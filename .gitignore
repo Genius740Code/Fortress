@@ -1,0 +1,128 @@
+# Rust
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+data/
+*.data
+
+# Configuration files with secrets
+config/
+*.secret
+*.key
+*.pem
+*.p12
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Test artifacts
+coverage/
+tarpaulin-report.html
+*.profraw
+
+# Backup files
+*.bak
+*.backup
+
+# Fortress specific
+fortress-data/
+encryption-keys/
+key-material/
+vault-storage/
+
+# Build artifacts
+/dist/
+/build/
+/out/
+
+# Environment files
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Documentation build
+/docs/target/
+/docs/book/
+
+# Performance benchmarks
+benchmarks/results/
+*.bench
+
+# Security audit files
+audit-reports/
+security-scans/
+
+# CI/CD
+.github/workflows/cache/
+.gitlab-ci-local/
+
+# Local development
+.local/
+dev-data/
+test-databases/
+
+# WASM
+pkg/
+wasm-pack.log
+
+# Protocol buffers
+*.pb.rs
+*.pb.go
+
+# Generated files
+generated/
+auto-generated/
+
+# Keys and certificates (security critical)
+*.crt
+*.key
+*.p12
+*.pem
+ca.crt
+server.crt
+server.key
+
+# Memory dumps
+*.dmp
+*.core
+
+# Profiling
+*.prof
+*.pprof
+flamegraph.svg
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# Kubernetes
+*.kubeconfig
+secrets/
+
+# Local configuration overrides
+fortress.local.toml
+settings.local.yaml

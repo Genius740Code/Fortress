@@ -1,0 +1,234 @@
+[package]
+name = "fortress"
+version = "0.1.0"
+edition = "2021"
+authors = ["Fortress Team <team@fortress-db.com>"]
+license = "Apache-2.0"
+description = "A highly customizable, secure database system with multi-layer encryption"
+homepage = "https://github.com/Genius740Code/Fortress"
+repository = "https://github.com/Genius740Code/Fortress"
+documentation = "https://docs.fortress-db.com"
+readme = "README.md"
+keywords = ["database", "encryption", "security", "privacy", "vault"]
+categories = ["database", "cryptography"]
+rust-version = "1.70"
+
+[workspace]
+members = [
+    "crates/fortress-core",
+    "crates/fortress-cli", 
+    "crates/fortress-server",
+    "crates/fortress-wasm",
+    "crates/fortress-macros",
+    "crates/fortress-proto",
+]
+
+[dependencies]
+# Core dependencies
+fortress-core = { path = "crates/fortress-core", version = "0.1.0" }
+
+# Async runtime
+tokio = { version = "1.35", features = ["full"] }
+tokio-util = { version = "0.7", features = ["codec"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+bincode = "1.3"
+
+# Cryptography
+ring = "0.17"
+chacha20poly1305 = "0.10"
+aegis = "0.2"
+argon2 = "0.5"
+rand = "0.8"
+sha2 = "0.10"
+hmac = "0.12"
+pbkdf2 = "0.12"
+
+# Database
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "sqlite", "mysql", "uuid", "chrono", "json"] }
+rocksdb = "0.21"
+
+# Networking
+axum = { version = "0.7", features = ["headers", "multipart"] }
+tonic = "0.10"
+tower = { version = "0.4", features = ["full"] }
+tower-http = { version = "0.5", features = ["cors", "trace", "compression"] }
+hyper = { version = "1.0", features = ["full"] }
+
+# CLI
+clap = { version = "4.4", features = ["derive", "env"] }
+crossterm = "0.27"
+dialoguer = "0.11"
+indicatif = "0.17"
+console = "0.15"
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+color-eyre = "0.6"
+
+# Logging and tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-opentelemetry = "0.21"
+opentelemetry = { version = "0.21", features = ["rt-tokio"] }
+
+# Metrics and monitoring
+metrics = "0.21"
+metrics-exporter-prometheus = "0.12"
+
+# Time and date
+chrono = { version = "0.4", features = ["serde"] }
+time = "0.3"
+
+# UUID
+uuid = { version = "1.6", features = ["v4", "serde", "fast-rng"] }
+
+# Configuration
+config = "0.13"
+env_logger = "0.10"
+
+# Async utilities
+futures = "0.3"
+async-trait = "0.1"
+
+# Compression
+flate2 = "1.0"
+lz4 = "1.24"
+zstd = "0.13"
+
+# Memory management
+bytes = "1.5"
+parking_lot = "0.12"
+
+# Regular expressions
+regex = "1.10"
+
+# Base64 encoding
+base64 = "0.21"
+
+# Hex encoding
+hex = "0.4"
+
+# Zeroize for secure memory handling
+zeroize = { version = "1.7", features = ["zeroize_derive"] }
+
+# Derive macros
+derive_builder = "0.12"
+derive_more = { version = "0.99", features = ["from", "into", "display"] }
+
+# WebAssembly (optional)
+wasm-bindgen = { version = "0.2", optional = true }
+js-sys = { version = "0.3", optional = true }
+web-sys = { version = "0.3", optional = true, features = ["console"] }
+console_error_panic_hook = { version = "0.1", optional = true }
+
+# HTTP client (for cloud storage)
+reqwest = { version = "0.11", features = ["json", "stream"] }
+
+# AWS SDK
+aws-config = "0.55"
+aws-sdk-s3 = "0.28"
+aws-sdk-kms = "0.28"
+
+# Azure SDK
+azure_storage_blobs = "0.12"
+azure_identity = "0.12"
+
+# Google Cloud SDK
+google-cloud-storage = "0.13"
+google-cloud-kms = "0.12"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+proptest = "1.4"
+quickcheck = "1.0"
+tempfile = "3.8"
+mockall = "0.12"
+wiremock = "0.5"
+test-case = "3.3"
+
+[features]
+default = ["cli", "server", "core"]
+cli = ["fortress-cli"]
+server = ["fortress-server"]
+core = ["fortress-core"]
+wasm = ["fortress-wasm", "wasm-bindgen", "js-sys", "web-sys", "console_error_panic_hook"]
+full = ["cli", "server", "core", "wasm"]
+
+# Performance features
+simd = []
+hardware-acceleration = ["ring/simd"]
+
+# Storage backends
+aws = ["aws-config", "aws-sdk-s3", "aws-sdk-kms"]
+azure = ["azure_storage_blobs", "azure_identity"]
+gcp = ["google-cloud-storage", "google-cloud-kms"]
+all-cloud = ["aws", "azure", "gcp"]
+
+# Security features
+hsm = []
+fips = ["ring/fips"]
+
+# Development features
+dev = ["tracing-subscriber/env-filter"]
+bench = ["criterion"]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.bench]
+opt-level = 3
+debug = true
+
+[profile.dev]
+opt-level = 0
+debug = true
+
+[[bin]]
+name = "fortress"
+path = "crates/fortress-cli/src/main.rs"
+required-features = ["cli"]
+
+[[bin]]
+name = "fortress-server"
+path = "crates/fortress-server/src/main.rs"
+required-features = ["server"]
+
+[lib]
+name = "fortress"
+path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
+required-features = ["core"]
+
+[[bench]]
+name = "encryption_bench"
+harness = false
+required-features = ["bench"]
+
+[[bench]]
+name = "storage_bench"
+harness = false
+required-features = ["bench"]
+
+[[bench]]
+name = "query_bench"
+harness = false
+required-features = ["bench"]
+
+[workspace.dependencies]
+# Shared workspace dependencies for consistent versions
+tokio = "1.35"
+serde = "1.0"
+tracing = "0.1"
+thiserror = "1.0"
+uuid = "1.6"
+chrono = "0.4"
+anyhow = "1.0"
