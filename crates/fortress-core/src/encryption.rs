@@ -342,9 +342,13 @@ impl EncryptionAlgorithm for Aegis256 {
             ));
         }
 
-        // Generate random nonce
-        let mut nonce = vec![0u8; self.nonce_size()];
-        getrandom::getrandom(&mut nonce)
+        // Pre-allocate result buffer with exact size needed (nonce + ciphertext + tag)
+        // AEGIS-256 ciphertext is same length as plaintext, tag is included internally
+        let mut result = Vec::with_capacity(self.nonce_size() + plaintext.len());
+        
+        // Generate random nonce directly into result buffer
+        result.resize(self.nonce_size(), 0);
+        getrandom::getrandom(&mut result)
             .map_err(|e| FortressError::encryption(
                 format!("Failed to generate nonce: {}", e),
                 self.name(),
@@ -359,7 +363,8 @@ impl EncryptionAlgorithm for Aegis256 {
                 EncryptionErrorCode::EncryptionFailed,
             ))?;
 
-        let nonce_array: [u8; 32] = nonce.try_into()
+        // Create nonce from the first 32 bytes
+        let nonce_array: [u8; 32] = result[..self.nonce_size()].try_into()
             .map_err(|_| FortressError::encryption(
                 "Failed to convert nonce to array",
                 self.name(),
@@ -374,8 +379,7 @@ impl EncryptionAlgorithm for Aegis256 {
                 EncryptionErrorCode::EncryptionFailed,
             ))?;
 
-        // Prepend nonce to ciphertext
-        let mut result = nonce;
+        // Extend result with ciphertext
         result.extend_from_slice(&ciphertext);
         
         Ok(result)
@@ -399,8 +403,7 @@ impl EncryptionAlgorithm for Aegis256 {
         }
 
         // Extract nonce from the beginning of ciphertext
-        let nonce_bytes = &ciphertext[..self.nonce_size()];
-        let actual_ciphertext = &ciphertext[self.nonce_size()..];
+        let (nonce_bytes, actual_ciphertext) = ciphertext.split_at(self.nonce_size());
 
         // Use the aegis crate for actual AEGIS-256 decryption
         let cipher = aegis::Aegis256::new_from_slice(key)
