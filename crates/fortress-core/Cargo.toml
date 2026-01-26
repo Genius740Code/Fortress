@@ -78,8 +78,8 @@ tokio-test = "0.4"
 default = ["std"]
 std = []
 simd = []
-hardware-acceleration = ["ring/simd"]
-fips = ["ring/fips"]
+hardware-acceleration = ["ring/std"]
+fips = []
 
 [profile.release]
 opt-level = 3

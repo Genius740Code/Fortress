@@ -351,14 +351,32 @@ impl EncryptionAlgorithm for Aegis256 {
                 EncryptionErrorCode::EncryptionFailed,
             ))?;
 
-        // TODO: Implement actual AEGIS-256 encryption
-        // For now, we'll use a placeholder implementation
-        // In a real implementation, you would use the AEGIS-256 crate
-        let mut ciphertext = plaintext.to_vec();
-        
-        // Add nonce to the beginning of ciphertext
+        // Use the aegis crate for actual AEGIS-256 encryption
+        let cipher = aegis::Aegis256::new_from_slice(key)
+            .map_err(|e| FortressError::encryption(
+                format!("Failed to create cipher: {}", e),
+                self.name(),
+                EncryptionErrorCode::EncryptionFailed,
+            ))?;
+
+        let nonce_array: [u8; 32] = nonce.try_into()
+            .map_err(|_| FortressError::encryption(
+                "Failed to convert nonce to array",
+                self.name(),
+                EncryptionErrorCode::EncryptionFailed,
+            ))?;
+
+        let ciphertext = cipher
+            .encrypt(&aegis::aegis256::Nonce::from_slice(&nonce_array), plaintext)
+            .map_err(|e| FortressError::encryption(
+                format!("Encryption failed: {}", e),
+                self.name(),
+                EncryptionErrorCode::EncryptionFailed,
+            ))?;
+
+        // Prepend nonce to ciphertext
         let mut result = nonce;
-        result.append(&mut ciphertext);
+        result.extend_from_slice(&ciphertext);
         
         Ok(result)
     }
@@ -381,12 +399,33 @@ impl EncryptionAlgorithm for Aegis256 {
         }
 
         // Extract nonce from the beginning of ciphertext
-        let nonce = &ciphertext[..self.nonce_size()];
+        let nonce_bytes = &ciphertext[..self.nonce_size()];
         let actual_ciphertext = &ciphertext[self.nonce_size()..];
 
-        // TODO: Implement actual AEGIS-256 decryption
-        // For now, we'll use a placeholder implementation
-        Ok(actual_ciphertext.to_vec())
+        // Use the aegis crate for actual AEGIS-256 decryption
+        let cipher = aegis::Aegis256::new_from_slice(key)
+            .map_err(|e| FortressError::encryption(
+                format!("Failed to create cipher: {}", e),
+                self.name(),
+                EncryptionErrorCode::DecryptionFailed,
+            ))?;
+
+        let nonce_array: [u8; 32] = nonce_bytes.try_into()
+            .map_err(|_| FortressError::encryption(
+                "Failed to convert nonce to array",
+                self.name(),
+                EncryptionErrorCode::DecryptionFailed,
+            ))?;
+
+        let plaintext = cipher
+            .decrypt(&aegis::aegis256::Nonce::from_slice(&nonce_array), actual_ciphertext)
+            .map_err(|e| FortressError::encryption(
+                format!("Decryption failed: {}", e),
+                self.name(),
+                EncryptionErrorCode::DecryptionFailed,
+            ))?;
+
+        Ok(plaintext)
     }
 
     fn key_size(&self) -> usize {
@@ -835,5 +874,50 @@ mod tests {
 
         let fortress = PerformanceProfile::Fortress;
         assert_eq!(fortress.recommended_rotation_interval(), std::time::Duration::from_secs(30 * 24 * 3600));
+    }
+
+    #[test]
+    fn test_aegis256_implementation() {
+        // This test verifies that our AEGIS-256 implementation works correctly
+        let algorithm = Aegis256::new();
+        let key = SecureKey::generate(algorithm.key_size());
+        let plaintext = b"Hello, Fortress! Testing AEGIS-256 implementation.";
+        
+        println!("Testing AEGIS-256 implementation...");
+        println!("Key size: {} bytes", algorithm.key_size());
+        println!("Nonce size: {} bytes", algorithm.nonce_size());
+        println!("Tag size: {} bytes", algorithm.tag_size());
+        
+        // Test encryption
+        let ciphertext = algorithm.encrypt(plaintext, key.as_bytes()).unwrap();
+        println!("✓ Encryption successful");
+        println!("  Plaintext length: {} bytes", plaintext.len());
+        println!("  Ciphertext length: {} bytes", ciphertext.len());
+        
+        // Test decryption
+        let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
+        println!("✓ Decryption successful");
+        println!("  Decrypted length: {} bytes", decrypted.len());
+        
+        // Verify correctness
+        assert_eq!(plaintext, &decrypted[..], "Decrypted data should match original plaintext");
+        println!("✓ Verification passed - plaintext matches decrypted data");
+        
+        // Test with different data sizes
+        let test_cases = vec![
+            b"", // empty
+            b"a", // single byte
+            &vec![0u8; 1000][..], // 1KB
+            &vec![0u8; 10000][..], // 10KB
+        ];
+        
+        for (i, test_data) in test_cases.iter().enumerate() {
+            let ct = algorithm.encrypt(test_data, key.as_bytes()).unwrap();
+            let dt = algorithm.decrypt(&ct, key.as_bytes()).unwrap();
+            assert_eq!(test_data, &dt[..], "Test case {} failed", i);
+            println!("✓ Test case {} ({}) passed", i + 1, if test_data.is_empty() { "empty" } else if test_data.len() == 1 { "1 byte" } else if test_data.len() == 1000 { "1KB" } else { "10KB" });
+        }
+        
+        println!("\n🎉 AEGIS-256 implementation is working correctly!");
     }
 }

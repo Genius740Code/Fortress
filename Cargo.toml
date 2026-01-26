@@ -16,16 +16,11 @@ rust-version = "1.70"
 [workspace]
 members = [
     "crates/fortress-core",
-    "crates/fortress-cli", 
-    "crates/fortress-server",
-    "crates/fortress-wasm",
-    "crates/fortress-macros",
-    "crates/fortress-proto",
 ]
 
 [dependencies]
 # Core dependencies
-fortress-core = { path = "crates/fortress-core", version = "0.1.0" }
+fortress-core = { path = "crates/fortress-core", version = "0.1.0", optional = true }
 
 # Async runtime
 tokio = { version = "1.35", features = ["full"] }
@@ -52,10 +47,10 @@ sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "sqlit
 rocksdb = "0.21"
 
 # Networking
-axum = { version = "0.7", features = ["headers", "multipart"] }
+axum = { version = "0.7", features = ["multipart"] }
 tonic = "0.10"
 tower = { version = "0.4", features = ["full"] }
-tower-http = { version = "0.5", features = ["cors", "trace", "compression"] }
+tower-http = { version = "0.5", features = ["cors", "trace", "compression-br"] }
 hyper = { version = "1.0", features = ["full"] }
 
 # CLI
@@ -74,7 +69,8 @@ color-eyre = "0.6"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tracing-opentelemetry = "0.21"
-opentelemetry = { version = "0.21", features = ["rt-tokio"] }
+opentelemetry = { version = "0.21", features = ["trace"] }
+opentelemetry_sdk = { version = "0.21", features = ["rt-tokio"] }
 
 # Metrics and monitoring
 metrics = "0.21"
@@ -129,18 +125,18 @@ console_error_panic_hook = { version = "0.1", optional = true }
 # HTTP client (for cloud storage)
 reqwest = { version = "0.11", features = ["json", "stream"] }
 
-# AWS SDK
-aws-config = "0.55"
-aws-sdk-s3 = "0.28"
-aws-sdk-kms = "0.28"
+# AWS SDK (optional)
+aws-config = { version = "0.55", optional = true }
+aws-sdk-s3 = { version = "0.28", optional = true }
+aws-sdk-kms = { version = "0.28", optional = true }
 
-# Azure SDK
-azure_storage_blobs = "0.12"
-azure_identity = "0.12"
+# Azure SDK (optional)
+azure_storage_blobs = { version = "0.12", optional = true }
+azure_identity = { version = "0.12", optional = true }
 
-# Google Cloud SDK
-google-cloud-storage = "0.13"
-google-cloud-kms = "0.12"
+# Google Cloud SDK (optional)
+google-cloud-storage = { version = "0.6", optional = true }
+google-cloud-kms = { version = "0.6", optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
@@ -152,16 +148,12 @@ wiremock = "0.5"
 test-case = "3.3"
 
 [features]
-default = ["cli", "server", "core"]
-cli = ["fortress-cli"]
-server = ["fortress-server"]
+default = ["core"]
 core = ["fortress-core"]
-wasm = ["fortress-wasm", "wasm-bindgen", "js-sys", "web-sys", "console_error_panic_hook"]
-full = ["cli", "server", "core", "wasm"]
 
 # Performance features
 simd = []
-hardware-acceleration = ["ring/simd"]
+hardware-acceleration = ["ring/std"]
 
 # Storage backends
 aws = ["aws-config", "aws-sdk-s3", "aws-sdk-kms"]
@@ -171,11 +163,10 @@ all-cloud = ["aws", "azure", "gcp"]
 
 # Security features
 hsm = []
-fips = ["ring/fips"]
+fips = []
 
 # Development features
 dev = ["tracing-subscriber/env-filter"]
-bench = ["criterion"]
 
 [profile.release]
 opt-level = 3
@@ -192,36 +183,11 @@ debug = true
 opt-level = 0
 debug = true
 
-[[bin]]
-name = "fortress"
-path = "crates/fortress-cli/src/main.rs"
-required-features = ["cli"]
-
-[[bin]]
-name = "fortress-server"
-path = "crates/fortress-server/src/main.rs"
-required-features = ["server"]
-
 [lib]
 name = "fortress"
 path = "src/lib.rs"
 crate-type = ["cdylib", "rlib"]
-required-features = ["core"]
 
-[[bench]]
-name = "encryption_bench"
-harness = false
-required-features = ["bench"]
-
-[[bench]]
-name = "storage_bench"
-harness = false
-required-features = ["bench"]
-
-[[bench]]
-name = "query_bench"
-harness = false
-required-features = ["bench"]
 
 [workspace.dependencies]
 # Shared workspace dependencies for consistent versions
