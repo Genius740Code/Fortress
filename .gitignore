@@ -126,3 +126,13 @@ secrets/
 # Local configuration overrides
 fortress.local.toml
 settings.local.yaml
+
+# Compiled executables
+*.exe
+simple_benchmark
+benchmark_aegis
+
+# Benchmark artifacts
+benchmark-results/
+performance-reports/
+*.benchmark
