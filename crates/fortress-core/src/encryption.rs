@@ -262,14 +262,14 @@ impl EncryptedData {
 /// Secure key container that zeroizes on drop
 #[derive(Clone)]
 pub struct SecureKey {
-    /// The key bytes
-    key: Bytes,
+    /// The key bytes in a secure container
+    key: Vec<u8>,
 }
 
 impl SecureKey {
     /// Create a new secure key
-    pub fn new(key: Vec<u8>) -> Self {
-        Self { key: Bytes::from(key) }
+    pub fn new(mut key: Vec<u8>) -> Self {
+        Self { key }
     }
 
     /// Get the key bytes
@@ -288,18 +288,22 @@ impl SecureKey {
     }
 
     /// Generate a random key of the specified length
-    pub fn generate(length: usize) -> Self {
+    pub fn generate(length: usize) -> Result<Self, FortressError> {
         let mut key = vec![0u8; length];
-        getrandom::getrandom(&mut key).expect("Failed to generate random key");
-        Self::new(key)
+        getrandom::getrandom(&mut key)
+            .map_err(|e| FortressError::encryption(
+                format!("Failed to generate random key: {}", e),
+                "key_generation",
+                EncryptionErrorCode::EncryptionFailed,
+            ))?;
+        Ok(Self::new(key))
     }
 }
 
 impl Drop for SecureKey {
     fn drop(&mut self) {
-        // Zeroize the key when dropped
-        let mut key_bytes = self.key.as_ref().to_vec();
-        key_bytes.zeroize();
+        // Zeroize the key when dropped - this now properly zeroizes the actual key
+        self.key.zeroize();
     }
 }
 
@@ -757,7 +761,7 @@ mod tests {
     #[tokio::test]
     async fn test_aegis256_encrypt_decrypt() {
         let algorithm = Aegis256::new();
-        let key = SecureKey::generate(algorithm.key_size());
+        let key = SecureKey::generate(algorithm.key_size()).unwrap();
         let plaintext = b"Hello, Fortress!";
 
         let ciphertext = algorithm.encrypt(plaintext, key.as_bytes()).unwrap();
@@ -769,7 +773,7 @@ mod tests {
     #[tokio::test]
     async fn test_chacha20poly1305_encrypt_decrypt() {
         let algorithm = ChaCha20Poly1305::new();
-        let key = SecureKey::generate(algorithm.key_size());
+        let key = SecureKey::generate(algorithm.key_size()).unwrap();
         let plaintext = b"Hello, Fortress!";
 
         let ciphertext = algorithm.encrypt(plaintext, key.as_bytes()).unwrap();
@@ -781,7 +785,7 @@ mod tests {
     #[tokio::test]
     async fn test_aes256gcm_encrypt_decrypt() {
         let algorithm = Aes256Gcm::new();
-        let key = SecureKey::generate(algorithm.key_size());
+        let key = SecureKey::generate(algorithm.key_size()).unwrap();
         let plaintext = b"Hello, Fortress!";
 
         let ciphertext = algorithm.encrypt(plaintext, key.as_bytes()).unwrap();
@@ -821,7 +825,7 @@ mod tests {
 
     #[test]
     fn test_secure_key() {
-        let key = SecureKey::generate(32);
+        let key = SecureKey::generate(32).unwrap();
         assert_eq!(key.len(), 32);
         assert!(!key.is_empty());
 
@@ -883,7 +887,7 @@ mod tests {
     fn test_aegis256_implementation() {
         // This test verifies that our AEGIS-256 implementation works correctly
         let algorithm = Aegis256::new();
-        let key = SecureKey::generate(algorithm.key_size());
+        let key = SecureKey::generate(algorithm.key_size()).unwrap();
         let plaintext = b"Hello, Fortress! Testing AEGIS-256 implementation.";
         
         println!("Testing AEGIS-256 implementation...");

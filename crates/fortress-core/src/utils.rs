@@ -3,7 +3,9 @@
 //! This module provides various utility functions and helpers for Fortress operations.
 
 use crate::error::{FortressError, Result};
+use base64::{Engine as _, engine::general_purpose};
 use bytes::Bytes;
+use getrandom;
 use std::collections::HashMap;
 
 /// Generate a random ID
@@ -57,7 +59,7 @@ pub fn compress_zstd(data: &[u8], level: i32) -> Result<Vec<u8>> {
     zstd::encode_all(data.as_ref(), level)
         .map_err(|e| FortressError::internal(
             format!("Zstd compression failed: {}", e),
-            "compression",
+            "compression".to_string(),
         ))
 }
 
@@ -66,7 +68,7 @@ pub fn decompress_zstd(compressed: &[u8]) -> Result<Vec<u8>> {
     zstd::decode_all(compressed.as_ref())
         .map_err(|e| FortressError::internal(
             format!("Zstd decompression failed: {}", e),
-            "decompression",
+            "decompression".to_string(),
         ))
 }
 
@@ -80,7 +82,7 @@ pub fn hex_decode(s: &str) -> Result<Vec<u8>> {
     hex::decode(s)
         .map_err(|e| FortressError::internal(
             format!("Hex decoding failed: {}", e),
-            "hex_decode",
+            "hex_decode".to_string(),
         ))
 }
 
@@ -226,11 +228,14 @@ pub fn parse_duration_to_seconds(duration_str: &str) -> Result<u64> {
 }
 
 /// Get current timestamp as Unix timestamp
-pub fn current_timestamp() -> u64 {
+pub fn current_timestamp() -> Result<u64, FortressError> {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
+        .map(|d| d.as_secs())
+        .map_err(|e| FortressError::internal(
+            format!("System time error: {}", e),
+            "SYSTEM_TIME_ERROR".to_string(),
+        ))
 }
 
 /// Get current timestamp as UTC DateTime

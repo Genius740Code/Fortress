@@ -72,7 +72,7 @@ impl Default for InMemoryKeyManager {
 #[async_trait]
 impl KeyManager for InMemoryKeyManager {
     async fn generate_key(&self, algorithm: &dyn EncryptionAlgorithm) -> Result<SecureKey> {
-        Ok(SecureKey::generate(algorithm.key_size()))
+        SecureKey::generate(algorithm.key_size()).map_err(|e| FortressError::key_management(format!("Failed to generate key: {}", e), None, KeyErrorCode::KeyGenerationFailed))
     }
 
     async fn store_key(&self, key_id: &KeyId, key: &SecureKey, metadata: &KeyMetadata) -> Result<()> {

@@ -542,13 +542,14 @@ impl QueryEngine for InMemoryQueryEngine {
                 
                 let data = self.data.read().await;
                 let rows = data.get(table_name).unwrap_or(&vec![]).clone();
+                let row_count = rows.len() as u64;
                 
                 let execution_time = start.elapsed().as_millis() as u64;
                 
                 return Ok(QueryResult {
                     rows,
                     columns: schema.columns.clone(),
-                    total_rows: Some(rows.len() as u64),
+                    total_rows: Some(row_count),
                     execution_time_ms: execution_time,
                     metadata: QueryMetadata {
                         query_type: QueryType::Select,
