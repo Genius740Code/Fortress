@@ -6,6 +6,7 @@
 use crate::error::{FortressError, Result, ConfigurationErrorCode};
 use crate::encryption::{EncryptionProfile, PerformanceProfile};
 use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, DurationSeconds};
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -34,7 +35,7 @@ impl Config {
                 ConfigurationErrorCode::FileNotFound,
             ))?;
 
-        let config = if path.as_ref().extension().and_then(|s| s.to_str()) == Some("toml") {
+        let config: Config = if path.as_ref().extension().and_then(|s| s.to_str()) == Some("toml") {
             toml::from_str(&content)
                 .map_err(|e| FortressError::configuration(
                     format!("Failed to parse TOML config: {}", e),
@@ -246,15 +247,16 @@ impl Default for DatabaseConfig {
 }
 
 /// Encryption configuration
+#[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncryptionConfig {
     /// Default encryption algorithm
     pub default_algorithm: String,
     /// Key rotation interval
-    #[serde(with = "duration_serde")]
+    #[serde_as(as = "DurationSeconds<u64>")]
     pub key_rotation_interval: std::time::Duration,
     /// Master key rotation interval
-    #[serde(with = "duration_serde")]
+    #[serde_as(as = "DurationSeconds<u64>")]
     pub master_key_rotation_interval: std::time::Duration,
     /// Encryption profiles
     pub profiles: HashMap<String, EncryptionProfile>,
@@ -271,8 +273,8 @@ impl Default for EncryptionConfig {
 
         Self {
             default_algorithm: "aegis256".to_string(),
-            key_rotation_interval: humantime::Duration::from(std::time::Duration::from_secs(23 * 3600)), // 23 hours
-            master_key_rotation_interval: humantime::Duration::from(std::time::Duration::from_secs(90 * 24 * 3600)), // 90 days
+            key_rotation_interval: std::time::Duration::from_secs(23 * 3600), // 23 hours
+            master_key_rotation_interval: std::time::Duration::from_secs(90 * 24 * 3600), // 90 days
             profiles,
             key_derivation: KeyDerivationConfig::default(),
         }

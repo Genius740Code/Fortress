@@ -1,0 +1,55 @@
+[package]
+name = "fortress-cli"
+version = "0.1.0"
+edition = "2021"
+authors = ["Fortress Team <team@fortress-db.com>"]
+license = "Apache-2.0"
+description = "Command-line interface for Fortress secure database"
+homepage = "https://github.com/Genius740Code/Fortress"
+repository = "https://github.com/Genius740Code/Fortress"
+keywords = ["cli", "database", "encryption", "security"]
+categories = ["command-line-utilities", "database"]
+
+[[bin]]
+name = "fortress"
+path = "src/main.rs"
+
+[dependencies]
+# Core fortress library (temporarily commented out)
+# fortress-core = { path = "../fortress-core", version = "0.1.0" }
+
+# CLI framework
+clap = { version = "4.4", features = ["derive", "env", "color"] }
+crossterm = "0.27"
+dialoguer = "0.11"
+indicatif = "0.17"
+console = "0.15"
+
+# Async runtime
+tokio = { version = "1.35", features = ["full"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+color-eyre = "0.6"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Time and date
+chrono = { version = "0.4", features = ["serde"] }
+humantime = "2.1"
+
+# File system
+dirs = "5.0"
+walkdir = "2.4"
+
+[dev-dependencies]
+tempfile = "3.8"
+assert_cmd = "2.0"

@@ -16,6 +16,7 @@ rust-version = "1.70"
 [workspace]
 members = [
     "crates/fortress-core",
+    "crates/fortress-cli",
 ]
 
 [dependencies]

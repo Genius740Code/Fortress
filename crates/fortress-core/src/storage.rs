@@ -7,6 +7,7 @@ use crate::error::{FortressError, Result, StorageErrorCode};
 use async_trait::async_trait;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
+use sha2::Digest;
 use std::collections::HashMap;
 use std::fmt;
 
@@ -164,7 +165,7 @@ impl FileSystemStorage {
         std::fs::create_dir_all(&path)
             .map_err(|e| FortressError::storage(
                 format!("Failed to create directory: {}", e),
-                "filesystem",
+                "filesystem".to_string(),
                 StorageErrorCode::ConnectionFailed,
             ))?;
 
@@ -192,7 +193,7 @@ impl FileSystemStorage {
         let json = serde_json::to_string(metadata)
             .map_err(|e| FortressError::storage(
                 format!("Failed to serialize metadata: {}", e),
-                "filesystem",
+                "filesystem".to_string(),
                 StorageErrorCode::InvalidOperation,
             ))?;
 
@@ -200,7 +201,7 @@ impl FileSystemStorage {
             .await
             .map_err(|e| FortressError::storage(
                 format!("Failed to write metadata: {}", e),
-                "filesystem",
+                "filesystem".to_string(),
                 StorageErrorCode::InvalidOperation,
             ))?;
 
@@ -216,7 +217,7 @@ impl FileSystemStorage {
                 let metadata = serde_json::from_slice(&data)
                     .map_err(|e| FortressError::storage(
                         format!("Failed to deserialize metadata: {}", e),
-                        "filesystem",
+                        "filesystem".to_string(),
                         StorageErrorCode::CorruptedData,
                     ))?;
                 Ok(Some(metadata))
@@ -236,7 +237,7 @@ impl StorageBackend for FileSystemStorage {
             .await
             .map_err(|e| FortressError::storage(
                 format!("Failed to write file: {}", e),
-                "filesystem",
+                "filesystem".to_string(),
                 StorageErrorCode::InvalidOperation,
             ))?;
 
@@ -286,7 +287,7 @@ impl StorageBackend for FileSystemStorage {
             if e.kind() != std::io::ErrorKind::NotFound {
                 return Err(FortressError::storage(
                     format!("Failed to delete file: {}", e),
-                    "filesystem",
+                    "filesystem".to_string(),
                     StorageErrorCode::InvalidOperation,
                 ));
             }
@@ -297,7 +298,7 @@ impl StorageBackend for FileSystemStorage {
             if e.kind() != std::io::ErrorKind::NotFound {
                 return Err(FortressError::storage(
                     format!("Failed to delete metadata: {}", e),
-                    "filesystem",
+                    "filesystem".to_string(),
                     StorageErrorCode::InvalidOperation,
                 ));
             }
@@ -316,7 +317,7 @@ impl StorageBackend for FileSystemStorage {
             .await
             .map_err(|e| FortressError::storage(
                 format!("Failed to read directory: {}", e),
-                "filesystem",
+                "filesystem".to_string(),
                 StorageErrorCode::ConnectionFailed,
             ))?;
 
@@ -324,7 +325,7 @@ impl StorageBackend for FileSystemStorage {
         while let Some(entry) = entries.next_entry().await
             .map_err(|e| FortressError::storage(
                 format!("Failed to read directory entry: {}", e),
-                "filesystem",
+                "filesystem".to_string(),
                 StorageErrorCode::ConnectionFailed,
             ))? {
             
@@ -344,7 +345,7 @@ impl StorageBackend for FileSystemStorage {
 
     fn metadata(&self) -> StorageMetadata {
         StorageMetadata {
-            backend_type: "filesystem",
+            backend_type: "filesystem".to_string(),
             version: "1.0.0".to_string(),
             supports_transactions: false,
             supports_encryption_at_rest: false,
@@ -361,7 +362,7 @@ impl StorageBackend for FileSystemStorage {
             .await
             .map_err(|e| FortressError::storage(
                 format!("Health check failed: {}", e),
-                "filesystem",
+                "filesystem".to_string(),
                 StorageErrorCode::ConnectionFailed,
             ))?;
 

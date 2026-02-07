@@ -19,7 +19,7 @@ pub fn generate_nonce(length: usize) -> Result<Vec<u8>> {
     getrandom::getrandom(&mut nonce)
         .map_err(|e| FortressError::internal(
             format!("Failed to generate nonce: {}", e),
-            "nonce_generation",
+            "nonce_generation".to_string(),
         ))?;
     Ok(nonce)
 }
@@ -41,7 +41,7 @@ pub fn compress_lz4(data: &[u8]) -> Result<Vec<u8>> {
     lz4::block::compress(data, None, true)
         .map_err(|e| FortressError::internal(
             format!("LZ4 compression failed: {}", e),
-            "compression",
+            "compression".to_string(),
         ))
 }
 
@@ -50,13 +50,13 @@ pub fn decompress_lz4(compressed: &[u8]) -> Result<Vec<u8>> {
     lz4::block::decompress(compressed, None)
         .map_err(|e| FortressError::internal(
             format!("LZ4 decompression failed: {}", e),
-            "decompression",
+            "decompression".to_string(),
         ))
 }
 
 /// Compress data using Zstd
 pub fn compress_zstd(data: &[u8], level: i32) -> Result<Vec<u8>> {
-    zstd::encode_all(data.as_ref(), level)
+    zstd::encode_all(data, level)
         .map_err(|e| FortressError::internal(
             format!("Zstd compression failed: {}", e),
             "compression".to_string(),
@@ -65,7 +65,7 @@ pub fn compress_zstd(data: &[u8], level: i32) -> Result<Vec<u8>> {
 
 /// Decompress Zstd data
 pub fn decompress_zstd(compressed: &[u8]) -> Result<Vec<u8>> {
-    zstd::decode_all(compressed.as_ref())
+    zstd::decode_all(compressed)
         .map_err(|e| FortressError::internal(
             format!("Zstd decompression failed: {}", e),
             "decompression".to_string(),
