@@ -95,7 +95,7 @@ pub fn base64_decode(s: &str) -> Result<Vec<u8>> {
         .decode(s)
         .map_err(|e| FortressError::internal(
             format!("Base64 decoding failed: {}", e),
-            "base64_decode",
+            "base64_decode".to_string(),
         ))
 }
 

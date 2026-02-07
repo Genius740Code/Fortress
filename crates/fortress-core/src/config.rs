@@ -27,7 +27,7 @@ pub struct Config {
 impl Config {
     /// Load configuration from a file
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let content = std::fs::read_to_string(path)
+        let content = std::fs::read_to_string(&path)
             .map_err(|e| FortressError::configuration(
                 format!("Failed to read config file: {}", e),
                 None,
@@ -251,9 +251,11 @@ pub struct EncryptionConfig {
     /// Default encryption algorithm
     pub default_algorithm: String,
     /// Key rotation interval
-    pub key_rotation_interval: humantime::Duration,
+    #[serde(with = "duration_serde")]
+    pub key_rotation_interval: std::time::Duration,
     /// Master key rotation interval
-    pub master_key_rotation_interval: humantime::Duration,
+    #[serde(with = "duration_serde")]
+    pub master_key_rotation_interval: std::time::Duration,
     /// Encryption profiles
     pub profiles: HashMap<String, EncryptionProfile>,
     /// Key derivation configuration

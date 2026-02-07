@@ -344,7 +344,7 @@ impl StorageBackend for FileSystemStorage {
 
     fn metadata(&self) -> StorageMetadata {
         StorageMetadata {
-            backend_type: "filesystem".to_string(),
+            backend_type: "filesystem",
             version: "1.0.0".to_string(),
             supports_transactions: false,
             supports_encryption_at_rest: false,

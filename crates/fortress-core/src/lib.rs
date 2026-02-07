@@ -58,6 +58,9 @@ pub mod config;
 /// Utility functions and helpers
 pub mod utils;
 
+/// Performance benchmarking suite
+pub mod benchmark;
+
 /// Re-export commonly used types
 pub mod prelude {
     pub use crate::error::{FortressError, Result};
@@ -67,6 +70,7 @@ pub mod prelude {
     pub use crate::key::{KeyManager, KeyId, KeyMetadata};
     pub use crate::storage::StorageBackend;
     pub use crate::config::Config;
+    pub use crate::benchmark::{AegisBenchmark, BenchmarkResults};
 }
 
 /// Fortress version information
