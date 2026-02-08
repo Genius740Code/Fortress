@@ -11,7 +11,7 @@
 ### 2. Create CLI interface with one-command database creation like Turnkey
 - [x] Design intuitive CLI commands
 - [x] Implement `fortress create` with templates
-- [ ] Add interactive setup mode
+- [x] Add interactive setup mode
 
 ### 3. Implement automatic key management system (no manual key handling)
 - [x] Build secure key generation
