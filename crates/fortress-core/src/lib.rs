@@ -61,6 +61,12 @@ pub mod utils;
 /// Performance benchmarking suite
 pub mod benchmark;
 
+/// Policy engine and RBAC system
+pub mod policy;
+
+#[cfg(test)]
+mod policy_test;
+
 /// Re-export commonly used types
 pub mod prelude {
     pub use crate::error::{FortressError, Result};
@@ -71,6 +77,7 @@ pub mod prelude {
     pub use crate::storage::StorageBackend;
     pub use crate::config::Config;
     pub use crate::benchmark::{AegisBenchmark, BenchmarkResults};
+    pub use crate::policy::{PolicyEngine, Role, Permission, Resource};
 }
 
 /// Fortress version information

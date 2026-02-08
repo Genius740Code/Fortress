@@ -19,9 +19,9 @@
 - [x] Implement key storage and retrieval
 
 ### 4. Build enterprise-grade policy engine with RBAC (Vault-style)
-- [ ] Design role-based access control
-- [ ] Implement policy evaluation engine
-- [ ] Create policy management interface
+- [x] Design role-based access control
+- [x] Implement policy evaluation engine
+- [x] Create policy management interface
 
 ### 5. Implement HSM integration for hardware security modules
 - [ ] Add HSM provider abstraction
@@ -222,10 +222,10 @@
 - ✅ Ensure production-grade quality
 
 ### 🚀 NEXT PRIORITY
-**2. Create CLI interface with one-command database creation like Turnkey**
-- Design intuitive CLI commands
-- Implement `fortress create` with templates
-- Add interactive setup mode
+**5. Implement HSM integration for hardware security modules**
+- Add HSM provider abstraction
+- Integrate AWS CloudHSM
+- Support other HSM providers
 
 ---
 

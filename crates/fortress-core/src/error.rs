@@ -127,6 +127,10 @@ pub enum FortressError {
         /// Internal error code
         code: String,
     },
+
+    /// Policy and authorization errors
+    #[error("Policy error: {0}")]
+    PolicyError(String),
 }
 
 /// Encryption error codes
@@ -453,6 +457,7 @@ impl FortressError {
             Self::Authentication { .. } => "authentication",
             Self::RateLimit { .. } => "rate_limit",
             Self::Internal { .. } => "internal",
+            Self::PolicyError(_) => "policy",
         }
     }
 }
