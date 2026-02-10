@@ -64,6 +64,9 @@ pub mod benchmark;
 /// Policy engine and RBAC system
 pub mod policy;
 
+/// Hardware Security Module (HSM) support
+pub mod hsm;
+
 #[cfg(test)]
 mod policy_test;
 
@@ -78,6 +81,7 @@ pub mod prelude {
     pub use crate::config::Config;
     pub use crate::benchmark::{AegisBenchmark, BenchmarkResults};
     pub use crate::policy::{PolicyEngine, Role, Permission, Resource};
+    pub use crate::hsm::{HsmProvider, HsmConfig, HsmKeyManager, HsmProvider as HsmProviderTrait};
 }
 
 /// Fortress version information

@@ -74,68 +74,6 @@ pub struct PermissionEntry {
     pub conditions: Vec<Condition>,
 }
 
-impl std::hash::Hash for Condition {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        match self {
-            Condition::Time(tc) => {
-                0u8.hash(state);
-                tc.start_time.hash(state);
-                tc.end_time.hash(state);
-                tc.days_of_week.hash(state);
-                tc.timezone.hash(state);
-            }
-            Condition::Ip(ic) => {
-                1u8.hash(state);
-                ic.allowed_ips.hash(state);
-                ic.denied_ips.hash(state);
-                ic.cidr_ranges.hash(state);
-            }
-            Condition::Attribute(ac) => {
-                2u8.hash(state);
-                ac.attribute.hash(state);
-                ac.operator.hash(state);
-                ac.value.hash(state);
-            }
-            Condition::Custom(s) => {
-                3u8.hash(state);
-                s.hash(state);
-            }
-        }
-    }
-}
-
-impl std::cmp::Eq for Condition {}
-
-impl std::hash::Hash for TimeCondition {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.start_time.hash(state);
-        self.end_time.hash(state);
-        self.days_of_week.hash(state);
-        self.timezone.hash(state);
-    }
-}
-
-impl std::cmp::Eq for TimeCondition {}
-
-impl std::hash::Hash for IpCondition {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.allowed_ips.hash(state);
-        self.denied_ips.hash(state);
-        self.cidr_ranges.hash(state);
-    }
-}
-
-impl std::cmp::Eq for IpCondition {}
-
-impl std::hash::Hash for AttributeCondition {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.attribute.hash(state);
-        self.operator.hash(state);
-        self.value.hash(state);
-    }
-}
-
-impl std::cmp::Eq for AttributeCondition {}
 
 /// Available permissions
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]

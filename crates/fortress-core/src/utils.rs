@@ -228,7 +228,7 @@ pub fn parse_duration_to_seconds(duration_str: &str) -> Result<u64> {
 }
 
 /// Get current timestamp as Unix timestamp
-pub fn current_timestamp() -> Result<u64, FortressError> {
+pub fn current_timestamp() -> Result<u64> {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
