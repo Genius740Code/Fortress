@@ -34,7 +34,6 @@ getrandom = "0.2"
 # Compression
 flate2 = "1.0"
 lz4 = "1.24"
-zstd = "0.13"
 
 # Hashing
 sha2 = "0.10"

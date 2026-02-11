@@ -54,22 +54,37 @@ pub fn decompress_lz4(compressed: &[u8]) -> Result<Vec<u8>> {
         ))
 }
 
-/// Compress data using Zstd
-pub fn compress_zstd(data: &[u8], level: i32) -> Result<Vec<u8>> {
-    zstd::encode_all(data, level)
+/// Compress data using flate2
+pub fn compress_flate2(data: &[u8]) -> Result<Vec<u8>> {
+    use flate2::write::GzEncoder;
+    use std::io::Write;
+    
+    let mut encoder = GzEncoder::new(Vec::new(), flate2::Compression::default());
+    encoder.write_all(data)
         .map_err(|e| FortressError::internal(
-            format!("Zstd compression failed: {}", e),
+            format!("Flate2 compression failed: {}", e),
+            "compression".to_string(),
+        ))?;
+    encoder.finish()
+        .map_err(|e| FortressError::internal(
+            format!("Flate2 compression failed: {}", e),
             "compression".to_string(),
         ))
 }
 
-/// Decompress Zstd data
-pub fn decompress_zstd(compressed: &[u8]) -> Result<Vec<u8>> {
-    zstd::decode_all(compressed)
+/// Decompress flate2 data
+pub fn decompress_flate2(compressed: &[u8]) -> Result<Vec<u8>> {
+    use flate2::read::GzDecoder;
+    use std::io::Read;
+    
+    let mut decoder = GzDecoder::new(compressed);
+    let mut decompressed = Vec::new();
+    decoder.read_to_end(&mut decompressed)
         .map_err(|e| FortressError::internal(
-            format!("Zstd decompression failed: {}", e),
+            format!("Flate2 decompression failed: {}", e),
             "decompression".to_string(),
-        ))
+        ))?;
+    Ok(decompressed)
 }
 
 /// Encode bytes to hex string

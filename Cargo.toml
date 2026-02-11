@@ -95,7 +95,6 @@ async-trait = "0.1"
 # Compression
 flate2 = "1.0"
 lz4 = "1.24"
-zstd = "0.13"
 
 # Memory management
 bytes = "1.5"

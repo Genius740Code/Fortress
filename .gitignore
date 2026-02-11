@@ -129,6 +129,7 @@ settings.local.yaml
 
 # Compiled executables
 *.exe
+test_policy_*.exe
 simple_benchmark
 benchmark_aegis
 
