@@ -11,6 +11,7 @@
 
 
 use crate::error::{FortressError, Result, EncryptionErrorCode};
+use crate::audit::{AuditEventType, SecurityLevel, EventOutcome, log_event_with_metadata};
 
 use async_trait::async_trait;
 
@@ -672,7 +673,7 @@ impl EncryptionAlgorithm for Aegis256 {
 
         if key.len() != self.key_size() {
 
-            return Err(FortressError::encryption(
+            let error = FortressError::encryption(
 
                 format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()),
 
@@ -680,11 +681,45 @@ impl EncryptionAlgorithm for Aegis256 {
 
                 EncryptionErrorCode::InvalidKeyLength,
 
-            ));
+            );
+
+            // Log encryption failure
+
+            if let Err(e) = log_event_with_metadata(
+
+                AuditEventType::CryptographicOperation,
+
+                SecurityLevel::Medium,
+
+                Some("system".to_string()),
+
+                None,
+
+                "encrypt".to_string(),
+
+                EventOutcome::Error,
+
+                {
+
+                    let mut meta = std::collections::HashMap::new();
+
+                    meta.insert("algorithm".to_string(), self.name());
+
+                    meta.insert("error".to_string(), "Invalid key length".to_string());
+
+                    meta
+
+                },
+
+            ) {
+
+                eprintln!("Failed to log encryption error: {}", e);
+
+            }
+
+            return Err(error);
 
         }
-
-
 
         // Pre-allocate result buffer with exact size needed (nonce + ciphertext + tag)
 
@@ -692,174 +727,437 @@ impl EncryptionAlgorithm for Aegis256 {
 
         let mut result = Vec::with_capacity(self.nonce_size() + plaintext.len());
 
-        
-
         // Generate random nonce directly into result buffer
 
         result.resize(self.nonce_size(), 0);
 
         getrandom::getrandom(&mut result)
 
-            .map_err(|e| FortressError::encryption(
+            .map_err(|e| {
 
-                format!("Failed to generate nonce: {}", e),
+                let error = FortressError::encryption(
 
-                self.name(),
+                    format!("Failed to generate nonce: {}", e),
 
-                EncryptionErrorCode::EncryptionFailed,
+                    self.name(),
 
-            ))?;
+                    EncryptionErrorCode::EncryptionFailed,
 
+                );
 
+                // Log nonce generation failure
+
+                if let Err(log_err) = log_event_with_metadata(
+
+                    AuditEventType::CryptographicOperation,
+
+                    SecurityLevel::High,
+
+                    Some("system".to_string()),
+
+                    None,
+
+                    "encrypt".to_string(),
+
+                    EventOutcome::Error,
+
+                    {
+
+                        let mut meta = std::collections::HashMap::new();
+
+                        meta.insert("algorithm".to_string(), self.name());
+
+                        meta.insert("error".to_string(), "Nonce generation failed".to_string());
+
+                        meta
+
+                    },
+
+                ) {
+
+                    eprintln!("Failed to log nonce generation error: {}", log_err);
+
+                }
+
+                error
+
+            })?;
 
         // Use the aegis crate for actual AEGIS-256 encryption
 
         let cipher = aegis::Aegis256::new_from_slice(key)
 
-            .map_err(|e| FortressError::encryption(
+            .map_err(|e| {
 
-                format!("Failed to create cipher: {}", e),
+                let error = FortressError::encryption(
 
-                self.name(),
+                    format!("Failed to create cipher: {}", e),
 
-                EncryptionErrorCode::EncryptionFailed,
+                    self.name(),
 
-            ))?;
+                    EncryptionErrorCode::EncryptionFailed,
 
+                );
 
+                // Log cipher creation failure
 
-        // Create nonce from the first 32 bytes
+                if let Err(log_err) = log_event_with_metadata(
+
+                    AuditEventType::CryptographicOperation,
+
+                    SecurityLevel::High,
+
+                    Some("system".to_string()),
+
+                    None,
+
+                    "encrypt".to_string(),
+
+                    EventOutcome::Error,
+
+                    {
+
+                        let mut meta = std::collections::HashMap::new();
+
+                        meta.insert("algorithm".to_string(), self.name());
+
+                        meta.insert("error".to_string(), "Cipher creation failed".to_string());
+
+                        meta
+
+                    },
+
+                ) {
+
+                    eprintln!("Failed to log cipher creation error: {}", log_err);
+
+                }
+
+                error
+
+            })?;
+
+        // Create nonce from first 32 bytes
 
         let nonce_array: [u8; 32] = result[..self.nonce_size()].try_into()
 
-            .map_err(|_| FortressError::encryption(
+            .map_err(|_| {
 
-                "Failed to convert nonce to array",
+                let error = FortressError::encryption(
 
-                self.name(),
+                    "Failed to convert nonce to array",
 
-                EncryptionErrorCode::EncryptionFailed,
+                    self.name(),
 
-            ))?;
+                    EncryptionErrorCode::EncryptionFailed,
 
+                );
 
+                // Log nonce conversion failure
+
+                if let Err(log_err) = log_event_with_metadata(
+
+                    AuditEventType::CryptographicOperation,
+
+                    SecurityLevel::High,
+
+                    Some("system".to_string()),
+
+                    None,
+
+                    "encrypt".to_string(),
+
+                    EventOutcome::Error,
+
+                    {
+
+                        let mut meta = std::collections::HashMap::new();
+
+                        meta.insert("algorithm".to_string(), self.name());
+
+                        meta.insert("error".to_string(), "Nonce conversion failed".to_string());
+
+                        meta
+
+                    },
+
+                ) {
+
+                    eprintln!("Failed to log nonce conversion error: {}", log_err);
+
+                }
+
+                error
+
+            })?;
 
         let ciphertext = cipher
 
             .encrypt(&aegis::aegis256::Nonce::from_slice(&nonce_array), plaintext)
 
-            .map_err(|e| FortressError::encryption(
+            .map_err(|e| {
 
-                format!("Encryption failed: {}", e),
+                let error = FortressError::encryption(
 
-                self.name(),
+                    format!("Encryption failed: {}", e),
 
-                EncryptionErrorCode::EncryptionFailed,
+                    self.name(),
 
-            ))?;
+                    EncryptionErrorCode::EncryptionFailed,
 
+                );
 
+                // Log encryption failure
+
+                if let Err(log_err) = log_event_with_metadata(
+
+                    AuditEventType::CryptographicOperation,
+
+                    SecurityLevel::High,
+
+                    Some("system".to_string()),
+
+                    None,
+
+                    "encrypt".to_string(),
+
+                    EventOutcome::Error,
+
+                    {
+
+                        let mut meta = std::collections::HashMap::new();
+
+                        meta.insert("algorithm".to_string(), self.name());
+
+                        meta.insert("error".to_string(), "Encryption operation failed".to_string());
+
+                        meta
+
+                    },
+
+                ) {
+
+                    eprintln!("Failed to log encryption error: {}", log_err);
+
+                }
+
+                error
+
+            })?;
 
         // Extend result with ciphertext
 
         result.extend_from_slice(&ciphertext);
 
-        
+        // Log successful encryption
+
+        if let Err(e) = log_event_with_metadata(
+
+            AuditEventType::CryptographicOperation,
+
+            SecurityLevel::Low,
+
+            Some("system".to_string()),
+
+            None,
+
+            "encrypt".to_string(),
+
+            EventOutcome::Success,
+
+            {
+
+                let mut meta = std::collections::HashMap::new();
+
+                meta.insert("algorithm".to_string(), self.name());
+
+                meta.insert("plaintext_size".to_string(), plaintext.len().to_string());
+
+                meta.insert("ciphertext_size".to_string(), ciphertext.len().to_string());
+
+                meta
+
+            },
+
+        ) {
+
+            eprintln!("Failed to log encryption success: {}", e);
+
+        }
 
         Ok(result)
 
     }
 
-
-
     fn decrypt(&self, ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
-
         if key.len() != self.key_size() {
-
-            return Err(FortressError::encryption(
-
+            let error = FortressError::encryption(
                 format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()),
-
                 self.name(),
-
                 EncryptionErrorCode::InvalidKeyLength,
-
-            ));
-
+            );
+            
+            // Log decryption failure
+            if let Err(e) = log_event_with_metadata(
+                AuditEventType::CryptographicOperation,
+                SecurityLevel::Medium,
+                Some("system".to_string()),
+                None,
+                "decrypt".to_string(),
+                EventOutcome::Error,
+                {
+                    let mut meta = std::collections::HashMap::new();
+                    meta.insert("algorithm".to_string(), self.name());
+                    meta.insert("error".to_string(), "Invalid key length".to_string());
+                    meta
+                },
+            ) {
+                eprintln!("Failed to log decryption error: {}", e);
+            }
+            
+            return Err(error);
         }
-
-
 
         if ciphertext.len() < self.nonce_size() {
-
-            return Err(FortressError::encryption(
-
+            let error = FortressError::encryption(
                 "Ciphertext too short to contain nonce",
-
                 self.name(),
-
                 EncryptionErrorCode::DecryptionFailed,
-
-            ));
-
+            );
+            
+            // Log decryption failure
+            if let Err(e) = log_event_with_metadata(
+                AuditEventType::CryptographicOperation,
+                SecurityLevel::Medium,
+                Some("system".to_string()),
+                None,
+                "decrypt".to_string(),
+                EventOutcome::Error,
+                {
+                    let mut meta = std::collections::HashMap::new();
+                    meta.insert("algorithm".to_string(), self.name());
+                    meta.insert("error".to_string(), "Ciphertext too short".to_string());
+                    meta
+                },
+            ) {
+                eprintln!("Failed to log decryption error: {}", e);
+            }
+            
+            return Err(error);
         }
 
-
-
         // Extract nonce from the beginning of ciphertext
-
         let (nonce_bytes, actual_ciphertext) = ciphertext.split_at(self.nonce_size());
 
-
-
         // Use the aegis crate for actual AEGIS-256 decryption
-
         let cipher = aegis::Aegis256::new_from_slice(key)
-
-            .map_err(|e| FortressError::encryption(
-
-                format!("Failed to create cipher: {}", e),
-
-                self.name(),
-
-                EncryptionErrorCode::DecryptionFailed,
-
-            ))?;
-
-
+            .map_err(|e| {
+                let error = FortressError::encryption(
+                    format!("Failed to create cipher: {}", e),
+                    self.name(),
+                    EncryptionErrorCode::DecryptionFailed,
+                );
+                
+                // Log cipher creation failure
+                if let Err(log_err) = log_event_with_metadata(
+                    AuditEventType::CryptographicOperation,
+                    SecurityLevel::High,
+                    Some("system".to_string()),
+                    None,
+                    "decrypt".to_string(),
+                    EventOutcome::Error,
+                    {
+                        let mut meta = std::collections::HashMap::new();
+                        meta.insert("algorithm".to_string(), self.name());
+                        meta.insert("error".to_string(), "Cipher creation failed".to_string());
+                        meta
+                    },
+                ) {
+                    eprintln!("Failed to log cipher creation error: {}", log_err);
+                }
+                
+                error
+            })?;
 
         let nonce_array: [u8; 32] = nonce_bytes.try_into()
-
-            .map_err(|_| FortressError::encryption(
-
-                "Failed to convert nonce to array",
-
-                self.name(),
-
-                EncryptionErrorCode::DecryptionFailed,
-
-            ))?;
-
-
+            .map_err(|_| {
+                let error = FortressError::encryption(
+                    "Failed to convert nonce to array",
+                    self.name(),
+                    EncryptionErrorCode::DecryptionFailed,
+                );
+                
+                // Log nonce conversion failure
+                if let Err(log_err) = log_event_with_metadata(
+                    AuditEventType::CryptographicOperation,
+                    SecurityLevel::High,
+                    Some("system".to_string()),
+                    None,
+                    "decrypt".to_string(),
+                    EventOutcome::Error,
+                    {
+                        let mut meta = std::collections::HashMap::new();
+                        meta.insert("algorithm".to_string(), self.name());
+                        meta.insert("error".to_string(), "Nonce conversion failed".to_string());
+                        meta
+                    },
+                ) {
+                    eprintln!("Failed to log nonce conversion error: {}", log_err);
+                }
+                
+                error
+            })?;
 
         let plaintext = cipher
-
             .decrypt(&aegis::aegis256::Nonce::from_slice(&nonce_array), actual_ciphertext)
+            .map_err(|e| {
+                let error = FortressError::encryption(
+                    format!("Decryption failed: {}", e),
+                    self.name(),
+                    EncryptionErrorCode::DecryptionFailed,
+                );
+                
+                // Log decryption failure
+                if let Err(log_err) = log_event_with_metadata(
+                    AuditEventType::CryptographicOperation,
+                    SecurityLevel::High,
+                    Some("system".to_string()),
+                    None,
+                    "decrypt".to_string(),
+                    EventOutcome::Error,
+                    {
+                        let mut meta = std::collections::HashMap::new();
+                        meta.insert("algorithm".to_string(), self.name());
+                        meta.insert("error".to_string(), "Decryption operation failed".to_string());
+                        meta
+                    },
+                ) {
+                    eprintln!("Failed to log decryption error: {}", log_err);
+                }
+                
+                error
+            })?;
 
-            .map_err(|e| FortressError::encryption(
-
-                format!("Decryption failed: {}", e),
-
-                self.name(),
-
-                EncryptionErrorCode::DecryptionFailed,
-
-            ))?;
-
-
+        // Log successful decryption
+        if let Err(e) = log_event_with_metadata(
+            AuditEventType::CryptographicOperation,
+            SecurityLevel::Low,
+            Some("system".to_string()),
+            None,
+            "decrypt".to_string(),
+            EventOutcome::Success,
+            {
+                let mut meta = std::collections::HashMap::new();
+                meta.insert("algorithm".to_string(), self.name());
+                meta.insert("ciphertext_size".to_string(), ciphertext.len().to_string());
+                meta.insert("plaintext_size".to_string(), plaintext.len().to_string());
+                meta
+            },
+        ) {
+            eprintln!("Failed to log decryption success: {}", e);
+        }
 
         Ok(plaintext)
-
     }
 
 

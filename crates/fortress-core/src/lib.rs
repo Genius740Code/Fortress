@@ -67,6 +67,15 @@ pub mod policy;
 /// Hardware Security Module (HSM) support
 pub mod hsm;
 
+/// Audit logging system
+pub mod audit;
+
+/// Audit log analysis tools
+pub mod audit_analysis;
+
+/// Audit log rotation and retention
+pub mod audit_rotation;
+
 #[cfg(test)]
 mod policy_test;
 
@@ -82,6 +91,9 @@ pub mod prelude {
     pub use crate::benchmark::{AegisBenchmark, BenchmarkResults};
     pub use crate::policy::{PolicyEngine, Role, Permission, Resource};
     pub use crate::hsm::{HsmProvider, HsmConfig, HsmKeyManager, HsmProvider as HsmProviderTrait};
+    pub use crate::audit::{AuditLogger, AuditConfig, AuditEntry, AuditEventType, SecurityLevel, EventOutcome};
+    pub use crate::audit_analysis::{AuditAnalyzer, SecurityAnomaly, SecurityInsights, SecurityReport};
+    pub use crate::audit_rotation::{LogRotationManager, RetentionPolicy, RotationStrategy, LogStatistics};
 }
 
 /// Fortress version information

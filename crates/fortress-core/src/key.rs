@@ -11,6 +11,7 @@
 use crate::error::{FortressError, Result, KeyErrorCode};
 
 use crate::encryption::{EncryptionAlgorithm, PerformanceProfile};
+use crate::audit::{AuditEventType, SecurityLevel, EventOutcome, log_event_with_metadata};
 
 use async_trait::async_trait;
 
@@ -145,68 +146,138 @@ impl Default for InMemoryKeyManager {
 impl KeyManager for InMemoryKeyManager {
 
     async fn generate_key(&self, algorithm: &dyn EncryptionAlgorithm) -> Result<SecureKey> {
-
-        Ok(SecureKey::generate(algorithm.key_size()))
-
+        let key = SecureKey::generate(algorithm.key_size());
+        
+        // Log key generation
+        let mut metadata = std::collections::HashMap::new();
+        metadata.insert("algorithm".to_string(), format!("{:?}", algorithm));
+        metadata.insert("key_size".to_string(), algorithm.key_size().to_string());
+        
+        if let Err(e) = log_event_with_metadata(
+            AuditEventType::KeyManagement,
+            SecurityLevel::High,
+            Some("system".to_string()),
+            None,
+            "generate_key".to_string(),
+            EventOutcome::Success,
+            metadata,
+        ) {
+            // Don't fail the operation if logging fails, but log the error
+            eprintln!("Failed to log key generation: {}", e);
+        }
+        
+        Ok(key)
     }
 
 
 
     async fn store_key(&self, key_id: &KeyId, key: &SecureKey, metadata: &KeyMetadata) -> Result<()> {
-
         let mut keys = self.keys.write().await;
-
+        
+        // Check if key already exists
+        let key_exists = keys.contains_key(key_id);
+        
         keys.insert(key_id.clone(), (key.clone(), metadata.clone()));
-
+        
+        // Log key storage
+        let mut audit_metadata = std::collections::HashMap::new();
+        audit_metadata.insert("key_id".to_string(), key_id.clone());
+        audit_metadata.insert("key_version".to_string(), metadata.version.to_string());
+        audit_metadata.insert("algorithm".to_string(), format!("{:?}", metadata.algorithm));
+        audit_metadata.insert("key_exists".to_string(), key_exists.to_string());
+        
+        if let Err(e) = log_event_with_metadata(
+            AuditEventType::KeyManagement,
+            SecurityLevel::High,
+            Some("system".to_string()),
+            Some(format!("key:{}", key_id)),
+            "store_key".to_string(),
+            EventOutcome::Success,
+            audit_metadata,
+        ) {
+            eprintln!("Failed to log key storage: {}", e);
+        }
+        
         Ok(())
-
     }
 
 
 
     async fn retrieve_key(&self, key_id: &KeyId) -> Result<(SecureKey, KeyMetadata)> {
-
         let keys = self.keys.read().await;
 
-        keys.get(key_id)
-
+        let result = keys.get(key_id)
             .cloned()
-
             .ok_or_else(|| FortressError::key_management(
-
                 format!("Key not found: {}", key_id),
-
                 Some(key_id.clone()),
-
                 KeyErrorCode::KeyNotFound,
-
-            ))
-
+            ));
+        
+        // Log key retrieval
+        let outcome = match result {
+            Ok(_) => EventOutcome::Success,
+            Err(_) => EventOutcome::Failure,
+        };
+        
+        let mut metadata = std::collections::HashMap::new();
+        metadata.insert("key_id".to_string(), key_id.clone());
+        
+        if let Err(e) = log_event_with_metadata(
+            AuditEventType::KeyManagement,
+            SecurityLevel::Medium,
+            Some("system".to_string()),
+            Some(format!("key:{}", key_id)),
+            "retrieve_key".to_string(),
+            outcome,
+            metadata,
+        ) {
+            eprintln!("Failed to log key retrieval: {}", e);
+        }
+        
+        result
     }
 
 
 
     async fn delete_key(&self, key_id: &KeyId) -> Result<()> {
-
         let mut keys = self.keys.write().await;
 
-        keys.remove(key_id)
-
-            .ok_or_else(|| FortressError::key_management(
-
+        let result = keys.remove(key_id);
+        
+        let outcome = if result.is_some() {
+            EventOutcome::Success
+        } else {
+            EventOutcome::Failure
+        };
+        
+        // Log key deletion
+        let mut metadata = std::collections::HashMap::new();
+        metadata.insert("key_id".to_string(), key_id.clone());
+        metadata.insert("key_existed".to_string(), result.is_some().to_string());
+        
+        if let Err(e) = log_event_with_metadata(
+            AuditEventType::KeyManagement,
+            SecurityLevel::High,
+            Some("system".to_string()),
+            Some(format!("key:{}", key_id)),
+            "delete_key".to_string(),
+            outcome,
+            metadata,
+        ) {
+            eprintln!("Failed to log key deletion: {}", e);
+        }
+        
+        if result.is_some() {
+            Ok(())
+        } else {
+            Err(FortressError::key_management(
                 format!("Key not found: {}", key_id),
-
                 Some(key_id.clone()),
-
                 KeyErrorCode::KeyNotFound,
-
-            ))?;
-
-        Ok(())
-
+            ))
+        }
     }
-
-
 
     async fn list_keys(&self) -> Result<Vec<(KeyId, KeyMetadata)>> {
 
