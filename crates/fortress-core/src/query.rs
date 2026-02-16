@@ -10,7 +10,7 @@
 
 use crate::error::{FortressError, Result, QueryErrorCode};
 
-use crate::encryption::{EncryptionAlgorithm, SecureKey};
+use crate::encryption::SecureKey;
 
 use async_trait::async_trait;
 
@@ -944,7 +944,17 @@ impl TryFromQueryParameter for chrono::DateTime<chrono::Utc> {
 
 }
 
+// Blanket implementation to convert TryFromQueryParameter to standard TryFrom
+impl<T> TryFrom<&QueryParameter> for T
+where
+    T: TryFromQueryParameter,
+{
+    type Error = FortressError;
 
+    fn try_from(param: &QueryParameter) -> Result<Self> {
+        T::try_from(param)
+    }
+}
 
 /// In-memory query engine for testing
 
@@ -1085,8 +1095,7 @@ impl QueryEngine for InMemoryQueryEngine {
                 let data = self.data.read().await;
 
                 let rows = data.get(table_name).unwrap_or(&vec![]).clone();
-
-                
+                let rows_count = rows.len() as u64;
 
                 let execution_time = start.elapsed().as_millis() as u64;
 
@@ -1098,7 +1107,7 @@ impl QueryEngine for InMemoryQueryEngine {
 
                     columns: schema.columns.clone(),
 
-                    total_rows: Some(rows.len() as u64),
+                    total_rows: Some(rows_count),
 
                     execution_time_ms: execution_time,
 

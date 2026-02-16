@@ -25,6 +25,8 @@ use std::fmt;
 
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
+use chacha20poly1305::{KeyInit, XChaCha20Poly1305, XNonce, aead::Aead};
+
 
 
 /// Trait for encryption algorithms
@@ -677,7 +679,7 @@ impl EncryptionAlgorithm for Aegis256 {
 
                 format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()),
 
-                self.name(),
+                self.name().to_string(),
 
                 EncryptionErrorCode::InvalidKeyLength,
 
@@ -703,7 +705,7 @@ impl EncryptionAlgorithm for Aegis256 {
 
                     let mut meta = std::collections::HashMap::new();
 
-                    meta.insert("algorithm".to_string(), self.name());
+                    meta.insert("algorithm".to_string(), self.name().to_string());
 
                     meta.insert("error".to_string(), "Invalid key length".to_string());
 
@@ -737,9 +739,9 @@ impl EncryptionAlgorithm for Aegis256 {
 
                 let error = FortressError::encryption(
 
-                    format!("Failed to generate nonce: {}", e),
+                    format!("Failed to generate nonce: {}", e).to_string(),
 
-                    self.name(),
+                    self.name().to_string(),
 
                     EncryptionErrorCode::EncryptionFailed,
 
@@ -765,7 +767,7 @@ impl EncryptionAlgorithm for Aegis256 {
 
                         let mut meta = std::collections::HashMap::new();
 
-                        meta.insert("algorithm".to_string(), self.name());
+                        meta.insert("algorithm".to_string(), self.name().to_string());
 
                         meta.insert("error".to_string(), "Nonce generation failed".to_string());
 
@@ -791,9 +793,9 @@ impl EncryptionAlgorithm for Aegis256 {
 
                 let error = FortressError::encryption(
 
-                    format!("Failed to create cipher: {}", e),
+                    format!("Failed to create cipher: {}", e).to_string(),
 
-                    self.name(),
+                    self.name().to_string(),
 
                     EncryptionErrorCode::EncryptionFailed,
 
@@ -819,7 +821,7 @@ impl EncryptionAlgorithm for Aegis256 {
 
                         let mut meta = std::collections::HashMap::new();
 
-                        meta.insert("algorithm".to_string(), self.name());
+                        meta.insert("algorithm".to_string(), self.name().to_string());
 
                         meta.insert("error".to_string(), "Cipher creation failed".to_string());
 
@@ -845,9 +847,9 @@ impl EncryptionAlgorithm for Aegis256 {
 
                 let error = FortressError::encryption(
 
-                    "Failed to convert nonce to array",
+                    "Failed to convert nonce to array".to_string(),
 
-                    self.name(),
+                    self.name().to_string(),
 
                     EncryptionErrorCode::EncryptionFailed,
 
@@ -873,7 +875,7 @@ impl EncryptionAlgorithm for Aegis256 {
 
                         let mut meta = std::collections::HashMap::new();
 
-                        meta.insert("algorithm".to_string(), self.name());
+                        meta.insert("algorithm".to_string(), self.name().to_string());
 
                         meta.insert("error".to_string(), "Nonce conversion failed".to_string());
 
@@ -899,9 +901,9 @@ impl EncryptionAlgorithm for Aegis256 {
 
                 let error = FortressError::encryption(
 
-                    format!("Encryption failed: {}", e),
+                    format!("Encryption failed: {}", e).to_string(),
 
-                    self.name(),
+                    self.name().to_string(),
 
                     EncryptionErrorCode::EncryptionFailed,
 
@@ -927,7 +929,7 @@ impl EncryptionAlgorithm for Aegis256 {
 
                         let mut meta = std::collections::HashMap::new();
 
-                        meta.insert("algorithm".to_string(), self.name());
+                        meta.insert("algorithm".to_string(), self.name().to_string());
 
                         meta.insert("error".to_string(), "Encryption operation failed".to_string());
 
@@ -946,43 +948,19 @@ impl EncryptionAlgorithm for Aegis256 {
             })?;
 
         // Extend result with ciphertext
-
         result.extend_from_slice(&ciphertext);
 
         // Log successful encryption
-
         if let Err(e) = log_event_with_metadata(
-
             AuditEventType::CryptographicOperation,
-
             SecurityLevel::Low,
-
             Some("system".to_string()),
-
             None,
-
             "encrypt".to_string(),
-
             EventOutcome::Success,
-
-            {
-
-                let mut meta = std::collections::HashMap::new();
-
-                meta.insert("algorithm".to_string(), self.name());
-
-                meta.insert("plaintext_size".to_string(), plaintext.len().to_string());
-
-                meta.insert("ciphertext_size".to_string(), ciphertext.len().to_string());
-
-                meta
-
-            },
-
+            HashMap::new(),
         ) {
-
             eprintln!("Failed to log encryption success: {}", e);
-
         }
 
         Ok(result)
@@ -992,8 +970,8 @@ impl EncryptionAlgorithm for Aegis256 {
     fn decrypt(&self, ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
         if key.len() != self.key_size() {
             let error = FortressError::encryption(
-                format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()),
-                self.name(),
+                format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()).to_string(),
+                self.name().to_string(),
                 EncryptionErrorCode::InvalidKeyLength,
             );
             
@@ -1007,7 +985,7 @@ impl EncryptionAlgorithm for Aegis256 {
                 EventOutcome::Error,
                 {
                     let mut meta = std::collections::HashMap::new();
-                    meta.insert("algorithm".to_string(), self.name());
+                    meta.insert("algorithm".to_string(), self.name().to_string());
                     meta.insert("error".to_string(), "Invalid key length".to_string());
                     meta
                 },
@@ -1020,8 +998,8 @@ impl EncryptionAlgorithm for Aegis256 {
 
         if ciphertext.len() < self.nonce_size() {
             let error = FortressError::encryption(
-                "Ciphertext too short to contain nonce",
-                self.name(),
+                "Ciphertext too short to contain nonce".to_string(),
+                self.name().to_string(),
                 EncryptionErrorCode::DecryptionFailed,
             );
             
@@ -1035,7 +1013,7 @@ impl EncryptionAlgorithm for Aegis256 {
                 EventOutcome::Error,
                 {
                     let mut meta = std::collections::HashMap::new();
-                    meta.insert("algorithm".to_string(), self.name());
+                    meta.insert("algorithm".to_string(), self.name().to_string());
                     meta.insert("error".to_string(), "Ciphertext too short".to_string());
                     meta
                 },
@@ -1053,8 +1031,8 @@ impl EncryptionAlgorithm for Aegis256 {
         let cipher = aegis::Aegis256::new_from_slice(key)
             .map_err(|e| {
                 let error = FortressError::encryption(
-                    format!("Failed to create cipher: {}", e),
-                    self.name(),
+                    format!("Failed to create cipher: {}", e).to_string(),
+                    self.name().to_string(),
                     EncryptionErrorCode::DecryptionFailed,
                 );
                 
@@ -1068,7 +1046,7 @@ impl EncryptionAlgorithm for Aegis256 {
                     EventOutcome::Error,
                     {
                         let mut meta = std::collections::HashMap::new();
-                        meta.insert("algorithm".to_string(), self.name());
+                        meta.insert("algorithm".to_string(), self.name().to_string());
                         meta.insert("error".to_string(), "Cipher creation failed".to_string());
                         meta
                     },
@@ -1082,8 +1060,8 @@ impl EncryptionAlgorithm for Aegis256 {
         let nonce_array: [u8; 32] = nonce_bytes.try_into()
             .map_err(|_| {
                 let error = FortressError::encryption(
-                    "Failed to convert nonce to array",
-                    self.name(),
+                    "Failed to convert nonce to array".to_string(),
+                    self.name().to_string(),
                     EncryptionErrorCode::DecryptionFailed,
                 );
                 
@@ -1097,7 +1075,7 @@ impl EncryptionAlgorithm for Aegis256 {
                     EventOutcome::Error,
                     {
                         let mut meta = std::collections::HashMap::new();
-                        meta.insert("algorithm".to_string(), self.name());
+                        meta.insert("algorithm".to_string(), self.name().to_string());
                         meta.insert("error".to_string(), "Nonce conversion failed".to_string());
                         meta
                     },
@@ -1112,8 +1090,8 @@ impl EncryptionAlgorithm for Aegis256 {
             .decrypt(&aegis::aegis256::Nonce::from_slice(&nonce_array), actual_ciphertext)
             .map_err(|e| {
                 let error = FortressError::encryption(
-                    format!("Decryption failed: {}", e),
-                    self.name(),
+                    format!("Decryption failed: {}", e).to_string(),
+                    self.name().to_string(),
                     EncryptionErrorCode::DecryptionFailed,
                 );
                 
@@ -1127,7 +1105,7 @@ impl EncryptionAlgorithm for Aegis256 {
                     EventOutcome::Error,
                     {
                         let mut meta = std::collections::HashMap::new();
-                        meta.insert("algorithm".to_string(), self.name());
+                        meta.insert("algorithm".to_string(), self.name().to_string());
                         meta.insert("error".to_string(), "Decryption operation failed".to_string());
                         meta
                     },
@@ -1148,7 +1126,7 @@ impl EncryptionAlgorithm for Aegis256 {
             EventOutcome::Success,
             {
                 let mut meta = std::collections::HashMap::new();
-                meta.insert("algorithm".to_string(), self.name());
+                meta.insert("algorithm".to_string(), self.name().to_string());
                 meta.insert("ciphertext_size".to_string(), ciphertext.len().to_string());
                 meta.insert("plaintext_size".to_string(), plaintext.len().to_string());
                 meta
@@ -1262,9 +1240,9 @@ impl EncryptionAlgorithm for ChaCha20Poly1305 {
 
             return Err(FortressError::encryption(
 
-                format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()),
+                format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()).to_string(),
 
-                self.name(),
+                self.name().to_string(),
 
                 EncryptionErrorCode::InvalidKeyLength,
 
@@ -1282,9 +1260,9 @@ impl EncryptionAlgorithm for ChaCha20Poly1305 {
 
             .map_err(|e| FortressError::encryption(
 
-                format!("Failed to generate nonce: {}", e),
+                format!("Failed to generate nonce: {}", e).to_string(),
 
-                self.name(),
+                self.name().to_string(),
 
                 EncryptionErrorCode::EncryptionFailed,
 
@@ -1298,9 +1276,9 @@ impl EncryptionAlgorithm for ChaCha20Poly1305 {
 
             .map_err(|e| FortressError::encryption(
 
-                format!("Failed to create cipher: {}", e),
+                format!("Failed to create cipher: {}", e).to_string(),
 
-                self.name(),
+                self.name().to_string(),
 
                 EncryptionErrorCode::EncryptionFailed,
 
@@ -1322,9 +1300,9 @@ impl EncryptionAlgorithm for ChaCha20Poly1305 {
 
             .map_err(|e| FortressError::encryption(
 
-                format!("Encryption failed: {}", e),
+                format!("Encryption failed: {}", e).to_string(),
 
-                self.name(),
+                self.name().to_string(),
 
                 EncryptionErrorCode::EncryptionFailed,
 
@@ -1352,9 +1330,9 @@ impl EncryptionAlgorithm for ChaCha20Poly1305 {
 
             return Err(FortressError::encryption(
 
-                format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()),
+                format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()).to_string(),
 
-                self.name(),
+                self.name().to_string(),
 
                 EncryptionErrorCode::InvalidKeyLength,
 
@@ -1368,9 +1346,9 @@ impl EncryptionAlgorithm for ChaCha20Poly1305 {
 
             return Err(FortressError::encryption(
 
-                "Ciphertext too short to contain nonce",
+                "Ciphertext too short to contain nonce".to_string(),
 
-                self.name(),
+                self.name().to_string(),
 
                 EncryptionErrorCode::DecryptionFailed,
 
@@ -1394,9 +1372,9 @@ impl EncryptionAlgorithm for ChaCha20Poly1305 {
 
             .map_err(|e| FortressError::encryption(
 
-                format!("Failed to create cipher: {}", e),
+                format!("Failed to create cipher: {}", e).to_string(),
 
-                self.name(),
+                self.name().to_string(),
 
                 EncryptionErrorCode::DecryptionFailed,
 
@@ -1418,9 +1396,9 @@ impl EncryptionAlgorithm for ChaCha20Poly1305 {
 
             .map_err(|e| FortressError::encryption(
 
-                format!("Decryption failed: {}", e),
+                format!("Decryption failed: {}", e).to_string(),
 
-                self.name(),
+                self.name().to_string(),
 
                 EncryptionErrorCode::DecryptionFailed,
 
@@ -1534,9 +1512,9 @@ impl EncryptionAlgorithm for Aes256Gcm {
 
             return Err(FortressError::encryption(
 
-                format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()),
+                format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()).to_string(),
 
-                self.name(),
+                self.name().to_string(),
 
                 EncryptionErrorCode::InvalidKeyLength,
 
@@ -1554,9 +1532,9 @@ impl EncryptionAlgorithm for Aes256Gcm {
 
             .map_err(|e| FortressError::encryption(
 
-                format!("Failed to generate nonce: {}", e),
+                format!("Failed to generate nonce: {}", e).to_string(),
 
-                self.name(),
+                self.name().to_string(),
 
                 EncryptionErrorCode::EncryptionFailed,
 
@@ -1572,9 +1550,9 @@ impl EncryptionAlgorithm for Aes256Gcm {
 
                 .map_err(|e| FortressError::encryption(
 
-                    format!("Failed to create key: {}", e),
+                    format!("Failed to create key: {}", e).to_string(),
 
-                    self.name(),
+                    self.name().to_string(),
 
                     EncryptionErrorCode::EncryptionFailed,
 
@@ -1600,9 +1578,9 @@ impl EncryptionAlgorithm for Aes256Gcm {
 
             .map_err(|e| FortressError::encryption(
 
-                format!("Encryption failed: {}", e),
+                format!("Encryption failed: {}", e).to_string(),
 
-                self.name(),
+                self.name().to_string(),
 
                 EncryptionErrorCode::EncryptionFailed,
 
@@ -1630,9 +1608,9 @@ impl EncryptionAlgorithm for Aes256Gcm {
 
             return Err(FortressError::encryption(
 
-                format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()),
+                format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()).to_string(),
 
-                self.name(),
+                self.name().to_string(),
 
                 EncryptionErrorCode::InvalidKeyLength,
 
@@ -1646,9 +1624,9 @@ impl EncryptionAlgorithm for Aes256Gcm {
 
             return Err(FortressError::encryption(
 
-                "Ciphertext too short to contain nonce and tag",
+                "Ciphertext too short to contain nonce and tag".to_string(),
 
-                self.name(),
+                self.name().to_string(),
 
                 EncryptionErrorCode::DecryptionFailed,
 
@@ -1674,9 +1652,9 @@ impl EncryptionAlgorithm for Aes256Gcm {
 
                 .map_err(|e| FortressError::encryption(
 
-                    format!("Failed to create key: {}", e),
+                    format!("Failed to create key: {}", e).to_string(),
 
-                    self.name(),
+                    self.name().to_string(),
 
                     EncryptionErrorCode::DecryptionFailed,
 
@@ -1694,21 +1672,19 @@ impl EncryptionAlgorithm for Aes256Gcm {
 
 
 
-        key.open_in_place(nonce, ring::aead::Aad::empty(), &mut ciphertext_with_tag)
 
+        let mut ciphertext = ciphertext_with_tag.to_vec();
+
+        let tag = key
+            .seal_in_place_append_tag(nonce, ring::aead::Aad::empty(), &mut ciphertext)
             .map_err(|e| FortressError::encryption(
-
-                format!("Decryption failed: {}", e),
-
-                self.name(),
-
-                EncryptionErrorCode::DecryptionFailed,
-
+                format!("Encryption failed: {}", e).to_string(),
+                self.name().to_string(),
+                EncryptionErrorCode::EncryptionFailed,
             ))?;
 
 
 
-        // Remove the tag from the end
 
         let plaintext_len = ciphertext_with_tag.len() - self.tag_size();
 
@@ -1786,9 +1762,9 @@ pub fn create_algorithm(name: &str) -> Result<Box<dyn EncryptionAlgorithm>> {
 
         _ => Err(FortressError::encryption(
 
-            format!("Unknown algorithm: {}", name),
+            format!("Unknown algorithm: {}", name).to_string(),
 
-            name,
+            name.to_string(),
 
             EncryptionErrorCode::AlgorithmNotSupported,
 

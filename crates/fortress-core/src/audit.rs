@@ -13,7 +13,6 @@ use ring::hmac;
 use zeroize::Zeroize;
 
 use crate::error::{FortressError, Result};
-use crate::encryption::EncryptionAlgorithm;
 
 /// Audit log entry with tamper-evident protection
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -307,7 +306,7 @@ impl DefaultAuditLogger {
         
         // Include all fields except the current hash and signature
         let mut hash_data = format!(
-            "{}{}{:?}{}{:?}{}{:?}{}{:?}{}{:?}",
+            "{}{}{:?}{}{:?}{}{:?}{}{:?}{}{:?}{}{:?}{}{:?}",
             entry.id,
             entry.timestamp,
             entry.event_type,

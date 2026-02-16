@@ -79,7 +79,7 @@ humantime = "2.1"
 urlencoding = "2.1"
 
 # Memory management
-bytes = "1.5"
+bytes = { version = "1.5", features = ["serde"] }
 parking_lot = "0.12"
 
 # HSM and PKCS#11 support

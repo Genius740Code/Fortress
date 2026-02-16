@@ -297,22 +297,15 @@ impl KeyManager for InMemoryKeyManager {
 
         let new_key = self.generate_key(algorithm).await?;
 
-        let new_metadata = KeyMetadata::builder()
-
-            .key_id(key_id.clone())
-
-            .algorithm(algorithm.name().to_string())
-
-            .version(1) // This should be incremented from the old version
-
-            .created_at(Utc::now())
-
-            .expires_at(Utc::now() + Duration::days(90))
-
-            .purpose("encryption".to_string())
-
-            .build()?;
-
+        let new_metadata = KeyMetadata::new(
+            key_id.clone(),
+            algorithm.name().to_string(),
+            1, // This should be incremented from old version
+            Utc::now(),
+            Utc::now() + Duration::days(90),
+            "encryption".to_string(),
+            PerformanceProfile::Balanced,
+        );
 
 
         self.store_key(key_id, &new_key, &new_metadata).await?;
@@ -765,14 +758,17 @@ impl Default for KeyMetadataBuilder {
 
 /// Key rotation scheduler
 
-#[derive(Debug)]
-
 pub struct KeyRotationScheduler {
-
     key_manager: Arc<dyn KeyManager>,
-
     rotation_intervals: HashMap<String, Duration>,
+}
 
+impl std::fmt::Debug for KeyRotationScheduler {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("KeyRotationScheduler")
+            .field("rotation_intervals", &self.rotation_intervals)
+            .finish()
+    }
 }
 
 
@@ -1053,7 +1049,7 @@ impl KeyDerivation {
 
             KeyDerivationFunction::Scrypt { n, r, p } => {
 
-                let params = scrypt::Params::new(*n, *r, *p, output_length)
+                let params = scrypt::Params::new((*n).try_into().unwrap(), *r, *p, output_length)
 
                     .map_err(|e| FortressError::key_management(
 
@@ -1178,9 +1174,10 @@ impl KeyManager for HsmKeyManager {
     async fn store_key(&self, key_id: &KeyId, key: &SecureKey, metadata: &KeyMetadata) -> Result<()> {
         // For HSM, we don't store external keys - we generate them internally
         // This method is kept for compatibility but may not be fully functional
-        Err(FortressError::KeyManagement(
+        Err(FortressError::key_management(
+            "HSM key manager does not support storing external keys. Use generate_key instead.",
+            Some(key_id.to_string()),
             KeyErrorCode::ProviderError,
-            "HSM key manager does not support storing external keys. Use generate_key instead.".to_string(),
         ))
     }
     
@@ -1266,16 +1263,17 @@ impl KeyManager for HsmKeyManager {
         let keys = self.list_keys().await?;
         
         // Find key with matching purpose that is not expired
-        for (key_id, metadata) in keys {
-            if metadata.purpose.as_ref() == Some(&purpose.to_string()) && metadata.expires_at > Utc::now() {
+        for (_key_id, metadata) in keys {
+            if metadata.purpose.as_ref().map(|s| s.as_str()) == Some(purpose) && metadata.expires_at > Utc::now() {
                 let key = SecureKey::generate(256); // Placeholder
                 return Ok((key, metadata));
             }
         }
         
-        Err(FortressError::KeyManagement(
-            KeyErrorCode::KeyNotFound,
+        Err(FortressError::key_management(
             format!("No active key found for purpose: {}", purpose),
+            None,
+            KeyErrorCode::KeyNotFound,
         ))
     }
 }

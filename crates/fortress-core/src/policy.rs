@@ -145,7 +145,7 @@ pub enum PolicyEffect {
 }
 
 /// Conditions for policy evaluation
-#[derive(Debug, Clone, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Condition {
     /// Time-based condition
     Time(TimeCondition),
@@ -158,7 +158,7 @@ pub enum Condition {
 }
 
 /// Time-based conditions
-#[derive(Debug, Clone, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TimeCondition {
     pub start_time: Option<u64>,
     pub end_time: Option<u64>,
@@ -167,7 +167,7 @@ pub struct TimeCondition {
 }
 
 /// IP-based conditions
-#[derive(Debug, Clone, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct IpCondition {
     pub allowed_ips: Vec<String>,
     pub denied_ips: Vec<String>,
@@ -175,7 +175,7 @@ pub struct IpCondition {
 }
 
 /// Attribute-based conditions
-#[derive(Debug, Clone, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct AttributeCondition {
     pub attribute: String,
     pub operator: AttributeOperator,
@@ -183,7 +183,7 @@ pub struct AttributeCondition {
 }
 
 /// Attribute operators
-#[derive(Debug, Clone, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum AttributeOperator {
     Equals,
     NotEquals,

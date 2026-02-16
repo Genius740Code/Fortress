@@ -199,6 +199,10 @@ pub enum KeyErrorCode {
     /// Key access denied
     #[error("Key access denied")]
     AccessDenied,
+    
+    /// Provider error
+    #[error("Provider error")]
+    ProviderError,
 }
 
 /// Storage error codes
@@ -295,6 +299,10 @@ pub enum QueryErrorCode {
     /// Insufficient permissions
     #[error("Insufficient permissions")]
     InsufficientPermissions,
+    
+    /// Invalid operation
+    #[error("Invalid operation")]
+    InvalidOperation,
 }
 
 impl FortressError {

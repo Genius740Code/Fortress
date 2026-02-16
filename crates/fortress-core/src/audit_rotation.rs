@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc, Datelike};
 
 use crate::error::{FortressError, Result};
-use crate::audit::{AuditConfig, AuditEntry, AuditLogger};
+use crate::audit::{AuditConfig, AuditEntry};
 
 /// Log rotation strategy
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

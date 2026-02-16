@@ -106,7 +106,7 @@ impl StorageBackend for InMemoryStorage {
         data.remove(key)
             .ok_or_else(|| FortressError::storage(
                 format!("Key not found: {}", key),
-                "in_memory",
+                "in_memory".to_string(),
                 StorageErrorCode::NotFound,
             ))?;
         Ok(())
