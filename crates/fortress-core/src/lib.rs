@@ -67,6 +67,9 @@ pub mod policy;
 /// Hardware Security Module (HSM) support
 pub mod hsm;
 
+/// Multi-tenant isolation system
+pub mod tenant;
+
 /// Audit logging system
 pub mod audit;
 

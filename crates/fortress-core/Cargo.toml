@@ -27,6 +27,7 @@ serde_with = "3.4"
 ring = "0.17"
 chacha20poly1305 = "0.10"
 aegis = "0.2"
+argon2 = "0.5"
 # Random number generation
 rand = "0.8"
 getrandom = "0.2"

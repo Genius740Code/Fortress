@@ -19,13 +19,14 @@ use base64::{Engine as _, engine::general_purpose};
 
 use bytes::Bytes;
 
-use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 use std::fmt;
 
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use chacha20poly1305::{KeyInit, XChaCha20Poly1305, XNonce, aead::Aead};
+use aegis::{Aegis256, KeyInit};
 
 
 
@@ -469,7 +470,7 @@ impl EncryptedData {
 
         let json = serde_json::to_string(self)
 
-            .map_err(|e| FortressError::encryption(
+            .map_err(|_e| FortressError::encryption(
 
                 "Failed to serialize encrypted data",
 
@@ -493,7 +494,7 @@ impl EncryptedData {
 
             .decode(data)
 
-            .map_err(|e| FortressError::encryption(
+            .map_err(|_e| FortressError::encryption(
 
                 "Failed to decode base64 data",
 
@@ -507,7 +508,7 @@ impl EncryptedData {
 
         serde_json::from_slice(&bytes)
 
-            .map_err(|e| FortressError::encryption(
+            .map_err(|_e| FortressError::encryption(
 
                 "Failed to deserialize encrypted data",
 
@@ -739,7 +740,7 @@ impl EncryptionAlgorithm for Aegis256 {
 
                 let error = FortressError::encryption(
 
-                    format!("Failed to generate nonce: {}", e).to_string(),
+                    "Failed to generate nonce: random error".to_string(),
 
                     self.name().to_string(),
 
@@ -793,7 +794,7 @@ impl EncryptionAlgorithm for Aegis256 {
 
                 let error = FortressError::encryption(
 
-                    format!("Failed to create cipher: {}", e).to_string(),
+                    "Failed to create cipher: cipher error".to_string(),
 
                     self.name().to_string(),
 
@@ -895,13 +896,13 @@ impl EncryptionAlgorithm for Aegis256 {
 
         let ciphertext = cipher
 
-            .encrypt(&aegis::aegis256::Nonce::from_slice(&nonce_array), plaintext)
+            .encrypt(&Aegis256::Nonce::from_slice(&nonce_array), plaintext)
 
             .map_err(|e| {
 
                 let error = FortressError::encryption(
 
-                    format!("Encryption failed: {}", e).to_string(),
+                    "Encryption failed: encryption error".to_string(),
 
                     self.name().to_string(),
 
@@ -1031,7 +1032,7 @@ impl EncryptionAlgorithm for Aegis256 {
         let cipher = aegis::Aegis256::new_from_slice(key)
             .map_err(|e| {
                 let error = FortressError::encryption(
-                    format!("Failed to create cipher: {}", e).to_string(),
+                    "Failed to create cipher: cipher error".to_string(),
                     self.name().to_string(),
                     EncryptionErrorCode::DecryptionFailed,
                 );
@@ -1087,10 +1088,10 @@ impl EncryptionAlgorithm for Aegis256 {
             })?;
 
         let plaintext = cipher
-            .decrypt(&aegis::aegis256::Nonce::from_slice(&nonce_array), actual_ciphertext)
+            .decrypt(&Aegis256::Nonce::from_slice(&nonce_array), actual_ciphertext)
             .map_err(|e| {
                 let error = FortressError::encryption(
-                    format!("Decryption failed: {}", e).to_string(),
+                    "Decryption failed: decryption error".to_string(),
                     self.name().to_string(),
                     EncryptionErrorCode::DecryptionFailed,
                 );
@@ -1258,9 +1259,9 @@ impl EncryptionAlgorithm for ChaCha20Poly1305 {
 
         getrandom::getrandom(&mut nonce)
 
-            .map_err(|e| FortressError::encryption(
+            .map_err(|_e| FortressError::encryption(
 
-                format!("Failed to generate nonce: {}", e).to_string(),
+                "Failed to generate nonce: random error".to_string(),
 
                 self.name().to_string(),
 
@@ -1274,9 +1275,9 @@ impl EncryptionAlgorithm for ChaCha20Poly1305 {
 
         let cipher = chacha20poly1305::XChaCha20Poly1305::new_from_slice(key)
 
-            .map_err(|e| FortressError::encryption(
+            .map_err(|_e| FortressError::encryption(
 
-                format!("Failed to create cipher: {}", e).to_string(),
+                "Failed to create cipher: cipher error".to_string(),
 
                 self.name().to_string(),
 
@@ -1298,9 +1299,9 @@ impl EncryptionAlgorithm for ChaCha20Poly1305 {
 
             .encrypt(&chacha20poly1305::XNonce::from_slice(&xnonce), plaintext)
 
-            .map_err(|e| FortressError::encryption(
+            .map_err(|_e| FortressError::encryption(
 
-                format!("Encryption failed: {}", e).to_string(),
+                "Encryption failed: encryption error".to_string(),
 
                 self.name().to_string(),
 
@@ -1370,9 +1371,9 @@ impl EncryptionAlgorithm for ChaCha20Poly1305 {
 
         let cipher = chacha20poly1305::XChaCha20Poly1305::new_from_slice(key)
 
-            .map_err(|e| FortressError::encryption(
+            .map_err(|_e| FortressError::encryption(
 
-                format!("Failed to create cipher: {}", e).to_string(),
+                "Failed to create cipher: cipher error".to_string(),
 
                 self.name().to_string(),
 
@@ -1394,9 +1395,9 @@ impl EncryptionAlgorithm for ChaCha20Poly1305 {
 
             .decrypt(&chacha20poly1305::XNonce::from_slice(&xnonce), actual_ciphertext)
 
-            .map_err(|e| FortressError::encryption(
+            .map_err(|_e| FortressError::encryption(
 
-                format!("Decryption failed: {}", e).to_string(),
+                "Decryption failed: decryption error".to_string(),
 
                 self.name().to_string(),
 
@@ -1530,9 +1531,9 @@ impl EncryptionAlgorithm for Aes256Gcm {
 
         getrandom::getrandom(&mut nonce)
 
-            .map_err(|e| FortressError::encryption(
+            .map_err(|_e| FortressError::encryption(
 
-                format!("Failed to generate nonce: {}", e).to_string(),
+                "Failed to generate nonce: random error".to_string(),
 
                 self.name().to_string(),
 
@@ -1548,9 +1549,9 @@ impl EncryptionAlgorithm for Aes256Gcm {
 
             ring::aead::UnboundKey::new(&ring::aead::AES_256_GCM, key)
 
-                .map_err(|e| FortressError::encryption(
+                .map_err(|_e| FortressError::encryption(
 
-                    format!("Failed to create key: {}", e).to_string(),
+                    "Failed to create key: key error".to_string(),
 
                     self.name().to_string(),
 
@@ -1576,9 +1577,9 @@ impl EncryptionAlgorithm for Aes256Gcm {
 
             .seal_in_place_append_tag(nonce, ring::aead::Aad::empty(), &mut ciphertext)
 
-            .map_err(|e| FortressError::encryption(
+            .map_err(|_e| FortressError::encryption(
 
-                format!("Encryption failed: {}", e).to_string(),
+                "Encryption failed: encryption error".to_string(),
 
                 self.name().to_string(),
 
@@ -1650,9 +1651,9 @@ impl EncryptionAlgorithm for Aes256Gcm {
 
             ring::aead::UnboundKey::new(&ring::aead::AES_256_GCM, key)
 
-                .map_err(|e| FortressError::encryption(
+                .map_err(|_e| FortressError::encryption(
 
-                    format!("Failed to create key: {}", e).to_string(),
+                    "Failed to create key: key error".to_string(),
 
                     self.name().to_string(),
 
@@ -1677,8 +1678,8 @@ impl EncryptionAlgorithm for Aes256Gcm {
 
         let tag = key
             .seal_in_place_append_tag(nonce, ring::aead::Aad::empty(), &mut ciphertext)
-            .map_err(|e| FortressError::encryption(
-                format!("Encryption failed: {}", e).to_string(),
+            .map_err(|_e| FortressError::encryption(
+                "Encryption failed: encryption error".to_string(),
                 self.name().to_string(),
                 EncryptionErrorCode::EncryptionFailed,
             ))?;

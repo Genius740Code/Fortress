@@ -475,21 +475,21 @@ impl PolicyEngine {
     }
 
     /// Evaluate IP-based conditions
-    async fn evaluate_ip_condition(&self, condition: &IpCondition, user_id: &str) -> Result<bool> {
+    async fn evaluate_ip_condition(&self, _condition: &IpCondition, _user_id: &str) -> Result<bool> {
         // TODO: Implement IP condition evaluation
         // This would require getting the user's IP address from context
         Ok(true)
     }
 
     /// Evaluate attribute-based conditions
-    async fn evaluate_attribute_condition(&self, condition: &AttributeCondition, user_id: &str) -> Result<bool> {
+    async fn evaluate_attribute_condition(&self, _condition: &AttributeCondition, _user_id: &str) -> Result<bool> {
         // TODO: Implement attribute condition evaluation
         // This would require getting user attributes from a user store
         Ok(true)
     }
 
     /// Log audit entry for policy decisions
-    async fn log_audit_entry(&self, entry: PolicyAuditEntry) -> Result<()> {
+    async fn log_audit_entry(&self, _entry: PolicyAuditEntry) -> Result<()> {
         // TODO: Implement audit logging
         // This would integrate with the audit logging system
         Ok(())

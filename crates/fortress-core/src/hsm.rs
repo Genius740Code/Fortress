@@ -3,7 +3,7 @@
 //! This module provides HSM integration for Fortress, allowing keys to be stored
 //! and managed in hardware security modules for enhanced security.
 
-use crate::error::{FortressError, Result};
+use crate::error::{FortressError, Result, KeyErrorCode};
 use crate::key::{KeyId, KeyMetadata, SecureKey};
 use crate::encryption::EncryptionAlgorithm;
 
@@ -12,7 +12,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use uuid::Uuid;
 
 /// HSM provider configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -180,15 +179,17 @@ impl HsmKeyManager {
                 Arc::new(Pkcs11Provider::new().await?)
             }
             HsmProviderType::AzureDedicatedHsm => {
-                return Err(FortressError::KeyManagement(
-                    crate::error::KeyErrorCode::ProviderError,
+                return Err(FortressError::key_management(
                     "Azure HSM provider not yet implemented".to_string(),
+                    None,
+                    crate::error::KeyErrorCode::ProviderError,
                 ));
             }
             HsmProviderType::GoogleCloudHsm => {
-                return Err(FortressError::KeyManagement(
-                    crate::error::KeyErrorCode::ProviderError,
+                return Err(FortressError::key_management(
                     "Google Cloud HSM provider not yet implemented".to_string(),
+                    None,
+                    crate::error::KeyErrorCode::ProviderError,
                 ));
             }
         };

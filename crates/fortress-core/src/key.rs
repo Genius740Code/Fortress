@@ -346,7 +346,7 @@ impl KeyManager for InMemoryKeyManager {
 
         let keys = self.keys.read().await;
 
-        for (key_id, (key, metadata)) in keys.iter() {
+        for (_key_id, (key, metadata)) in keys.iter() {
 
             if metadata.purpose == purpose && metadata.is_active() {
 
@@ -820,11 +820,12 @@ impl KeyRotationScheduler {
                 if time_since_creation >= *interval {
 
                     // This key needs rotation
-
-                    if let Ok((new_key, new_metadata)) = self.rotate_key(&key_id).await {
-
-                        rotated_keys.push((key_id, new_metadata));
-
+                    if let Err(_rotation_error) = self.rotate_key(&key_id).await {
+                        // Rotation failed, but we continue with other keys
+                        // Could log the error here
+                    } else {
+                        // Rotation succeeded, add to rotated keys
+                        rotated_keys.push((key_id, metadata));
                     }
 
                 }
@@ -1171,12 +1172,12 @@ impl KeyManager for HsmKeyManager {
         Ok(SecureKey::generate(algorithm.key_size()))
     }
     
-    async fn store_key(&self, key_id: &KeyId, key: &SecureKey, metadata: &KeyMetadata) -> Result<()> {
+    async fn store_key(&self, _key_id: &KeyId, _key: &SecureKey, _metadata: &KeyMetadata) -> Result<()> {
         // For HSM, we don't store external keys - we generate them internally
         // This method is kept for compatibility but may not be fully functional
         Err(FortressError::key_management(
             "HSM key manager does not support storing external keys. Use generate_key instead.",
-            Some(key_id.to_string()),
+            None,
             KeyErrorCode::ProviderError,
         ))
     }
@@ -1264,9 +1265,14 @@ impl KeyManager for HsmKeyManager {
         
         // Find key with matching purpose that is not expired
         for (_key_id, metadata) in keys {
-            if metadata.purpose.as_ref().map(|s| s.as_str()) == Some(purpose) && metadata.expires_at > Utc::now() {
-                let key = SecureKey::generate(256); // Placeholder
-                return Ok((key, metadata));
+            match metadata.purpose.as_ref() {
+                Some(p) if p == purpose => {
+                    if metadata.expires_at > Utc::now() {
+                        let key = SecureKey::generate(256); // Placeholder
+                        return Ok((key, metadata));
+                    }
+                }
+                _ => {}
             }
         }
         

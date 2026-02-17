@@ -68,7 +68,7 @@ pub trait QueryEngine: Send + Sync + fmt::Debug {
 
     /// Prepare a statement for repeated execution
 
-    async fn prepare(&self, query: &str) -> Result<PreparedStatement>;
+    async fn prepare(&self, query: &str) -> Result<Box<dyn PreparedStatement>>;
 
 }
 
@@ -260,11 +260,7 @@ impl Row {
 
     {
 
-        self.values
-
-            .get(index)
-
-            .ok_or_else(|| FortressError::query_execution(
+        T::try_from(self.values.get(index).ok_or_else(|| FortressError::query_execution(
 
                 format!("Index out of bounds: {}", index),
 
@@ -272,9 +268,7 @@ impl Row {
 
                 QueryErrorCode::InvalidParameter,
 
-            ))?
-
-            .try_into()
+            ))?)
 
     }
 
@@ -944,18 +938,6 @@ impl TryFromQueryParameter for chrono::DateTime<chrono::Utc> {
 
 }
 
-// Blanket implementation to convert TryFromQueryParameter to standard TryFrom
-impl<T> TryFrom<&QueryParameter> for T
-where
-    T: TryFromQueryParameter,
-{
-    type Error = FortressError;
-
-    fn try_from(param: &QueryParameter) -> Result<Self> {
-        T::try_from(param)
-    }
-}
-
 /// In-memory query engine for testing
 
 #[derive(Debug)]
@@ -1147,7 +1129,7 @@ impl QueryEngine for InMemoryQueryEngine {
 
 
 
-    async fn parse(&self, query: &str) -> Result<ExecutionPlan> {
+    async fn parse(&self, _query: &str) -> Result<ExecutionPlan> {
 
         // Simple parsing implementation
 

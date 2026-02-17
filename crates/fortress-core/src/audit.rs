@@ -5,7 +5,7 @@
 //! are logged with cryptographic integrity verification.
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use sha2::{Sha256, Digest};
@@ -158,7 +158,7 @@ impl Default for AuditConfig {
 /// Audit logger interface
 pub trait AuditLogger: Send + Sync {
     /// Log an audit event
-    fn log(&self, entry: AuditEntry) -> Result<()>;
+    fn log(&mut self, entry: AuditEntry) -> Result<()>;
     
     /// Query audit logs
     fn query(&self, query: AuditQuery) -> Result<Vec<AuditEntry>>;
@@ -256,14 +256,15 @@ pub struct AuditStatistics {
 pub struct DefaultAuditLogger {
     config: AuditConfig,
     hmac_key: Vec<u8>,
-    last_hash: Option<String>,
+    last_hash: Arc<Mutex<Option<String>>>,
 }
 
 impl DefaultAuditLogger {
     /// Create a new audit logger with the given configuration
     pub fn new(config: AuditConfig) -> Result<Self> {
         let hmac_key = if let Some(key_str) = &config.hmac_key {
-            base64::decode(key_str)
+            use base64::{Engine as _, engine::general_purpose};
+            general_purpose::STANDARD.decode(key_str)
                 .map_err(|e| FortressError::configuration(
                     format!("Invalid HMAC key: {}", e),
                     Some("hmac_key".to_string()),
@@ -283,7 +284,7 @@ impl DefaultAuditLogger {
         Ok(Self {
             config,
             hmac_key,
-            last_hash: None,
+            last_hash: Arc::new(Mutex::new(None)),
         })
     }
 
@@ -297,7 +298,8 @@ impl DefaultAuditLogger {
 
         let key = hmac::Key::new(hmac::HMAC_SHA256, &self.hmac_key);
         let tag = hmac::sign(&key, serialized.as_bytes());
-        Ok(base64::encode(tag.as_ref()))
+        use base64::{Engine as _, engine::general_purpose};
+        Ok(general_purpose::STANDARD.encode(tag.as_ref()))
     }
 
     /// Generate hash for an entry
@@ -362,7 +364,10 @@ impl DefaultAuditLogger {
             action,
             outcome,
             metadata,
-            previous_hash: self.last_hash.clone(),
+            previous_hash: {
+                let last_hash_guard = self.last_hash.lock().unwrap();
+                last_hash_guard.clone()
+            },
             current_hash: String::new(),
             signature: String::new(),
         };
@@ -372,7 +377,10 @@ impl DefaultAuditLogger {
         entry.signature = self.generate_signature(&entry)?;
 
         // Update last hash for chain integrity
-        self.last_hash = Some(entry.current_hash.clone());
+        {
+            let mut last_hash_guard = self.last_hash.lock().unwrap();
+            *last_hash_guard = Some(entry.current_hash.clone());
+        }
 
         Ok(entry)
     }
@@ -405,6 +413,17 @@ impl AuditLogger for DefaultAuditLogger {
         if entry.security_level < self.config.min_security_level {
             return Ok(());
         }
+
+        // Create entry with hash chain
+        let entry = self.create_entry(
+            entry.event_type,
+            entry.security_level,
+            entry.principal,
+            entry.resource,
+            entry.action,
+            entry.outcome,
+            entry.metadata,
+        )?;
 
         self.write_to_log(&entry)?;
         Ok(())

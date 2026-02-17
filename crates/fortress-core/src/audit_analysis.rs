@@ -580,7 +580,7 @@ impl ReportGenerator {
 
     /// Generate security recommendations
     fn generate_recommendations(
-        insights: &SecurityInsights,
+        _insights: &SecurityInsights,
         anomalies: &[SecurityAnomaly],
     ) -> Vec<SecurityRecommendation> {
         let mut recommendations = Vec::new();
