@@ -79,6 +79,15 @@ pub mod audit_analysis;
 /// Audit log rotation and retention
 pub mod audit_rotation;
 
+/// Distributed clustering system
+pub mod cluster;
+
+/// Raft consensus algorithm
+pub mod raft;
+
+/// Data replication system
+pub mod replication;
+
 #[cfg(test)]
 mod policy_test;
 
@@ -97,6 +106,9 @@ pub mod prelude {
     pub use crate::audit::{AuditLogger, AuditConfig, AuditEntry, AuditEventType, SecurityLevel, EventOutcome};
     pub use crate::audit_analysis::{AuditAnalyzer, SecurityAnomaly, SecurityInsights, SecurityReport};
     pub use crate::audit_rotation::{LogRotationManager, RetentionPolicy, RotationStrategy, LogStatistics};
+    pub use crate::cluster::{ClusterManager, ClusterConfig, ClusterNode, NodeState, ClusterHealth};
+    pub use crate::raft::{RaftEngine, RaftState, AppendEntriesRequest, AppendEntriesResponse, RequestVoteRequest, RequestVoteResponse};
+    pub use crate::replication::{ReplicationManager, ReplicationConfig, ReplicationOperation, ConsistencyLevel, ReplicationStatus};
 }
 
 /// Fortress version information

@@ -5,7 +5,7 @@ use tracing::{info, error};
 mod commands;
 mod utils;
 
-use commands::create_simple;
+use commands::{create_simple, cluster};
 
 #[derive(Parser)]
 #[command(name = "fortress")]
@@ -76,6 +76,11 @@ pub enum Commands {
     Config {
         #[command(subcommand)]
         action: ConfigAction,
+    },
+    /// Manage cluster operations
+    Cluster {
+        #[command(subcommand)]
+        action: cluster::ClusterCommands,
     },
 }
 
@@ -166,6 +171,9 @@ async fn run_command(command: Commands) -> Result<()> {
             println!("⚙️ Configuration Management");
             println!("Config command not yet implemented.");
             Ok(())
+        }
+        Commands::Cluster { action } => {
+            cluster::execute_cluster_command(action).await
         }
     }
 }

@@ -342,7 +342,7 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 - [x] Core encryption library
 - [x] Multi-layer encryption
 - [x] Key rotation system
-- [ ] Distributed clustering
+- [x] Distributed clustering
 - [ ] Web dashboard
 - [ ] Machine learning integration
 - [ ] Quantum-resistant cryptography
@@ -350,7 +350,6 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 See [Future Plans](docs/FUTURE_PLANS.md) for detailed timeline.
 
 ## 🏆 Acknowledgments
-
 - Built with [Rust](https://www.rust-lang.org/)
 - Encryption algorithms from [RustCrypto](https://github.com/RustCrypto)
 - Inspired by HashiCorp Vault, AWS KMS, and Turnkey
@@ -380,5 +379,6 @@ See [Future Plans](docs/FUTURE_PLANS.md) for detailed timeline.
 - Custom encryption rules per data type
 - Ultra-high performance
 - Zero-config setup with advanced options
-#   F o r t r e s s  
+#   F o r t r e s s 
+ 
  
