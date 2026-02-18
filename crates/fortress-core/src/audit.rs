@@ -308,7 +308,7 @@ impl DefaultAuditLogger {
         
         // Include all fields except the current hash and signature
         let mut hash_data = format!(
-            "{}{}{:?}{}{:?}{}{:?}{}{:?}{}{:?}{}{:?}{}{:?}",
+            "{}{}{:?}{}{:?}{}{:?}{}{:?}{}{:?}",
             entry.id,
             entry.timestamp,
             entry.event_type,
@@ -385,6 +385,138 @@ impl DefaultAuditLogger {
         Ok(entry)
     }
 
+    /// Read audit entries from a log file
+    fn read_log_file(&self, file_path: &str) -> Result<Vec<AuditEntry>> {
+        let mut entries = Vec::new();
+        
+        let content = if file_path.ends_with(".gz") {
+            // Read compressed file
+            self.read_compressed_log_file(file_path)?
+        } else {
+            // Read regular file
+            std::fs::read_to_string(file_path)
+                .map_err(|e| FortressError::io(
+                    format!("Failed to read audit log file: {}", e),
+                    Some(file_path.to_string()),
+                ))?
+        };
+
+        // Parse each line as a JSON audit entry
+        for line in content.lines() {
+            if line.trim().is_empty() {
+                continue;
+            }
+            
+            match serde_json::from_str::<AuditEntry>(line) {
+                Ok(entry) => entries.push(entry),
+                Err(e) => {
+                    // Log parsing error but continue with other entries
+                    eprintln!("Failed to parse audit entry from {}: {}", file_path, e);
+                }
+            }
+        }
+
+        Ok(entries)
+    }
+
+    /// Read compressed log file using gzip
+    fn read_compressed_log_file(&self, file_path: &str) -> Result<String> {
+        use flate2::read::GzDecoder;
+        use std::io::Read;
+
+        let file = std::fs::File::open(file_path)
+            .map_err(|e| FortressError::io(
+                format!("Failed to open compressed log file: {}", e),
+                Some(file_path.to_string()),
+            ))?;
+
+        let mut decoder = GzDecoder::new(file);
+        let mut content = String::new();
+        
+        decoder.read_to_string(&mut content)
+            .map_err(|e| FortressError::io(
+                format!("Failed to decompress log file: {}", e),
+                Some(file_path.to_string()),
+            ))?;
+
+        Ok(content)
+    }
+
+    /// Check if an audit entry matches the query criteria
+    fn matches_query(&self, entry: &AuditEntry, query: &AuditQuery) -> bool {
+        // Time range filter
+        if let Some(start_time) = query.start_time {
+            if entry.timestamp < start_time {
+                return false;
+            }
+        }
+        if let Some(end_time) = query.end_time {
+            if entry.timestamp > end_time {
+                return false;
+            }
+        }
+
+        // Event type filter
+        if let Some(event_types) = &query.event_types {
+            if !event_types.contains(&entry.event_type) {
+                return false;
+            }
+        }
+
+        // Security level filter
+        if let Some(security_levels) = &query.security_levels {
+            if !security_levels.contains(&entry.security_level) {
+                return false;
+            }
+        }
+
+        // Principal filter
+        if let Some(principal) = &query.principal {
+            if entry.principal.as_ref().map_or(true, |p| !p.contains(principal)) {
+                return false;
+            }
+        }
+
+        // Resource filter
+        if let Some(resource) = &query.resource {
+            if entry.resource.as_ref().map_or(true, |r| !r.contains(resource)) {
+                return false;
+            }
+        }
+
+        // Action filter (supports wildcards)
+        if let Some(action) = &query.action {
+            if action.contains('*') {
+                // Simple wildcard matching
+                let pattern = action.replace('*', ".*");
+                match regex::Regex::new(&pattern) {
+                    Ok(regex) => {
+                        if !regex.is_match(&entry.action) {
+                            return false;
+                        }
+                    }
+                    Err(_) => {
+                        // Fallback to simple contains if regex is invalid
+                        if !entry.action.contains(&action.replace('*', "")) {
+                            return false;
+                        }
+                    }
+                }
+            } else if !entry.action.contains(action) {
+                return false;
+            }
+        }
+
+        // Outcome filter
+        if let Some(outcome) = &query.outcome {
+            if &entry.outcome != outcome {
+                return false;
+            }
+        }
+
+        true
+    }
+
     /// Write entry to log file
     fn write_to_log(&self, entry: &AuditEntry) -> Result<()> {
         if let Some(log_path) = &self.config.log_path {
@@ -394,7 +526,20 @@ impl DefaultAuditLogger {
                     "SERIALIZATION_ERROR".to_string(),
                 ))?;
 
-            std::fs::write(log_path, format!("{}\n", serialized))
+            // Append to file (create if doesn't exist)
+            use std::fs::OpenOptions;
+            use std::io::Write;
+
+            let mut file = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(log_path)
+                .map_err(|e| FortressError::io(
+                    format!("Failed to open audit log file: {}", e),
+                    Some(log_path.clone()),
+                ))?;
+
+            writeln!(file, "{}", serialized)
                 .map_err(|e| FortressError::io(
                     format!("Failed to write audit log: {}", e),
                     Some(log_path.clone()),
@@ -429,36 +574,319 @@ impl AuditLogger for DefaultAuditLogger {
         Ok(())
     }
 
-    fn query(&self, _query: AuditQuery) -> Result<Vec<AuditEntry>> {
-        // TODO: Implement log querying
-        Ok(vec![])
+    fn query(&self, query: AuditQuery) -> Result<Vec<AuditEntry>> {
+        let log_path = match &self.config.log_path {
+            Some(path) => path,
+            None => return Ok(vec![]),
+        };
+
+        // Read all log files (current and rotated)
+        let mut all_entries = Vec::new();
+        
+        // Read current log file
+        if std::path::Path::new(log_path).exists() {
+            let entries = self.read_log_file(log_path)?;
+            all_entries.extend(entries);
+        }
+
+        // Read rotated log files
+        if let Some(parent) = std::path::Path::new(log_path).parent() {
+            if let Ok(dir_entries) = std::fs::read_dir(parent) {
+                for entry in dir_entries.flatten() {
+                    let path = entry.path();
+                    if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+                        if file_name.starts_with("audit_") && 
+                           (file_name.ends_with(".log") || file_name.ends_with(".log.gz")) {
+                            // Skip the current log file as we already read it
+                            if path.to_string_lossy() != *log_path {
+                                let entries = self.read_log_file(&path.to_string_lossy())?;
+                                all_entries.extend(entries);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Apply filters
+        let mut filtered_entries = Vec::new();
+        for entry in all_entries {
+            if self.matches_query(&entry, &query) {
+                filtered_entries.push(entry);
+            }
+        }
+
+        // Sort by timestamp (newest first)
+        filtered_entries.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+
+        // Apply pagination
+        let offset = query.offset.unwrap_or(0) as usize;
+        let limit = query.limit.unwrap_or(u32::MAX) as usize;
+
+        if offset >= filtered_entries.len() {
+            return Ok(vec![]);
+        }
+
+        let end = std::cmp::min(offset + limit, filtered_entries.len());
+        Ok(filtered_entries[offset..end].to_vec())
     }
 
     fn verify_integrity(&self) -> Result<IntegrityReport> {
-        // TODO: Implement integrity verification
+        let log_path = match &self.config.log_path {
+            Some(path) => path,
+            None => return Ok(IntegrityReport {
+                total_entries: 0,
+                valid_entries: 0,
+                violations: 0,
+                violation_details: vec![],
+            }),
+        };
+
+        // Read all audit entries from all log files
+        let mut all_entries = Vec::new();
+        
+        // Read current log file
+        if std::path::Path::new(log_path).exists() {
+            let entries = self.read_log_file(log_path)?;
+            all_entries.extend(entries);
+        }
+
+        // Read rotated log files
+        if let Some(parent) = std::path::Path::new(log_path).parent() {
+            if let Ok(dir_entries) = std::fs::read_dir(parent) {
+                let mut rotated_files: Vec<_> = dir_entries.flatten().collect();
+                // Sort by filename to ensure chronological order
+                rotated_files.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
+                
+                for entry in rotated_files {
+                    let path = entry.path();
+                    if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+                        if file_name.starts_with("audit_") && 
+                           (file_name.ends_with(".log") || file_name.ends_with(".log.gz")) {
+                            // Skip current log file as we already read it
+                            if path.to_string_lossy() != *log_path {
+                                let entries = self.read_log_file(&path.to_string_lossy())?;
+                                all_entries.extend(entries);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Sort entries by timestamp to verify hash chain
+        all_entries.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
+
+        let total_entries = all_entries.len() as u64;
+        let mut valid_entries = 0u64;
+        let mut violations = Vec::new();
+        let mut previous_hash: Option<String> = None;
+
+        for (index, entry) in all_entries.iter().enumerate() {
+            let mut entry_valid = true;
+
+            // Verify hash chain
+            if entry.previous_hash != previous_hash {
+                violations.push(IntegrityViolation {
+                    entry_id: entry.id.clone(),
+                    violation_type: IntegrityViolationType::HashChainBroken,
+                    description: format!(
+                        "Hash chain broken at entry {}. Expected previous hash: {:?}, found: {:?}",
+                        index,
+                        previous_hash,
+                        entry.previous_hash
+                    ),
+                });
+                entry_valid = false;
+            }
+
+            // Verify current hash
+            let expected_hash = self.generate_hash(entry)?;
+            if entry.current_hash != expected_hash {
+                violations.push(IntegrityViolation {
+                    entry_id: entry.id.clone(),
+                    violation_type: IntegrityViolationType::InvalidSignature,
+                    description: format!(
+                        "Invalid hash for entry {}. Expected: {}, found: {}",
+                        index,
+                        expected_hash,
+                        entry.current_hash
+                    ),
+                });
+                entry_valid = false;
+            }
+
+            // Verify HMAC signature
+            let expected_signature = self.generate_signature(entry)?;
+            if entry.signature != expected_signature {
+                violations.push(IntegrityViolation {
+                    entry_id: entry.id.clone(),
+                    violation_type: IntegrityViolationType::InvalidSignature,
+                    description: format!(
+                        "Invalid HMAC signature for entry {}. Expected: {}, found: {}",
+                        index,
+                        expected_signature,
+                        entry.signature
+                    ),
+                });
+                entry_valid = false;
+            }
+
+            // Check timestamp consistency (should be increasing)
+            if index > 0 {
+                let prev_entry = &all_entries[index - 1];
+                if entry.timestamp <= prev_entry.timestamp {
+                    violations.push(IntegrityViolation {
+                        entry_id: entry.id.clone(),
+                        violation_type: IntegrityViolationType::TimestampInconsistency,
+                        description: format!(
+                            "Timestamp inconsistency at entry {}. Current: {}, Previous: {}",
+                            index,
+                            entry.timestamp,
+                            prev_entry.timestamp
+                        ),
+                    });
+                    entry_valid = false;
+                }
+            }
+
+            if entry_valid {
+                valid_entries += 1;
+            }
+
+            previous_hash = Some(entry.current_hash.clone());
+        }
+
         Ok(IntegrityReport {
-            total_entries: 0,
-            valid_entries: 0,
-            violations: 0,
-            violation_details: vec![],
+            total_entries,
+            valid_entries,
+            violations: violations.len() as u64,
+            violation_details: violations,
         })
     }
 
     fn get_statistics(&self) -> Result<AuditStatistics> {
-        // TODO: Implement statistics collection
+        let log_path = match &self.config.log_path {
+            Some(path) => path,
+            None => return Ok(AuditStatistics {
+                total_entries: 0,
+                entries_by_event_type: HashMap::new(),
+                entries_by_security_level: HashMap::new(),
+                entries_by_outcome: HashMap::new(),
+                date_range: (None, None),
+                log_size: 0,
+            }),
+        };
+
+        // Read all audit entries from all log files
+        let mut all_entries = Vec::new();
+        
+        // Read current log file
+        if std::path::Path::new(log_path).exists() {
+            let entries = self.read_log_file(log_path)?;
+            all_entries.extend(entries);
+        }
+
+        // Read rotated log files
+        if let Some(parent) = std::path::Path::new(log_path).parent() {
+            if let Ok(dir_entries) = std::fs::read_dir(parent) {
+                for entry in dir_entries.flatten() {
+                    let path = entry.path();
+                    if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+                        if file_name.starts_with("audit_") && 
+                           (file_name.ends_with(".log") || file_name.ends_with(".log.gz")) {
+                            // Skip current log file as we already read it
+                            if path.to_string_lossy() != *log_path {
+                                let entries = self.read_log_file(&path.to_string_lossy())?;
+                                all_entries.extend(entries);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Calculate statistics
+        let total_entries = all_entries.len() as u64;
+        let mut entries_by_event_type: HashMap<AuditEventType, u64> = HashMap::new();
+        let mut entries_by_security_level: HashMap<SecurityLevel, u64> = HashMap::new();
+        let mut entries_by_outcome: HashMap<EventOutcome, u64> = HashMap::new();
+        let mut min_timestamp: Option<u64> = None;
+        let mut max_timestamp: Option<u64> = None;
+        let mut total_log_size = 0u64;
+
+        // Calculate log file sizes
+        if std::path::Path::new(log_path).exists() {
+            if let Ok(metadata) = std::fs::metadata(log_path) {
+                total_log_size += metadata.len();
+            }
+        }
+
+        if let Some(parent) = std::path::Path::new(log_path).parent() {
+            if let Ok(dir_entries) = std::fs::read_dir(parent) {
+                for entry in dir_entries.flatten() {
+                    let path = entry.path();
+                    if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+                        if file_name.starts_with("audit_") && 
+                           (file_name.ends_with(".log") || file_name.ends_with(".log.gz")) {
+                            if let Ok(metadata) = std::fs::metadata(&path) {
+                                total_log_size += metadata.len();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Process entries
+        for entry in &all_entries {
+            // Count by event type
+            *entries_by_event_type.entry(entry.event_type.clone()).or_insert(0) += 1;
+
+            // Count by security level
+            *entries_by_security_level.entry(entry.security_level.clone()).or_insert(0) += 1;
+
+            // Count by outcome
+            *entries_by_outcome.entry(entry.outcome.clone()).or_insert(0) += 1;
+
+            // Track timestamp range
+            min_timestamp = min_timestamp.map_or(Some(entry.timestamp), |min| Some(min.min(entry.timestamp)));
+            max_timestamp = max_timestamp.map_or(Some(entry.timestamp), |max| Some(max.max(entry.timestamp)));
+        }
+
         Ok(AuditStatistics {
-            total_entries: 0,
-            entries_by_event_type: HashMap::new(),
-            entries_by_security_level: HashMap::new(),
-            entries_by_outcome: HashMap::new(),
-            date_range: (None, None),
-            log_size: 0,
+            total_entries,
+            entries_by_event_type,
+            entries_by_security_level,
+            entries_by_outcome,
+            date_range: (min_timestamp, max_timestamp),
+            log_size: total_log_size,
         })
     }
 
     fn rotate_logs(&self) -> Result<()> {
-        // TODO: Implement log rotation
-        Ok(())
+        use crate::audit_rotation::{LogRotationManager, RetentionPolicy, RotationStrategy};
+        
+        if !self.config.enable_rotation {
+            return Ok(());
+        }
+
+        let retention_policy = RetentionPolicy {
+            retention_days: self.config.retention_days,
+            max_files: self.config.max_rotated_files,
+            compress_old_logs: true,
+            auto_delete: true,
+        };
+
+        let rotation_strategy = RotationStrategy::SizeBased; // Use size-based rotation
+
+        let mut rotation_manager = LogRotationManager::new(
+            self.config.clone(),
+            retention_policy,
+            rotation_strategy,
+        )?;
+
+        rotation_manager.force_rotation()
     }
 }
 

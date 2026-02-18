@@ -66,6 +66,10 @@ hex = "0.4"
 # Zeroize for secure memory handling
 zeroize = { version = "1.7", features = ["zeroize_derive"] }
 
+# Logging
+log = "0.4"
+tracing = "0.1"
+
 # Derive macros
 derive_builder = "0.12"
 derive_more = { version = "0.99", features = ["from", "into", "display"] }

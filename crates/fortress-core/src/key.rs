@@ -1265,14 +1265,11 @@ impl KeyManager for HsmKeyManager {
         
         // Find key with matching purpose that is not expired
         for (_key_id, metadata) in keys {
-            match metadata.purpose.as_ref() {
-                Some(p) if p == purpose => {
-                    if metadata.expires_at > Utc::now() {
-                        let key = SecureKey::generate(256); // Placeholder
-                        return Ok((key, metadata));
-                    }
+            if metadata.purpose == purpose {
+                if metadata.expires_at > Utc::now() {
+                    let key = SecureKey::generate(256); // Placeholder
+                    return Ok((key, metadata));
                 }
-                _ => {}
             }
         }
         

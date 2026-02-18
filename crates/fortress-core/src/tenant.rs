@@ -6,7 +6,7 @@
 //! infrastructure.
 
 use crate::error::{FortressError, Result};
-use crate::encryption::{EncryptionAlgorithm, EncryptionProfile};
+use crate::encryption::EncryptionProfile;
 use std::collections::HashMap;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -76,6 +76,18 @@ pub struct TenantResourceLimits {
     
     /// Memory quota (percentage)
     pub memory_quota: Option<f32>,
+}
+
+impl Default for TenantResourceLimits {
+    fn default() -> Self {
+        Self {
+            max_databases: None,
+            max_storage_size: None,
+            max_connections: None,
+            cpu_quota: None,
+            memory_quota: None,
+        }
+    }
 }
 
 /// Tenant manager for handling multi-tenant operations
@@ -175,16 +187,17 @@ impl TenantManager for InMemoryTenantManager {
             name: request.name.clone(),
             description: request.description.clone(),
             encryption_config: request.encryption_config.clone(),
-            resource_limits: request.resource_limits.clone(),
+            resource_limits: request.resource_limits.clone().unwrap_or_default(),
             active: true,
             created_at: now,
             modified_at: now,
         };
         
+        let tenant_clone = tenant.clone();
         let mut tenants = self.tenants.write().await;
         tenants.insert(tenant_id, tenant);
         
-        Ok(tenant)
+        Ok(tenant_clone)
     }
     
     async fn get_tenant(&self, tenant_id: &TenantId) -> Result<Option<Tenant>> {
@@ -200,15 +213,16 @@ impl TenantManager for InMemoryTenantManager {
                 tenant.name = name.clone();
             }
             if let Some(description) = &update.description {
-                tenant.description = description.clone();
+                tenant.description = Some(description.clone());
             }
             if let Some(encryption_config) = &update.encryption_config {
-                tenant.encryption_config = encryption_config.clone();
+                tenant.encryption_config = Some(encryption_config.clone());
             }
             if let Some(resource_limits) = &update.resource_limits {
                 tenant.resource_limits = resource_limits.clone();
             }
             tenant.modified_at = chrono::Utc::now();
+            Ok(tenant.clone())
         } else {
             return Err(FortressError::key_management(
                 "Tenant not found".to_string(),
@@ -216,8 +230,6 @@ impl TenantManager for InMemoryTenantManager {
                 crate::error::KeyErrorCode::KeyNotFound,
             ));
         }
-        
-        Ok(tenant)
     }
     
     async fn delete_tenant(&self, tenant_id: &TenantId) -> Result<()> {
@@ -231,7 +243,7 @@ impl TenantManager for InMemoryTenantManager {
         Ok(tenants.values().cloned().collect())
     }
     
-    async fn get_tenant_stats(&self, tenant_id: &TenantId) -> Result<TenantStats> {
+    async fn get_tenant_stats(&self, _tenant_id: &TenantId) -> Result<TenantStats> {
         // For now, return placeholder stats
         Ok(TenantStats {
             database_count: 0,

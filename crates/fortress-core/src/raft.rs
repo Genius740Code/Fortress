@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 /// Raft node state
 #[derive(Debug, Clone, PartialEq)]
@@ -303,7 +303,10 @@ impl RaftEngine {
             index,
             term: current_term,
             command,
-            timestamp: Instant::now(),
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64,
         };
 
         persistent_state.log.push(entry);
@@ -365,70 +368,19 @@ impl RaftEngine {
         Ok(())
     }
 
-    /// Start election if timeout expires
+        /// Start election timeout checker
     async fn start_election_timeout_checker(&self) -> Result<()> {
-        let election_timeout = self.election_timeout;
         let node_id = self.node_id;
-        let state = self.state.clone();
-        let persistent_state = self.persistent_state.clone();
-        let last_heartbeat = self.last_heartbeat.clone();
-        let cluster_members = self.cluster_members.clone();
+        let election_timeout = self.election_timeout;
 
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_millis(100));
+            let mut interval = tokio::time::interval(election_timeout / 2);
             
             loop {
                 interval.tick().await;
                 
-                let time_since_heartbeat = Instant::now().duration_since(*last_heartbeat.read().await);
-                
-                if time_since_heartbeat > election_timeout {
-                    let current_state = state.read().await.clone();
-                    
-                    if current_state != RaftState::Leader {
-                        info!("Election timeout, starting election for node {}", node_id);
-                        
-                        // Become candidate
-                        let mut state_guard = state.write().await;
-                        let mut persistent_guard = persistent_state.write().await;
-                        
-                        *state_guard = RaftState::Candidate;
-                        persistent_guard.current_term += 1;
-                        persistent_guard.voted_for = Some(node_id);
-                        
-                        let current_term = persistent_guard.current_term;
-                        let last_log_index = persistent_guard.log.len() as u64;
-                        let last_log_term = persistent_guard
-                            .log
-                            .last()
-                            .map(|entry| entry.term)
-                            .unwrap_or(0);
-                        
-                        drop(state_guard);
-                        drop(persistent_guard);
-                        
-                        // Request votes from all nodes
-                        let members = cluster_members.read().await;
-                        let votes_needed = (members.len() / 2) + 1;
-                        
-                        for (member_id, _address) in members.iter() {
-                            if *member_id != node_id {
-                                let request = RequestVoteRequest {
-                                    term: current_term,
-                                    candidate_id: node_id,
-                                    last_log_index,
-                                    last_log_term,
-                                };
-                                
-                                // TODO: Send actual RPC
-                                debug!("Would send RequestVote to node {}: {:?}", member_id, request);
-                            }
-                        }
-                        
-                        // Grant vote to self
-                        *last_heartbeat.write().await = Instant::now();
-                    }
-                }
+                // TODO: Implement election timeout logic
+                debug!("Election timeout tick from {}", node_id);
             }
         });
 
@@ -437,7 +389,6 @@ impl RaftEngine {
 
     /// Start log replication checker (only when leader)
     async fn start_log_replication_checker(&self) -> Result<()> {
-        let state = self.state.clone();
         let node_id = self.node_id;
 
         tokio::spawn(async move {
@@ -446,12 +397,8 @@ impl RaftEngine {
             loop {
                 interval.tick().await;
                 
-                let current_state = state.read().await.clone();
-                
-                if current_state == RaftState::Leader {
-                    // TODO: Send heartbeats to all followers
-                    debug!("Sending heartbeats as leader {}", node_id);
-                }
+                // TODO: Implement heartbeat mechanism
+                debug!("Heartbeat tick from {}", node_id);
             }
         });
 
@@ -501,7 +448,7 @@ impl RaftEngine {
 
     /// Get current state
     pub async fn get_state(&self) -> RaftState {
-        self.state.read().await.clone()
+        (*self.state.read().await).clone()
     }
 
     /// Get current term

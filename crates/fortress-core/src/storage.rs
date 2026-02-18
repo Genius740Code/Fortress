@@ -5,7 +5,6 @@
 
 use crate::error::{FortressError, Result, StorageErrorCode};
 use async_trait::async_trait;
-use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
 use std::collections::HashMap;

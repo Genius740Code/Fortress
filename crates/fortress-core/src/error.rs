@@ -3,7 +3,6 @@
 //! This module defines comprehensive error types for all Fortress operations,
 //! with a focus on security and clarity.
 
-use std::fmt;
 use thiserror::Error;
 
 /// Result type alias for Fortress operations
@@ -131,6 +130,15 @@ pub enum FortressError {
     /// Policy and authorization errors
     #[error("Policy error: {0}")]
     PolicyError(String),
+
+    /// Cluster-related errors
+    #[error("Cluster error: {message}")]
+    Cluster {
+        /// Error message
+        message: String,
+        /// Node ID if applicable
+        node_id: Option<String>,
+    },
 }
 
 /// Encryption error codes
@@ -429,6 +437,14 @@ impl FortressError {
         }
     }
 
+    /// Create a new cluster error
+    pub fn cluster<S: Into<String>>(message: S, node_id: Option<String>) -> Self {
+        Self::Cluster {
+            message: message.into(),
+            node_id,
+        }
+    }
+
     /// Check if this error is retryable
     pub fn is_retryable(&self) -> bool {
         match self {
@@ -437,6 +453,7 @@ impl FortressError {
             }
             Self::RateLimit { .. } => true,
             Self::Io { .. } => true,
+            Self::Cluster { .. } => true,
             _ => false,
         }
     }
@@ -466,6 +483,7 @@ impl FortressError {
             Self::RateLimit { .. } => "rate_limit",
             Self::Internal { .. } => "internal",
             Self::PolicyError(_) => "policy",
+            Self::Cluster { .. } => "cluster",
         }
     }
 }

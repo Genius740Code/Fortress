@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use log::{info, debug, warn};
 
 /// HSM provider configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -230,7 +231,7 @@ impl HsmProvider for AwsCloudHsmProvider {
                 
                 // TODO: Set up AWS client configuration
                 match &config.credentials {
-                    HsmCredentials::Aws { access_key_id, secret_access_key, region } => {
+                    HsmCredentials::Aws { access_key_id: _, secret_access_key: _, region } => {
                         // TODO: Configure AWS credentials
                         log::info!("Configuring AWS CloudHSM credentials for region: {}", region);
                     }
@@ -299,7 +300,7 @@ impl HsmProvider for AwsCloudHsmProvider {
         Ok(vec![]) // Return empty list for now
     }
     
-    async fn sign(&self, key_id: &KeyId, data: &[u8]) -> Result<Vec<u8>> {
+    async fn sign(&self, key_id: &KeyId, _data: &[u8]) -> Result<Vec<u8>> {
         log::info!("Signing data with key {} using AWS CloudHSM", key_id);
         
         // TODO: Implement AWS CloudHSM signing
@@ -308,7 +309,7 @@ impl HsmProvider for AwsCloudHsmProvider {
         Ok(vec![]) // Return empty signature for now
     }
     
-    async fn verify(&self, key_id: &KeyId, data: &[u8], signature: &[u8]) -> Result<bool> {
+    async fn verify(&self, key_id: &KeyId, _data: &[u8], _signature: &[u8]) -> Result<bool> {
         log::info!("Verifying signature with key {} using AWS CloudHSM", key_id);
         
         // TODO: Implement AWS CloudHSM verification
@@ -317,7 +318,7 @@ impl HsmProvider for AwsCloudHsmProvider {
         Ok(false) // Return false for now
     }
     
-    async fn encrypt(&self, key_id: &KeyId, plaintext: &[u8]) -> Result<Vec<u8>> {
+    async fn encrypt(&self, key_id: &KeyId, _plaintext: &[u8]) -> Result<Vec<u8>> {
         log::info!("Encrypting data with key {} using AWS CloudHSM", key_id);
         
         // TODO: Implement AWS CloudHSM encryption
@@ -326,7 +327,7 @@ impl HsmProvider for AwsCloudHsmProvider {
         Ok(vec![]) // Return empty ciphertext for now
     }
     
-    async fn decrypt(&self, key_id: &KeyId, ciphertext: &[u8]) -> Result<Vec<u8>> {
+    async fn decrypt(&self, key_id: &KeyId, _ciphertext: &[u8]) -> Result<Vec<u8>> {
         log::info!("Decrypting data with key {} using AWS CloudHSM", key_id);
         
         // TODO: Implement AWS CloudHSM decryption
@@ -379,7 +380,7 @@ impl HsmProvider for Pkcs11Provider {
                 }
                 
                 match &config.credentials {
-                    HsmCredentials::Pkcs11 { pin, user_type } => {
+                    HsmCredentials::Pkcs11 { pin: _, user_type } => {
                         log::info!("Configuring PKCS#11 authentication for user type: {:?}", user_type);
                         // TODO: Login to PKCS#11 token with PIN
                     }
@@ -448,7 +449,7 @@ impl HsmProvider for Pkcs11Provider {
         Ok(vec![]) // Return empty list for now
     }
     
-    async fn sign(&self, key_id: &KeyId, data: &[u8]) -> Result<Vec<u8>> {
+    async fn sign(&self, key_id: &KeyId, _data: &[u8]) -> Result<Vec<u8>> {
         log::info!("Signing data with key {} using PKCS#11 HSM", key_id);
         
         // TODO: Implement PKCS#11 signing
@@ -457,7 +458,7 @@ impl HsmProvider for Pkcs11Provider {
         Ok(vec![]) // Return empty signature for now
     }
     
-    async fn verify(&self, key_id: &KeyId, data: &[u8], signature: &[u8]) -> Result<bool> {
+    async fn verify(&self, key_id: &KeyId, _data: &[u8], _signature: &[u8]) -> Result<bool> {
         log::info!("Verifying signature with key {} using PKCS#11 HSM", key_id);
         
         // TODO: Implement PKCS#11 verification
@@ -466,7 +467,7 @@ impl HsmProvider for Pkcs11Provider {
         Ok(false) // Return false for now
     }
     
-    async fn encrypt(&self, key_id: &KeyId, plaintext: &[u8]) -> Result<Vec<u8>> {
+    async fn encrypt(&self, key_id: &KeyId, _plaintext: &[u8]) -> Result<Vec<u8>> {
         log::info!("Encrypting data with key {} using PKCS#11 HSM", key_id);
         
         // TODO: Implement PKCS#11 encryption
@@ -475,7 +476,7 @@ impl HsmProvider for Pkcs11Provider {
         Ok(vec![]) // Return empty ciphertext for now
     }
     
-    async fn decrypt(&self, key_id: &KeyId, ciphertext: &[u8]) -> Result<Vec<u8>> {
+    async fn decrypt(&self, key_id: &KeyId, _ciphertext: &[u8]) -> Result<Vec<u8>> {
         log::info!("Decrypting data with key {} using PKCS#11 HSM", key_id);
         
         // TODO: Implement PKCS#11 decryption
