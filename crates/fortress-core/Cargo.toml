@@ -66,6 +66,9 @@ hex = "0.4"
 # Zeroize for secure memory handling
 zeroize = { version = "1.7", features = ["zeroize_derive"] }
 
+# Generic array for cryptography
+generic-array = "0.14"
+
 # Logging
 log = "0.4"
 tracing = "0.1"

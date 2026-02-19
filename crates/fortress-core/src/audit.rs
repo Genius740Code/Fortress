@@ -308,7 +308,7 @@ impl DefaultAuditLogger {
         
         // Include all fields except the current hash and signature
         let mut hash_data = format!(
-            "{}{}{:?}{}{:?}{}{:?}{}{:?}{}{:?}",
+            "{}{}{:?}{:?}{:?}{:?}{:?}{:?}{:?}",
             entry.id,
             entry.timestamp,
             entry.event_type,

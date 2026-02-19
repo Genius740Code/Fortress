@@ -32,7 +32,7 @@ use chacha20poly1305::{KeyInit as ChaChaKeyInit, XChaCha20Poly1305, XNonce, aead
 // use aegis::aegis256::Aegis256; // TODO: Fix aegis import
 use ring::aead::{LessSafeKey, UnboundKey, AES_256_GCM};
 use ring::aead::Nonce as RingNonce;
-use ring::aead::generic_array::GenericArray;
+use generic_array::GenericArray;
 
 
 
@@ -1095,9 +1095,8 @@ impl EncryptionAlgorithm for Aes256Gcm {
 
         );
 
-        let nonce = ring::aead::Nonce::assume_unique_for_key(
-            GenericArray::from_slice(&nonce)
-        );
+        let nonce_bytes = nonce.try_into().unwrap();
+        let nonce = ring::aead::Nonce::assume_unique_for_key(nonce_bytes);
 
         let mut ciphertext = plaintext.to_vec();
 
@@ -1119,7 +1118,7 @@ impl EncryptionAlgorithm for Aes256Gcm {
 
         // Prepend nonce to ciphertext
 
-        let mut result = nonce.as_ref().to_vec();
+        let mut result = nonce_bytes.to_vec();
 
         result.extend_from_slice(&ciphertext);
 
@@ -1194,7 +1193,7 @@ impl EncryptionAlgorithm for Aes256Gcm {
 
 
         let nonce = ring::aead::Nonce::assume_unique_for_key(
-            GenericArray::from_slice(nonce_bytes)
+            nonce_bytes.try_into().unwrap()
         );
 
 
@@ -1710,3 +1709,5 @@ async fn test_aegis256_encrypt_decrypt() {
     // TODO: Fix Aegis256 implementation - temporarily commented out
     println!("🎉 AEGIS-256 implementation is working correctly!");
 }
+
+} // mod tests
