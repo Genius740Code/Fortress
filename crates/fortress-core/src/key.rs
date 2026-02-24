@@ -522,6 +522,14 @@ impl KeyMetadata {
 
     }
 
+    /// Create a new builder for KeyMetadata
+
+    pub fn builder() -> KeyMetadataBuilder {
+
+        KeyMetadataBuilder::default()
+
+    }
+
 }
 
 

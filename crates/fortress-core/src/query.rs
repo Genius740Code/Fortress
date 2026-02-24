@@ -936,6 +936,39 @@ impl TryFromQueryParameter for chrono::DateTime<chrono::Utc> {
 
 }
 
+// Standard TryFrom implementations for QueryParameter
+impl TryFrom<&QueryParameter> for String {
+    type Error = FortressError;
+    
+    fn try_from(param: &QueryParameter) -> Result<Self> {
+        <String as TryFromQueryParameter>::try_from(param)
+    }
+}
+
+impl TryFrom<&QueryParameter> for i64 {
+    type Error = FortressError;
+    
+    fn try_from(param: &QueryParameter) -> Result<Self> {
+        <i64 as TryFromQueryParameter>::try_from(param)
+    }
+}
+
+impl TryFrom<&QueryParameter> for f64 {
+    type Error = FortressError;
+    
+    fn try_from(param: &QueryParameter) -> Result<Self> {
+        <f64 as TryFromQueryParameter>::try_from(param)
+    }
+}
+
+impl TryFrom<&QueryParameter> for bool {
+    type Error = FortressError;
+    
+    fn try_from(param: &QueryParameter) -> Result<Self> {
+        <bool as TryFromQueryParameter>::try_from(param)
+    }
+}
+
 /// In-memory query engine for testing
 
 #[derive(Debug)]
@@ -1315,7 +1348,7 @@ mod tests {
 
         
 
-        let id: uuid::Uuid = row.get_as(0).unwrap();
+        let _id: uuid::Uuid = row.get_as(0).unwrap();
 
         assert_eq!(row.get(0).unwrap().param_type(), ParameterType::Uuid);
 
@@ -1329,7 +1362,7 @@ mod tests {
 
         let string_param = QueryParameter::String("test".to_string());
 
-        let converted: String = string_param.try_into().unwrap();
+        let converted: String = (&string_param).try_into().unwrap();
 
         assert_eq!(converted, "test");
 
@@ -1337,7 +1370,7 @@ mod tests {
 
         let int_param = QueryParameter::Integer(42);
 
-        let converted: i64 = int_param.try_into().unwrap();
+        let converted: i64 = (&int_param).try_into().unwrap();
 
         assert_eq!(converted, 42);
 
@@ -1345,7 +1378,7 @@ mod tests {
 
         let float_param = QueryParameter::Float(3.14);
 
-        let converted: f64 = float_param.try_into().unwrap();
+        let converted: f64 = (&float_param).try_into().unwrap();
 
         assert_eq!(converted, 3.14);
 
@@ -1353,7 +1386,7 @@ mod tests {
 
         let bool_param = QueryParameter::Boolean(true);
 
-        let converted: bool = bool_param.try_into().unwrap();
+        let converted: bool = (&bool_param).try_into().unwrap();
 
         assert_eq!(converted, true);
 

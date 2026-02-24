@@ -604,10 +604,10 @@ mod tests {
         assert_eq!(password.len(), 12);
         
         // Should contain different character types
-        let has_upper = password.chars().any(|c| c.is_uppercase());
-        let has_lower = password.chars().any(|c| c.is_lowercase());
-        let has_digit = password.chars().any(|c| c.is_digit(10));
-        let has_special = password.chars().any(|c| "!@#$%^&*()_+-=[]{}|;:,.<>?".contains(c));
+        let _has_upper = password.chars().any(|c| c.is_uppercase());
+        let _has_lower = password.chars().any(|c| c.is_lowercase());
+        let _has_digit = password.chars().any(|c| c.is_digit(10));
+        let _has_special = password.chars().any(|c| "!@#$%^&*()_+-=[]{}|;:,.<>?".contains(c));
         
         // Not guaranteed in random generation, but likely
         // assert!(has_upper || has_lower || has_digit || has_special);

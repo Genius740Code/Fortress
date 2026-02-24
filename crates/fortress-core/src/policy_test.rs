@@ -7,7 +7,7 @@ use tokio::test;
 async fn test_role_creation() {
     let role = Role::new("test")
         .with_description("Test role")
-        .with_permission(Permission::Read, Resource::Database("users"));
+        .with_permission(Permission::Read, Resource::Database("users".to_string()));
 
     assert_eq!(role.name, "test");
     assert_eq!(role.description, Some("Test role".to_string()));
@@ -19,13 +19,13 @@ async fn test_policy_engine_basic() {
     let engine = PolicyEngine::new();
     
     let role = Role::new("readonly")
-        .with_permission(Permission::Read, Resource::Database("users"));
+        .with_permission(Permission::Read, Resource::Database("users".to_string()));
     
     engine.add_role(role).await.unwrap();
     engine.assign_role("user1", "readonly").await.unwrap();
     
-    let can_read = engine.check_permission("user1", Permission::Read, Resource::Database("users")).await.unwrap();
-    let can_write = engine.check_permission("user1", Permission::Write, Resource::Database("users")).await.unwrap();
+    let can_read = engine.check_permission("user1", Permission::Read, Resource::Database("users".to_string())).await.unwrap();
+    let can_write = engine.check_permission("user1", Permission::Write, Resource::Database("users".to_string())).await.unwrap();
     
     assert!(can_read);
     assert!(!can_write);
@@ -36,17 +36,17 @@ async fn test_resource_matching() {
     let engine = PolicyEngine::new();
     
     let role = Role::new("db_access")
-        .with_permission(Permission::Read, Resource::Database("users"));
+        .with_permission(Permission::Read, Resource::Database("users".to_string()));
     
     engine.add_role(role).await.unwrap();
     engine.assign_role("user1", "db_access").await.unwrap();
     
     // Should match database access
-    let can_read_db = engine.check_permission("user1", Permission::Read, Resource::Database("users")).await.unwrap();
+    let can_read_db = engine.check_permission("user1", Permission::Read, Resource::Database("users".to_string())).await.unwrap();
     // Should match table access within database
-    let can_read_table = engine.check_permission("user1", Permission::Read, Resource::Table("users", "profiles")).await.unwrap();
+    let can_read_table = engine.check_permission("user1", Permission::Read, Resource::Table("users".to_string(), "profiles".to_string())).await.unwrap();
     // Should match field access within database
-    let can_read_field = engine.check_permission("user1", Permission::Read, Resource::Field("users", "profiles", "email")).await.unwrap();
+    let can_read_field = engine.check_permission("user1", Permission::Read, Resource::Field("users".to_string(), "profiles".to_string(), "email".to_string())).await.unwrap();
     
     assert!(can_read_db);
     assert!(can_read_table);
@@ -58,7 +58,7 @@ async fn test_user_roles() {
     let engine = PolicyEngine::new();
     
     let role1 = Role::new("admin").with_permission(Permission::Admin, Resource::All);
-    let role2 = Role::new("reader").with_permission(Permission::Read, Resource::Database("users"));
+    let role2 = Role::new("reader").with_permission(Permission::Read, Resource::Database("users".to_string()));
     
     engine.add_role(role1).await.unwrap();
     engine.add_role(role2).await.unwrap();
@@ -77,8 +77,8 @@ async fn test_user_permissions() {
     let engine = PolicyEngine::new();
     
     let role = Role::new("multi_access")
-        .with_permission(Permission::Read, Resource::Database("users"))
-        .with_permission(Permission::Write, Resource::Database("orders"));
+        .with_permission(Permission::Read, Resource::Database("users".to_string()))
+        .with_permission(Permission::Write, Resource::Database("orders".to_string()));
     
     engine.add_role(role).await.unwrap();
     engine.assign_role("user1", "multi_access").await.unwrap();
@@ -92,20 +92,20 @@ async fn test_role_removal() {
     let engine = PolicyEngine::new();
     
     let role = Role::new("temp_role")
-        .with_permission(Permission::Read, Resource::Database("users"));
+        .with_permission(Permission::Read, Resource::Database("users".to_string()));
     
     engine.add_role(role).await.unwrap();
     engine.assign_role("user1", "temp_role").await.unwrap();
     
     // Verify role exists and user has access
-    let can_read = engine.check_permission("user1", Permission::Read, Resource::Database("users")).await.unwrap();
+    let can_read = engine.check_permission("user1", Permission::Read, Resource::Database("users".to_string())).await.unwrap();
     assert!(can_read);
     
     // Remove role
     engine.remove_role("temp_role").await.unwrap();
     
     // Verify access is revoked
-    let can_read_after = engine.check_permission("user1", Permission::Read, Resource::Database("users")).await.unwrap();
+    let can_read_after = engine.check_permission("user1", Permission::Read, Resource::Database("users".to_string())).await.unwrap();
     assert!(!can_read_after);
 }
 
@@ -114,20 +114,20 @@ async fn test_role_assignment_removal() {
     let engine = PolicyEngine::new();
     
     let role = Role::new("test_role")
-        .with_permission(Permission::Read, Resource::Database("users"));
+        .with_permission(Permission::Read, Resource::Database("users".to_string()));
     
     engine.add_role(role).await.unwrap();
     engine.assign_role("user1", "test_role").await.unwrap();
     
     // Verify access
-    let can_read = engine.check_permission("user1", Permission::Read, Resource::Database("users")).await.unwrap();
+    let can_read = engine.check_permission("user1", Permission::Read, Resource::Database("users".to_string())).await.unwrap();
     assert!(can_read);
     
     // Remove role assignment
     engine.remove_role_assignment("user1", "test_role").await.unwrap();
     
     // Verify access is revoked
-    let can_read_after = engine.check_permission("user1", Permission::Read, Resource::Database("users")).await.unwrap();
+    let can_read_after = engine.check_permission("user1", Permission::Read, Resource::Database("users".to_string())).await.unwrap();
     assert!(!can_read_after);
 }
 
@@ -154,7 +154,7 @@ async fn test_permissions_with_conditions() {
     let role = Role::new("conditional")
         .with_permission_conditions(
             Permission::Read,
-            Resource::Database("users"),
+            Resource::Database("users".to_string()),
             vec![Condition::Time(time_condition)],
         );
     

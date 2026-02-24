@@ -441,7 +441,7 @@ impl ReplicationManager {
 
     /// Start operation monitoring
     async fn start_operation_monitoring(&self) -> Result<()> {
-        let replication_timeout = self.config.replication_timeout;
+        let _replication_timeout = self.config.replication_timeout;
 
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(1));

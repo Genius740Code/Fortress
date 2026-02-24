@@ -1,5 +1,6 @@
 //! Integration tests for fortress-core
 
+use std::sync::Arc;
 use fortress_core::{
     encryption::{Aegis256, ChaCha20Poly1305, Aes256Gcm, EncryptionAlgorithm},
     key::{InMemoryKeyManager, KeyManager, KeyMetadata},
@@ -38,7 +39,7 @@ async fn test_end_to_end_encryption_workflow() {
     let ciphertext = algorithm.encrypt(plaintext, key.as_bytes()).unwrap();
     let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
     
-    assert_eq!(plaintext, decrypted);
+    assert_eq!(plaintext.to_vec(), decrypted);
     
     // Verify key retrieval
     let (retrieved_key, retrieved_metadata) = key_manager.retrieve_key(&key_id).await.unwrap();
@@ -66,12 +67,12 @@ async fn test_multi_algorithm_encryption() {
         
         // Test decryption
         let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
-        assert_eq!(plaintext, decrypted);
+        assert_eq!(plaintext.to_vec(), decrypted);
         
         // Test async methods
         let ciphertext_async = algorithm.encrypt_async(plaintext, key.as_bytes()).await.unwrap();
         let decrypted_async = algorithm.decrypt_async(&ciphertext_async, key.as_bytes()).await.unwrap();
-        assert_eq!(plaintext, decrypted_async);
+        assert_eq!(plaintext.to_vec(), decrypted_async);
     }
 }
 

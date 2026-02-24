@@ -286,7 +286,7 @@ mod tests {
         
         let tenant = manager.create_tenant(request).await.unwrap();
         let retrieved = manager.get_tenant(&tenant.id).await.unwrap();
-        assert_eq!(retrieved.id, tenant.id);
-        assert_eq!(retrieved.name, tenant.name);
+        assert_eq!(retrieved.as_ref().unwrap().id, tenant.id);
+        assert_eq!(retrieved.as_ref().unwrap().name, tenant.name);
     }
 }

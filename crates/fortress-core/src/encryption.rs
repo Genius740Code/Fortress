@@ -1100,7 +1100,7 @@ impl EncryptionAlgorithm for Aes256Gcm {
 
         let mut ciphertext = plaintext.to_vec();
 
-        let tag = key
+        let _tag = key
 
             .seal_in_place_append_tag(nonce, ring::aead::Aad::empty(), &mut ciphertext)
 
@@ -1358,7 +1358,7 @@ mod tests {
         let plaintext = b"Hello, Fortress!";
         let ciphertext = algorithm.encrypt(plaintext, key.as_bytes()).unwrap();
         let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
-        assert_eq!(plaintext, decrypted);
+        assert_eq!(plaintext.to_vec(), decrypted);
     }
 
 
@@ -1370,7 +1370,7 @@ mod tests {
         let plaintext = b"Hello, Fortress!";
         let ciphertext = algorithm.encrypt(plaintext, key.as_bytes()).unwrap();
         let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
-        assert_eq!(plaintext, decrypted);
+        assert_eq!(plaintext.to_vec(), decrypted);
     }
 
 
@@ -1671,15 +1671,17 @@ fn test_aegis256_implementation() {
 
     // Test with different data sizes
 
-    let test_cases = vec![
+    let kb_data = vec![0u8; 1000];
+    let ten_kb_data = vec![0u8; 10000];
+    let test_cases: Vec<&[u8]> = vec![
 
         b"", // empty
 
         b"a", // single byte
 
-        &vec![0u8; 1000][..], // 1KB
+        &kb_data[..], // 1KB
 
-        &vec![0u8; 10000][..], // 10KB
+        &ten_kb_data[..], // 10KB
 
     ];
 
@@ -1691,7 +1693,7 @@ fn test_aegis256_implementation() {
 
         let dt = algorithm.decrypt(&ct, key.as_bytes()).unwrap();
 
-        assert_eq!(test_data, &dt[..], "Test case {} failed", i);
+        assert_eq!(*test_data, &dt[..], "Test case {} failed", i);
 
         println!("✓ Test case {} ({}) passed", i + 1, if test_data.is_empty() { "empty" } else if test_data.len() == 1 { "1 byte" } else if test_data.len() == 1000 { "1KB" } else { "10KB" });
 

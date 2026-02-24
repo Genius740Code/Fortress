@@ -365,7 +365,7 @@ impl ClusterManager {
         target_nodes.truncate(replication_factor);
 
         // Create replication command
-        let command = ClusterCommand::ReplicateData {
+        let _command = ClusterCommand::ReplicateData {
             key,
             data,
             nodes: target_nodes.clone(),

@@ -527,7 +527,7 @@ mod tests {
         let retention_policy = RetentionPolicy::default();
         let rotation_strategy = RotationStrategy::SizeBased;
 
-        let mut manager = LogRotationManager::new(
+        let manager = LogRotationManager::new(
             config,
             retention_policy,
             rotation_strategy,

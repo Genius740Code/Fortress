@@ -560,7 +560,7 @@ mod tests {
     async fn test_role_creation() {
         let role = Role::new("test")
             .with_description("Test role")
-            .with_permission(Permission::Read, Resource::Database("users"));
+            .with_permission(Permission::Read, Resource::Database("users".to_string()));
 
         assert_eq!(role.name, "test");
         assert_eq!(role.description, Some("Test role".to_string()));
@@ -572,13 +572,13 @@ mod tests {
         let engine = PolicyEngine::new();
         
         let role = Role::new("readonly")
-            .with_permission(Permission::Read, Resource::Database("users"));
+            .with_permission(Permission::Read, Resource::Database("users".to_string()));
         
         engine.add_role(role).await.unwrap();
         engine.assign_role("user1", "readonly").await.unwrap();
         
-        let can_read = engine.check_permission("user1", Permission::Read, Resource::Database("users")).await.unwrap();
-        let can_write = engine.check_permission("user1", Permission::Write, Resource::Database("users")).await.unwrap();
+        let can_read = engine.check_permission("user1", Permission::Read, Resource::Database("users".to_string())).await.unwrap();
+        let can_write = engine.check_permission("user1", Permission::Write, Resource::Database("users".to_string())).await.unwrap();
         
         assert!(can_read);
         assert!(!can_write);
@@ -589,17 +589,17 @@ mod tests {
         let engine = PolicyEngine::new();
         
         let role = Role::new("db_access")
-            .with_permission(Permission::Read, Resource::Database("users"));
+            .with_permission(Permission::Read, Resource::Database("users".to_string()));
         
         engine.add_role(role).await.unwrap();
         engine.assign_role("user1", "db_access").await.unwrap();
         
         // Should match database access
-        let can_read_db = engine.check_permission("user1", Permission::Read, Resource::Database("users")).await.unwrap();
+        let can_read_db = engine.check_permission("user1", Permission::Read, Resource::Database("users".to_string())).await.unwrap();
         // Should match table access within database
-        let can_read_table = engine.check_permission("user1", Permission::Read, Resource::Table("users", "profiles")).await.unwrap();
+        let can_read_table = engine.check_permission("user1", Permission::Read, Resource::Table("users".to_string(), "profiles".to_string())).await.unwrap();
         // Should match field access within database
-        let can_read_field = engine.check_permission("user1", Permission::Read, Resource::Field("users", "profiles", "email")).await.unwrap();
+        let can_read_field = engine.check_permission("user1", Permission::Read, Resource::Field("users".to_string(), "profiles".to_string(), "email".to_string())).await.unwrap();
         
         assert!(can_read_db);
         assert!(can_read_table);
