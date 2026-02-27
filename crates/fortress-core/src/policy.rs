@@ -42,6 +42,8 @@ use tokio::sync::RwLock;
 pub struct PolicyEngine {
     roles: RwLock<HashMap<String, Role>>,
     user_roles: RwLock<HashMap<String, HashSet<String>>>,
+    /// Policy storage
+    #[allow(dead_code)]
     policies: RwLock<HashMap<String, Policy>>,
     cache: RwLock<HashMap<CacheKey, bool>>,
 }
@@ -58,19 +60,28 @@ struct CacheKey {
 /// Role definition with permissions and metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Role {
+    /// Role name
     pub name: String,
+    /// Role description
     pub description: Option<String>,
+    /// Role permissions
     pub permissions: HashSet<PermissionEntry>,
+    /// Role constraints
     pub constraints: Vec<Constraint>,
+    /// Creation timestamp
     pub created_at: u64,
+    /// Last update timestamp
     pub updated_at: u64,
 }
 
 /// Individual permission entry
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct PermissionEntry {
+    /// Permission type
     pub permission: Permission,
+    /// Resource type
     pub resource: Resource,
+    /// Permission conditions
     pub conditions: Vec<Condition>,
 }
 
@@ -120,27 +131,39 @@ pub enum Resource {
 /// Policy definition with rules and conditions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Policy {
+    /// Policy name
     pub name: String,
+    /// Policy description
     pub description: Option<String>,
+    /// Policy rules
     pub rules: Vec<PolicyRule>,
+    /// Policy effect
     pub effect: PolicyEffect,
+    /// Policy priority
     pub priority: i32,
+    /// Creation timestamp
     pub created_at: u64,
+    /// Last update timestamp
     pub updated_at: u64,
 }
 
 /// Individual policy rule
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PolicyRule {
+    /// Allowed actions
     pub actions: Vec<Permission>,
+    /// Target resources
     pub resources: Vec<Resource>,
+    /// Rule conditions
     pub conditions: Vec<Condition>,
 }
 
 /// Policy effect (allow or deny)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PolicyEffect {
+    /// Allow the action
     Allow,
+    /// Deny the action
     Deny,
 }
 
@@ -160,37 +183,54 @@ pub enum Condition {
 /// Time-based conditions
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TimeCondition {
+    /// Start time (Unix timestamp)
     pub start_time: Option<u64>,
+    /// End time (Unix timestamp)
     pub end_time: Option<u64>,
-    pub days_of_week: Option<Vec<u8>>, // 0 = Sunday, 6 = Saturday
+    /// Days of week (0 = Sunday, 6 = Saturday)
+    pub days_of_week: Option<Vec<u8>>,
+    /// Timezone identifier
     pub timezone: Option<String>,
 }
 
 /// IP-based conditions
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct IpCondition {
+    /// Allowed IP addresses
     pub allowed_ips: Vec<String>,
+    /// Denied IP addresses
     pub denied_ips: Vec<String>,
+    /// CIDR ranges
     pub cidr_ranges: Vec<String>,
 }
 
 /// Attribute-based conditions
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct AttributeCondition {
+    /// Attribute name
     pub attribute: String,
+    /// Comparison operator
     pub operator: AttributeOperator,
+    /// Attribute value
     pub value: String,
 }
 
 /// Attribute operators
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum AttributeOperator {
+    /// Equality check
     Equals,
+    /// Inequality check
     NotEquals,
+    /// Contains check
     Contains,
+    /// Starts with check
     StartsWith,
+    /// Ends with check
     EndsWith,
+    /// Greater than check
     GreaterThan,
+    /// Less than check
     LessThan,
 }
 
@@ -200,24 +240,42 @@ pub enum Constraint {
     /// Maximum data size that can be accessed
     MaxDataSize(u64),
     /// Rate limiting
-    RateLimit { requests_per_minute: u32 },
+    RateLimit { 
+        /// Maximum requests per minute
+        requests_per_minute: u32 
+    },
     /// Geographic restrictions
-    Geographic { allowed_countries: Vec<String> },
+    Geographic { 
+        /// Allowed countries
+        allowed_countries: Vec<String> 
+    },
     /// Device restrictions
-    Device { allowed_devices: Vec<String> },
+    Device { 
+        /// Allowed devices
+        allowed_devices: Vec<String> 
+    },
 }
 
 /// Audit log entry for policy decisions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PolicyAuditEntry {
+    /// Decision timestamp
     pub timestamp: u64,
+    /// User identifier
     pub user_id: String,
+    /// Permission type
     pub permission: Permission,
+    /// Resource type
     pub resource: Resource,
+    /// Policy decision
     pub decision: bool,
+    /// Decision reason
     pub reason: String,
+    /// Roles involved
     pub roles_involved: Vec<String>,
+    /// Policies evaluated
     pub policies_evaluated: Vec<String>,
+    /// Evaluation time in milliseconds
     pub evaluation_time_ms: u64,
 }
 

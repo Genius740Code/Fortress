@@ -94,22 +94,22 @@ impl Default for TenantResourceLimits {
 /// Tenant manager for handling multi-tenant operations
 pub trait TenantManager: Send + Sync {
     /// Create a new tenant
-    async fn create_tenant(&self, tenant: CreateTenantRequest) -> Result<Tenant>;
+    fn create_tenant(&self, tenant: CreateTenantRequest) -> impl std::future::Future<Output = Result<Tenant>> + Send;
     
     /// Get tenant by ID
-    async fn get_tenant(&self, tenant_id: &TenantId) -> Result<Option<Tenant>>;
+    fn get_tenant(&self, tenant_id: &TenantId) -> impl std::future::Future<Output = Result<Option<Tenant>>> + Send;
     
     /// Update tenant configuration
-    async fn update_tenant(&self, tenant_id: &TenantId, update: UpdateTenantRequest) -> Result<Tenant>;
+    fn update_tenant(&self, tenant_id: &TenantId, update: UpdateTenantRequest) -> impl std::future::Future<Output = Result<Tenant>> + Send;
     
     /// Delete a tenant
-    async fn delete_tenant(&self, tenant_id: &TenantId) -> Result<()>;
+    fn delete_tenant(&self, tenant_id: &TenantId) -> impl std::future::Future<Output = Result<()>> + Send;
     
     /// List all tenants
-    async fn list_tenants(&self) -> Result<Vec<Tenant>>;
+    fn list_tenants(&self) -> impl std::future::Future<Output = Result<Vec<Tenant>>> + Send;
     
     /// Get tenant statistics
-    async fn get_tenant_stats(&self, tenant_id: &TenantId) -> Result<TenantStats>;
+    fn get_tenant_stats(&self, tenant_id: &TenantId) -> impl std::future::Future<Output = Result<TenantStats>> + Send;
 }
 
 /// Request to create a new tenant
@@ -457,89 +457,101 @@ impl InMemoryTenantManager {
 }
 
 impl TenantManager for InMemoryTenantManager {
-    async fn create_tenant(&self, request: CreateTenantRequest) -> Result<Tenant> {
-        let tenant_id = Uuid::new_v4();
-        let now = chrono::Utc::now();
-        
-        let tenant = Tenant {
-            id: tenant_id,
-            name: request.name.clone(),
-            description: request.description.clone(),
-            encryption_config: request.encryption_config.clone(),
-            resource_limits: request.resource_limits.clone().unwrap_or_default(),
-            active: true,
-            created_at: now,
-            modified_at: now,
-        };
-        
-        let tenant_clone = tenant.clone();
-        let mut tenants = self.tenants.write().await;
-        tenants.insert(tenant_id, tenant);
-        
-        Ok(tenant_clone)
-    }
-    
-    async fn get_tenant(&self, tenant_id: &TenantId) -> Result<Option<Tenant>> {
-        let tenants = self.tenants.read().await;
-        Ok(tenants.get(tenant_id).cloned())
-    }
-    
-    async fn update_tenant(&self, tenant_id: &TenantId, update: UpdateTenantRequest) -> Result<Tenant> {
-        let mut tenants = self.tenants.write().await;
-        
-        if let Some(tenant) = tenants.get_mut(tenant_id) {
-            if let Some(name) = &update.name {
-                tenant.name = name.clone();
-            }
-            if let Some(description) = &update.description {
-                tenant.description = Some(description.clone());
-            }
-            if let Some(encryption_config) = &update.encryption_config {
-                tenant.encryption_config = Some(encryption_config.clone());
-            }
-            if let Some(resource_limits) = &update.resource_limits {
-                tenant.resource_limits = resource_limits.clone();
-            }
-            tenant.modified_at = chrono::Utc::now();
-            Ok(tenant.clone())
-        } else {
-            return Err(FortressError::key_management(
-                "Tenant not found".to_string(),
-                Some(tenant_id.to_string()),
-                crate::error::KeyErrorCode::KeyNotFound,
-            ));
+    fn create_tenant(&self, request: CreateTenantRequest) -> impl std::future::Future<Output = Result<Tenant>> + Send {
+        async move {
+            let tenant_id = Uuid::new_v4();
+            let now = chrono::Utc::now();
+            
+            let tenant = Tenant {
+                id: tenant_id,
+                name: request.name.clone(),
+                description: request.description.clone(),
+                encryption_config: request.encryption_config.clone(),
+                resource_limits: request.resource_limits.clone().unwrap_or_default(),
+                active: true,
+                created_at: now,
+                modified_at: now,
+            };
+            
+            let tenant_clone = tenant.clone();
+            let mut tenants = self.tenants.write().await;
+            tenants.insert(tenant_id, tenant);
+            
+            Ok(tenant_clone)
         }
     }
     
-    async fn delete_tenant(&self, tenant_id: &TenantId) -> Result<()> {
-        let mut tenants = self.tenants.write().await;
-        tenants.remove(tenant_id);
-        Ok(())
+    fn get_tenant(&self, tenant_id: &TenantId) -> impl std::future::Future<Output = Result<Option<Tenant>>> + Send {
+        async move {
+            let tenants = self.tenants.read().await;
+            Ok(tenants.get(tenant_id).cloned())
+        }
     }
     
-    async fn list_tenants(&self) -> Result<Vec<Tenant>> {
-        let tenants = self.tenants.read().await;
-        Ok(tenants.values().cloned().collect())
+    fn update_tenant(&self, tenant_id: &TenantId, update: UpdateTenantRequest) -> impl std::future::Future<Output = Result<Tenant>> + Send {
+        async move {
+            let mut tenants = self.tenants.write().await;
+            
+            if let Some(tenant) = tenants.get_mut(tenant_id) {
+                if let Some(name) = &update.name {
+                    tenant.name = name.clone();
+                }
+                if let Some(description) = &update.description {
+                    tenant.description = Some(description.clone());
+                }
+                if let Some(encryption_config) = &update.encryption_config {
+                    tenant.encryption_config = Some(encryption_config.clone());
+                }
+                if let Some(resource_limits) = &update.resource_limits {
+                    tenant.resource_limits = resource_limits.clone();
+                }
+                tenant.modified_at = chrono::Utc::now();
+                Ok(tenant.clone())
+            } else {
+                return Err(FortressError::key_management(
+                    "Tenant not found".to_string(),
+                    Some(tenant_id.to_string()),
+                    crate::error::KeyErrorCode::KeyNotFound,
+                ));
+            }
+        }
     }
     
-    async fn get_tenant_stats(&self, tenant_id: &TenantId) -> Result<TenantStats> {
-        let usage = self.resource_isolation.get_tenant_usage(tenant_id).await?;
-        
-        match usage {
-            Some(usage) => Ok(TenantStats {
-                database_count: usage.database_count,
-                storage_used: usage.storage_used,
-                active_connections: usage.active_connections,
-                cpu_usage: usage.cpu_usage,
-                memory_usage: usage.memory_usage,
-            }),
-            None => Ok(TenantStats {
-                database_count: 0,
-                storage_used: 0,
-                active_connections: 0,
-                cpu_usage: 0.0,
-                memory_usage: 0.0,
-            }),
+    fn delete_tenant(&self, tenant_id: &TenantId) -> impl std::future::Future<Output = Result<()>> + Send {
+        async move {
+            let mut tenants = self.tenants.write().await;
+            tenants.remove(tenant_id);
+            Ok(())
+        }
+    }
+    
+    fn list_tenants(&self) -> impl std::future::Future<Output = Result<Vec<Tenant>>> + Send {
+        async move {
+            let tenants = self.tenants.read().await;
+            Ok(tenants.values().cloned().collect())
+        }
+    }
+    
+    fn get_tenant_stats(&self, tenant_id: &TenantId) -> impl std::future::Future<Output = Result<TenantStats>> + Send {
+        async move {
+            let usage = self.resource_isolation.get_tenant_usage(tenant_id).await?;
+            
+            match usage {
+                Some(usage) => Ok(TenantStats {
+                    database_count: usage.database_count,
+                    storage_used: usage.storage_used,
+                    active_connections: usage.active_connections,
+                    cpu_usage: usage.cpu_usage,
+                    memory_usage: usage.memory_usage,
+                }),
+                None => Ok(TenantStats {
+                    database_count: 0,
+                    storage_used: 0,
+                    active_connections: 0,
+                    cpu_usage: 0.0,
+                    memory_usage: 0.0,
+                }),
+            }
         }
     }
 }

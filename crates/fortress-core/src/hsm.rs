@@ -43,20 +43,32 @@ pub enum HsmProviderType {
 /// HSM connection details
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum HsmConnection {
-    /// AWS CloudHSM cluster ID
-    AwsCloudHsm { cluster_id: String },
-    /// PKCS#11 library path and slot
+    /// AWS CloudHSM cluster configuration
+    AwsCloudHsm { 
+        /// Cluster identifier
+        cluster_id: String 
+    },
+    /// PKCS#11 library configuration
     Pkcs11 { 
+        /// Path to PKCS#11 library
         library_path: String,
+        /// Slot identifier
         slot_id: Option<u64>,
+        /// Token label
         token_label: Option<String>,
     },
-    /// Azure Dedicated HSM details
-    Azure { resource_id: String },
-    /// Google Cloud HSM details
+    /// Azure Dedicated HSM configuration
+    Azure { 
+        /// Resource identifier
+        resource_id: String 
+    },
+    /// Google Cloud HSM configuration
     Google { 
+        /// Project identifier
         project_id: String,
+        /// Location
         location: String,
+        /// Key ring name
         key_ring: String,
     },
 }
@@ -66,23 +78,32 @@ pub enum HsmConnection {
 pub enum HsmCredentials {
     /// AWS CloudHSM credentials
     Aws { 
+        /// AWS access key ID
         access_key_id: String,
+        /// AWS secret access key
         secret_access_key: String,
+        /// AWS region
         region: String,
     },
     /// PKCS#11 PIN and optional user type
     Pkcs11 { 
+        /// PIN for token access
         pin: String,
+        /// User type for authentication
         user_type: Pkcs11UserType,
     },
     /// Azure authentication
     Azure { 
+        /// Azure client ID
         client_id: String,
+        /// Azure client secret
         client_secret: String,
+        /// Azure tenant ID
         tenant_id: String,
     },
     /// Google Cloud authentication
     Google { 
+        /// Service account key
         service_account_key: String,
     },
 }
@@ -163,9 +184,13 @@ pub trait HsmProvider: Send + Sync {
 
 /// HSM-backed key manager that integrates with the existing KeyManager trait
 pub struct HsmKeyManager {
+    /// HSM configuration
+    #[allow(dead_code)]
     config: HsmConfig,
     provider: Arc<dyn HsmProvider>,
     /// Cache for key metadata to reduce HSM calls
+    /// Cache for key metadata to reduce HSM calls
+    #[allow(dead_code)]
     metadata_cache: Arc<RwLock<HashMap<KeyId, KeyMetadata>>>,
 }
 
@@ -210,11 +235,13 @@ impl HsmKeyManager {
     }
 }
 
-// Placeholder implementations for specific providers
+/// AWS CloudHSM provider implementation
 pub struct AwsCloudHsmProvider;
+/// PKCS#11 provider implementation
 pub struct Pkcs11Provider;
 
 impl AwsCloudHsmProvider {
+    /// Create a new AWS CloudHSM provider
     pub async fn new() -> Result<Self> {
         // TODO: Initialize AWS CloudHSM client
         Ok(Self)
@@ -356,6 +383,7 @@ impl HsmProvider for AwsCloudHsmProvider {
 }
 
 impl Pkcs11Provider {
+    /// Create a new PKCS#11 provider
     pub async fn new() -> Result<Self> {
         // TODO: Initialize PKCS#11 context
         log::info!("Initializing PKCS#11 provider");

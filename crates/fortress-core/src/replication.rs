@@ -247,6 +247,8 @@ pub struct ReplicationManager {
     /// Completed operations (for cleanup)
     completed_operations: RwLock<HashMap<ReplicationId, ReplicationOperation>>,
     /// Communication channels
+    /// Communication channels
+    #[allow(dead_code)]
     channels: ReplicationChannels,
     /// Cluster nodes
     cluster_nodes: RwLock<HashMap<NodeId, ClusterNode>>,
@@ -265,26 +267,38 @@ pub struct ReplicationChannels {
 pub enum ReplicationMessage {
     /// Replication request
     ReplicateRequest {
+        /// Operation identifier
         operation_id: ReplicationId,
+        /// Data key
         key: String,
+        /// Data payload
         data: Vec<u8>,
+        /// Source node
         from_node: NodeId,
     },
     /// Replication acknowledgment
     ReplicateAck {
+        /// Operation identifier
         operation_id: ReplicationId,
+        /// Responding node
         from_node: NodeId,
+        /// Success status
         success: bool,
+        /// Error message
         error: Option<String>,
     },
     /// Data synchronization request
     SyncRequest {
+        /// Requesting node
         from_node: NodeId,
+        /// Keys to synchronize
         keys: Vec<String>,
     },
     /// Data synchronization response
     SyncResponse {
+        /// Responding node
         from_node: NodeId,
+        /// Synchronized data
         data: HashMap<String, Vec<u8>>,
     },
 }

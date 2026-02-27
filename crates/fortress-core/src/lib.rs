@@ -176,6 +176,14 @@ pub mod raft;
 
 pub mod replication;
 
+/// Per-field encryption with custom algorithm selection
+
+pub mod field_encryption;
+
+/// Field encryption manager implementations
+
+pub mod field_encryption_manager;
+
 
 
 #[cfg(test)]
@@ -219,6 +227,14 @@ pub mod prelude {
     pub use crate::raft::{RaftEngine, RaftState, AppendEntriesRequest, AppendEntriesResponse, RequestVoteRequest, RequestVoteResponse};
 
     pub use crate::replication::{ReplicationManager, ReplicationConfig, ReplicationOperation, ConsistencyLevel, ReplicationStatus};
+
+    pub use crate::field_encryption::{
+        FieldEncryptionManager, FieldEncryptionConfig, FieldIdentifier, FieldEncryptionStrategy,
+        FieldEncryptionMetadata, EncryptedField, DecryptedField, FieldAlgorithmSelector,
+        DefaultAlgorithmSelector, FieldSensitivity, FieldConfigId
+    };
+
+    pub use crate::field_encryption_manager::{DefaultFieldEncryptionManager, FieldEncryptionManagerBuilder};
 
     pub use crate::tenant::{
         TenantManager, InMemoryTenantManager, Tenant, TenantId, CreateTenantRequest, UpdateTenantRequest,

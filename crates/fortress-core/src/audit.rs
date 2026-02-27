@@ -920,7 +920,14 @@ pub fn init_audit_logger(config: AuditConfig) -> Result<()> {
 
 /// Get the global audit logger
 pub fn get_audit_logger() -> Option<Arc<std::sync::Mutex<DefaultAuditLogger>>> {
-    unsafe { AUDIT_LOGGER.clone() }
+    // SAFETY: This is safe because:
+    // 1. AUDIT_LOGGER_INIT ensures initialization happens only once
+    // 2. We only read the value after initialization is complete
+    // 3. Arc provides thread-safe sharing of the logger
+    unsafe { 
+        // Create a proper reference without cloning the Option
+        AUDIT_LOGGER.as_ref().map(|arc| Arc::clone(arc))
+    }
 }
 
 /// Convenience function to log audit events

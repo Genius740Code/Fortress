@@ -153,30 +153,54 @@ pub struct LogEntry {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClusterCommand {
     /// Add a new node to the cluster
-    AddNode { node: ClusterNode },
+    AddNode { 
+        /// Node to add
+        node: ClusterNode 
+    },
     /// Remove a node from the cluster
-    RemoveNode { node_id: NodeId },
+    RemoveNode { 
+        /// Node ID to remove
+        node_id: NodeId 
+    },
     /// Replicate data to nodes
     ReplicateData {
+        /// Data key
         key: String,
+        /// Data payload
         data: Vec<u8>,
+        /// Target nodes
         nodes: Vec<NodeId>,
     },
     /// Update cluster configuration
-    UpdateConfig { config: ClusterConfig },
+    UpdateConfig { 
+        /// New configuration
+        config: ClusterConfig 
+    },
     /// Heartbeat message
-    Heartbeat { from: NodeId, term: u64 },
+    Heartbeat { 
+        /// Sender node ID
+        from: NodeId, 
+        /// Current term
+        term: u64 
+    },
     /// Vote request
     RequestVote {
+        /// Candidate requesting vote
         candidate_id: NodeId,
+        /// Election term
         term: u64,
+        /// Last log index
         last_log_index: u64,
+        /// Last log term
         last_log_term: u64,
     },
     /// Vote response
     VoteResponse {
+        /// Voting node ID
         voter_id: NodeId,
+        /// Response term
         term: u64,
+        /// Vote granted
         vote_granted: bool,
     },
 }
@@ -190,12 +214,18 @@ pub struct ClusterManager {
     /// Cluster members
     members: RwLock<HashMap<NodeId, ClusterNode>>,
     /// Raft log
+    /// Raft log
+    #[allow(dead_code)]
     log: RwLock<Vec<LogEntry>>,
     /// Current term
     current_term: RwLock<u64>,
     /// Voted for candidate in current term
+    /// Voted for candidate in current term
+    #[allow(dead_code)]
     voted_for: RwLock<Option<NodeId>>,
     /// Communication channels
+    /// Communication channels
+    #[allow(dead_code)]
     channels: ClusterChannels,
 }
 
@@ -222,8 +252,8 @@ impl ClusterManager {
             load_metrics: LoadMetrics::default(),
         };
 
-        let (tx_in, rx_in) = mpsc::unbounded_channel();
-        let (tx_out, rx_out) = mpsc::unbounded_channel();
+        let (_tx_in, rx_in) = mpsc::unbounded_channel();
+        let (tx_out, _rx_out) = mpsc::unbounded_channel();
 
         let channels = ClusterChannels {
             incoming: rx_in,

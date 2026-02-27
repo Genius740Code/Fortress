@@ -152,20 +152,28 @@ impl QueryParameter {
 
 pub enum ParameterType {
 
+    /// Null value
     Null,
 
+    /// Boolean value
     Boolean,
 
+    /// Integer value
     Integer,
 
+    /// Float value
     Float,
 
+    /// String value
     String,
 
+    /// Binary data
     Binary,
 
+    /// UUID value
     Uuid,
 
+    /// Timestamp value
     Timestamp,
 
 }
@@ -394,18 +402,25 @@ pub struct QueryMetadata {
 
 pub enum QueryType {
 
+    /// Select query
     Select,
 
+    /// Insert query
     Insert,
 
+    /// Update query
     Update,
 
+    /// Delete query
     Delete,
 
+    /// Create query
     Create,
 
+    /// Drop query
     Drop,
 
+    /// Alter query
     Alter,
 
 }

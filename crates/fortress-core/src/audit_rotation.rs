@@ -24,7 +24,10 @@ pub enum RotationStrategy {
     /// Rotate logs when file size exceeds limit
     SizeBased,
     /// Rotate logs after specified time interval
-    Interval { seconds: u64 },
+    Interval { 
+        /// Interval in seconds
+        seconds: u64 
+    },
 }
 
 /// Retention policy for audit logs
