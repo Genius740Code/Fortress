@@ -15,8 +15,8 @@ name = "fortress"
 path = "src/main.rs"
 
 [dependencies]
-# Core fortress library (temporarily commented out)
-# fortress-core = { path = "../fortress-core", version = "0.1.0" }
+# Core fortress library
+fortress-core = { path = "../fortress-core", version = "0.1.0" }
 
 # CLI framework
 clap = { version = "4.4", features = ["derive", "env", "color"] }
@@ -49,6 +49,9 @@ humantime = "2.1"
 # File system
 dirs = "5.0"
 walkdir = "2.4"
+
+# UUID generation
+uuid = { version = "1.6", features = ["v4"] }
 
 [dev-dependencies]
 tempfile = "3.8"

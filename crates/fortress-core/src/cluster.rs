@@ -184,9 +184,9 @@ pub enum ClusterCommand {
 /// Cluster manager
 pub struct ClusterManager {
     /// Cluster configuration
-    config: ClusterConfig,
+    pub config: ClusterConfig,
     /// Current node information
-    local_node: ClusterNode,
+    pub local_node: ClusterNode,
     /// Cluster members
     members: RwLock<HashMap<NodeId, ClusterNode>>,
     /// Raft log

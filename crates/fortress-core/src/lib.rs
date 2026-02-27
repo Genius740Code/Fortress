@@ -220,6 +220,12 @@ pub mod prelude {
 
     pub use crate::replication::{ReplicationManager, ReplicationConfig, ReplicationOperation, ConsistencyLevel, ReplicationStatus};
 
+    pub use crate::tenant::{
+        TenantManager, InMemoryTenantManager, Tenant, TenantId, CreateTenantRequest, UpdateTenantRequest,
+        TenantStats, TenantResourceLimits, TenantEncryptionConfig, ResourceIsolationManager,
+        TenantResourceUsage, GlobalResourceLimits, GlobalResourceUsage
+    };
+
 }
 
 
