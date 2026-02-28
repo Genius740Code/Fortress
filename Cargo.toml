@@ -18,8 +18,8 @@ members = [
     "crates/fortress-core",
     "crates/fortress-cli",
     "crates/fortress-server",
-    "crates/fortress-python",
-    "crates/fortress-js",
+    # "crates/fortress-python",
+    # "crates/fortress-js",
 ]
 
 [dependencies]
@@ -121,14 +121,14 @@ zeroize = { version = "1.7", features = ["zeroize_derive"] }
 derive_builder = "0.12"
 derive_more = { version = "0.99", features = ["from", "into", "display"] }
 
-# WebAssembly (optional)
-wasm-bindgen = { version = "0.2", optional = true }
-js-sys = { version = "0.3", optional = true }
-web-sys = { version = "0.3", optional = true, features = ["console"] }
-console_error_panic_hook = { version = "0.1", optional = true }
+# WebAssembly (optional) - moved to fortress-js crate
+# wasm-bindgen = { version = "0.2", optional = true }
+# js-sys = { version = "0.3", optional = true }
+# web-sys = { version = "0.3", optional = true, features = ["console", "ReadableStream"] }
+# console_error_panic_hook = { version = "0.1", optional = true }
 
 # HTTP client (for cloud storage)
-reqwest = { version = "0.11", features = ["json", "stream"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }
 
 # AWS SDK (optional)
 aws-config = { version = "0.55", optional = true }
@@ -139,9 +139,9 @@ aws-sdk-kms = { version = "0.28", optional = true }
 azure_storage_blobs = { version = "0.12", optional = true }
 azure_identity = { version = "0.12", optional = true }
 
-# Google Cloud SDK (optional)
-google-cloud-storage = { version = "0.6", optional = true }
-google-cloud-kms = { version = "0.6", optional = true }
+# Google Cloud SDK (optional) - temporarily disabled due to web-sys conflict
+# google-cloud-storage = { version = "0.6", optional = true }
+# google-cloud-kms = { version = "0.6", optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
@@ -163,8 +163,9 @@ hardware-acceleration = ["ring/std"]
 # Storage backends
 aws = ["aws-config", "aws-sdk-s3", "aws-sdk-kms"]
 azure = ["azure_storage_blobs", "azure_identity"]
-gcp = ["google-cloud-storage", "google-cloud-kms"]
-all-cloud = ["aws", "azure", "gcp"]
+# gcp = ["google-cloud-storage", "google-cloud-kms"]
+# all-cloud = ["aws", "azure", "gcp"]
+all-cloud = ["aws", "azure"]
 
 # Security features
 hsm = []
@@ -176,7 +177,7 @@ dev = ["tracing-subscriber/env-filter"]
 # Platform features
 cli = ["fortress-cli"]
 server = ["fortress-server"]
-wasm = ["wasm-bindgen", "js-sys", "web-sys", "console_error_panic_hook"]
+# wasm = ["wasm-bindgen", "js-sys", "web-sys", "console_error_panic_hook"]
 
 [profile.release]
 opt-level = 3

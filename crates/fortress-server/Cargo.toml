@@ -45,7 +45,13 @@ uuid = { version = "1.6", features = ["v4", "serde", "fast-rng"] }
 chrono = { version = "0.4", features = ["serde"] }
 
 # HTTP client (for health checks)
-reqwest = { version = "0.11", features = ["json"] }
+reqwest = { version = "0.12", features = ["json"] }
+
+# gRPC dependencies (simplified implementation for now)
+# tonic = "0.10"
+# prost = "0.12"
+# tokio-stream = "0.1"
+# tonic-reflection = "0.10"
 
 # Metrics and monitoring
 metrics = "0.21"

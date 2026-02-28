@@ -47,6 +47,7 @@ pub mod server;
 pub mod auth;
 pub mod metrics;
 pub mod health;
+pub mod grpc;
 
 /// Re-export commonly used types
 pub mod prelude {
@@ -58,6 +59,7 @@ pub mod prelude {
     pub use crate::health::HealthChecker;
     pub use crate::metrics::MetricsCollector;
     pub use crate::middleware::{AdvancedRateLimiter, RateLimitAlgorithm, RateLimitMetricsSnapshot};
+    pub use crate::grpc::{GrpcServer, FortressGrpcService};
 }
 
 /// Fortress server version information

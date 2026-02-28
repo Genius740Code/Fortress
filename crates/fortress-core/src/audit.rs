@@ -928,14 +928,14 @@ fn get_audit_logger() -> Option<Arc<dyn AuditLogger>> {
 
 /// Convenience function to log audit events
 pub fn log_event(
-    event_type: AuditEventType,
-    security_level: SecurityLevel,
-    principal: Option<String>,
-    resource: Option<String>,
-    action: String,
-    outcome: EventOutcome,
+    _event_type: AuditEventType,
+    _security_level: SecurityLevel,
+    _principal: Option<String>,
+    _resource: Option<String>,
+    _action: String,
+    _outcome: EventOutcome,
 ) -> Result<()> {
-    if let Some(logger_arc) = get_audit_logger() {
+    if let Some(_logger_arc) = get_audit_logger() {
         // For now, we'll skip logging since the type system is complex
         // In a real implementation, you'd handle this properly
         debug!("Audit logging not yet implemented for dynamic logger types");
@@ -948,13 +948,13 @@ pub fn log_event(
 
 /// Convenience function to log audit events with metadata
 pub fn log_event_with_metadata(
-    event_type: AuditEventType,
-    security_level: SecurityLevel,
-    principal: Option<String>,
-    resource: Option<String>,
-    action: String,
-    outcome: EventOutcome,
-    metadata: HashMap<String, String>,
+    _event_type: AuditEventType,
+    _security_level: SecurityLevel,
+    _principal: Option<String>,
+    _resource: Option<String>,
+    _action: String,
+    _outcome: EventOutcome,
+    _metadata: HashMap<String, String>,
 ) -> Result<()> {
     if let Some(_logger_arc) = get_audit_logger() {
         // For now, we'll skip logging since the type system is complex

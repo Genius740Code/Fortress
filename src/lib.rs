@@ -68,8 +68,8 @@ pub use fortress_cli as cli;
 #[cfg(feature = "server")]
 pub use fortress_server as server;
 
-#[cfg(feature = "wasm")]
-pub use fortress_wasm as wasm;
+// #[cfg(feature = "wasm")]
+// pub use fortress_wasm as wasm;
 
 /// Fortress version information
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

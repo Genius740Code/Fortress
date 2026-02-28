@@ -1,0 +1,272 @@
+syntax = "proto3";
+
+package fortress;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+// Fortress gRPC Service Definition
+service FortressService {
+  // Database operations
+  rpc CreateDatabase(CreateDatabaseRequest) returns (DatabaseResponse);
+  rpc GetDatabase(GetDatabaseRequest) returns (DatabaseResponse);
+  rpc ListDatabases(ListDatabasesRequest) returns (ListDatabasesResponse);
+  rpc DeleteDatabase(DeleteDatabaseRequest) returns (google.protobuf.Empty);
+  
+  // Encryption operations
+  rpc EncryptData(EncryptRequest) returns (EncryptResponse);
+  rpc DecryptData(DecryptRequest) returns (DecryptResponse);
+  rpc BatchEncrypt(stream BatchEncryptRequest) returns (stream BatchEncryptResponse);
+  rpc BatchDecrypt(stream BatchDecryptRequest) returns (stream BatchDecryptResponse);
+  
+  // Key management
+  rpc CreateKey(CreateKeyRequest) returns (KeyResponse);
+  rpc RotateKey(RotateKeyRequest) returns (KeyResponse);
+  rpc ListKeys(ListKeysRequest) returns (ListKeysResponse);
+  rpc DeleteKey(DeleteKeyRequest) returns (google.protobuf.Empty);
+  
+  // Field-level encryption
+  rpc EncryptField(EncryptFieldRequest) returns (EncryptFieldResponse);
+  rpc DecryptField(DecryptFieldRequest) returns (DecryptFieldResponse);
+  rpc GetFieldMetadata(GetFieldMetadataRequest) returns (FieldMetadataResponse);
+  
+  // Health and monitoring
+  rpc HealthCheck(google.protobuf.Empty) returns (HealthResponse);
+  rpc GetMetrics(google.protobuf.Empty) returns (MetricsResponse);
+}
+
+// Database messages
+message Database {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  google.protobuf.Timestamp created_at = 4;
+  google.protobuf.Timestamp updated_at = 5;
+  DatabaseConfig config = 6;
+}
+
+message DatabaseConfig {
+  string encryption_algorithm = 1;
+  int32 key_rotation_interval_days = 2;
+  bool enable_audit_logging = 3;
+  map<string, string> custom_settings = 4;
+}
+
+message CreateDatabaseRequest {
+  string name = 1;
+  string description = 2;
+  DatabaseConfig config = 3;
+}
+
+message GetDatabaseRequest {
+  string database_id = 1;
+}
+
+message ListDatabasesRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+}
+
+message DeleteDatabaseRequest {
+  string database_id = 1;
+}
+
+message DatabaseResponse {
+  Database database = 1;
+}
+
+message ListDatabasesResponse {
+  repeated Database databases = 1;
+  string next_page_token = 2;
+}
+
+// Encryption messages
+message EncryptRequest {
+  string database_id = 1;
+  bytes plaintext = 2;
+  optional string key_id = 3;
+  map<string, string> metadata = 4;
+}
+
+message EncryptResponse {
+  bytes ciphertext = 1;
+  string key_id = 2;
+  google.protobuf.Timestamp encrypted_at = 3;
+  map<string, string> metadata = 4;
+}
+
+message DecryptRequest {
+  string database_id = 1;
+  bytes ciphertext = 2;
+  string key_id = 3;
+}
+
+message DecryptResponse {
+  bytes plaintext = 1;
+  google.protobuf.Timestamp decrypted_at = 2;
+  map<string, string> metadata = 3;
+}
+
+message BatchEncryptRequest {
+  string database_id = 1;
+  bytes plaintext = 2;
+  optional string key_id = 3;
+  string request_id = 4;
+  map<string, string> metadata = 5;
+}
+
+message BatchEncryptResponse {
+  bytes ciphertext = 1;
+  string key_id = 2;
+  string request_id = 3;
+  google.protobuf.Timestamp encrypted_at = 4;
+  map<string, string> metadata = 5;
+}
+
+message BatchDecryptRequest {
+  string database_id = 1;
+  bytes ciphertext = 2;
+  string key_id = 3;
+  string request_id = 4;
+}
+
+message BatchDecryptResponse {
+  bytes plaintext = 1;
+  string request_id = 2;
+  google.protobuf.Timestamp decrypted_at = 3;
+  map<string, string> metadata = 4;
+}
+
+// Key management messages
+message Key {
+  string id = 1;
+  string database_id = 2;
+  string algorithm = 3;
+  int32 key_size = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp expires_at = 6;
+  KeyStatus status = 7;
+  map<string, string> metadata = 8;
+}
+
+enum KeyStatus {
+  KEY_STATUS_UNSPECIFIED = 0;
+  KEY_STATUS_ACTIVE = 1;
+  KEY_STATUS_ROTATING = 2;
+  KEY_STATUS_DEPRECATED = 3;
+  KEY_STATUS_REVOKED = 4;
+}
+
+message CreateKeyRequest {
+  string database_id = 1;
+  string algorithm = 2;
+  int32 key_size = 3;
+  google.protobuf.Timestamp expires_at = 4;
+  map<string, string> metadata = 5;
+}
+
+message RotateKeyRequest {
+  string key_id = 1;
+  string new_algorithm = 2;
+  int32 new_key_size = 3;
+  google.protobuf.Timestamp expires_at = 4;
+}
+
+message ListKeysRequest {
+  string database_id = 1;
+  KeyStatus status_filter = 2;
+  int32 page_size = 3;
+  string page_token = 4;
+}
+
+message DeleteKeyRequest {
+  string key_id = 1;
+}
+
+message KeyResponse {
+  Key key = 1;
+}
+
+message ListKeysResponse {
+  repeated Key keys = 1;
+  string next_page_token = 2;
+}
+
+// Field-level encryption messages
+message EncryptFieldRequest {
+  string database_id = 1;
+  string field_name = 2;
+  bytes field_value = 3;
+  string algorithm = 4;
+  map<string, string> metadata = 5;
+}
+
+message EncryptFieldResponse {
+  bytes encrypted_field = 1;
+  string field_key_id = 2;
+  FieldEncryptionMetadata metadata = 3;
+}
+
+message DecryptFieldRequest {
+  string database_id = 1;
+  bytes encrypted_field = 2;
+  string field_key_id = 3;
+}
+
+message DecryptFieldResponse {
+  bytes field_value = 1;
+  FieldEncryptionMetadata metadata = 2;
+}
+
+message GetFieldMetadataRequest {
+  string database_id = 1;
+  string field_name = 2;
+}
+
+message FieldMetadataResponse {
+  FieldEncryptionMetadata metadata = 1;
+}
+
+message FieldEncryptionMetadata {
+  string field_name = 1;
+  string algorithm = 2;
+  string key_id = 3;
+  google.protobuf.Timestamp created_at = 4;
+  google.protobuf.Timestamp updated_at = 5;
+  map<string, string> custom_metadata = 6;
+}
+
+// Health and monitoring messages
+message HealthResponse {
+  ServiceStatus status = 1;
+  string version = 2;
+  google.protobuf.Timestamp timestamp = 3;
+  repeated ComponentHealth components = 4;
+}
+
+enum ServiceStatus {
+  SERVICE_STATUS_UNSPECIFIED = 0;
+  SERVICE_STATUS_HEALTHY = 1;
+  SERVICE_STATUS_DEGRADED = 2;
+  SERVICE_STATUS_UNHEALTHY = 3;
+}
+
+message ComponentHealth {
+  string name = 1;
+  ServiceStatus status = 2;
+  string message = 3;
+}
+
+message MetricsResponse {
+  google.protobuf.Timestamp timestamp = 1;
+  map<string, double> counters = 2;
+  map<string, double> gauges = 3;
+  map<string, HistogramData> histograms = 4;
+}
+
+message HistogramData {
+  uint64 count = 1;
+  double sum = 2;
+  repeated double buckets = 3;
+  repeated uint64 bucket_counts = 4;
+}
