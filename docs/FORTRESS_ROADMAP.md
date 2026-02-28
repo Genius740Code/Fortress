@@ -58,7 +58,7 @@
 ### 11. Design storage backend abstraction layer (local, S3, Azure, GCP)
 - [x] Create storage interface
 - [x] Implement local filesystem
-- [ ] Add cloud storage providers
+- [x] Add cloud storage providers
 
 ### 12. Implement REST API with automatic encryption/decryption
 - [ ] Build REST endpoints

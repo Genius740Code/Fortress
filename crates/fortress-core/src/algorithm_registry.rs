@@ -3,7 +3,7 @@
 //! This module provides a centralized registry for encryption algorithms,
 //! making it extremely easy to add new algorithms and manage them efficiently.
 
-use crate::error::{FortressError, Result, EncryptionErrorCode};
+use crate::error::Result;
 use crate::encryption::{EncryptionAlgorithm, create_algorithm};
 use std::collections::HashMap;
 use std::sync::Arc;

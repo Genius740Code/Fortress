@@ -101,6 +101,14 @@ aws-sdk-cloudhsmv2 = "0.28"
 aws-config = "0.55"
 aws-types = "0.55"
 
+# Cloud storage dependencies
+aws-sdk-s3 = { version = "0.28", optional = true }
+azure_storage = { version = "0.19", optional = true }
+azure_storage_blobs = { version = "0.19", optional = true }
+azure_identity = { version = "0.19", optional = true }
+google-cloud-storage = { version = "0.15", optional = true }
+google-cloud-auth = { version = "0.13", optional = true }
+
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 proptest = "1.4"
@@ -112,6 +120,7 @@ tokio-test = "0.4"
 [features]
 default = ["std"]
 std = []
+cloud-storage = ["aws-sdk-s3", "azure_storage", "azure_storage_blobs", "azure_identity", "google-cloud-storage", "google-cloud-auth"]
 simd = []
 hardware-acceleration = ["ring/std"]
 fips = []

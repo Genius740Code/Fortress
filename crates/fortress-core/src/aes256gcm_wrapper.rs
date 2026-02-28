@@ -3,8 +3,7 @@
 use crate::error::{FortressError, Result, EncryptionErrorCode};
 use crate::encryption::{EncryptionAlgorithm, PerformanceProfile};
 use async_trait::async_trait;
-use aes_gcm::{aead::{Aead, AeadCore, KeyInit as AeadKeyInit}};
-use std::fmt;
+use aes_gcm::{aead::{Aead, KeyInit as AeadKeyInit}};
 
 /// AES-256-GCM wrapper implementing EncryptionAlgorithm trait
 #[derive(Debug, Clone)]

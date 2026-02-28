@@ -31,7 +31,7 @@ use blake3::Hasher as Blake3Hasher;
 use sha2::{Sha256, Sha512};
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac};
-use argon2::{PasswordHasher, password_hash::SaltString};
+use argon2::PasswordHasher;
 type HmacSha256 = Hmac<Sha256>;
 type HmacSha512 = Hmac<Sha512>;
 // use aegis::aegis256::Aegis256; // TODO: Fix aegis import

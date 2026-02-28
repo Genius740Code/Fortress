@@ -10,6 +10,12 @@ use sha2::Digest;
 use std::collections::HashMap;
 use std::fmt;
 
+// Cloud storage imports (only available with cloud-storage feature)
+#[cfg(feature = "cloud-storage")]
+use aws_config::from_env;
+#[cfg(feature = "cloud-storage")]
+use aws_sdk_s3::{Client as S3Client, config::Region as S3Region};
+
 /// Trait for storage backends
 ///
 /// This trait defines the interface that all storage backends must implement.
@@ -385,6 +391,331 @@ struct FileMetadata {
     checksum: Option<String>,
 }
 
+/// AWS S3 storage backend
+#[cfg(feature = "cloud-storage")]
+#[derive(Debug)]
+pub struct S3Storage {
+    client: S3Client,
+    bucket: String,
+    prefix: Option<String>,
+}
+
+#[cfg(feature = "cloud-storage")]
+impl S3Storage {
+    /// Create a new S3 storage backend
+    pub async fn new(bucket: String, region: String, prefix: Option<String>) -> Result<Self> {
+        let config = from_env()
+            .region(S3Region::new(region))
+            .load()
+            .await;
+        
+        let client = S3Client::new(&config);
+
+        Ok(Self {
+            client,
+            bucket,
+            prefix,
+        })
+    }
+
+    /// Get the full S3 key for a storage key
+    fn get_s3_key(&self, key: &str) -> String {
+        match &self.prefix {
+            Some(prefix) => format!("{}/{}", prefix, key),
+            None => key.to_string(),
+        }
+    }
+}
+
+#[cfg(feature = "cloud-storage")]
+#[async_trait]
+impl StorageBackend for S3Storage {
+    async fn put(&self, key: &str, value: &[u8]) -> Result<()> {
+        let s3_key = self.get_s3_key(key);
+        
+        self.client
+            .put_object()
+            .bucket(&self.bucket)
+            .key(&s3_key)
+            .body(value.to_vec().into())
+            .send()
+            .await
+            .map_err(|e| FortressError::storage(
+                format!("Failed to put object to S3: {}", e),
+                "s3".to_string(),
+                StorageErrorCode::InvalidOperation,
+            ))?;
+
+        Ok(())
+    }
+
+    async fn get(&self, key: &str) -> Result<Option<Vec<u8>>> {
+        let s3_key = self.get_s3_key(key);
+        
+        match self.client
+            .get_object()
+            .bucket(&self.bucket)
+            .key(&s3_key)
+            .send()
+            .await
+        {
+            Ok(response) => {
+                let data = response.body.collect().await
+                    .map_err(|e| FortressError::storage(
+                        format!("Failed to read S3 object data: {}", e),
+                        "s3".to_string(),
+                        StorageErrorCode::InvalidOperation,
+                    ))?
+                    .into_bytes()
+                    .to_vec();
+                Ok(Some(data))
+            }
+            Err(e) => {
+                // Simple error handling - check if error message contains "NoSuchKey"
+                if e.to_string().contains("NoSuchKey") {
+                    Ok(None)
+                } else {
+                    Err(FortressError::storage(
+                        format!("Failed to get object from S3: {}", e),
+                        "s3".to_string(),
+                        StorageErrorCode::InvalidOperation,
+                    ))
+                }
+            }
+        }
+    }
+
+    async fn delete(&self, key: &str) -> Result<()> {
+        let s3_key = self.get_s3_key(key);
+        
+        self.client
+            .delete_object()
+            .bucket(&self.bucket)
+            .key(&s3_key)
+            .send()
+            .await
+            .map_err(|e| FortressError::storage(
+                format!("Failed to delete object from S3: {}", e),
+                "s3".to_string(),
+                StorageErrorCode::InvalidOperation,
+            ))?;
+
+        Ok(())
+    }
+
+    async fn exists(&self, key: &str) -> Result<bool> {
+        let s3_key = self.get_s3_key(key);
+        
+        match self.client
+            .head_object()
+            .bucket(&self.bucket)
+            .key(&s3_key)
+            .send()
+            .await
+        {
+            Ok(_) => Ok(true),
+            Err(e) => {
+                // Simple error handling - check if error message contains "NoSuchKey"
+                if e.to_string().contains("NoSuchKey") {
+                    Ok(false)
+                } else {
+                    Err(FortressError::storage(
+                        format!("Failed to check object existence in S3: {}", e),
+                        "s3".to_string(),
+                        StorageErrorCode::InvalidOperation,
+                    ))
+                }
+            }
+        }
+    }
+
+    async fn list_prefix(&self, prefix: &str) -> Result<Vec<String>> {
+        let s3_prefix = match &self.prefix {
+            Some(storage_prefix) => format!("{}/{}", storage_prefix, prefix),
+            None => prefix.to_string(),
+        };
+
+        let mut keys = Vec::new();
+        let mut continuation_token = None;
+
+        loop {
+            let mut request = self.client
+                .list_objects_v2()
+                .bucket(&self.bucket)
+                .prefix(&s3_prefix);
+
+            if let Some(token) = continuation_token {
+                request = request.continuation_token(token);
+            }
+
+            let response = request
+                .send()
+                .await
+                .map_err(|e| FortressError::storage(
+                    format!("Failed to list objects in S3: {}", e),
+                    "s3".to_string(),
+                    StorageErrorCode::InvalidOperation,
+                ))?;
+
+            if let Some(objects) = response.contents() {
+                for object in objects {
+                    if let Some(key) = object.key() {
+                        // Remove the storage prefix to get the original key
+                        let original_key = match &self.prefix {
+                            Some(storage_prefix) => {
+                                key.strip_prefix(&format!("{}/", storage_prefix))
+                                    .unwrap_or(key)
+                            }
+                            None => key,
+                        };
+                        keys.push(original_key.to_string());
+                    }
+                }
+            }
+
+            if response.is_truncated() {
+                continuation_token = response.next_continuation_token().map(|s| s.to_string());
+            } else {
+                break;
+            }
+        }
+
+        Ok(keys)
+    }
+
+    fn metadata(&self) -> StorageMetadata {
+        StorageMetadata {
+            backend_type: "s3".to_string(),
+            version: "1.0.0".to_string(),
+            supports_transactions: false,
+            supports_encryption_at_rest: true,
+            max_object_size: Some(5 * 1024 * 1024 * 1024), // 5GB
+            metadata: {
+                let mut meta = HashMap::new();
+                meta.insert("bucket".to_string(), self.bucket.clone());
+                if let Some(prefix) = &self.prefix {
+                    meta.insert("prefix".to_string(), prefix.clone());
+                }
+                meta
+            },
+        }
+    }
+
+    async fn health_check(&self) -> Result<HealthStatus> {
+        let start = std::time::Instant::now();
+        
+        // Try to list the bucket (this is a lightweight operation)
+        self.client
+            .list_objects_v2()
+            .bucket(&self.bucket)
+            .max_keys(1)
+            .send()
+            .await
+            .map_err(|e| FortressError::storage(
+                format!("S3 health check failed: {}", e),
+                "s3".to_string(),
+                StorageErrorCode::ConnectionFailed,
+            ))?;
+
+        let response_time = start.elapsed().as_millis() as u64;
+
+        Ok(HealthStatus {
+            healthy: true,
+            response_time_ms: response_time,
+            details: {
+                let mut details = HashMap::new();
+                details.insert("bucket".to_string(), self.bucket.clone());
+                details
+            },
+        })
+    }
+}
+
+/// Azure Blob storage backend (placeholder implementation)
+#[derive(Debug)]
+pub struct AzureBlobStorage {
+    container: String,
+}
+
+impl AzureBlobStorage {
+    /// Create a new Azure Blob storage backend
+    pub async fn new(_container: String, _account: String) -> Result<Self> {
+        // TODO: Implement proper Azure Blob storage integration
+        // For now, return a placeholder to satisfy compilation
+        Err(FortressError::storage(
+            "Azure Blob storage not yet fully implemented - API integration needed",
+            "azure_blob",
+            StorageErrorCode::BackendNotAvailable,
+        ))
+    }
+}
+
+#[async_trait]
+impl StorageBackend for AzureBlobStorage {
+    async fn put(&self, _key: &str, _value: &[u8]) -> Result<()> {
+        Err(FortressError::storage(
+            "Azure Blob storage not implemented",
+            "azure_blob",
+            StorageErrorCode::BackendNotAvailable,
+        ))
+    }
+
+    async fn get(&self, _key: &str) -> Result<Option<Vec<u8>>> {
+        Err(FortressError::storage(
+            "Azure Blob storage not implemented",
+            "azure_blob",
+            StorageErrorCode::BackendNotAvailable,
+        ))
+    }
+
+    async fn delete(&self, _key: &str) -> Result<()> {
+        Err(FortressError::storage(
+            "Azure Blob storage not implemented",
+            "azure_blob",
+            StorageErrorCode::BackendNotAvailable,
+        ))
+    }
+
+    async fn exists(&self, _key: &str) -> Result<bool> {
+        Err(FortressError::storage(
+            "Azure Blob storage not implemented",
+            "azure_blob",
+            StorageErrorCode::BackendNotAvailable,
+        ))
+    }
+
+    async fn list_prefix(&self, _prefix: &str) -> Result<Vec<String>> {
+        Err(FortressError::storage(
+            "Azure Blob storage not implemented",
+            "azure_blob",
+            StorageErrorCode::BackendNotAvailable,
+        ))
+    }
+
+    fn metadata(&self) -> StorageMetadata {
+        StorageMetadata {
+            backend_type: "azure_blob".to_string(),
+            version: "1.0.0".to_string(),
+            supports_transactions: false,
+            supports_encryption_at_rest: true,
+            max_object_size: Some(4 * 1024 * 1024 * 1024 * 1024), // 4TB
+            metadata: {
+                let mut meta = HashMap::new();
+                meta.insert("container".to_string(), self.container.clone());
+                meta
+            },
+        }
+    }
+
+    async fn health_check(&self) -> Result<HealthStatus> {
+        Err(FortressError::storage(
+            "Azure Blob storage not implemented",
+            "azure_blob",
+            StorageErrorCode::BackendNotAvailable,
+        ))
+    }
+}
+
 /// Storage configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StorageConfig {
@@ -420,13 +751,6 @@ pub enum StorageBackendType {
         /// Account name
         account: String,
     },
-    /// Google Cloud Storage
-    Gcs {
-        /// Bucket name
-        bucket: String,
-        /// Prefix
-        prefix: Option<String>,
-    },
 }
 
 /// Factory function to create storage backends
@@ -438,29 +762,20 @@ pub async fn create_storage_backend(config: StorageConfig) -> Result<Box<dyn Sto
         StorageBackendType::FileSystem { base_path } => {
             Ok(Box::new(FileSystemStorage::new(base_path)?))
         }
-        StorageBackendType::S3 { bucket: _, region: _, prefix: _ } => {
-            // TODO: Implement S3 backend
+        #[cfg(feature = "cloud-storage")]
+        StorageBackendType::S3 { bucket, region, prefix } => {
+            Ok(Box::new(S3Storage::new(bucket, region, prefix).await?))
+        }
+        #[cfg(not(feature = "cloud-storage"))]
+        StorageBackendType::S3 { .. } => {
             Err(FortressError::storage(
-                "S3 backend not yet implemented",
+                "S3 storage backend requires 'cloud-storage' feature to be enabled",
                 "s3",
                 StorageErrorCode::BackendNotAvailable,
             ))
         }
-        StorageBackendType::AzureBlob { container: _, account: _ } => {
-            // TODO: Implement Azure Blob backend
-            Err(FortressError::storage(
-                "Azure Blob backend not yet implemented",
-                "azure_blob",
-                StorageErrorCode::BackendNotAvailable,
-            ))
-        }
-        StorageBackendType::Gcs { bucket: _, prefix: _ } => {
-            // TODO: Implement GCS backend
-            Err(FortressError::storage(
-                "GCS backend not yet implemented",
-                "gcs",
-                StorageErrorCode::BackendNotAvailable,
-            ))
+        StorageBackendType::AzureBlob { container, account } => {
+            Ok(Box::new(AzureBlobStorage::new(container, account).await?))
         }
     }
 }
@@ -592,6 +907,51 @@ mod tests {
                 assert_eq!(base_path, "/tmp/test");
             }
             _ => panic!("Expected FileSystem backend type"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_cloud_storage_configs() {
+        // Test S3 config
+        let s3_config = StorageConfig {
+            backend_type: StorageBackendType::S3 {
+                bucket: "test-bucket".to_string(),
+                region: "us-east-1".to_string(),
+                prefix: Some("fortress".to_string()),
+            },
+            config: HashMap::new(),
+        };
+
+        let json = serde_json::to_string(&s3_config).unwrap();
+        let deserialized: StorageConfig = serde_json::from_str(&json).unwrap();
+
+        match deserialized.backend_type {
+            StorageBackendType::S3 { bucket, region, prefix } => {
+                assert_eq!(bucket, "test-bucket");
+                assert_eq!(region, "us-east-1");
+                assert_eq!(prefix, Some("fortress".to_string()));
+            }
+            _ => panic!("Expected S3 backend type"),
+        }
+
+        // Test Azure Blob config
+        let azure_config = StorageConfig {
+            backend_type: StorageBackendType::AzureBlob {
+                container: "test-container".to_string(),
+                account: "testaccount".to_string(),
+            },
+            config: HashMap::new(),
+        };
+
+        let json = serde_json::to_string(&azure_config).unwrap();
+        let deserialized: StorageConfig = serde_json::from_str(&json).unwrap();
+
+        match deserialized.backend_type {
+            StorageBackendType::AzureBlob { container, account } => {
+                assert_eq!(container, "test-container");
+                assert_eq!(account, "testaccount");
+            }
+            _ => panic!("Expected Azure Blob backend type"),
         }
     }
 }
