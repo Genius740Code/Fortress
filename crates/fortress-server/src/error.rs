@@ -46,6 +46,10 @@ pub enum ServerError {
     #[error("Rate limit exceeded")]
     RateLimit,
 
+    /// DDoS protection blocked
+    #[error("Request blocked by DDoS protection")]
+    DdosBlocked,
+
     /// Quota exceeded error
     #[error("Quota exceeded: {0}")]
     QuotaExceeded(String),
@@ -89,6 +93,7 @@ impl ServerError {
             ServerError::NotFound(_) => StatusCode::NOT_FOUND,
             ServerError::Conflict(_) => StatusCode::CONFLICT,
             ServerError::RateLimit => StatusCode::TOO_MANY_REQUESTS,
+            ServerError::DdosBlocked => StatusCode::TOO_MANY_REQUESTS,
             ServerError::QuotaExceeded(_) => StatusCode::PAYLOAD_TOO_LARGE,
             ServerError::PayloadTooLarge(_) => StatusCode::PAYLOAD_TOO_LARGE,
             ServerError::Timeout => StatusCode::REQUEST_TIMEOUT,
@@ -126,6 +131,7 @@ impl ServerError {
             ServerError::NotFound(_) => "NOT_FOUND",
             ServerError::Conflict(_) => "CONFLICT",
             ServerError::RateLimit => "RATE_LIMIT_EXCEEDED",
+            ServerError::DdosBlocked => "DDOS_BLOCKED",
             ServerError::QuotaExceeded(_) => "QUOTA_EXCEEDED",
             ServerError::PayloadTooLarge(_) => "PAYLOAD_TOO_LARGE",
             ServerError::Timeout => "TIMEOUT",

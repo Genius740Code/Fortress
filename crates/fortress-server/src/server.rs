@@ -11,9 +11,9 @@ use crate::health::{HealthChecker, HealthCheckRegistry};
 use crate::metrics::MetricsCollector;
 use crate::middleware::{
     create_cors_layer, create_timeout_layer, create_trace_layer,
-    auth_middleware, rate_limit_middleware, request_logging_middleware,
+    auth_middleware, advanced_rate_limit_middleware, request_logging_middleware,
     request_size_middleware, security_headers_middleware, tenant_isolation_middleware,
-    RateLimiter, MiddlewareStack,
+    AdvancedRateLimiter, MiddlewareStack,
 };
 use crate::prelude::*;
 use axum::{
@@ -50,7 +50,7 @@ pub struct FortressServer {
     /// Health check registry
     health_registry: Arc<HealthCheckRegistry>,
     /// Rate limiter
-    rate_limiter: Arc<RateLimiter>,
+    rate_limiter: Arc<AdvancedRateLimiter>,
 }
 
 impl FortressServer {
@@ -65,7 +65,7 @@ impl FortressServer {
         let storage = Self::create_storage_backend(&config)?;
         let health_checker = Arc::new(HealthChecker::new(config.features.clone()));
         let health_registry = Arc::new(HealthCheckRegistry::new());
-        let rate_limiter = Arc::new(RateLimiter::new(config.security.rate_limit.clone()));
+        let rate_limiter = Arc::new(AdvancedRateLimiter::new(config.security.rate_limit.clone()));
 
         // Create application state
         let app_state = Arc::new(AppState {
@@ -147,7 +147,7 @@ impl FortressServer {
                 ))
                 .layer(axum::middleware::from_fn_with_state(
                     rate_limiter.clone(),
-                    rate_limit_middleware,
+                    advanced_rate_limit_middleware,
                 ))
                 .layer(axum::middleware::from_fn_with_state(
                     network_config,

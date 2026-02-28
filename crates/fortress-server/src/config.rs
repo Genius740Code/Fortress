@@ -185,6 +185,53 @@ pub struct RateLimitConfig {
     
     /// Burst size
     pub burst_size: u32,
+    
+    /// Rate limiting algorithm
+    #[serde(default = "default_rate_limit_algorithm")]
+    pub algorithm: RateLimitAlgorithm,
+    
+    /// DDoS protection settings
+    #[serde(default)]
+    pub ddos_protection: DdosProtectionConfig,
+}
+
+/// Rate limiting algorithms
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum RateLimitAlgorithm {
+    /// Token bucket algorithm (default)
+    TokenBucket,
+    /// Sliding window counter
+    SlidingWindow,
+    /// Fixed window counter
+    FixedWindow,
+    /// Leaky bucket
+    LeakyBucket,
+}
+
+/// DDoS protection configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DdosProtectionConfig {
+    /// Enable DDoS protection
+    pub enabled: bool,
+    
+    /// Global requests per second threshold
+    pub global_rps_threshold: Option<u32>,
+    
+    /// IP requests per second threshold
+    pub ip_rps_threshold: Option<u32>,
+    
+    /// Auto-block threshold
+    pub auto_block_threshold: Option<u32>,
+    
+    /// Block duration in seconds
+    pub block_duration_seconds: u64,
+    
+    /// Reputation decay rate per hour
+    pub reputation_decay_rate: u8,
+}
+
+fn default_rate_limit_algorithm() -> RateLimitAlgorithm {
+    RateLimitAlgorithm::TokenBucket
 }
 
 impl Default for RateLimitConfig {
@@ -194,6 +241,21 @@ impl Default for RateLimitConfig {
             requests_per_minute: 60,
             requests_per_hour: 1000,
             burst_size: 10,
+            algorithm: RateLimitAlgorithm::TokenBucket,
+            ddos_protection: DdosProtectionConfig::default(),
+        }
+    }
+}
+
+impl Default for DdosProtectionConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            global_rps_threshold: None,
+            ip_rps_threshold: None,
+            auto_block_threshold: None,
+            block_duration_seconds: 300,
+            reputation_decay_rate: 10,
         }
     }
 }

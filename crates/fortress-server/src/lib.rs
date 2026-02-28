@@ -57,6 +57,7 @@ pub mod prelude {
     pub use crate::auth::{AuthManager, TokenClaims};
     pub use crate::health::HealthChecker;
     pub use crate::metrics::MetricsCollector;
+    pub use crate::middleware::{AdvancedRateLimiter, RateLimitAlgorithm, RateLimitMetricsSnapshot};
 }
 
 /// Fortress server version information
