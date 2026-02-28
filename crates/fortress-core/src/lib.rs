@@ -188,12 +188,13 @@ pub mod field_encryption_manager;
 
 pub mod algorithm_registry;
 
-/// Backup and disaster recovery system
+/// Performance profiles and optimization
+pub mod performance_profile;
 
+/// Backup and disaster recovery system
 pub mod backup;
 
 /// Simple backup manager for testing
-
 pub mod simple_backup_manager;
 
 /// AES-256-GCM wrapper implementation
@@ -272,6 +273,11 @@ pub mod prelude {
     };
 
     pub use crate::simple_backup_manager::{SimpleBackupManager};
+
+    pub use crate::performance_profile::{
+        PerformanceProfile, PerformanceProfileConfig, ProfileManager, ResourceLimits,
+        EncryptionSettings, StorageSettings, NetworkSettings, SystemInfo, SyncMode,
+    };
 
 }
 

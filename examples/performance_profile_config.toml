@@ -1,0 +1,217 @@
+# Fortress Configuration with Performance Profiles
+# This example shows how to configure Fortress with different performance profiles
+
+[database]
+path = "./fortress.db"
+max_size = 1073741824  # 1GB
+cache_size = 67108864  # 64MB
+enable_wal = true
+pool_size = 10
+
+[encryption]
+default_algorithm = "aegis256"
+key_rotation_interval = 82800  # 23 hours in seconds
+master_key_rotation_interval = 7776000  # 90 days in seconds
+
+# Performance profiles configuration
+[encryption.profiles.lightning]
+name = "lightning"
+profile_type = "Lightning"
+description = "Maximum speed profile optimized for high-throughput scenarios"
+
+[encryption.profiles.lightning.resources]
+max_memory_mb = 512
+max_cpu_percent = 60
+max_concurrent_ops = 50
+thread_pool_size = 2
+cache_size_mb = 128
+
+[encryption.profiles.lightning.encryption]
+algorithm = "chacha20poly1305"
+kdf = "argon2id"
+kdf_memory_cost = 16384
+kdf_iterations = 1
+kdf_parallelism = 2
+hardware_acceleration = true
+simd_optimizations = true
+batch_size = 2048
+
+[encryption.profiles.lightning.storage]
+compression = "none"
+compression_level = 1
+enable_wal = false
+sync_mode = "Off"
+page_size = 8192
+cache_pages = 512
+async_writes = true
+batch_write_size = 200
+
+[encryption.profiles.lightning.network]
+connection_timeout_secs = 10
+request_timeout_secs = 30
+max_connections = 50
+connection_pool_size = 5
+keep_alive = true
+compression = false
+buffer_size = 16384
+
+[encryption.profiles.lightning.tags]
+tags = ["speed", "high-throughput"]
+
+[encryption.profiles.balanced]
+name = "balanced"
+profile_type = "Balanced"
+description = "Balanced profile providing good performance and security"
+
+[encryption.profiles.balanced.resources]
+max_memory_mb = 1024
+max_cpu_percent = 75
+max_concurrent_ops = 100
+thread_pool_size = 4
+cache_size_mb = 256
+
+[encryption.profiles.balanced.encryption]
+algorithm = "aegis256"
+kdf = "argon2id"
+kdf_memory_cost = 65536
+kdf_iterations = 3
+kdf_parallelism = 4
+hardware_acceleration = true
+simd_optimizations = true
+batch_size = 1024
+
+[encryption.profiles.balanced.storage]
+compression = "lz4"
+compression_level = 4
+enable_wal = true
+sync_mode = "Normal"
+page_size = 4096
+cache_pages = 1024
+async_writes = true
+batch_write_size = 100
+
+[encryption.profiles.balanced.network]
+connection_timeout_secs = 30
+request_timeout_secs = 60
+max_connections = 100
+connection_pool_size = 10
+keep_alive = true
+compression = true
+buffer_size = 8192
+
+[encryption.profiles.balanced.tags]
+tags = ["balanced", "general-purpose"]
+
+[encryption.profiles.fortress]
+name = "fortress"
+profile_type = "Fortress"
+description = "Maximum security profile with comprehensive protection"
+
+[encryption.profiles.fortress.resources]
+max_memory_mb = 2048
+max_cpu_percent = 90
+max_concurrent_ops = 200
+thread_pool_size = 8
+cache_size_mb = 512
+
+[encryption.profiles.fortress.encryption]
+algorithm = "aes256gcm"
+kdf = "argon2id"
+kdf_memory_cost = 262144
+kdf_iterations = 5
+kdf_parallelism = 8
+hardware_acceleration = true
+simd_optimizations = true
+batch_size = 512
+
+[encryption.profiles.fortress.storage]
+compression = "flate2"
+compression_level = 9
+enable_wal = true
+sync_mode = "Full"
+page_size = 2048
+cache_pages = 2048
+async_writes = false
+batch_write_size = 50
+
+[encryption.profiles.fortress.network]
+connection_timeout_secs = 60
+request_timeout_secs = 120
+max_connections = 200
+connection_pool_size = 20
+keep_alive = true
+compression = true
+buffer_size = 4096
+
+[encryption.profiles.fortress.tags]
+tags = ["security", "high-protection"]
+
+# Custom Gaming Profile
+[encryption.profiles.gaming]
+name = "gaming"
+profile_type = "Custom"
+description = "Optimized for gaming applications with high performance requirements"
+
+[encryption.profiles.gaming.resources]
+max_memory_mb = 2048
+max_cpu_percent = 90
+max_concurrent_ops = 200
+thread_pool_size = 6
+cache_size_mb = 512
+
+[encryption.profiles.gaming.encryption]
+algorithm = "chacha20poly1305"
+kdf = "argon2id"
+kdf_memory_cost = 32768
+kdf_iterations = 2
+kdf_parallelism = 4
+hardware_acceleration = true
+simd_optimizations = true
+batch_size = 4096
+
+[encryption.profiles.gaming.storage]
+compression = "lz4"
+compression_level = 2
+enable_wal = false
+sync_mode = "Off"
+page_size = 16384
+cache_pages = 2048
+async_writes = true
+batch_write_size = 500
+
+[encryption.profiles.gaming.network]
+connection_timeout_secs = 5
+request_timeout_secs = 15
+max_connections = 200
+connection_pool_size = 20
+keep_alive = true
+compression = false
+buffer_size = 32768
+
+[encryption.profiles.gaming.tags]
+tags = ["gaming", "high-performance", "low-latency"]
+
+[encryption.key_derivation]
+kdf = "argon2id"
+memory_cost = 65536
+iterations = 3
+parallelism = 4
+salt_length = 32
+
+[storage]
+backend = "filesystem"
+base_path = "./data"
+compression = true
+checksum = "sha256"
+
+[api]
+rest_port = 8080
+grpc_port = 50051
+enable_cors = true
+enable_wasm = true
+
+[monitoring]
+enable_metrics = true
+metrics_port = 9090
+enable_tracing = false
+log_level = "info"

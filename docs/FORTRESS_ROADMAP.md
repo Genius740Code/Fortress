@@ -81,15 +81,10 @@
 - [x] Create browser API
 - [x] Add client-side encryption
 
-### 15. Design plugin system for custom encryption algorithms
-- [ ] Create plugin interface
-- [ ] Build plugin loader
-- [ ] Add plugin registry
-
 ### 16. Implement performance profiles (Lightning, Balanced, Fortress modes)
-- [ ] Design performance tiers
-- [ ] Create profile selection
-- [ ] Add automatic optimization
+- [X] Design performance tiers
+- [X] Create profile selection
+- [X] Add automatic optimization
 
 ### 17. Build zero-downtime key rotation mechanism
 - [x] Implement live rotation
