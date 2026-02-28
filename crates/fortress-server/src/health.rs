@@ -25,7 +25,39 @@ impl InMemoryAuditLogger {
 
 #[async_trait::async_trait]
 impl AuditLogger for InMemoryAuditLogger {
-    fn log(&mut self, _entry: AuditEntry) -> Result<(), FortressError> {
+    fn log(&mut self, _entry: AuditEntry) -> Result<()> {
+        // Just return success for health check
+        Ok(())
+    }
+    
+    fn query(&self, _query: AuditQuery) -> Result<Vec<AuditEntry>> {
+        // Return empty results for health check
+        Ok(vec![])
+    }
+    
+    fn verify_integrity(&self) -> Result<IntegrityReport> {
+        // Return a simple integrity report
+        Ok(IntegrityReport {
+            total_entries: 0,
+            verified_entries: 0,
+            tampered_entries: 0,
+            verification_time: Utc::now(),
+            is_valid: true,
+        })
+    }
+    
+    fn get_statistics(&self) -> Result<AuditStatistics> {
+        // Return empty statistics for health check
+        Ok(AuditStatistics {
+            total_entries: 0,
+            entries_by_type: HashMap::new(),
+            entries_by_level: HashMap::new(),
+            entries_by_outcome: HashMap::new(),
+            time_range: None,
+        })
+    }
+    
+    fn rotate_logs(&self) -> Result<()> {
         // Just return success for health check
         Ok(())
     }

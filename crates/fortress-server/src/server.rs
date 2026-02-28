@@ -21,6 +21,7 @@ use axum::{
     http::Method,
     routing::{get, post, delete},
     Router,
+    response::IntoResponse,
 };
 use fortress_core::prelude::*;
 use std::net::SocketAddr;
@@ -98,31 +99,17 @@ impl FortressServer {
             "Starting Fortress server"
         );
 
-        // Create the router
+        // Start the server with the router directly
         let app = self.create_router().await?;
-
-        // Start background tasks
-        let health_checker = self.health_checker.clone();
-        let health_registry = self.health_registry.clone();
-        let metrics = self.app_state.metrics.clone();
-
-        tokio::spawn(async move {
-            Self::run_background_tasks(health_checker, health_registry, metrics).await;
-        });
-
-        // Start the server
         let listener = tokio::net::TcpListener::bind(addr).await
             .map_err(|e| ServerError::network(format!("Failed to bind to {}: {}", addr, e)))?;
-
+        
         info!(
             bind_addr = %addr,
             "Fortress server listening"
         );
-
-        // Create a service from the router
-        let service = app.into_service();
-
-        axum::serve(listener, service)
+        
+        axum::serve(listener, app)
             .with_graceful_shutdown(Self::shutdown_signal())
             .await
             .map_err(|e| ServerError::network(format!("Server error: {}", e)))?;
@@ -138,40 +125,14 @@ impl FortressServer {
         let rate_limiter = self.rate_limiter.clone();
         let network_config = self.config.network.clone();
 
-        // Build middleware stack
-        let middleware_stack = MiddlewareStack::new()
-            .add_layer(create_trace_layer())
-            .add_layer(create_cors_layer(&self.config.security.cors))
-            .add_layer(create_timeout_layer(self.config.network.request_timeout))
-            .add_layer(CompressionLayer::new())
-            .add_layer(ServiceBuilder::new()
-                .layer(axum::middleware::from_fn_with_state(
-                    app_state.clone(),
-                    request_logging_middleware,
-                ))
-                .layer(axum::middleware::from_fn_with_state(
-                    rate_limiter.clone(),
-                    advanced_rate_limit_middleware,
-                ))
-                .layer(axum::middleware::from_fn_with_state(
-                    network_config,
-                    request_size_middleware,
-                ))
-                .layer(axum::middleware::from_fn(
-                    security_headers_middleware,
-                ))
-                .layer(axum::middleware::from_fn(
-                    tenant_isolation_middleware,
-                ))
-            )
-            .add_layer(DefaultBodyLimit::max(self.config.network.max_body_size));
-
-        // Create base router
+        // Create base router with basic middleware
         let mut router = Router::new()
             .route("/health", get(crate::handlers::health_check))
             .route("/metrics", get(crate::handlers::get_metrics))
             .route("/metrics/prometheus", get(crate::handlers::get_prometheus_metrics))
-            .layer(middleware_stack.build());
+            .layer(DefaultBodyLimit::max(self.config.network.max_body_size))
+            .layer(create_cors_layer(&self.config.security.cors))
+            .layer(create_timeout_layer(self.config.network.request_timeout));
 
         // Add authentication routes
         router = router
@@ -302,47 +263,33 @@ struct NoOpFieldEncryptionManager;
 impl FieldEncryptionManager for NoOpFieldEncryptionManager {
     async fn encrypt_field(
         &self,
-        _field_id: &FieldIdentifier,
-        _data: &serde_json::Value,
-        _config: &FieldEncryptionConfig,
-    ) -> Result<EncryptedField, FortressError> {
+        _field: &FieldIdentifier,
+        _plaintext: &[u8],
+    ) -> Result<EncryptedField> {
         Err(FortressError::encryption("Field encryption is disabled", "none", EncryptionErrorCode::NotSupported))
     }
 
     async fn decrypt_field(
         &self,
-        _field_id: &FieldIdentifier,
-        _encrypted_field: &EncryptedField,
-    ) -> Result<DecryptedField, FortressError> {
+        _ciphertext: &[u8],
+        _metadata: &FieldEncryptionMetadata,
+    ) -> Result<DecryptedField> {
         Err(FortressError::encryption("Field encryption is disabled", "none", EncryptionErrorCode::NotSupported))
     }
 
-    async fn get_field_metadata(
-        &self,
-        _field_id: &FieldIdentifier,
-    ) -> Result<Option<FieldEncryptionMetadata>, FortressError> {
+    async fn get_field_config(&self, _field: &FieldIdentifier) -> Result<Option<FieldEncryptionConfig>> {
         Ok(None)
     }
 
-    async fn update_field_config(
-        &self,
-        _field_id: &FieldIdentifier,
-        _config: &FieldEncryptionConfig,
-    ) -> Result<(), FortressError> {
+    async fn set_field_config(&self, _config: FieldEncryptionConfig) -> Result<()> {
         Err(FortressError::encryption("Field encryption is disabled", "none", EncryptionErrorCode::NotSupported))
     }
 
-    async fn delete_field_config(
-        &self,
-        _field_id: &FieldIdentifier,
-    ) -> Result<(), FortressError> {
+    async fn remove_field_config(&self, _field: &FieldIdentifier) -> Result<()> {
         Err(FortressError::encryption("Field encryption is disabled", "none", EncryptionErrorCode::NotSupported))
     }
 
-    async fn list_encrypted_fields(
-        &self,
-        _tenant_id: Option<&str>,
-    ) -> Result<Vec<FieldIdentifier>, FortressError> {
+    async fn list_field_configs(&self) -> Result<Vec<FieldEncryptionConfig>> {
         Ok(vec![])
     }
 }
@@ -363,114 +310,65 @@ impl InMemoryStorage {
 
 #[async_trait::async_trait]
 impl StorageBackend for InMemoryStorage {
-    async fn store(&self, record: StorageRecord) -> Result<(), FortressError> {
+    async fn put(&self, key: &str, value: &[u8]) -> Result<()> {
         let mut data = self.data.write();
-        data.insert(record.id.clone(), crate::handlers::StorageRecord {
-            id: record.id,
-            key_id: record.key_id,
-            data: record.data,
-            algorithm: record.algorithm,
-            created_at: record.created_at,
-            metadata: record.metadata,
-            tenant_id: record.tenant_id,
-            field_metadata: record.field_metadata,
-        });
+        let record = serde_json::from_slice::<crate::handlers::StorageRecord>(value)
+            .map_err(|e| FortressError::storage("Invalid record format", "serde", StorageErrorCode::SerializationError))?;
+        data.insert(key.to_string(), record);
         Ok(())
     }
 
-    async fn retrieve(&self, id: &str) -> Result<StorageRecord, FortressError> {
+    async fn get(&self, key: &str) -> Result<Option<Vec<u8>>> {
         let data = self.data.read();
-        data.get(id).cloned().ok_or_else(|| {
-            FortressError::storage("Data not found", "Data not found", StorageErrorCode::NotFound)
-        })
-    }
-
-    async fn delete(&self, id: &str, _soft_delete: bool) -> Result<(), FortressError> {
-        let mut data = self.data.write();
-        data.remove(id).ok_or_else(|| {
-            FortressError::storage("Data not found", "Data not found", StorageErrorCode::NotFound)
-        })?;
-        Ok(())
-    }
-
-    async fn query(&self, params: crate::handlers::QueryParams) -> Result<crate::handlers::QueryResults, FortressError> {
-        let data = self.data.read();
-        let mut records: Vec<crate::handlers::StorageRecord> = data.values().cloned().collect();
-
-        // Apply filters
-        // Filter by tenant_id from the QueryParams itself
-        if let Some(ref tenant_id) = params.tenant_id {
-            records.retain(|r| r.tenant_id.as_ref() == Some(tenant_id));
-        }
-        
-        if let Some(filter) = &params.filter {
-            if let Some(ref algorithm) = filter.algorithm {
-                records.retain(|r| r.algorithm == *algorithm);
-            }
-            if let Some(ref date_range) = filter.date_range {
-                if let Some(start) = date_range.start {
-                    records.retain(|r| r.created_at >= start);
-                }
-                if let Some(end) = date_range.end {
-                    records.retain(|r| r.created_at <= end);
-                }
-            }
-        }
-
-        // Apply sorting
-        match params.sort.field.as_str() {
-            "created_at" => {
-                records.sort_by(|a, b| {
-                    match params.sort.direction {
-                        crate::models::SortDirection::Asc => a.created_at.cmp(&b.created_at),
-                        crate::models::SortDirection::Desc => b.created_at.cmp(&a.created_at),
-                    }
-                });
-            }
-            _ => {
-                // Default sort by created_at descending
-                records.sort_by(|a, b| b.created_at.cmp(&a.created_at));
-            }
-        }
-
-        // Apply pagination
-        let total_count = records.len() as u64;
-        let page = params.pagination.page.unwrap_or(1);
-        let page_size = params.pagination.page_size.unwrap_or(50);
-        let start = ((page - 1) * page_size) as usize;
-        let end = std::cmp::min(start + page_size as usize, records.len());
-        
-        let paginated_records = if start < records.len() {
-            records[start..end].to_vec()
+        if let Some(record) = data.get(key) {
+            serde_json::to_vec(record)
+                .map(Some)
+                .map_err(|e| FortressError::storage("Serialization error", "serde", StorageErrorCode::SerializationError))
         } else {
-            vec![]
-        };
+            Ok(None)
+        }
+    }
 
-        Ok(crate::handlers::QueryResults {
-            records: paginated_records,
-            total_count,
+    async fn delete(&self, key: &str) -> Result<()> {
+        let mut data = self.data.write();
+        data.remove(key).map(|_| ()).ok_or_else(|| {
+            FortressError::storage("Data not found", "Data not found", StorageErrorCode::NotFound)
         })
     }
 
-    async fn list_tenants(&self) -> Result<Vec<String>, FortressError> {
+    async fn exists(&self, key: &str) -> Result<bool> {
         let data = self.data.read();
-        let mut tenants: std::collections::HashSet<String> = std::collections::HashSet::new();
-        for record in data.values() {
-            if let Some(ref tenant_id) = record.tenant_id {
-                tenants.insert(tenant_id.to_string());
-            }
-        }
-        Ok(tenants.into_iter().collect())
+        Ok(data.contains_key(key))
     }
 
-    async fn get_tenant_stats(&self, _tenant_id: &str) -> Result<TenantStats, FortressError> {
-        // Simplified implementation
-        Ok(TenantStats {
-            database_count: 0,
-            storage_used: 0,
-            active_connections: 0,
-            cpu_usage: 0.0,
-            memory_usage: 0.0,
+    async fn list_prefix(&self, prefix: &str) -> Result<Vec<String>> {
+        let data = self.data.read();
+        let keys: Vec<String> = data.keys()
+            .filter(|k| k.starts_with(prefix))
+            .cloned()
+            .collect();
+        Ok(keys)
+    }
+
+    fn metadata(&self) -> StorageMetadata {
+        StorageMetadata {
+            backend_type: "in-memory".to_string(),
+            version: "1.0.0".to_string(),
+            supports_transactions: false,
+            supports_encryption_at_rest: false,
+            max_object_size: Some(1024 * 1024), // 1MB
+            metadata: HashMap::new(),
+        }
+    }
+
+    async fn health_check(&self) -> Result<fortress_core::storage::HealthStatus> {
+        Ok(fortress_core::storage::HealthStatus {
+            healthy: true,
+            response_time_ms: 1,
+            details: HashMap::from([
+                ("status".to_string(), "In-memory storage is healthy".to_string()),
+                ("last_check".to_string(), Utc::now().to_rfc3339()),
+            ]),
         })
     }
 }

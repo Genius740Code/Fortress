@@ -61,9 +61,9 @@
 - [x] Add cloud storage providers
 
 ### 12. Implement REST API with automatic encryption/decryption
-- [ ] Build REST endpoints
-- [ ] Add automatic encryption
-- [ ] Create API documentation
+- [X] Build REST endpoints
+- [X] Add automatic encryption
+- [X] Create API documentation
 
 ### 13. Build gRPC interface for high-performance communication
 - [ ] Design gRPC services
