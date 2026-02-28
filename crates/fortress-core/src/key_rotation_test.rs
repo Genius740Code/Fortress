@@ -93,7 +93,7 @@ mod tests {
                 .collect())
         }
 
-        async fn rotate_key(&self, key_id: &str, algorithm: &dyn EncryptionAlgorithm) -> Result<(SecureKey, KeyMetadata)> {
+        async fn rotate_key(&self, key_id: &str, algorithm: &dyn EncryptionAlgorithm) -> Result<()> {
             let new_key = self.generate_key(algorithm).await?;
             let (_, old_metadata) = self.retrieve_key(key_id).await?;
             
@@ -108,12 +108,117 @@ mod tests {
             );
 
             self.store_key(key_id, &new_key, &new_metadata).await?;
-            Ok((new_key, new_metadata))
+            Ok(())
+        }
+
+        async fn validate_dual_keys(&self, key_id: &str, old_version: u32, new_version: u32) -> Result<bool> {
+            let old_key_id = format!("{}_v{}", key_id, old_version);
+            let new_key_id = format!("{}_v{}", key_id, new_version);
+            
+            let old_exists = self.key_exists(&old_key_id).await?;
+            let new_exists = self.key_exists(&new_key_id).await?;
+            
+            if !old_exists || !new_exists {
+                return Ok(false);
+            }
+            
+            let old_result = self.retrieve_key(&old_key_id).await;
+            let new_result = self.retrieve_key(&new_key_id).await;
+            
+            old_result.is_ok() && new_result.is_ok()
+        }
+
+        async fn get_active_key_version(&self, key_id: &str) -> Result<u32> {
+            let (_, metadata) = self.retrieve_key(key_id).await?;
+            Ok(metadata.version)
+        }
+
+        async fn initiate_key_transition(&self, key_id: &str, algorithm: &dyn EncryptionAlgorithm) -> Result<u32> {
+            let (_, old_metadata) = self.retrieve_key(key_id).await?;
+            let new_version = old_metadata.version + 1;
+            
+            let new_key = self.generate_key(algorithm).await?;
+            
+            let new_metadata = KeyMetadata::new(
+                key_id.to_string(),
+                algorithm.name().to_string(),
+                new_version,
+                Utc::now(),
+                Utc::now() + Duration::days(90),
+                old_metadata.purpose.clone(),
+                old_metadata.performance_profile,
+            ).with_metadata("transition_status".to_string(), "initiating".to_string());
+            
+            let old_versioned_id = format!("{}_v{}", key_id, old_metadata.version);
+            let (old_key, old_metadata_copy) = self.retrieve_key(key_id).await?;
+            let old_metadata_backup = old_metadata_copy.clone()
+                .with_metadata("transition_status".to_string(), "backup".to_string());
+            self.store_key(&old_versioned_id, &old_key, &old_metadata_backup).await?;
+            
+            let new_versioned_id = format!("{}_v{}", key_id, new_version);
+            let new_metadata_with_status = new_metadata.clone()
+                .with_metadata("transition_status".to_string(), "active".to_string());
+            self.store_key(&new_versioned_id, &new_key, &new_metadata_with_status).await?;
+            
+            self.store_key(key_id, &new_key, &new_metadata).await?;
+            
+            Ok(new_version)
+        }
+
+        async fn rollback_key_transition(&self, key_id: &str, old_version: u32, new_version: u32) -> Result<()> {
+            let old_versioned_id = format!("{}_v{}", key_id, old_version);
+            let (old_key, old_metadata) = self.retrieve_key(&old_versioned_id).await?;
+            
+            let restored_metadata = KeyMetadata::new(
+                key_id.to_string(),
+                old_metadata.algorithm.clone(),
+                old_version,
+                old_metadata.created_at,
+                old_metadata.expires_at,
+                old_metadata.purpose.clone(),
+                old_metadata.performance_profile,
+            );
+            
+            self.store_key(key_id, &old_key, &restored_metadata).await?;
+            
+            let new_versioned_id = format!("{}_v{}", key_id, new_version);
+            let _ = self.delete_key(&new_versioned_id).await;
+            
+            Ok(())
+        }
+
+        async fn complete_key_transition(&self, key_id: &str, new_version: u32) -> Result<()> {
+            let (_, mut metadata) = self.retrieve_key(key_id).await?;
+            metadata.metadata.insert("transition_status".to_string(), "complete".to_string());
+            
+            let old_versioned_id = format!("{}_v{}", key_id, new_version - 1);
+            let _ = self.delete_key(&old_versioned_id).await;
+            
+            Ok(())
         }
 
         async fn needs_rotation(&self, key_id: &str) -> Result<bool> {
             let (_, metadata) = self.retrieve_key(key_id).await?;
             Ok(Utc::now() >= metadata.expires_at)
+        }
+
+        async fn rotate_key_with_zero_downtime(&self, key_id: &str, algorithm: &dyn EncryptionAlgorithm) -> Result<()> {
+            let new_version = self.initiate_key_transition(key_id, algorithm).await?;
+            
+            let old_metadata = self.get_key_metadata(key_id).await?;
+            let dual_valid = self.validate_dual_keys(key_id, old_metadata.version - 1, new_version).await?;
+            
+            if !dual_valid {
+                self.rollback_key_transition(key_id, old_metadata.version - 1, new_version).await?;
+                return Err(crate::error::FortressError::key_management(
+                    "Dual-key validation failed during zero-downtime rotation",
+                    Some(key_id.to_string()),
+                    crate::error::KeyErrorCode::RotationFailed,
+                ));
+            }
+            
+            self.complete_key_transition(key_id, new_version).await?;
+            Ok(())
         }
 
         async fn get_active_key(&self, purpose: &str) -> Result<(SecureKey, KeyMetadata)> {
@@ -128,6 +233,17 @@ mod tests {
                 None,
                 crate::error::KeyErrorCode::KeyNotFound,
             ))
+        }
+
+        async fn get_key_metadata(&self, key_id: &str) -> Result<KeyMetadata> {
+            let keys = self.keys.read().await;
+            keys.get(key_id)
+                .map(|(_, metadata)| metadata.clone())
+                .ok_or_else(|| crate::error::FortressError::key_management(
+                    format!("Key not found: {}", key_id),
+                    Some(key_id.to_string()),
+                    crate::error::KeyErrorCode::KeyNotFound,
+                ))
         }
     }
 
@@ -437,5 +553,254 @@ mod tests {
         let metrics = scheduler.get_metrics().await;
         assert_eq!(metrics.total_rotations, 100);
         assert_eq!(metrics.successful_rotations, 100);
+    }
+
+    // ===== Zero-Downtime Rotation Tests =====
+
+    #[tokio::test]
+    async fn test_zero_downtime_rotation_success() {
+        let key_manager = Arc::new(MockKeyManager::new());
+        let algorithm = create_algorithm("AES256-GCM").unwrap();
+        
+        // Create a test key
+        let key_id = "zero_downtime_test".to_string();
+        let key = SecureKey::generate(algorithm.key_size());
+        let metadata = KeyMetadata::new(
+            key_id.clone(),
+            "AES256-GCM".to_string(),
+            1,
+            Utc::now() - Duration::hours(25),
+            Utc::now() + Duration::days(90),
+            "test".to_string(),
+            Default::default(),
+        );
+        key_manager.store_key(&key_id, &key, &metadata).await.unwrap();
+        
+        // Perform zero-downtime rotation
+        let result = key_manager.rotate_key_with_zero_downtime(&key_id, algorithm.as_ref()).await;
+        assert!(result.is_ok());
+        
+        // Verify key was rotated and is still available
+        let (_, new_metadata) = key_manager.retrieve_key(&key_id).await.unwrap();
+        assert_eq!(new_metadata.version, 2);
+        assert!(new_metadata.is_active());
+    }
+
+    #[tokio::test]
+    async fn test_dual_key_validation() {
+        let key_manager = Arc::new(MockKeyManager::new());
+        let algorithm = create_algorithm("AES256-GCM").unwrap();
+        
+        // Create initial key
+        let key_id = "dual_validation_test".to_string();
+        let key = SecureKey::generate(algorithm.key_size());
+        let metadata = KeyMetadata::new(
+            key_id.clone(),
+            "AES256-GCM".to_string(),
+            1,
+            Utc::now(),
+            Utc::now() + Duration::days(90),
+            "test".to_string(),
+            Default::default(),
+        );
+        key_manager.store_key(&key_id, &key, &metadata).await.unwrap();
+        
+        // Initiate transition
+        let new_version = key_manager.initiate_key_transition(&key_id, algorithm.as_ref()).await.unwrap();
+        assert_eq!(new_version, 2);
+        
+        // Validate dual keys
+        let dual_valid = key_manager.validate_dual_keys(&key_id, 1, 2).await.unwrap();
+        assert!(dual_valid);
+        
+        // Complete transition
+        key_manager.complete_key_transition(&key_id, new_version).await.unwrap();
+        
+        // Verify final state
+        let (_, final_metadata) = key_manager.retrieve_key(&key_id).await.unwrap();
+        assert_eq!(final_metadata.version, 2);
+    }
+
+    #[tokio::test]
+    async fn test_key_transition_rollback() {
+        let key_manager = Arc::new(MockKeyManager::new());
+        let algorithm = create_algorithm("AES256-GCM").unwrap();
+        
+        // Create initial key
+        let key_id = "rollback_test".to_string();
+        let key = SecureKey::generate(algorithm.key_size());
+        let metadata = KeyMetadata::new(
+            key_id.clone(),
+            "AES256-GCM".to_string(),
+            1,
+            Utc::now(),
+            Utc::now() + Duration::days(90),
+            "test".to_string(),
+            Default::default(),
+        );
+        key_manager.store_key(&key_id, &key, &metadata).await.unwrap();
+        
+        // Initiate transition
+        let new_version = key_manager.initiate_key_transition(&key_id, algorithm.as_ref()).await.unwrap();
+        assert_eq!(new_version, 2);
+        
+        // Verify new version exists
+        let new_key_id = format!("{}_v{}", key_id, new_version);
+        assert!(key_manager.key_exists(&new_key_id).await.unwrap());
+        
+        // Perform rollback
+        key_manager.rollback_key_transition(&key_id, 1, new_version).await.unwrap();
+        
+        // Verify rollback - old version is restored
+        let (_, restored_metadata) = key_manager.retrieve_key(&key_id).await.unwrap();
+        assert_eq!(restored_metadata.version, 1);
+        
+        // Verify new version was cleaned up
+        assert!(!key_manager.key_exists(&new_key_id).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_active_key_version_tracking() {
+        let key_manager = Arc::new(MockKeyManager::new());
+        let algorithm = create_algorithm("AES256-GCM").unwrap();
+        
+        // Create initial key
+        let key_id = "version_tracking_test".to_string();
+        let key = SecureKey::generate(algorithm.key_size());
+        let metadata = KeyMetadata::new(
+            key_id.clone(),
+            "AES256-GCM".to_string(),
+            1,
+            Utc::now(),
+            Utc::now() + Duration::days(90),
+            "test".to_string(),
+            Default::default(),
+        );
+        key_manager.store_key(&key_id, &key, &metadata).await.unwrap();
+        
+        // Check initial version
+        let active_version = key_manager.get_active_key_version(&key_id).await.unwrap();
+        assert_eq!(active_version, 1);
+        
+        // Rotate using zero-downtime
+        key_manager.rotate_key_with_zero_downtime(&key_id, algorithm.as_ref()).await.unwrap();
+        
+        // Check updated version
+        let new_active_version = key_manager.get_active_key_version(&key_id).await.unwrap();
+        assert_eq!(new_active_version, 2);
+    }
+
+    #[tokio::test]
+    async fn test_zero_downtime_with_concurrent_access() {
+        let key_manager = Arc::new(MockKeyManager::new());
+        let algorithm = create_algorithm("AES256-GCM").unwrap();
+        
+        // Create initial key
+        let key_id = "concurrent_test".to_string();
+        let key = SecureKey::generate(algorithm.key_size());
+        let metadata = KeyMetadata::new(
+            key_id.clone(),
+            "AES256-GCM".to_string(),
+            1,
+            Utc::now(),
+            Utc::now() + Duration::days(90),
+            "test".to_string(),
+            Default::default(),
+        );
+        key_manager.store_key(&key_id, &key, &metadata).await.unwrap();
+        
+        // Simulate concurrent access during rotation
+        let key_manager_clone = key_manager.clone();
+        let key_id_clone = key_id.clone();
+        let algorithm_clone = algorithm.clone();
+        
+        let rotation_task = tokio::spawn(async move {
+            key_manager_clone.rotate_key_with_zero_downtime(&key_id_clone, algorithm_clone.as_ref()).await
+        });
+        
+        // Simulate read operations during rotation
+        let key_manager_read = key_manager.clone();
+        let read_task = tokio::spawn(async move {
+            for _ in 0..10 {
+                let result = key_manager_read.retrieve_key(&key_id).await;
+                assert!(result.is_ok(), "Key should remain accessible during rotation");
+                tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+            }
+        });
+        
+        // Wait for both tasks to complete
+        let rotation_result = rotation_task.await.unwrap();
+        let _ = read_task.await.unwrap();
+        
+        assert!(rotation_result.is_ok());
+        
+        // Verify final state
+        let (_, final_metadata) = key_manager.retrieve_key(&key_id).await.unwrap();
+        assert_eq!(final_metadata.version, 2);
+    }
+
+    #[tokio::test]
+    async fn test_zero_downtime_failure_recovery() {
+        let key_manager = Arc::new(MockKeyManager::new());
+        let algorithm = create_algorithm("AES256-GCM").unwrap();
+        
+        // Create initial key
+        let key_id = "failure_recovery_test".to_string();
+        let key = SecureKey::generate(algorithm.key_size());
+        let metadata = KeyMetadata::new(
+            key_id.clone(),
+            "AES256-GCM".to_string(),
+            1,
+            Utc::now(),
+            Utc::now() + Duration::days(90),
+            "test".to_string(),
+            Default::default(),
+        );
+        key_manager.store_key(&key_id, &key, &metadata).await.unwrap();
+        
+        // Manually initiate transition
+        let new_version = key_manager.initiate_key_transition(&key_id, algorithm.as_ref()).await.unwrap();
+        
+        // Simulate validation failure by deleting one of the keys
+        let new_key_id = format!("{}_v{}", key_id, new_version);
+        key_manager.delete_key(&new_key_id).await.unwrap();
+        
+        // Attempt zero-downtime rotation (should fail and rollback)
+        let result = key_manager.rotate_key_with_zero_downtime(&key_id, algorithm.as_ref()).await;
+        assert!(result.is_err());
+        
+        // Verify rollback occurred - original version should be restored
+        let (_, restored_metadata) = key_manager.retrieve_key(&key_id).await.unwrap();
+        assert_eq!(restored_metadata.version, 1);
+    }
+
+    #[tokio::test]
+    async fn test_transition_status_tracking() {
+        let key_manager = Arc::new(MockKeyManager::new());
+        let algorithm = create_algorithm("AES256-GCM").unwrap();
+        
+        // Create initial key
+        let key_id = "status_tracking_test".to_string();
+        let key = SecureKey::generate(algorithm.key_size());
+        let metadata = KeyMetadata::new(
+            key_id.clone(),
+            "AES256-GCM".to_string(),
+            1,
+            Utc::now(),
+            Utc::now() + Duration::days(90),
+            "test".to_string(),
+            Default::default(),
+        );
+        key_manager.store_key(&key_id, &key, &metadata).await.unwrap();
+        
+        // Initiate transition and check status
+        let new_version = key_manager.initiate_key_transition(&key_id, algorithm.as_ref()).await.unwrap();
+        let (_, transition_metadata) = key_manager.retrieve_key(&key_id).await.unwrap();
+        assert_eq!(transition_metadata.get_metadata("transition_status"), Some(&"initiating".to_string()));
+        
+        // Complete transition and check final status
+        key_manager.complete_key_transition(&key_id, new_version).await.unwrap();
+        let (_, final_metadata) = key_manager.retrieve_key(&key_id).await.unwrap();
+        assert_eq!(final_metadata.get_metadata("transition_status"), Some(&"complete".to_string()));
     }
 }

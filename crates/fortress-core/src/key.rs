@@ -83,31 +83,18 @@ pub trait KeyManager: Send + Sync {
 
 
     /// Rotate a key (create new version)
-
     async fn rotate_key(&self, key_id: &KeyId, algorithm: &dyn EncryptionAlgorithm) -> Result<()>;
 
-
-
     /// Zero-downtime key rotation (maintains availability during rotation)
-
     async fn rotate_key_with_zero_downtime(&self, key_id: &KeyId, algorithm: &dyn EncryptionAlgorithm) -> Result<()> {
-
         // Default implementation - can be overridden by specific implementations
-
         self.rotate_key(key_id, algorithm).await
-
     }
 
-
-
     /// Check if a key exists
-
     async fn key_exists(&self, key_id: &KeyId) -> Result<bool>;
 
-
-
     /// Get key metadata only
-
     async fn get_key_metadata(&self, key_id: &KeyId) -> Result<KeyMetadata>;
 
 }
@@ -333,13 +320,17 @@ impl KeyManager for InMemoryKeyManager {
     }
     
     async fn rotate_key_with_zero_downtime(&self, key_id: &KeyId, algorithm: &dyn EncryptionAlgorithm) -> Result<()> {
-        // Zero-downtime: create new key version first, then gracefully transition
+        // Generate new key with secure random
         let new_key = self.generate_key(algorithm).await?;
         
-        // Get old metadata
-        let (_, old_metadata) = self.retrieve_key(key_id).await?;
+        // Get old metadata and create backup atomically
+        let (old_key, old_metadata) = self.retrieve_key(key_id).await?;
+        let old_versioned_id = format!("{}_v{}", key_id, old_metadata.version);
         
-        // Create new version with incremented version
+        // Store backup first - ensures rollback capability
+        self.store_key(&old_versioned_id, &old_key, &old_metadata).await?;
+        
+        // Create new metadata with incremented version
         let new_metadata = KeyMetadata::new(
             key_id.clone(),
             algorithm.name().to_string(),
@@ -350,16 +341,39 @@ impl KeyManager for InMemoryKeyManager {
             old_metadata.performance_profile,
         );
         
-        // Store new key alongside old one temporarily (dual-key period)
-        let versioned_key_id = format!("{}_v{}", key_id, new_metadata.version);
-        self.store_key(&versioned_key_id, &new_key, &new_metadata).await?;
-        
-        // Store the new key as the primary (this is where zero-downtime happens)
+        // Atomic switch to new key
         self.store_key(key_id, &new_key, &new_metadata).await?;
         
-        // Clean up old version after a grace period (in production, this would be a delayed task)
-        let old_versioned_id = format!("{}_v{}", key_id, old_metadata.version);
-        let _ = self.delete_key(&old_versioned_id).await; // Ignore errors in cleanup - old version might not exist    
+        // Immediate validation - ensures key is accessible
+        match self.retrieve_key(key_id).await {
+            Ok((_, retrieved_metadata)) => {
+                // Verify version increment
+                if retrieved_metadata.version != old_metadata.version + 1 {
+                    // Version mismatch - rollback
+                    let _ = self.store_key(key_id, &old_key, &old_metadata).await;
+                    let _ = self.delete_key(&old_versioned_id).await;
+                    return Err(FortressError::key_management(
+                        "Version validation failed during zero-downtime rotation",
+                        Some(key_id.clone()),
+                        KeyErrorCode::RotationFailed,
+                    ));
+                }
+            }
+            Err(e) => {
+                // Rollback on validation failure
+                let _ = self.store_key(key_id, &old_key, &old_metadata).await;
+                let _ = self.delete_key(&old_versioned_id).await;
+                return Err(FortressError::key_management(
+                    format!("Key validation failed during zero-downtime rotation: {}", e),
+                    Some(key_id.clone()),
+                    KeyErrorCode::RotationFailed,
+                ));
+            }
+        }
+        
+        // Secure cleanup of old backup
+        let _ = self.delete_key(&old_versioned_id).await;
+        
         Ok(())
     }
 

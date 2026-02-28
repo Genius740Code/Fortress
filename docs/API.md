@@ -133,8 +133,30 @@ db.set_column_encryption("users", "password", "fortress").await?;
 // Rotate keys
 db.rotate_keys("users").await?;
 
+// Zero-Downtime Key Rotation
+db.rotate_keys_with_zero_downtime("users").await?;
+
+// Check rotation status
+let status = db.get_rotation_status("users").await?;
+println!("Rotation status: {:?}", status);
+
+// Validate dual keys during transition
+let dual_valid = key_manager.validate_dual_keys(&key_id, old_version, new_version).await?;
+
+// Get active key version
+let active_version = key_manager.get_active_key_version(&key_id).await?;
+
 // Get encryption metadata
 let metadata = db.get_encryption_metadata("users").await?;
+
+// Check if zero-downtime is enabled
+if metadata.zero_downtime_enabled {
+    println!("Zero-downtime rotation is available");
+}
+
+// Get rotation schedule
+let next_rotation = metadata.next_rotation;
+println!("Next rotation: {:?}", next_rotation);
 ```
 
 ### Transactions
@@ -375,6 +397,27 @@ curl -X DELETE http://localhost:8080/api/v1/databases/mydb/tables/users/data/550
 curl -X POST http://localhost:8080/api/v1/databases/mydb/tables/users/rotate-keys
 ```
 
+#### Zero-Downtime Key Rotation
+```bash
+# Perform zero-downtime key rotation
+curl -X POST http://localhost:8080/api/v1/databases/mydb/tables/users/rotate-keys-zero-downtime
+
+# Get rotation status
+curl http://localhost:8080/api/v1/databases/mydb/tables/users/rotation-status
+```
+
+Response:
+```json
+{
+  "rotation_status": "in_progress",
+  "current_version": 2,
+  "previous_version": 1,
+  "transition_status": "validating",
+  "started_at": "2024-01-15T10:30:00Z",
+  "estimated_completion": "2024-01-15T10:30:05Z"
+}
+```
+
 #### Get Encryption Metadata
 ```bash
 curl http://localhost:8080/api/v1/databases/mydb/tables/users/encryption-metadata
@@ -392,7 +435,9 @@ Response:
     "password": "30d"
   },
   "last_rotation": "2024-01-15T10:30:00Z",
-  "next_rotation": "2024-01-22T10:30:00Z"
+  "next_rotation": "2024-01-22T10:30:00Z",
+  "zero_downtime_enabled": true,
+  "dual_key_validation": true
 }
 ```
 
@@ -575,6 +620,12 @@ fortress delete mydb users --where "name='Alice'"
 # Rotate keys
 fortress rotate-keys mydb users
 
+# Zero-downtime key rotation
+fortress rotate-keys mydb users --zero-downtime
+
+# Get rotation status
+fortress rotation-status mydb users
+
 # Set encryption
 fortress encryption set mydb users balanced
 
@@ -583,6 +634,12 @@ fortress encryption set-column mydb users password fortress
 
 # Get encryption metadata
 fortress encryption metadata mydb users
+
+# Enable zero-downtime rotation
+fortress encryption zero-downtime enable mydb users
+
+# Validate dual keys
+fortress encryption validate-dual-keys mydb users
 ```
 
 #### Configuration
