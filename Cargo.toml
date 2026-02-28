@@ -17,12 +17,14 @@ rust-version = "1.70"
 members = [
     "crates/fortress-core",
     "crates/fortress-cli",
+    "crates/fortress-server",
 ]
 
 [dependencies]
 # Core dependencies
 fortress-core = { path = "crates/fortress-core", version = "0.1.0", optional = true }
 fortress-cli = { path = "crates/fortress-cli", version = "0.1.0", optional = true }
+fortress-server = { path = "crates/fortress-server", version = "0.1.0", optional = true }
 
 # Async runtime
 tokio = { version = "1.35", features = ["full"] }
@@ -171,7 +173,7 @@ dev = ["tracing-subscriber/env-filter"]
 
 # Platform features
 cli = ["fortress-cli"]
-server = []
+server = ["fortress-server"]
 wasm = ["wasm-bindgen", "js-sys", "web-sys", "console_error_panic_hook"]
 
 [profile.release]

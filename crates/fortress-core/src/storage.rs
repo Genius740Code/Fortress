@@ -899,14 +899,28 @@ mod tests {
             config: HashMap::new(),
         };
 
-        let json = serde_json::to_string(&config).unwrap();
-        let deserialized: StorageConfig = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&config)
+            .map_err(|e| FortressError::storage(
+                format!("Failed to serialize storage config: {}", e),
+                "serialization".to_string(),
+                StorageErrorCode::SerializationError,
+            ))?;
+        let deserialized: StorageConfig = serde_json::from_str(&json)
+            .map_err(|e| FortressError::storage(
+                format!("Failed to deserialize storage config: {}", e),
+                "serialization".to_string(),
+                StorageErrorCode::SerializationError,
+            ))?;
 
         match deserialized.backend_type {
             StorageBackendType::FileSystem { base_path } => {
                 assert_eq!(base_path, "/tmp/test");
             }
-            _ => panic!("Expected FileSystem backend type"),
+            _ => return Err(FortressError::storage(
+                "Expected FileSystem backend type".to_string(),
+                "test".to_string(),
+                StorageErrorCode::InvalidConfiguration,
+            )),
         }
     }
 
@@ -922,8 +936,18 @@ mod tests {
             config: HashMap::new(),
         };
 
-        let json = serde_json::to_string(&s3_config).unwrap();
-        let deserialized: StorageConfig = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&s3_config)
+            .map_err(|e| FortressError::storage(
+                format!("Failed to serialize S3 config: {}", e),
+                "serialization".to_string(),
+                StorageErrorCode::SerializationError,
+            ))?;
+        let deserialized: StorageConfig = serde_json::from_str(&json)
+            .map_err(|e| FortressError::storage(
+                format!("Failed to deserialize S3 config: {}", e),
+                "serialization".to_string(),
+                StorageErrorCode::SerializationError,
+            ))?;
 
         match deserialized.backend_type {
             StorageBackendType::S3 { bucket, region, prefix } => {
@@ -931,7 +955,11 @@ mod tests {
                 assert_eq!(region, "us-east-1");
                 assert_eq!(prefix, Some("fortress".to_string()));
             }
-            _ => panic!("Expected S3 backend type"),
+            _ => return Err(FortressError::storage(
+                "Expected S3 backend type".to_string(),
+                "test".to_string(),
+                StorageErrorCode::InvalidConfiguration,
+            )),
         }
 
         // Test Azure Blob config
@@ -943,15 +971,29 @@ mod tests {
             config: HashMap::new(),
         };
 
-        let json = serde_json::to_string(&azure_config).unwrap();
-        let deserialized: StorageConfig = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&azure_config)
+            .map_err(|e| FortressError::storage(
+                format!("Failed to serialize Azure config: {}", e),
+                "serialization".to_string(),
+                StorageErrorCode::SerializationError,
+            ))?;
+        let deserialized: StorageConfig = serde_json::from_str(&json)
+            .map_err(|e| FortressError::storage(
+                format!("Failed to deserialize Azure config: {}", e),
+                "serialization".to_string(),
+                StorageErrorCode::SerializationError,
+            ))?;
 
         match deserialized.backend_type {
             StorageBackendType::AzureBlob { container, account } => {
                 assert_eq!(container, "test-container");
                 assert_eq!(account, "testaccount");
             }
-            _ => panic!("Expected Azure Blob backend type"),
+            _ => return Err(FortressError::storage(
+                "Expected Azure Blob backend type".to_string(),
+                "test".to_string(),
+                StorageErrorCode::InvalidConfiguration,
+            )),
         }
     }
 }

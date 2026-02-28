@@ -1613,7 +1613,14 @@ impl KeyDerivation {
 
             KeyDerivationFunction::Scrypt { n, r, p } => {
 
-                let params = scrypt::Params::new((*n).try_into().unwrap(), *r, *p, output_length)
+                let params = scrypt::Params::new(
+                    (*n).try_into().map_err(|_| FortressError::key_management(
+                        "Invalid scrypt n parameter: too large".to_string(),
+                        None,
+                        KeyErrorCode::DerivationFailed,
+                    ))?,
+                    *r, *p, output_length
+                )
 
                     .map_err(|e| FortressError::key_management(
 

@@ -1644,7 +1644,11 @@ impl EncryptionAlgorithm for Argon2idEncrypt {
             ))?;
 
         // Extract hash as bytes for encryption key
-        let hash_str = password_hash.hash.unwrap().to_string();
+        let hash_str = password_hash.hash.ok_or_else(|| FortressError::encryption(
+            "Password hash failed to generate".to_string(),
+            self.name().to_string(),
+            EncryptionErrorCode::EncryptionFailed,
+        ))?.to_string();
         let derived_key = hash_str.as_bytes();
         
         // Use first 32 bytes of derived hash as encryption key
@@ -1726,7 +1730,11 @@ impl EncryptionAlgorithm for Argon2idEncrypt {
             ))?;
 
         // Extract hash as bytes for encryption key
-        let hash_str = password_hash.hash.unwrap().to_string();
+        let hash_str = password_hash.hash.ok_or_else(|| FortressError::encryption(
+            "Password hash failed to generate".to_string(),
+            self.name().to_string(),
+            EncryptionErrorCode::EncryptionFailed,
+        ))?.to_string();
         let derived_key = hash_str.as_bytes();
         
         // Use first 32 bytes of derived hash as encryption key
@@ -2035,7 +2043,11 @@ mod tests {
         if let Err(FortressError::Encryption { code: EncryptionErrorCode::InvalidKeyLength, .. }) = result {
             println!("✅ Correctly caught invalid key length error");
         } else {
-            panic!("Expected invalid key length error");
+            return Err(FortressError::encryption(
+                "Expected invalid key length error".to_string(),
+                "test".to_string(),
+                EncryptionErrorCode::UnexpectedError,
+            ));
         }
     }
     */

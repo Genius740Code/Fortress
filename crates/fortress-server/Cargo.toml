@@ -1,0 +1,91 @@
+[package]
+name = "fortress-server"
+version = "0.1.0"
+edition = "2021"
+authors = ["Fortress Team <team@fortress-db.com>"]
+license = "Apache-2.0"
+description = "REST API server for Fortress secure database system"
+homepage = "https://github.com/Genius740Code/Fortress"
+repository = "https://github.com/Genius740Code/Fortress"
+documentation = "https://docs.fortress-db.com"
+keywords = ["database", "encryption", "security", "api", "rest"]
+categories = ["database", "web-programming", "cryptography"]
+rust-version = "1.70"
+
+[dependencies]
+# Core Fortress library
+fortress-core = { path = "../fortress-core", version = "0.1.0" }
+
+# Async runtime
+tokio = { version = "1.35", features = ["full"] }
+tokio-util = { version = "0.7", features = ["codec"] }
+
+# Web framework
+axum = { version = "0.7", features = ["multipart", "macros"] }
+tower = { version = "0.4", features = ["full"] }
+tower-http = { version = "0.5", features = ["cors", "trace", "compression-br", "timeout"] }
+hyper = { version = "1.0", features = ["full"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Logging and tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# UUID
+uuid = { version = "1.6", features = ["v4", "serde", "fast-rng"] }
+
+# Time and date
+chrono = { version = "0.4", features = ["serde"] }
+
+# HTTP client (for health checks)
+reqwest = { version = "0.11", features = ["json"] }
+
+# Metrics and monitoring
+metrics = "0.21"
+metrics-exporter-prometheus = "0.12"
+
+# JWT authentication
+jsonwebtoken = "9.2"
+
+# Configuration
+config = "0.13"
+
+# Async utilities
+futures = "0.3"
+async-trait = "0.1"
+
+# Base64 encoding
+base64 = "0.21"
+
+# Hex encoding
+hex = "0.4"
+
+# Memory management
+bytes = "1.5"
+parking_lot = "0.12"
+
+# Regular expressions
+regex = "1.10"
+
+# Zeroize for secure memory handling
+zeroize = { version = "1.7", features = ["zeroize_derive"] }
+
+# Random number generation
+rand = "0.8"
+
+[dev-dependencies]
+tower-test = "0.4"
+wiremock = "0.5"
+tempfile = "3.8"
+test-case = "3.3"
+
+[features]
+default = []
+dev = ["tracing-subscriber/env-filter"]
