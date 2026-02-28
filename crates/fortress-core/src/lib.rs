@@ -184,6 +184,14 @@ pub mod field_encryption;
 
 pub mod field_encryption_manager;
 
+/// Algorithm registry for easy management and discovery
+
+pub mod algorithm_registry;
+
+/// AES-256-GCM wrapper implementation
+
+pub mod aes256gcm_wrapper;
+
 
 
 #[cfg(test)]
@@ -205,6 +213,7 @@ pub mod prelude {
     pub use crate::encryption::{
 
         EncryptionAlgorithm, EncryptionProfile, Aegis256, ChaCha20Poly1305, Aes256Gcm,
+        XChaCha20Poly1305, Blake3Encrypt, HmacSha512Encrypt, Aes256Ctr, Argon2idEncrypt, CompositeEncrypt,
 
     };
 
@@ -239,6 +248,8 @@ pub mod prelude {
     };
 
     pub use crate::field_encryption_manager::{DefaultFieldEncryptionManager, FieldEncryptionManagerBuilder};
+
+    pub use crate::algorithm_registry::{AlgorithmRegistry, AlgorithmMetadata, AlgorithmRequirements, AlgorithmStatistics};
 
     pub use crate::tenant::{
         TenantManager, InMemoryTenantManager, Tenant, TenantId, CreateTenantRequest, UpdateTenantRequest,

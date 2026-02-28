@@ -384,14 +384,17 @@ impl FieldAlgorithmSelector for DefaultAlgorithmSelector {
             )),
             FieldEncryptionStrategy::Default => Ok(match performance_profile {
                 PerformanceProfile::Lightning => "aegis256",
-                PerformanceProfile::Balanced => "chacha20poly1305",
-                PerformanceProfile::Fortress => "aes256gcm",
+                PerformanceProfile::Balanced => "xchacha20poly1305",
+                PerformanceProfile::Fortress => "argon2idencrypt",
+                PerformanceProfile::Streaming => "aes256ctr",
+                PerformanceProfile::Hardware => "blake3encrypt",
+                PerformanceProfile::Quantum => "compositeencrypt",
             }.to_string()),
             FieldEncryptionStrategy::Algorithm(name) => Ok(name.clone()),
             FieldEncryptionStrategy::Profile(profile_name) => Ok(profile_name.clone()),
             FieldEncryptionStrategy::DedicatedKey | FieldEncryptionStrategy::DerivedKey => {
                 // For key-specific strategies, use balanced algorithm by default
-                Ok("chacha20poly1305".to_string())
+                Ok("xchacha20poly1305".to_string())
             }
         }
     }
@@ -399,9 +402,9 @@ impl FieldAlgorithmSelector for DefaultAlgorithmSelector {
     fn recommend_algorithm_for_type(&self, data_type: &str, sensitivity: FieldSensitivity) -> Result<String> {
         match (data_type, sensitivity) {
             // High-performance for large data
-            ("blob", FieldSensitivity::Internal) => Ok("aegis256".to_string()),
-            ("blob", FieldSensitivity::Confidential) => Ok("chacha20poly1305".to_string()),
-            ("blob", FieldSensitivity::Restricted | FieldSensitivity::Critical) => Ok("aes256gcm".to_string()),
+            ("blob", FieldSensitivity::Internal) => Ok("aes256ctr".to_string()),
+            ("blob", FieldSensitivity::Confidential) => Ok("blake3encrypt".to_string()),
+            ("blob", FieldSensitivity::Restricted | FieldSensitivity::Critical) => Ok("compositeencrypt".to_string()),
             
             // Standard for text fields
             ("text" | "string", FieldSensitivity::Public) => Err(FortressError::encryption(
@@ -409,19 +412,19 @@ impl FieldAlgorithmSelector for DefaultAlgorithmSelector {
                 "none",
                 EncryptionErrorCode::AlgorithmNotSupported,
             )),
-            ("text" | "string", FieldSensitivity::Internal) => Ok("chacha20poly1305".to_string()),
-            ("text" | "string", FieldSensitivity::Confidential) => Ok("chacha20poly1305".to_string()),
-            ("text" | "string", FieldSensitivity::Restricted | FieldSensitivity::Critical) => Ok("aes256gcm".to_string()),
+            ("text" | "string", FieldSensitivity::Internal) => Ok("xchacha20poly1305".to_string()),
+            ("text" | "string", FieldSensitivity::Confidential) => Ok("argon2idencrypt".to_string()),
+            ("text" | "string", FieldSensitivity::Restricted | FieldSensitivity::Critical) => Ok("compositeencrypt".to_string()),
             
             // High security for identifiers
-            ("email" | "phone" | "ssn" | "credit_card", _) => Ok("aes256gcm".to_string()),
+            ("email" | "phone" | "ssn" | "credit_card", _) => Ok("compositeencrypt".to_string()),
             
             // Balanced for numeric data
-            ("number" | "decimal" | "integer", FieldSensitivity::Internal) => Ok("chacha20poly1305".to_string()),
-            ("number" | "decimal" | "integer", _) => Ok("aes256gcm".to_string()),
+            ("number" | "decimal" | "integer", FieldSensitivity::Internal) => Ok("xchacha20poly1305".to_string()),
+            ("number" | "decimal" | "integer", _) => Ok("argon2idencrypt".to_string()),
             
             // Default to balanced
-            _ => Ok("chacha20poly1305".to_string()),
+            _ => Ok("xchacha20poly1305".to_string()),
         }
     }
 }
@@ -473,9 +476,12 @@ mod tests {
 
         // Test data type recommendations
         let algorithm = selector.recommend_algorithm_for_type("email", FieldSensitivity::Restricted).unwrap();
-        assert_eq!(algorithm, "aes256gcm");
+        assert_eq!(algorithm, "hmacsha512encrypt");
 
         let algorithm = selector.recommend_algorithm_for_type("blob", FieldSensitivity::Internal).unwrap();
-        assert_eq!(algorithm, "aegis256");
+        assert_eq!(algorithm, "blake3encrypt");
+
+        let algorithm = selector.recommend_algorithm_for_type("text", FieldSensitivity::Confidential).unwrap();
+        assert_eq!(algorithm, "xchacha20poly1305");
     }
 }
