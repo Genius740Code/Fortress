@@ -1,0 +1,49 @@
+[package]
+name = "fortress-python"
+version = "0.1.0"
+edition = "2021"
+authors = ["Fortress Team <team@fortress-db.com>"]
+license = "Apache-2.0"
+description = "Python bindings for Fortress secure database system"
+homepage = "https://github.com/Genius740Code/Fortress"
+repository = "https://github.com/Genius740Code/Fortress"
+documentation = "https://docs.fortress-db.com"
+keywords = ["database", "encryption", "security", "privacy", "vault", "python"]
+categories = ["database", "cryptography", "api-bindings"]
+rust-version = "1.70"
+
+[lib]
+name = "fortress"
+crate-type = ["cdylib"]
+
+[dependencies]
+# Fortress core
+fortress-core = { path = "../fortress-core" }
+
+# Python bindings
+pyo3 = { version = "0.20", features = ["extension-module", "abi3-py38"] }
+pyo3-asyncio = { version = "0.20", features = ["tokio-runtime"] }
+
+# Async runtime
+tokio = { version = "1.35", features = ["rt", "sync", "macros"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Error handling
+thiserror = "1.0"
+
+# UUID
+uuid = { version = "1.6", features = ["v4", "serde", "fast-rng"] }
+
+# Time and date
+chrono = { version = "0.4", features = ["serde"] }
+
+[features]
+extension-module = ["pyo3/extension-module"]
+default = ["extension-module"]
+
+[package.metadata.maturin]
+python-source = "python"
+module-name = "fortress._fortress"

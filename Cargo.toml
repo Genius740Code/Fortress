@@ -18,6 +18,8 @@ members = [
     "crates/fortress-core",
     "crates/fortress-cli",
     "crates/fortress-server",
+    "crates/fortress-python",
+    "crates/fortress-js",
 ]
 
 [dependencies]

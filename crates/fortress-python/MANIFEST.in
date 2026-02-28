@@ -1,0 +1,59 @@
+# Include Python source files
+include python/fortress/**/*.py
+include python/fortress/py.typed
+
+# Include examples
+include python/examples/*.py
+
+# Include documentation
+include README.md
+include LICENSE
+include CHANGELOG.md
+
+# Include configuration files
+include pyproject.toml
+include Cargo.toml
+
+# Include test files
+recursive-include tests *.py
+include pytest.ini
+include conftest.py
+
+# Include type stubs
+recursive-include python/fortress *.pyi
+
+# Exclude development files
+exclude .gitignore
+exclude .github/
+recursive-exclude .github *
+exclude target/
+recursive-exclude target *
+exclude Cargo.lock
+exclude *.so
+exclude *.pyd
+exclude *.dll
+exclude *.dylib
+
+# Exclude test artifacts
+exclude .pytest_cache/
+recursive-exclude .pytest_cache *
+exclude .coverage
+exclude *.cover
+exclude htmlcov/
+recursive-exclude htmlcov *
+
+# Exclude development configuration
+exclude .mypy_cache/
+recursive-exclude .mypy_cache *
+exclude .tox/
+recursive-exclude .tox *
+exclude *.egg-info/
+recursive-exclude *.egg-info *
+
+# Include Rust source for transparency
+include src/**/*.rs
+include build.rs
+
+# Exclude Rust build artifacts
+exclude **/*.rs.bk
+recursive-exclude **/Cargo.lock

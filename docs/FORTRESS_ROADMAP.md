@@ -126,9 +126,9 @@
 - [ ] Add code examples
 
 ### 33. Implement rate limiting and DDoS protection
-- [ ] Add rate limiting
-- [ ] Create DDoS protection
-- [ ] Implement traffic shaping
+- [X] Add rate limiting
+- [X] Create DDoS protection
+- [X] Implement traffic shaping
 
 ### 35. Design performance benchmarking suite
 - [x] Create benchmark suite
