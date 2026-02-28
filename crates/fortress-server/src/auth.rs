@@ -6,11 +6,12 @@
 use crate::error::{ServerError, ServerResult};
 use crate::models::{AuthRequest, AuthResponse, RefreshTokenRequest, RefreshTokenResponse, UserInfo};
 use axum::{
-    extract::{Request, State},
-    http::{header, StatusCode},
+    extract::{Request, State, FromRequestParts},
+    http::{header, StatusCode, request::Parts},
     middleware::Next,
     response::Response,
     Json,
+    async_trait,
 };
 use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
@@ -39,6 +40,44 @@ pub struct TokenClaims {
     pub exp: i64,
     /// JWT ID
     pub jti: String,
+}
+
+/// Optional TokenClaims extractor for handlers
+/// This extracts claims from request extensions if they exist
+#[derive(Debug, Clone)]
+pub struct OptionalTokenClaims(pub Option<TokenClaims>);
+
+#[async_trait]
+impl<S> FromRequestParts<S> for OptionalTokenClaims
+where
+    S: Send + Sync,
+{
+    type Rejection = StatusCode;
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        let claims = parts.extensions.get::<TokenClaims>().cloned();
+        Ok(OptionalTokenClaims(claims))
+    }
+}
+
+/// Required TokenClaims extractor for handlers that require authentication
+#[derive(Debug, Clone)]
+pub struct RequiredTokenClaims(pub TokenClaims);
+
+#[async_trait]
+impl<S> FromRequestParts<S> for RequiredTokenClaims
+where
+    S: Send + Sync,
+{
+    type Rejection = StatusCode;
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        parts.extensions
+            .get::<TokenClaims>()
+            .cloned()
+            .map(RequiredTokenClaims)
+            .ok_or(StatusCode::UNAUTHORIZED)
+    }
 }
 
 /// Authentication manager

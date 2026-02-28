@@ -16,6 +16,7 @@ pub struct SimpleBackupManager {
 }
 
 impl SimpleBackupManager {
+    /// Create a new SimpleBackupManager with the given storage backend
     pub fn new(storage: Arc<dyn StorageBackend>) -> Self {
         Self { storage }
     }

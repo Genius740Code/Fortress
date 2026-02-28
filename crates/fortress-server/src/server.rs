@@ -25,6 +25,7 @@ use axum::{
 use fortress_core::prelude::*;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::signal;
 use tower::ServiceBuilder;
 use tower_http::compression::CompressionLayer;
@@ -118,7 +119,10 @@ impl FortressServer {
             "Fortress server listening"
         );
 
-        axum::serve(listener, app)
+        // Create a service from the router
+        let service = app.into_service();
+
+        axum::serve(listener, service)
             .with_graceful_shutdown(Self::shutdown_signal())
             .await
             .map_err(|e| ServerError::network(format!("Server error: {}", e)))?;
@@ -344,6 +348,7 @@ impl FieldEncryptionManager for NoOpFieldEncryptionManager {
 }
 
 /// In-memory storage backend for development/testing
+#[derive(Debug)]
 struct InMemoryStorage {
     data: Arc<parking_lot::RwLock<HashMap<String, crate::handlers::StorageRecord>>>,
 }
@@ -449,10 +454,10 @@ impl StorageBackend for InMemoryStorage {
 
     async fn list_tenants(&self) -> Result<Vec<String>, FortressError> {
         let data = self.data.read();
-        let mut tenants = std::collections::HashSet::<String>::new();
+        let mut tenants: std::collections::HashSet<String> = std::collections::HashSet::new();
         for record in data.values() {
             if let Some(ref tenant_id) = record.tenant_id {
-                tenants.insert(tenant_id.clone());
+                tenants.insert(tenant_id.to_string());
             }
         }
         Ok(tenants.into_iter().collect())

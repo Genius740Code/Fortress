@@ -6,7 +6,6 @@
 
 use crate::error::{FortressError, Result, StorageErrorCode};
 use crate::storage::StorageBackend;
-use crate::encryption::EncryptionAlgorithm;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
@@ -518,7 +517,7 @@ pub mod utils {
     ) -> Result<Vec<String>> {
         let all_keys = source_storage.list_prefix("").await?;
         
-        if let Some(base) = base_backup {
+        if let Some(_base) = base_backup {
             // For incremental/differential, we need to compare with base backup
             // This is a simplified implementation - in practice, you'd need
             // to track changes more efficiently

@@ -205,7 +205,7 @@ impl DdosProtection {
                         let mut info = ip_info.clone();
                         info.blocked = false;
                         info.block_expiry = None;
-                        self.suspicious_ips.insert(ip, info);
+                        self.suspicious_ips.insert(ip.clone(), info);
                     }
                 }
             }
@@ -694,13 +694,15 @@ pub async fn request_logging_middleware(
     let start = Instant::now();
     let method = request.method().clone();
     let uri = request.uri().clone();
+    
+    // Extract headers and user info before moving request
     let user_agent = request
         .headers()
         .get(header::USER_AGENT)
         .and_then(|h| h.to_str().ok())
-        .unwrap_or("unknown");
+        .unwrap_or("unknown")
+        .to_string();
 
-    // Extract user info if authenticated
     let user_id = request
         .extensions()
         .get::<TokenClaims>()

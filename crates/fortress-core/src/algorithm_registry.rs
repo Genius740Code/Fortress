@@ -248,11 +248,17 @@ pub struct AlgorithmRequirements {
 /// Algorithm statistics
 #[derive(Debug)]
 pub struct AlgorithmStatistics {
+    /// Total number of algorithms registered
     pub total_algorithms: usize,
+    /// Total number of algorithm families
     pub total_families: usize,
+    /// Number of AEAD algorithms
     pub aead_count: usize,
+    /// Average security level (1-10 scale)
     pub average_security_level: f64,
+    /// Newest algorithm year
     pub newest_year: u32,
+    /// Oldest algorithm year
     pub oldest_year: u32,
 }
 

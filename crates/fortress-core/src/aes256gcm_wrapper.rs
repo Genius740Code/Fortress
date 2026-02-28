@@ -138,5 +138,5 @@ impl EncryptionAlgorithm for Aes256GcmWrapper {
     }
 }
 
-// Type alias for easier use
+/// Type alias for easier use of AES-256-GCM wrapper
 pub type Aes256Gcm = Aes256GcmWrapper;
