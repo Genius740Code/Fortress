@@ -898,6 +898,7 @@ impl Drop for DefaultAuditLogger {
 }
 
 /// Global audit logger instance
+#[allow(static_mut_refs)]
 static mut AUDIT_LOGGER: Option<Arc<std::sync::Mutex<DefaultAuditLogger>>> = None;
 static AUDIT_LOGGER_INIT: std::sync::Once = std::sync::Once::new();
 

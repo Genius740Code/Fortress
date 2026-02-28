@@ -4,7 +4,7 @@
 //! capabilities for Fortress.
 
 use crate::error::{FortressError, Result, ConfigurationErrorCode};
-use crate::encryption::{EncryptionProfile, PerformanceProfile};
+use crate::encryption::EncryptionProfile;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DurationSeconds};
 use std::collections::HashMap;

@@ -777,15 +777,24 @@ impl Default for KeyMetadataBuilder {
 
 
 /// Comprehensive rotation policies for different data types and security requirements
+/// Policy for key rotation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RotationPolicy {
+    /// Name of the rotation policy
     pub name: String,
+    /// Description of what this policy covers
     pub description: String,
+    /// How often keys should be rotated
     pub interval: RotationInterval,
+    /// Data classification level this policy applies to
     pub data_classification: DataClassification,
+    /// Compliance requirements that affect this policy
     pub compliance_requirements: Vec<ComplianceRequirement>,
+    /// Grace period in hours before rotation is enforced
     pub grace_period_hours: u64,
+    /// Whether rotation should happen automatically
     pub auto_rotate: bool,
+    /// Hours before rotation to send notifications
     pub notification_hours_before: u64,
 }
 
@@ -805,11 +814,17 @@ pub enum DataClassification {
 /// Compliance requirements that may affect rotation
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ComplianceRequirement {
+    /// General Data Protection Regulation
     GDPR,
+    /// Health Insurance Portability and Accountability Act
     HIPAA,
+    /// Payment Card Industry Data Security Standard
     PciDss,
+    /// Sarbanes-Oxley Act
     SOX,
+    /// California Consumer Privacy Act
     CCPA,
+    /// Custom compliance requirement
     Custom(String),
 }
 
@@ -904,6 +919,7 @@ impl RotationPolicy {
         now >= notification_time && now < self.next_rotation_time(metadata)
     }
 }
+/// Interval for key rotation
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum RotationInterval {
     /// 23 hours - high security, near-daily rotation
@@ -952,14 +968,20 @@ pub struct SmartKeyRotationScheduler {
     metrics: Arc<RwLock<RotationMetrics>>,
 }
 
-/// Rotation performance metrics
+/// Metrics for tracking rotation performance
 #[derive(Debug, Clone, Default)]
 pub struct RotationMetrics {
+    /// Total number of rotation attempts
     pub total_rotations: u64,
+    /// Number of successful rotations
     pub successful_rotations: u64,
+    /// Number of failed rotations
     pub failed_rotations: u64,
+    /// Average time taken for rotations in milliseconds
     pub average_rotation_time_ms: u64,
+    /// Timestamp of the last rotation
     pub last_rotation_time: Option<DateTime<Utc>>,
+    /// Rotations grouped by interval type
     pub rotations_by_interval: HashMap<String, u64>,
 }
 
@@ -1777,7 +1799,7 @@ impl KeyManager for HsmKeyManager {
         }
         
         // Return placeholder key
-        let key = SecureKey::generate(algorithm.key_size());
+        let _key = SecureKey::generate(algorithm.key_size());
         
         Ok(())
     }

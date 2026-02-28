@@ -7,10 +7,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH, Duration};
 use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc, Datelike};
+use chrono::DateTime;
 
 use crate::error::{FortressError, Result};
-use crate::audit::{AuditConfig, AuditEntry};
+use crate::audit::AuditConfig;
 
 /// Log rotation strategy
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

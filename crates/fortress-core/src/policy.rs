@@ -357,7 +357,7 @@ impl PolicyEngine {
             resource: resource.clone(),
             timestamp: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_else(|_| Duration::from_secs(0))
                 .as_secs(),
         };
 
@@ -388,11 +388,11 @@ impl PolicyEngine {
                         let mut cache = self.cache.write().await;
                         cache.insert(cache_key, true);
                         
-                        let elapsed = start_time.elapsed().unwrap().as_millis() as u64;
+                        let elapsed = start_time.elapsed().unwrap_or_else(|_| Duration::from_secs(0)).as_millis() as u64;
                         self.log_audit_entry(PolicyAuditEntry {
                             timestamp: SystemTime::now()
                                 .duration_since(UNIX_EPOCH)
-                                .unwrap()
+                                .unwrap_or_else(|_| Duration::from_secs(0))
                                 .as_secs(),
                             user_id: user_id.to_string(),
                             permission,
@@ -414,11 +414,11 @@ impl PolicyEngine {
         let mut cache = self.cache.write().await;
         cache.insert(cache_key, false);
         
-        let elapsed = start_time.elapsed().unwrap().as_millis() as u64;
+        let elapsed = start_time.elapsed().unwrap_or_else(|_| Duration::from_secs(0)).as_millis() as u64;
         self.log_audit_entry(PolicyAuditEntry {
             timestamp: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_else(|_| Duration::from_secs(0))
                 .as_secs(),
             user_id: user_id.to_string(),
             permission,
@@ -512,7 +512,7 @@ impl PolicyEngine {
     fn evaluate_time_condition(&self, condition: &TimeCondition) -> Result<bool> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_else(|_| Duration::from_secs(0))
             .as_secs();
 
         // Check time range
@@ -559,7 +559,7 @@ impl Role {
     pub fn new(name: &str) -> Self {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_else(|_| Duration::from_secs(0))
             .as_secs();
 
         Self {

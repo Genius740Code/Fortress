@@ -7,7 +7,7 @@ use crate::error::{FortressError, Result, EncryptionErrorCode};
 use crate::field_encryption::{
     FieldEncryptionManager, FieldEncryptionConfig, FieldIdentifier, FieldEncryptionStrategy,
     FieldEncryptionMetadata, EncryptedField, DecryptedField, FieldAlgorithmSelector,
-    DefaultAlgorithmSelector, FieldConfigId,
+    DefaultAlgorithmSelector,
 };
 use crate::encryption::{create_algorithm, EncryptionAlgorithm};
 use crate::key::{KeyManager, SecureKey};

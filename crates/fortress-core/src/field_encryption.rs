@@ -14,14 +14,12 @@
 
 use crate::error::{FortressError, Result, EncryptionErrorCode};
 use crate::encryption::{EncryptionProfile, PerformanceProfile};
-use crate::key::{KeyManager, KeyId, KeyMetadata};
-use crate::audit::{AuditEventType, SecurityLevel, EventOutcome, log_event_with_metadata};
+use crate::key::{KeyId};
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Arc;
 use uuid::Uuid;
 
 /// Unique identifier for a field encryption configuration

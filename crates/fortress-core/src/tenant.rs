@@ -6,7 +6,6 @@
 //! infrastructure.
 
 use crate::error::{FortressError, Result};
-use crate::encryption::EncryptionProfile;
 use std::collections::HashMap;
 use std::sync::Arc;
 use uuid::Uuid;

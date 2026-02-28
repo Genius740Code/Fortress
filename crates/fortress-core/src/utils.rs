@@ -3,8 +3,7 @@
 //! This module provides various utility functions and helpers for Fortress operations.
 
 use crate::error::{FortressError, Result};
-use base64::{Engine as _, engine::general_purpose};
-use bytes::Bytes;
+use base64::Engine as _;
 use getrandom;
 use std::collections::HashMap;
 

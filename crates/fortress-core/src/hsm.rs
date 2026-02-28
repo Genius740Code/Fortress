@@ -4,7 +4,7 @@
 //! and managed in hardware security modules for enhanced security.
 
 use crate::error::{FortressError, Result, KeyErrorCode};
-use crate::key::{KeyId, KeyMetadata, SecureKey};
+use crate::key::{KeyId, KeyMetadata};
 use crate::encryption::EncryptionAlgorithm;
 
 use async_trait::async_trait;
@@ -12,7 +12,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use log::{info, debug, warn};
 
 /// HSM provider configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]

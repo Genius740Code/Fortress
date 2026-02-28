@@ -4,12 +4,12 @@
 //! including pattern detection, anomaly detection, and security insights.
 
 use std::collections::{HashMap, HashSet};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc, Timelike};
+use chrono::Timelike;
 
 use crate::audit::{AuditEntry, AuditEventType, SecurityLevel, EventOutcome, AuditQuery};
-use crate::error::{FortressError, Result};
+use crate::error::Result;
 
 /// Analysis engine for audit logs
 pub struct AuditAnalyzer {
@@ -575,7 +575,7 @@ impl ReportGenerator {
         }
 
         // Normalize to 0-100 scale
-        (score.min(100.0))
+        score.min(100.0)
     }
 
     /// Generate security recommendations

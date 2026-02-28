@@ -10,7 +10,6 @@
 
 use crate::error::{FortressError, Result, QueryErrorCode};
 
-use crate::encryption::SecureKey;
 
 use async_trait::async_trait;
 

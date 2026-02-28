@@ -22,6 +22,7 @@ members = [
 [dependencies]
 # Core dependencies
 fortress-core = { path = "crates/fortress-core", version = "0.1.0", optional = true }
+fortress-cli = { path = "crates/fortress-cli", version = "0.1.0", optional = true }
 
 # Async runtime
 tokio = { version = "1.35", features = ["full"] }
@@ -167,6 +168,11 @@ fips = []
 
 # Development features
 dev = ["tracing-subscriber/env-filter"]
+
+# Platform features
+cli = ["fortress-cli"]
+server = []
+wasm = ["wasm-bindgen", "js-sys", "web-sys", "console_error_panic_hook"]
 
 [profile.release]
 opt-level = 3
