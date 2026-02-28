@@ -188,6 +188,14 @@ pub mod field_encryption_manager;
 
 pub mod algorithm_registry;
 
+/// Backup and disaster recovery system
+
+pub mod backup;
+
+/// Simple backup manager for testing
+
+pub mod simple_backup_manager;
+
 /// AES-256-GCM wrapper implementation
 
 pub mod aes256gcm_wrapper;
@@ -256,6 +264,14 @@ pub mod prelude {
         TenantStats, TenantResourceLimits, TenantEncryptionConfig, ResourceIsolationManager,
         TenantResourceUsage, GlobalResourceLimits, GlobalResourceUsage
     };
+
+    pub use crate::backup::{
+        BackupManager, DisasterRecoveryManager, BackupMetadata, BackupItem, BackupManifest,
+        BackupConfig, BackupStrategy, RetentionPolicy as BackupRetentionPolicy, VerificationLevel, DisasterRecoveryPlan,
+        RecoveryStep, RecoveryPriority, RestoreStatus, RestoreOperationStatus, BackupStorageStats,
+    };
+
+    pub use crate::simple_backup_manager::{SimpleBackupManager};
 
 }
 

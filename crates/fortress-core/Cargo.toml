@@ -14,7 +14,7 @@ rust-version = "1.70"
 
 [dependencies]
 # Async runtime
-tokio = { version = "1.35", features = ["rt", "sync"] }
+tokio = { version = "1.35", features = ["rt", "sync", "macros"] }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -108,6 +108,9 @@ azure_storage_blobs = { version = "0.19", optional = true }
 azure_identity = { version = "0.19", optional = true }
 google-cloud-storage = { version = "0.15", optional = true }
 google-cloud-auth = { version = "0.13", optional = true }
+
+# Additional dependencies for backup system
+tempfile = "3.8"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
