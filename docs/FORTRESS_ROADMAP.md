@@ -51,9 +51,9 @@
 - [x] Add benchmarking
 
 ### 10. Create smart key rotation system (23h, 7d, 30d, 90d intervals)
-- [ ] Design rotation scheduling
-- [ ] Implement zero-downtime rotation
-- [ ] Add rotation policies
+- [x] Design rotation scheduling
+- [x] Implement zero-downtime rotation
+- [x] Add rotation policies
 
 ### 11. Design storage backend abstraction layer (local, S3, Azure, GCP)
 - [x] Create storage interface

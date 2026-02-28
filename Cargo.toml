@@ -45,7 +45,7 @@ pbkdf2 = "0.12"
 
 # Database
 sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "sqlite", "mysql", "uuid", "chrono", "json"] }
-rocksdb = "0.21"
+# rocksdb = "0.21"
 
 # Networking
 axum = { version = "0.7", features = ["multipart"] }

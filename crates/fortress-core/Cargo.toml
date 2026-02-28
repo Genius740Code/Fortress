@@ -92,9 +92,9 @@ parking_lot = "0.12"
 
 # HSM and PKCS#11 support
 pkcs11 = "0.5"
-aws-sdk-cloudhsmv2 = "1.0"
-aws-config = "1.0"
-aws-types = "1.0"
+aws-sdk-cloudhsmv2 = "0.28"
+aws-config = "0.55"
+aws-types = "0.55"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

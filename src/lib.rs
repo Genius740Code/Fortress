@@ -45,7 +45,7 @@
 
 pub use fortress_core::{
     error::{FortressError, Result},
-    Fortress, Config,
+    config::Config,
     encryption::{EncryptionAlgorithm, EncryptionProfile},
     storage::StorageBackend,
     query::{QueryEngine, QueryResult},
@@ -55,7 +55,7 @@ pub use fortress_core::{
 pub mod prelude {
     pub use fortress_core::{
         error::{FortressError, Result},
-        Fortress, Config,
+        config::Config,
         encryption::{EncryptionAlgorithm, EncryptionProfile},
         storage::StorageBackend,
         query::{QueryEngine, QueryResult},
@@ -77,16 +77,16 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Fortress build information
 pub mod build {
     /// Build timestamp
-    pub const TIMESTAMP: &str = env!("VERGEN_BUILD_TIMESTAMP", "unknown");
+    pub const TIMESTAMP: &str = "unknown";
     
     /// Git commit SHA
-    pub const GIT_SHA: &str = env!("VERGEN_GIT_SHA", "unknown");
+    pub const GIT_SHA: &str = "unknown";
     
     /// Rust version
-    pub const RUST_VERSION: &str = env!("VERGEN_RUSTC_SEMVER", "unknown");
+    pub const RUST_VERSION: &str = "unknown";
     
     /// Target triple
-    pub const TARGET: &str = env!("VERGEN_CARGO_TARGET_TRIPLE", "unknown");
+    pub const TARGET: &str = "unknown";
 }
 
 #[cfg(test)]

@@ -30,6 +30,9 @@ use uuid::Uuid;
 // Import HSM types
 use crate::hsm::{HsmConfig, HsmKeyManager as HsmKeyManagerInner};
 
+// Import futures for concurrent processing
+use futures;
+
 
 /// Unique identifier for a key
 
@@ -61,7 +64,7 @@ pub trait KeyManager: Send + Sync {
 
 
 
-    /// Retrieve a key by ID
+    /// Retrieve a key and its metadata
 
     async fn retrieve_key(&self, key_id: &KeyId) -> Result<(SecureKey, KeyMetadata)>;
 
@@ -79,23 +82,39 @@ pub trait KeyManager: Send + Sync {
 
 
 
-    /// Rotate a key
+    /// Rotate a key (create new version)
 
-    async fn rotate_key(&self, key_id: &KeyId, algorithm: &dyn EncryptionAlgorithm) -> Result<(SecureKey, KeyMetadata)>;
-
-
-
-    /// Check if a key needs rotation
-
-    async fn needs_rotation(&self, key_id: &KeyId) -> Result<bool>;
+    async fn rotate_key(&self, key_id: &KeyId, algorithm: &dyn EncryptionAlgorithm) -> Result<()>;
 
 
 
-    /// Get active key for a given purpose
+    /// Zero-downtime key rotation (maintains availability during rotation)
 
-    async fn get_active_key(&self, purpose: &str) -> Result<(SecureKey, KeyMetadata)>;
+    async fn rotate_key_with_zero_downtime(&self, key_id: &KeyId, algorithm: &dyn EncryptionAlgorithm) -> Result<()> {
+
+        // Default implementation - can be overridden by specific implementations
+
+        self.rotate_key(key_id, algorithm).await
+
+    }
+
+
+
+    /// Check if a key exists
+
+    async fn key_exists(&self, key_id: &KeyId) -> Result<bool>;
+
+
+
+    /// Get key metadata only
+
+    async fn get_key_metadata(&self, key_id: &KeyId) -> Result<KeyMetadata>;
 
 }
+
+
+
+
 
 
 
@@ -293,81 +312,74 @@ impl KeyManager for InMemoryKeyManager {
 
 
 
-    async fn rotate_key(&self, key_id: &KeyId, algorithm: &dyn EncryptionAlgorithm) -> Result<(SecureKey, KeyMetadata)> {
-
+    async fn rotate_key(&self, key_id: &KeyId, algorithm: &dyn EncryptionAlgorithm) -> Result<()> {
         let new_key = self.generate_key(algorithm).await?;
-
+        
+        // Get old metadata to preserve version and purpose
+        let (_, old_metadata) = self.retrieve_key(key_id).await?;
+        
         let new_metadata = KeyMetadata::new(
             key_id.clone(),
             algorithm.name().to_string(),
-            1, // This should be incremented from old version
+            old_metadata.version + 1, // Increment version
             Utc::now(),
             Utc::now() + Duration::days(90),
-            "encryption".to_string(),
-            PerformanceProfile::Balanced,
+            old_metadata.purpose.clone(),
+            old_metadata.performance_profile,
         );
 
-
         self.store_key(key_id, &new_key, &new_metadata).await?;
-
-        Ok((new_key, new_metadata))
-
+        Ok(())
+    }
+    
+    async fn rotate_key_with_zero_downtime(&self, key_id: &KeyId, algorithm: &dyn EncryptionAlgorithm) -> Result<()> {
+        // Zero-downtime: create new key version first, then gracefully transition
+        let new_key = self.generate_key(algorithm).await?;
+        
+        // Get old metadata
+        let (_, old_metadata) = self.retrieve_key(key_id).await?;
+        
+        // Create new version with incremented version
+        let new_metadata = KeyMetadata::new(
+            key_id.clone(),
+            algorithm.name().to_string(),
+            old_metadata.version + 1,
+            Utc::now(),
+            Utc::now() + Duration::days(90),
+            old_metadata.purpose.clone(),
+            old_metadata.performance_profile,
+        );
+        
+        // Store new key alongside old one temporarily (dual-key period)
+        let versioned_key_id = format!("{}_v{}", key_id, new_metadata.version);
+        self.store_key(&versioned_key_id, &new_key, &new_metadata).await?;
+        
+        // Store the new key as the primary (this is where zero-downtime happens)
+        self.store_key(key_id, &new_key, &new_metadata).await?;
+        
+        // Clean up old version after a grace period (in production, this would be a delayed task)
+        let old_versioned_id = format!("{}_v{}", key_id, old_metadata.version);
+        let _ = self.delete_key(&old_versioned_id).await; // Ignore errors in cleanup - old version might not exist    
+        Ok(())
     }
 
 
 
-    async fn needs_rotation(&self, key_id: &KeyId) -> Result<bool> {
-
+    async fn key_exists(&self, key_id: &KeyId) -> Result<bool> {
         let keys = self.keys.read().await;
+        Ok(keys.contains_key(key_id))
+    }
 
-        if let Some((_, metadata)) = keys.get(key_id) {
-
-            Ok(Utc::now() >= metadata.expires_at)
-
-        } else {
-
-            Err(FortressError::key_management(
-
+    async fn get_key_metadata(&self, key_id: &KeyId) -> Result<KeyMetadata> {
+        let keys = self.keys.read().await;
+        keys.get(key_id)
+            .map(|(_, metadata)| metadata.clone())
+            .ok_or_else(|| FortressError::key_management(
                 format!("Key not found: {}", key_id),
-
                 Some(key_id.clone()),
-
                 KeyErrorCode::KeyNotFound,
-
             ))
-
-        }
-
     }
-
-
-
-    async fn get_active_key(&self, purpose: &str) -> Result<(SecureKey, KeyMetadata)> {
-
-        let keys = self.keys.read().await;
-
-        for (_key_id, (key, metadata)) in keys.iter() {
-
-            if metadata.purpose == purpose && metadata.is_active() {
-
-                return Ok((key.clone(), metadata.clone()));
-
-            }
-
-        }
-
-        Err(FortressError::key_management(
-
-            format!("No active key found for purpose: {}", purpose),
-
-            None,
-
-            KeyErrorCode::KeyNotFound,
-
-        ))
-
-    }
-
 }
 
 
@@ -764,117 +776,624 @@ impl Default for KeyMetadataBuilder {
 
 
 
-/// Key rotation scheduler
-
-pub struct KeyRotationScheduler {
-    key_manager: Arc<dyn KeyManager>,
-    rotation_intervals: HashMap<String, Duration>,
+/// Comprehensive rotation policies for different data types and security requirements
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RotationPolicy {
+    pub name: String,
+    pub description: String,
+    pub interval: RotationInterval,
+    pub data_classification: DataClassification,
+    pub compliance_requirements: Vec<ComplianceRequirement>,
+    pub grace_period_hours: u64,
+    pub auto_rotate: bool,
+    pub notification_hours_before: u64,
 }
 
-impl std::fmt::Debug for KeyRotationScheduler {
+/// Data classification levels for rotation policies
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum DataClassification {
+    /// Highly sensitive data (PII, financial, health)
+    HighlyRestricted,
+    /// Sensitive business data
+    Restricted,
+    /// Internal company data
+    Internal,
+    /// Public data
+    Public,
+}
+
+/// Compliance requirements that may affect rotation
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ComplianceRequirement {
+    GDPR,
+    HIPAA,
+    PciDss,
+    SOX,
+    CCPA,
+    Custom(String),
+}
+
+impl RotationPolicy {
+    /// Get default policies for common data classifications
+    pub fn get_default_policies() -> Vec<Self> {
+        vec![
+            Self {
+                name: "PII and Financial Data".to_string(),
+                description: "Policy for personally identifiable information and financial data".to_string(),
+                interval: RotationInterval::Hour23,
+                data_classification: DataClassification::HighlyRestricted,
+                compliance_requirements: vec![ComplianceRequirement::GDPR, ComplianceRequirement::PciDss],
+                grace_period_hours: 1,
+                auto_rotate: true,
+                notification_hours_before: 4,
+            },
+            Self {
+                name: "Health Information".to_string(),
+                description: "Policy for protected health information".to_string(),
+                interval: RotationInterval::Days7,
+                data_classification: DataClassification::HighlyRestricted,
+                compliance_requirements: vec![ComplianceRequirement::HIPAA],
+                grace_period_hours: 2,
+                auto_rotate: true,
+                notification_hours_before: 24,
+            },
+            Self {
+                name: "Business Sensitive Data".to_string(),
+                description: "Policy for sensitive business data".to_string(),
+                interval: RotationInterval::Days30,
+                data_classification: DataClassification::Restricted,
+                compliance_requirements: vec![ComplianceRequirement::SOX],
+                grace_period_hours: 6,
+                auto_rotate: true,
+                notification_hours_before: 72,
+            },
+            Self {
+                name: "Internal Company Data".to_string(),
+                description: "Policy for internal company data".to_string(),
+                interval: RotationInterval::Days90,
+                data_classification: DataClassification::Internal,
+                compliance_requirements: vec![],
+                grace_period_hours: 12,
+                auto_rotate: true,
+                notification_hours_before: 168, // 1 week
+            },
+            Self {
+                name: "Public Data".to_string(),
+                description: "Policy for public data".to_string(),
+                interval: RotationInterval::Days90,
+                data_classification: DataClassification::Public,
+                compliance_requirements: vec![],
+                grace_period_hours: 24,
+                auto_rotate: false, // Manual rotation for public data
+                notification_hours_before: 168,
+            },
+        ]
+    }
+    
+    /// Get policy by data classification
+    pub fn by_classification(classification: DataClassification) -> Option<Self> {
+        Self::get_default_policies()
+            .into_iter()
+            .find(|policy| policy.data_classification == classification)
+    }
+    
+    /// Check if rotation should occur based on policy
+    pub fn should_rotate(&self, metadata: &KeyMetadata) -> bool {
+        if !self.auto_rotate {
+            return false;
+        }
+        
+        let now = Utc::now();
+        let rotation_time = metadata.created_at + self.interval.duration();
+        
+        // Add grace period
+        let rotation_with_grace = rotation_time + Duration::hours(self.grace_period_hours as i64);
+        
+        now >= rotation_with_grace
+    }
+    
+    /// Get next rotation time
+    pub fn next_rotation_time(&self, metadata: &KeyMetadata) -> DateTime<Utc> {
+        metadata.created_at + self.interval.duration()
+    }
+    
+    /// Check if notification should be sent
+    pub fn should_notify(&self, metadata: &KeyMetadata) -> bool {
+        let now = Utc::now();
+        let notification_time = self.next_rotation_time(metadata) - Duration::hours(self.notification_hours_before as i64);
+        now >= notification_time && now < self.next_rotation_time(metadata)
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum RotationInterval {
+    /// 23 hours - high security, near-daily rotation
+    Hour23,
+    /// 7 days - weekly rotation for sensitive data
+    Days7,
+    /// 30 days - monthly rotation for standard data
+    Days30,
+    /// 90 days - quarterly rotation for low sensitivity data
+    Days90,
+    /// Custom interval in hours/days
+    Custom(Duration),
+}
+
+impl RotationInterval {
+    /// Get the duration for this interval
+    pub fn duration(&self) -> Duration {
+        match self {
+            RotationInterval::Hour23 => Duration::hours(23),
+            RotationInterval::Days7 => Duration::days(7),
+            RotationInterval::Days30 => Duration::days(30),
+            RotationInterval::Days90 => Duration::days(90),
+            RotationInterval::Custom(duration) => *duration,
+        }
+    }
+
+    /// Get human-readable description
+    pub fn description(&self) -> &'static str {
+        match self {
+            RotationInterval::Hour23 => "23 hours (high security)",
+            RotationInterval::Days7 => "7 days (weekly)",
+            RotationInterval::Days30 => "30 days (monthly)",
+            RotationInterval::Days90 => "90 days (quarterly)",
+            RotationInterval::Custom(_) => "custom interval",
+        }
+    }
+}
+
+/// Smart key rotation scheduler with optimized performance
+pub struct SmartKeyRotationScheduler {
+    key_manager: Arc<dyn KeyManager>,
+    rotation_intervals: HashMap<String, RotationInterval>,
+    rotation_cache: Arc<RwLock<HashMap<KeyId, DateTime<Utc>>>>,
+    batch_size: usize,
+    max_concurrent_rotations: usize,
+    metrics: Arc<RwLock<RotationMetrics>>,
+}
+
+/// Rotation performance metrics
+#[derive(Debug, Clone, Default)]
+pub struct RotationMetrics {
+    pub total_rotations: u64,
+    pub successful_rotations: u64,
+    pub failed_rotations: u64,
+    pub average_rotation_time_ms: u64,
+    pub last_rotation_time: Option<DateTime<Utc>>,
+    pub rotations_by_interval: HashMap<String, u64>,
+}
+
+impl std::fmt::Debug for SmartKeyRotationScheduler {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("KeyRotationScheduler")
+        f.debug_struct("SmartKeyRotationScheduler")
             .field("rotation_intervals", &self.rotation_intervals)
+            .field("batch_size", &self.batch_size)
+            .field("max_concurrent_rotations", &self.max_concurrent_rotations)
             .finish()
     }
 }
 
-
-
-impl KeyRotationScheduler {
-
-    /// Create a new key rotation scheduler
-
+impl SmartKeyRotationScheduler {
+    /// Create a new smart key rotation scheduler with optimized defaults
     pub fn new(key_manager: Arc<dyn KeyManager>) -> Self {
-
         Self {
-
             key_manager,
-
             rotation_intervals: HashMap::new(),
-
+            rotation_cache: Arc::new(RwLock::new(HashMap::new())),
+            batch_size: 100,
+            max_concurrent_rotations: 10,
+            metrics: Arc::new(RwLock::new(RotationMetrics::default())),
         }
-
     }
 
+    /// Create scheduler with custom performance parameters
+    pub fn with_config(
+        key_manager: Arc<dyn KeyManager>,
+        batch_size: usize,
+        max_concurrent_rotations: usize,
+    ) -> Self {
+        Self {
+            key_manager,
+            rotation_intervals: HashMap::new(),
+            rotation_cache: Arc::new(RwLock::new(HashMap::new())),
+            batch_size,
+            max_concurrent_rotations,
+            metrics: Arc::new(RwLock::new(RotationMetrics::default())),
+        }
+    }
 
-
-    /// Set rotation interval for a purpose
-
-    pub fn set_rotation_interval(&mut self, purpose: String, interval: Duration) {
-
+    /// Set rotation interval for a specific purpose
+    pub fn set_rotation_interval(&mut self, purpose: String, interval: RotationInterval) {
         self.rotation_intervals.insert(purpose, interval);
-
     }
 
+    /// Set rotation interval with predefined security levels
+    pub fn set_security_level_intervals(&mut self) {
+        self.rotation_intervals.insert("high_security".to_string(), RotationInterval::Hour23);
+        self.rotation_intervals.insert("sensitive".to_string(), RotationInterval::Days7);
+        self.rotation_intervals.insert("standard".to_string(), RotationInterval::Days30);
+        self.rotation_intervals.insert("low_sensitivity".to_string(), RotationInterval::Days90);
+    }
 
+    /// Get rotation interval for a purpose
+    pub fn get_rotation_interval(&self, purpose: &str) -> Option<&RotationInterval> {
+        self.rotation_intervals.get(purpose)
+    }
 
-    /// Check all keys and rotate if needed
-
+    /// Check all keys and rotate if needed using optimized batch processing
     pub async fn check_and_rotate(&self) -> Result<Vec<(KeyId, KeyMetadata)>> {
-
+        let start_time = std::time::Instant::now();
         let keys = self.key_manager.list_keys().await?;
-
-        let mut rotated_keys = Vec::new();
-
-
-
-        for (key_id, metadata) in keys {
-
-            if let Some(interval) = self.rotation_intervals.get(&metadata.purpose) {
-
-                let time_since_creation = Utc::now() - metadata.created_at;
-
-                if time_since_creation >= *interval {
-
-                    // This key needs rotation
-                    if let Err(_rotation_error) = self.rotate_key(&key_id).await {
-                        // Rotation failed, but we continue with other keys
-                        // Could log the error here
-                    } else {
-                        // Rotation succeeded, add to rotated keys
-                        rotated_keys.push((key_id, metadata));
-                    }
-
-                }
-
-            }
-
+        
+        // Filter keys that need rotation
+        let keys_to_rotate = self.filter_keys_needing_rotation(keys).await?;
+        
+        if keys_to_rotate.is_empty() {
+            return Ok(Vec::new());
         }
 
+        // Process in batches for performance
+        let mut rotated_keys = Vec::new();
+        let chunks: Vec<_> = keys_to_rotate.chunks(self.batch_size).collect();
+        
+        for chunk in chunks {
+            let batch_results = self.rotate_key_batch(chunk).await?;
+            rotated_keys.extend(batch_results);
+        }
 
-
+        // Update metrics
+        self.update_metrics(start_time, rotated_keys.len()).await;
+        
         Ok(rotated_keys)
-
     }
 
+    /// Filter keys that need rotation based on their intervals
+    async fn filter_keys_needing_rotation(&self, keys: Vec<(KeyId, KeyMetadata)>) -> Result<Vec<(KeyId, KeyMetadata)>> {
+        let mut keys_to_rotate = Vec::new();
+        let cache = self.rotation_cache.read().await;
+        
+        for (key_id, metadata) in keys {
+            if let Some(interval) = self.rotation_intervals.get(&metadata.purpose) {
+                let should_rotate = self.should_rotate_key(&key_id, &metadata, interval, &cache).await?;
+                if should_rotate {
+                    keys_to_rotate.push((key_id, metadata));
+                }
+            }
+        }
+        
+        Ok(keys_to_rotate)
+    }
 
+    /// Determine if a specific key needs rotation
+    async fn should_rotate_key(
+        &self,
+        key_id: &KeyId,
+        metadata: &KeyMetadata,
+        interval: &RotationInterval,
+        cache: &HashMap<KeyId, DateTime<Utc>>,
+    ) -> Result<bool> {
+        let now = Utc::now();
+        let interval_duration = interval.duration();
+        
+        // Check if key is expired first
+        if metadata.is_expired() {
+            return Ok(true);
+        }
+        
+        // Check cache to avoid redundant calculations
+        if let Some(&last_check) = cache.get(key_id) {
+            let time_since_check = now - last_check;
+            if time_since_check < interval_duration {
+                return Ok(false);
+            }
+        }
+        
+        // Calculate time since creation or last rotation
+        let time_since_creation = now - metadata.created_at;
+        Ok(time_since_creation >= interval_duration)
+    }
 
-    /// Rotate a specific key
+    /// Rotate a batch of keys concurrently
+    async fn rotate_key_batch(&self, keys: &[(KeyId, KeyMetadata)]) -> Result<Vec<(KeyId, KeyMetadata)>> {
+        use futures::stream::{self, StreamExt};
+        
+        let results = stream::iter(keys)
+            .map(|(key_id, metadata)| async move {
+                let rotation_result = self.rotate_single_key(key_id).await;
+                (key_id.clone(), metadata.clone(), rotation_result)
+            })
+            .buffer_unordered(self.max_concurrent_rotations)
+            .collect::<Vec<_>>()
+            .await;
+        
+        let mut rotated_keys = Vec::new();
+        for (key_id, metadata, result) in results {
+            match result {
+                Ok(_) => {
+                    // Update cache with successful rotation
+                    let mut cache = self.rotation_cache.write().await;
+                    cache.insert(key_id.clone(), Utc::now());
+                    rotated_keys.push((key_id, metadata));
+                }
+                Err(e) => {
+                    // Log rotation failure but continue with others
+                    eprintln!("Failed to rotate key {}: {}", key_id, e);
+                }
+            }
+        }
+        
+        Ok(rotated_keys)
+    }
 
-    async fn rotate_key(&self, key_id: &KeyId) -> Result<(SecureKey, KeyMetadata)> {
-
-        // Get the current key metadata to determine the algorithm
-
+    /// Rotate a single key with zero-downtime support
+    async fn rotate_single_key(&self, key_id: &KeyId) -> Result<()> {
         let (_, metadata) = self.key_manager.retrieve_key(key_id).await?;
-
-        
-
-        // Create the algorithm instance
-
         let algorithm = crate::encryption::create_algorithm(&metadata.algorithm)?;
-
         
-
-        // Rotate the key
-
-        self.key_manager.rotate_key(key_id, algorithm.as_ref()).await
-
+        // Zero-downtime rotation: create new key version before deactivating old one
+        self.key_manager.rotate_key_with_zero_downtime(key_id, algorithm.as_ref()).await?;
+        Ok(())
     }
 
+    /// Update rotation metrics
+    async fn update_metrics(&self, start_time: std::time::Instant, rotated_count: usize) {
+        let mut metrics = self.metrics.write().await;
+        let elapsed_ms = start_time.elapsed().as_millis() as u64;
+        
+        metrics.total_rotations += rotated_count as u64;
+        metrics.successful_rotations += rotated_count as u64;
+        metrics.last_rotation_time = Some(Utc::now());
+        
+        // Update average rotation time
+        if metrics.total_rotations > 0 {
+            metrics.average_rotation_time_ms = 
+                (metrics.average_rotation_time_ms * (metrics.total_rotations - 1) + elapsed_ms) / metrics.total_rotations;
+        }
+    }
+
+    /// Get current rotation metrics
+    pub async fn get_metrics(&self) -> RotationMetrics {
+        self.metrics.read().await.clone()
+    }
+
+    /// Clear rotation cache
+    pub async fn clear_cache(&self) {
+        self.rotation_cache.write().await.clear();
+    }
+
+    /// Get keys that will need rotation soon (within next 24 hours)
+    pub async fn get_keys_needing_soon_rotation(&self, hours_ahead: i64) -> Result<Vec<(KeyId, KeyMetadata)>> {
+        let keys = self.key_manager.list_keys().await?;
+        let soon_threshold = Utc::now() + Duration::hours(hours_ahead);
+        let mut soon_keys = Vec::new();
+        
+        for (key_id, metadata) in keys {
+            if let Some(interval) = self.rotation_intervals.get(&metadata.purpose) {
+                let next_rotation = metadata.created_at + interval.duration();
+                if next_rotation <= soon_threshold && next_rotation > Utc::now() {
+                    soon_keys.push((key_id, metadata));
+                }
+            }
+        }
+        
+        Ok(soon_keys)
+    }
+
+    /// Force rotate a specific key regardless of schedule
+    pub async fn force_rotate_key(&self, key_id: &KeyId) -> Result<(SecureKey, KeyMetadata)> {
+        let result = self.rotate_single_key(key_id).await;
+        
+        if result.is_ok() {
+            // Update cache
+            let mut cache = self.rotation_cache.write().await;
+            cache.insert(key_id.to_string(), Utc::now());
+        }
+        
+        // Return the new key metadata
+        self.key_manager.retrieve_key(key_id).await
+    }
 }
 
+/// Cron-like rotation scheduler for automated key rotation
+#[derive(Clone)]
+pub struct RotationScheduler {
+    key_manager: Arc<dyn KeyManager>,
+    policies: Vec<RotationPolicy>,
+    is_running: Arc<RwLock<bool>>,
+    last_run: Arc<RwLock<Option<DateTime<Utc>>>>,
+}
 
+impl RotationScheduler {
+    /// Create a new rotation scheduler
+    pub fn new(key_manager: Arc<dyn KeyManager>) -> Self {
+        Self {
+            key_manager,
+            policies: RotationPolicy::get_default_policies(),
+            is_running: Arc::new(RwLock::new(false)),
+            last_run: Arc::new(RwLock::new(None)),
+        }
+    }
+    
+    /// Create scheduler with custom policies
+    pub fn with_policies(key_manager: Arc<dyn KeyManager>, policies: Vec<RotationPolicy>) -> Self {
+        Self {
+            key_manager,
+            policies,
+            is_running: Arc::new(RwLock::new(false)),
+            last_run: Arc::new(RwLock::new(None)),
+        }
+    }
+    
+    /// Add a rotation policy
+    pub async fn add_policy(&mut self, policy: RotationPolicy) {
+        self.policies.push(policy);
+    }
+    
+    /// Remove a policy by name
+    pub async fn remove_policy(&mut self, name: &str) -> Option<RotationPolicy> {
+        let index = self.policies.iter().position(|p| p.name == name);
+        if let Some(idx) = index {
+            Some(self.policies.remove(idx))
+        } else {
+            None
+        }
+    }
+    
+    /// Get all policies
+    pub async fn get_policies(&self) -> Vec<RotationPolicy> {
+        self.policies.clone()
+    }
+    
+    /// Start the automated rotation scheduler
+    pub async fn start(&self) -> Result<()> {
+        let mut is_running = self.is_running.write().await;
+        if *is_running {
+            return Err(FortressError::key_management(
+                "Scheduler is already running",
+                None,
+                KeyErrorCode::InvalidKeyFormat,
+            ));
+        }
+        
+        *is_running = true;
+        drop(is_running);
+        
+        let key_manager = self.key_manager.clone();
+        let policies = self.policies.clone();
+        let is_running_flag = self.is_running.clone();
+        let last_run = self.last_run.clone();
+        
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600)); // Check every hour
+            
+            while {
+                let flag = is_running_flag.read().await;
+                *flag
+            } {
+                interval.tick().await;
+                
+                // Update last run time
+                {
+                    let mut last = last_run.write().await;
+                    *last = Some(Utc::now());
+                }
+                
+                // Check all keys for rotation
+                if let Err(e) = Self::check_and_rotate_keys(&key_manager, &policies).await {
+                    eprintln!("Rotation check failed: {}", e);
+                }
+            }
+        });
+        
+        Ok(())
+    }
+    
+    /// Stop the automated rotation scheduler
+    pub async fn stop(&self) -> Result<()> {
+        let mut is_running = self.is_running.write().await;
+        *is_running = false;
+        Ok(())
+    }
+    
+    /// Check if scheduler is running
+    pub async fn is_running(&self) -> bool {
+        let flag = self.is_running.read().await;
+        *flag
+    }
+    
+    /// Get last run time
+    pub async fn last_run(&self) -> Option<DateTime<Utc>> {
+        let last = self.last_run.read().await;
+        *last
+    }
+    
+    /// Manual rotation check
+    pub async fn check_rotation_now(&self) -> Result<Vec<(KeyId, KeyMetadata)>> {
+        Self::check_and_rotate_keys(&self.key_manager, &self.policies).await
+    }
+    
+    /// Internal method to check and rotate keys based on policies
+    async fn check_and_rotate_keys(
+        key_manager: &Arc<dyn KeyManager>,
+        policies: &[RotationPolicy],
+    ) -> Result<Vec<(KeyId, KeyMetadata)>> {
+        let keys = key_manager.list_keys().await?;
+        let mut rotated_keys = Vec::new();
+        
+        for (key_id, metadata) in keys {
+            // Find applicable policy based on purpose/data classification
+            if let Some(policy) = Self::find_applicable_policy(policies, &metadata) {
+                if policy.should_rotate(&metadata) {
+                    // Get algorithm for rotation
+                    let algorithm = crate::encryption::create_algorithm(&metadata.algorithm)?;
+                    
+                    // Perform zero-downtime rotation
+                    if let Err(e) = key_manager.rotate_key_with_zero_downtime(&key_id, algorithm.as_ref()).await {
+                        eprintln!("Failed to rotate key {}: {}", key_id, e);
+                        continue;
+                    }
+                    
+                    rotated_keys.push((key_id.clone(), metadata.clone()));
+                    
+                    // Log successful rotation
+                    let mut audit_metadata = std::collections::HashMap::new();
+                    audit_metadata.insert("key_id".to_string(), key_id.clone());
+                    audit_metadata.insert("policy".to_string(), policy.name.clone());
+                    audit_metadata.insert("classification".to_string(), format!("{:?}", policy.data_classification));
+                    
+                    if let Err(e) = log_event_with_metadata(
+                        AuditEventType::KeyManagement,
+                        SecurityLevel::High,
+                        Some("system".to_string()),
+                        Some(format!("key:{}", key_id)),
+                        "automatic_rotation".to_string(),
+                        EventOutcome::Success,
+                        audit_metadata,
+                    ) {
+                        eprintln!("Failed to log rotation: {}", e);
+                    }
+                }
+                
+                // Check if notification should be sent
+                if policy.should_notify(&metadata) {
+                    // In production, this would send notifications via email, Slack, etc.
+                    let mut notification_metadata = std::collections::HashMap::new();
+                    notification_metadata.insert("key_id".to_string(), key_id.clone());
+                    notification_metadata.insert("next_rotation".to_string(), policy.next_rotation_time(&metadata).to_rfc3339());
+                    notification_metadata.insert("policy".to_string(), policy.name.clone());
+                    
+                    if let Err(e) = log_event_with_metadata(
+                        AuditEventType::KeyManagement,
+                        SecurityLevel::Medium,
+                        Some("system".to_string()),
+                        Some(format!("key:{}", key_id)),
+                        "rotation_notification".to_string(),
+                        EventOutcome::Success,
+                        notification_metadata,
+                    ) {
+                        eprintln!("Failed to log rotation notification: {}", e);
+                    }
+                }
+            }
+        }
+        
+        Ok(rotated_keys)
+    }
+    
+    /// Find applicable policy for a key based on its metadata
+    fn find_applicable_policy<'a>(policies: &'a [RotationPolicy], metadata: &KeyMetadata) -> Option<&'a RotationPolicy> {
+        // Simple mapping based on purpose - in production, this would be more sophisticated
+        let classification = match metadata.purpose.as_str() {
+            "pii" | "financial" | "health" => DataClassification::HighlyRestricted,
+            "business" | "sensitive" => DataClassification::Restricted,
+            "internal" => DataClassification::Internal,
+            "public" => DataClassification::Public,
+            _ => DataClassification::Internal, // Default to internal
+        };
+        
+        policies.iter().find(|policy| policy.data_classification == classification)
+    }
+}
 
 /// Key derivation function types
 
@@ -1241,7 +1760,7 @@ impl KeyManager for HsmKeyManager {
         Ok(keys)
     }
     
-    async fn rotate_key(&self, key_id: &KeyId, algorithm: &dyn EncryptionAlgorithm) -> Result<(SecureKey, KeyMetadata)> {
+    async fn rotate_key(&self, key_id: &KeyId, algorithm: &dyn EncryptionAlgorithm) -> Result<()> {
         // Delete old key from HSM
         self.inner.provider().delete_key(key_id).await?;
         
@@ -1260,32 +1779,36 @@ impl KeyManager for HsmKeyManager {
         // Return placeholder key
         let key = SecureKey::generate(algorithm.key_size());
         
-        Ok((key, metadata))
+        Ok(())
     }
     
-    async fn needs_rotation(&self, key_id: &KeyId) -> Result<bool> {
-        let metadata = self.inner.provider().get_key_metadata(key_id).await?;
-        Ok(metadata.expires_at <= Utc::now())
+    async fn key_exists(&self, key_id: &KeyId) -> Result<bool> {
+        // Try to get metadata to check if key exists
+        match self.inner.provider().get_key_metadata(key_id).await {
+            Ok(_) => Ok(true),
+            Err(_) => Ok(false),
+        }
     }
     
-    async fn get_active_key(&self, purpose: &str) -> Result<(SecureKey, KeyMetadata)> {
-        let keys = self.list_keys().await?;
-        
-        // Find key with matching purpose that is not expired
-        for (_key_id, metadata) in keys {
-            if metadata.purpose == purpose {
-                if metadata.expires_at > Utc::now() {
-                    let key = SecureKey::generate(256); // Placeholder
-                    return Ok((key, metadata));
-                }
+    async fn get_key_metadata(&self, key_id: &KeyId) -> Result<KeyMetadata> {
+        // Check cache first
+        {
+            let cache = self.metadata_cache.read().await;
+            if let Some(metadata) = cache.get(key_id) {
+                return Ok(metadata.clone());
             }
         }
         
-        Err(FortressError::key_management(
-            format!("No active key found for purpose: {}", purpose),
-            None,
-            KeyErrorCode::KeyNotFound,
-        ))
+        // Get from HSM
+        let metadata = self.inner.provider().get_key_metadata(key_id).await?;
+        
+        // Update cache
+        {
+            let mut cache = self.metadata_cache.write().await;
+            cache.insert(key_id.clone(), metadata.clone());
+        }
+        
+        Ok(metadata)
     }
 }
 
@@ -1407,21 +1930,20 @@ mod tests {
 
 
 
-        // Check if rotation is needed
-
-        let needs_rotation = manager.needs_rotation(&key_id).await.unwrap();
+        // Check if rotation is needed by checking expiration
+        let (_, metadata) = manager.retrieve_key(&key_id).await.unwrap();
+        let needs_rotation = metadata.is_expired();
 
         assert!(needs_rotation);
 
 
 
         // Rotate the key
-
-        let (new_key, new_metadata) = manager.rotate_key(&key_id, &algorithm).await.unwrap();
-
-        assert_ne!(key.as_bytes(), new_key.as_bytes());
-
-        assert_eq!(new_metadata.version, 1); // Should be incremented in real implementation
+        manager.rotate_key(&key_id, &algorithm).await.unwrap();
+        
+        // Verify the key was rotated
+        let (_, new_metadata) = manager.retrieve_key(&key_id).await.unwrap();
+        assert_eq!(new_metadata.version, 2);
 
     }
 

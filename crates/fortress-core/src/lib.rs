@@ -190,6 +190,10 @@ pub mod field_encryption_manager;
 
 mod policy_test;
 
+#[cfg(test)]
+
+mod key_rotation_test;
+
 
 
 /// Re-export commonly used types
@@ -204,7 +208,7 @@ pub mod prelude {
 
     };
 
-    pub use crate::key::{KeyManager, KeyId, KeyMetadata};
+    pub use crate::key::{KeyManager, KeyId, KeyMetadata, SmartKeyRotationScheduler, RotationInterval, RotationMetrics};
 
     pub use crate::storage::StorageBackend;
 
