@@ -201,6 +201,22 @@ pub mod simple_backup_manager;
 
 pub mod aes256gcm_wrapper;
 
+/// Key database management for persistent key storage
+
+pub mod key_database;
+
+/// Key preloading system for high-performance key access
+
+pub mod key_preloader;
+
+/// High-performance in-memory key cache with LRU eviction
+
+pub mod key_cache;
+
+/// Database-backed key manager with preloading and caching
+
+pub mod database_key_manager;
+
 
 
 #[cfg(test)]
@@ -277,6 +293,25 @@ pub mod prelude {
     pub use crate::performance_profile::{
         PerformanceProfile, PerformanceProfileConfig, ProfileManager, ResourceLimits,
         EncryptionSettings, StorageSettings, NetworkSettings, SystemInfo, SyncMode,
+    };
+
+    pub use crate::key_database::{
+        KeyDatabase, KeyDatabaseConfig, KeyDatabaseStats, KeyDatabaseBackend,
+        SqliteKeyDatabase, create_key_database
+    };
+
+    pub use crate::key_preloader::{
+        KeyPreloader, KeyPreloadConfig, PreloadStrategy, KeyAccessStats,
+        PreloadStats
+    };
+
+    pub use crate::key_cache::{
+        KeyCache, KeyCacheConfig, CacheStats
+    };
+
+    pub use crate::database_key_manager::{
+        DatabaseKeyManager, DatabaseKeyManagerConfig, KeyManagerMetrics,
+        DatabaseKeyManagerStats
     };
 
 }

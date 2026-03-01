@@ -211,6 +211,14 @@ pub enum KeyErrorCode {
     /// Provider error
     #[error("Provider error")]
     ProviderError,
+    
+    /// Storage error
+    #[error("Storage error")]
+    StorageError,
+    
+    /// Serialization error
+    #[error("Serialization error")]
+    SerializationError,
 }
 
 /// Storage error codes

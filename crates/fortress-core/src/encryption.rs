@@ -567,6 +567,14 @@ impl SecureKey {
 
     }
 
+    /// Create a secure key from bytes
+
+    pub fn from_bytes(bytes: &[u8]) -> Self {
+
+        Self { key: Bytes::copy_from_slice(bytes) }
+
+    }
+
 
 
     /// Get the key bytes
@@ -574,6 +582,14 @@ impl SecureKey {
     pub fn as_bytes(&self) -> &[u8] {
 
         &self.key
+
+    }
+
+    /// Get the key bytes as a Vec<u8>
+
+    pub fn to_vec(&self) -> Vec<u8> {
+
+        self.key.to_vec()
 
     }
 

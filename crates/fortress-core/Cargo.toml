@@ -112,6 +112,9 @@ google-cloud-auth = { version = "0.13", optional = true }
 # Additional dependencies for backup system
 tempfile = "3.8"
 
+# Database dependencies
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite", "chrono", "uuid", "json", "migrate"] }
+
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 proptest = "1.4"
@@ -124,6 +127,7 @@ tokio-test = "0.4"
 default = ["std"]
 std = []
 cloud-storage = ["aws-sdk-s3", "azure_storage", "azure_storage_blobs", "azure_identity", "google-cloud-storage", "google-cloud-auth"]
+postgres = ["sqlx/postgres"]
 simd = []
 hardware-acceleration = ["ring/std"]
 fips = []
