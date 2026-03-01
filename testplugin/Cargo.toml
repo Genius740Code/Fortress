@@ -1,0 +1,13 @@
+[package]
+name = "TestPlugin"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+fortress-core = { path = "../../crates/fortress-core" }
+tokio = { version = "1.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+async-trait = "0.1"

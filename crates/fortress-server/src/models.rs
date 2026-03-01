@@ -157,6 +157,9 @@ pub struct FieldEncryptionMetadata {
     pub size_bytes: u64,
 }
 
+/// Re-export from fortress_core to avoid conflicts
+pub use fortress_core::field_encryption::FieldEncryptionMetadata as CoreFieldEncryptionMetadata;
+
 /// Data retrieval request
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RetrieveRequest {

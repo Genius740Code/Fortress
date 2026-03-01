@@ -847,7 +847,7 @@ pub fn create_trace_layer() -> impl Layer<axum::body::Body> {
         .make_span_with(|request: &Request<_>| {
             tracing::info_span!(
                 "http_request",
-                method = %request.method(),
+                method = %request.method().as_str(),
                 uri = %request.uri(),
                 version = ?request.version(),
             )

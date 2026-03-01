@@ -8,6 +8,7 @@ use crate::models::{HealthResponse, HealthStatus, ComponentHealth};
 use crate::error::{ServerError, ServerResult};
 use chrono::{DateTime, Utc};
 use fortress_core::prelude::*;
+use fortress_core::encryption::PerformanceProfile;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};

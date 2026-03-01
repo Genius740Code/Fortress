@@ -34,7 +34,7 @@ pub struct StorageRecord {
 }
 
 /// Query parameters for storage queries
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct QueryParams {
     pub tenant_id: Option<String>,
     pub pagination: PaginationParams,

@@ -1,6 +1,6 @@
 # Fortress 🔐
 
-A highly customizable, secure database system built in Rust that combines the developer experience of **Turnkey** with the enterprise security capabilities of **HashiCorp Vault** - but with unprecedented customization and performance.
+A highly customizable, secure database system built in Rust that combines **Turnkey's simplicity** with **HashiCorp Vault's enterprise security** - plus unprecedented customization and performance.
 
 > **Think of Fortress as:** Turnkey's simplicity + Vault's security + Your custom encryption rules
 
@@ -199,18 +199,19 @@ compression = true
 checksum = "sha256"
 
 [api]
-rest_port = 8080
-grpc_port = 50051
+rest_port = 8083
+grpc_port = 50054
 enable_wasm = true
 ```
 
 ## 📚 Documentation
 
-- [Future Plans & Roadmap](docs/FUTURE_PLANS.md)
-- [Architecture Details](docs/ARCHITECTURE.md)
-- [API Reference](docs/API.md)
-- [Configuration Guide](docs/CONFIGURATION.md)
-- [Security Whitepaper](docs/SECURITY.md)
+- [📋 Architecture Details](docs/ARCHITECTURE.md)
+- [🔧 Configuration Guide](docs/CONFIGURATION.md)
+- [📡 API Reference](https://docs.fortress-db.com/api)
+- [🛡️ Security Whitepaper](docs/SECURITY.md)
+- [🗺️ Future Plans & Roadmap](docs/FUTURE_PLANS.md)
+- [📖 Fortress Roadmap](docs/FORTRESS_ROADMAP.md)
 
 ## 🚀 Getting Started
 
@@ -264,67 +265,82 @@ fortress table create sessions \
 
 ### Rust Library
 ```rust
-use fortress::{Fortress, Config};
+use fortress_core::prelude::*;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = Config::from_file("fortress.toml")?;
-    let db = Fortress::connect(config).await?;
+async fn main() -> Result<()> {
+    let algorithm = Aegis256::new();
+    let key_manager = KeyManager::new();
+    let key = key_manager.generate_key(&algorithm)?;
     
-    // Insert encrypted data
-    db.insert("users", &json!({
-        "name": "Alice",
-        "email": "alice@example.com",
-        "password": "secret123"
-    })).await?;
+    let plaintext = b"Hello, Fortress!";
+    let ciphertext = algorithm.encrypt(plaintext, &key)?;
+    let decrypted = algorithm.decrypt(&ciphertext, &key)?;
     
-    // Query automatically decrypted data
-    let results = db.query("SELECT name, email FROM users").await?;
-    
+    assert_eq!(plaintext, decrypted);
     Ok(())
 }
 ```
 
 ### REST API
 ```bash
+# Start server
+fortress server start --port 8083
+
 # Insert data
-curl -X POST http://localhost:8080/api/v1/users \
+curl -X POST http://localhost:8083/data \
   -H "Content-Type: application/json" \
-  -d '{"name": "Bob", "email": "bob@example.com"}'
+  -d '{"data": {"name": "Alice"}, "algorithm": "aegis256"}'
 
 # Query data
-curl http://localhost:8080/api/v1/users \
-  -H "Accept: application/json"
+curl http://localhost:8083/data/{id}
 ```
 
 ## 🧪 Development
 
+### Prerequisites
+- Rust 1.70+
+- Git
+
+### Setup
+```bash
+git clone https://github.com/Genius740Code/Fortress.git
+cd Fortress
+cargo build
+cargo test
+```
+
 ### Running Tests
 ```bash
+# Run all tests
 cargo test
+
+# Run integration tests
+cargo test --test integration_tests
+
+# Run with coverage
+cargo tarpaulin --out Html
 ```
 
 ### Benchmarks
 ```bash
+# Run performance benchmarks
 cargo bench
-```
 
-### Security Audit
-```bash
-cargo audit
+# View benchmark reports
+open target/criterion/report/index.html
 ```
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md).
 
-### Development Setup
-```bash
-git clone https://github.com/fortress-db/fortress.git
-cd fortress
-cargo build
-cargo test
-```
+### Areas for Contribution
+- 🚀 Performance optimizations
+- 🔐 New encryption algorithms
+- 📚 Documentation improvements
+- 🐛 Bug fixes and testing
+- 🔌 Plugin development
 
 ## 📄 License
 
@@ -379,6 +395,3 @@ See [Future Plans](docs/FUTURE_PLANS.md) for detailed timeline.
 - Custom encryption rules per data type
 - Ultra-high performance
 - Zero-config setup with advanced options
-#   F o r t r e s s 
- 
- 
