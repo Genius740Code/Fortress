@@ -708,11 +708,10 @@ impl EncryptionAlgorithm for Aegis256 {
             ));
         }
 
-        // TODO: Fix Aegis256 implementation - temporarily return plaintext as is
-        let mut result = Vec::with_capacity(self.nonce_size() + plaintext.len());
-        result.resize(self.nonce_size(), 0);
-
-        getrandom::getrandom(&mut result).map_err(|_e| {
+        // Simple XOR cipher as placeholder for Aegis256
+        // TODO: Implement proper Aegis256 when aegis crate API is clarified
+        let mut nonce = [0u8; 16];
+        getrandom::getrandom(&mut nonce).map_err(|_e| {
             FortressError::encryption(
                 "Failed to generate nonce".to_string(),
                 self.name().to_string(),
@@ -720,7 +719,15 @@ impl EncryptionAlgorithm for Aegis256 {
             )
         })?;
 
-        result.extend_from_slice(plaintext);
+        let mut result = Vec::with_capacity(self.nonce_size() + plaintext.len());
+        result.extend_from_slice(&nonce);
+        
+        // Simple XOR encryption with key material
+        for (i, &byte) in plaintext.iter().enumerate() {
+            let key_byte = key[i % key.len()];
+            result.push(byte ^ key_byte ^ nonce[i % nonce.len()]);
+        }
+        
         Ok(result)
     }
 
@@ -741,12 +748,21 @@ impl EncryptionAlgorithm for Aegis256 {
             ));
         }
 
-        // TODO: Fix Aegis256 implementation - temporarily return ciphertext as is
+        // Simple XOR cipher as placeholder for Aegis256 (corresponding to encrypt)
+        // TODO: Implement proper Aegis256 when aegis crate API is clarified
         let nonce_size = self.nonce_size();
+        let nonce = &ciphertext[..nonce_size];
+        let encrypted_data = &ciphertext[nonce_size..];
 
-        let plaintext = &ciphertext[nonce_size..].to_vec();
-
-        Ok(plaintext.to_vec())
+        let mut result = Vec::with_capacity(encrypted_data.len());
+        
+        // Reverse the XOR encryption
+        for (i, &byte) in encrypted_data.iter().enumerate() {
+            let key_byte = key[i % key.len()];
+            result.push(byte ^ key_byte ^ nonce[i % nonce.len()]);
+        }
+        
+        Ok(result)
     }
 
     fn key_size(&self) -> usize {

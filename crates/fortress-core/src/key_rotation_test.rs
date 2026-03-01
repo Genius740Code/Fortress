@@ -712,10 +712,9 @@ mod tests {
         // Simulate concurrent access during rotation
         let key_manager_clone = key_manager.clone();
         let key_id_clone = key_id.clone();
-        let algorithm_clone = algorithm.clone();
         
         let rotation_task = tokio::spawn(async move {
-            key_manager_clone.rotate_key_with_zero_downtime(&key_id_clone, algorithm_clone.as_ref()).await
+            key_manager_clone.rotate_key_with_zero_downtime(&key_id_clone, algorithm.as_ref()).await
         });
         
         // Simulate read operations during rotation

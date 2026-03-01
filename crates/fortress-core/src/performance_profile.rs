@@ -33,6 +33,12 @@ impl fmt::Display for PerformanceProfile {
     }
 }
 
+impl Default for PerformanceProfile {
+    fn default() -> Self {
+        PerformanceProfile::Balanced
+    }
+}
+
 /// Resource allocation limits
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResourceLimits {

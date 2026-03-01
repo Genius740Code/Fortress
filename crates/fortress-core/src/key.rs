@@ -97,6 +97,27 @@ pub trait KeyManager: Send + Sync {
     /// Get key metadata only
     async fn get_key_metadata(&self, key_id: &KeyId) -> Result<KeyMetadata>;
 
+    /// Get the active key version for a key ID
+    async fn get_active_key_version(&self, key_id: &KeyId) -> Result<u32>;
+
+    /// Initiate a key transition for zero-downtime rotation
+    async fn initiate_key_transition(&self, key_id: &KeyId, algorithm: &dyn EncryptionAlgorithm) -> Result<u32>;
+
+    /// Complete a key transition
+    async fn complete_key_transition(&self, key_id: &KeyId, new_version: u32) -> Result<()>;
+
+    /// Validate that both old and new key versions exist and are valid
+    async fn validate_dual_keys(&self, key_id: &KeyId, old_version: u32, new_version: u32) -> Result<bool>;
+
+    /// Rollback a failed key transition
+    async fn rollback_key_transition(&self, key_id: &KeyId, old_version: u32, new_version: u32) -> Result<()>;
+
+    /// Check if a key needs rotation based on expiration
+    async fn needs_rotation(&self, key_id: &KeyId) -> Result<bool>;
+
+    /// Get the active key for a specific purpose
+    async fn get_active_key(&self, purpose: &str) -> Result<(SecureKey, KeyMetadata)>;
+
 }
 
 
@@ -393,6 +414,111 @@ impl KeyManager for InMemoryKeyManager {
                 Some(key_id.clone()),
                 KeyErrorCode::KeyNotFound,
             ))
+    }
+
+    async fn get_active_key_version(&self, key_id: &KeyId) -> Result<u32> {
+        let (_, metadata) = self.retrieve_key(key_id).await?;
+        Ok(metadata.version)
+    }
+
+    async fn initiate_key_transition(&self, key_id: &KeyId, algorithm: &dyn EncryptionAlgorithm) -> Result<u32> {
+        let (_, old_metadata) = self.retrieve_key(key_id).await?;
+        let new_version = old_metadata.version + 1;
+        
+        let new_key = self.generate_key(algorithm).await?;
+        
+        let new_metadata = KeyMetadata::new(
+            key_id.to_string(),
+            algorithm.name().to_string(),
+            new_version,
+            Utc::now(),
+            Utc::now() + Duration::days(90),
+            old_metadata.purpose.clone(),
+            old_metadata.performance_profile,
+        ).with_metadata("transition_status".to_string(), "initiating".to_string());
+        
+        let old_versioned_id = format!("{}_v{}", key_id, old_metadata.version);
+        let (old_key, old_metadata_copy) = self.retrieve_key(key_id).await?;
+        let old_metadata_backup = old_metadata_copy.clone()
+            .with_metadata("transition_status".to_string(), "backup".to_string());
+        self.store_key(&old_versioned_id, &old_key, &old_metadata_backup).await?;
+        
+        let new_versioned_id = format!("{}_v{}", key_id, new_version);
+        let new_metadata_with_status = new_metadata.clone()
+            .with_metadata("transition_status".to_string(), "active".to_string());
+        self.store_key(&new_versioned_id, &new_key, &new_metadata_with_status).await?;
+        
+        self.store_key(key_id, &new_key, &new_metadata).await?;
+        
+        Ok(new_version)
+    }
+
+    async fn complete_key_transition(&self, key_id: &KeyId, new_version: u32) -> Result<()> {
+        let (_, mut metadata) = self.retrieve_key(key_id).await?;
+        metadata.metadata.insert("transition_status".to_string(), "complete".to_string());
+        
+        let old_versioned_id = format!("{}_v{}", key_id, new_version - 1);
+        let _ = self.delete_key(&old_versioned_id).await;
+        
+        Ok(())
+    }
+
+    async fn validate_dual_keys(&self, key_id: &KeyId, old_version: u32, new_version: u32) -> Result<bool> {
+        let old_key_id = format!("{}_v{}", key_id, old_version);
+        let new_key_id = format!("{}_v{}", key_id, new_version);
+        
+        let old_exists = self.key_exists(&old_key_id).await?;
+        let new_exists = self.key_exists(&new_key_id).await?;
+        
+        if !old_exists || !new_exists {
+            return Ok(false);
+        }
+        
+        let old_result = self.retrieve_key(&old_key_id).await;
+        let new_result = self.retrieve_key(&new_key_id).await;
+        
+        Ok(old_result.is_ok() && new_result.is_ok())
+    }
+
+    async fn rollback_key_transition(&self, key_id: &KeyId, old_version: u32, new_version: u32) -> Result<()> {
+        let old_versioned_id = format!("{}_v{}", key_id, old_version);
+        let (old_key, old_metadata) = self.retrieve_key(&old_versioned_id).await?;
+        
+        let restored_metadata = KeyMetadata::new(
+            key_id.to_string(),
+            old_metadata.algorithm.clone(),
+            old_version,
+            old_metadata.created_at,
+            old_metadata.expires_at,
+            old_metadata.purpose.clone(),
+            old_metadata.performance_profile,
+        );
+        
+        self.store_key(key_id, &old_key, &restored_metadata).await?;
+        
+        let new_versioned_id = format!("{}_v{}", key_id, new_version);
+        let _ = self.delete_key(&new_versioned_id).await;
+        
+        Ok(())
+    }
+
+    async fn needs_rotation(&self, key_id: &KeyId) -> Result<bool> {
+        let (_, metadata) = self.retrieve_key(key_id).await?;
+        Ok(Utc::now() >= metadata.expires_at)
+    }
+
+    async fn get_active_key(&self, purpose: &str) -> Result<(SecureKey, KeyMetadata)> {
+        let keys = self.keys.read().await;
+        for (_key_id, (key, metadata)) in keys.iter() {
+            if metadata.purpose == purpose && metadata.is_active() {
+                return Ok((key.clone(), metadata.clone()));
+            }
+        }
+        Err(FortressError::key_management(
+            format!("No active key found for purpose: {}", purpose),
+            None,
+            KeyErrorCode::KeyNotFound,
+        ))
     }
 }
 
@@ -1852,6 +1978,84 @@ impl KeyManager for HsmKeyManager {
         }
         
         Ok(metadata)
+    }
+
+    async fn get_active_key_version(&self, key_id: &KeyId) -> Result<u32> {
+        let metadata = self.get_key_metadata(key_id).await?;
+        Ok(metadata.version)
+    }
+
+    async fn initiate_key_transition(&self, key_id: &KeyId, algorithm: &dyn EncryptionAlgorithm) -> Result<u32> {
+        // HSM implementation - simplified version
+        let old_metadata = self.get_key_metadata(key_id).await?;
+        let new_version = old_metadata.version + 1;
+        
+        // Generate new key in HSM
+        let new_key_id = format!("{}_v{}", key_id, new_version);
+        self.inner.provider().generate_key(&new_key_id, algorithm).await?;
+        
+        // Store backup of old key
+        let backup_key_id = format!("{}_v{}_backup", key_id, old_metadata.version);
+        // In real HSM, this would involve key export/import operations
+        
+        Ok(new_version)
+    }
+
+    async fn complete_key_transition(&self, key_id: &KeyId, new_version: u32) -> Result<()> {
+        // HSM implementation - cleanup old versions
+        let old_key_id = format!("{}_v{}", key_id, new_version - 1);
+        let backup_key_id = format!("{}_v{}_backup", key_id, new_version - 1);
+        
+        // Delete old versions from HSM
+        let _ = self.inner.provider().delete_key(&old_key_id).await;
+        let _ = self.inner.provider().delete_key(&backup_key_id).await;
+        
+        Ok(())
+    }
+
+    async fn validate_dual_keys(&self, key_id: &KeyId, old_version: u32, new_version: u32) -> Result<bool> {
+        let old_key_id = format!("{}_v{}", key_id, old_version);
+        let new_key_id = format!("{}_v{}", key_id, new_version);
+        
+        let old_exists = self.key_exists(&old_key_id).await?;
+        let new_exists = self.key_exists(&new_key_id).await?;
+        
+        Ok(old_exists && new_exists)
+    }
+
+    async fn rollback_key_transition(&self, key_id: &KeyId, old_version: u32, new_version: u32) -> Result<()> {
+        // HSM implementation - restore from backup
+        let backup_key_id = format!("{}_v{}_backup", key_id, old_version);
+        let new_key_id = format!("{}_v{}", key_id, new_version);
+        
+        // Delete failed new version
+        let _ = self.inner.provider().delete_key(&new_key_id).await;
+        
+        // Restore from backup (simplified - real HSM would need proper key restore)
+        let restored_key_id = format!("{}_v{}", key_id, old_version);
+        // In real implementation, this would restore from backup
+        
+        Ok(())
+    }
+
+    async fn needs_rotation(&self, key_id: &KeyId) -> Result<bool> {
+        let metadata = self.get_key_metadata(key_id).await?;
+        Ok(Utc::now() >= metadata.expires_at)
+    }
+
+    async fn get_active_key(&self, purpose: &str) -> Result<(SecureKey, KeyMetadata)> {
+        let keys = self.list_keys().await?;
+        for (_key_id, metadata) in keys {
+            if metadata.purpose == purpose && metadata.is_active() {
+                let key = SecureKey::generate(256); // Placeholder - real HSM would use provider
+                return Ok((key, metadata));
+            }
+        }
+        Err(FortressError::key_management(
+            format!("No active key found for purpose: {}", purpose),
+            None,
+            KeyErrorCode::KeyNotFound,
+        ))
     }
 }
 

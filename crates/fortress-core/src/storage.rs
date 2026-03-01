@@ -16,6 +16,14 @@ use aws_config::from_env;
 #[cfg(feature = "cloud-storage")]
 use aws_sdk_s3::{Client as S3Client, config::Region as S3Region};
 
+// Azure storage imports (only available with cloud-storage feature)
+#[cfg(feature = "cloud-storage")]
+use azure_storage::BlobServiceClient;
+#[cfg(feature = "cloud-storage")]
+use azure_storage_blobs::prelude::*;
+#[cfg(feature = "cloud-storage")]
+use azure_identity::DefaultAzureCredential;
+
 /// Trait for storage backends
 ///
 /// This trait defines the interface that all storage backends must implement.
@@ -631,65 +639,142 @@ impl StorageBackend for S3Storage {
     }
 }
 
-/// Azure Blob storage backend (placeholder implementation)
+/// Azure Blob storage backend
 #[derive(Debug)]
+#[cfg(feature = "cloud-storage")]
 pub struct AzureBlobStorage {
+    client: BlobServiceClient,
     container: String,
 }
 
+#[cfg(feature = "cloud-storage")]
 impl AzureBlobStorage {
     /// Create a new Azure Blob storage backend
-    pub async fn new(_container: String, _account: String) -> Result<Self> {
-        // TODO: Implement proper Azure Blob storage integration
-        // For now, return a placeholder to satisfy compilation
-        Err(FortressError::storage(
-            "Azure Blob storage not yet fully implemented - API integration needed",
-            "azure_blob",
-            StorageErrorCode::BackendNotAvailable,
-        ))
+    pub async fn new(container: String, account: String) -> Result<Self> {
+        // Create Azure credential and client
+        let credential = DefaultAzureCredential::new()
+            .map_err(|e| FortressError::storage(
+                format!("Failed to create Azure credential: {}", e),
+                "azure_blob",
+                StorageErrorCode::AuthenticationError,
+            ))?;
+
+        let account_url = format!("https://{}.blob.core.windows.net", account);
+        let client = BlobServiceClient::new(&account_url, credential)
+            .map_err(|e| FortressError::storage(
+                format!("Failed to create Azure Blob client: {}", e),
+                "azure_blob",
+                StorageErrorCode::ConnectionFailed,
+            ))?;
+
+        Ok(AzureBlobStorage {
+            client,
+            container,
+        })
     }
 }
 
 #[async_trait]
+#[cfg(feature = "cloud-storage")]
 impl StorageBackend for AzureBlobStorage {
-    async fn put(&self, _key: &str, _value: &[u8]) -> Result<()> {
-        Err(FortressError::storage(
-            "Azure Blob storage not implemented",
-            "azure_blob",
-            StorageErrorCode::BackendNotAvailable,
-        ))
+    async fn put(&self, key: &str, value: &[u8]) -> Result<()> {
+        let container_client = self.client.container_client(&self.container);
+        let blob_client = container_client.blob_client(key);
+        
+        blob_client
+            .put_block_blob(value)
+            .await
+            .map_err(|e| FortressError::storage(
+                format!("Failed to put blob {}: {}", key, e),
+                "azure_blob",
+                StorageErrorCode::WriteError,
+            ))?;
+        
+        Ok(())
     }
 
-    async fn get(&self, _key: &str) -> Result<Option<Vec<u8>>> {
-        Err(FortressError::storage(
-            "Azure Blob storage not implemented",
-            "azure_blob",
-            StorageErrorCode::BackendNotAvailable,
-        ))
+    async fn get(&self, key: &str) -> Result<Option<Vec<u8>>> {
+        let container_client = self.client.container_client(&self.container);
+        let blob_client = container_client.blob_client(key);
+        
+        match blob_client.get().await {
+            Ok(response) => {
+                let data = response.data.to_vec();
+                Ok(Some(data))
+            }
+            Err(err) => {
+                if err.to_string().contains("BlobNotFound") {
+                    Ok(None)
+                } else {
+                    Err(FortressError::storage(
+                        format!("Failed to get blob {}: {}", key, err),
+                        "azure_blob",
+                        StorageErrorCode::ReadError,
+                    ))
+                }
+            }
+        }
     }
 
-    async fn delete(&self, _key: &str) -> Result<()> {
-        Err(FortressError::storage(
-            "Azure Blob storage not implemented",
-            "azure_blob",
-            StorageErrorCode::BackendNotAvailable,
-        ))
+    async fn delete(&self, key: &str) -> Result<()> {
+        let container_client = self.client.container_client(&self.container);
+        let blob_client = container_client.blob_client(key);
+        
+        blob_client
+            .delete()
+            .await
+            .map_err(|e| FortressError::storage(
+                format!("Failed to delete blob {}: {}", key, e),
+                "azure_blob",
+                StorageErrorCode::DeleteError,
+            ))?;
+        
+        Ok(())
     }
 
-    async fn exists(&self, _key: &str) -> Result<bool> {
-        Err(FortressError::storage(
-            "Azure Blob storage not implemented",
-            "azure_blob",
-            StorageErrorCode::BackendNotAvailable,
-        ))
+    async fn exists(&self, key: &str) -> Result<bool> {
+        let container_client = self.client.container_client(&self.container);
+        let blob_client = container_client.blob_client(key);
+        
+        match blob_client.get_properties().await {
+            Ok(_) => Ok(true),
+            Err(err) => {
+                if err.to_string().contains("BlobNotFound") {
+                    Ok(false)
+                } else {
+                    Err(FortressError::storage(
+                        format!("Failed to check blob existence {}: {}", key, err),
+                        "azure_blob",
+                        StorageErrorCode::ReadError,
+                    ))
+                }
+            }
+        }
     }
 
-    async fn list_prefix(&self, _prefix: &str) -> Result<Vec<String>> {
-        Err(FortressError::storage(
-            "Azure Blob storage not implemented",
-            "azure_blob",
-            StorageErrorCode::BackendNotAvailable,
-        ))
+    async fn list_prefix(&self, prefix: &str) -> Result<Vec<String>> {
+        let container_client = self.client.container_client(&self.container);
+        
+        let mut stream = container_client
+            .list_blobs()
+            .prefix(prefix)
+            .into_stream();
+        
+        let mut keys = Vec::new();
+        
+        while let Some(blob_response) = stream.next().await {
+            let blob_response = blob_response.map_err(|e| FortressError::storage(
+                format!("Failed to list blobs: {}", e),
+                "azure_blob",
+                StorageErrorCode::ReadError,
+            ))?;
+            
+            for blob in blob_response.blobs.blobs {
+                keys.push(blob.name.clone());
+            }
+        }
+        
+        Ok(keys)
     }
 
     fn metadata(&self) -> StorageMetadata {
@@ -708,11 +793,26 @@ impl StorageBackend for AzureBlobStorage {
     }
 
     async fn health_check(&self) -> Result<HealthStatus> {
-        Err(FortressError::storage(
-            "Azure Blob storage not implemented",
-            "azure_blob",
-            StorageErrorCode::BackendNotAvailable,
-        ))
+        let container_client = self.client.container_client(&self.container);
+        
+        match container_client.get_properties().await {
+            Ok(_) => Ok(HealthStatus {
+                is_healthy: true,
+                message: "Azure Blob storage is healthy".to_string(),
+                last_check: chrono::Utc::now(),
+                response_time_ms: 0, // Would need to measure actual response time
+                details: {
+                    let mut details = HashMap::new();
+                    details.insert("container".to_string(), self.container.clone());
+                    details
+                },
+            }),
+            Err(err) => Err(FortressError::storage(
+                format!("Azure Blob health check failed: {}", err),
+                "azure_blob",
+                StorageErrorCode::ConnectionFailed,
+            )),
+        }
     }
 }
 
@@ -766,6 +866,10 @@ pub async fn create_storage_backend(config: StorageConfig) -> Result<Box<dyn Sto
         StorageBackendType::S3 { bucket, region, prefix } => {
             Ok(Box::new(S3Storage::new(bucket, region, prefix).await?))
         }
+        #[cfg(feature = "cloud-storage")]
+        StorageBackendType::AzureBlob { container, account } => {
+            Ok(Box::new(AzureBlobStorage::new(container, account).await?))
+        }
         #[cfg(not(feature = "cloud-storage"))]
         StorageBackendType::S3 { .. } => {
             Err(FortressError::storage(
@@ -774,8 +878,13 @@ pub async fn create_storage_backend(config: StorageConfig) -> Result<Box<dyn Sto
                 StorageErrorCode::BackendNotAvailable,
             ))
         }
-        StorageBackendType::AzureBlob { container, account } => {
-            Ok(Box::new(AzureBlobStorage::new(container, account).await?))
+        #[cfg(not(feature = "cloud-storage"))]
+        StorageBackendType::AzureBlob { .. } => {
+            Err(FortressError::storage(
+                "Azure Blob storage backend requires 'cloud-storage' feature to be enabled",
+                "azure_blob",
+                StorageErrorCode::BackendNotAvailable,
+            ))
         }
     }
 }

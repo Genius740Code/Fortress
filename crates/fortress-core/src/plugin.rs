@@ -97,11 +97,17 @@ pub trait Plugin: Send + Sync {
     /// Get plugin metadata
     fn metadata(&self) -> &PluginMetadata;
     
-    /// Initialize the plugin with the given context
+    /// Initialize plugin with given context
     async fn initialize(&self, context: PluginContext) -> Result<()>;
     
-    /// Execute the plugin with the given input
+    /// Execute plugin with given input
     async fn execute(&self, input: PluginInput) -> Result<PluginResult>;
+    
+    /// Execute plugin with given input and context
+    async fn execute_with_context(&self, input: PluginInput, context: &PluginContext) -> Result<PluginResult> {
+        // Default implementation just calls execute without context
+        self.execute(input).await
+    }
     
     /// Cleanup resources when the plugin is being unloaded
     async fn cleanup(&self) -> Result<()>;
@@ -139,6 +145,7 @@ pub struct PluginHealth {
 pub struct PluginRegistry {
     plugins: Arc<RwLock<HashMap<String, Arc<dyn Plugin>>>>,
     metadata: Arc<RwLock<HashMap<String, PluginMetadata>>>,
+    plugin_contexts: Arc<RwLock<HashMap<String, PluginContext>>>,
 }
 
 impl std::fmt::Debug for PluginRegistry {
@@ -146,6 +153,7 @@ impl std::fmt::Debug for PluginRegistry {
         f.debug_struct("PluginRegistry")
             .field("plugin_count", &self.plugins.try_read().map(|p| p.len()).unwrap_or(0))
             .field("metadata_count", &self.metadata.try_read().map(|m| m.len()).unwrap_or(0))
+            .field("plugin_contexts_count", &self.plugin_contexts.try_read().map(|p| p.len()).unwrap_or(0))
             .finish()
     }
 }
@@ -156,6 +164,7 @@ impl PluginRegistry {
         Self {
             plugins: Arc::new(RwLock::new(HashMap::new())),
             metadata: Arc::new(RwLock::new(HashMap::new())),
+            plugin_contexts: Arc::new(RwLock::new(HashMap::new())),
         }
     }
     
@@ -188,6 +197,18 @@ impl PluginRegistry {
             .get(plugin_id)
             .cloned()
             .ok_or_else(|| FortressError::plugin(format!("Plugin '{}' not found", plugin_id)))
+    }
+    
+    /// Get plugin context by ID
+    pub async fn get_plugin_context(&self, plugin_id: &str) -> Option<PluginContext> {
+        let contexts = self.plugin_contexts.read().await;
+        contexts.get(plugin_id).cloned()
+    }
+    
+    /// Set plugin context
+    pub async fn set_plugin_context(&self, plugin_id: &str, context: PluginContext) {
+        let mut contexts = self.plugin_contexts.write().await;
+        contexts.insert(plugin_id.to_string(), context);
     }
     
     /// List all registered plugins
@@ -225,9 +246,16 @@ impl PluginRegistry {
             plugins.remove(plugin_id);
         }
         
+        // Remove from metadata
         {
             let mut metadata = self.metadata.write().await;
             metadata.remove(plugin_id);
+        }
+        
+        // Remove from contexts
+        {
+            let mut contexts = self.plugin_contexts.write().await;
+            contexts.remove(plugin_id);
         }
         
         Ok(())
@@ -284,8 +312,8 @@ impl PluginManager {
             storage_access: true,
         };
         
-        // Initialize plugin
-        plugin.initialize(context).await?;
+        // Store plugin context in registry
+        self.registry.set_plugin_context(&plugin_id, context).await;
         
         // Register plugin
         self.registry.register_plugin(plugin).await?;
@@ -350,7 +378,6 @@ macro_rules! fortress_plugin {
         struct $struct_name {
             $($field_name: $field_type,)*
             metadata: $crate::plugin::PluginMetadata,
-            context: Option<$crate::plugin::PluginContext>,
         }
         
         impl $struct_name {
@@ -366,7 +393,6 @@ macro_rules! fortress_plugin {
                         capabilities: vec![$($capability,)*],
                         config_schema: $config_schema,
                     },
-                    context: None,
                 }
             }
         }
@@ -377,8 +403,8 @@ macro_rules! fortress_plugin {
                 &self.metadata
             }
             
-            async fn initialize(&mut self, context: $crate::plugin::PluginContext) -> $crate::error::Result<()> {
-                self.context = Some(context);
+            async fn initialize(&self, _context: $crate::plugin::PluginContext) -> $crate::error::Result<()> {
+                // Context is handled by the plugin manager
                 Ok(())
             }
             
@@ -396,6 +422,21 @@ macro_rules! fortress_plugin {
                     message: "Plugin is healthy".to_string(),
                     last_check: chrono::Utc::now(),
                 })
+            }
+            
+            async fn execute(&self, input: $crate::plugin::PluginInput) -> $crate::error::Result<$crate::plugin::PluginResult> {
+                // Default implementation
+                self.execute_with_context(input, &$crate::plugin::PluginContext {
+                    config: std::collections::HashMap::new(),
+                    metadata: self.metadata.clone(),
+                    encryption_access: false,
+                    storage_access: false,
+                }).await
+            }
+            
+            async fn execute_with_context(&self, input: $crate::plugin::PluginInput, context: &$crate::plugin::PluginContext) -> $crate::error::Result<$crate::plugin::PluginResult> {
+                // Default implementation - can be overridden by specific plugins
+                self.execute(input).await
             }
         }
     };

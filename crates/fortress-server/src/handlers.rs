@@ -95,7 +95,8 @@ pub async fn store_data(
     // Get or generate encryption key
     let key_id = request.key_id.clone().unwrap_or_else(|| {
         let algorithm = Aegis256::new();
-        let key = state.key_manager.generate_key(&algorithm).unwrap();
+        let key = state.key_manager.generate_key(&algorithm)
+            .map_err(|e| ServerError::Core(e))?;
         key.id
     });
 
@@ -103,12 +104,15 @@ pub async fn store_data(
     let key = state.key_manager.get_key(&key_id)
         .map_err(|e| ServerError::Core(e))?;
 
-    // Encrypt the data
+    // Encrypt data
     let data_json = serde_json::to_string(&request.data)
         .map_err(|e| ServerError::serialization(e.to_string()))?;
     
     let plaintext = data_json.as_bytes();
-    let ciphertext = Aegis256::new().encrypt(plaintext, &key)
+    let ciphertext = match Aegis256::new().encrypt(plaintext, &key) {
+        Ok(ciphertext) => ciphertext,
+        Err(e) => return Err(ServerError::Core(e)),
+    };
         .map_err(|e| ServerError::Core(e))?;
 
     // Handle field-level encryption if specified
