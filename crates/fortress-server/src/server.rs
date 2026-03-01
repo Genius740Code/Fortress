@@ -19,7 +19,7 @@ use crate::prelude::*;
 use axum::{
     extract::DefaultBodyLimit,
     http::Method,
-    routing::{get, post, delete},
+    routing::{get, post, delete, put},
     Router,
     response::IntoResponse,
 };
@@ -125,11 +125,48 @@ impl FortressServer {
         let rate_limiter = self.rate_limiter.clone();
         let network_config = self.config.network.clone();
 
-        // Create base router with basic middleware
+        // Create base router with basic middleware and API v1 routes
         let mut router = Router::new()
+            // Health and metrics
             .route("/health", get(crate::handlers::health_check))
             .route("/metrics", get(crate::handlers::get_metrics))
             .route("/metrics/prometheus", get(crate::handlers::get_prometheus_metrics))
+            
+            // API v1 Database Management
+            .route("/api/v1/databases", post(crate::handlers::create_database))
+            .route("/api/v1/databases", get(crate::handlers::list_databases))
+            .route("/api/v1/databases/:name", get(crate::handlers::get_database))
+            .route("/api/v1/databases/:name", delete(crate::handlers::delete_database))
+            
+            // API v1 Table Management
+            .route("/api/v1/databases/:database/tables", post(crate::handlers::create_table))
+            .route("/api/v1/databases/:database/tables", get(crate::handlers::list_tables))
+            .route("/api/v1/databases/:database/tables/:table", get(crate::handlers::get_table_schema))
+            .route("/api/v1/databases/:database/tables/:table", delete(crate::handlers::drop_table))
+            
+            // API v1 Data Operations
+            .route("/api/v1/databases/:database/tables/:table/data", post(crate::handlers::insert_data))
+            .route("/api/v1/databases/:database/tables/:table/data", get(crate::handlers::query_data))
+            .route("/api/v1/databases/:database/tables/:table/bulk", post(crate::handlers::bulk_insert))
+            .route("/api/v1/databases/:database/tables/:table/data/:id", put(crate::handlers::update_data))
+            .route("/api/v1/databases/:database/tables/:table/data/:id", delete(crate::handlers::delete_data))
+            
+            // API v1 Query Operations
+            .route("/api/v1/databases/:database/query", post(crate::handlers::execute_query))
+            
+            // API v1 Encryption Management
+            .route("/api/v1/databases/:database/tables/:table/rotate-keys", post(crate::handlers::rotate_keys))
+            .route("/api/v1/databases/:database/tables/:table/rotate-keys-zero-downtime", post(crate::handlers::rotate_keys_zero_downtime))
+            .route("/api/v1/databases/:database/tables/:table/rotation-status", get(crate::handlers::get_rotation_status))
+            .route("/api/v1/databases/:database/tables/:table/encryption-metadata", get(crate::handlers::get_encryption_metadata))
+            
+            // Legacy routes for backward compatibility
+            .route("/data", post(crate::handlers::store_data))
+            .route("/data/:id", get(crate::handlers::retrieve_data))
+            .route("/data/:id", delete(crate::handlers::delete_data))
+            .route("/data", get(crate::handlers::list_data))
+            .route("/keys", post(crate::handlers::generate_key))
+            
             .layer(DefaultBodyLimit::max(self.config.network.max_body_size))
             .layer(create_cors_layer(&self.config.security.cors))
             .layer(create_timeout_layer(self.config.network.request_timeout));
@@ -137,7 +174,9 @@ impl FortressServer {
         // Add authentication routes
         router = router
             .route("/auth/login", post(crate::handlers::authenticate))
-            .route("/auth/refresh", post(crate::handlers::refresh_token));
+            .route("/auth/refresh", post(crate::handlers::refresh_token))
+            .route("/api/v1/auth/login", post(crate::handlers::authenticate))
+            .route("/api/v1/auth/refresh", post(crate::handlers::refresh_token));
 
         // Add API routes with authentication
         if self.config.features.auth_enabled {

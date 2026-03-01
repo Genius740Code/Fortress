@@ -444,6 +444,303 @@ pub struct RefreshTokenResponse {
     pub refresh_token: Option<String>,
 }
 
+// ==================== DATABASE MANAGEMENT MODELS ====================
+
+/// Create database request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateDatabaseRequest {
+    /// Database name
+    pub name: String,
+    /// Encryption algorithm
+    pub algorithm: String,
+    /// Key rotation interval
+    pub key_rotation_interval: String,
+    /// Storage path
+    pub storage_path: String,
+}
+
+/// Database response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatabaseResponse {
+    /// Database name
+    pub name: String,
+    /// Creation timestamp
+    pub created_at: DateTime<Utc>,
+    /// Encryption algorithm
+    pub algorithm: String,
+    /// Key rotation interval
+    pub key_rotation_interval: String,
+    /// Number of tables
+    pub tables_count: u32,
+    /// Database size in bytes
+    pub size_bytes: u64,
+}
+
+/// List databases response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ListDatabasesResponse {
+    /// List of databases
+    pub databases: Vec<DatabaseInfo>,
+    /// Total count
+    pub total_count: u64,
+}
+
+/// Database information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatabaseInfo {
+    /// Database name
+    pub name: String,
+    /// Creation timestamp
+    pub created_at: DateTime<Utc>,
+    /// Number of tables
+    pub tables_count: u32,
+    /// Database size in bytes
+    pub size_bytes: u64,
+}
+
+/// Operation delete response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OperationDeleteResponse {
+    /// Whether the operation was successful
+    pub deleted: bool,
+    /// Operation message
+    pub message: String,
+}
+
+// ==================== TABLE MANAGEMENT MODELS ====================
+
+/// Create table request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateTableRequest {
+    /// Table name
+    pub name: String,
+    /// Table columns
+    pub columns: Vec<ColumnDefinition>,
+    /// Table encryption profile
+    pub encryption: Option<String>,
+    /// Column-specific encryption
+    pub column_encryption: Option<HashMap<String, String>>,
+}
+
+/// Column definition
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ColumnDefinition {
+    /// Column name
+    pub name: String,
+    /// Column type
+    #[serde(rename = "type")]
+    pub column_type: String,
+    /// Whether it's a primary key
+    pub primary_key: Option<bool>,
+    /// Whether it's nullable
+    pub nullable: Option<bool>,
+    /// Encryption configuration
+    pub encryption: Option<String>,
+}
+
+/// Table response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TableResponse {
+    /// Table name
+    pub name: String,
+    /// Number of columns
+    pub columns: u32,
+    /// Number of rows
+    pub rows: u64,
+    /// Encryption profile
+    pub encryption: String,
+    /// Creation timestamp
+    pub created_at: DateTime<Utc>,
+}
+
+/// List tables response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ListTablesResponse {
+    /// List of tables
+    pub tables: Vec<TableInfo>,
+    /// Total count
+    pub total_count: u64,
+}
+
+/// Table information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TableInfo {
+    /// Table name
+    pub name: String,
+    /// Number of columns
+    pub columns: u32,
+    /// Number of rows
+    pub rows: u64,
+    /// Encryption profile
+    pub encryption: String,
+    /// Creation timestamp
+    pub created_at: DateTime<Utc>,
+}
+
+/// Table schema response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TableSchemaResponse {
+    /// Table name
+    pub name: String,
+    /// Table columns
+    pub columns: Vec<ColumnSchema>,
+    /// Encryption profile
+    pub encryption: String,
+}
+
+/// Column schema
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ColumnSchema {
+    /// Column name
+    pub name: String,
+    /// Column type
+    #[serde(rename = "type")]
+    pub column_type: String,
+    /// Whether it's a primary key
+    pub primary_key: bool,
+    /// Whether it's nullable
+    pub nullable: bool,
+    /// Whether it's encrypted
+    pub encrypted: bool,
+    /// Encryption algorithm (if encrypted)
+    pub encryption_algorithm: Option<String>,
+}
+
+// ==================== DATA OPERATIONS MODELS ====================
+
+/// Insert data request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InsertDataRequest {
+    /// Data to insert (JSON object)
+    #[serde(flatten)]
+    pub data: serde_json::Value,
+}
+
+/// Insert response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InsertResponse {
+    /// Inserted record ID
+    pub id: String,
+    /// Insert timestamp
+    pub inserted_at: DateTime<Utc>,
+    /// Number of rows affected
+    pub rows_affected: u64,
+}
+
+/// Query response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryResponse {
+    /// Query results
+    pub results: Vec<serde_json::Value>,
+    /// Total count
+    pub total_count: u64,
+    /// Execution time in milliseconds
+    pub execution_time_ms: f64,
+}
+
+/// Bulk insert request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BulkInsertRequest {
+    /// Data to insert (array of objects)
+    pub data: Vec<serde_json::Value>,
+}
+
+/// Bulk insert response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BulkInsertResponse {
+    /// Number of records inserted
+    pub inserted_count: u64,
+    /// Insert timestamp
+    pub inserted_at: DateTime<Utc>,
+    /// Execution time in milliseconds
+    pub execution_time_ms: f64,
+}
+
+/// Update data request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateDataRequest {
+    /// Data to update (JSON object with fields to update)
+    #[serde(flatten)]
+    pub data: serde_json::Value,
+}
+
+/// Update response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateResponse {
+    /// Updated record ID
+    pub id: String,
+    /// Update timestamp
+    pub updated_at: DateTime<Utc>,
+    /// Number of rows affected
+    pub rows_affected: u64,
+}
+
+// ==================== QUERY OPERATIONS MODELS ====================
+
+/// Execute query request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExecuteQueryRequest {
+    /// SQL query
+    pub sql: String,
+    /// Query parameters
+    pub parameters: Option<Vec<serde_json::Value>>,
+    /// Query options
+    pub options: Option<HashMap<String, String>>,
+}
+
+// ==================== ENCRYPTION MANAGEMENT MODELS ====================
+
+/// Rotate keys response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RotateKeysResponse {
+    /// Rotation operation ID
+    pub rotation_id: String,
+    /// Rotation status
+    pub status: String,
+    /// Start timestamp
+    pub started_at: DateTime<Utc>,
+    /// Completion timestamp
+    pub completed_at: DateTime<Utc>,
+    /// Number of rows rotated
+    pub rows_rotated: u64,
+}
+
+/// Rotation status response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RotationStatusResponse {
+    /// Rotation status
+    pub rotation_status: String,
+    /// Current key version
+    pub current_version: u32,
+    /// Previous key version
+    pub previous_version: u32,
+    /// Transition status
+    pub transition_status: String,
+    /// Start timestamp
+    pub started_at: DateTime<Utc>,
+    /// Estimated completion time
+    pub estimated_completion: DateTime<Utc>,
+}
+
+/// Encryption metadata response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EncryptionMetadataResponse {
+    /// Table encryption profile
+    pub table_encryption: String,
+    /// Column-specific encryption
+    pub column_encryption: HashMap<String, String>,
+    /// Key rotation schedule
+    pub key_rotation_schedule: HashMap<String, String>,
+    /// Last rotation timestamp
+    pub last_rotation: DateTime<Utc>,
+    /// Next rotation timestamp
+    pub next_rotation: DateTime<Utc>,
+    /// Zero-downtime rotation enabled
+    pub zero_downtime_enabled: bool,
+    /// Dual key validation enabled
+    pub dual_key_validation: bool,
+}
+
 impl Default for PaginationParams {
     fn default() -> Self {
         Self {

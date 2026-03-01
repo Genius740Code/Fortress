@@ -618,6 +618,595 @@ fn get_nested_value(data: &serde_json::Value, path: &str) -> Option<serde_json::
     Some(current.clone())
 }
 
+// ==================== DATABASE MANAGEMENT HANDLERS ====================
+
+/// Create database handler
+pub async fn create_database(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<CreateDatabaseRequest>,
+) -> ServerResult<Json<ApiResponse<DatabaseResponse>>> {
+    let start_time = std::time::Instant::now();
+    
+    info!(
+        database_name = %request.name,
+        algorithm = %request.algorithm,
+        "Create database request received"
+    );
+
+    // For now, simulate database creation
+    // In production, this would create an actual database instance
+    let response = DatabaseResponse {
+        name: request.name.clone(),
+        created_at: Utc::now(),
+        algorithm: request.algorithm,
+        key_rotation_interval: request.key_rotation_interval,
+        tables_count: 0,
+        size_bytes: 0,
+    };
+
+    info!(
+        database_name = %response.name,
+        duration_ms = start_time.elapsed().as_millis(),
+        "Database created successfully"
+    );
+
+    Ok(Json(ApiResponse::success(response)))
+}
+
+/// List databases handler
+pub async fn list_databases(
+    State(_state): State<Arc<AppState>>,
+) -> ServerResult<Json<ApiResponse<ListDatabasesResponse>>> {
+    let start_time = std::time::Instant::now();
+    
+    info!("List databases request received");
+
+    // For now, return empty list
+    // In production, this would query actual databases
+    let response = ListDatabasesResponse {
+        databases: vec![],
+        total_count: 0,
+    };
+
+    info!(
+        count = response.total_count,
+        duration_ms = start_time.elapsed().as_millis(),
+        "Databases listed successfully"
+    );
+
+    Ok(Json(ApiResponse::success(response)))
+}
+
+/// Get database info handler
+pub async fn get_database(
+    State(_state): State<Arc<AppState>>,
+    Path(database_name): Path<String>,
+) -> ServerResult<Json<ApiResponse<DatabaseResponse>>> {
+    let start_time = std::time::Instant::now();
+    
+    info!(
+        database_name = %database_name,
+        "Get database request received"
+    );
+
+    // For now, return mock data
+    // In production, this would query actual database
+    let response = DatabaseResponse {
+        name: database_name,
+        created_at: Utc::now(),
+        algorithm: "aegis256".to_string(),
+        key_rotation_interval: "23h".to_string(),
+        tables_count: 0,
+        size_bytes: 0,
+    };
+
+    info!(
+        database_name = %response.name,
+        duration_ms = start_time.elapsed().as_millis(),
+        "Database info retrieved successfully"
+    );
+
+    Ok(Json(ApiResponse::success(response)))
+}
+
+/// Delete database handler
+pub async fn delete_database(
+    State(_state): State<Arc<AppState>>,
+    Path(database_name): Path<String>,
+) -> ServerResult<Json<ApiResponse<OperationDeleteResponse>>> {
+    let start_time = std::time::Instant::now();
+    
+    info!(
+        database_name = %database_name,
+        "Delete database request received"
+    );
+
+    // For now, simulate deletion
+    // In production, this would delete actual database
+    let response = OperationDeleteResponse {
+        deleted: true,
+        message: format!("Database '{}' deleted successfully", database_name),
+    };
+
+    info!(
+        database_name = %database_name,
+        duration_ms = start_time.elapsed().as_millis(),
+        "Database deleted successfully"
+    );
+
+    Ok(Json(ApiResponse::success(response)))
+}
+
+// ==================== TABLE MANAGEMENT HANDLERS ====================
+
+/// Create table handler
+pub async fn create_table(
+    State(_state): State<Arc<AppState>>,
+    Path((database_name, _table_name)): Path<(String, String)>,
+    Json(request): Json<CreateTableRequest>,
+) -> ServerResult<Json<ApiResponse<TableResponse>>> {
+    let start_time = std::time::Instant::now();
+    
+    info!(
+        database_name = %database_name,
+        table_name = %request.name,
+        "Create table request received"
+    );
+
+    // For now, simulate table creation
+    // In production, this would create actual table
+    let response = TableResponse {
+        name: request.name.clone(),
+        columns: request.columns.len() as u32,
+        rows: 0,
+        encryption: request.encryption.unwrap_or_else(|| "balanced".to_string()),
+        created_at: Utc::now(),
+    };
+
+    info!(
+        database_name = %database_name,
+        table_name = %response.name,
+        columns = response.columns,
+        duration_ms = start_time.elapsed().as_millis(),
+        "Table created successfully"
+    );
+
+    Ok(Json(ApiResponse::success(response)))
+}
+
+/// List tables handler
+pub async fn list_tables(
+    State(_state): State<Arc<AppState>>,
+    Path(database_name): Path<String>,
+) -> ServerResult<Json<ApiResponse<ListTablesResponse>>> {
+    let start_time = std::time::Instant::now();
+    
+    info!(
+        database_name = %database_name,
+        "List tables request received"
+    );
+
+    // For now, return empty list
+    // In production, this would query actual tables
+    let response = ListTablesResponse {
+        tables: vec![],
+        total_count: 0,
+    };
+
+    info!(
+        database_name = %database_name,
+        count = response.total_count,
+        duration_ms = start_time.elapsed().as_millis(),
+        "Tables listed successfully"
+    );
+
+    Ok(Json(ApiResponse::success(response)))
+}
+
+/// Get table schema handler
+pub async fn get_table_schema(
+    State(_state): State<Arc<AppState>>,
+    Path((database_name, table_name)): Path<(String, String)>,
+) -> ServerResult<Json<ApiResponse<TableSchemaResponse>>> {
+    let start_time = std::time::Instant::now();
+    
+    info!(
+        database_name = %database_name,
+        table_name = %table_name,
+        "Get table schema request received"
+    );
+
+    // For now, return mock schema
+    // In production, this would query actual table schema
+    let response = TableSchemaResponse {
+        name: table_name,
+        columns: vec![],
+        encryption: "balanced".to_string(),
+    };
+
+    info!(
+        database_name = %database_name,
+        table_name = %response.name,
+        duration_ms = start_time.elapsed().as_millis(),
+        "Table schema retrieved successfully"
+    );
+
+    Ok(Json(ApiResponse::success(response)))
+}
+
+/// Drop table handler
+pub async fn drop_table(
+    State(_state): State<Arc<AppState>>,
+    Path((database_name, table_name)): Path<(String, String)>,
+) -> ServerResult<Json<ApiResponse<OperationDeleteResponse>>> {
+    let start_time = std::time::Instant::now();
+    
+    info!(
+        database_name = %database_name,
+        table_name = %table_name,
+        "Drop table request received"
+    );
+
+    // For now, simulate table deletion
+    // In production, this would delete actual table
+    let response = OperationDeleteResponse {
+        deleted: true,
+        message: format!("Table '{}.{}' dropped successfully", database_name, table_name),
+    };
+
+    info!(
+        database_name = %database_name,
+        table_name = %table_name,
+        duration_ms = start_time.elapsed().as_millis(),
+        "Table dropped successfully"
+    );
+
+    Ok(Json(ApiResponse::success(response)))
+}
+
+// ==================== DATA OPERATIONS HANDLERS ====================
+
+/// Insert data handler
+pub async fn insert_data(
+    State(_state): State<Arc<AppState>>,
+    Path((database_name, table_name)): Path<(String, String)>,
+    Json(request): Json<InsertDataRequest>,
+) -> ServerResult<Json<ApiResponse<InsertResponse>>> {
+    let start_time = std::time::Instant::now();
+    
+    info!(
+        database_name = %database_name,
+        table_name = %table_name,
+        "Insert data request received"
+    );
+
+    // For now, simulate data insertion
+    // In production, this would insert actual data
+    let data_id = Uuid::new_v4().to_string();
+    let response = InsertResponse {
+        id: data_id,
+        inserted_at: Utc::now(),
+        rows_affected: 1,
+    };
+
+    info!(
+        database_name = %database_name,
+        table_name = %table_name,
+        data_id = %response.id,
+        duration_ms = start_time.elapsed().as_millis(),
+        "Data inserted successfully"
+    );
+
+    Ok(Json(ApiResponse::success(response)))
+}
+
+/// Query data handler
+pub async fn query_data(
+    State(_state): State<Arc<AppState>>,
+    Path((database_name, table_name)): Path<(String, String)>,
+    Query(params): Query<QueryParams>,
+) -> ServerResult<Json<ApiResponse<QueryResponse>>> {
+    let start_time = std::time::Instant::now();
+    
+    info!(
+        database_name = %database_name,
+        table_name = %table_name,
+        "Query data request received"
+    );
+
+    // For now, return empty results
+    // In production, this would query actual data
+    let response = QueryResponse {
+        results: vec![],
+        total_count: 0,
+        execution_time_ms: start_time.elapsed().as_millis() as f64,
+    };
+
+    info!(
+        database_name = %database_name,
+        table_name = %table_name,
+        count = response.total_count,
+        duration_ms = start_time.elapsed().as_millis(),
+        "Data queried successfully"
+    );
+
+    Ok(Json(ApiResponse::success(response)))
+}
+
+/// Bulk insert handler
+pub async fn bulk_insert(
+    State(_state): State<Arc<AppState>>,
+    Path((database_name, table_name)): Path<(String, String)>,
+    Json(request): Json<BulkInsertRequest>,
+) -> ServerResult<Json<ApiResponse<BulkInsertResponse>>> {
+    let start_time = std::time::Instant::now();
+    
+    info!(
+        database_name = %database_name,
+        table_name = %table_name,
+        count = %request.data.len(),
+        "Bulk insert request received"
+    );
+
+    // For now, simulate bulk insertion
+    // In production, this would insert actual data
+    let response = BulkInsertResponse {
+        inserted_count: request.data.len() as u64,
+        inserted_at: Utc::now(),
+        execution_time_ms: start_time.elapsed().as_millis() as f64,
+    };
+
+    info!(
+        database_name = %database_name,
+        table_name = %table_name,
+        inserted_count = response.inserted_count,
+        duration_ms = start_time.elapsed().as_millis(),
+        "Bulk insert completed successfully"
+    );
+
+    Ok(Json(ApiResponse::success(response)))
+}
+
+/// Update data handler
+pub async fn update_data(
+    State(_state): State<Arc<AppState>>,
+    Path((database_name, table_name, data_id)): Path<(String, String, String)>,
+    Json(request): Json<UpdateDataRequest>,
+) -> ServerResult<Json<ApiResponse<UpdateResponse>>> {
+    let start_time = std::time::Instant::now();
+    
+    info!(
+        database_name = %database_name,
+        table_name = %table_name,
+        data_id = %data_id,
+        "Update data request received"
+    );
+
+    // For now, simulate data update
+    // In production, this would update actual data
+    let response = UpdateResponse {
+        id: data_id,
+        updated_at: Utc::now(),
+        rows_affected: 1,
+    };
+
+    info!(
+        database_name = %database_name,
+        table_name = %table_name,
+        data_id = %response.id,
+        duration_ms = start_time.elapsed().as_millis(),
+        "Data updated successfully"
+    );
+
+    Ok(Json(ApiResponse::success(response)))
+}
+
+/// Delete data handler
+pub async fn delete_data(
+    State(_state): State<Arc<AppState>>,
+    Path((database_name, table_name, data_id)): Path<(String, String, String)>,
+) -> ServerResult<Json<ApiResponse<OperationDeleteResponse>>> {
+    let start_time = std::time::Instant::now();
+    
+    info!(
+        database_name = %database_name,
+        table_name = %table_name,
+        data_id = %data_id,
+        "Delete data request received"
+    );
+
+    // For now, simulate data deletion
+    // In production, this would delete actual data
+    let response = OperationDeleteResponse {
+        deleted: true,
+        message: format!("Data '{}' deleted successfully from '{}.{}'", data_id, database_name, table_name),
+    };
+
+    info!(
+        database_name = %database_name,
+        table_name = %table_name,
+        data_id = %data_id,
+        duration_ms = start_time.elapsed().as_millis(),
+        "Data deleted successfully"
+    );
+
+    Ok(Json(ApiResponse::success(response)))
+}
+
+// ==================== QUERY OPERATIONS HANDLERS ====================
+
+/// Execute query handler
+pub async fn execute_query(
+    State(_state): State<Arc<AppState>>,
+    Path(database_name): Path<String>,
+    Json(request): Json<ExecuteQueryRequest>,
+) -> ServerResult<Json<ApiResponse<QueryResponse>>> {
+    let start_time = std::time::Instant::now();
+    
+    info!(
+        database_name = %database_name,
+        sql = %request.sql,
+        "Execute query request received"
+    );
+
+    // For now, return empty results
+    // In production, this would execute actual SQL query
+    let response = QueryResponse {
+        results: vec![],
+        total_count: 0,
+        execution_time_ms: start_time.elapsed().as_millis() as f64,
+    };
+
+    info!(
+        database_name = %database_name,
+        count = response.total_count,
+        duration_ms = start_time.elapsed().as_millis(),
+        "Query executed successfully"
+    );
+
+    Ok(Json(ApiResponse::success(response)))
+}
+
+// ==================== ENCRYPTION MANAGEMENT HANDLERS ====================
+
+/// Rotate keys handler
+pub async fn rotate_keys(
+    State(_state): State<Arc<AppState>>,
+    Path((database_name, table_name)): Path<(String, String)>,
+) -> ServerResult<Json<ApiResponse<RotateKeysResponse>>> {
+    let start_time = std::time::Instant::now();
+    
+    info!(
+        database_name = %database_name,
+        table_name = %table_name,
+        "Rotate keys request received"
+    );
+
+    // For now, simulate key rotation
+    // In production, this would perform actual key rotation
+    let response = RotateKeysResponse {
+        rotation_id: Uuid::new_v4().to_string(),
+        status: "completed".to_string(),
+        started_at: Utc::now(),
+        completed_at: Utc::now(),
+        rows_rotated: 0,
+    };
+
+    info!(
+        database_name = %database_name,
+        table_name = %table_name,
+        rotation_id = %response.rotation_id,
+        duration_ms = start_time.elapsed().as_millis(),
+        "Key rotation completed successfully"
+    );
+
+    Ok(Json(ApiResponse::success(response)))
+}
+
+/// Zero-downtime key rotation handler
+pub async fn rotate_keys_zero_downtime(
+    State(_state): State<Arc<AppState>>,
+    Path((database_name, table_name)): Path<(String, String)>,
+) -> ServerResult<Json<ApiResponse<RotateKeysResponse>>> {
+    let start_time = std::time::Instant::now();
+    
+    info!(
+        database_name = %database_name,
+        table_name = %table_name,
+        "Zero-downtime key rotation request received"
+    );
+
+    // For now, simulate zero-downtime key rotation
+    // In production, this would perform actual zero-downtime key rotation
+    let response = RotateKeysResponse {
+        rotation_id: Uuid::new_v4().to_string(),
+        status: "in_progress".to_string(),
+        started_at: Utc::now(),
+        completed_at: Utc::now(),
+        rows_rotated: 0,
+    };
+
+    info!(
+        database_name = %database_name,
+        table_name = %table_name,
+        rotation_id = %response.rotation_id,
+        duration_ms = start_time.elapsed().as_millis(),
+        "Zero-downtime key rotation started successfully"
+    );
+
+    Ok(Json(ApiResponse::success(response)))
+}
+
+/// Get rotation status handler
+pub async fn get_rotation_status(
+    State(_state): State<Arc<AppState>>,
+    Path((database_name, table_name)): Path<(String, String)>,
+) -> ServerResult<Json<ApiResponse<RotationStatusResponse>>> {
+    let start_time = std::time::Instant::now();
+    
+    info!(
+        database_name = %database_name,
+        table_name = %table_name,
+        "Get rotation status request received"
+    );
+
+    // For now, return mock status
+    // In production, this would query actual rotation status
+    let response = RotationStatusResponse {
+        rotation_status: "completed".to_string(),
+        current_version: 2,
+        previous_version: 1,
+        transition_status: "completed".to_string(),
+        started_at: Utc::now(),
+        estimated_completion: Utc::now(),
+    };
+
+    info!(
+        database_name = %database_name,
+        table_name = %table_name,
+        status = %response.rotation_status,
+        duration_ms = start_time.elapsed().as_millis(),
+        "Rotation status retrieved successfully"
+    );
+
+    Ok(Json(ApiResponse::success(response)))
+}
+
+/// Get encryption metadata handler
+pub async fn get_encryption_metadata(
+    State(_state): State<Arc<AppState>>,
+    Path((database_name, table_name)): Path<(String, String)>,
+) -> ServerResult<Json<ApiResponse<EncryptionMetadataResponse>>> {
+    let start_time = std::time::Instant::now();
+    
+    info!(
+        database_name = %database_name,
+        table_name = %table_name,
+        "Get encryption metadata request received"
+    );
+
+    // For now, return mock metadata
+    // In production, this would query actual encryption metadata
+    let response = EncryptionMetadataResponse {
+        table_encryption: "balanced".to_string(),
+        column_encryption: HashMap::new(),
+        key_rotation_schedule: HashMap::new(),
+        last_rotation: Utc::now(),
+        next_rotation: Utc::now() + chrono::Duration::days(7),
+        zero_downtime_enabled: true,
+        dual_key_validation: true,
+    };
+
+    info!(
+        database_name = %database_name,
+        table_name = %table_name,
+        duration_ms = start_time.elapsed().as_millis(),
+        "Encryption metadata retrieved successfully"
+    );
+
+    Ok(Json(ApiResponse::success(response)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

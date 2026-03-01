@@ -8,7 +8,9 @@ use crate::key::{KeyManager, KeyId, KeyMetadata, SecureKey};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{Database, Pool, Row, Sqlite, SqlitePool, Postgres, PgPool};
+use sqlx::{Database, Pool, Row, Sqlite, SqlitePool};
+#[cfg(feature = "postgres")]
+use sqlx::{Postgres, PgPool};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
