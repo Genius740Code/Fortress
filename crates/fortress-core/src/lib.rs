@@ -221,6 +221,10 @@ pub mod database_key_manager;
 
 pub mod plugin;
 
+/// True Random Number Generator (TRNG) system
+
+pub mod trng;
+
 
 
 #[cfg(test)]
@@ -319,6 +323,11 @@ pub mod prelude {
     pub use crate::plugin::{
         Plugin, PluginRegistry, PluginManager, PluginMetadata, PluginCapability,
         PluginContext, PluginResult, PluginInput, PluginHealth, PluginMetrics,
+    };
+
+    pub use crate::trng::{
+        TrueRandomGenerator, TrngConfig, TrngHealth, EntropySource,
+        init_global_trng, global_trng, random_bytes, random_u64, fill_random
     };
 
 }

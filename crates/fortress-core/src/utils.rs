@@ -14,13 +14,20 @@ pub fn generate_id() -> String {
 
 /// Generate a random nonce for encryption
 pub fn generate_nonce(length: usize) -> Result<Vec<u8>> {
-    let mut nonce = vec![0u8; length];
-    getrandom::getrandom(&mut nonce)
-        .map_err(|e| FortressError::internal(
-            format!("Failed to generate nonce: {}", e),
-            "nonce_generation".to_string(),
-        ))?;
-    Ok(nonce)
+    // Try to use TRNG first, fallback to getrandom if not available
+    match crate::trng::random_bytes(length) {
+        Ok(bytes) => Ok(bytes),
+        Err(_) => {
+            // Fallback to getrandom
+            let mut nonce = vec![0u8; length];
+            getrandom::getrandom(&mut nonce)
+                .map_err(|e| FortressError::internal(
+                    format!("Failed to generate nonce: {}", e),
+                    "nonce_generation".to_string(),
+                ))?;
+            Ok(nonce)
+        }
+    }
 }
 
 /// Calculate SHA-256 checksum
@@ -354,13 +361,27 @@ pub fn sanitize_for_logging(s: &str) -> String {
 
 /// Generate a random password
 pub fn generate_password(length: usize) -> String {
-    use rand::Rng;
     const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
     
-    let mut rng = rand::thread_rng();
-    (0..length)
-        .map(|_| {
-            let idx = rng.gen_range(0..CHARSET.len());
+    // Try to use TRNG first, fallback to thread_rng if not available
+    let random_bytes = match crate::trng::random_bytes(length) {
+        Ok(bytes) => bytes,
+        Err(_) => {
+            // Fallback to thread_rng
+            use rand::Rng;
+            let mut rng = rand::thread_rng();
+            let mut bytes = vec![0u8; length];
+            for byte in &mut bytes {
+                *byte = rng.gen();
+            }
+            bytes
+        }
+    };
+    
+    random_bytes
+        .into_iter()
+        .map(|byte| {
+            let idx = byte as usize % CHARSET.len();
             CHARSET[idx] as char
         })
         .collect()

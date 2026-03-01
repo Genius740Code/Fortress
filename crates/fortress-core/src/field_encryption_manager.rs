@@ -104,14 +104,20 @@ impl DefaultFieldEncryptionManager {
             return Ok(Vec::new());
         }
         
-        let mut nonce = vec![0u8; nonce_size];
-        getrandom::getrandom(&mut nonce)
-            .map_err(|e| FortressError::encryption(
-                format!("Failed to generate nonce: {}", e),
-                "nonce_generation".to_string(),
-                EncryptionErrorCode::AlgorithmNotSupported,
-            ))?;
-        Ok(nonce)
+        match crate::trng::random_bytes(nonce_size) {
+            Ok(bytes) => Ok(bytes),
+            Err(_) => {
+                // Fallback to getrandom
+                let mut nonce = vec![0u8; nonce_size];
+                getrandom::getrandom(&mut nonce)
+                    .map_err(|e| FortressError::encryption(
+                        format!("Failed to generate nonce: {}", e),
+                        "nonce_generation".to_string(),
+                        EncryptionErrorCode::AlgorithmNotSupported,
+                    ))?;
+                Ok(nonce)
+            }
+        }
     }
 }
 

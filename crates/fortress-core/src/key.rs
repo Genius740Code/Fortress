@@ -1790,22 +1790,20 @@ impl KeyDerivation {
 
     pub fn generate_salt(length: usize) -> Result<Vec<u8>> {
 
-        let mut salt = vec![0u8; length];
-
-        getrandom::getrandom(&mut salt)
-
-            .map_err(|e| FortressError::key_management(
-
-                format!("Failed to generate salt: {}", e),
-
-                None,
-
-                KeyErrorCode::DerivationFailed,
-
-            ))?;
-
-        Ok(salt)
-
+        match crate::trng::random_bytes(length) {
+            Ok(bytes) => Ok(bytes),
+            Err(_) => {
+                // Fallback to getrandom
+                let mut salt = vec![0u8; length];
+                getrandom::getrandom(&mut salt)
+                    .map_err(|e| FortressError::key_management(
+                        format!("Failed to generate salt: {}", e),
+                        None,
+                        KeyErrorCode::DerivationFailed,
+                    ))?;
+                Ok(salt)
+            }
+        }
     }
 
 }

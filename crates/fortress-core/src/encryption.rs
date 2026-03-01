@@ -623,20 +623,21 @@ impl SecureKey {
     /// Generate a random key of the specified length
 
     pub fn generate(length: usize) -> Self {
-
-        let mut key = vec![0u8; length];
-
-        getrandom::getrandom(&mut key).unwrap_or_else(|_| {
-
-            // Fallback to a less secure but still functional method
-
-            for i in 0..key.len() {
-
-                key[i] = (i as u8).wrapping_add(0x5A).wrapping_mul(0x17);
-
+        // Try to use TRNG first for true randomness
+        let key = match crate::trng::random_bytes(length) {
+            Ok(bytes) => bytes,
+            Err(_) => {
+                // Fallback to getrandom
+                let mut key = vec![0u8; length];
+                getrandom::getrandom(&mut key).unwrap_or_else(|_| {
+                    // Last resort: deterministic but still functional method
+                    for i in 0..key.len() {
+                        key[i] = (i as u8).wrapping_add(0x5A).wrapping_mul(0x17);
+                    }
+                });
+                key
             }
-
-        });
+        };
 
         Self::new(key)
 
@@ -716,13 +717,20 @@ impl EncryptionAlgorithm for Aegis256 {
         // Simple XOR cipher as placeholder for Aegis256
         // TODO: Implement proper Aegis256 when aegis crate API is clarified
         let mut nonce = [0u8; 16];
-        getrandom::getrandom(&mut nonce).map_err(|_e| {
-            FortressError::encryption(
-                "Failed to generate nonce".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::EncryptionFailed,
-            )
-        })?;
+        
+        // Try to use TRNG first, fallback to getrandom
+        match crate::trng::fill_random(&mut nonce) {
+            Ok(_) => {},
+            Err(_) => {
+                getrandom::getrandom(&mut nonce).map_err(|_e| {
+                    FortressError::encryption(
+                        "Failed to generate nonce".to_string(),
+                        self.name().to_string(),
+                        EncryptionErrorCode::EncryptionFailed,
+                    )
+                })?;
+            }
+        }
 
         let mut result = Vec::with_capacity(self.nonce_size() + plaintext.len());
         result.extend_from_slice(&nonce);
@@ -862,17 +870,18 @@ impl EncryptionAlgorithm for ChaCha20Poly1305 {
 
         let mut nonce = vec![0u8; self.nonce_size()];
 
-        getrandom::getrandom(&mut nonce)
-
-            .map_err(|_e| FortressError::encryption(
-
-                "Failed to generate nonce: random error".to_string(),
-
-                self.name().to_string(),
-
-                EncryptionErrorCode::EncryptionFailed,
-
-            ))?;
+        // Try to use TRNG first, fallback to getrandom
+        match crate::trng::fill_random(&mut nonce) {
+            Ok(_) => {},
+            Err(_) => {
+                getrandom::getrandom(&mut nonce)
+                    .map_err(|_e| FortressError::encryption(
+                        "Failed to generate nonce: random error".to_string(),
+                        self.name().to_string(),
+                        EncryptionErrorCode::EncryptionFailed,
+                    ))?;
+            }
+        }
 
 
 
@@ -1107,12 +1116,19 @@ impl EncryptionAlgorithm for XChaCha20Poly1305 {
 
         // Generate random 24-byte nonce for XChaCha20
         let mut nonce = vec![0u8; self.nonce_size()];
-        getrandom::getrandom(&mut nonce)
-            .map_err(|_e| FortressError::encryption(
-                "Failed to generate nonce: random error".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::EncryptionFailed,
-            ))?;
+        
+        // Try to use TRNG first, fallback to getrandom
+        match crate::trng::fill_random(&mut nonce) {
+            Ok(_) => {},
+            Err(_) => {
+                getrandom::getrandom(&mut nonce)
+                    .map_err(|_e| FortressError::encryption(
+                        "Failed to generate nonce: random error".to_string(),
+                        self.name().to_string(),
+                        EncryptionErrorCode::EncryptionFailed,
+                    ))?;
+            }
+        }
 
         // Use the chacha20poly1305 crate for actual encryption
         let cipher = chacha20poly1305::XChaCha20Poly1305::new_from_slice(key)
@@ -1235,12 +1251,19 @@ impl EncryptionAlgorithm for Blake3Encrypt {
 
         // Generate random nonce
         let mut nonce = vec![0u8; self.nonce_size()];
-        getrandom::getrandom(&mut nonce)
-            .map_err(|_e| FortressError::encryption(
-                "Failed to generate nonce: random error".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::EncryptionFailed,
-            ))?;
+        
+        // Try to use TRNG first, fallback to getrandom
+        match crate::trng::fill_random(&mut nonce) {
+            Ok(_) => {},
+            Err(_) => {
+                getrandom::getrandom(&mut nonce)
+                    .map_err(|_e| FortressError::encryption(
+                        "Failed to generate nonce: random error".to_string(),
+                        self.name().to_string(),
+                        EncryptionErrorCode::EncryptionFailed,
+                    ))?;
+            }
+        }
 
         // Use Blake3 in keyed mode as a stream cipher
         let key_array: [u8; 32] = key.try_into().map_err(|_| FortressError::encryption(
@@ -1383,13 +1406,20 @@ impl EncryptionAlgorithm for HmacSha512Encrypt {
         }
 
         // Generate random salt
-        let mut salt = vec![0u8; self.nonce_size()];
-        getrandom::getrandom(&mut salt)
-            .map_err(|_e| FortressError::encryption(
-                "Failed to generate salt: random error".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::EncryptionFailed,
-            ))?;
+        let salt = match crate::trng::random_bytes(self.nonce_size()) {
+            Ok(bytes) => bytes,
+            Err(_) => {
+                // Fallback to getrandom
+                let mut salt = vec![0u8; self.nonce_size()];
+                getrandom::getrandom(&mut salt)
+                    .map_err(|_e| FortressError::encryption(
+                        "Failed to generate salt: random error".to_string(),
+                        self.name().to_string(),
+                        EncryptionErrorCode::EncryptionFailed,
+                    ))?;
+                salt
+            }
+        };
 
         // Derive encryption key using HKDF
         let hkdf = Hkdf::<Sha512>::new(Some(&salt), key);
@@ -1543,13 +1573,20 @@ impl EncryptionAlgorithm for Aes256Ctr {
         }
 
         // Generate random IV/counter
-        let mut iv = vec![0u8; self.nonce_size()];
-        getrandom::getrandom(&mut iv)
-            .map_err(|_e| FortressError::encryption(
-                "Failed to generate IV: random error".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::EncryptionFailed,
-            ))?;
+        let iv = match crate::trng::random_bytes(self.nonce_size()) {
+            Ok(bytes) => bytes,
+            Err(_) => {
+                // Fallback to getrandom
+                let mut iv = vec![0u8; self.nonce_size()];
+                getrandom::getrandom(&mut iv)
+                    .map_err(|_e| FortressError::encryption(
+                        "Failed to generate IV: random error".to_string(),
+                        self.name().to_string(),
+                        EncryptionErrorCode::EncryptionFailed,
+                    ))?;
+                iv
+            }
+        };
 
         // Use AES-GCM in a way that simulates CTR (simplified implementation)
         // In production, use a proper AES-CTR implementation
@@ -1674,12 +1711,19 @@ impl EncryptionAlgorithm for Argon2idEncrypt {
 
         // Generate random salt
         let mut salt = vec![0u8; self.nonce_size()];
-        getrandom::getrandom(&mut salt)
-            .map_err(|_e| FortressError::encryption(
-                "Failed to generate salt: random error".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::EncryptionFailed,
-            ))?;
+        
+        // Try to use TRNG first, fallback to getrandom
+        match crate::trng::fill_random(&mut salt) {
+            Ok(_) => {},
+            Err(_) => {
+                getrandom::getrandom(&mut salt)
+                    .map_err(|_e| FortressError::encryption(
+                        "Failed to generate salt: random error".to_string(),
+                        self.name().to_string(),
+                        EncryptionErrorCode::EncryptionFailed,
+                    ))?;
+            }
+        }
 
         // Derive encryption key using Argon2id
         let argon2 = argon2::Argon2::default();
@@ -1710,13 +1754,20 @@ impl EncryptionAlgorithm for Argon2idEncrypt {
         encryption_key[..key_len].copy_from_slice(&derived_key[..key_len]);
 
         // Generate nonce for ChaCha20-Poly1305
-        let mut nonce = vec![0u8; 12];
-        getrandom::getrandom(&mut nonce)
-            .map_err(|_e| FortressError::encryption(
-                "Failed to generate nonce: random error".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::EncryptionFailed,
-            ))?;
+        let nonce = match crate::trng::random_bytes(12) {
+            Ok(bytes) => bytes,
+            Err(_) => {
+                // Fallback to getrandom
+                let mut nonce = vec![0u8; 12];
+                getrandom::getrandom(&mut nonce)
+                    .map_err(|_e| FortressError::encryption(
+                        "Failed to generate nonce: random error".to_string(),
+                        self.name().to_string(),
+                        EncryptionErrorCode::EncryptionFailed,
+                    ))?;
+                nonce
+            }
+        };
 
         // Use ChaCha20-Poly1305 for encryption
         let cipher = chacha20poly1305::XChaCha20Poly1305::new_from_slice(&encryption_key)
@@ -1876,18 +1927,31 @@ impl EncryptionAlgorithm for CompositeEncrypt {
         // Generate random salt and nonce
         let mut salt = vec![0u8; 16];
         let mut nonce = vec![0u8; 24];
-        getrandom::getrandom(&mut salt)
-            .map_err(|_e| FortressError::encryption(
-                "Failed to generate salt: random error".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::EncryptionFailed,
-            ))?;
-        getrandom::getrandom(&mut nonce)
-            .map_err(|_e| FortressError::encryption(
-                "Failed to generate nonce: random error".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::EncryptionFailed,
-            ))?;
+        
+        // Try to use TRNG first, fallback to getrandom
+        match crate::trng::fill_random(&mut salt) {
+            Ok(_) => {},
+            Err(_) => {
+                getrandom::getrandom(&mut salt)
+                    .map_err(|_e| FortressError::encryption(
+                        "Failed to generate salt: random error".to_string(),
+                        self.name().to_string(),
+                        EncryptionErrorCode::EncryptionFailed,
+                    ))?;
+            }
+        }
+        
+        match crate::trng::fill_random(&mut nonce) {
+            Ok(_) => {},
+            Err(_) => {
+                getrandom::getrandom(&mut nonce)
+                    .map_err(|_e| FortressError::encryption(
+                        "Failed to generate nonce: random error".to_string(),
+                        self.name().to_string(),
+                        EncryptionErrorCode::EncryptionFailed,
+                    ))?;
+            }
+        }
 
         // Derive encryption key using Blake3
         let key_array: [u8; 32] = key.try_into().map_err(|_| FortressError::encryption(

@@ -389,9 +389,21 @@ impl ClusterManager {
             .cloned()
             .collect();
         
-        // Randomly select replication factor nodes
-        use rand::seq::SliceRandom;
-        target_nodes.shuffle(&mut rand::thread_rng());
+        // Randomly select replication factor nodes using TRNG
+        match crate::trng::random_bytes(target_nodes.len()) {
+            Ok(random_bytes) => {
+                // Use random bytes to shuffle
+                for i in 0..random_bytes.len().min(target_nodes.len()) {
+                    let j = (random_bytes[i] as usize) % target_nodes.len();
+                    target_nodes.swap(i, j);
+                }
+            }
+            Err(_) => {
+                // Fallback to thread_rng
+                use rand::seq::SliceRandom;
+                target_nodes.shuffle(&mut rand::thread_rng());
+            }
+        }
         target_nodes.truncate(replication_factor);
 
         // Create replication command

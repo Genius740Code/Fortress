@@ -272,13 +272,19 @@ impl DefaultAuditLogger {
                 ))?
         } else {
             // Generate a random key if none provided
-            let mut key = vec![0u8; 32];
-            getrandom::getrandom(&mut key)
-                .map_err(|e| FortressError::internal(
-                    format!("Failed to generate HMAC key: {}", e),
-                    "RANDOM_KEY_GENERATION".to_string(),
-                ))?;
-            key
+            match crate::trng::random_bytes(32) {
+                Ok(key) => key,
+                Err(_) => {
+                    // Fallback to getrandom
+                    let mut key = vec![0u8; 32];
+                    getrandom::getrandom(&mut key)
+                        .map_err(|e| FortressError::internal(
+                            format!("Failed to generate HMAC key: {}", e),
+                            "RANDOM_KEY_GENERATION".to_string(),
+                        ))?;
+                    key
+                }
+            }
         };
 
         Ok(Self {
