@@ -7,6 +7,7 @@ use axum_test::TestServer;
 use fortress_server::prelude::*;
 use serde_json::json;
 use std::collections::HashMap;
+use futures::future;
 
 #[tokio::test]
 async fn test_health_check() {
@@ -364,4 +365,144 @@ async fn test_metrics_endpoint() {
     assert!(!prometheus_body.is_empty());
     // Should contain some prometheus-style metrics
     assert!(prometheus_body.contains('#') || prometheus_body.contains('_'));
+}
+
+#[tokio::test]
+async fn test_storage_backend_integration() {
+    // Test with different storage backends
+    let mut config = ServerConfig::default();
+    
+    // Test in-memory storage
+    config.storage.backend_type = fortress_core::storage::StorageBackendType::InMemory;
+    
+    let server = FortressServer::new(config).await.unwrap();
+    let router = server.create_router().await.unwrap();
+    
+    let test_server = TestServer::new(router).unwrap();
+    
+    // Store and retrieve data
+    let test_data = json!({
+        "test": "storage_backend_integration",
+        "backend": "memory"
+    });
+    
+    let store_request = json!({
+        "data": test_data
+    });
+    
+    let store_response = test_server
+        .post("/data")
+        .json(&store_request)
+        .await;
+    
+    assert_eq!(store_response.status_code(), 200);
+    
+    let store_body: serde_json::Value = store_response.json();
+    let data_id = store_body["data"]["id"].as_str().unwrap();
+    
+    // Retrieve the data
+    let retrieve_response = test_server
+        .get(&format!("/data/{}", data_id))
+        .await;
+    
+    assert_eq!(retrieve_response.status_code(), 200);
+    let retrieve_body: serde_json::Value = retrieve_response.json();
+    assert_eq!(retrieve_body["data"]["data"]["test"], "storage_backend_integration");
+}
+
+#[tokio::test]
+async fn test_error_handling() {
+    let config = ServerConfig::default();
+    let server = FortressServer::new(config).await.unwrap();
+    let router = server.create_router().await.unwrap();
+    
+    let test_server = TestServer::new(router).unwrap();
+    
+    // Test retrieving non-existent data
+    let response = test_server.get("/data/non-existent-id").await;
+    assert_eq!(response.status_code(), 404);
+    
+    let body: serde_json::Value = response.json();
+    assert!(!body["success"].as_bool().unwrap());
+    assert!(body["error"].is_string());
+}
+
+#[tokio::test]
+async fn test_concurrent_requests() {
+    let config = ServerConfig::default();
+    let server = FortressServer::new(config).await.unwrap();
+    let router = server.create_router().await.unwrap();
+    
+    let test_server = TestServer::new(router).unwrap();
+    
+    // Create multiple concurrent requests
+    let mut handles = Vec::new();
+    
+    for i in 0..10 {
+        let test_server = test_server.clone();
+        let handle = tokio::spawn(async move {
+            let test_data = json!({
+                "id": i,
+                "message": format!("Concurrent test {}", i)
+            });
+            
+            let store_request = json!({
+                "data": test_data
+            });
+            
+            test_server
+                .post("/data")
+                .json(&store_request)
+                .await
+        });
+        handles.push(handle);
+    }
+    
+    // Wait for all requests to complete
+    let results = futures::future::join_all(handles).await;
+    
+    // All requests should succeed
+    for result in results {
+        let response = result.unwrap();
+        assert_eq!(response.status_code(), 200);
+    }
+}
+
+#[tokio::test]
+async fn test_large_data_handling() {
+    let config = ServerConfig::default();
+    let server = FortressServer::new(config).await.unwrap();
+    let router = server.create_router().await.unwrap();
+    
+    let test_server = TestServer::new(router).unwrap();
+    
+    // Create large test data (1MB)
+    let large_data = json!({
+        "data": "x".repeat(1024 * 1024),
+        "size": 1024 * 1024
+    });
+    
+    let store_request = json!({
+        "data": large_data
+    });
+    
+    let store_response = test_server
+        .post("/data")
+        .json(&store_request)
+        .await;
+    
+    assert_eq!(store_response.status_code(), 200);
+    
+    let store_body: serde_json::Value = store_response.json();
+    let data_id = store_body["data"]["id"].as_str().unwrap();
+    
+    // Retrieve the large data
+    let retrieve_response = test_server
+        .get(&format!("/data/{}", data_id))
+        .await;
+    
+    assert_eq!(retrieve_response.status_code(), 200);
+    let retrieve_body: serde_json::Value = retrieve_response.json();
+    let retrieved_size = retrieve_body["data"]["data"]["size"].as_u64().unwrap();
+    assert_eq!(retrieved_size, 1024 * 1024);
 }

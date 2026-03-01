@@ -116,20 +116,22 @@ pub async fn store_data(
         let mut metadata = HashMap::new();
         for (field_name, field_config) in &field_config.fields {
             if let Some(field_value) = get_nested_value(&request.data, field_name) {
-                let field_id = FieldIdentifier {
-                    name: field_name.clone(),
-                    tenant_id: request.tenant_id.clone(),
-                };
+                let field_id = fortress_core::field_encryption::FieldIdentifier::Name(field_name.clone());
                 
                 let field_bytes = serde_json::to_vec(&field_value)
                     .map_err(|e| ServerError::serialization(e.to_string()))?;
                 
                 if let Ok(encrypted_field) = state.field_encryption_manager.encrypt_field(&field_id, &field_bytes).await {
                     metadata.insert(field_name.clone(), FieldEncryptionMetadata {
+                        config_id: "default".to_string(),
                         field: field_name.clone(),
                         algorithm: field_config.algorithm.clone(),
                         key_id: field_config.key_id.clone().unwrap_or_else(|| "default".to_string()),
-                        size_bytes: encrypted_field.ciphertext.len() as u64,
+                        key_version: 1,
+                        encrypted_at: Utc::now(),
+                        nonce: None,
+                        tag: None,
+                        metadata: HashMap::new(),
                     });
                 }
             }
@@ -164,7 +166,9 @@ pub async fn store_data(
         stored_at: Utc::now(),
         size_bytes: storage_record.data.len() as u64,
         algorithm: "aegis256".to_string(),
-        field_metadata: storage_record.field_metadata,
+        field_metadata: storage_record.field_metadata.map(|m| {
+            m.into_iter().map(|(k, v)| (k, v.into())).collect()
+        }),
     };
 
     info!(
@@ -245,7 +249,9 @@ pub async fn retrieve_data(
         algorithm: storage_record.algorithm,
         key_id: storage_record.key_id,
         encrypted_data: None, // Could include raw encrypted data if requested
-        field_metadata: storage_record.field_metadata,
+        field_metadata: storage_record.field_metadata.map(|m| {
+            m.into_iter().map(|(k, v)| (k, v.into())).collect()
+        }),
     };
 
     info!(
@@ -522,10 +528,13 @@ pub async fn authenticate(
 
     state.metrics.record_auth_attempt().await;
 
-    let auth_response = state.auth_manager.authenticate(request).await.map_err(|e| {
-        state.metrics.record_auth_failure().await;
-        e
-    })?;
+    let auth_response = match state.auth_manager.authenticate(request).await {
+        Ok(response) => response,
+        Err(e) => {
+            state.metrics.record_auth_failure().await;
+            return Err(e);
+        }
+    };
 
     info!(
         user_id = %auth_response.user.id,

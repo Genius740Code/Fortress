@@ -147,18 +147,49 @@ pub struct StoreResponse {
 /// Field encryption metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FieldEncryptionMetadata {
-    /// Field name
+    /// Field configuration ID
+    pub config_id: String,
+    /// Field identifier
     pub field: String,
-    /// Algorithm used
+    /// Algorithm used for encryption
     pub algorithm: String,
     /// Key ID used
     pub key_id: String,
-    /// Encrypted size
-    pub size_bytes: u64,
+    /// Key version
+    pub key_version: u32,
+    /// When the field was encrypted
+    pub encrypted_at: DateTime<Utc>,
+    /// Nonce/IV used (if applicable)
+    pub nonce: Option<Vec<u8>>,
+    /// Authentication tag (if applicable)
+    pub tag: Option<Vec<u8>>,
+    /// Additional encryption metadata
+    pub metadata: HashMap<String, String>,
 }
 
 /// Re-export from fortress_core to avoid conflicts
 pub use fortress_core::field_encryption::FieldEncryptionMetadata as CoreFieldEncryptionMetadata;
+
+/// Conversion from core metadata to API metadata
+impl From<CoreFieldEncryptionMetadata> for FieldEncryptionMetadata {
+    fn from(core: CoreFieldEncryptionMetadata) -> Self {
+        Self {
+            config_id: core.config_id.to_string(),
+            field: match core.field {
+                fortress_core::field_encryption::FieldIdentifier::Name(name) => name,
+                fortress_core::field_encryption::FieldIdentifier::Path(path) => path.join("."),
+                fortress_core::field_encryption::FieldIdentifier::Indexed { index, .. } => format!("[{}]", index),
+            },
+            algorithm: core.algorithm,
+            key_id: core.key_id.to_string(),
+            key_version: core.key_version,
+            encrypted_at: core.encrypted_at,
+            nonce: core.nonce,
+            tag: core.tag,
+            metadata: core.metadata,
+        }
+    }
+}
 
 /// Data retrieval request
 #[derive(Debug, Clone, Serialize, Deserialize)]

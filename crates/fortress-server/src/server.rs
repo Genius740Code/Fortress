@@ -18,10 +18,10 @@ use crate::middleware::{
 use crate::prelude::*;
 use axum::{
     extract::DefaultBodyLimit,
-    http::Method,
-    routing::{get, post, delete, put},
+    http::StatusCode,
+    response::Json,
+    routing::{get, post, put, delete},
     Router,
-    response::IntoResponse,
 };
 use fortress_core::prelude::*;
 use std::net::SocketAddr;
@@ -120,7 +120,7 @@ impl FortressServer {
     }
 
     /// Create the application router
-    async fn create_router(&self) -> ServerResult<Router<Arc<AppState>>> {
+    async fn create_router(&self) -> ServerResult<Router<()>> {
         let app_state = self.app_state.clone();
         let rate_limiter = self.rate_limiter.clone();
         let network_config = self.config.network.clone();
@@ -205,7 +205,17 @@ impl FortressServer {
         }
 
         // Add state
-        router = router.with_state(app_state);
+        // Removed duplicate with_state call
+
+        // Apply global middleware
+        router = router
+            .layer(create_timeout_layer(network_config.request_timeout))
+            .layer(axum::middleware::from_fn_with_state(
+                rate_limiter.clone(),
+                advanced_rate_limit_middleware,
+            ))
+            .layer(security_headers_middleware())
+            .layer(request_size_middleware(network_config.max_body_size));
 
         Ok(router)
     }
@@ -234,11 +244,33 @@ impl FortressServer {
     }
 
     /// Create storage backend
-    fn create_storage_backend(_config: &ServerConfig) -> ServerResult<Arc<dyn StorageBackend>> {
-        // For now, use an in-memory storage backend
-        // In production, this would be configurable (PostgreSQL, SQLite, etc.)
-        let storage = InMemoryStorage::new();
-        Ok(Arc::new(storage))
+    fn create_storage_backend(config: &ServerConfig) -> ServerResult<Arc<dyn StorageBackend>> {
+        match &config.storage.backend_type {
+            StorageBackendType::InMemory => {
+                let storage = InMemoryStorage::new();
+                Ok(Arc::new(storage))
+            }
+            StorageBackendType::FileSystem { base_path } => {
+                let storage = FileSystemStorage::new(base_path)
+                    .map_err(|e| ServerError::Core(e))?;
+                Ok(Arc::new(storage))
+            }
+            #[cfg(feature = "cloud-storage")]
+            StorageBackendType::S3 { bucket, region, prefix } => {
+                let rt = tokio::runtime::Handle::current();
+                let storage = rt.block_on(async {
+                    S3Storage::new(bucket, region, prefix.clone()).await
+                }).map_err(|e| ServerError::Core(e))?;
+                Ok(Arc::new(storage))
+            }
+            #[cfg(not(feature = "cloud-storage"))]
+            StorageBackendType::S3 { .. } => {
+                Err(ServerError::Configuration("S3 storage requires cloud-storage feature to be enabled".to_string()))
+            }
+            StorageBackendType::AzureBlob { .. } => {
+                Err(ServerError::Configuration("Azure Blob storage not yet implemented".to_string()))
+            }
+        }
     }
 
     /// Run background tasks

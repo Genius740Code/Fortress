@@ -842,12 +842,13 @@ pub fn create_timeout_layer(timeout_seconds: u64) -> TimeoutLayer {
 }
 
 /// Create trace layer
-pub fn create_trace_layer() -> impl Layer<axum::body::Body> {
+pub fn create_trace_layer() -> TraceLayer {
     TraceLayer::new_for_http()
         .make_span_with(|request: &Request<_>| {
+            let method_str: String = request.method().to_string();
             tracing::info_span!(
                 "http_request",
-                method = %request.method().as_str(),
+                method = %method_str,
                 uri = %request.uri(),
                 version = ?request.version(),
             )
@@ -885,25 +886,12 @@ fn extract_client_id(request: &Request) -> String {
 }
 
 /// Middleware stack builder - simplified for axum compatibility
-pub struct MiddlewareStack {
-    layers: Vec<Box<dyn Layer<axum::body::Body> + Send + Sync>>,
-}
+pub struct MiddlewareStack;
 
 impl MiddlewareStack {
     /// Create a new middleware stack
     pub fn new() -> Self {
-        Self {
-            layers: Vec::new(),
-        }
-    }
-
-    /// Add a layer to the stack
-    pub fn add_layer<L>(mut self, layer: L) -> Self
-    where
-        L: Layer<axum::body::Body> + Send + Sync + 'static,
-    {
-        self.layers.push(Box::new(layer));
-        self
+        Self
     }
 }
 

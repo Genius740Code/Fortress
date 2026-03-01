@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use fortress_core::config::Config as CoreConfig;
+use fortress_core::prelude::*;
 
 /// Default server host
 pub const DEFAULT_HOST: &str = "0.0.0.0";
@@ -43,6 +44,9 @@ pub struct ServerConfig {
     
     /// Metrics configuration
     pub metrics: MetricsConfig,
+    
+    /// Storage configuration
+    pub storage: StorageConfig,
 }
 
 impl Default for ServerConfig {
@@ -54,6 +58,7 @@ impl Default for ServerConfig {
             features: FeatureFlags::default(),
             logging: LoggingConfig::default(),
             metrics: MetricsConfig::default(),
+            storage: StorageConfig::default(),
         }
     }
 }
@@ -95,7 +100,7 @@ impl Default for NetworkConfig {
 
 impl NetworkConfig {
     /// Get the full bind address
-    pub fn bind_address(&self) -> Result<SocketAddr, std::net::AddrParseError> {
+    pub fn bind_address(&self) -> std::result::Result<SocketAddr, std::net::AddrParseError> {
         format!("{}:{}", self.host, self.port).parse()
     }
 }
