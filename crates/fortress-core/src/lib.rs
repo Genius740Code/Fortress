@@ -217,6 +217,10 @@ pub mod key_cache;
 
 pub mod database_key_manager;
 
+/// Plugin system for extensible functionality
+
+pub mod plugin;
+
 
 
 #[cfg(test)]
@@ -312,6 +316,11 @@ pub mod prelude {
     pub use crate::database_key_manager::{
         DatabaseKeyManager, DatabaseKeyManagerConfig, KeyManagerMetrics,
         DatabaseKeyManagerStats
+    };
+
+    pub use crate::plugin::{
+        Plugin, PluginRegistry, PluginManager, PluginMetadata, PluginCapability,
+        PluginContext, PluginResult, PluginInput, PluginHealth, PluginMetrics,
     };
 
 }

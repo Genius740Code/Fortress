@@ -139,6 +139,15 @@ pub enum FortressError {
         /// Node ID if applicable
         node_id: Option<String>,
     },
+
+    /// Plugin-related errors
+    #[error("Plugin error: {message}")]
+    Plugin {
+        /// Error message
+        message: String,
+        /// Plugin ID if applicable
+        plugin_id: Option<String>,
+    },
 }
 
 /// Encryption error codes
@@ -445,6 +454,22 @@ impl FortressError {
         }
     }
 
+    /// Create a new plugin error
+    pub fn plugin<S: Into<String>>(message: S) -> Self {
+        Self::Plugin {
+            message: message.into(),
+            plugin_id: None,
+        }
+    }
+
+    /// Create a new plugin error with plugin ID
+    pub fn plugin_with_id<S: Into<String>>(message: S, plugin_id: S) -> Self {
+        Self::Plugin {
+            message: message.into(),
+            plugin_id: Some(plugin_id.into()),
+        }
+    }
+
     /// Create a new cluster error
     pub fn cluster<S: Into<String>>(message: S, node_id: Option<String>) -> Self {
         Self::Cluster {
@@ -462,6 +487,7 @@ impl FortressError {
             Self::RateLimit { .. } => true,
             Self::Io { .. } => true,
             Self::Cluster { .. } => true,
+            Self::Plugin { .. } => true,
             _ => false,
         }
     }
@@ -492,6 +518,7 @@ impl FortressError {
             Self::Internal { .. } => "internal",
             Self::PolicyError(_) => "policy",
             Self::Cluster { .. } => "cluster",
+            Self::Plugin { .. } => "plugin",
         }
     }
 }
