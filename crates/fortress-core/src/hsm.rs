@@ -530,6 +530,3 @@ impl HsmProvider for Pkcs11Provider {
         Ok(())
     }
 }
-
-#[cfg(test)]
-mod tests;

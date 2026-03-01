@@ -970,11 +970,12 @@ pub fn log_event_with_metadata(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use base64::Engine;
 
     #[test]
     fn test_audit_entry_creation() {
         let mut config = AuditConfig::default();
-        config.hmac_key = Some(base64::encode("test_key_32_bytes_long_12345678"));
+        config.hmac_key = Some(base64::engine::general_purpose::STANDARD.encode("test_key_32_bytes_long_12345678"));
         
         let mut logger = DefaultAuditLogger::new(config).unwrap();
         

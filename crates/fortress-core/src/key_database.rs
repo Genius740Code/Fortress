@@ -4,17 +4,13 @@
 //! along with preloading and caching capabilities for high performance.
 
 use crate::error::{FortressError, Result, KeyErrorCode};
-use crate::key::{KeyManager, KeyId, KeyMetadata, SecureKey};
+use crate::key::{KeyId, KeyMetadata, SecureKey};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{Database, Pool, Row, Sqlite, SqlitePool};
+use sqlx::{Pool, Row, Sqlite, SqlitePool};
 #[cfg(feature = "postgres")]
 use sqlx::{Postgres, PgPool};
-use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::RwLock;
-use uuid::Uuid;
 
 /// Configuration for key database backends
 #[derive(Debug, Clone, Serialize, Deserialize)]

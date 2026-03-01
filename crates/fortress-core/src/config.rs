@@ -490,6 +490,7 @@ fn parse_duration(s: &str) -> Result<std::time::Duration> {
 mod tests {
     use super::*;
     use tempfile::NamedTempFile;
+    use crate::encryption::PerformanceProfile;
 
     #[test]
     fn test_default_config() {

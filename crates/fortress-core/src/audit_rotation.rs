@@ -474,9 +474,8 @@ impl RotationTask {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
     use tempfile::TempDir;
-    use std::thread;
-    use std::time::Duration;
 
     #[test]
     fn test_retention_policy_default() {

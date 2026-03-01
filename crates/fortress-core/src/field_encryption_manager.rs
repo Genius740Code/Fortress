@@ -309,8 +309,8 @@ impl Default for FieldEncryptionManagerBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
     use crate::key::InMemoryKeyManager;
-    use crate::field_encryption::FieldSensitivity;
 
     #[tokio::test]
     async fn test_field_encryption_roundtrip() {

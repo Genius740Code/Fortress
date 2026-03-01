@@ -535,18 +535,18 @@ pub struct ReplicationStatistics {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::collections::HashMap;
+use super::*;
+use std::sync::Arc;
 
-    #[test]
-    fn test_replication_operation_creation() {
-        let target_nodes = vec![Uuid::new_v4(), Uuid::new_v4()];
-        let operation = ReplicationOperation::new(
-            "test_key".to_string(),
-            b"test_data".to_vec(),
-            target_nodes.clone(),
-            ConsistencyLevel::Quorum,
-        );
+#[test]
+fn test_replication_operation_creation() {
+    let target_nodes = vec![Uuid::new_v4(), Uuid::new_v4()];
+    let operation = ReplicationOperation::new(
+        "test_key".to_string(),
+        b"test_data".to_vec(),
+        target_nodes.clone(),
+        ConsistencyLevel::Quorum,
+    );
 
         assert_eq!(operation.key, "test_key");
         assert_eq!(operation.data, b"test_data");

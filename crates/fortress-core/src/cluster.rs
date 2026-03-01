@@ -467,9 +467,9 @@ mod tests {
             bind_address: "127.0.0.1:8080".parse().unwrap(),
             seed_nodes: vec![],
             min_nodes: 1,
-            heartbeat_interval: Duration::default(),
-            election_timeout: Duration::default(),
-            replication_factor: 0,
+            heartbeat_interval: default_heartbeat_interval(),
+            election_timeout: default_election_timeout(),
+            replication_factor: default_replication_factor(),
         };
 
         assert_eq!(config.heartbeat_interval, default_heartbeat_interval());

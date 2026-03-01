@@ -3,9 +3,9 @@
 //! This is a simplified version to get the system compiling.
 
 use crate::storage::StorageBackend;
-use crate::prelude::*;
-use crate::backup::{RetentionPolicy as BackupRetentionPolicy, utils};
-use crate::error::StorageErrorCode;
+use crate::backup::{RetentionPolicy as BackupRetentionPolicy, utils, BackupManager, BackupItem, BackupStrategy, RestoreStatus};
+use crate::error::{FortressError, StorageErrorCode, Result};
+use crate::backup::{BackupConfig, BackupMetadata, BackupManifest, VerificationLevel, BackupStorageStats, RestoreOperationStatus};
 use chrono::Utc;
 use std::sync::Arc;
 
@@ -16,7 +16,11 @@ pub struct SimpleBackupManager {
 }
 
 impl SimpleBackupManager {
-    /// Create a new SimpleBackupManager with the given storage backend
+    /// Create a new simple backup manager
+    /// 
+    /// # Arguments
+    /// 
+    /// * `storage` - The storage backend to use for backups
     pub fn new(storage: Arc<dyn StorageBackend>) -> Self {
         Self { storage }
     }

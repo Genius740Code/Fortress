@@ -104,7 +104,7 @@ pub trait Plugin: Send + Sync {
     async fn execute(&self, input: PluginInput) -> Result<PluginResult>;
     
     /// Execute plugin with given input and context
-    async fn execute_with_context(&self, input: PluginInput, context: &PluginContext) -> Result<PluginResult> {
+    async fn execute_with_context(&self, input: PluginInput, _context: &PluginContext) -> Result<PluginResult> {
         // Default implementation just calls execute without context
         self.execute(input).await
     }

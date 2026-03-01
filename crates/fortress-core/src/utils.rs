@@ -650,12 +650,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_retry_with_backoff() {
-        let mut attempts = 0;
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicU32, Ordering};
+        let attempts = Arc::new(AtomicU32::new(0));
+        let attempts_clone = attempts.clone();
         let result = retry_with_backoff(
-            || {
+            move || {
+                let attempts = attempts_clone.clone();
                 Box::pin(async move {
-                    attempts += 1;
-                    if attempts < 3 {
+                    let current = attempts.fetch_add(1, Ordering::SeqCst) + 1;
+                    if current < 3 {
                         Err("error")
                     } else {
                         Ok("success")
@@ -667,6 +671,6 @@ mod tests {
         ).await;
         
         assert_eq!(result, Ok("success"));
-        assert_eq!(attempts, 3);
+        assert_eq!(attempts.load(Ordering::SeqCst), 3);
     }
 }

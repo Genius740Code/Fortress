@@ -466,6 +466,7 @@ impl RaftEngine {
 mod tests {
     use super::*;
     use std::collections::HashMap;
+    use uuid::Uuid;
 
     #[tokio::test]
     async fn test_raft_engine_creation() {

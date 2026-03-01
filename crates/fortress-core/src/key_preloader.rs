@@ -3,15 +3,14 @@
 //! This module provides configurable key preloading capabilities to minimize
 //! decryption overhead during runtime operations.
 
-use crate::error::{FortressError, Result, KeyErrorCode};
+use crate::error::Result;
 use crate::key::{KeyId, KeyMetadata, SecureKey};
-use crate::key_database::{KeyDatabase, KeyDatabaseStats};
+use crate::key_database::KeyDatabase;
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use uuid::Uuid;
 
 /// Configuration for key preloading
 #[derive(Debug, Clone, Serialize, Deserialize)]

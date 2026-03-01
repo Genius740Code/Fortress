@@ -338,7 +338,7 @@ mod tests {
         assert!(stats.total_algorithms >= 8); // At least our algorithms
         assert!(stats.total_families >= 3); // AES, ChaCha20, etc.
         assert!(stats.aead_count > 0);
-        assert!(stats.average_security_level > 0);
+        assert!(stats.average_security_level > 0.0);
         assert!(stats.newest_year >= 2024); // Our composite algorithm
         assert!(stats.oldest_year <= 2000); // AES is from 2000/2001
     }

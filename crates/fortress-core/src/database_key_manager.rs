@@ -14,7 +14,6 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use uuid::Uuid;
 
 /// Configuration for the database key manager
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -186,7 +185,7 @@ impl DatabaseKeyManager {
     /// Perform background key rotation
     async fn perform_background_rotation(
         database: &Arc<dyn KeyDatabase>,
-        enable_backup: bool,
+        _enable_backup: bool,
         metrics: &Arc<RwLock<KeyManagerMetrics>>,
     ) -> Result<()> {
         let start_time = std::time::Instant::now();

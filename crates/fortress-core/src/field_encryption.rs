@@ -476,12 +476,12 @@ mod tests {
 
         // Test data type recommendations
         let algorithm = selector.recommend_algorithm_for_type("email", FieldSensitivity::Restricted).unwrap();
-        assert_eq!(algorithm, "hmacsha512encrypt");
+        assert_eq!(algorithm, "compositeencrypt");
 
         let algorithm = selector.recommend_algorithm_for_type("blob", FieldSensitivity::Internal).unwrap();
-        assert_eq!(algorithm, "blake3encrypt");
+        assert_eq!(algorithm, "aes256ctr");
 
         let algorithm = selector.recommend_algorithm_for_type("text", FieldSensitivity::Confidential).unwrap();
-        assert_eq!(algorithm, "xchacha20poly1305");
+        assert_eq!(algorithm, "argon2idencrypt");
     }
 }

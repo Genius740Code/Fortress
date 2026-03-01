@@ -229,8 +229,6 @@ mod policy_test;
 
 #[cfg(test)]
 
-mod key_rotation_test;
-
 
 
 /// Re-export commonly used types

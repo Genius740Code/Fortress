@@ -3,14 +3,13 @@
 //! This module provides a sophisticated caching system for keys with
 //! LRU eviction, memory management, and performance monitoring.
 
-use crate::error::{FortressError, Result, KeyErrorCode};
+use crate::error::Result;
 use crate::key::{KeyId, KeyMetadata, SecureKey};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use uuid::Uuid;
 
 /// Configuration for the key cache
 #[derive(Debug, Clone, Serialize, Deserialize)]
