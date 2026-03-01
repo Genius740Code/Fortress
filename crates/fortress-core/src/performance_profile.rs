@@ -480,9 +480,8 @@ impl ProfileManager {
     }
 
     /// Get the default profile
-    pub fn get_default_profile(&self) -> &PerformanceProfileConfig {
+    pub fn get_default_profile(&self) -> Option<&PerformanceProfileConfig> {
         self.profiles.get(&self.default_profile)
-            .expect("Default profile should always exist")
     }
 
     /// Remove a profile
@@ -662,11 +661,11 @@ mod tests {
         assert!(manager.get_profile("fortress").is_some());
 
         // Default should be balanced
-        assert_eq!(manager.get_default_profile().profile_type, PerformanceProfile::Balanced);
+        assert_eq!(manager.get_default_profile().unwrap().profile_type, PerformanceProfile::Balanced);
 
         // Can set new default
         manager.set_default_profile("lightning").unwrap();
-        assert_eq!(manager.get_default_profile().profile_type, PerformanceProfile::Lightning);
+        assert_eq!(manager.get_default_profile().unwrap().profile_type, PerformanceProfile::Lightning);
 
         // Can add custom profile
         let custom = PerformanceProfileConfig::new("custom".to_string());

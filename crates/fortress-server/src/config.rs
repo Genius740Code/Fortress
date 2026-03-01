@@ -95,10 +95,8 @@ impl Default for NetworkConfig {
 
 impl NetworkConfig {
     /// Get the full bind address
-    pub fn bind_address(&self) -> SocketAddr {
-        format!("{}:{}", self.host, self.port)
-            .parse()
-            .expect("Invalid bind address")
+    pub fn bind_address(&self) -> Result<SocketAddr, std::net::AddrParseError> {
+        format!("{}:{}", self.host, self.port).parse()
     }
 }
 
@@ -390,7 +388,7 @@ mod tests {
     #[test]
     fn test_bind_address() {
         let network = NetworkConfig::default();
-        let addr = network.bind_address();
+        let addr = network.bind_address().expect("Default bind address should be valid");
         assert_eq!(addr.port(), DEFAULT_PORT);
     }
 

@@ -277,13 +277,13 @@ fn demo_profile_management(manager: &mut ProfileManager) -> Result<()> {
 
     // Change default profile
     println!("🔄 Default Profile Management:");
-    println!("Current default: {}", manager.get_default_profile().name);
+    println!("Current default: {}", manager.get_default_profile().unwrap().name);
     
     manager.set_default_profile("gaming")?;
-    println!("New default: {}", manager.get_default_profile().name);
+    println!("New default: {}", manager.get_default_profile().unwrap().name);
     
     manager.set_default_profile("balanced")?;
-    println!("Reset to: {}", manager.get_default_profile().name);
+    println!("Reset to: {}", manager.get_default_profile().unwrap().name);
     println!();
 
     // Profile validation demo

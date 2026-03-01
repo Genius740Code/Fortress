@@ -270,15 +270,16 @@ impl FortressServer {
         let ctrl_c = async {
             signal::ctrl_c()
                 .await
-                .expect("failed to install Ctrl+C handler");
+                .map_err(|e| tracing::error!("Failed to install Ctrl+C handler: {}", e))
+                .ok();
         };
 
         #[cfg(unix)]
         let terminate = async {
             signal::unix::signal(signal::unix::SignalKind::terminate())
-                .expect("failed to install signal handler")
-                .recv()
-                .await;
+                .map_err(|e| tracing::error!("Failed to install signal handler: {}", e))
+                .ok()
+                .and_then(|mut signal| signal.recv().await);
         };
 
         #[cfg(not(unix))]
