@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fortress-config
+  namespace: fortress
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: config
+data:
+  RUST_LOG: "info"
+  FORTRESS_SERVER_HOST: "0.0.0.0"
+  FORTRESS_SERVER_PORT: "8080"
+  FORTRESS_DATA_DIR: "/data"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: fortress-secrets
+  namespace: fortress
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: secrets
+type: Opaque
+data:
+  # Base64 encoded values - replace with actual values
+  # echo -n "your-secret-key" | base64
+  FORTRESS_ENCRYPTION_KEY: eW91ci1zZWNyZXQta2V5  # Replace with actual key
+  FORTRESS_JWT_SECRET: eW91ci1qd3Qtc2VjcmV0      # Replace with actual secret

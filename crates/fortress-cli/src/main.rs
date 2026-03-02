@@ -5,7 +5,7 @@ use tracing::{info, error};
 mod commands;
 mod utils;
 
-use commands::{create_simple, cluster, tenant};
+use commands::{create_simple, cluster, tenant, plugin};
 
 #[derive(Parser)]
 #[command(name = "fortress")]
@@ -86,6 +86,11 @@ pub enum Commands {
     Tenant {
         #[command(subcommand)]
         action: tenant::TenantCommands,
+    },
+    /// Manage plugins
+    Plugin {
+        #[command(subcommand)]
+        action: plugin::PluginAction,
     },
 }
 
@@ -182,6 +187,9 @@ async fn run_command(command: Commands) -> Result<()> {
         }
         Commands::Tenant { action } => {
             tenant::execute_tenant_command(action).await.map_err(|e| color_eyre::eyre::eyre!("Tenant command failed: {}", e))
+        }
+        Commands::Plugin { action } => {
+            plugin::execute_plugin_command(action).await.map_err(|e| color_eyre::eyre::eyre!("Plugin command failed: {}", e))
         }
     }
 }

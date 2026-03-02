@@ -1,0 +1,31 @@
+# Development Docker Compose for Fortress
+version: '3.8'
+
+services:
+  fortress-dev:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: fortress-dev
+    ports:
+      - "8080:8080"
+    volumes:
+      - ..:/app
+      - fortress-data:/data
+    environment:
+      - RUST_LOG=debug
+      - FORTRESS_DATA_DIR=/data
+    working_dir: /app
+    command: cargo run --release -p fortress-server
+    stdin_open: true
+    tty: true
+    networks:
+      - fortress-network
+
+volumes:
+  fortress-data:
+    driver: local
+
+networks:
+  fortress-network:
+    driver: bridge

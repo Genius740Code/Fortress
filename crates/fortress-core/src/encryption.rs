@@ -2473,7 +2473,7 @@ mod tests {
         let ciphertext = algorithm.encrypt(plaintext, key.as_bytes()).unwrap();
         let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
         
-        assert_eq!(plaintext, decrypted);
+        assert_eq!(&plaintext[..], &decrypted[..]);
         println!("✅ AEGIS-256 implementation test passed");
     }
 
@@ -2487,7 +2487,7 @@ mod tests {
         let ciphertext = algorithm.encrypt_async(plaintext, key.as_bytes()).await.unwrap();
         let decrypted = algorithm.decrypt_async(&ciphertext, key.as_bytes()).await.unwrap();
         
-        assert_eq!(plaintext, decrypted);
+        assert_eq!(&plaintext[..], &decrypted[..]);
         println!("✅ Async AEGIS-256 test passed");
     }
 } // mod tests

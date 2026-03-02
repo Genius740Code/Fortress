@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fortress
+  labels:
+    name: fortress
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: fortress

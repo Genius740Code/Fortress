@@ -221,6 +221,10 @@ pub mod database_key_manager;
 
 pub mod plugin;
 
+/// Plugin marketplace and distribution system
+
+pub mod plugin_marketplace;
+
 /// True Random Number Generator (TRNG) system
 
 pub mod trng;
@@ -323,6 +327,11 @@ pub mod prelude {
     pub use crate::plugin::{
         Plugin, PluginRegistry, PluginManager, PluginMetadata, PluginCapability,
         PluginContext, PluginResult, PluginInput, PluginHealth, PluginMetrics,
+    };
+
+    pub use crate::plugin_marketplace::{
+        PluginMarketplace, PluginRepository, PluginInstaller, PluginPackage,
+        InstalledPlugin,
     };
 
     pub use crate::trng::{

@@ -1,0 +1,20 @@
+apiVersion: v2
+name: fortress
+description: A Helm chart for Fortress secure database system
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/Genius740Code/Fortress
+sources:
+  - https://github.com/Genius740Code/Fortress
+maintainers:
+  - name: Fortress Team
+    email: team@fortress-db.com
+keywords:
+  - database
+  - encryption
+  - security
+  - vault
+  - rust
+annotations:
+  category: Database

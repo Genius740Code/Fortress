@@ -1,0 +1,160 @@
+# Default values for fortress.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Fortress server configuration
+image:
+  repository: fortress-server
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+# Number of replicas
+replicaCount: 3
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 8080
+  annotations: {}
+
+# Ingress configuration
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: fortress.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: fortress-tls
+  #    hosts:
+  #      - fortress.local
+
+# Resource configuration
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+# Autoscaling
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+# Persistence configuration
+persistence:
+  enabled: true
+  storageClass: "fast-ssd"
+  size: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  annotations: {}
+
+# Logs persistence
+logsPersistence:
+  enabled: true
+  storageClass: "fast-ssd"
+  size: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  annotations: {}
+
+# Security context
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+# Container security context
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+    - ALL
+
+# Environment variables
+env:
+  RUST_LOG: "info"
+  FORTRESS_SERVER_HOST: "0.0.0.0"
+  FORTRESS_SERVER_PORT: "8080"
+  FORTRESS_DATA_DIR: "/data"
+
+# Secrets
+secrets:
+  encryptionKey: ""  # Set to base64 encoded encryption key
+  jwtSecret: ""      # Set to base64 encoded JWT secret
+
+# Health checks
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity
+affinity: {}
+
+# Pod annotations
+podAnnotations: {
+  prometheus.io/scrape: "true",
+  prometheus.io/port: "8080",
+  prometheus.io/path: "/metrics"
+}
+
+# Service account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Pod disruption budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Network policies
+networkPolicy:
+  enabled: false
+  ingress: []
+  egress: []
+
+# Monitoring
+monitoring:
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    scrapeTimeout: 10s
+
+# RBAC
+rbac:
+  create: true
