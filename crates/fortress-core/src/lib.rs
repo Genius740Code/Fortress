@@ -229,6 +229,34 @@ pub mod plugin_marketplace;
 
 pub mod trng;
 
+/// Secure Multi-Party Computation (MPC) system
+
+pub mod mpc;
+
+/// MPC Manager implementation
+
+pub mod mpc_manager;
+
+/// MPC Party implementation
+
+pub mod mpc_party;
+
+/// MPC Network implementation
+
+pub mod mpc_network;
+
+/// Homomorphic encryption capabilities
+
+pub mod homomorphic_encryption;
+
+/// Quantum-resistant encryption options
+
+pub mod quantum_resistant;
+
+/// Advanced threat detection and response
+
+pub mod threat_detection;
+
 
 
 #[cfg(test)]
@@ -337,6 +365,37 @@ pub mod prelude {
     pub use crate::trng::{
         TrueRandomGenerator, TrngConfig, TrngHealth, EntropySource,
         init_global_trng, global_trng, random_bytes, random_u64, fill_random
+    };
+
+    pub use crate::mpc::{
+        MpcProtocol, MpcParty, MpcNetwork, MpcManager, ComputationConfig, SessionId,
+        PartyId, PartyRole, ComputationStatus, MpcMessage, ComputationResult,
+        SecretShare, ShareId, SecretSharingScheme, ShamirSecretSharing,
+    };
+
+    pub use crate::mpc_manager::{DefaultMpcManager, MpcManagerBuilder};
+
+    pub use crate::mpc_party::{InMemoryMpcParty, MpcPartyBuilder, MessageHandler};
+
+    pub use crate::mpc_network::{InMemoryMpcNetwork, MpcNetworkBuilder, NetworkStats};
+
+    pub use crate::homomorphic_encryption::{
+        HomomorphicEncryption, HomomorphicScheme, HomomorphicOperation, HomomorphicCiphertext,
+        HomomorphicManager, HomomorphicManagerBuilder, HomomorphicPerformance,
+        PaillierHomomorphic,
+    };
+
+    pub use crate::quantum_resistant::{
+        QuantumResistantEncryption, QuantumResistantScheme, QuantumResistantCiphertext,
+        QuantumResistantManager, QuantumResistantManagerBuilder, QuantumPerformance,
+        LweEncryption, HybridEncryption,
+    };
+
+    pub use crate::threat_detection::{
+        ThreatDetectionEngine, ThreatResponseSystem, DetectionRule, SecurityEvent,
+        ThreatDetection, SecurityIncident, ThreatSeverity, ThreatType, ResponseAction,
+        DefaultThreatDetectionEngine, DefaultThreatResponseSystem,
+        DetectionStatistics, ResponseStatistics,
     };
 
 }
