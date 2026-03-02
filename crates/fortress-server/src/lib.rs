@@ -48,6 +48,7 @@ pub mod auth;
 pub mod metrics;
 pub mod health;
 pub mod grpc;
+pub mod cluster;
 
 /// Re-export commonly used types
 pub mod prelude {

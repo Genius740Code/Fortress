@@ -70,7 +70,6 @@ config = "0.13"
 # Async utilities
 futures = "0.3"
 futures-util = "0.3"
-async-trait = "0.1"
 
 # Base64 encoding
 base64 = "0.21"
@@ -91,6 +90,9 @@ zeroize = { version = "1.7", features = ["zeroize_derive"] }
 
 # Random number generation
 rand = "0.8"
+
+# Async traits
+async-trait = "0.1"
 
 [dev-dependencies]
 tower-test = "0.4"
