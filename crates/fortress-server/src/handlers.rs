@@ -3,22 +3,29 @@
 //! This module contains all the request handlers for the various API endpoints,
 //! including data storage, retrieval, key management, and authentication.
 
-use crate::auth::{AuthManager, TokenClaims, OptionalTokenClaims};
+use crate::auth::{AuthManager, OptionalTokenClaims};
 use crate::error::{ServerError, ServerResult};
 use crate::models::*;
 use crate::metrics::MetricsCollector;
 use axum::{
     extract::{Path, Query, State},
-    http::StatusCode,
     response::Json,
 };
-use chrono::Utc;
-use fortress_core::prelude::*;
+use chrono::{Utc, DateTime};
+use fortress_core::{
+    encryption::{EncryptionAlgorithm, Aegis256, ChaCha20Poly1305, Aes256Gcm},
+    key::{KeyManager, SecureKey, InMemoryKeyManager},
+    storage::StorageBackend,
+    field_encryption::FieldEncryptionManager,
+};
+use crate::health::HealthChecker;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tracing::{info, warn, error};
+use tracing::info;
 use uuid::Uuid;
+use futures_util::TryFutureExt;
+use fortress_core::field_encryption::FieldIdentifier;
 
 /// Storage record (simplified for this example)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -94,26 +101,24 @@ pub async fn store_data(
 
     // Get or generate encryption key
     let key_id = request.key_id.clone().unwrap_or_else(|| {
-        let algorithm = Aegis256::new();
-        let key = state.key_manager.generate_key(&algorithm)
-            .map_err(|e| ServerError::Core(e))?;
-        key.id
+        // Generate a new key ID since we can't use async here
+        format!("key_{}", Uuid::new_v4())
     });
 
     // Get the key
-    let key = state.key_manager.get_key(&key_id)
+    let key = state.key_manager.retrieve_key(&key_id).await
         .map_err(|e| ServerError::Core(e))?;
+    let key_bytes = key.0.as_bytes();
 
     // Encrypt data
     let data_json = serde_json::to_string(&request.data)
         .map_err(|e| ServerError::serialization(e.to_string()))?;
     
     let plaintext = data_json.as_bytes();
-    let ciphertext = match Aegis256::new().encrypt(plaintext, &key) {
+    let ciphertext = match Aegis256::new().encrypt(plaintext, key_bytes) {
         Ok(ciphertext) => ciphertext,
         Err(e) => return Err(ServerError::Core(e)),
     };
-        .map_err(|e| ServerError::Core(e))?;
 
     // Handle field-level encryption if specified
     let field_metadata = if let Some(ref field_config) = request.field_encryption {
@@ -218,11 +223,12 @@ pub async fn retrieve_data(
     }
 
     // Get the decryption key
-    let key = state.key_manager.get_key(&storage_record.key_id)
+    let key = state.key_manager.retrieve_key(&storage_record.key_id).await
         .map_err(|e| ServerError::Core(e))?;
+    let key_bytes = key.0.as_bytes();
 
     // Decrypt the data
-    let plaintext = Aegis256::new().decrypt(&storage_record.data, &key)
+    let plaintext = Aegis256::new().decrypt(&storage_record.data, key_bytes)
         .map_err(|e| ServerError::Core(e))?;
     
     let decrypted_data: serde_json::Value = serde_json::from_slice(&plaintext)
@@ -232,10 +238,7 @@ pub async fn retrieve_data(
     let final_data = if let Some(ref field_metadata) = storage_record.field_metadata {
         let mut data = decrypted_data;
         for (field_name, metadata) in field_metadata {
-            let field_id = FieldIdentifier {
-                name: field_name.clone(),
-                tenant_id: storage_record.tenant_id.clone(),
-            };
+            let field_id = fortress_core::field_encryption::FieldIdentifier::Name(field_name.clone());
             
             // This would require storing the encrypted field data separately
             // For now, we'll keep the original data
@@ -491,14 +494,14 @@ pub async fn generate_key(
     };
 
     // Generate the key
-    let key = state.key_manager.generate_key(&algorithm)
+    let key = state.key_manager.generate_key(&algorithm).await
         .map_err(|e| ServerError::Core(e))?;
 
     // Generate fingerprint
     let fingerprint = generate_key_fingerprint(&key);
 
     let response = KeyResponse {
-        id: key.id.clone(),
+        id: format!("key_{}", Uuid::new_v4()), // Generate ID since SecureKey doesn't have one
         algorithm: request.algorithm,
         key_size: request.key_size.unwrap_or(256),
         created_at: Utc::now(),
@@ -573,8 +576,7 @@ pub async fn refresh_token(
 pub async fn health_check(
     State(state): State<Arc<AppState>>,
 ) -> ServerResult<Json<ApiResponse<HealthResponse>>> {
-    let health_checker = state.health_checker.as_ref()
-        .ok_or_else(|| ServerError::internal("Health checker not available"))?;
+    let health_checker = &*state.health_checker;
 
     let health_response = health_checker.get_health().await;
 
@@ -603,7 +605,7 @@ pub async fn get_prometheus_metrics(
 fn generate_key_fingerprint(key: &SecureKey) -> String {
     use sha2::{Sha256, Digest};
     let mut hasher = Sha256::new();
-    hasher.update(key.data());
+    hasher.update(key.as_bytes());
     format!("{:x}", hasher.finalize())[..16].to_string()
 }
 
@@ -1014,8 +1016,8 @@ pub async fn update_data(
     Ok(Json(ApiResponse::success(response)))
 }
 
-/// Delete data handler
-pub async fn delete_data(
+/// Delete data handler (API v1)
+pub async fn delete_data_v2(
     State(_state): State<Arc<AppState>>,
     Path((database_name, table_name, data_id)): Path<(String, String, String)>,
 ) -> ServerResult<Json<ApiResponse<OperationDeleteResponse>>> {

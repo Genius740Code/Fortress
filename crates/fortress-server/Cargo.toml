@@ -47,15 +47,19 @@ chrono = { version = "0.4", features = ["serde"] }
 # HTTP client (for health checks)
 reqwest = { version = "0.12", features = ["json"] }
 
+# Metrics and monitoring
+metrics = "0.21"
+metrics-exporter-prometheus = "0.12"
+prometheus = "0.13"
+
+# Cryptography
+sha2 = "0.10"
+
 # gRPC dependencies (simplified implementation for now)
 # tonic = "0.10"
 # prost = "0.12"
 # tokio-stream = "0.1"
 # tonic-reflection = "0.10"
-
-# Metrics and monitoring
-metrics = "0.21"
-metrics-exporter-prometheus = "0.12"
 
 # JWT authentication
 jsonwebtoken = "9.2"
@@ -65,6 +69,7 @@ config = "0.13"
 
 # Async utilities
 futures = "0.3"
+futures-util = "0.3"
 async-trait = "0.1"
 
 # Base64 encoding

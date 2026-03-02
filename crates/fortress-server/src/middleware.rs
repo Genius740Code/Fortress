@@ -3,29 +3,27 @@
 //! This module provides production-ready rate limiting with multiple algorithms,
 //! distributed storage support, and comprehensive DDoS protection mechanisms.
 
-use crate::auth::TokenClaims;
-use crate::config::{NetworkConfig, RateLimitConfig, RateLimitAlgorithm, DdosProtectionConfig};
+use crate::config::{NetworkConfig, RateLimitConfig, RateLimitAlgorithm};
 use crate::error::{ServerError, ServerResult};
+use crate::auth::TokenClaims;
 use axum::{
-    body::Body,
     extract::{Request, State},
     http::{header, HeaderValue, StatusCode},
     middleware::Next,
-    response::{IntoResponse, Response},
+    response::Response,
 };
 use dashmap::DashMap;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use serde::Serialize;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use tokio::sync::RwLock;
-use tower::Layer;
 use tower_http::{
-    cors::{Any, CorsLayer},
+    cors::CorsLayer,
     timeout::TimeoutLayer,
     trace::TraceLayer,
 };
-use tracing::{info, warn, error, debug};
+use tower_http::classify::{SharedClassifier, ServerErrorsAsFailures};
+use tower_http::trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse};
+use tracing::{info, warn, error};
 
 /// Advanced rate limiter with multiple algorithms and DDoS protection
 #[derive(Clone)]
@@ -842,23 +840,8 @@ pub fn create_timeout_layer(timeout_seconds: u64) -> TimeoutLayer {
 }
 
 /// Create trace layer
-pub fn create_trace_layer() -> TraceLayer {
+pub fn create_trace_layer() -> TraceLayer<SharedClassifier<ServerErrorsAsFailures>> {
     TraceLayer::new_for_http()
-        .make_span_with(|request: &Request<_>| {
-            let method_str: String = request.method().to_string();
-            tracing::info_span!(
-                "http_request",
-                method = %method_str,
-                uri = %request.uri(),
-                version = ?request.version(),
-            )
-        })
-        .on_request(|_request: &Request<_>, _span: &tracing::Span| {
-            tracing::info!("started processing request");
-        })
-        .on_response(|_response: &Response<_>, latency: Duration, _span: &tracing::Span| {
-            tracing::info!("finished processing request in {:?}", latency);
-        })
 }
 
 /// Extract client ID from request

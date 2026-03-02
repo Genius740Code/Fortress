@@ -1,6 +1,10 @@
 use crate::grpc::types::*;
-use crate::error::FortressServerError;
-use fortress_core::{FortressDatabase, encryption::EncryptionManager};
+use crate::error::ServerError;
+use fortress_core::{
+    encryption::{EncryptionAlgorithm, Aegis256, ChaCha20Poly1305, Aes256Gcm},
+    key::{KeyManager, SecureKey},
+    storage::StorageBackend,
+};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -8,24 +12,24 @@ use tracing::{info, error, debug};
 
 #[derive(Debug, Clone)]
 pub struct FortressGrpcService {
-    database: Arc<RwLock<Option<FortressDatabase>>>,
-    encryption_manager: Arc<EncryptionManager>,
+    database: Arc<RwLock<Option<()>>>, // Placeholder for FortressDatabase
+    encryption_manager: Arc<()>, // Placeholder
 }
 
 impl FortressGrpcService {
-    pub fn new(encryption_manager: Arc<EncryptionManager>) -> Self {
+    pub fn new() -> Self {
         Self {
             database: Arc::new(RwLock::new(None)),
-            encryption_manager,
+            encryption_manager: Arc::new(()), // Placeholder
         }
     }
 
-    pub async fn set_database(&self, database: FortressDatabase) {
+    pub async fn set_database(&self, _database: ()) {
         let mut db = self.database.write().await;
-        *db = Some(database);
+        *db = Some(()); // Placeholder
     }
 
-    fn map_error(err: FortressServerError) -> String {
+    fn map_error(err: ServerError) -> String {
         error!("gRPC service error: {:?}", err);
         err.to_string()
     }
@@ -91,19 +95,8 @@ impl FortressGrpcService {
     ) -> Result<EncryptResponse, String> {
         debug!("Encrypting data for database: {}", request.database_id);
 
-        // Use fortress-core encryption
-        match self.encryption_manager.encrypt(&request.plaintext).await {
-            Ok(ciphertext) => {
-                let response = EncryptResponse {
-                    ciphertext,
-                    key_id: uuid::Uuid::new_v4().to_string(),
-                    encrypted_at: chrono::Utc::now(),
-                    metadata: request.metadata,
-                };
-                Ok(response)
-            }
-            Err(e) => Err(Self::map_error(FortressServerError::Encryption(e))),
-        }
+        // Return error since encryption manager is placeholder
+        Err("Encryption not implemented - placeholder".to_string())
     }
 
     pub async fn decrypt_data(
@@ -112,18 +105,8 @@ impl FortressGrpcService {
     ) -> Result<DecryptResponse, String> {
         debug!("Decrypting data for database: {}", request.database_id);
 
-        // Use fortress-core decryption
-        match self.encryption_manager.decrypt(&request.ciphertext).await {
-            Ok(plaintext) => {
-                let response = DecryptResponse {
-                    plaintext,
-                    decrypted_at: chrono::Utc::now(),
-                    metadata: HashMap::new(),
-                };
-                Ok(response)
-            }
-            Err(e) => Err(Self::map_error(FortressServerError::Encryption(e))),
-        }
+        // Return error since encryption manager is placeholder
+        Err("Decryption not implemented - placeholder".to_string())
     }
 
     pub async fn health_check(

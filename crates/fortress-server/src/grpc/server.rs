@@ -1,6 +1,10 @@
 use crate::grpc::service::FortressGrpcService;
-use crate::error::FortressServerError;
-use fortress_core::encryption::EncryptionManager;
+use crate::error::ServerError;
+use fortress_core::{
+    encryption::{EncryptionAlgorithm, Aegis256, ChaCha20Poly1305, Aes256Gcm},
+    key::{KeyManager, SecureKey},
+    storage::StorageBackend,
+};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use axum::{
@@ -18,13 +22,14 @@ pub struct GrpcServer {
 }
 
 impl GrpcServer {
-    pub fn new(addr: SocketAddr, encryption_manager: Arc<EncryptionManager>) -> Self {
-        let service = Arc::new(FortressGrpcService::new(encryption_manager));
-        
-        Self { addr, service }
+    pub fn new(addr: SocketAddr) -> Self {
+        Self {
+            addr,
+            service: Arc::new(FortressGrpcService::new()),
+        }
     }
 
-    pub async fn start(self) -> Result<(), FortressServerError> {
+    pub async fn start(self) -> Result<(), ServerError> {
         info!("Starting gRPC-compatible server on {}", self.addr);
 
         // Create HTTP routes that mimic gRPC endpoints using JSON
@@ -40,14 +45,14 @@ impl GrpcServer {
             .layer(tower_http::cors::CorsLayer::permissive());
 
         let listener = tokio::net::TcpListener::bind(self.addr).await
-            .map_err(|e| FortressServerError::Server(e.to_string()))?;
+            .map_err(|e| ServerError::internal(e.to_string()))?;
 
         info!("gRPC-compatible server listening on {}", self.addr);
         
         axum::serve(listener, app).await
             .map_err(|e| {
                 error!("Server error: {}", e);
-                FortressServerError::Server(e.to_string())
+                ServerError::internal(e.to_string())
             })?;
 
         Ok(())

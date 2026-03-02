@@ -7,13 +7,17 @@ use crate::config::FeatureFlags;
 use crate::models::{HealthResponse, HealthStatus, ComponentHealth};
 use crate::error::{ServerError, ServerResult};
 use chrono::{DateTime, Utc};
-use fortress_core::prelude::*;
 use fortress_core::encryption::PerformanceProfile;
+use fortress_core::audit::{AuditConfig, AuditEntry, AuditEventType, SecurityLevel, EventOutcome, AuditStatistics, AuditLogger, AuditQuery, IntegrityReport};
+use fortress_core::encryption::{EncryptionAlgorithm, Aegis256};
+use fortress_core::key::{SecureKey, InMemoryKeyManager, KeyManager, KeyMetadata};
+use fortress_core::error::FortressError;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
-use tracing::{info, warn, error};
+use tracing::{info, error};
+use uuid::Uuid;
 
 /// Simple in-memory audit logger for health checks
 struct InMemoryAuditLogger;
@@ -26,39 +30,39 @@ impl InMemoryAuditLogger {
 
 #[async_trait::async_trait]
 impl AuditLogger for InMemoryAuditLogger {
-    fn log(&mut self, _entry: AuditEntry) -> Result<()> {
+    fn log(&mut self, _entry: AuditEntry) -> Result<(), FortressError> {
         // Just return success for health check
         Ok(())
     }
     
-    fn query(&self, _query: AuditQuery) -> Result<Vec<AuditEntry>> {
+    fn query(&self, _query: AuditQuery) -> Result<Vec<AuditEntry>, FortressError> {
         // Return empty results for health check
         Ok(vec![])
     }
     
-    fn verify_integrity(&self) -> Result<IntegrityReport> {
+    fn verify_integrity(&self) -> Result<IntegrityReport, FortressError> {
         // Return a simple integrity report
         Ok(IntegrityReport {
             total_entries: 0,
-            verified_entries: 0,
-            tampered_entries: 0,
-            verification_time: Utc::now(),
-            is_valid: true,
+            valid_entries: 0,
+            violations: 0,
+            violation_details: vec![],
         })
     }
     
-    fn get_statistics(&self) -> Result<AuditStatistics> {
+    fn get_statistics(&self) -> Result<AuditStatistics, FortressError> {
         // Return empty statistics for health check
         Ok(AuditStatistics {
             total_entries: 0,
-            entries_by_type: HashMap::new(),
-            entries_by_level: HashMap::new(),
+            entries_by_event_type: HashMap::new(),
+            entries_by_security_level: HashMap::new(),
             entries_by_outcome: HashMap::new(),
-            time_range: None,
+            date_range: (None, None),
+            log_size: 0,
         })
     }
     
-    fn rotate_logs(&self) -> Result<()> {
+    fn rotate_logs(&self) -> Result<(), FortressError> {
         // Just return success for health check
         Ok(())
     }
@@ -283,8 +287,8 @@ impl HealthChecker {
         let key = SecureKey::generate(algorithm.key_size());
         
         let plaintext = b"health_check_test";
-        let ciphertext = algorithm.encrypt(plaintext, &key)?;
-        let decrypted = algorithm.decrypt(&ciphertext, &key)?;
+        let ciphertext = algorithm.encrypt(plaintext, key.as_bytes())?;
+        let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes())?;
         
         if plaintext != &decrypted[..] {
             return Err(ServerError::internal("Encryption test failed"));
@@ -325,7 +329,7 @@ impl HealthChecker {
         // Retrieve the key
         let (retrieved_key, _retrieved_metadata) = key_manager.retrieve_key(&key_id).await?;
         
-        if retrieved_key.data() != key.data() {
+        if retrieved_key.as_bytes() != key.as_bytes() {
             return Err(ServerError::internal("Key retrieval failed"));
         }
         

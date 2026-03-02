@@ -4,14 +4,15 @@
 //! including HTTP request metrics, performance metrics, and custom business metrics.
 
 use crate::models::MetricsResponse;
-use chrono::{DateTime, Utc};
-use prometheus::{Encoder, TextEncoder};
+use chrono::Utc;
+use prometheus;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
-use tracing::{info, warn, error};
+use tracing::info;
+use axum::extract::State;
 
 /// Metrics collector for the Fortress server
 #[derive(Clone)]

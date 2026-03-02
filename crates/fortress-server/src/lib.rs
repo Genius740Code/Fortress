@@ -58,8 +58,11 @@ pub mod prelude {
     pub use crate::auth::{AuthManager, TokenClaims};
     pub use crate::health::HealthChecker;
     pub use crate::metrics::MetricsCollector;
-    pub use crate::middleware::{AdvancedRateLimiter, RateLimitAlgorithm, RateLimitMetricsSnapshot};
-    pub use crate::grpc::{GrpcServer, FortressGrpcService};
+    pub use crate::middleware::AdvancedRateLimiter;
+    pub use crate::config::RateLimitAlgorithm;
+    pub use crate::middleware::RateLimitMetricsSnapshot;
+    pub use crate::grpc::server::GrpcServer;
+    pub use crate::grpc::service::FortressGrpcService;
 }
 
 /// Fortress server version information
