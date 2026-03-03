@@ -301,6 +301,14 @@ pub mod compliance;
 
 pub mod audit_event;
 
+/// Secrets engine system for Vault-compatible secret management
+
+pub mod secrets;
+
+/// KV (Key-Value) secrets engine implementation
+
+pub mod secrets_kv;
+
 
 
 #[cfg(test)]
@@ -497,6 +505,15 @@ pub mod prelude {
         UserDataExport, HIPAAComplianceReport, SOC2Report, PCIDSSValidationReport,
         ComplianceAuditLogger, create_default_gdpr_policy, create_default_hipaa_policy,
         create_default_pci_dss_policy,
+    };
+
+    pub use crate::secrets::{
+        SecretsEngine, SecretsEngineManager, Secret, SecretMetadata, LeaseInfo, 
+        EngineType, EngineStatus, EngineStats, SecretsConfig,
+    };
+
+    pub use crate::secrets_kv::{
+        KvEngine, KvConfig, VersionedSecret,
     };
 
 }

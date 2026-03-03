@@ -159,6 +159,17 @@ pub enum FortressError {
         /// Error code for programmatic handling
         code: ComplianceErrorCode,
     },
+
+    /// Secrets management errors
+    #[error("Secrets error: {message}")]
+    Secrets {
+        /// Error message
+        message: String,
+        /// Secrets engine if applicable
+        engine: Option<String>,
+        /// Error code for programmatic handling
+        code: SecretsErrorCode,
+    },
 }
 
 /// Encryption error codes
@@ -377,6 +388,50 @@ pub enum ComplianceErrorCode {
     AuditTrailRequired,
 }
 
+/// Secrets management error codes
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
+pub enum SecretsErrorCode {
+    /// Secret not found
+    #[error("Secret not found")]
+    SecretNotFound,
+    
+    /// Lease not found
+    #[error("Lease not found")]
+    LeaseNotFound,
+    
+    /// Lease expired
+    #[error("Lease expired")]
+    LeaseExpired,
+    
+    /// Engine not found
+    #[error("Engine not found")]
+    EngineNotFound,
+    
+    /// Invalid path
+    #[error("Invalid path")]
+    InvalidPath,
+    
+    /// Version not found
+    #[error("Version not found")]
+    VersionNotFound,
+    
+    /// Access denied
+    #[error("Access denied")]
+    AccessDenied,
+    
+    /// Invalid configuration
+    #[error("Invalid configuration")]
+    InvalidConfiguration,
+    
+    /// Lease TTL exceeded
+    #[error("Lease TTL exceeded")]
+    LeaseTtlExceeded,
+    
+    /// Secret already exists
+    #[error("Secret already exists")]
+    SecretAlreadyExists,
+}
+
 impl FortressError {
     /// Create a new encryption error
     pub fn encryption<S: Into<String>>(
@@ -547,6 +602,28 @@ impl FortressError {
         }
     }
 
+    /// Create a new secrets error
+    pub fn secrets<S: Into<String>>(message: S) -> Self {
+        Self::Secrets {
+            message: message.into(),
+            engine: None,
+            code: SecretsErrorCode::SecretNotFound,
+        }
+    }
+
+    /// Create a new secrets error with engine and code
+    pub fn secrets_with_code<S: Into<String>>(
+        message: S,
+        engine: Option<String>,
+        code: SecretsErrorCode,
+    ) -> Self {
+        Self::Secrets {
+            message: message.into(),
+            engine,
+            code,
+        }
+    }
+
     /// Check if this error is retryable
     pub fn is_retryable(&self) -> bool {
         match self {
@@ -569,6 +646,7 @@ impl FortressError {
                 | Self::KeyManagement { .. }
                 | Self::Authentication { .. }
                 | Self::Compliance { .. }
+                | Self::Secrets { .. }
         )
     }
 
@@ -590,6 +668,7 @@ impl FortressError {
             Self::Cluster { .. } => "cluster",
             Self::Plugin { .. } => "plugin",
             Self::Compliance { .. } => "compliance",
+            Self::Secrets { .. } => "secrets",
         }
     }
 }
