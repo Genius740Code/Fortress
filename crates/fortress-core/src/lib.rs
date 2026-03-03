@@ -293,6 +293,14 @@ pub mod auto_tuning;
 
 pub mod observability;
 
+/// Comprehensive compliance framework
+
+pub mod compliance;
+
+/// Audit event structures for compliance integration
+
+pub mod audit_event;
+
 
 
 #[cfg(test)]
@@ -480,6 +488,15 @@ pub mod prelude {
         HealthChecker, HealthConfig, HealthStatus,
         AlertManager, AlertConfig, AlertRule,
         DashboardManager, DashboardConfig, Widget,
+    };
+
+    pub use crate::compliance::{
+        ComplianceManager, CompliancePolicy, ComplianceStandard, DataClassification,
+        ComplianceRequirement, ImplementationStatus, DataSubjectRequest, GDPRDataSubjectRight,
+        RequestStatus, ComplianceAuditEvent, ComplianceEventType, AuditOutcome,
+        UserDataExport, HIPAAComplianceReport, SOC2Report, PCIDSSValidationReport,
+        ComplianceAuditLogger, create_default_gdpr_policy, create_default_hipaa_policy,
+        create_default_pci_dss_policy,
     };
 
 }

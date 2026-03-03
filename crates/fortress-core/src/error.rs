@@ -148,6 +148,17 @@ pub enum FortressError {
         /// Plugin ID if applicable
         plugin_id: Option<String>,
     },
+
+    /// Compliance-related errors
+    #[error("Compliance error: {message}")]
+    Compliance {
+        /// Error message
+        message: String,
+        /// Compliance standard if applicable
+        standard: Option<String>,
+        /// Error code for programmatic handling
+        code: ComplianceErrorCode,
+    },
 }
 
 /// Encryption error codes
@@ -330,6 +341,42 @@ pub enum QueryErrorCode {
     InvalidOperation,
 }
 
+/// Compliance error codes
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
+pub enum ComplianceErrorCode {
+    /// Policy not found
+    #[error("Policy not found")]
+    PolicyNotFound,
+    
+    /// Requirement not met
+    #[error("Requirement not met")]
+    RequirementNotMet,
+    
+    /// Data subject request failed
+    #[error("Data subject request failed")]
+    DataSubjectRequestFailed,
+    
+    /// Compliance verification failed
+    #[error("Compliance verification failed")]
+    VerificationFailed,
+    
+    /// Invalid compliance standard
+    #[error("Invalid compliance standard")]
+    InvalidStandard,
+    
+    /// Access denied for compliance operation
+    #[error("Access denied")]
+    AccessDenied,
+    
+    /// Data retention violation
+    #[error("Data retention violation")]
+    DataRetentionViolation,
+    
+    /// Audit trail required
+    #[error("Audit trail required")]
+    AuditTrailRequired,
+}
+
 impl FortressError {
     /// Create a new encryption error
     pub fn encryption<S: Into<String>>(
@@ -478,6 +525,28 @@ impl FortressError {
         }
     }
 
+    /// Create a new compliance error
+    pub fn compliance<S: Into<String>>(message: S) -> Self {
+        Self::Compliance {
+            message: message.into(),
+            standard: None,
+            code: ComplianceErrorCode::VerificationFailed,
+        }
+    }
+
+    /// Create a new compliance error with standard and code
+    pub fn compliance_with_code<S: Into<String>>(
+        message: S,
+        standard: Option<String>,
+        code: ComplianceErrorCode,
+    ) -> Self {
+        Self::Compliance {
+            message: message.into(),
+            standard,
+            code,
+        }
+    }
+
     /// Check if this error is retryable
     pub fn is_retryable(&self) -> bool {
         match self {
@@ -499,6 +568,7 @@ impl FortressError {
             Self::Encryption { .. }
                 | Self::KeyManagement { .. }
                 | Self::Authentication { .. }
+                | Self::Compliance { .. }
         )
     }
 
@@ -519,6 +589,7 @@ impl FortressError {
             Self::PolicyError(_) => "policy",
             Self::Cluster { .. } => "cluster",
             Self::Plugin { .. } => "plugin",
+            Self::Compliance { .. } => "compliance",
         }
     }
 }
