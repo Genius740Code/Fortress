@@ -257,6 +257,26 @@ pub mod quantum_resistant;
 
 pub mod threat_detection;
 
+/// Advanced query optimization system
+
+pub mod query_optimizer;
+
+/// Distributed caching layer
+
+pub mod distributed_cache;
+
+/// Advanced connection pooling and load balancing
+
+pub mod connection_pool;
+
+/// Performance monitoring and profiling
+
+pub mod performance_monitor;
+
+/// Automatic performance tuning system
+
+pub mod auto_tuning;
+
 
 
 #[cfg(test)]
@@ -396,6 +416,34 @@ pub mod prelude {
         ThreatDetection, SecurityIncident, ThreatSeverity, ThreatType, ResponseAction,
         DefaultThreatDetectionEngine, DefaultThreatResponseSystem,
         DetectionStatistics, ResponseStatistics,
+    };
+
+    pub use crate::query_optimizer::{
+        QueryOptimizer, QueryOptimizerConfig, TableStatistics, ColumnStatistics,
+        IndexStatistics, OptimizerStats, hash_query
+    };
+
+    pub use crate::distributed_cache::{
+        DistributedCache, DistributedCacheConfig, CacheBackend, EvictionPolicy,
+        CacheStatistics, InMemoryCache, create_distributed_cache
+    };
+
+    pub use crate::connection_pool::{
+        ConnectionManager, ConnectionPoolConfig, ServerEndpoint, ConnectionStats,
+        LoadBalanceAlgorithm, AdvancedConnectionPool, create_connection_pool
+    };
+
+    pub use crate::performance_monitor::{
+        PerformanceMonitor, PerformanceMonitorConfig, ProfileSample, OperationType,
+        AggregatedMetrics, PerformanceAlert, AlertSeverity, AlertType,
+        TuningRecommendation, RecommendationType, ImplementationComplexity,
+        RecommendationPriority, profile_operation
+    };
+
+    pub use crate::auto_tuning::{
+        AutomaticPerformanceTuner, AutoTuningConfig, TuningParameter,
+        ParameterType, ParameterCategory, ImpactLevel, AppliedChange,
+        ChangeStatus, TuningStrategy, OptimizationGoal, TuningStatus
     };
 
 }

@@ -93,7 +93,6 @@ urlencoding = "2.1"
 
 # Memory management
 bytes = { version = "1.5", features = ["serde"] }
-parking_lot = "0.12"
 
 # HSM and PKCS#11 support
 pkcs11 = "0.5"
@@ -118,6 +117,22 @@ sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite", "chrono"
 # HTTP client for plugin marketplace
 reqwest = { version = "0.12", features = ["json"] }
 
+# Performance optimization dependencies
+parking_lot = { version = "0.12", features = ["send_guard"] }
+dashmap = { version = "5.5", optional = true }
+crossbeam = { version = "0.8", optional = true }
+atomic = { version = "0.6", optional = true }
+metrics = { version = "0.21", optional = true }
+metrics-exporter-prometheus = { version = "0.12", optional = true }
+
+# Distributed caching (optional features)
+redis = { version = "0.24", features = ["tokio-comp", "connection-manager"], optional = true }
+memcached = { version = "0.4.5-beta.2", optional = true }
+
+# Advanced profiling (optional)
+pprof = { version = "0.12", features = ["flamegraph", "protobuf-codec"], optional = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"], optional = true }
+
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 proptest = "1.4"
@@ -134,6 +149,11 @@ postgres = ["sqlx/postgres"]
 simd = []
 hardware-acceleration = ["ring/std"]
 fips = []
+performance-optimization = ["dashmap", "crossbeam", "atomic", "metrics"]
+distributed-cache = ["performance-optimization", "redis", "memcached"]
+advanced-profiling = ["performance-optimization", "pprof", "tracing-subscriber"]
+monitoring = ["performance-optimization", "metrics-exporter-prometheus"]
+full-performance = ["performance-optimization", "distributed-cache", "advanced-profiling", "monitoring"]
 
 [[bench]]
 name = "encryption_bench"
