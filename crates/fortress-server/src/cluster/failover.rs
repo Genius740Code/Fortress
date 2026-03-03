@@ -7,10 +7,10 @@ use crate::cluster::{ClusterError, ClusterResult};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio::sync::{RwLock, Mutex};
 use tokio::time::{interval, timeout};
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 /// Failover configuration
@@ -130,51 +130,73 @@ pub enum FailoverSeverity {
 pub enum FailoverMessage {
     /// Health check request
     HealthCheckRequest {
+        /// ID of the node requesting health check
         requester_id: Uuid,
+        /// When the request was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
     
     /// Health check response
     HealthCheckResponse {
+        /// ID of the responding node
         responder_id: Uuid,
+        /// Health status of the node
         status: NodeHealthStatus,
+        /// When the response was sent
         timestamp: chrono::DateTime<chrono::Utc>,
+        /// Node metrics
         metrics: HashMap<String, String>,
     },
     
     /// Failover notification
     FailoverNotification {
+        /// The failover event
         event: FailoverEvent,
     },
     
     /// Leader election request
     LeaderElectionRequest {
+        /// ID of the candidate node
         candidate_id: Uuid,
+        /// Current election term
         term: u64,
+        /// When the request was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
     
     /// Leader election response
     LeaderElectionResponse {
+        /// ID of the voting node
         voter_id: Uuid,
+        /// ID of the candidate node
         candidate_id: Uuid,
+        /// Whether the vote was granted
         vote_granted: bool,
+        /// Current election term
         term: u64,
+        /// When the response was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
     
     /// Recovery request
     RecoveryRequest {
+        /// ID of the failed node
         failed_node_id: Uuid,
+        /// Type of recovery to perform
         recovery_type: RecoveryType,
+        /// When the request was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
     
     /// Recovery response
     RecoveryResponse {
+        /// Unique identifier for the request
         request_id: Uuid,
+        /// Whether the recovery was successful
         success: bool,
+        /// Recovery status message
         message: String,
+        /// When the response was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
 }
@@ -195,27 +217,35 @@ pub enum RecoveryType {
 /// Failover-specific errors
 #[derive(Debug, thiserror::Error)]
 pub enum FailoverError {
+    /// Node failure detected
     #[error("Node failure detected: {0}")]
     NodeFailure(Uuid),
     
+    /// Leader election process failed
     #[error("Leader election failed: {0}")]
     LeaderElectionFailed(String),
     
+    /// Recovery operation failed
     #[error("Recovery failed: {0}")]
     RecoveryFailed(String),
     
+    /// Network partition detected
     #[error("Network partition detected")]
     NetworkPartition,
     
+    /// Not enough healthy nodes for operation
     #[error("Insufficient healthy nodes: {0}/{1}")]
     InsufficientHealthyNodes(usize, usize),
     
+    /// Backup node promotion failed
     #[error("Backup promotion failed: {0}")]
     BackupPromotionFailed(String),
     
+    /// Failover operation timed out
     #[error("Failover timeout")]
     FailoverTimeout,
     
+    /// Invalid failover configuration
     #[error("Invalid failover configuration: {0}")]
     InvalidConfiguration(String),
 }
@@ -245,25 +275,42 @@ pub struct FailoverManager {
 /// Callback trait for failover events
 #[async_trait::async_trait]
 pub trait FailoverCallback {
+    /// Called when a node failure is detected
     async fn on_node_failure(&self, node_id: Uuid, event: &FailoverEvent);
+    
+    /// Called when a new leader is elected
     async fn on_leader_election(&self, new_leader: Uuid, event: &FailoverEvent);
+    
+    /// Called when recovery is initiated for a node
     async fn on_recovery_initiated(&self, node_id: Uuid, event: &FailoverEvent);
+    
+    /// Called when recovery is completed for a node
     async fn on_recovery_completed(&self, node_id: Uuid, event: &FailoverEvent);
+    
+    /// Called when a backup node is promoted
     async fn on_backup_promotion(&self, backup_node: Uuid, event: &FailoverEvent);
 }
 
 /// Trait for network failover operations
 #[async_trait::async_trait]
 pub trait FailoverNetworkSender {
+    /// Send a failover message to a specific node
     async fn send_failover_message(&self, target: Uuid, message: FailoverMessage) -> ClusterResult<()>;
+    
+    /// Broadcast a failover message to all nodes
     async fn broadcast_failover_message(&self, message: FailoverMessage) -> ClusterResult<()>;
 }
 
 /// Trait for recovery operations
 #[async_trait::async_trait]
 pub trait RecoveryManager {
+    /// Initiate recovery for a failed node
     async fn initiate_recovery(&self, node_id: Uuid, recovery_type: RecoveryType) -> ClusterResult<()>;
+    
+    /// Check the recovery status of a node
     async fn check_recovery_status(&self, node_id: Uuid) -> ClusterResult<Option<RecoveryStatus>>;
+    
+    /// Promote a backup node to primary
     async fn promote_backup(&self, backup_node: Uuid) -> ClusterResult<()>;
 }
 

@@ -9,10 +9,8 @@ use crate::error::{ServerError, ServerResult};
 use crate::handlers::AppState;
 use crate::health::{HealthChecker, HealthCheckRegistry};
 use crate::metrics::MetricsCollector;
-use crate::middleware::{
-    create_cors_layer, create_timeout_layer,
+use crate::middleware::{create_cors_layer, create_timeout_layer,
     advanced_rate_limit_middleware, request_logging_middleware,
-    request_size_middleware, security_headers_middleware,
     AdvancedRateLimiter,
 };
 use crate::prelude::*;
@@ -21,32 +19,32 @@ use axum::{
     routing::{get, post, put, delete},
     Router,
 };
-use fortress_core::{
-    encryption::{EncryptionAlgorithm, Aegis256, ChaCha20Poly1305, Aes256Gcm},
-    key::{KeyManager, SecureKey},
-    storage::StorageBackend,
-};
+use fortress_core::storage::StorageBackend;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::signal;
 use fortress_core::error::FortressError;
 use fortress_core::error::{EncryptionErrorCode, StorageErrorCode};
-use fortress_core::storage::{StorageMetadata, StorageBackendType, FileSystemStorage};
-use fortress_core::field_encryption::{FieldIdentifier, FieldEncryptionManager, EncryptedField, DecryptedField, FieldEncryptionMetadata, FieldEncryptionConfig};
+use fortress_core::storage::{StorageMetadata, FileSystemStorage};
+use fortress_core::field_encryption::{FieldIdentifier, FieldEncryptionManager, EncryptedField, DecryptedField};
 use fortress_core::key::InMemoryKeyManager;
 use fortress_core::field_encryption_manager::DefaultFieldEncryptionManager;
 use std::collections::HashMap;
 use chrono::Utc;
 use tokio::time::interval;
-use tracing::{info, error};
+use tracing::info;
 
 /// Query parameters for storage queries
 #[derive(Debug, Clone)]
 pub struct QueryParams {
+    /// Optional tenant identifier for filtering
     pub tenant_id: Option<String>,
+    /// Pagination parameters for the query
     pub pagination: PaginationParams,
+    /// Optional filtering parameters
     pub filter: Option<FilterParams>,
+    /// Sorting parameters for the query
     pub sort: SortParams,
 }
 
@@ -109,8 +107,8 @@ impl FortressServer {
         );
 
         // Start the server with the router directly
-        let app = self.create_router().await?;
-        let listener = tokio::net::TcpListener::bind(addr).await
+        let _app = self.create_router().await?;
+        let _listener = tokio::net::TcpListener::bind(addr).await
             .map_err(|e| ServerError::network(format!("Failed to bind to {}: {}", addr, e)))?;
         
         info!(
@@ -120,7 +118,7 @@ impl FortressServer {
         
         // For now, just return success without starting the server
         info!("Server setup completed successfully");
-        Ok::<(), ServerError>(());
+        let _ = Ok::<(), ServerError>(());
 
         info!("Fortress server stopped");
 
@@ -270,7 +268,7 @@ impl FortressServer {
     async fn run_background_tasks(
         health_checker: Arc<HealthChecker>,
         health_registry: Arc<HealthCheckRegistry>,
-        metrics: Arc<MetricsCollector>,
+        _metrics: Arc<MetricsCollector>,
     ) {
         let mut health_interval = interval(Duration::from_secs(30));
         let mut metrics_interval = interval(Duration::from_secs(60));
@@ -378,7 +376,7 @@ impl StorageBackend for InMemoryStorage {
     async fn put(&self, key: &str, value: &[u8]) -> Result<(), FortressError> {
         let mut data = self.data.write();
         let record = serde_json::from_slice::<crate::handlers::StorageRecord>(value)
-            .map_err(|e| FortressError::storage("Invalid record format", "serde", StorageErrorCode::ConnectionFailed))?;
+            .map_err(|_e| FortressError::storage("Invalid record format", "serde", StorageErrorCode::ConnectionFailed))?;
         data.insert(key.to_string(), record);
         Ok(())
     }
@@ -388,7 +386,7 @@ impl StorageBackend for InMemoryStorage {
         if let Some(record) = data.get(key) {
             serde_json::to_vec(record)
                 .map(Some)
-                .map_err(|e| FortressError::storage("Serialization error", "serde", StorageErrorCode::ConnectionFailed))
+                .map_err(|_e| FortressError::storage("Serialization error", "serde", StorageErrorCode::ConnectionFailed))
         } else {
             Ok(None)
         }

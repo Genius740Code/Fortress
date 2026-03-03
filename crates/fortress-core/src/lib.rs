@@ -194,6 +194,18 @@ pub mod performance_profile;
 /// Backup and disaster recovery system
 pub mod backup;
 
+/// Backup manager implementation
+pub mod backup_manager;
+
+/// Disaster recovery manager implementation
+pub mod disaster_recovery;
+
+/// Automated backup scheduling system
+pub mod backup_scheduler;
+
+/// Cross-region replication manager
+pub mod cross_region_replication;
+
 /// Simple backup manager for testing
 pub mod simple_backup_manager;
 
@@ -344,7 +356,17 @@ pub mod prelude {
         BackupManager, DisasterRecoveryManager, BackupMetadata, BackupItem, BackupManifest,
         BackupConfig, BackupStrategy, RetentionPolicy as BackupRetentionPolicy, VerificationLevel, DisasterRecoveryPlan,
         RecoveryStep, RecoveryPriority, RestoreStatus, RestoreOperationStatus, BackupStorageStats,
+        ConflictResolution, VerificationResult, VerificationStatus, BackupSchedule, ScheduledRunResult,
+        CrossRegionConfig, ReplicationStrategy, ReplicationResult,
     };
+
+    pub use crate::backup_manager::{DefaultBackupManager};
+    
+    pub use crate::disaster_recovery::{DefaultDisasterRecoveryManager};
+    
+    pub use crate::backup_scheduler::{BackupScheduler};
+    
+    pub use crate::cross_region_replication::{CrossRegionReplicationManager, ReplicationStats};
 
     pub use crate::simple_backup_manager::{SimpleBackupManager};
 

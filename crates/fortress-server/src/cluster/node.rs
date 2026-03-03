@@ -2,7 +2,6 @@
 //!
 //! This module defines the cluster node structure and basic node operations.
 
-use crate::cluster::{ClusterError, ClusterResult};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;

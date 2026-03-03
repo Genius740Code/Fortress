@@ -4,14 +4,20 @@
 //! with comprehensive recovery planning, execution, and testing capabilities.
 
 use crate::storage::StorageBackend;
-use crate::prelude::*;
+use crate::error::{FortressError, Result};
 use crate::backup::utils;
+use crate::backup::{
+    RestoreStatus, RestoreOperationStatus, TestResult, StepTestResult, DisasterRecoveryPlan,
+    RecoveryPriority, RecoveryStep, DisasterRecoveryManager, BackupManager, BackupConfig,
+    VerificationLevel, RetentionPolicy
+};
 use crate::error::StorageErrorCode;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use std::sync::Arc;
 use std::collections::HashMap;
 use tokio::sync::RwLock;
 use uuid::Uuid;
+use async_trait::async_trait;
 
 /// Default disaster recovery manager implementation
 #[derive(Debug)]
@@ -86,7 +92,7 @@ impl DefaultDisasterRecoveryManager {
             None => return Ok(None),
         };
 
-        let plan = serde_json::from_slice(&plan_data)
+        let plan: DisasterRecoveryPlan = serde_json::from_slice(&plan_data)
             .map_err(|e| FortressError::storage(
                 format!("Failed to deserialize recovery plan: {}", e),
                 "disaster_recovery".to_string(),
@@ -347,7 +353,7 @@ impl DefaultDisasterRecoveryManager {
                 ))?;
 
             let backups = self.backup_manager.list_backups().await?;
-            if backups.len() as u64 < min_count {
+            if (backups.len() as u64) < min_count {
                 return Err(FortressError::storage(
                     format!("Insufficient backup count: {} < {}", backups.len(), min_count),
                     "disaster_recovery".to_string(),
@@ -508,97 +514,131 @@ impl DefaultDisasterRecoveryManager {
 
 #[async_trait]
 impl DisasterRecoveryManager for DefaultDisasterRecoveryManager {
-    async fn create_recovery_plan(&self, plan: DisasterRecoveryPlan) -> Result<()> {
-        // Validate plan
-        if plan.recovery_steps.is_empty() {
-            return Err(FortressError::configuration(
-                "Recovery plan must have at least one step".to_string(),
-                Some("recovery_steps".to_string()),
-                crate::error::ConfigurationErrorCode::InvalidValue,
-            ));
-        }
+    fn create_recovery_plan<'a>(
+        &'a self,
+        plan: DisasterRecoveryPlan,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + 'a>> {
+        Box::pin(async move {
+            // Validate plan
+            if plan.recovery_steps.is_empty() {
+                return Err(FortressError::configuration(
+                    "Recovery plan must have at least one step".to_string(),
+                    Some("recovery_steps".to_string()),
+                    crate::error::ConfigurationErrorCode::InvalidValue,
+                ));
+            }
 
-        if plan.name.is_empty() {
-            return Err(FortressError::configuration(
-                "Recovery plan must have a name".to_string(),
-                Some("name".to_string()),
-                crate::error::ConfigurationErrorCode::InvalidValue,
-            ));
-        }
+            if plan.name.is_empty() {
+                return Err(FortressError::configuration(
+                    "Recovery plan must have a name".to_string(),
+                    Some("name".to_string()),
+                    crate::error::ConfigurationErrorCode::InvalidValue,
+                ));
+            }
 
-        // Save plan
-        self.save_plan(&plan).await
+            // Save plan
+            self.save_plan(&plan).await
+        })
     }
 
-    async fn get_recovery_plan(&self, plan_id: &str) -> Result<Option<DisasterRecoveryPlan>> {
-        self.load_plan(plan_id).await
+    fn get_recovery_plan<'a>(
+        &'a self,
+        plan_id: &'a str,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Option<DisasterRecoveryPlan>>> + Send + 'a>> {
+        Box::pin(async move {
+            self.load_plan(plan_id).await
+        })
     }
 
-    async fn list_recovery_plans(&self) -> Result<Vec<DisasterRecoveryPlan>> {
-        let plan_keys = self.plan_storage.list_prefix("plans/").await?;
-        let mut plans = Vec::new();
+    fn list_recovery_plans<'a>(
+        &'a self,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<DisasterRecoveryPlan>>> + Send + 'a>> {
+        Box::pin(async move {
+            let plan_keys = self.plan_storage.list_prefix("plans/").await?;
+            let mut plans = Vec::new();
 
-        for key in plan_keys {
-            if key.ends_with(".json") {
-                let plan_id = key.strip_prefix("plans/")
-                    .and_then(|s| s.strip_suffix(".json"))
-                    .unwrap_or("unknown");
-                
-                if let Ok(Some(plan)) = self.load_plan(plan_id).await {
-                    plans.push(plan);
+            for key in plan_keys {
+                if key.ends_with(".json") {
+                    let plan_id = key.strip_prefix("plans/")
+                        .and_then(|s| s.strip_suffix(".json"))
+                        .unwrap_or("unknown");
+                    
+                    if let Ok(Some(plan)) = self.load_plan(plan_id).await {
+                        plans.push(plan);
+                    }
                 }
             }
-        }
 
-        // Sort by priority and name
-        plans.sort_by(|a, b| {
-            match (a.priority, b.priority) {
-                (RecoveryPriority::Critical, RecoveryPriority::Critical) => a.name.cmp(&b.name),
-                (RecoveryPriority::Critical, _) => std::cmp::Ordering::Less,
-                (RecoveryPriority::High, RecoveryPriority::Critical) => std::cmp::Ordering::Greater,
-                (RecoveryPriority::High, RecoveryPriority::High) => a.name.cmp(&b.name),
-                (RecoveryPriority::High, _) => std::cmp::Ordering::Less,
-                (RecoveryPriority::Medium, RecoveryPriority::Critical | RecoveryPriority::High) => std::cmp::Ordering::Greater,
-                (RecoveryPriority::Medium, RecoveryPriority::Medium) => a.name.cmp(&b.name),
-                (RecoveryPriority::Medium, _) => std::cmp::Ordering::Less,
-                (RecoveryPriority::Low, _) => std::cmp::Ordering::Greater,
-            }
-        });
+            // Sort by priority and name
+            plans.sort_by(|a, b| {
+                match (&a.priority, &b.priority) {
+                    (RecoveryPriority::Critical, RecoveryPriority::Critical) => a.name.cmp(&b.name),
+                    (RecoveryPriority::Critical, _) => std::cmp::Ordering::Less,
+                    (RecoveryPriority::High, RecoveryPriority::Critical) => std::cmp::Ordering::Greater,
+                    (RecoveryPriority::High, RecoveryPriority::High) => a.name.cmp(&b.name),
+                    (RecoveryPriority::High, _) => std::cmp::Ordering::Less,
+                    (RecoveryPriority::Medium, RecoveryPriority::Critical | RecoveryPriority::High) => std::cmp::Ordering::Greater,
+                    (RecoveryPriority::Medium, RecoveryPriority::Medium) => a.name.cmp(&b.name),
+                    (RecoveryPriority::Medium, _) => std::cmp::Ordering::Less,
+                    (RecoveryPriority::Low, _) => std::cmp::Ordering::Greater,
+                }
+            });
 
-        Ok(plans)
+            Ok(plans)
+        })
     }
 
-    async fn execute_recovery_plan(
-        &self,
-        plan_id: &str,
-        backup_id: &str,
-        target_storage: &dyn StorageBackend,
-    ) -> Result<RestoreStatus> {
-        let plan = self.load_plan(plan_id).await?
-            .ok_or_else(|| FortressError::storage(
-                format!("Recovery plan not found: {}", plan_id),
-                "disaster_recovery".to_string(),
-                StorageErrorCode::NotFound,
-            ))?;
+    fn execute_recovery_plan<'a>(
+        &'a self,
+        plan_id: &'a str,
+        backup_id: &'a str,
+        target_storage: &'a dyn StorageBackend,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<RestoreStatus>> + Send + 'a>> {
+        Box::pin(async move {
+            let plan = self.load_plan(plan_id).await?
+                .ok_or_else(|| FortressError::storage(
+                    format!("Recovery plan not found: {}", plan_id),
+                    "disaster_recovery".to_string(),
+                    StorageErrorCode::NotFound,
+                ))?;
 
-        let restore_id = utils::generate_restore_id();
-        let start_time = Utc::now();
-        let mut items_restored = 0u64;
-        let mut total_items = plan.recovery_steps.len() as u64;
-        let mut errors = Vec::new();
+            let restore_id = utils::generate_restore_id();
+            let start_time = Utc::now();
+            let mut items_restored = 0u64;
+            let total_items = plan.recovery_steps.len() as u64;
+            let mut errors = Vec::new();
 
-        // Execute each step
-        for step in &plan.recovery_steps {
-            match self.execute_recovery_step(step, backup_id, target_storage).await {
-                Ok(step_result) => {
-                    if step_result.passed {
-                        items_restored += 1;
-                    } else {
-                        let error_msg = format!("Step {} failed: {:?}", step.step_number, step_result.issues);
+            // Execute each step
+            for step in &plan.recovery_steps {
+                match self.execute_recovery_step(step, backup_id, target_storage).await {
+                    Ok(step_result) => {
+                        if step_result.passed {
+                            items_restored += 1;
+                        } else {
+                            let error_msg = format!("Step {} failed: {:?}", step.step_number, step_result.issues);
+                            errors.push(error_msg.clone());
+                            
+                            if step.critical {
+                                // Stop execution on critical step failure
+                                return Ok(RestoreStatus {
+                                    restore_id,
+                                    backup_id: backup_id.to_string(),
+                                    status: RestoreOperationStatus::Failed,
+                                    progress_percentage: (items_restored as f32 / total_items as f32) * 100.0,
+                                    items_restored,
+                                    total_items,
+                                    started_at: start_time,
+                                    estimated_completion: None,
+                                    errors,
+                                });
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        let error_msg = format!("Step {} execution failed: {}", step.step_number, e);
                         errors.push(error_msg.clone());
                         
                         if step.critical {
-                            // Stop execution on critical step failure
                             return Ok(RestoreStatus {
                                 restore_id,
                                 backup_id: backup_id.to_string(),
@@ -613,150 +653,147 @@ impl DisasterRecoveryManager for DefaultDisasterRecoveryManager {
                         }
                     }
                 }
-                Err(e) => {
-                    let error_msg = format!("Step {} execution failed: {}", step.step_number, e);
-                    errors.push(error_msg.clone());
-                    
-                    if step.critical {
-                        return Ok(RestoreStatus {
-                            restore_id,
-                            backup_id: backup_id.to_string(),
-                            status: RestoreOperationStatus::Failed,
-                            progress_percentage: (items_restored as f32 / total_items as f32) * 100.0,
-                            items_restored,
-                            total_items,
-                            started_at: start_time,
-                            estimated_completion: None,
-                            errors,
+            }
+
+            let status = if errors.is_empty() {
+                RestoreOperationStatus::Completed
+            } else {
+                RestoreOperationStatus::Completed // Some non-critical steps failed but overall completed
+            };
+
+            Ok(RestoreStatus {
+                restore_id,
+                backup_id: backup_id.to_string(),
+                status,
+                progress_percentage: 100.0,
+                items_restored,
+                total_items,
+                started_at: start_time,
+                estimated_completion: Some(Utc::now()),
+                errors,
+            })
+        })
+    }
+
+    fn test_recovery_plan<'a>(
+        &'a self,
+        plan_id: &'a str,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<TestResult>> + Send + 'a>> {
+        Box::pin(async move {
+            let plan = self.load_plan(plan_id).await?
+                .ok_or_else(|| FortressError::storage(
+                    format!("Recovery plan not found: {}", plan_id),
+                    "disaster_recovery".to_string(),
+                    StorageErrorCode::NotFound,
+                ))?;
+
+            let test_id = self.generate_test_id();
+            let start_time = std::time::Instant::now();
+            let mut step_results = Vec::new();
+            let mut all_passed = true;
+            let mut issues = Vec::new();
+            let mut recommendations = Vec::new();
+
+            // Create a temporary storage for testing
+            let test_storage = Arc::new(crate::storage::InMemoryStorage::new());
+
+            // Test each step
+            for step in &plan.recovery_steps {
+                match self.execute_recovery_step(step, "test_backup", &*test_storage).await {
+                    Ok(step_result) => {
+                        if !step_result.passed {
+                            all_passed = false;
+                            issues.extend(step_result.issues.clone());
+                            
+                            if step.critical {
+                                recommendations.push(format!("Critical step {} failed: {:?}", step.step_number, step_result.issues));
+                            }
+                        }
+                        step_results.push(step_result);
+                    }
+                    Err(e) => {
+                        all_passed = false;
+                        let error_msg = format!("Step {} test failed: {}", step.step_number, e);
+                        issues.push(error_msg.clone());
+                        
+                        if step.critical {
+                            recommendations.push(format!("Critical step {} failed: {}", step.step_number, e));
+                        }
+                        
+                        step_results.push(StepTestResult {
+                            step_number: step.step_number,
+                            passed: false,
+                            duration_seconds: 0,
+                            issues: vec![error_msg],
                         });
                     }
                 }
             }
-        }
 
-        let status = if errors.is_empty() {
-            RestoreOperationStatus::Completed
-        } else {
-            RestoreOperationStatus::Completed // Some non-critical steps failed but overall completed
-        };
+            // Add general recommendations
+            if all_passed {
+                recommendations.push("All tests passed successfully".to_string());
+            } else {
+                recommendations.push("Review failed steps and update the plan".to_string());
+                recommendations.push("Consider increasing time estimates for failed steps".to_string());
+            }
 
-        Ok(RestoreStatus {
-            restore_id,
-            backup_id: backup_id.to_string(),
-            status,
-            progress_percentage: 100.0,
-            items_restored,
-            total_items,
-            started_at: start_time,
-            estimated_completion: None,
-            errors,
+            let duration = start_time.elapsed().as_secs();
+            let test_result = TestResult {
+                test_id,
+                plan_id: plan_id.to_string(),
+                tested_at: Utc::now(),
+                passed: all_passed,
+                duration_seconds: duration,
+                step_results,
+                issues,
+                recommendations,
+            };
+
+            // Save test result
+            self.save_test_result(&test_result).await?;
+
+            // Update plan's last tested timestamp
+            let mut updated_plan = plan.clone();
+            updated_plan.last_tested = Some(test_result.tested_at);
+            self.save_plan(&updated_plan).await?;
+
+            Ok(test_result)
         })
     }
 
-    async fn test_recovery_plan(&self, plan_id: &str) -> Result<TestResult> {
-        let plan = self.load_plan(plan_id).await?
-            .ok_or_else(|| FortressError::storage(
-                format!("Recovery plan not found: {}", plan_id),
-                "disaster_recovery".to_string(),
-                StorageErrorCode::NotFound,
-            ))?;
+    fn update_recovery_plan<'a>(
+        &'a self,
+        plan: DisasterRecoveryPlan,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + 'a>> {
+        Box::pin(async move {
+            // Verify plan exists
+            let _existing = self.load_plan(&plan.plan_id).await?
+                .ok_or_else(|| FortressError::storage(
+                    format!("Recovery plan not found: {}", plan.plan_id),
+                    "disaster_recovery".to_string(),
+                    StorageErrorCode::NotFound,
+                ))?;
 
-        let test_id = self.generate_test_id();
-        let start_time = std::time::Instant::now();
-        let mut step_results = Vec::new();
-        let mut all_passed = true;
-        let mut issues = Vec::new();
-        let mut recommendations = Vec::new();
-
-        // Create a temporary storage for testing
-        let test_storage = Arc::new(crate::storage::InMemoryStorage::new());
-
-        // Test each step
-        for step in &plan.recovery_steps {
-            match self.execute_recovery_step(step, "test_backup", &*test_storage).await {
-                Ok(step_result) => {
-                    if !step_result.passed {
-                        all_passed = false;
-                        issues.extend(step_result.issues.clone());
-                        
-                        if step.critical {
-                            recommendations.push(format!("Critical step {} failed: {:?}", step.step_number, step_result.issues));
-                        }
-                    }
-                    step_results.push(step_result);
-                }
-                Err(e) => {
-                    all_passed = false;
-                    let error_msg = format!("Step {} test failed: {}", step.step_number, e);
-                    issues.push(error_msg.clone());
-                    
-                    if step.critical {
-                        recommendations.push(format!("Critical step {} failed: {}", step.step_number, e));
-                    }
-                    
-                    step_results.push(StepTestResult {
-                        step_number: step.step_number,
-                        passed: false,
-                        duration_seconds: 0,
-                        issues: vec![error_msg],
-                    });
-                }
-            }
-        }
-
-        // Add general recommendations
-        if all_passed {
-            recommendations.push("All tests passed successfully".to_string());
-        } else {
-            recommendations.push("Review failed steps and update the plan".to_string());
-            recommendations.push("Consider increasing time estimates for failed steps".to_string());
-        }
-
-        let duration = start_time.elapsed().as_secs();
-        let test_result = TestResult {
-            test_id,
-            plan_id: plan_id.to_string(),
-            tested_at: Utc::now(),
-            passed: all_passed,
-            duration_seconds: duration,
-            step_results,
-            issues,
-            recommendations,
-        };
-
-        // Save test result
-        self.save_test_result(&test_result).await?;
-
-        // Update plan's last tested timestamp
-        let mut updated_plan = plan.clone();
-        updated_plan.last_tested = Some(test_result.tested_at);
-        self.save_plan(&updated_plan).await?;
-
-        Ok(test_result)
+            self.save_plan(&plan).await
+        })
     }
 
-    async fn update_recovery_plan(&self, plan: DisasterRecoveryPlan) -> Result<()> {
-        // Verify plan exists
-        let _existing = self.load_plan(&plan.plan_id).await?
-            .ok_or_else(|| FortressError::storage(
-                format!("Recovery plan not found: {}", plan.plan_id),
-                "disaster_recovery".to_string(),
-                StorageErrorCode::NotFound,
-            ))?;
+    fn delete_recovery_plan<'a>(
+        &'a self,
+        plan_id: &'a str,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + 'a>> {
+        Box::pin(async move {
+            // Delete from storage
+            let plan_key = format!("plans/{}.json", plan_id);
+            self.plan_storage.delete(&plan_key).await?;
 
-        self.save_plan(&plan).await
-    }
+            // Remove from cache
+            let mut plans = self.plans.write().await;
+            plans.remove(plan_id);
 
-    async fn delete_recovery_plan(&self, plan_id: &str) -> Result<()> {
-        // Delete from storage
-        let plan_key = format!("plans/{}.json", plan_id);
-        self.plan_storage.delete(&plan_key).await?;
-
-        // Remove from cache
-        let mut plans = self.plans.write().await;
-        plans.remove(plan_id);
-
-        Ok(())
+            Ok(())
+        })
     }
 }
 

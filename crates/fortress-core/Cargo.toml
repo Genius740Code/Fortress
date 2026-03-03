@@ -110,6 +110,7 @@ google-cloud-auth = { version = "0.13", optional = true }
 
 # Additional dependencies for backup system
 tempfile = "3.8"
+cron = "0.12"
 
 # Database dependencies
 sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite", "chrono", "uuid", "json", "migrate"] }

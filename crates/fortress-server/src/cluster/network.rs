@@ -10,7 +10,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{RwLock, Mutex};
-use tokio::time::{interval, timeout};
+use tokio::time::interval;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
@@ -159,30 +159,39 @@ pub enum ConnectionState {
 /// Network-specific errors
 #[derive(Debug, thiserror::Error)]
 pub enum NetworkError {
+    /// Connection establishment failed
     #[error("Connection failed: {0}")]
     ConnectionFailed(String),
     
+    /// Message sending failed
     #[error("Message send failed: {0}")]
     MessageSendFailed(String),
     
+    /// Message receiving failed
     #[error("Message receive failed: {0}")]
     MessageReceiveFailed(String),
     
+    /// Connection establishment timed out
     #[error("Connection timeout")]
     ConnectionTimeout,
     
+    /// Message exceeds maximum size
     #[error("Message too large: {0} bytes")]
     MessageTooLarge(usize),
     
+    /// Message format is invalid
     #[error("Invalid message format: {0}")]
     InvalidMessageFormat(String),
     
+    /// TLS/SSL error occurred
     #[error("TLS error: {0}")]
     TlsError(String),
     
+    /// Network partition detected
     #[error("Network partition detected")]
     NetworkPartition,
     
+    /// Failed to resolve network address
     #[error("Address resolution failed: {0}")]
     AddressResolutionFailed(String),
 }
@@ -231,17 +240,29 @@ pub struct NetworkStatistics {
 /// Callback trait for network events
 #[async_trait::async_trait]
 pub trait NetworkCallback {
+    /// Called when a new connection is established
     async fn on_connection_established(&self, node_id: Uuid, address: SocketAddr);
+    
+    /// Called when a connection is lost
     async fn on_connection_lost(&self, node_id: Uuid, reason: &str);
+    
+    /// Called when a message is sent
     async fn on_message_sent(&self, message: &NetworkMessage, success: bool);
+    
+    /// Called when a message is received
     async fn on_message_received(&self, message: &NetworkMessage);
+    
+    /// Called when a network partition is detected
     async fn on_network_partition(&self, affected_nodes: Vec<Uuid>);
 }
 
 /// Trait for handling specific message types
 #[async_trait::async_trait]
 pub trait MessageHandler {
+    /// Handle a network message
     async fn handle_message(&self, message: NetworkMessage) -> ClusterResult<Option<NetworkMessage>>;
+    
+    /// Get the message type this handler processes
     fn message_type(&self) -> MessageType;
 }
 

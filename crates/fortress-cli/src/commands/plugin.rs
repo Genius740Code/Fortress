@@ -490,7 +490,7 @@ fn print_plugin_details(plugin: &PluginPackage) {
         println!("🔗 Dependencies: {}", plugin.dependencies.join(", "));
     }
     
-    if let Some(schema) = &plugin.config_schema {
+    if let Some(_schema) = &plugin.config_schema {
         println!("⚙️  Configuration schema available");
     }
 }

@@ -102,6 +102,8 @@ pub struct BackupConfig {
     pub verification_level: VerificationLevel,
     /// Parallel backup settings
     pub parallel_settings: ParallelBackupSettings,
+    /// Conflict resolution strategy for restores
+    pub conflict_resolution: ConflictResolution,
 }
 
 /// Retention policy for backups
@@ -228,6 +230,168 @@ pub enum RestoreOperationStatus {
     Failed,
     /// Restore operation was cancelled
     Cancelled,
+}
+
+/// Conflict resolution strategies for restore operations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ConflictResolution {
+    /// Skip conflicting items
+    Skip,
+    /// Fail on any conflict
+    Fail,
+    /// Create backup of existing items before overwriting
+    BackupAndOverwrite,
+    /// Overwrite existing items
+    Overwrite,
+    /// Prompt user for action (not available in automated mode)
+    Prompt,
+}
+
+/// Verification result for comprehensive backup verification
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VerificationResult {
+    /// Backup ID that was verified
+    pub backup_id: String,
+    /// When verification was performed
+    pub verified_at: DateTime<Utc>,
+    /// Whether manifest is valid
+    pub manifest_valid: bool,
+    /// Number of items successfully verified
+    pub items_verified: u64,
+    /// Total number of items in backup
+    pub items_total: usize,
+    /// List of corrupted item keys
+    pub corrupted_items: Vec<String>,
+    /// List of missing item keys
+    pub missing_items: Vec<String>,
+    /// Whether encryption is valid
+    pub encryption_valid: bool,
+    /// Whether compression is valid
+    pub compression_valid: bool,
+    /// Overall verification status
+    pub overall_status: VerificationStatus,
+}
+
+/// Verification status
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum VerificationStatus {
+    /// Verification passed completely
+    Passed,
+    /// Verification passed with warnings
+    Warning,
+    /// Verification failed
+    Failed,
+}
+
+/// Backup scheduling configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackupSchedule {
+    /// Schedule ID
+    pub schedule_id: String,
+    /// Schedule name
+    pub name: String,
+    /// Backup strategy to use
+    pub strategy: BackupStrategy,
+    /// Cron expression for scheduling
+    pub cron_expression: String,
+    /// Whether schedule is enabled
+    pub enabled: bool,
+    /// Timezone for scheduling
+    pub timezone: String,
+    /// Maximum number of retries
+    pub max_retries: u32,
+    /// Retry delay in seconds
+    pub retry_delay_seconds: u32,
+    /// Last run timestamp
+    pub last_run: Option<DateTime<Utc>>,
+    /// Next run timestamp
+    pub next_run: Option<DateTime<Utc>>,
+    /// Run history
+    pub run_history: Vec<ScheduledRunResult>,
+}
+
+/// Result of a scheduled backup run
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScheduledRunResult {
+    /// Run ID
+    pub run_id: String,
+    /// When the run started
+    pub started_at: DateTime<Utc>,
+    /// When the run completed
+    pub completed_at: Option<DateTime<Utc>>,
+    /// Whether the run succeeded
+    pub success: bool,
+    /// Backup ID if successful
+    pub backup_id: Option<String>,
+    /// Error message if failed
+    pub error_message: Option<String>,
+    /// Number of items backed up
+    pub items_backed_up: Option<u64>,
+    /// Total size backed up
+    pub total_size: Option<u64>,
+    /// Duration in seconds
+    pub duration_seconds: Option<u64>,
+}
+
+/// Cross-region replication configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CrossRegionConfig {
+    /// Replication ID
+    pub replication_id: String,
+    /// Source region
+    pub source_region: String,
+    /// Target regions
+    pub target_regions: Vec<String>,
+    /// Replication strategy
+    pub strategy: ReplicationStrategy,
+    /// Whether replication is enabled
+    pub enabled: bool,
+    /// Replication frequency in seconds
+    pub frequency_seconds: u64,
+    /// Maximum bandwidth in bytes per second
+    pub max_bandwidth_bps: Option<u64>,
+    /// Last replication timestamp
+    pub last_replication: Option<DateTime<Utc>>,
+    /// Replication history
+    pub replication_history: Vec<ReplicationResult>,
+}
+
+/// Replication strategy
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ReplicationStrategy {
+    /// Replicate all backups immediately
+    Immediate,
+    /// Replicate on schedule
+    Scheduled,
+    /// Replicate only full backups
+    FullOnly,
+    /// Replicate based on backup age
+    AgeBased { max_age_hours: u64 },
+}
+
+/// Result of a replication operation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReplicationResult {
+    /// Replication ID
+    pub replication_id: String,
+    /// Backup ID that was replicated
+    pub backup_id: String,
+    /// Target region
+    pub target_region: String,
+    /// When replication started
+    pub started_at: DateTime<Utc>,
+    /// When replication completed
+    pub completed_at: Option<DateTime<Utc>>,
+    /// Whether replication succeeded
+    pub success: bool,
+    /// Error message if failed
+    pub error_message: Option<String>,
+    /// Number of items replicated
+    pub items_replicated: Option<u64>,
+    /// Total size replicated
+    pub total_size: Option<u64>,
+    /// Duration in seconds
+    pub duration_seconds: Option<u64>,
 }
 
 /// Trait for backup managers
@@ -404,6 +568,7 @@ impl Default for BackupConfig {
                 chunk_size: 1024 * 1024, // 1MB
                 enabled: true,
             },
+            conflict_resolution: ConflictResolution::Overwrite,
         }
     }
 }

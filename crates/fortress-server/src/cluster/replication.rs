@@ -9,7 +9,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{RwLock, Mutex};
-use tokio::time::{interval, timeout};
+use tokio::time::interval;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
@@ -136,44 +136,63 @@ pub enum ReplicationStatus {
 pub enum ReplicationMessage {
     /// Replication request
     ReplicationRequest {
+        /// The replication operation to perform
         operation: ReplicationOperation,
     },
     
     /// Replication response
     ReplicationResponse {
+        /// Unique identifier for the operation
         operation_id: Uuid,
+        /// ID of the responding node
         node_id: Uuid,
+        /// Whether the operation was successful
         success: bool,
+        /// When the response was generated
         timestamp: chrono::DateTime<chrono::Utc>,
+        /// Error message if the operation failed
         error_message: Option<String>,
     },
     
     /// Anti-entropy request
     AntiEntropyRequest {
+        /// ID of the requesting node
         node_id: Uuid,
+        /// Optional key range for anti-entropy
         key_range: Option<(String, String)>,
+        /// When the request was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
     
     /// Anti-entropy response
     AntiEntropyResponse {
+        /// ID of the requesting node
         requester_id: Uuid,
+        /// Data for anti-entropy repair
         data: Vec<(String, Vec<u8>, chrono::DateTime<chrono::Utc>)>,
+        /// When the response was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
     
     /// Read repair request
     ReadRepairRequest {
+        /// Key to repair
         key: String,
+        /// ID of the requesting node
         node_id: Uuid,
+        /// When the request was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
     
     /// Read repair response
     ReadRepairResponse {
+        /// Key being repaired
         key: String,
+        /// Value for the key (if available)
         value: Option<Vec<u8>>,
+        /// When the response was sent
         timestamp: chrono::DateTime<chrono::Utc>,
+        /// ID of the responding node
         node_id: Uuid,
     },
 }
@@ -181,24 +200,31 @@ pub enum ReplicationMessage {
 /// Replication-specific errors
 #[derive(Debug, thiserror::Error)]
 pub enum ReplicationError {
+    /// Replication operation failed
     #[error("Replication failed: {0}")]
     ReplicationFailed(String),
     
+    /// Not enough replicas available
     #[error("Insufficient replicas: {0}/{1}")]
     InsufficientReplicas(usize, usize),
     
+    /// Replication operation timed out
     #[error("Replication timeout")]
     ReplicationTimeout,
     
+    /// Data inconsistency detected between replicas
     #[error("Data inconsistency detected")]
     DataInconsistency,
     
+    /// Invalid replication factor specified
     #[error("Invalid replication factor: {0}")]
     InvalidReplicationFactor(usize),
     
+    /// Node not available for replication
     #[error("Node not available for replication: {0}")]
     NodeNotAvailable(Uuid),
     
+    /// Anti-entropy process failed
     #[error("Anti-entropy failed: {0}")]
     AntiEntropyFailed(String),
 }
@@ -224,25 +250,42 @@ pub struct DataReplicator {
 /// Callback trait for replication events
 #[async_trait::async_trait]
 pub trait ReplicationCallback {
+    /// Called when a replication operation completes successfully
     async fn on_replication_completed(&self, operation: &ReplicationOperation);
+    
+    /// Called when a replication operation fails
     async fn on_replication_failed(&self, operation: &ReplicationOperation, error: &str);
+    
+    /// Called when data inconsistency is detected
     async fn on_inconsistency_detected(&self, key: &str, conflicting_data: Vec<(Uuid, Vec<u8>)>);
 }
 
 /// Trait for network replication operations
 #[async_trait::async_trait]
 pub trait ReplicationNetworkSender {
+    /// Send a replication message to a specific node
     async fn send_replication_message(&self, target: Uuid, message: ReplicationMessage) -> ClusterResult<()>;
+    
+    /// Broadcast a replication message to all nodes
     async fn broadcast_replication_message(&self, message: ReplicationMessage) -> ClusterResult<()>;
 }
 
 /// Trait for local storage operations
 #[async_trait::async_trait]
 pub trait ReplicationStorage {
+    /// Get a value from storage
     async fn get(&self, key: &str) -> ClusterResult<Option<Vec<u8>>>;
+    
+    /// Put a value into storage
     async fn put(&self, key: &str, value: Vec<u8>) -> ClusterResult<()>;
+    
+    /// Delete a value from storage
     async fn delete(&self, key: &str) -> ClusterResult<()>;
+    
+    /// List keys with optional prefix
     async fn list_keys(&self, prefix: Option<&str>) -> ClusterResult<Vec<String>>;
+    
+    /// Get the timestamp for a key
     async fn get_timestamp(&self, key: &str) -> ClusterResult<Option<chrono::DateTime<chrono::Utc>>>;
 }
 
@@ -385,7 +428,7 @@ impl DataReplicator {
     /// Read with consistency guarantee
     pub async fn consistent_read(&self, key: &str) -> ClusterResult<Option<Vec<u8>>> {
         let target_nodes = self.select_replication_nodes(key).await?;
-        let required_reads = self.config.read_consistency.required_acks(target_nodes.len() + 1);
+        let _required_reads = self.config.read_consistency.required_acks(target_nodes.len() + 1);
 
         // Read locally first
         let local_value = {
@@ -405,7 +448,7 @@ impl DataReplicator {
             };
 
             let sender = self.network_sender.lock().await;
-            if let Ok(response) = sender.send_replication_message(target_node, message).await {
+            if let Ok(_response) = sender.send_replication_message(target_node, message).await {
                 // In a real implementation, we'd wait for responses
                 // For now, this is simplified
             }
@@ -550,7 +593,7 @@ impl DataReplicator {
     }
 
     /// Handle replication response
-    async fn handle_replication_response(&self, operation_id: Uuid, node_id: Uuid, success: bool, timestamp: chrono::DateTime<chrono::Utc>, error_message: Option<String>) -> ClusterResult<()> {
+    async fn handle_replication_response(&self, operation_id: Uuid, _node_id: Uuid, success: bool, _timestamp: chrono::DateTime<chrono::Utc>, error_message: Option<String>) -> ClusterResult<()> {
         let mut pending = self.pending_operations.write().await;
         
         if let Some(operation) = pending.get_mut(&operation_id) {
@@ -581,7 +624,7 @@ impl DataReplicator {
     }
 
     /// Handle anti-entropy request
-    async fn handle_anti_entropy_request(&self, node_id: Uuid, key_range: Option<(String, String)>, timestamp: chrono::DateTime<chrono::Utc>) -> ClusterResult<Option<ReplicationMessage>> {
+    async fn handle_anti_entropy_request(&self, node_id: Uuid, key_range: Option<(String, String)>, _timestamp: chrono::DateTime<chrono::Utc>) -> ClusterResult<Option<ReplicationMessage>> {
         let storage = self.storage.lock().await;
         let keys = storage.list_keys(key_range.as_ref().map(|(start, _)| start.as_str())).await?;
         drop(storage);
@@ -612,7 +655,7 @@ impl DataReplicator {
     }
 
     /// Handle anti-entropy response
-    async fn handle_anti_entropy_response(&self, requester_id: Uuid, data: Vec<(String, Vec<u8>, chrono::DateTime<chrono::Utc>)>, timestamp: chrono::DateTime<chrono::Utc>) -> ClusterResult<()> {
+    async fn handle_anti_entropy_response(&self, _requester_id: Uuid, data: Vec<(String, Vec<u8>, chrono::DateTime<chrono::Utc>)>, _timestamp: chrono::DateTime<chrono::Utc>) -> ClusterResult<()> {
         for (key, value, ts) in data {
             let storage = self.storage.lock().await;
             
@@ -634,7 +677,7 @@ impl DataReplicator {
     }
 
     /// Handle read repair request
-    async fn handle_read_repair_request(&self, key: String, node_id: Uuid, timestamp: chrono::DateTime<chrono::Utc>) -> ClusterResult<Option<ReplicationMessage>> {
+    async fn handle_read_repair_request(&self, key: String, _node_id: Uuid, _timestamp: chrono::DateTime<chrono::Utc>) -> ClusterResult<Option<ReplicationMessage>> {
         let storage = self.storage.lock().await;
         let value = storage.get(&key).await?;
         drop(storage);
@@ -650,7 +693,7 @@ impl DataReplicator {
     }
 
     /// Handle read repair response
-    async fn handle_read_repair_response(&self, key: String, value: Option<Vec<u8>>, timestamp: chrono::DateTime<chrono::Utc>, node_id: Uuid) -> ClusterResult<()> {
+    async fn handle_read_repair_response(&self, key: String, _value: Option<Vec<u8>>, _timestamp: chrono::DateTime<chrono::Utc>, node_id: Uuid) -> ClusterResult<()> {
         // Read repair logic would go here
         // For now, this is a placeholder
         debug!("Received read repair response for key {} from node {}", key, node_id);

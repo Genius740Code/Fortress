@@ -232,39 +232,39 @@ impl HealthChecker {
 
         // Check core Fortress components
         if self.features.auth_enabled {
-            self.check_component("auth", || async {
+            let _ = self.check_component("auth", || async {
                 // Check authentication system
                 self.check_auth_system().await
             }).await;
         }
 
         if self.features.field_encryption {
-            self.check_component("encryption", || async {
+            let _ = self.check_component("encryption", || async {
                 // Check encryption system
                 self.check_encryption_system().await
             }).await;
         }
 
         // Check storage backend
-        self.check_component("storage", || async {
+        let _ = self.check_component("storage", || async {
             self.check_storage_backend().await
         }).await;
 
         // Check key management
-        self.check_component("key_management", || async {
+        let _ = self.check_component("key_management", || async {
             self.check_key_management().await
         }).await;
 
         // Check audit logging
         if self.features.audit_enabled {
-            self.check_component("audit_logging", || async {
+            let _ = self.check_component("audit_logging", || async {
                 self.check_audit_logging().await
             }).await;
         }
 
         // Check metrics collection
         if self.features.metrics_enabled {
-            self.check_component("metrics", || async {
+            let _ = self.check_component("metrics", || async {
                 self.check_metrics_collection().await
             }).await;
         }
@@ -435,7 +435,7 @@ impl HealthCheckRegistry {
         let checks = self.checks.read().await;
         
         for (name, check) in checks.iter() {
-            health_checker.check_component(name, || async {
+            let _ = health_checker.check_component(name, || async {
                 check.check_health().await
             }).await;
         }

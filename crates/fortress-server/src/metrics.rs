@@ -5,7 +5,6 @@
 
 use crate::models::MetricsResponse;
 use chrono::Utc;
-use prometheus;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::Arc;

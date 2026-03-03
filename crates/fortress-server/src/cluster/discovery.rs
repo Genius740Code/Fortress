@@ -3,14 +3,13 @@
 //! This module handles automatic discovery and registration of cluster nodes,
 //! enabling dynamic cluster formation and maintenance.
 
-use crate::cluster::{ClusterError, ClusterResult};
+use crate::cluster::ClusterResult;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
-use std::net::SocketAddr;
+use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio::sync::{RwLock, Mutex};
-use tokio::time::{interval, timeout};
+use tokio::time::interval;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
@@ -80,33 +79,45 @@ pub struct NodeInfo {
 pub enum DiscoveryMessage {
     /// Node announcement
     NodeAnnouncement {
+        /// Information about the announcing node
         node_info: NodeInfo,
     },
     
     /// Node discovery request
     DiscoveryRequest {
+        /// ID of the requesting node
         requester_id: Uuid,
+        /// When the request was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
     
     /// Node discovery response
     DiscoveryResponse {
+        /// ID of the requesting node
         requester_id: Uuid,
+        /// List of known nodes
         known_nodes: Vec<NodeInfo>,
+        /// When the response was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
     
     /// Node leave notification
     NodeLeave {
+        /// ID of the leaving node
         node_id: Uuid,
+        /// When the leave notification was sent
         timestamp: chrono::DateTime<chrono::Utc>,
+        /// Reason for leaving
         reason: String,
     },
     
     /// Heartbeat message
     Heartbeat {
+        /// ID of the node sending heartbeat
         node_id: Uuid,
+        /// When the heartbeat was sent
         timestamp: chrono::DateTime<chrono::Utc>,
+        /// Current election term
         term: u64,
     },
 }
@@ -114,24 +125,31 @@ pub enum DiscoveryMessage {
 /// Discovery-specific errors
 #[derive(Debug, thiserror::Error)]
 pub enum DiscoveryError {
+    /// Network discovery failed
     #[error("Network discovery failed: {0}")]
     NetworkDiscoveryFailed(String),
     
+    /// DNS discovery failed
     #[error("DNS discovery failed: {0}")]
     DnsDiscoveryFailed(String),
     
+    /// Invalid node address
     #[error("Invalid node address: {0}")]
     InvalidNodeAddress(String),
     
+    /// Node already exists
     #[error("Node already exists: {0}")]
     NodeAlreadyExists(Uuid),
     
+    /// Node not found in cluster
     #[error("Node not found: {0}")]
     NodeNotFound(Uuid),
     
+    /// Discovery operation timed out
     #[error("Discovery timeout")]
     DiscoveryTimeout,
     
+    /// Multicast communication error
     #[error("Multicast error: {0}")]
     MulticastError(String),
 }
@@ -153,16 +171,26 @@ pub struct NodeDiscovery {
 /// Callback trait for node discovery events
 #[async_trait::async_trait]
 pub trait NodeDiscoveryCallback {
+    /// Called when a new node joins the cluster
     async fn on_node_joined(&self, node_info: &NodeInfo);
+    
+    /// Called when a node leaves the cluster
     async fn on_node_left(&self, node_id: Uuid, reason: &str);
+    
+    /// Called when a node's information is updated
     async fn on_node_updated(&self, node_info: &NodeInfo);
 }
 
 /// Trait for network discovery operations
 #[async_trait::async_trait]
 pub trait DiscoveryNetworkSender {
+    /// Send a discovery message to a specific target
     async fn send_discovery_message(&self, target: &str, message: DiscoveryMessage) -> ClusterResult<()>;
+    
+    /// Broadcast a discovery message to all nodes
     async fn broadcast_discovery_message(&self, message: DiscoveryMessage) -> ClusterResult<()>;
+    
+    /// Receive discovery messages from the network
     async fn receive_discovery_messages(&self) -> Vec<(String, DiscoveryMessage)>;
 }
 
@@ -424,7 +452,7 @@ impl NodeDiscovery {
     }
 
     /// Handle discovery response
-    async fn handle_discovery_response(&self, requester_id: Uuid, known_nodes: Vec<NodeInfo>, timestamp: chrono::DateTime<chrono::Utc>) -> ClusterResult<()> {
+    async fn handle_discovery_response(&self, requester_id: Uuid, known_nodes: Vec<NodeInfo>, _timestamp: chrono::DateTime<chrono::Utc>) -> ClusterResult<()> {
         if requester_id != self.local_node_info.node_id {
             return Ok(());
         }

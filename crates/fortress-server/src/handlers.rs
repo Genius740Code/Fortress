@@ -13,7 +13,7 @@ use axum::{
 };
 use chrono::{Utc, DateTime};
 use fortress_core::{
-    encryption::{EncryptionAlgorithm, Aegis256, ChaCha20Poly1305, Aes256Gcm},
+    encryption::{EncryptionAlgorithm, Aegis256},
     key::{KeyManager, SecureKey, InMemoryKeyManager},
     storage::StorageBackend,
     field_encryption::FieldEncryptionManager,
@@ -24,35 +24,47 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::info;
 use uuid::Uuid;
-use futures_util::TryFutureExt;
-use fortress_core::field_encryption::FieldIdentifier;
 
 /// Storage record (simplified for this example)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StorageRecord {
+    /// Unique identifier for the storage record
     pub id: String,
+    /// Unique identifier for the encryption key
     pub key_id: String,
+    /// Encrypted data bytes
     pub data: Vec<u8>,
+    /// Name of the encryption algorithm used
     pub algorithm: String,
+    /// Timestamp when the record was created
     pub created_at: DateTime<Utc>,
+    /// Optional metadata associated with the record
     pub metadata: Option<HashMap<String, serde_json::Value>>,
+    /// Optional tenant identifier for multi-tenancy
     pub tenant_id: Option<String>,
+    /// Optional field-level encryption metadata
     pub field_metadata: Option<HashMap<String, FieldEncryptionMetadata>>,
 }
 
 /// Query parameters for storage queries
 #[derive(Debug, Clone, Deserialize)]
 pub struct QueryParams {
+    /// Optional tenant identifier for filtering
     pub tenant_id: Option<String>,
+    /// Pagination parameters for the query
     pub pagination: PaginationParams,
+    /// Optional filtering parameters
     pub filter: Option<FilterParams>,
+    /// Sorting parameters for the query
     pub sort: SortParams,
 }
 
 /// Query results
 #[derive(Debug, Clone)]
 pub struct QueryResults {
+    /// List of storage records matching the query
     pub records: Vec<StorageRecord>,
+    /// Total count of records available
     pub total_count: u64,
 }
 
@@ -130,7 +142,7 @@ pub async fn store_data(
                 let field_bytes = serde_json::to_vec(&field_value)
                     .map_err(|e| ServerError::serialization(e.to_string()))?;
                 
-                if let Ok(encrypted_field) = state.field_encryption_manager.encrypt_field(&field_id, &field_bytes).await {
+                if let Ok(_encrypted_field) = state.field_encryption_manager.encrypt_field(&field_id, &field_bytes).await {
                     metadata.insert(field_name.clone(), FieldEncryptionMetadata {
                         config_id: "default".to_string(),
                         field: field_name.clone(),
@@ -236,9 +248,9 @@ pub async fn retrieve_data(
 
     // Handle field-level decryption if specified
     let final_data = if let Some(ref field_metadata) = storage_record.field_metadata {
-        let mut data = decrypted_data;
-        for (field_name, metadata) in field_metadata {
-            let field_id = fortress_core::field_encryption::FieldIdentifier::Name(field_name.clone());
+        let data = decrypted_data;
+        for (field_name, _metadata) in field_metadata {
+            let _field_id = fortress_core::field_encryption::FieldIdentifier::Name(field_name.clone());
             
             // This would require storing the encrypted field data separately
             // For now, we'll keep the original data
@@ -637,7 +649,7 @@ fn get_nested_value(data: &serde_json::Value, path: &str) -> Option<serde_json::
 
 /// Create database handler
 pub async fn create_database(
-    State(state): State<Arc<AppState>>,
+    State(_state): State<Arc<AppState>>,
     Json(request): Json<CreateDatabaseRequest>,
 ) -> ServerResult<Json<ApiResponse<DatabaseResponse>>> {
     let start_time = std::time::Instant::now();
@@ -885,7 +897,7 @@ pub async fn drop_table(
 pub async fn insert_data(
     State(_state): State<Arc<AppState>>,
     Path((database_name, table_name)): Path<(String, String)>,
-    Json(request): Json<InsertDataRequest>,
+    Json(_request): Json<InsertDataRequest>,
 ) -> ServerResult<Json<ApiResponse<InsertResponse>>> {
     let start_time = std::time::Instant::now();
     
@@ -919,7 +931,7 @@ pub async fn insert_data(
 pub async fn query_data(
     State(_state): State<Arc<AppState>>,
     Path((database_name, table_name)): Path<(String, String)>,
-    Query(params): Query<QueryParams>,
+    Query(_params): Query<QueryParams>,
 ) -> ServerResult<Json<ApiResponse<QueryResponse>>> {
     let start_time = std::time::Instant::now();
     
@@ -986,7 +998,7 @@ pub async fn bulk_insert(
 pub async fn update_data(
     State(_state): State<Arc<AppState>>,
     Path((database_name, table_name, data_id)): Path<(String, String, String)>,
-    Json(request): Json<UpdateDataRequest>,
+    Json(_request): Json<UpdateDataRequest>,
 ) -> ServerResult<Json<ApiResponse<UpdateResponse>>> {
     let start_time = std::time::Instant::now();
     

@@ -119,7 +119,7 @@ pub struct InMemoryUserStore {
 
 /// User record for in-memory store
 #[derive(Clone)]
-struct UserRecord {
+pub struct UserRecord {
     id: String,
     username: String,
     password_hash: String,

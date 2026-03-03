@@ -3,14 +3,14 @@
 //! This module provides high-level cluster management capabilities,
 //! including administration, monitoring, and configuration management.
 
-use crate::cluster::{ClusterError, ClusterResult};
+use crate::cluster::ClusterResult;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio::sync::{RwLock, Mutex};
-use tokio::time::{interval, timeout};
-use tracing::{debug, error, info, warn};
+use tokio::time::interval;
+use tracing::{error, info};
 use uuid::Uuid;
 
 /// Cluster management configuration
@@ -272,75 +272,105 @@ pub struct NodeMetrics {
 pub enum ManagementMessage {
     /// Cluster state request
     ClusterStateRequest {
+        /// ID of the requesting node
         requester_id: Uuid,
+        /// When the request was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
     
     /// Cluster state response
     ClusterStateResponse {
+        /// ID of the requesting node
         requester_id: Uuid,
+        /// Current cluster state
         cluster_state: ClusterState,
+        /// When the response was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
     
     /// Node join request
     NodeJoinRequest {
+        /// Information about the joining node
         node_info: ClusterMember,
+        /// When the request was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
     
     /// Node join response
     NodeJoinResponse {
+        /// ID of the responding node
         node_id: Uuid,
+        /// Whether the join was accepted
         accepted: bool,
+        /// Cluster configuration (if accepted)
         cluster_config: Option<ClusterConfiguration>,
+        /// Response message
         message: String,
+        /// When the response was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
     
     /// Node leave request
     NodeLeaveRequest {
+        /// ID of the leaving node
         node_id: Uuid,
+        /// Reason for leaving
         reason: String,
+        /// When the request was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
     
     /// Configuration update request
     ConfigUpdateRequest {
+        /// New cluster configuration
         configuration: ClusterConfiguration,
+        /// When the request was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
     
     /// Configuration update response
     ConfigUpdateResponse {
+        /// Whether the update was successful
         success: bool,
+        /// Response message
         message: String,
+        /// When the response was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
     
     /// Metrics request
     MetricsRequest {
+        /// ID of the requesting node
         requester_id: Uuid,
+        /// When the request was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
     
     /// Metrics response
     MetricsResponse {
+        /// ID of the requesting node
         requester_id: Uuid,
+        /// Cluster metrics
         metrics: ClusterMetrics,
+        /// When the response was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
     
     /// Rebalance request
     RebalanceRequest {
+        /// Reason for rebalancing
         reason: String,
+        /// When the request was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
     
     /// Rebalance response
     RebalanceResponse {
+        /// Whether rebalancing was successful
         success: bool,
+        /// Response message
         message: String,
+        /// When the response was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
 }
@@ -348,30 +378,39 @@ pub enum ManagementMessage {
 /// Management-specific errors
 #[derive(Debug, thiserror::Error)]
 pub enum ManagementError {
+    /// Cluster not found
     #[error("Cluster not found")]
     ClusterNotFound,
     
+    /// Node not found in cluster
     #[error("Node not found: {0}")]
     NodeNotFound(Uuid),
     
+    /// Invalid cluster configuration
     #[error("Invalid configuration: {0}")]
     InvalidConfiguration(String),
     
+    /// Operation not allowed in current state
     #[error("Operation not allowed: {0}")]
     OperationNotAllowed(String),
     
+    /// Cluster is not ready for operation
     #[error("Cluster is not ready")]
     ClusterNotReady,
     
+    /// Rebalancing operation failed
     #[error("Rebalancing failed: {0}")]
     RebalancingFailed(String),
     
+    /// Auto-scaling operation failed
     #[error("Auto-scaling failed: {0}")]
     AutoScalingFailed(String),
     
+    /// Backup operation failed
     #[error("Backup failed: {0}")]
     BackupFailed(String),
     
+    /// Management operation timed out
     #[error("Management timeout")]
     ManagementTimeout,
 }
@@ -395,26 +434,45 @@ pub struct ClusterManager {
 /// Callback trait for management events
 #[async_trait::async_trait]
 pub trait ManagementCallback {
+    /// Called when a new node joins the cluster
     async fn on_node_joined(&self, node_info: &ClusterMember);
+    
+    /// Called when a node leaves the cluster
     async fn on_node_left(&self, node_id: Uuid, reason: &str);
+    
+    /// Called when cluster configuration is updated
     async fn on_configuration_updated(&self, old_config: &ClusterConfiguration, new_config: &ClusterConfiguration);
+    
+    /// Called when rebalancing starts
     async fn on_rebalancing_started(&self, reason: &str);
+    
+    /// Called when rebalancing completes
     async fn on_rebalancing_completed(&self, success: bool, message: &str);
+    
+    /// Called when auto-scaling is triggered
     async fn on_auto_scaling_triggered(&self, action: &str, reason: &str);
 }
 
 /// Trait for network management operations
 #[async_trait::async_trait]
 pub trait ManagementNetworkSender {
+    /// Send a management message to a specific node
     async fn send_management_message(&self, target: Uuid, message: ManagementMessage) -> ClusterResult<()>;
+    
+    /// Broadcast a management message to all nodes
     async fn broadcast_management_message(&self, message: ManagementMessage) -> ClusterResult<()>;
 }
 
 /// Trait for metrics collection
 #[async_trait::async_trait]
 pub trait MetricsCollector {
+    /// Collect metrics for the entire cluster
     async fn collect_cluster_metrics(&self) -> ClusterResult<ClusterMetrics>;
+    
+    /// Collect metrics for a specific node
     async fn collect_node_metrics(&self, node_id: Uuid) -> ClusterResult<NodeMetrics>;
+    
+    /// Get historical metrics for a time period
     async fn get_historical_metrics(&self, duration: Duration) -> ClusterResult<Vec<ClusterMetrics>>;
 }
 
@@ -667,7 +725,7 @@ impl ClusterManager {
         // Notify callbacks of completion
         let callbacks = self.callbacks.lock().await;
         for callback in callbacks.iter() {
-            callback.on_rebalancing_completed(true, "Rebalancing completed successfully");
+            let _ = callback.on_rebalancing_completed(true, "Rebalancing completed successfully");
         }
 
         Ok(())

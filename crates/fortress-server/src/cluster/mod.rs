@@ -20,7 +20,6 @@ pub mod management;
 pub mod network;
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 
@@ -51,8 +50,11 @@ pub enum ClusterMessage {
     Management(management::ManagementMessage),
     /// Heartbeat messages
     Heartbeat {
+        /// ID of the node sending heartbeat
         node_id: Uuid,
+        /// When the heartbeat was sent
         timestamp: DateTime<Utc>,
+        /// Current election term
         term: u64,
     },
 }
@@ -60,33 +62,43 @@ pub enum ClusterMessage {
 /// Cluster-wide error types
 #[derive(Debug, thiserror::Error)]
 pub enum ClusterError {
+    /// Network-related error
     #[error("Network error: {0}")]
     Network(#[from] network::NetworkError),
     
+    /// Raft consensus error
     #[error("Raft consensus error: {0}")]
     Raft(#[from] raft::RaftError),
     
+    /// Node discovery error
     #[error("Node discovery error: {0}")]
     Discovery(#[from] discovery::DiscoveryError),
     
+    /// Data replication error
     #[error("Data replication error: {0}")]
     Replication(#[from] replication::ReplicationError),
     
+    /// Failover error
     #[error("Failover error: {0}")]
     Failover(#[from] failover::FailoverError),
     
+    /// Cluster management error
     #[error("Cluster management error: {0}")]
     Management(#[from] management::ManagementError),
     
+    /// Configuration error
     #[error("Configuration error: {0}")]
     Configuration(String),
     
+    /// Node not found error
     #[error("Node not found: {0}")]
     NodeNotFound(Uuid),
     
+    /// Cluster not ready error
     #[error("Cluster is not ready")]
     ClusterNotReady,
     
+    /// Leadership transfer failed error
     #[error("Leadership transfer failed: {0}")]
     LeadershipTransferFailed(String),
 }
@@ -171,4 +183,3 @@ use crate::cluster::discovery::DiscoveryConfig;
 use crate::cluster::replication::ReplicationConfig;
 use crate::cluster::failover::FailoverConfig;
 use crate::cluster::network::NetworkConfig;
-use crate::cluster::management::{ManagementConfig, ClusterConfiguration};

@@ -7,7 +7,6 @@ use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use fortress_core::config::Config as CoreConfig;
-use fortress_core::storage::StorageConfig;
 
 /// Default server host
 pub const DEFAULT_HOST: &str = "0.0.0.0";

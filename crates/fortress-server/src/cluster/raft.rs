@@ -9,8 +9,8 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{RwLock, Mutex};
-use tokio::time::{interval, timeout, Interval};
-use tracing::{debug, error, info, warn};
+use tokio::time::interval;
+use tracing::{error, info};
 use uuid::Uuid;
 
 /// Raft node role
@@ -99,46 +99,67 @@ impl Default for RaftConfig {
 pub enum RaftMessage {
     /// Request vote message
     RequestVote {
+        /// Current election term
         term: u64,
+        /// ID of the candidate requesting vote
         candidate_id: Uuid,
+        /// Index of candidate's last log entry
         last_log_index: u64,
+        /// Term of candidate's last log entry
         last_log_term: u64,
     },
     
     /// Response to vote request
     RequestVoteResponse {
+        /// Current election term
         term: u64,
+        /// Whether the vote was granted
         vote_granted: bool,
     },
     
     /// Append entries message (heartbeat or log replication)
     AppendEntries {
+        /// Current election term
         term: u64,
+        /// ID of the leader sending entries
         leader_id: Uuid,
+        /// Index of log entry before new ones
         prev_log_index: u64,
+        /// Term of log entry before new ones
         prev_log_term: u64,
+        /// New log entries to append
         entries: Vec<LogEntry>,
+        /// Leader's commit index
         leader_commit: u64,
     },
     
     /// Response to append entries
     AppendEntriesResponse {
+        /// Current election term
         term: u64,
+        /// Whether the vote was granted
         success: bool,
+        /// Index of highest log entry known to be replicated
         match_index: u64,
     },
     
     /// Install snapshot message
     InstallSnapshot {
+        /// Current election term
         term: u64,
+        /// ID of the leader sending snapshot
         leader_id: Uuid,
+        /// Index of last included entry
         last_included_index: u64,
+        /// Term of last included entry
         last_included_term: u64,
+        /// Snapshot data bytes
         data: Vec<u8>,
     },
     
     /// Response to install snapshot
     InstallSnapshotResponse {
+        /// Current election term
         term: u64,
     },
 }
@@ -146,21 +167,27 @@ pub enum RaftMessage {
 /// Raft-specific errors
 #[derive(Debug, thiserror::Error)]
 pub enum RaftError {
+    /// Invalid election term
     #[error("Invalid term: {0}")]
     InvalidTerm(u64),
     
+    /// Log inconsistency detected
     #[error("Log inconsistency at index {0}")]
     LogInconsistency(u64),
     
+    /// Node is not the leader
     #[error("Not a leader")]
     NotLeader,
     
+    /// Leadership transfer failed
     #[error("Leadership transfer failed: {0}")]
     LeadershipTransferFailed(String),
     
+    /// Snapshot installation failed
     #[error("Snapshot installation failed: {0}")]
     SnapshotInstallationFailed(String),
     
+    /// Log compaction failed
     #[error("Log compaction failed: {0}")]
     LogCompactionFailed(String),
 }
@@ -182,7 +209,10 @@ pub struct RaftNode {
 /// Trait for sending messages to other nodes
 #[async_trait::async_trait]
 pub trait MessageSender {
+    /// Send a message to a specific node
     async fn send_message(&self, target: Uuid, message: RaftMessage) -> ClusterResult<()>;
+    
+    /// Broadcast a message to all nodes
     async fn broadcast_message(&self, message: RaftMessage) -> ClusterResult<()>;
 }
 
@@ -425,7 +455,7 @@ impl RaftNode {
     }
 
     /// Handle append entries request
-    async fn handle_append_entries(&self, term: u64, leader_id: Uuid, prev_log_index: u64, prev_log_term: u64, entries: Vec<LogEntry>, leader_commit: u64) -> ClusterResult<RaftMessage> {
+    async fn handle_append_entries(&self, term: u64, _leader_id: Uuid, prev_log_index: u64, prev_log_term: u64, entries: Vec<LogEntry>, leader_commit: u64) -> ClusterResult<RaftMessage> {
         let mut state = self.state.write().await;
         
         // Update term if necessary
@@ -489,7 +519,7 @@ impl RaftNode {
     }
 
     /// Handle install snapshot request
-    async fn handle_install_snapshot(&self, term: u64, leader_id: Uuid, last_included_index: u64, last_included_term: u64, data: Vec<u8>) -> ClusterResult<RaftMessage> {
+    async fn handle_install_snapshot(&self, term: u64, _leader_id: Uuid, _last_included_index: u64, _last_included_term: u64, _data: Vec<u8>) -> ClusterResult<RaftMessage> {
         let mut state = self.state.write().await;
         
         // Update term if necessary

@@ -1,10 +1,5 @@
 use crate::grpc::service::FortressGrpcService;
 use crate::error::ServerError;
-use fortress_core::{
-    encryption::{EncryptionAlgorithm, Aegis256, ChaCha20Poly1305, Aes256Gcm},
-    key::{KeyManager, SecureKey},
-    storage::StorageBackend,
-};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use axum::{
@@ -16,12 +11,19 @@ use axum::{
 };
 use tracing::{info, error};
 
+/// gRPC-compatible server implementation for Fortress
+/// 
+/// This server provides HTTP endpoints that mimic gRPC functionality
+/// using JSON for simplicity. Can be upgraded to full protobuf gRPC.
 pub struct GrpcServer {
+    /// Server address to bind to
     addr: SocketAddr,
+    /// gRPC service instance
     service: Arc<FortressGrpcService>,
 }
 
 impl GrpcServer {
+    /// Create a new gRPC server instance
     pub fn new(addr: SocketAddr) -> Self {
         Self {
             addr,
@@ -29,6 +31,7 @@ impl GrpcServer {
         }
     }
 
+    /// Start the gRPC-compatible server
     pub async fn start(self) -> Result<(), ServerError> {
         info!("Starting gRPC-compatible server on {}", self.addr);
 
@@ -58,6 +61,7 @@ impl GrpcServer {
         Ok(())
     }
 
+    /// Get a reference to the service
     pub fn service(&self) -> Arc<FortressGrpcService> {
         self.service.clone()
     }

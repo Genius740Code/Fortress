@@ -22,7 +22,6 @@ use tower_http::{
     trace::TraceLayer,
 };
 use tower_http::classify::{SharedClassifier, ServerErrorsAsFailures};
-use tower_http::trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse};
 use tracing::{info, warn, error};
 
 /// Advanced rate limiter with multiple algorithms and DDoS protection
