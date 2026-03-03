@@ -286,6 +286,14 @@ pub enum StorageErrorCode {
     /// Corrupted data
     #[error("Corrupted data")]
     CorruptedData,
+    
+    /// Operation not implemented
+    #[error("Operation not implemented")]
+    NotImplemented,
+    
+    /// Operation cancelled
+    #[error("Operation cancelled")]
+    OperationCancelled,
 }
 
 /// Configuration error codes

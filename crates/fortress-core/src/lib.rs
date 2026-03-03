@@ -309,6 +309,18 @@ pub mod secrets;
 
 pub mod secrets_kv;
 
+/// MongoDB database backend for Fortress
+
+pub mod mongodb_database;
+
+/// Enhanced PostgreSQL database backend for Fortress
+
+pub mod postgres_database;
+
+/// Push/Pull operations for database synchronization
+
+pub mod push_pull_operations;
+
 
 
 #[cfg(test)]
@@ -514,6 +526,25 @@ pub mod prelude {
 
     pub use crate::secrets_kv::{
         KvEngine, KvConfig, VersionedSecret,
+    };
+
+    pub use crate::mongodb_database::{
+        MongoConfig, MongoKeyDatabase, MongoStorage, MongoPullFilter, 
+        MongoPipeline, MongoAggregationResult, MongoSearchResult,
+        MongoBulkEntry, MongoReadPreference, MongoWriteConcern
+    };
+
+    pub use crate::postgres_database::{
+        PostgresConfig, PostgresKeyDatabase, PostgresStorage, PostgresQuery,
+        PostgresCursor, PostgresRow, PostgresSearchResult, PostgresBulkEntry,
+        PostgresJsonbQuery, PostgresPartitioning, PostgresReplicationConfig,
+        PostgresSyncMode
+    };
+
+    pub use crate::push_pull_operations::{
+        PushPullManager, PushPullConfig, PushRequest, PullRequest, PushPullResult,
+        PushFilter, PullFilter, StorageSource, StorageTarget, ConflictResolution,
+        OperationType, ProgressUpdate, ConflictInfo, DataVersion, ConflictType
     };
 
 }
