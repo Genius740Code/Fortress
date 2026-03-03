@@ -289,6 +289,10 @@ pub mod performance_monitor;
 
 pub mod auto_tuning;
 
+/// Advanced observability and monitoring system
+
+pub mod observability;
+
 
 
 #[cfg(test)]
@@ -466,6 +470,16 @@ pub mod prelude {
         AutomaticPerformanceTuner, AutoTuningConfig, TuningParameter,
         ParameterType, ParameterCategory, ImpactLevel, AppliedChange,
         ChangeStatus, TuningStrategy, OptimizationGoal, TuningStatus
+    };
+
+    pub use crate::observability::{
+        ObservabilityManager, ObservabilityConfig, SystemStatus,
+        ObservabilityTracer, TraceConfig, SpanContext,
+        AdvancedMetricsCollector, MetricsConfig, MetricType,
+        StructuredLogger, LogConfig, LogFormat,
+        HealthChecker, HealthConfig, HealthStatus,
+        AlertManager, AlertConfig, AlertRule,
+        DashboardManager, DashboardConfig, Widget,
     };
 
 }

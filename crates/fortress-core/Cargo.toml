@@ -77,6 +77,11 @@ generic-array = "0.14"
 # Logging
 log = "0.4"
 tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"], optional = true }
+opentelemetry = { version = "0.21", features = ["trace"], optional = true }
+opentelemetry_sdk = { version = "0.21", features = ["rt-tokio"], optional = true }
+tracing-opentelemetry = { version = "0.21", optional = true }
+gethostname = { version = "0.4", optional = true }
 
 # Derive macros
 derive_builder = "0.12"
@@ -132,7 +137,6 @@ memcached = { version = "0.4.5-beta.2", optional = true }
 
 # Advanced profiling (optional)
 pprof = { version = "0.12", features = ["flamegraph", "protobuf-codec"], optional = true }
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"], optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
@@ -155,6 +159,7 @@ distributed-cache = ["performance-optimization", "redis", "memcached"]
 advanced-profiling = ["performance-optimization", "pprof", "tracing-subscriber"]
 monitoring = ["performance-optimization", "metrics-exporter-prometheus"]
 full-performance = ["performance-optimization", "distributed-cache", "advanced-profiling", "monitoring"]
+observability = ["tracing-subscriber", "opentelemetry", "opentelemetry_sdk", "tracing-opentelemetry", "gethostname"]
 
 [[bench]]
 name = "encryption_bench"
