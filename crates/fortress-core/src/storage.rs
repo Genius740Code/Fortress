@@ -3,12 +3,16 @@
 //! This module provides traits and implementations for various storage backends
 //! that Fortress can use to store encrypted data and metadata.
 
-use crate::error::{FortressError, Result, StorageErrorCode};
+use crate::error::{FortressError, Result, StorageErrorCode, TransactionErrorCode, BackupErrorCode, StreamingErrorCode, AuditErrorCode};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
 use std::collections::HashMap;
 use std::fmt;
+use std::sync::Arc;
+use tokio::sync::mpsc;
+use tokio::sync::RwLock;
+use uuid::Uuid;
 
 // Cloud storage imports (only available with cloud-storage feature)
 #[cfg(feature = "cloud-storage")]
@@ -50,6 +54,149 @@ pub trait StorageBackend: Send + Sync + fmt::Debug {
 
     /// Check if the backend is healthy
     async fn health_check(&self) -> Result<HealthStatus>;
+
+    // Transaction support methods
+    
+    /// Begin a new transaction
+    async fn begin_transaction(&self) -> Result<TransactionId> {
+        Err(FortressError::storage(
+            "Transactions not supported by this backend",
+            &self.metadata().backend_type,
+            StorageErrorCode::NotImplemented,
+        ))
+    }
+
+    /// Commit a transaction
+    async fn commit_transaction(&self, transaction_id: &TransactionId) -> Result<()> {
+        Err(FortressError::storage(
+            "Transactions not supported by this backend",
+            &self.metadata().backend_type,
+            StorageErrorCode::NotImplemented,
+        ))
+    }
+
+    /// Rollback a transaction
+    async fn rollback_transaction(&self, transaction_id: &TransactionId) -> Result<()> {
+        Err(FortressError::storage(
+            "Transactions not supported by this backend",
+            &self.metadata().backend_type,
+            StorageErrorCode::NotImplemented,
+        ))
+    }
+
+    /// Get transaction status
+    async fn get_transaction_status(&self, transaction_id: &TransactionId) -> Result<TransactionStatus> {
+        Err(FortressError::storage(
+            "Transactions not supported by this backend",
+            &self.metadata().backend_type,
+            StorageErrorCode::NotImplemented,
+        ))
+    }
+
+    // Streaming support methods
+    
+    /// Create a new stream for data streaming
+    async fn create_stream(&self, stream_config: StreamConfig) -> Result<StreamId> {
+        Err(FortressError::storage(
+            "Streaming not supported by this backend",
+            &self.metadata().backend_type,
+            StorageErrorCode::NotImplemented,
+        ))
+    }
+
+    /// Write data to a stream
+    async fn write_to_stream(&self, stream_id: &StreamId, data: &[u8]) -> Result<()> {
+        Err(FortressError::storage(
+            "Streaming not supported by this backend",
+            &self.metadata().backend_type,
+            StorageErrorCode::NotImplemented,
+        ))
+    }
+
+    /// Read data from a stream
+    async fn read_from_stream(&self, stream_id: &StreamId, buffer: &mut [u8]) -> Result<usize> {
+        Err(FortressError::storage(
+            "Streaming not supported by this backend",
+            &self.metadata().backend_type,
+            StorageErrorCode::NotImplemented,
+        ))
+    }
+
+    /// Close a stream
+    async fn close_stream(&self, stream_id: &StreamId) -> Result<()> {
+        Err(FortressError::storage(
+            "Streaming not supported by this backend",
+            &self.metadata().backend_type,
+            StorageErrorCode::NotImplemented,
+        ))
+    }
+
+    // Backup/restore support methods
+    
+    /// Create a backup of the storage
+    async fn create_backup(&self, backup_config: BackupConfig) -> Result<BackupId> {
+        Err(FortressError::storage(
+            "Backups not supported by this backend",
+            &self.metadata().backend_type,
+            StorageErrorCode::NotImplemented,
+        ))
+    }
+
+    /// Restore from a backup
+    async fn restore_backup(&self, backup_id: &BackupId, restore_config: RestoreConfig) -> Result<()> {
+        Err(FortressError::storage(
+            "Backups not supported by this backend",
+            &self.metadata().backend_type,
+            StorageErrorCode::NotImplemented,
+        ))
+    }
+
+    /// List available backups
+    async fn list_backups(&self) -> Result<Vec<BackupMetadata>> {
+        Err(FortressError::storage(
+            "Backups not supported by this backend",
+            &self.metadata().backend_type,
+            StorageErrorCode::NotImplemented,
+        ))
+    }
+
+    /// Delete a backup
+    async fn delete_backup(&self, backup_id: &BackupId) -> Result<()> {
+        Err(FortressError::storage(
+            "Backups not supported by this backend",
+            &self.metadata().backend_type,
+            StorageErrorCode::NotImplemented,
+        ))
+    }
+
+    // Audit logging support methods
+    
+    /// Log an audit event
+    async fn log_audit_event(&self, event: AuditEvent) -> Result<()> {
+        Err(FortressError::storage(
+            "Audit logging not supported by this backend",
+            &self.metadata().backend_type,
+            StorageErrorCode::NotImplemented,
+        ))
+    }
+
+    /// Query audit logs
+    async fn query_audit_logs(&self, query: AuditQuery) -> Result<Vec<AuditEvent>> {
+        Err(FortressError::storage(
+            "Audit logging not supported by this backend",
+            &self.metadata().backend_type,
+            StorageErrorCode::NotImplemented,
+        ))
+    }
+
+    /// Get audit statistics
+    async fn get_audit_statistics(&self) -> Result<AuditStatistics> {
+        Err(FortressError::storage(
+            "Audit logging not supported by this backend",
+            &self.metadata().backend_type,
+            StorageErrorCode::NotImplemented,
+        ))
+    }
 }
 
 /// Storage metadata information
@@ -63,8 +210,18 @@ pub struct StorageMetadata {
     pub supports_transactions: bool,
     /// Whether the backend supports encryption at rest
     pub supports_encryption_at_rest: bool,
+    /// Whether the backend supports streaming
+    pub supports_streaming: bool,
+    /// Whether the backend supports backup/restore
+    pub supports_backup_restore: bool,
+    /// Whether the backend supports audit logging
+    pub supports_audit_logging: bool,
     /// Maximum object size (if applicable)
     pub max_object_size: Option<usize>,
+    /// Supported transaction isolation levels
+    pub supported_isolation_levels: Vec<IsolationLevel>,
+    /// Supported compression algorithms
+    pub supported_compression_algorithms: Vec<CompressionAlgorithm>,
     /// Additional metadata
     pub metadata: HashMap<String, String>,
 }
@@ -145,7 +302,12 @@ impl StorageBackend for InMemoryStorage {
             version: "1.0.0".to_string(),
             supports_transactions: false,
             supports_encryption_at_rest: false,
+            supports_streaming: false,
+            supports_backup_restore: false,
+            supports_audit_logging: false,
             max_object_size: None,
+            supported_isolation_levels: vec![],
+            supported_compression_algorithms: vec![],
             metadata: HashMap::new(),
         }
     }
@@ -362,7 +524,12 @@ impl StorageBackend for FileSystemStorage {
             version: "1.0.0".to_string(),
             supports_transactions: false,
             supports_encryption_at_rest: false,
+            supports_streaming: false,
+            supports_backup_restore: false,
+            supports_audit_logging: false,
             max_object_size: Some(1024 * 1024 * 1024), // 1GB
+            supported_isolation_levels: vec![],
+            supported_compression_algorithms: vec![],
             metadata: HashMap::new(),
         }
     }
@@ -597,7 +764,12 @@ impl StorageBackend for S3Storage {
             version: "1.0.0".to_string(),
             supports_transactions: false,
             supports_encryption_at_rest: true,
+            supports_streaming: false,
+            supports_backup_restore: false,
+            supports_audit_logging: false,
             max_object_size: Some(5 * 1024 * 1024 * 1024), // 5GB
+            supported_isolation_levels: vec![],
+            supported_compression_algorithms: vec![],
             metadata: {
                 let mut meta = HashMap::new();
                 meta.insert("bucket".to_string(), self.bucket.clone());
@@ -783,7 +955,12 @@ impl StorageBackend for AzureBlobStorage {
             version: "1.0.0".to_string(),
             supports_transactions: false,
             supports_encryption_at_rest: true,
+            supports_streaming: false,
+            supports_backup_restore: false,
+            supports_audit_logging: false,
             max_object_size: Some(4 * 1024 * 1024 * 1024 * 1024), // 4TB
+            supported_isolation_levels: vec![],
+            supported_compression_algorithms: vec![],
             metadata: {
                 let mut meta = HashMap::new();
                 meta.insert("container".to_string(), self.container.clone());
@@ -851,6 +1028,446 @@ pub enum StorageBackendType {
         /// Account name
         account: String,
     },
+}
+
+// Transaction-related types
+
+/// Transaction identifier
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct TransactionId(pub Uuid);
+
+/// Transaction status
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum TransactionStatus {
+    /// Transaction is active
+    Active,
+    /// Transaction has been committed
+    Committed,
+    /// Transaction has been rolled back
+    RolledBack,
+    /// Transaction has been aborted
+    Aborted,
+    /// Transaction is preparing to commit
+    Preparing,
+    /// Transaction is in doubt
+    InDoubt,
+}
+
+/// Transaction isolation level
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum IsolationLevel {
+    /// Read uncommitted (lowest isolation)
+    ReadUncommitted,
+    /// Read committed
+    ReadCommitted,
+    /// Repeatable read
+    RepeatableRead,
+    /// Serializable (highest isolation)
+    Serializable,
+}
+
+/// Transaction metadata
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TransactionMetadata {
+    /// Transaction ID
+    pub transaction_id: TransactionId,
+    /// Transaction start time
+    pub start_time: chrono::DateTime<chrono::Utc>,
+    /// Transaction isolation level
+    pub isolation_level: IsolationLevel,
+    /// Transaction status
+    pub status: TransactionStatus,
+    /// Number of operations in transaction
+    pub operation_count: u64,
+    /// Transaction timeout in seconds
+    pub timeout_seconds: u64,
+    /// User who initiated the transaction
+    pub user_id: Option<String>,
+    /// Additional metadata
+    pub metadata: HashMap<String, String>,
+}
+
+// Streaming-related types
+
+/// Stream identifier
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct StreamId(pub Uuid);
+
+/// Stream configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamConfig {
+    /// Stream name
+    pub name: String,
+    /// Stream type (read, write, or bidirectional)
+    pub stream_type: StreamType,
+    /// Buffer size in bytes
+    pub buffer_size: usize,
+    /// Maximum message size in bytes
+    pub max_message_size: usize,
+    /// Stream timeout in seconds
+    pub timeout_seconds: u64,
+    /// Compression settings
+    pub compression: Option<CompressionConfig>,
+    /// Encryption settings
+    pub encryption: Option<EncryptionConfig>,
+    /// Additional configuration
+    pub metadata: HashMap<String, String>,
+}
+
+/// Stream type
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum StreamType {
+    /// Read-only stream
+    Read,
+    /// Write-only stream
+    Write,
+    /// Bidirectional stream
+    Bidirectional,
+}
+
+/// Compression configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompressionConfig {
+    /// Compression algorithm
+    pub algorithm: CompressionAlgorithm,
+    /// Compression level (1-9)
+    pub level: u8,
+}
+
+/// Compression algorithm
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum CompressionAlgorithm {
+    /// No compression
+    None,
+    /// Gzip compression
+    Gzip,
+    /// Zstandard compression
+    Zstd,
+    /// LZ4 compression
+    Lz4,
+}
+
+/// Encryption configuration for streams
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EncryptionConfig {
+    /// Encryption algorithm
+    pub algorithm: String,
+    /// Key ID for encryption
+    pub key_id: String,
+    /// Additional encryption parameters
+    pub parameters: HashMap<String, String>,
+}
+
+/// Stream metadata
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamMetadata {
+    /// Stream ID
+    pub stream_id: StreamId,
+    /// Stream name
+    pub name: String,
+    /// Stream type
+    pub stream_type: StreamType,
+    /// Creation time
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    /// Last activity time
+    pub last_activity: chrono::DateTime<chrono::Utc>,
+    /// Number of bytes written
+    pub bytes_written: u64,
+    /// Number of bytes read
+    pub bytes_read: u64,
+    /// Number of messages
+    pub message_count: u64,
+    /// Stream status
+    pub status: StreamStatus,
+    /// Additional metadata
+    pub metadata: HashMap<String, String>,
+}
+
+/// Stream status
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum StreamStatus {
+    /// Stream is active
+    Active,
+    /// Stream is paused
+    Paused,
+    /// Stream is closed
+    Closed,
+    /// Stream has an error
+    Error,
+}
+
+// Backup-related types
+
+/// Backup identifier
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct BackupId(pub Uuid);
+
+/// Backup configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackupConfig {
+    /// Backup name
+    pub name: String,
+    /// Backup type
+    pub backup_type: BackupType,
+    /// Compression settings
+    pub compression: Option<CompressionConfig>,
+    /// Encryption settings
+    pub encryption: Option<EncryptionConfig>,
+    /// Retention policy
+    pub retention_policy: Option<RetentionPolicy>,
+    /// Include/exclude filters
+    pub filters: Vec<BackupFilter>,
+    /// Additional configuration
+    pub metadata: HashMap<String, String>,
+}
+
+/// Backup type
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum BackupType {
+    /// Full backup
+    Full,
+    /// Incremental backup
+    Incremental,
+    /// Differential backup
+    Differential,
+}
+
+/// Retention policy
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RetentionPolicy {
+    /// Number of backups to retain
+    pub max_backups: usize,
+    /// Maximum age in days
+    pub max_age_days: u32,
+    /// Cleanup schedule
+    pub cleanup_schedule: Option<String>,
+}
+
+/// Backup filter
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackupFilter {
+    /// Filter type
+    pub filter_type: FilterType,
+    /// Filter pattern
+    pub pattern: String,
+    /// Whether to include (true) or exclude (false)
+    pub include: bool,
+}
+
+/// Filter type
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum FilterType {
+    /// Prefix filter
+    Prefix,
+    /// Suffix filter
+    Suffix,
+    /// Regex filter
+    Regex,
+    /// Exact match filter
+    Exact,
+}
+
+/// Restore configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RestoreConfig {
+    /// Target location for restore
+    pub target_location: Option<String>,
+    /// Conflict resolution strategy
+    pub conflict_resolution: ConflictResolution,
+    /// Include/exclude filters
+    pub filters: Vec<BackupFilter>,
+    /// Whether to verify after restore
+    pub verify: bool,
+    /// Additional configuration
+    pub metadata: HashMap<String, String>,
+}
+
+/// Conflict resolution strategy
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ConflictResolution {
+    /// Skip conflicting items
+    Skip,
+    /// Overwrite existing items
+    Overwrite,
+    /// Keep existing items
+    KeepExisting,
+    /// Fail on conflict
+    Fail,
+}
+
+/// Backup metadata
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackupMetadata {
+    /// Backup ID
+    pub backup_id: BackupId,
+    /// Backup name
+    pub name: String,
+    /// Backup type
+    pub backup_type: BackupType,
+    /// Creation time
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    /// Backup size in bytes
+    pub size_bytes: u64,
+    /// Number of items in backup
+    pub item_count: u64,
+    /// Backup status
+    pub status: BackupStatus,
+    /// Checksum for integrity verification
+    pub checksum: Option<String>,
+    /// Encryption information
+    pub encryption_info: Option<String>,
+    /// Compression information
+    pub compression_info: Option<String>,
+    /// Additional metadata
+    pub metadata: HashMap<String, String>,
+}
+
+/// Backup status
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum BackupStatus {
+    /// Backup is in progress
+    InProgress,
+    /// Backup completed successfully
+    Completed,
+    /// Backup failed
+    Failed,
+    /// Backup is being verified
+    Verifying,
+    /// Backup is being restored
+    Restoring,
+}
+
+// Audit-related types
+
+/// Audit event
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuditEvent {
+    /// Event ID
+    pub event_id: Uuid,
+    /// Event type
+    pub event_type: AuditEventType,
+    /// Event timestamp
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    /// User who performed the action
+    pub user_id: Option<String>,
+    /// Action performed
+    pub action: String,
+    /// Resource that was acted upon
+    pub resource: Option<String>,
+    /// Event outcome
+    pub outcome: AuditEventOutcome,
+    /// IP address of the client
+    pub client_ip: Option<String>,
+    /// User agent
+    pub user_agent: Option<String>,
+    /// Session ID
+    pub session_id: Option<String>,
+    /// Request ID
+    pub request_id: Option<String>,
+    /// Additional event data
+    pub data: HashMap<String, serde_json::Value>,
+}
+
+/// Audit event type
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum AuditEventType {
+    /// Authentication event
+    Authentication,
+    /// Authorization event
+    Authorization,
+    /// Data access event
+    DataAccess,
+    /// Data modification event
+    DataModification,
+    /// Configuration change event
+    ConfigurationChange,
+    /// System event
+    System,
+    /// Security event
+    Security,
+    /// Compliance event
+    Compliance,
+    /// Backup event
+    Backup,
+    /// Restore event
+    Restore,
+    /// Transaction event
+    Transaction,
+}
+
+/// Audit event outcome
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum AuditEventOutcome {
+    /// Operation succeeded
+    Success,
+    /// Operation failed
+    Failure,
+    /// Operation was denied
+    Denied,
+    /// Operation resulted in error
+    Error,
+}
+
+/// Audit query
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuditQuery {
+    /// Event types to filter by
+    pub event_types: Option<Vec<AuditEventType>>,
+    /// Time range start
+    pub start_time: Option<chrono::DateTime<chrono::Utc>>,
+    /// Time range end
+    pub end_time: Option<chrono::DateTime<chrono::Utc>>,
+    /// User ID filter
+    pub user_id: Option<String>,
+    /// Resource filter
+    pub resource: Option<String>,
+    /// Action filter
+    pub action: Option<String>,
+    /// Outcome filter
+    pub outcome: Option<AuditEventOutcome>,
+    /// Maximum number of results
+    pub limit: Option<u64>,
+    /// Offset for pagination
+    pub offset: Option<u64>,
+    /// Sort order
+    pub sort_order: Option<SortOrder>,
+}
+
+/// Sort order
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum SortOrder {
+    /// Ascending order
+    Ascending,
+    /// Descending order
+    Descending,
+}
+
+/// Audit statistics
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuditStatistics {
+    /// Total number of audit events
+    pub total_events: u64,
+    /// Events by type
+    pub events_by_type: HashMap<AuditEventType, u64>,
+    /// Events by outcome
+    pub events_by_outcome: HashMap<AuditEventOutcome, u64>,
+    /// Events by user
+    pub events_by_user: HashMap<String, u64>,
+    /// Events by resource
+    pub events_by_resource: HashMap<String, u64>,
+    /// Time range of statistics
+    pub time_range: TimeRange,
+    /// Last updated timestamp
+    pub last_updated: chrono::DateTime<chrono::Utc>,
+}
+
+/// Time range
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimeRange {
+    /// Start time
+    pub start: chrono::DateTime<chrono::Utc>,
+    /// End time
+    pub end: chrono::DateTime<chrono::Utc>,
 }
 
 /// Factory function to create storage backends

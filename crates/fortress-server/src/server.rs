@@ -419,7 +419,12 @@ impl StorageBackend for InMemoryStorage {
             version: "1.0.0".to_string(),
             supports_transactions: false,
             supports_encryption_at_rest: false,
+            supports_streaming: false,
+            supports_backup_restore: false,
+            supports_audit_logging: false,
             max_object_size: Some(10 * 1024 * 1024), // 10MB
+            supported_isolation_levels: vec![],
+            supported_compression_algorithms: vec![],
             metadata: HashMap::new(),
         }
     }

@@ -23,6 +23,14 @@ pub struct Config {
     pub api: Option<ApiConfig>,
     /// Monitoring configuration
     pub monitoring: Option<MonitoringConfig>,
+    /// Transaction configuration
+    pub transactions: Option<TransactionConfig>,
+    /// Streaming configuration
+    pub streaming: Option<StreamingConfig>,
+    /// Backup configuration
+    pub backup: Option<BackupConfig>,
+    /// Audit configuration
+    pub audit: Option<AuditConfig>,
 }
 
 impl Config {
@@ -166,6 +174,10 @@ impl Default for Config {
             storage: StorageConfig::default(),
             api: None,
             monitoring: None,
+            transactions: None,
+            streaming: None,
+            backup: None,
+            audit: None,
         }
     }
 }
@@ -484,6 +496,209 @@ fn parse_duration(s: &str) -> Result<std::time::Duration> {
             None,
             ConfigurationErrorCode::InvalidValue,
         ))
+}
+
+/// Transaction configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TransactionConfig {
+    /// Default isolation level
+    pub default_isolation_level: String,
+    /// Transaction timeout in seconds
+    pub timeout_seconds: u64,
+    /// Maximum number of active transactions
+    pub max_active_transactions: usize,
+    /// Enable deadlock detection
+    pub deadlock_detection: bool,
+    /// Enable savepoints
+    pub savepoints_enabled: bool,
+    /// Transaction retry attempts
+    pub retry_attempts: u32,
+    /// Retry backoff in milliseconds
+    pub retry_backoff_ms: u64,
+}
+
+impl Default for TransactionConfig {
+    fn default() -> Self {
+        Self {
+            default_isolation_level: "read_committed".to_string(),
+            timeout_seconds: 300, // 5 minutes
+            max_active_transactions: 1000,
+            deadlock_detection: true,
+            savepoints_enabled: true,
+            retry_attempts: 3,
+            retry_backoff_ms: 100,
+        }
+    }
+}
+
+/// Streaming configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamingConfig {
+    /// Default buffer size in bytes
+    pub default_buffer_size: usize,
+    /// Maximum buffer size in bytes
+    pub max_buffer_size: usize,
+    /// Stream timeout in seconds
+    pub timeout_seconds: u64,
+    /// Maximum concurrent streams
+    pub max_concurrent_streams: usize,
+    /// Enable compression
+    pub compression_enabled: bool,
+    /// Default compression algorithm
+    pub default_compression: String,
+    /// Enable encryption
+    pub encryption_enabled: bool,
+    /// Heartbeat interval in seconds
+    pub heartbeat_interval_seconds: u64,
+    /// Maximum message size in bytes
+    pub max_message_size: usize,
+}
+
+impl Default for StreamingConfig {
+    fn default() -> Self {
+        Self {
+            default_buffer_size: 64 * 1024, // 64KB
+            max_buffer_size: 10 * 1024 * 1024, // 10MB
+            timeout_seconds: 300, // 5 minutes
+            max_concurrent_streams: 1000,
+            compression_enabled: true,
+            default_compression: "gzip".to_string(),
+            encryption_enabled: true,
+            heartbeat_interval_seconds: 30,
+            max_message_size: 1024 * 1024, // 1MB
+        }
+    }
+}
+
+/// Backup configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackupConfig {
+    /// Default backup type
+    pub default_backup_type: String,
+    /// Backup retention policy
+    pub retention_policy: RetentionPolicyConfig,
+    /// Enable compression
+    pub compression_enabled: bool,
+    /// Default compression algorithm
+    pub default_compression: String,
+    /// Enable encryption
+    pub encryption_enabled: bool,
+    /// Backup schedule in cron format
+    pub schedule: Option<String>,
+    /// Maximum concurrent backups
+    pub max_concurrent_backups: usize,
+    /// Enable verification
+    pub verification_enabled: bool,
+    /// Backup storage location
+    pub storage_location: String,
+}
+
+/// Retention policy configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RetentionPolicyConfig {
+    /// Maximum number of backups to retain
+    pub max_backups: usize,
+    /// Maximum age in days
+    pub max_age_days: u32,
+    /// Cleanup schedule in cron format
+    pub cleanup_schedule: Option<String>,
+}
+
+impl Default for BackupConfig {
+    fn default() -> Self {
+        Self {
+            default_backup_type: "incremental".to_string(),
+            retention_policy: RetentionPolicyConfig {
+                max_backups: 30,
+                max_age_days: 90,
+                cleanup_schedule: Some("0 2 * * *".to_string()), // 2 AM daily
+            },
+            compression_enabled: true,
+            default_compression: "gzip".to_string(),
+            encryption_enabled: true,
+            schedule: Some("0 1 * * *".to_string()), // 1 AM daily
+            max_concurrent_backups: 3,
+            verification_enabled: true,
+            storage_location: "/var/lib/fortress/backups".to_string(),
+        }
+    }
+}
+
+/// Audit configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuditConfig {
+    /// Enable audit logging
+    pub enabled: bool,
+    /// Audit log retention policy
+    pub retention_policy: AuditRetentionPolicy,
+    /// Enable log encryption
+    pub encryption_enabled: bool,
+    /// Enable log compression
+    pub compression_enabled: bool,
+    /// Default compression algorithm
+    pub default_compression: String,
+    /// Audit log level
+    pub log_level: AuditLogLevel,
+    /// Events to audit
+    pub audited_events: Vec<String>,
+    /// Audit storage location
+    pub storage_location: String,
+    /// Enable real-time monitoring
+    pub real_time_monitoring: bool,
+    /// Alert threshold for security events
+    pub security_alert_threshold: u32,
+}
+
+/// Audit retention policy
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuditRetentionPolicy {
+    /// Maximum age in days
+    pub max_age_days: u32,
+    /// Maximum log size in GB
+    pub max_size_gb: u32,
+    /// Cleanup schedule in cron format
+    pub cleanup_schedule: Option<String>,
+}
+
+/// Audit log level
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum AuditLogLevel {
+    /// Minimal logging
+    Minimal,
+    /// Standard logging
+    Standard,
+    /// Verbose logging
+    Verbose,
+    /// Debug logging
+    Debug,
+}
+
+impl Default for AuditConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            retention_policy: AuditRetentionPolicy {
+                max_age_days: 365, // 1 year
+                max_size_gb: 100,
+                cleanup_schedule: Some("0 3 * * 0".to_string()), // 3 AM on Sundays
+            },
+            encryption_enabled: true,
+            compression_enabled: true,
+            default_compression: "gzip".to_string(),
+            log_level: AuditLogLevel::Standard,
+            audited_events: vec![
+                "authentication".to_string(),
+                "authorization".to_string(),
+                "data_access".to_string(),
+                "data_modification".to_string(),
+                "configuration_change".to_string(),
+                "security".to_string(),
+            ],
+            storage_location: "/var/lib/fortress/audit".to_string(),
+            real_time_monitoring: true,
+            security_alert_threshold: 10,
+        }
+    }
 }
 
 #[cfg(test)]

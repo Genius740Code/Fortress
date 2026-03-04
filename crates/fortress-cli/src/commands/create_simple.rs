@@ -3,7 +3,7 @@ use console::style;
 use dialoguer::{Confirm, Input, Select};
 use indicatif::{ProgressBar, ProgressStyle};
 use std::path::PathBuf;
-use tracing::{info, debug};
+use tracing::debug;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -5,7 +5,7 @@ use color_eyre::eyre::Result;
 use serde_json;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use tracing::{info, warn, error};
+use tracing::error;
 
 use fortress_core::plugin_marketplace::{PluginMarketplace, PluginPackage, InstalledPlugin};
 

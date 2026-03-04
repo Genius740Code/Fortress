@@ -4,10 +4,9 @@ use clap::Subcommand;
 use color_eyre::eyre::Result;
 use fortress_core::{
     tenant::{
-        TenantManager, InMemoryTenantManager, CreateTenantRequest, UpdateTenantRequest,
+        TenantManager, InMemoryTenantManager, CreateTenantRequest,
         TenantResourceLimits, GlobalResourceLimits
     },
-    error::FortressError,
 };
 use std::str::FromStr;
 use uuid::Uuid;

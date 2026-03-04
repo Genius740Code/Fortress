@@ -1012,7 +1012,12 @@ impl StorageBackend for PostgresStorage {
             version: "1.0.0".to_string(),
             supports_transactions: true,
             supports_encryption_at_rest: true,
+            supports_streaming: false,
+            supports_backup_restore: false,
+            supports_audit_logging: false,
             max_object_size: Some(1024 * 1024 * 1024), // 1GB
+            supported_isolation_levels: vec![],
+            supported_compression_algorithms: vec![],
             metadata: {
                 let mut meta = HashMap::new();
                 meta.insert("database".to_string(), self.config.database_name.clone());

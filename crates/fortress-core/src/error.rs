@@ -170,6 +170,50 @@ pub enum FortressError {
         /// Error code for programmatic handling
         code: SecretsErrorCode,
     },
+
+    /// Transaction-related errors
+    #[error("Transaction error: {message}")]
+    Transaction {
+        /// Error message
+        message: String,
+        /// Transaction ID if applicable
+        transaction_id: Option<String>,
+        /// Error code for programmatic handling
+        code: TransactionErrorCode,
+    },
+
+    /// Backup and restore errors
+    #[error("Backup error: {message}")]
+    Backup {
+        /// Error message
+        message: String,
+        /// Backup ID if applicable
+        backup_id: Option<String>,
+        /// Error code for programmatic handling
+        code: BackupErrorCode,
+    },
+
+    /// Streaming errors
+    #[error("Streaming error: {message}")]
+    Streaming {
+        /// Error message
+        message: String,
+        /// Stream ID if applicable
+        stream_id: Option<String>,
+        /// Error code for programmatic handling
+        code: StreamingErrorCode,
+    },
+
+    /// Audit logging errors
+    #[error("Audit error: {message}")]
+    Audit {
+        /// Error message
+        message: String,
+        /// Audit log ID if applicable
+        log_id: Option<String>,
+        /// Error code for programmatic handling
+        code: AuditErrorCode,
+    },
 }
 
 /// Encryption error codes
@@ -440,6 +484,270 @@ pub enum SecretsErrorCode {
     SecretAlreadyExists,
 }
 
+/// Transaction error codes
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
+pub enum TransactionErrorCode {
+    /// Transaction not found
+    #[error("Transaction not found")]
+    TransactionNotFound,
+    
+    /// Transaction already exists
+    #[error("Transaction already exists")]
+    TransactionAlreadyExists,
+    
+    /// Transaction aborted
+    #[error("Transaction aborted")]
+    TransactionAborted,
+    
+    /// Transaction timeout
+    #[error("Transaction timeout")]
+    TransactionTimeout,
+    
+    /// Deadlock detected
+    #[error("Deadlock detected")]
+    DeadlockDetected,
+    
+    /// Transaction isolation violation
+    #[error("Transaction isolation violation")]
+    IsolationViolation,
+    
+    /// Transaction rollback failed
+    #[error("Transaction rollback failed")]
+    RollbackFailed,
+    
+    /// Transaction commit failed
+    #[error("Transaction commit failed")]
+    CommitFailed,
+    
+    /// Savepoint not found
+    #[error("Savepoint not found")]
+    SavepointNotFound,
+    
+    /// Invalid transaction state
+    #[error("Invalid transaction state")]
+    InvalidState,
+    
+    /// Transaction lock acquisition failed
+    #[error("Transaction lock acquisition failed")]
+    LockAcquisitionFailed,
+    
+    /// Transaction serialization error
+    #[error("Transaction serialization error")]
+    SerializationError,
+}
+
+/// Backup error codes
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
+pub enum BackupErrorCode {
+    /// Backup not found
+    #[error("Backup not found")]
+    BackupNotFound,
+    
+    /// Backup already exists
+    #[error("Backup already exists")]
+    BackupAlreadyExists,
+    
+    /// Backup creation failed
+    #[error("Backup creation failed")]
+    CreationFailed,
+    
+    /// Backup restoration failed
+    #[error("Backup restoration failed")]
+    RestorationFailed,
+    
+    /// Backup corruption detected
+    #[error("Backup corruption detected")]
+    CorruptionDetected,
+    
+    /// Backup verification failed
+    #[error("Backup verification failed")]
+    VerificationFailed,
+    
+    /// Backup encryption failed
+    #[error("Backup encryption failed")]
+    EncryptionFailed,
+    
+    /// Backup decryption failed
+    #[error("Backup decryption failed")]
+    DecryptionFailed,
+    
+    /// Backup compression failed
+    #[error("Backup compression failed")]
+    CompressionFailed,
+    
+    /// Backup decompression failed
+    #[error("Backup decompression failed")]
+    DecompressionFailed,
+    
+    /// Backup storage quota exceeded
+    #[error("Backup storage quota exceeded")]
+    StorageQuotaExceeded,
+    
+    /// Backup schedule conflict
+    #[error("Backup schedule conflict")]
+    ScheduleConflict,
+    
+    /// Backup in progress
+    #[error("Backup in progress")]
+    BackupInProgress,
+    
+    /// Restore in progress
+    #[error("Restore in progress")]
+    RestoreInProgress,
+    
+    /// Invalid backup format
+    #[error("Invalid backup format")]
+    InvalidFormat,
+}
+
+/// Streaming error codes
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
+pub enum StreamingErrorCode {
+    /// Stream not found
+    #[error("Stream not found")]
+    StreamNotFound,
+    
+    /// Stream already exists
+    #[error("Stream already exists")]
+    StreamAlreadyExists,
+    
+    /// Stream connection failed
+    #[error("Stream connection failed")]
+    ConnectionFailed,
+    
+    /// Stream disconnection failed
+    #[error("Stream disconnection failed")]
+    DisconnectionFailed,
+    
+    /// Stream timeout
+    #[error("Stream timeout")]
+    StreamTimeout,
+    
+    /// Stream buffer overflow
+    #[error("Stream buffer overflow")]
+    BufferOverflow,
+    
+    /// Stream protocol error
+    #[error("Stream protocol error")]
+    ProtocolError,
+    
+    /// Stream authentication failed
+    #[error("Stream authentication failed")]
+    AuthenticationFailed,
+    
+    /// Stream authorization failed
+    #[error("Stream authorization failed")]
+    AuthorizationFailed,
+    
+    /// Stream rate limit exceeded
+    #[error("Stream rate limit exceeded")]
+    RateLimitExceeded,
+    
+    /// Stream subscription failed
+    #[error("Stream subscription failed")]
+    SubscriptionFailed,
+    
+    /// Stream publication failed
+    #[error("Stream publication failed")]
+    PublicationFailed,
+    
+    /// Stream encoding error
+    #[error("Stream encoding error")]
+    EncodingError,
+    
+    /// Stream decoding error
+    #[error("Stream decoding error")]
+    DecodingError,
+    
+    /// Stream resumption failed
+    #[error("Stream resumption failed")]
+    ResumptionFailed,
+    
+    /// Stream cancellation failed
+    #[error("Stream cancellation failed")]
+    CancellationFailed,
+}
+
+/// Audit error codes
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
+pub enum AuditErrorCode {
+    /// Audit log not found
+    #[error("Audit log not found")]
+    LogNotFound,
+    
+    /// Audit log creation failed
+    #[error("Audit log creation failed")]
+    LogCreationFailed,
+    
+    /// Audit log storage failed
+    #[error("Audit log storage failed")]
+    LogStorageFailed,
+    
+    /// Audit log retrieval failed
+    #[error("Audit log retrieval failed")]
+    LogRetrievalFailed,
+    
+    /// Audit log corruption detected
+    #[error("Audit log corruption detected")]
+    LogCorruptionDetected,
+    
+    /// Audit log encryption failed
+    #[error("Audit log encryption failed")]
+    LogEncryptionFailed,
+    
+    /// Audit log decryption failed
+    #[error("Audit log decryption failed")]
+    LogDecryptionFailed,
+    
+    /// Audit log compression failed
+    #[error("Audit log compression failed")]
+    LogCompressionFailed,
+    
+    /// Audit log decompression failed
+    #[error("Audit log decompression failed")]
+    LogDecompressionFailed,
+    
+    /// Audit log rotation failed
+    #[error("Audit log rotation failed")]
+    LogRotationFailed,
+    
+    /// Audit log export failed
+    #[error("Audit log export failed")]
+    LogExportFailed,
+    
+    /// Audit log import failed
+    #[error("Audit log import failed")]
+    LogImportFailed,
+    
+    /// Audit policy not found
+    #[error("Audit policy not found")]
+    PolicyNotFound,
+    
+    /// Audit policy creation failed
+    #[error("Audit policy creation failed")]
+    PolicyCreationFailed,
+    
+    /// Audit policy validation failed
+    #[error("Audit policy validation failed")]
+    PolicyValidationFailed,
+    
+    /// Audit retention policy violation
+    #[error("Audit retention policy violation")]
+    RetentionPolicyViolation,
+    
+    /// Audit tampering detected
+    #[error("Audit tampering detected")]
+    TamperingDetected,
+    
+    /// Audit log quota exceeded
+    #[error("Audit log quota exceeded")]
+    LogQuotaExceeded,
+    
+    /// Audit configuration error
+    #[error("Audit configuration error")]
+    ConfigurationError,
+}
+
 impl FortressError {
     /// Create a new encryption error
     pub fn encryption<S: Into<String>>(
@@ -632,6 +940,58 @@ impl FortressError {
         }
     }
 
+    /// Create a new transaction error
+    pub fn transaction<S: Into<String>>(
+        message: S,
+        transaction_id: Option<String>,
+        code: TransactionErrorCode,
+    ) -> Self {
+        Self::Transaction {
+            message: message.into(),
+            transaction_id,
+            code,
+        }
+    }
+
+    /// Create a new backup error
+    pub fn backup<S: Into<String>>(
+        message: S,
+        backup_id: Option<String>,
+        code: BackupErrorCode,
+    ) -> Self {
+        Self::Backup {
+            message: message.into(),
+            backup_id,
+            code,
+        }
+    }
+
+    /// Create a new streaming error
+    pub fn streaming<S: Into<String>>(
+        message: S,
+        stream_id: Option<String>,
+        code: StreamingErrorCode,
+    ) -> Self {
+        Self::Streaming {
+            message: message.into(),
+            stream_id,
+            code,
+        }
+    }
+
+    /// Create a new audit error
+    pub fn audit<S: Into<String>>(
+        message: S,
+        log_id: Option<String>,
+        code: AuditErrorCode,
+    ) -> Self {
+        Self::Audit {
+            message: message.into(),
+            log_id,
+            code,
+        }
+    }
+
     /// Check if this error is retryable
     pub fn is_retryable(&self) -> bool {
         match self {
@@ -642,6 +1002,12 @@ impl FortressError {
             Self::Io { .. } => true,
             Self::Cluster { .. } => true,
             Self::Plugin { .. } => true,
+            Self::Transaction { code: TransactionErrorCode::TransactionTimeout, .. } => true,
+            Self::Transaction { code: TransactionErrorCode::DeadlockDetected, .. } => true,
+            Self::Backup { code: BackupErrorCode::BackupInProgress, .. } => true,
+            Self::Backup { code: BackupErrorCode::RestoreInProgress, .. } => true,
+            Self::Streaming { code: StreamingErrorCode::StreamTimeout, .. } => true,
+            Self::Streaming { code: StreamingErrorCode::ConnectionFailed, .. } => true,
             _ => false,
         }
     }
@@ -655,6 +1021,10 @@ impl FortressError {
                 | Self::Authentication { .. }
                 | Self::Compliance { .. }
                 | Self::Secrets { .. }
+                | Self::Audit { code: AuditErrorCode::TamperingDetected, .. }
+                | Self::Audit { code: AuditErrorCode::LogCorruptionDetected, .. }
+                | Self::Streaming { code: StreamingErrorCode::AuthenticationFailed, .. }
+                | Self::Streaming { code: StreamingErrorCode::AuthorizationFailed, .. }
         )
     }
 
@@ -677,6 +1047,10 @@ impl FortressError {
             Self::Plugin { .. } => "plugin",
             Self::Compliance { .. } => "compliance",
             Self::Secrets { .. } => "secrets",
+            Self::Transaction { .. } => "transaction",
+            Self::Backup { .. } => "backup",
+            Self::Streaming { .. } => "streaming",
+            Self::Audit { .. } => "audit",
         }
     }
 }
