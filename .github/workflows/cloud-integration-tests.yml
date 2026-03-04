@@ -1,0 +1,433 @@
+name: Cloud Integration Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'crates/fortress-core/src/storage.rs'
+      - 'tests/test_aws_integration.rs'
+      - 'tests/test_azure_integration.rs'
+      - 'tests/test_cloud_integration_framework.rs'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'crates/fortress-core/src/storage.rs'
+      - 'tests/test_aws_integration.rs'
+      - 'tests/test_azure_integration.rs'
+      - 'tests/test_cloud_integration_framework.rs'
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      cloud_provider:
+        description: 'Cloud provider to test'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - aws
+          - azure
+          - gcp
+      test_type:
+        description: 'Type of tests to run'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - integration
+          - performance
+          - compliance
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # AWS Integration Tests
+  aws-integration:
+    name: AWS Integration Tests
+    runs-on: ubuntu-latest
+    if: github.event.inputs.cloud_provider == 'all' || github.event.inputs.cloud_provider == 'aws' || github.event.inputs.cloud_provider == ''
+    
+    strategy:
+      matrix:
+        region: [us-east-1, us-west-2, eu-west-1]
+        test-type: [integration, performance, compliance]
+      fail-fast: false
+
+    services:
+      # LocalStack for AWS service emulation
+      localstack:
+        image: localstack/localstack:latest
+        ports:
+          - 4566:4566
+        env:
+          SERVICES: s3,cloudhsm
+          DEBUG: 1
+          DATA_DIR: /tmp/localstack/data
+        options: >-
+          --health-cmd "curl -f http://localhost:4566/health || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt, clippy
+
+    - name: Cache Rust dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+
+    - name: Install AWS CLI
+      run: |
+        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+        unzip awscliv2.zip
+        sudo ./aws/install
+
+    - name: Configure AWS CLI for LocalStack
+      run: |
+        aws configure set aws_access_key_id test
+        aws configure set aws_secret_access_key test
+        aws configure set default.region us-east-1
+        aws configure set default.endpoint_url http://localhost:4566
+
+    - name: Create S3 bucket for testing
+      run: |
+        aws --endpoint-url=http://localhost:4566 s3 mb s3://fortress-test-${{ matrix.region }}
+
+    - name: Set environment variables
+      env:
+        FORTRESS_TEST_S3_BUCKET: fortress-test-${{ matrix.region }}
+        FORTRESS_TEST_AWS_REGION: ${{ matrix.region }}
+        FORTRESS_TEST_AWS_ACCESS_KEY_ID: test
+        FORTRESS_TEST_AWS_SECRET_ACCESS_KEY: test
+      run: |
+        echo "FORTRESS_TEST_S3_BUCKET=fortress-test-${{ matrix.region }}" >> $GITHUB_ENV
+        echo "FORTRESS_TEST_AWS_REGION=${{ matrix.region }}" >> $GITHUB_ENV
+        echo "FORTRESS_TEST_AWS_ACCESS_KEY_ID=test" >> $GITHUB_ENV
+        echo "FORTRESS_TEST_AWS_SECRET_ACCESS_KEY=test" >> $GITHUB_ENV
+
+    - name: Run Rustfmt check
+      run: cargo fmt --all -- --check
+
+    - name: Run Clippy
+      run: cargo clippy --all-targets --all-features -- -D warnings
+
+    - name: Build with cloud features
+      run: cargo build --all --features cloud-storage
+
+    - name: Run unit tests
+      run: cargo test --lib --features cloud-storage
+
+    - name: Run AWS integration tests
+      env:
+        FORTRESS_TEST_S3_BUCKET: fortress-test-${{ matrix.region }}
+        FORTRESS_TEST_AWS_REGION: ${{ matrix.region }}
+        FORTRESS_TEST_AWS_ACCESS_KEY_ID: test
+        FORTRESS_TEST_AWS_SECRET_ACCESS_KEY: test
+      run: |
+        if [ "${{ github.event.inputs.test_type }}" = "all" ] || [ "${{ github.event.inputs.test_type }}" = "" ] || [ "${{ github.event.inputs.test_type }}" = "${{ matrix.test-type }}" ]; then
+          echo "Running ${{ matrix.test-type }} tests for AWS in ${{ matrix.region }}"
+          cargo test --test test_aws_integration --features cloud-storage -- --ignored --test-threads=1
+        else
+          echo "Skipping ${{ matrix.test-type }} tests due to input filter"
+        fi
+
+    - name: Generate test report
+      if: always()
+      run: |
+        mkdir -p test-reports
+        echo "AWS Integration Test Report - ${{ matrix.region }}" > test-reports/aws-${{ matrix.region }}.md
+        echo "Test Type: ${{ matrix.test-type }}" >> test-reports/aws-${{ matrix.region }}.md
+        echo "Timestamp: $(date)" >> test-reports/aws-${{ matrix.region }}.md
+        echo "" >> test-reports/aws-${{ matrix.region }}.md
+
+    - name: Upload test artifacts
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: aws-test-results-${{ matrix.region }}-${{ matrix.test-type }}
+        path: |
+          test-reports/
+          target/debug/deps/
+        retention-days: 7
+
+  # Azure Integration Tests
+  azure-integration:
+    name: Azure Integration Tests
+    runs-on: ubuntu-latest
+    if: github.event.inputs.cloud_provider == 'all' || github.event.inputs.cloud_provider == 'azure' || github.event.inputs.cloud_provider == ''
+    
+    strategy:
+      matrix:
+        region: [eastus, westus2, westeurope]
+        test-type: [integration, performance, compliance]
+      fail-fast: false
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt, clippy
+
+    - name: Cache Rust dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+
+    - name: Install Azure CLI
+      run: |
+        curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+
+    - name: Login to Azure
+      if: env AZURE_CLIENT_SECRET != ''
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Create Azure Storage Account (if credentials available)
+      if: env AZURE_CLIENT_SECRET != ''
+      run: |
+        # Create resource group
+        az group create --name fortress-test-rg --location ${{ matrix.region }}
+        
+        # Create storage account
+        az storage account create \
+          --name fortresstest${{ github.run_number }} \
+          --resource-group fortress-test-rg \
+          --location ${{ matrix.region }} \
+          --sku Standard_LRS \
+          --allow-blob-public-access false
+        
+        # Create container
+        az storage container create \
+          --name fortress-test \
+          --account-name fortresstest${{ github.run_number }} \
+          --public-access blob
+
+    - name: Set environment variables
+      env:
+        FORTRESS_TEST_AZURE_CONTAINER: fortress-test
+        FORTRESS_TEST_AZURE_STORAGE_ACCOUNT: fortresstest${{ github.run_number }}
+        FORTRESS_TEST_AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        FORTRESS_TEST_AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        FORTRESS_TEST_AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      run: |
+        echo "FORTRESS_TEST_AZURE_CONTAINER=fortress-test" >> $GITHUB_ENV
+        echo "FORTRESS_TEST_AZURE_STORAGE_ACCOUNT=fortresstest${{ github.run_number }}" >> $GITHUB_ENV
+        if [ -n "${{ secrets.AZURE_TENANT_ID }}" ]; then
+          echo "FORTRESS_TEST_AZURE_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}" >> $GITHUB_ENV
+          echo "FORTRESS_TEST_AZURE_CLIENT_ID=${{ secrets.AZURE_CLIENT_ID }}" >> $GITHUB_ENV
+          echo "FORTRESS_TEST_AZURE_CLIENT_SECRET=${{ secrets.AZURE_CLIENT_SECRET }}" >> $GITHUB_ENV
+        fi
+
+    - name: Run Rustfmt check
+      run: cargo fmt --all -- --check
+
+    - name: Run Clippy
+      run: cargo clippy --all-targets --all-features -- -D warnings
+
+    - name: Build with cloud features
+      run: cargo build --all --features cloud-storage
+
+    - name: Run unit tests
+      run: cargo test --lib --features cloud-storage
+
+    - name: Run Azure integration tests
+      env:
+        FORTRESS_TEST_AZURE_CONTAINER: fortress-test
+        FORTRESS_TEST_AZURE_STORAGE_ACCOUNT: fortresstest${{ github.run_number }}
+        FORTRESS_TEST_AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        FORTRESS_TEST_AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        FORTRESS_TEST_AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      run: |
+        if [ "${{ github.event.inputs.test_type }}" = "all" ] || [ "${{ github.event.inputs.test_type }}" = "" ] || [ "${{ github.event.inputs.test_type }}" = "${{ matrix.test-type }}" ]; then
+          echo "Running ${{ matrix.test-type }} tests for Azure in ${{ matrix.region }}"
+          cargo test --test test_azure_integration --features cloud-storage -- --ignored --test-threads=1
+        else
+          echo "Skipping ${{ matrix.test-type }} tests due to input filter"
+        fi
+
+    - name: Cleanup Azure resources
+      if: env AZURE_CLIENT_SECRET != '' && always()
+      run: |
+        az group delete --name fortress-test-rg --yes --no-wait
+
+    - name: Generate test report
+      if: always()
+      run: |
+        mkdir -p test-reports
+        echo "Azure Integration Test Report - ${{ matrix.region }}" > test-reports/azure-${{ matrix.region }}.md
+        echo "Test Type: ${{ matrix.test-type }}" >> test-reports/azure-${{ matrix.region }}.md
+        echo "Timestamp: $(date)" >> test-reports/azure-${{ matrix.region }}.md
+        echo "" >> test-reports/azure-${{ matrix.region }}.md
+
+    - name: Upload test artifacts
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: azure-test-results-${{ matrix.region }}-${{ matrix.test-type }}
+        path: |
+          test-reports/
+          target/debug/deps/
+        retention-days: 7
+
+  # Cloud Integration Framework Tests
+  framework-tests:
+    name: Cloud Integration Framework Tests
+    runs-on: ubuntu-latest
+    needs: [aws-integration, azure-integration]
+    if: always() && (needs.aws-integration.result == 'success' || needs.azure-integration.result == 'success')
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+      with:
+        path: artifacts/
+
+    - name: Run framework tests
+      run: |
+        cargo test --test test_cloud_integration_framework --features cloud-storage -- --ignored --test-threads=1
+
+    - name: Generate comprehensive report
+      run: |
+        mkdir -p comprehensive-report
+        echo "# Cloud Integration Test Report" > comprehensive-report/summary.md
+        echo "Generated on: $(date)" >> comprehensive-report/summary.md
+        echo "" >> comprehensive-report/summary.md
+        echo "## Test Results Summary" >> comprehensive-report/summary.md
+        echo "- AWS Tests: ${{ needs.aws-integration.result }}" >> comprehensive-report/summary.md
+        echo "- Azure Tests: ${{ needs.azure-integration.result }}" >> comprehensive-report/summary.md
+        echo "- Framework Tests: Completed" >> comprehensive-report/summary.md
+        echo "" >> comprehensive-report/summary.md
+        echo "## Performance Metrics" >> comprehensive-report/summary.md
+        echo "Detailed metrics available in individual test artifacts" >> comprehensive-report/summary.md
+
+    - name: Upload comprehensive report
+      uses: actions/upload-artifact@v3
+      with:
+        name: comprehensive-test-report
+        path: comprehensive-report/
+        retention-days: 30
+
+  # Security and Compliance Scans
+  security-scan:
+    name: Security and Compliance Scan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'schedule'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run cargo audit
+      run: |
+        cargo install cargo-audit
+        cargo audit
+
+    - name: Run cargo-deny
+      uses: EmbarkStudios/cargo-deny-action@v1
+
+    - name: Check for hardcoded secrets
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ./
+        base: main
+        head: HEAD
+
+    - name: Generate security report
+      run: |
+        mkdir -p security-report
+        echo "# Security Scan Report" > security-report/security-summary.md
+        echo "Generated on: $(date)" >> security-report/security-summary.md
+        echo "" >> security-report/security-summary.md
+        echo "## Security Checks Completed" >> security-report/security-summary.md
+        echo "- Dependency Audit: Completed" >> security-report/security-summary.md
+        echo "- License Compliance: Completed" >> security-report/security-summary.md
+        echo "- Secret Scanning: Completed" >> security-report/security-summary.md
+
+    - name: Upload security report
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-scan-report
+        path: security-report/
+        retention-days: 30
+
+  # Performance Benchmarking
+  performance-benchmark:
+    name: Performance Benchmarking
+    runs-on: ubuntu-latest
+    if: github.event.inputs.test_type == 'all' || github.event.inputs.test_type == 'performance' || github.event.inputs.test_type == ''
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Run performance benchmarks
+      run: |
+        cargo bench --features cloud-storage
+
+    - name: Upload benchmark results
+      uses: actions/upload-artifact@v3
+      with:
+        name: benchmark-results
+        path: target/criterion/
+        retention-days: 30
+
+  # Notification
+  notify:
+    name: Notify Results
+    runs-on: ubuntu-latest
+    needs: [aws-integration, azure-integration, framework-tests, security-scan]
+    if: always()
+
+    steps:
+    - name: Prepare notification
+      run: |
+        echo "AWS Tests: ${{ needs.aws-integration.result }}" >> notification.txt
+        echo "Azure Tests: ${{ needs.azure-integration.result }}" >> notification.txt
+        echo "Framework Tests: ${{ needs.framework-tests.result }}" >> notification.txt
+        echo "Security Scan: ${{ needs.security-scan.result }}" >> notification.txt
+
+    - name: Send notification (if webhook configured)
+      if: env.SLACK_WEBHOOK_URL != ''
+      run: |
+        curl -X POST -H 'Content-type: application/json' \
+          --data '{"text":"Cloud Integration Tests completed:\nAWS: ${{ needs.aws-integration.result }}\nAzure: ${{ needs.azure-integration.result }}\nFramework: ${{ needs.framework-tests.result }}\nSecurity: ${{ needs.security-scan.result }}"}' \
+          ${{ secrets.SLACK_WEBHOOK_URL }}
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
