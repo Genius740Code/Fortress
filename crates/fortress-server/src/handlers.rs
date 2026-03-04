@@ -1258,7 +1258,7 @@ mod tests {
 
     #[test]
     fn test_key_fingerprint_generation() {
-        let key = SecureKey::new(b"test_key_data_12345678901234567890123456789012");
+        let key = SecureKey::new(b"test_key_data_12345678901234567890123456789012".to_vec());
         let fingerprint = generate_key_fingerprint(&key);
         assert_eq!(fingerprint.len(), 16);
     }

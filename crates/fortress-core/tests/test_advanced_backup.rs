@@ -6,10 +6,11 @@
 
 use fortress_core::prelude::*;
 use fortress_core::backup_manager::DefaultBackupManager;
+use fortress_core::backup::BackupManager;
 use fortress_core::disaster_recovery::DefaultDisasterRecoveryManager;
 use fortress_core::backup_scheduler::BackupScheduler;
 use fortress_core::cross_region_replication::CrossRegionReplicationManager;
-use fortress_core::storage::InMemoryStorage;
+use fortress_core::storage::{InMemoryStorage, StorageBackend};
 use std::sync::Arc;
 use chrono::Utc;
 use tokio::time::{sleep, Duration};

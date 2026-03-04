@@ -944,7 +944,7 @@ mod tests {
     #[test]
     fn test_cors_layer_creation() {
         let config = crate::config::CorsConfig::default();
-        let cors_layer = create_cors_layer(&config);
+        let _cors_layer = create_cors_layer(&config);
         // Just test that it doesn't panic
         assert!(true);
     }
