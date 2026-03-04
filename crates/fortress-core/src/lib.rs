@@ -321,6 +321,10 @@ pub mod postgres_database;
 
 pub mod push_pull_operations;
 
+/// Image encryption and processing system
+
+pub mod image_encryption;
+
 
 
 #[cfg(test)]
@@ -545,6 +549,17 @@ pub mod prelude {
         PushPullManager, PushPullConfig, PushRequest, PullRequest, PushPullResult,
         PushFilter, PullFilter, StorageSource, StorageTarget, ConflictResolution,
         OperationType, ProgressUpdate, ConflictInfo, DataVersion, ConflictType
+    };
+
+    pub use crate::image_encryption::{
+        ImageEncryptor, ImageEncryptorFactory, EncryptedImage, EncryptionOptions,
+        EncryptionMode, ImageFormat, ImageFormatInfo, ImageMetadata, EncryptedMetadata,
+        ThumbnailGenerator, ThumbnailSize, ThumbnailFormat, EncryptedThumbnail,
+        StreamingImageEncryptor, ChunkConfig, StreamingState, StreamingStatus,
+        EncryptedChunk, StreamingResult, DataClassification, AccessPermissions,
+        SearchCriteria, ImageFilter, ImageSearchResult, ImageInfo, ColorSpace,
+        CompressionInfo, ImageEncryptionError, MetadataProcessor, FormatProcessor,
+        ImageFormatDetector, ThumbnailOptions, StreamingImageDecryptor,
     };
 
 }
