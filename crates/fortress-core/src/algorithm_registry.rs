@@ -102,6 +102,22 @@ impl AlgorithmRegistry {
              "Multiple algorithms for maximum security", 512, 32, 56, 32, true, 2024,
              "Composite", vec!["maximum-security".to_string(), "quantum-resistant".to_string(), "defense-in-depth".to_string()], 
              "Combines Blake3, XChaCha20, and HMAC-SHA256"),
+            
+            // Newly added important algorithms
+            ("salsa20", "Salsa20", 
+             "Ultra-fast stream cipher", 256, 32, 8, 16, true, 2005,
+             "Salsa", vec!["streaming".to_string(), "high-performance".to_string(), "legacy-compatible".to_string()], 
+             "Bernstein's stream cipher, predecessor to ChaCha20"),
+            
+            ("ascon", "ASCON", 
+             "Lightweight AEAD for IoT", 128, 16, 16, 16, true, 2023,
+             "ASCON", vec!["lightweight".to_string(), "iot".to_string(), "embedded".to_string(), "nist-finalist".to_string()], 
+             "NIST lightweight cryptography finalist, optimized for small devices"),
+            
+            ("kmac256", "KMAC256", 
+             "SHA-3 based keyed encryption", 256, 32, 32, 32, true, 2016,
+             "SHA-3", vec!["standards-based".to_string(), "nist".to_string(), "compliance".to_string(), "hash-based".to_string()], 
+             "NIST SP 800-185 standardized keyed hash function"),
         ];
 
         for (name, display_name, description, security_level, key_size, nonce_size, 
@@ -282,6 +298,9 @@ mod tests {
         assert!(algorithms.contains(&"chacha20poly1305"));
         assert!(algorithms.contains(&"aes256ctr"));
         assert!(algorithms.contains(&"compositeencrypt"));
+        assert!(algorithms.contains(&"salsa20"));
+        assert!(algorithms.contains(&"ascon"));
+        assert!(algorithms.contains(&"kmac256"));
         
         // Test getting algorithm
         let algorithm = registry.get_algorithm("xchacha20poly1305").unwrap();
@@ -335,8 +354,8 @@ mod tests {
         let registry = AlgorithmRegistry::new().unwrap();
         let stats = registry.statistics();
         
-        assert!(stats.total_algorithms >= 8); // At least our algorithms
-        assert!(stats.total_families >= 3); // AES, ChaCha20, etc.
+        assert!(stats.total_algorithms >= 11); // At least our algorithms
+        assert!(stats.total_families >= 4); // AES, ChaCha20, ASCON, SHA-3, etc.
         assert!(stats.aead_count > 0);
         assert!(stats.average_security_level > 0.0);
         assert!(stats.newest_year >= 2024); // Our composite algorithm

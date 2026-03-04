@@ -43,6 +43,7 @@ lz4 = "1.24"
 
 # Hashing
 sha2 = "0.10"
+sha3 = "0.10"
 hmac = "0.12"
 pbkdf2 = "0.12"
 scrypt = "0.11"
