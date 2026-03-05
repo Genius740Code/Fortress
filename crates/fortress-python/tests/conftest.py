@@ -64,7 +64,7 @@ def sample_metadata() -> dict:
     """Create sample metadata for testing."""
     return {
         "algorithm": "aegis256",
-        "created_at": "2024-01-01T00:00:00Z",
+        "created_at": "2026-01-01T00:00:00Z",
         "purpose": "test-data",
         "tags": ["test", "unit-test"],
         "owner": "test-suite",

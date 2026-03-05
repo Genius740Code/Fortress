@@ -129,24 +129,31 @@ pub enum StorageSource {
 pub enum StorageTarget {
     /// Fortress storage backend
     Fortress {
+        /// Storage identifier
         storage: String, // Storage identifier
     },
     /// MongoDB
     Mongo {
+        /// MongoDB configuration
         config: crate::mongodb_database::MongoConfig,
     },
     /// PostgreSQL
     Postgres {
+        /// PostgreSQL configuration
         config: crate::postgres_database::PostgresConfig,
     },
     /// File system
     FileSystem {
+        /// File system path
         path: String,
     },
     /// Cloud storage
     Cloud {
+        /// Cloud provider name
         provider: String,
+        /// Cloud storage bucket
         bucket: String,
+        /// Optional prefix for objects
         prefix: Option<String>,
     },
 }
@@ -176,13 +183,31 @@ pub enum PullFilter {
     /// By key prefix
     Prefix(String),
     /// By date range
-    DateRange { start: DateTime<Utc>, end: DateTime<Utc> },
+    DateRange { 
+        /// Start date
+        start: DateTime<Utc>, 
+        /// End date
+        end: DateTime<Utc> 
+    },
     /// By size range
-    SizeRange { min_bytes: u64, max_bytes: u64 },
+    SizeRange { 
+        /// Minimum size in bytes
+        min_bytes: u64, 
+        /// Maximum size in bytes
+        max_bytes: u64 
+    },
     /// By metadata
-    Metadata { key: String, value: String },
+    Metadata { 
+        /// Metadata key
+        key: String, 
+        /// Metadata value
+        value: String 
+    },
     /// Incremental since timestamp
-    Incremental { since: DateTime<Utc> },
+    Incremental { 
+        /// Since timestamp
+        since: DateTime<Utc> 
+    },
     /// Custom filter expression
     Custom(String),
 }
@@ -221,8 +246,11 @@ pub struct PushPullResult {
 /// Operation type
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum OperationType {
+    /// Push operation
     Push,
+    /// Pull operation
     Pull,
+    /// Sync operation
     Sync,
 }
 

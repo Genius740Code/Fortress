@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Secure defaults
 - Comprehensive error handling
 
-## [0.1.0] - 2024-01-XX
+## [0.1.0] - 2026-01-XX
 
 ### Added
 - **Core Features**
@@ -157,7 +157,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 0.1.0 | 2024-01-XX | Initial release with core features |
+| 0.1.0 | 2026-01-XX | Initial release with core features |
 
 ## Support
 

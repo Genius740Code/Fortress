@@ -50,7 +50,7 @@ hmac = "0.12"
 pbkdf2 = "0.12"
 
 # Database
-sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "sqlite", "mysql", "uuid", "chrono", "json"] }
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "sqlite", "mysql", "uuid", "chrono", "json"] }
 # rocksdb = "0.21"
 
 # Networking

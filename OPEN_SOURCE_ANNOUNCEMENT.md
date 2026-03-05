@@ -138,19 +138,19 @@ Help translate Fortress documentation and UI to other languages.
 
 ## 📊 Roadmap
 
-### v0.2.0 (Q1 2024)
+### v0.2.0 (Q1 2026)
 - [ ] GraphQL API completion
 - [ ] Advanced plugin marketplace
 - [ ] Machine learning integration
 - [ ] Mobile SDKs (iOS/Android)
 
-### v0.3.0 (Q2 2024)
+### v0.3.0 (Q2 2026)
 - [ ] Distributed SQL queries
 - [ ] Advanced analytics engine
 - [ ] WebAssembly plugin support
 - [ ] Edge computing support
 
-### v1.0.0 (Q3 2024)
+### v1.0.0 (Q3 2026)
 - [ ] Production-ready stability
 - [ ] Full compliance certification
 - [ ] Enterprise features

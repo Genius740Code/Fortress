@@ -338,7 +338,7 @@ For security vulnerabilities, email: security@fortress-db.com
 ### Changelog Format
 
 ```markdown
-## [0.2.0] - 2024-01-15
+## [0.2.0] - 2026-01-15
 
 ### Added
 - New feature 1

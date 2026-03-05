@@ -25,7 +25,7 @@ async def main():
         # Create metadata
         metadata = {
             "algorithm": algorithm,
-            "created_at": "2024-01-01T00:00:00Z",
+            "created_at": "2026-01-01T00:00:00Z",
             "purpose": "data-encryption",
             "tags": [algorithm, "example"]
         }

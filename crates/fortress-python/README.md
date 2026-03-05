@@ -120,7 +120,7 @@ key_manager = fortress.KeyManager()
 # Generate a new key with metadata
 metadata = fortress.KeyMetadata(
     algorithm="aegis256",
-    created_at="2024-01-01T00:00:00Z",
+    created_at="2026-01-01T00:00:00Z",
     purpose="data-encryption",
     tags=["production", "user-data"]
 )
@@ -239,8 +239,8 @@ await audit_logger.log_event(
 
 # Query audit events
 events = await audit_logger.query_events(
-    start_time="2024-01-01T00:00:00Z",
-    end_time="2024-01-02T00:00:00Z",
+    start_time="2026-01-01T00:00:00Z",
+    end_time="2026-01-02T00:00:00Z",
     event_types=["Authentication", "DataAccess"],
     limit=100
 )

@@ -139,7 +139,7 @@ All API responses follow this format:
 {
   "data": { ... },
   "success": true,
-  "timestamp": "2024-01-15T10:30:00Z",
+  "timestamp": "2026-01-15T10:30:00Z",
   "metadata": { ... }
 }
 ```
@@ -152,7 +152,7 @@ Errors return detailed information:
 {
   "data": null,
   "success": false,
-  "timestamp": "2024-01-15T10:30:00Z",
+  "timestamp": "2026-01-15T10:30:00Z",
   "metadata": {
     "error": {
       "code": "DATABASE_NOT_FOUND",

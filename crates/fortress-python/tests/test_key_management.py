@@ -22,7 +22,7 @@ class TestKeyManager:
         """Sample key metadata"""
         return {
             "algorithm": "aegis256",
-            "created_at": "2024-01-01T00:00:00Z",
+            "created_at": "2026-01-01T00:00:00Z",
             "purpose": "data-encryption",
             "tags": ["test", "encryption"],
             "owner": "test-user",
@@ -255,7 +255,7 @@ class TestKeyMetadata:
         """Test key metadata serialization"""
         metadata = fortress.KeyMetadata(
             algorithm="aegis256",
-            created_at="2024-01-01T00:00:00Z",
+            created_at="2026-01-01T00:00:00Z",
             purpose="data-encryption",
             tags=["test", "encryption"],
             owner="test-user"

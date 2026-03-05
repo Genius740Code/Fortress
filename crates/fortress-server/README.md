@@ -263,15 +263,15 @@ The server provides comprehensive health checks for all components:
     "auth": {
       "status": "healthy",
       "response_time_ms": 15,
-      "last_check": "2024-01-01T12:00:00Z"
+      "last_check": "2026-01-01T12:00:00Z"
     },
     "encryption": {
       "status": "healthy",
       "response_time_ms": 25,
-      "last_check": "2024-01-01T12:00:00Z"
+      "last_check": "2026-01-01T12:00:00Z"
     }
   },
-  "timestamp": "2024-01-01T12:00:00Z"
+  "timestamp": "2026-01-01T12:00:00Z"
 }
 ```
 

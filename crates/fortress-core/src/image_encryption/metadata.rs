@@ -193,12 +193,19 @@ pub struct LensInfo {
 /// EXIF value types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ExifValue {
+    /// String value
     String(String),
+    /// Integer value
     Integer(i64),
+    /// Float value
     Float(f64),
-    Rational(f64), // numerator/denominator
+    /// Rational value (numerator/denominator)
+    Rational(f64),
+    /// Boolean value
     Boolean(bool),
+    /// Array of EXIF values
     Array(Vec<ExifValue>),
+    /// Binary data
     Binary(Vec<u8>),
 }
 
@@ -309,12 +316,19 @@ pub struct RightsInfo {
 /// XMP value types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum XmpValue {
+    /// String value
     String(String),
+    /// Integer value
     Integer(i64),
+    /// Float value
     Float(f64),
+    /// Boolean value
     Boolean(bool),
+    /// Date/time value
     Date(DateTime<Utc>),
+    /// Array of XMP values
     Array(Vec<XmpValue>),
+    /// Struct with nested XMP values
     Struct(HashMap<String, XmpValue>),
 }
 
@@ -340,9 +354,13 @@ pub struct ProcessingStep {
 /// Processing status
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ProcessingStatus {
+    /// Processing completed successfully
     Success,
+    /// Processing completed with warnings
     Warning,
+    /// Processing failed with errors
     Error,
+    /// Processing was skipped
     Skipped,
 }
 
@@ -465,9 +483,13 @@ pub struct LicenseInfo {
 /// Approval status
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ApprovalStatus {
+    /// Pending approval
     Pending,
+    /// Approved
     Approved,
+    /// Rejected
     Rejected,
+    /// Expired
     Expired,
 }
 
@@ -485,12 +507,19 @@ pub struct EncryptedValue {
 /// Value type hints for encrypted values
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ValueType {
+    /// String value type
     String,
+    /// Integer value type
     Integer,
+    /// Float value type
     Float,
+    /// Boolean value type
     Boolean,
+    /// Date value type
     Date,
+    /// Binary data type
     Binary,
+    /// JSON data type
     Json,
 }
 
@@ -882,7 +911,7 @@ mod tests {
                 title: Some("Test Image".to_string()),
                 description: Some("A test image for encryption".to_string()),
                 creator: Some("Test User".to_string()),
-                copyright: Some("© 2024 Test Corp".to_string()),
+                copyright: Some("© 2026 Test Corp".to_string()),
                 keywords: vec!["test".to_string(), "encryption".to_string()],
                 rating: Some(4),
                 subject: Some("Testing".to_string()),

@@ -257,9 +257,12 @@ pub struct ImageFilter {
 }
 
 /// Sort order for listing
+/// Sort order for image operations
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SortOrder {
+    /// Ascending order
     Ascending,
+    /// Descending order
     Descending,
 }
 
@@ -302,11 +305,17 @@ pub struct ImageInfo {
 /// Color space information
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ColorSpace {
+    /// RGB color space
     RGB,
+    /// CMYK color space
     CMYK,
+    /// Grayscale color space
     Grayscale,
+    /// LAB color space
     LAB,
+    /// XYZ color space
     XYZ,
+    /// YCbCr color space
     YCbCr,
 }
 
@@ -327,27 +336,35 @@ pub struct CompressionInfo {
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum ImageEncryptionError {
     #[error("Unsupported image format: {0}")]
+    /// Unsupported image format error
     UnsupportedFormat(String),
     
     #[error("Corrupted image data: {0}")]
+    /// Corrupted image data error
     CorruptedData(String),
     
     #[error("Invalid image dimensions: {0}x{1}")]
+    /// Invalid image dimensions error
     InvalidDimensions(u32, u32),
     
     #[error("Metadata extraction failed: {0}")]
+    /// Metadata extraction error
     MetadataError(String),
     
     #[error("Thumbnail generation failed: {0}")]
+    /// Thumbnail generation error
     ThumbnailError(String),
     
     #[error("Streaming error: {0}")]
+    /// Streaming operation error
     StreamingError(String),
     
     #[error("Format conversion failed: {0}")]
+    /// Format conversion error
     ConversionError(String),
     
     #[error("Processing error: {0}")]
+    /// General processing error
     ProcessingError(String),
 }
 

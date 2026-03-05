@@ -466,11 +466,17 @@ impl FormatProcessorFactory {
 }
 
 // Placeholder processors for common formats
+/// JPEG image processor
 pub struct JpegProcessor;
+/// PNG image processor
 pub struct PngProcessor;
+/// TIFF image processor
 pub struct TiffProcessor;
+/// BMP image processor
 pub struct BmpProcessor;
+/// WebP image processor
 pub struct WebPProcessor;
+/// GIF image processor
 pub struct GifProcessor;
 
 impl FormatProcessor for JpegProcessor {
