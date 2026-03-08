@@ -238,7 +238,62 @@ impl KeyCache {
         Ok(())
     }
 
+    /// Store encrypted data in the cache (convenience method for encrypted bytes)
+    /// 
+    /// This method provides a convenient way to store encrypted data directly
+    /// without needing to create a SecureKey manually.
+    /// 
+    /// # Arguments
+    /// * `key_id` - The unique identifier for the cached data
+    /// * `encrypted_data` - The encrypted bytes to store
+    /// * `metadata` - Optional metadata for the cache entry
+    /// 
+    /// # Returns
+    /// * `Result<()>` - Success or error
+    /// 
+    /// # Examples
+    /// ```rust
+    /// // Store encrypted data directly
+    /// cache.store(&key_id, encrypted_bytes, metadata).await?;
+    /// ```
+    pub async fn store(&self, key_id: &KeyId, encrypted_data: Vec<u8>, metadata: Option<KeyMetadata>) -> Result<()> {
+        let secure_key = SecureKey::from_bytes(&encrypted_data);
+        let cache_metadata = metadata.unwrap_or_else(|| KeyMetadata::new(
+            key_id.clone(),
+            "cached_encrypted_data".to_string(),
+            1,
+            chrono::Utc::now(),
+            chrono::Utc::now() + chrono::Duration::hours(24),
+            "cache".to_string(),
+            crate::encryption::PerformanceProfile::Balanced,
+        ));
+        
+        self.put(key_id.clone(), secure_key, cache_metadata).await
+    }
+
     /// Remove a key from the cache
+    /// 
+    /// This method securely removes a key and its associated metadata from the cache.
+    /// The key is immediately removed from both the cache storage and LRU tracking.
+    /// 
+    /// # Arguments
+    /// * `key_id` - The unique identifier of the key to remove
+    /// 
+    /// # Returns
+    /// * `Result<bool>` - Ok(true) if the key was found and removed, Ok(false) if the key was not found
+    /// 
+    /// # Security Notes
+    /// - The secure key memory is automatically zeroized when dropped
+    /// - All references to the key are removed from LRU tracking
+    /// - Cache statistics are updated to reflect the removal
+    /// 
+    /// # Examples
+    /// ```rust
+    /// let removed = cache.remove(&key_id).await?;
+    /// if removed {
+    ///     println!("Key securely removed from cache");
+    /// }
+    /// ```
     pub async fn remove(&self, key_id: &KeyId) -> Result<bool> {
         let mut cache = self.cache.write().await;
         let mut lru_order = self.lru_order.write().await;

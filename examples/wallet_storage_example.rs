@@ -130,14 +130,14 @@ impl SecureWalletStorage {
         // Encrypt the private key using XChaCha20-Poly1305
         let encrypted_private_key = self.algorithm.encrypt(&private_key_bytes, encryption_key.as_bytes())?;
         
-        // Store the encryption key in the cache for fast access
-        // The key is stored securely and can be retrieved later for decryption
+        // Store encrypted private key in cache for fast access
+        // The encrypted data is stored and can be retrieved later for decryption
         let key_id = KeyId::new(wallet_id.clone());
-        self.key_cache.store(&key_id, encrypted_private_key.clone()).await?;
+        self.key_cache.store(&key_id, encrypted_private_key.clone(), None).await?;
         
         // Zeroize the plaintext private key from memory
         // This is critical for security - we don't want sensitive data lingering in memory
-        zeroize::Zeroize::zeroize(&mut private_key_bytes.to_vec());
+        zeroize::Zeroize::zeroize(&mut private_key_bytes);
         
         // Create the wallet object
         let wallet = Wallet {
@@ -282,14 +282,14 @@ impl SecureWalletStorage {
         // Re-encrypt with new key
         let new_encrypted_key = self.algorithm.encrypt(&decrypted_key, new_key.as_bytes())?;
         
-        // Update the cache with the new encrypted key
-        self.key_cache.store(&key_id, new_encrypted_key).await?;
+        // Update cache with new encrypted private key
+        self.key_cache.store(&key_id, new_encrypted_key, None).await?;
         
         // Update the key manager with the new key
         self.key_manager.rotate_key(&key_id, new_key)?;
         
         // Zeroize the decrypted key
-        zeroize::Zeroize::zeroize(&mut decrypted_key.to_vec());
+        zeroize::Zeroize::zeroize(&mut decrypted_key);
         
         println!("✅ Key rotation completed successfully");
         println!("   Old key destroyed, new key active");
@@ -542,14 +542,14 @@ struct CacheStats {
 
 impl KeyCacheExt for KeyCache {
     async fn get_stats(&self) -> Result<CacheStats> {
-        // In a real implementation, this would query the actual cache statistics
-        // For demo purposes, we return mock statistics
+        // Get real cache statistics
+        let stats = self.get_stats().await;
         Ok(CacheStats {
-            total_keys: 3,
-            cache_hits: 5,
-            cache_misses: 1,
-            hit_ratio: 0.833,
-            memory_usage: 1024, // 1KB
+            total_keys: stats.current_keys,
+            cache_hits: stats.hits,
+            cache_misses: stats.misses,
+            hit_ratio: stats.hit_ratio,
+            memory_usage: stats.current_memory_bytes,
         })
     }
 }
