@@ -23,8 +23,9 @@ pub async fn handle_start(
     info!("Starting Fortress server on {}:{}", host, port);
     info!("Data directory: {}", db_path.display());
     
-    // TODO: Implement actual server startup
-    println!("Server startup not yet implemented. This is a placeholder.");
+    // TODO: Load configuration and start actual server
+    println!("Server startup implementation in progress...");
+    println!("Server would bind to {}:{}", host, port);
     
     Ok(())
 }

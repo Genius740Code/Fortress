@@ -5,7 +5,7 @@ use tracing::{info, error};
 mod commands;
 mod utils;
 
-use commands::{create_simple, cluster, tenant, plugin};
+use commands::{create_simple, cluster, tenant, plugin, start, status, key, config};
 
 #[derive(Parser)]
 #[command(name = "fortress")]
@@ -158,9 +158,7 @@ async fn run_command(command: Commands) -> Result<()> {
             create_simple::handle_create_simple(name, template, data_dir, interactive).await
         }
         Commands::Start { data_dir, port, host } => {
-            println!("🚀 Starting Fortress Server");
-            println!("Start command not yet implemented.");
-            Ok(())
+            start::handle_start(data_dir, port, host).await
         }
         Commands::Stop => {
             println!("🛑 Stopping Fortress Server");
@@ -168,19 +166,13 @@ async fn run_command(command: Commands) -> Result<()> {
             Ok(())
         }
         Commands::Status { data_dir } => {
-            println!("📊 Fortress Database Status");
-            println!("Status command not yet implemented.");
-            Ok(())
+            status::handle_status(data_dir).await
         }
         Commands::Key { action } => {
-            println!("🔑 Key Management");
-            println!("Key command not yet implemented.");
-            Ok(())
+            key::handle_key_action(action).await
         }
         Commands::Config { action } => {
-            println!("⚙️ Configuration Management");
-            println!("Config command not yet implemented.");
-            Ok(())
+            config::handle_config_action(action).await
         }
         Commands::Cluster { action } => {
             cluster::execute_cluster_command(action).await.map_err(|e| color_eyre::eyre::eyre!("Cluster command failed: {}", e))

@@ -179,29 +179,6 @@ fn format_node_state(state: &fortress_core::cluster::NodeState) -> &'static str 
     }
 }
 
-/// Display cluster health information
-pub fn display_cluster_health(health: &ClusterHealth) {
-    println!("🏥 Cluster Health Status");
-    println!("=======================");
-    println!("📊 Total nodes: {}", health.total_nodes);
-    println!("✅ Active nodes: {}", health.active_nodes);
-    println!("⭐ Leader: {}", health.leader.map(|id| id.to_string()).unwrap_or_else(|| "None".to_string()));
-    println!("⚖️  Has quorum: {}", if health.has_quorum { "✅ Yes" } else { "❌ No" });
-    println!("🔁 Replication factor: {}", health.replication_factor);
-    println!("📈 Current term: {}", health.current_term);
-    
-    // Health indicator
-    let health_status = if health.has_quorum && health.active_nodes >= health.replication_factor {
-        "🟢 Healthy"
-    } else if health.has_quorum {
-        "🟡 Degraded"
-    } else {
-        "🔴 Unhealthy"
-    };
-    
-    println!("🏥 Overall status: {}", health_status);
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

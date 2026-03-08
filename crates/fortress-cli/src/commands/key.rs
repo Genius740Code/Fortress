@@ -1,6 +1,6 @@
 use color_eyre::eyre::Result;
 use console::style;
-use crate::main::KeyAction;
+use crate::KeyAction;
 
 pub async fn handle_key_action(action: KeyAction) -> Result<()> {
     match action {

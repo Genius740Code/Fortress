@@ -458,6 +458,7 @@ pub struct MongoSearchResult {
     pub key: String,
     pub score: f64,
     pub snippet: String,
+    /// Additional metadata associated with the search result
     pub metadata: HashMap<String, String>,
 }
 
@@ -469,6 +470,13 @@ pub struct MongoStorage {
 }
 
 impl MongoStorage {
+    /// Create a new MongoDB storage instance
+    /// 
+    /// # Arguments
+    /// * `config` - MongoDB configuration
+    /// 
+    /// # Returns
+    /// Result containing the MongoStorage instance or an error
     pub async fn new(config: MongoConfig) -> Result<Self> {
         Ok(Self {
             config,

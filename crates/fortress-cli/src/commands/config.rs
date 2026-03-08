@@ -1,6 +1,6 @@
 use color_eyre::eyre::Result;
 use console::style;
-use crate::main::ConfigAction;
+use crate::ConfigAction;
 
 pub async fn handle_config_action(action: ConfigAction) -> Result<()> {
     match action {
