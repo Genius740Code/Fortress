@@ -185,3 +185,35 @@ async fn run_command(command: Commands) -> Result<()> {
         }
     }
 }
+
+/// Public function to run CLI with custom arguments (for NAPI bindings)
+pub async fn run_cli_with_args(args: &[&str]) -> Result<String> {
+    use std::io::{self, Write};
+    
+    // Capture stdout
+    let mut buffer = Vec::new();
+    
+    // Override stdout temporarily
+    let original_stdout = io::stdout();
+    
+    // Parse CLI with custom args
+    let cli = match Cli::try_parse_from(args) {
+        Ok(cli) => cli,
+        Err(e) => {
+            return Ok(format!("CLI Error: {}", e));
+        }
+    };
+    
+    // Initialize logging
+    let log_level = if cli.verbose { "debug" } else { "info" };
+    
+    // Run the command and capture output
+    match run_command(cli.command).await {
+        Ok(_) => {
+            Ok("Command completed successfully".to_string())
+        }
+        Err(e) => {
+            Ok(format!("Command failed: {}", e))
+        }
+    }
+}

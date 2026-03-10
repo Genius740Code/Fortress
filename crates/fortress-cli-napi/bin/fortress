@@ -1,0 +1,25 @@
+#!/usr/bin/env node
+
+const { FortressCli } = require('../index.js');
+
+async function main() {
+  const args = process.argv.slice(2);
+  
+  if (args.length === 0) {
+    console.log('Fortress CLI - Node.js bindings');
+    console.log('Usage: fortress <command> [options]');
+    console.log('Run "fortress help" for more information');
+    process.exit(0);
+  }
+
+  try {
+    const cli = new FortressCli();
+    const result = await cli.execute(args);
+    console.log(result);
+  } catch (error) {
+    console.error('Error:', error.message);
+    process.exit(1);
+  }
+}
+
+main();

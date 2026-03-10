@@ -1,0 +1,42 @@
+[package]
+name = "fortress-cli-napi"
+version = "0.1.0"
+edition = "2021"
+authors = ["Fortress Team <team@fortress-db.com>"]
+license = "Apache-2.0"
+description = "NAPI bindings for Fortress CLI"
+homepage = "https://github.com/Genius740Code/Fortress"
+repository = "https://github.com/Genius740Code/Fortress"
+keywords = ["cli", "database", "encryption", "security", "napi"]
+categories = ["command-line-utilities", "database"]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# Fortress core CLI - minimal features
+fortress-cli = { path = "../fortress-cli", default-features = false }
+
+# NAPI bindings
+napi = { version = "2.0", default-features = false, features = ["napi4"] }
+napi-derive = "2.0"
+
+# Minimal async runtime
+tokio = { version = "1.35", features = ["rt"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+
+# Error handling
+thiserror = "1.0"
+
+[build-dependencies]
+napi-build = "2.0"
+
+[features]
+default = ["napi4"]
+napi4 = ["napi/napi4"]
+napi5 = ["napi/napi5"]
+napi6 = ["napi/napi6"]
+napi7 = ["napi/napi7"]
+napi8 = ["napi/napi8"]

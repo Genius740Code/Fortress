@@ -1,0 +1,80 @@
+{
+  "name": "fortress-cli",
+  "version": "0.1.0",
+  "description": "Fortress CLI - Node.js bindings for Fortress secure database system",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "napi": {
+    "name": "fortress-cli",
+    "triples": {
+      "defaults": true,
+      "additional": [
+        "x86_64-pc-windows-msvc",
+        "i686-pc-windows-msvc",
+        "x86_64-apple-darwin",
+        "aarch64-apple-darwin",
+        "x86_64-unknown-linux-gnu",
+        "x86_64-unknown-linux-musl",
+        "aarch64-unknown-linux-gnu",
+        "armv7-unknown-linux-gnueabihf"
+      ]
+    }
+  },
+  "bin": {
+    "fortress": "bin/fortress"
+  },
+  "scripts": {
+    "artifacts": "napi artifacts",
+    "build": "napi build --platform --release",
+    "build:debug": "napi build --platform",
+    "prepublishOnly": "napi prepublish -t npm",
+    "test": "node test/index.js",
+    "pretest": "npm run build",
+    "version": "napi version"
+  },
+  "files": [
+    "index.d.ts",
+    "index.js",
+    "bin/fortress",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Genius740Code/Fortress.git",
+    "directory": "crates/fortress-cli-napi"
+  },
+  "keywords": [
+    "fortress",
+    "cli",
+    "database",
+    "encryption",
+    "security",
+    "privacy",
+    "vault",
+    "napi",
+    "native"
+  ],
+  "author": {
+    "name": "Fortress Team",
+    "email": "team@fortress-db.com",
+    "url": "https://fortress-db.com"
+  },
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/Genius740Code/Fortress/issues"
+  },
+  "homepage": "https://docs.fortress-db.com",
+  "engines": {
+    "node": ">= 14"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^2.18.0"
+  },
+  "dependencies": {
+    "@napi-rs/cli": "^2.18.0"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  }
+}

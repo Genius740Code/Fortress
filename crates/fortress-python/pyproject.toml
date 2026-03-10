@@ -73,6 +73,9 @@ fortress-python = "fortress.cli:main"
 python-source = "python"
 module-name = "fortress._fortress"
 features = ["pyo3/extension-module"]
+# Enable wheel building for distribution
+bindings = "pyo3"
+strip = true
 
 [tool.black]
 line-length = 88
@@ -120,7 +123,7 @@ module = [
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-minversion = "7.0"
+minversion = "6.0"
 addopts = "-ra -q --strict-markers --strict-config"
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]

@@ -8,14 +8,64 @@ A highly customizable, secure database system with multi-layer encryption that c
 
 ### Installation
 
+#### Binary Packages (Recommended)
+
+**NPM (Node.js)**
 ```bash
-# Install from source
+# Install globally
+npm install -g fortress-cli
+
+# Install as dependency
+npm install fortress-cli
+```
+
+**PyPI (Python)**
+```bash
+# Install from PyPI
+pip install fortress
+
+# Install with development features
+pip install fortress[dev]
+```
+
+**Standalone Binaries**
+```bash
+# Download from GitHub Releases
+curl -L "https://github.com/Genius740Code/Fortress/releases/latest/download/fortress-cli-$(uname -s)-$(uname -m).tar.gz" | tar -xz
+sudo mv fortress /usr/local/bin/
+```
+
+#### Build from Source
+
+```bash
+# Clone the repository
 git clone https://github.com/Genius740Code/Fortress.git
 cd Fortress
+
+# Build the project
 cargo build --release
 
-# Or install via Cargo
-cargo install fortress-cli
+# Run tests
+cargo test
+
+# Install CLI tool
+cargo install --path crates/fortress-cli
+```
+
+#### Docker Installation
+
+```bash
+# Pull the latest image
+docker pull fortressdb/fortress:latest
+
+# Run with default settings
+docker run -p 8080:8080 -v fortress_data:/var/lib/fortress fortressdb/fortress
+
+# Run with custom configuration
+docker run -p 8080:8080 \
+  -v $(pwd)/config.toml:/etc/fortress/config.toml \
+  -v fortress_data:/var/lib/fortress \
+  fortressdb/fortress --config /etc/fortress/config.toml
 ```
 
 ### Basic Usage
@@ -96,11 +146,14 @@ user = client.insert_data('myapp_db', 'users', {
 
 ## 📚 Documentation
 
-### Core Documentation
-- 📖 [API Documentation](docs/API_DOCUMENTATION.md) - Complete REST API reference
-- 🛠️ [CLI Documentation](docs/CLI_DOCUMENTATION.md) - Command-line interface guide
-- 💡 [Usage Examples](docs/USAGE_EXAMPLES.md) - Comprehensive examples and tutorials
+### Installation & Setup
+- 📖 [Binary Installation Guide](docs/BINARY_INSTALLATION.md) - Complete installation instructions for all platforms
+- �️ [CLI Documentation](docs/CLI_DOCUMENTATION.md) - Command-line interface guide
 - 🏗️ [Architecture Guide](docs/ARCHITECTURE.md) - System architecture and design
+
+### Core Documentation
+- � [API Documentation](docs/API_DOCUMENTATION.md) - Complete REST API reference
+- 💡 [Usage Examples](docs/USAGE_EXAMPLES.md) - Comprehensive examples and tutorials
 
 ### Quick Guides
 - 🚀 [API Quick Start](examples/API_QUICK_START.md) - Get started with the REST API

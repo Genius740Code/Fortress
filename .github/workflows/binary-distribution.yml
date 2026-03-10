@@ -1,0 +1,324 @@
+name: Binary Distribution
+
+on:
+  push:
+    branches: [ main, develop ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # NPM Binary Distribution
+  build-npm:
+    name: Build NPM Binaries
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        target:
+          - x86_64-pc-windows-msvc
+          - i686-pc-windows-msvc  
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
+          - x86_64-unknown-linux-gnu
+          - x86_64-unknown-linux-musl
+          - aarch64-unknown-linux-gnu
+          - armv7-unknown-linux-gnueabihf
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: fortress-cli
+            artifact_name_binary: fortress-cli
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            artifact_name: fortress-cli
+            artifact_name_binary: fortress-cli
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            artifact_name: fortress-cli
+            artifact_name_binary: fortress-cli
+          - os: ubuntu-latest
+            target: armv7-unknown-linux-gnueabihf
+            artifact_name: fortress-cli
+            artifact_name_binary: fortress-cli
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: fortress-cli.dll
+            artifact_name_binary: fortress-cli.dll
+          - os: windows-latest
+            target: i686-pc-windows-msvc
+            artifact_name: fortress-cli.dll
+            artifact_name_binary: fortress-cli.dll
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: libfortress_cli.dylib
+            artifact_name_binary: libfortress_cli.dylib
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: libfortress_cli.dylib
+            artifact_name_binary: libfortress_cli.dylib
+        exclude:
+          - os: windows-latest
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            target: x86_64-unknown-linux-musl
+          - os: windows-latest
+            target: aarch64-unknown-linux-gnu
+          - os: windows-latest
+            target: armv7-unknown-linux-gnueabihf
+          - os: macos-latest
+            target: x86_64-pc-windows-msvc
+          - os: macos-latest
+            target: i686-pc-windows-msvc
+          - os: macos-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: x86_64-unknown-linux-musl
+          - os: macos-latest
+            target: aarch64-unknown-linux-gnu
+          - os: macos-latest
+            target: armv7-unknown-linux-gnueabihf
+          - os: ubuntu-latest
+            target: x86_64-pc-windows-msvc
+          - os: ubuntu-latest
+            target: i686-pc-windows-msvc
+          - os: ubuntu-latest
+            target: x86_64-apple-darwin
+          - os: ubuntu-latest
+            target: aarch64-apple-darwin
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.target }}
+
+    - name: Install Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install Python (for maturin)
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install system dependencies
+      if: matrix.target == 'armv7-unknown-linux-gnueabihf'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf
+
+    - name: Build NAPI binary
+      working-directory: crates/fortress-cli-napi
+      run: |
+        npm install
+        npm run build -- --target ${{ matrix.target }}
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: npm-binary-${{ matrix.target }}
+        path: crates/fortress-cli-napi/index.node
+
+  # Python Wheel Distribution
+  build-python:
+    name: Build Python Wheels
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        target:
+          - x86_64-pc-windows-msvc
+          - i686-pc-windows-msvc  
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
+          - x86_64-unknown-linux-gnu
+          - x86_64-unknown-linux-musl
+          - aarch64-unknown-linux-gnu
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            manylinux: auto
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            manylinux: auto
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            manylinux: auto
+        exclude:
+          - os: windows-latest
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            target: x86_64-unknown-linux-musl
+          - os: windows-latest
+            target: aarch64-unknown-linux-gnu
+          - os: macos-latest
+            target: x86_64-pc-windows-msvc
+          - os: macos-latest
+            target: i686-pc-windows-msvc
+          - os: macos-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: x86_64-unknown-linux-musl
+          - os: macos-latest
+            target: aarch64-unknown-linux-gnu
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.target }}
+
+    - name: Install Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install maturin
+      run: pip install maturin
+
+    - name: Build Python wheel
+      working-directory: crates/fortress-python
+      run: |
+        maturin build --release --target ${{ matrix.target }} --out dist
+
+    - name: Upload wheels
+      uses: actions/upload-artifact@v4
+      with:
+        name: python-wheels-${{ matrix.target }}
+        path: crates/fortress-python/dist/*.whl
+
+  # Build source distribution
+  build-sdist:
+    name: Build Source Distribution
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install maturin
+      run: pip install maturin
+
+    - name: Build source distribution
+      working-directory: crates/fortress-python
+      run: maturin build --sdist --out dist
+
+    - name: Upload source distribution
+      uses: actions/upload-artifact@v4
+      with:
+        name: python-sdist
+        path: crates/fortress-python/dist/*.tar.gz
+
+  # Publish to NPM
+  publish-npm:
+    name: Publish to NPM
+    needs: build-npm
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        registry-url: 'https://registry.npmjs.org'
+        cache: 'npm'
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: npm-binary-*
+        merge-multiple: true
+        path: crates/fortress-cli-napi/
+
+    - name: Setup NAPI
+      working-directory: crates/fortress-cli-napi
+      run: |
+        npm install
+        napi prepublish -t npm
+
+    - name: Publish to NPM
+      working-directory: crates/fortress-cli-napi
+      run: npm publish
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # Publish to PyPI
+  publish-pypi:
+    name: Publish to PyPI
+    needs: [build-python, build-sdist]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install maturin
+      run: pip install maturin
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: python-wheels-*
+        merge-multiple: true
+        path: crates/fortress-python/dist/
+
+    - name: Download source distribution
+      uses: actions/download-artifact@v4
+      with:
+        name: python-sdist
+        path: crates/fortress-python/dist/
+
+    - name: Publish to PyPI
+      working-directory: crates/fortress-python
+      run: maturin publish --username __token__ --password ${{ secrets.PYPI_TOKEN }}
+      env:
+        MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+
+  # Create GitHub Release
+  create-release:
+    name: Create GitHub Release
+    needs: [build-npm, build-python, build-sdist]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: release-assets/
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: release-assets/**/*
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

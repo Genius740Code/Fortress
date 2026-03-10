@@ -12,6 +12,9 @@ keywords = ["database", "encryption", "security", "privacy", "vault", "python"]
 categories = ["database", "cryptography", "api-bindings"]
 rust-version = "1.70"
 
+# Exclude from parent workspace
+[workspace]
+
 [lib]
 name = "fortress"
 crate-type = ["cdylib"]
