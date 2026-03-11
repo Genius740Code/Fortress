@@ -82,9 +82,85 @@ async fn create_router(openapi: OpenApi) -> Result<Router, Box<dyn std::error::E
     Ok(app)
 }
 
-/// Handler for OpenAPI JSON specification
+/// Create OpenAPI specification with all documented endpoints
+#[utoipa::path(
+    get,
+    path = "/openapi.json",
+    responses(
+        (status = 200, description = "OpenAPI specification in JSON format", body = OpenApi)
+    ),
+    tag = "Documentation"
+)]
 async fn openapi_handler() -> Json<OpenApi> {
     Json(create_openapi())
+}
+
+/// Create complete OpenAPI specification
+fn create_openapi() -> OpenApi {
+    #[derive(OpenApi)]
+    #[openapi(
+        paths(
+            crate::handlers::store_data,
+            crate::handlers::retrieve_data,
+            crate::handlers::delete_data,
+            crate::handlers::list_data,
+            crate::handlers::authenticate,
+            crate::handlers::refresh_token,
+            crate::handlers::health_check,
+            crate::handlers::get_metrics,
+            crate::handlers::get_prometheus_metrics,
+        ),
+        components(
+            schemas(
+                crate::handlers::StorageRecord,
+                crate::handlers::StoreDataRequest,
+                crate::handlers::StoreDataResponse,
+                crate::handlers::RetrieveDataResponse,
+                crate::handlers::ListDataResponse,
+                crate::handlers::AuthRequest,
+                crate::handlers::AuthResponse,
+                crate::handlers::RefreshTokenRequest,
+                crate::handlers::RefreshTokenResponse,
+                crate::handlers::HealthResponse,
+                crate::handlers::MetricsResponse,
+                crate::handlers::ErrorResponse,
+            )
+        ),
+        tags(
+            (
+                name = "data",
+                description = "Data storage and retrieval operations"
+            ),
+            (
+                name = "authentication",
+                description = "Authentication and token management"
+            ),
+            (
+                name = "health",
+                description = "Health check and monitoring endpoints"
+            ),
+            (
+                name = "documentation",
+                description = "API documentation and specification"
+            )
+        ),
+        info(
+            title = "Fortress API",
+            version = "1.0.0",
+            description = "REST API for Fortress secure database system with end-to-end encryption",
+            contact(
+                name = "Fortress Team",
+                email = "team@fortress-db.com"
+            ),
+            license(
+                name = "Apache-2.0",
+                url = "https://github.com/Genius740Code/Fortress/blob/main/LICENSE"
+            )
+        )
+    )]
+    struct ApiDoc;
+
+    ApiDoc::openapi()
 }
 
 /// Create application state

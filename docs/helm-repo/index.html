@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fortress Helm Repository</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --primary-dark: #1e40af;
+            --secondary-color: #10b981;
+            --background: #f8fafc;
+            --surface: #ffffff;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --border: #e2e8f0;
+            --code-bg: #f1f5f9;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--background);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        header {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 1.5rem 0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary-color);
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover {
+            color: var(--primary-color);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.2s;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+
+        .btn-secondary {
+            background: var(--surface);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--background);
+        }
+
+        main {
+            padding: 3rem 0;
+        }
+
+        .hero {
+            text-align: center;
+            margin-bottom: 4rem;
+        }
+
+        .hero h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero p {
+            font-size: 1.25rem;
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .charts-section {
+            margin-bottom: 4rem;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .section-header h2 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .section-header p {
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+
+        .chart-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: all 0.2s;
+        }
+
+        .chart-card:hover {
+            border-color: var(--primary-color);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
+        }
+
+        .chart-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .chart-name {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .chart-version {
+            background: var(--code-bg);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.875rem;
+            font-family: monospace;
+            color: var(--text-secondary);
+        }
+
+        .chart-description {
+            color: var(--text-secondary);
+            margin-bottom: 1.5rem;
+            line-height: 1.5;
+        }
+
+        .chart-actions {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .installation-section {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 3rem;
+        }
+
+        .installation-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .installation-icon {
+            width: 48px;
+            height: 48px;
+            background: var(--success);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+
+        .code-block {
+            background: var(--code-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            overflow-x: auto;
+        }
+
+        .code-block pre {
+            margin: 0;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.875rem;
+            line-height: 1.5;
+        }
+
+        .copy-button {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            margin: 3rem 0;
+        }
+
+        .feature-card {
+            text-align: center;
+        }
+
+        .feature-icon {
+            width: 64px;
+            height: 64px;
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5rem;
+            margin: 0 auto 1rem;
+        }
+
+        .feature-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .feature-description {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        footer {
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            padding: 2rem 0;
+            margin-top: 4rem;
+        }
+
+        .footer-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 2rem;
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 2rem;
+        }
+
+        .footer-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.875rem;
+        }
+
+        .footer-links a:hover {
+            color: var(--primary-color);
+        }
+
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2rem;
+            }
+
+            .hero p {
+                font-size: 1rem;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .footer-content {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <div class="logo-icon">F</div>
+                    <span>Fortress Helm Repository</span>
+                </div>
+                <nav class="nav-links">
+                    <a href="#charts">Charts</a>
+                    <a href="#installation">Installation</a>
+                    <a href="#documentation">Documentation</a>
+                    <a href="https://github.com/Genius740Code/Fortress" class="btn btn-secondary">GitHub</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="container">
+            <section class="hero">
+                <h1>Fortress Helm Repository</h1>
+                <p>Official Helm charts for Fortress secure database system. Deploy Fortress with confidence using battle-tested Kubernetes configurations.</p>
+                <div class="hero-buttons">
+                    <a href="#installation" class="btn btn-primary">🚀 Quick Install</a>
+                    <a href="#charts" class="btn btn-secondary">📦 Browse Charts</a>
+                </div>
+            </section>
+
+            <section id="installation" class="installation-section">
+                <div class="installation-header">
+                    <div class="installation-icon">⚡</div>
+                    <div>
+                        <h2>Quick Installation</h2>
+                        <p>Add the repository and install Fortress in seconds</p>
+                    </div>
+                </div>
+                
+                <div class="code-block" style="position: relative;">
+                    <button class="copy-button" onclick="copyToClipboard(this)">Copy</button>
+                    <pre><code># Add the Fortress Helm repository
+helm repo add fortress https://helm.fortress-db.com/charts
+helm repo update
+
+# Install Fortress
+helm install my-fortress fortress/fortress \
+  --namespace fortress \
+  --create-namespace
+
+# Check the installation
+kubectl get pods -n fortress</code></pre>
+                </div>
+            </section>
+
+            <section id="charts" class="charts-section">
+                <div class="section-header">
+                    <h2>Available Charts</h2>
+                    <p>Production-ready Helm charts with comprehensive configuration options</p>
+                </div>
+
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <h3 class="chart-name">fortress</h3>
+                            <span class="chart-version">0.1.0</span>
+                        </div>
+                        <p class="chart-description">
+                            Complete Fortress secure database system with encryption, key management, and monitoring. Includes production-ready configurations for high availability and security.
+                        </p>
+                        <div class="chart-actions">
+                            <a href="https://helm.sh/docs/topics/charts/" class="btn btn-secondary">📖 Docs</a>
+                            <a href="#" class="btn btn-primary" onclick="showChartDetails('fortress')">🚀 Install</a>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="features-section">
+                <div class="section-header">
+                    <h2>Why Choose Fortress Helm Charts?</h2>
+                    <p>Production-ready configurations with security and reliability built-in</p>
+                </div>
+
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon">🔒</div>
+                        <h3 class="feature-title">Security First</h3>
+                        <p class="feature-description">Built-in encryption, secure defaults, and compliance-ready configurations</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🚀</div>
+                        <h3 class="feature-title">Production Ready</h3>
+                        <p class="feature-description">High availability, monitoring, and scaling out of the box</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">⚙️</div>
+                        <h3 class="feature-title">Flexible Config</h3>
+                        <p class="feature-description">Extensive customization options for any deployment scenario</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">📊</div>
+                        <h3 class="feature-title">Monitoring</h3>
+                        <p class="feature-description">Integrated Prometheus metrics and health checks</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="documentation" class="charts-section">
+                <div class="section-header">
+                    <h2>Documentation & Support</h2>
+                    <p>Comprehensive guides and community support</p>
+                </div>
+
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <h3 class="chart-name">📚 Installation Guide</h3>
+                        <p class="chart-description">Step-by-step instructions for installing and configuring Fortress</p>
+                        <div class="chart-actions">
+                            <a href="https://docs.fortress-db.com" class="btn btn-secondary">View Guide</a>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <h3 class="chart-name">🔧 Configuration</h3>
+                        <p class="chart-description">Detailed configuration options and best practices</p>
+                        <div class="chart-actions">
+                            <a href="https://docs.fortress-db.com/configuration" class="btn btn-secondary">Configure</a>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <h3 class="chart-name">🆘 Support</h3>
+                        <p class="chart-description">Get help from the community and maintainers</p>
+                        <div class="chart-actions">
+                            <a href="https://github.com/Genius740Code/Fortress/issues" class="btn btn-secondary">Get Help</a>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div>
+                    <p>&copy; 2024 Fortress Team. Licensed under Apache 2.0.</p>
+                </div>
+                <div class="footer-links">
+                    <a href="https://docs.fortress-db.com">Documentation</a>
+                    <a href="https://github.com/Genius740Code/Fortress">GitHub</a>
+                    <a href="https://github.com/Genius740Code/Fortress/discussions">Community</a>
+                    <a href="https://github.com/Genius740Code/Fortress/issues">Issues</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        function copyToClipboard(button) {
+            const codeBlock = button.parentElement.querySelector('code');
+            const text = codeBlock.textContent;
+            
+            navigator.clipboard.writeText(text).then(() => {
+                const originalText = button.textContent;
+                button.textContent = '✓ Copied!';
+                button.style.background = 'var(--success)';
+                button.style.color = 'white';
+                
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.style.background = 'var(--surface)';
+                    button.style.color = 'var(--text-primary)';
+                }, 2000);
+            });
+        }
+
+        function showChartDetails(chartName) {
+            // In a real implementation, this would show detailed chart information
+            alert(`Chart details for ${chartName} would be shown here. For now, use the installation commands above.`);
+        }
+
+        // Smooth scrolling for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+</html>

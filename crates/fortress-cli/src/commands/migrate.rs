@@ -2,7 +2,7 @@ use color_eyre::eyre::{Result, Context};
 use console::style;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde_json::{json, Value};
-use fortress_core::{Config, StorageBackend};
+use fortress_core::storage::StorageBackend;
 use fortress_core::config::{DatabaseConfig, EncryptionConfig, StorageConfig, ApiConfig, MonitoringConfig};
 use std::path::PathBuf;
 use tracing::{info, debug, warn};
@@ -24,7 +24,7 @@ pub async fn handle_migrate(
     
     // Validate source database type
     if from != "postgres" {
-        return Err(color_eyre::eyre!("Only PostgreSQL migration is currently supported"));
+        return Err(color_eyre::Report::msg("Only PostgreSQL migration is currently supported"));
     }
     
     println!("📊 Connecting to PostgreSQL database...");
@@ -41,12 +41,12 @@ pub async fn handle_migrate(
             if output.status.success() {
                 info!("Connected to PostgreSQL successfully");
             } else {
-                return Err(color_eyre::eyre!("Failed to connect to PostgreSQL: {}", 
-                    String::from_utf8_lossy(&output.stderr)));
+                return Err(color_eyre::Report::msg(format!("Failed to connect to PostgreSQL: {}", String::from_utf8_lossy(&output.stderr))));
             }
         }
         Err(e) => {
             warn!("Could not test PostgreSQL connection: {}", e);
+            println!("  Continuing without connection test...");
             println!("⚠️  Continuing without connection test...");
         }
     }
@@ -216,8 +216,7 @@ async fn list_postgres_tables(source: &str) -> Result<Vec<String>> {
                 let tables_str = String::from_utf8_lossy(&result.stdout);
                 Ok(tables_str.lines().map(|s| s.trim().to_string()).collect())
             } else {
-                Err(color_eyre::eyre!("Failed to list tables: {}", 
-                    String::from_utf8_lossy(&result.stderr)))
+                return Err(color_eyre::Report::msg(format!("Failed to list tables: {}", String::from_utf8_lossy(&result.stderr))));
             }
         }
         Err(e) => {
@@ -261,8 +260,7 @@ async fn get_postgres_table_schema(source: &str, table_name: &str) -> Result<Vec
                 }
                 Ok(schema)
             } else {
-                Err(color_eyre::eyre!("Failed to get table schema: {}", 
-                    String::from_utf8_lossy(&result.stderr)))
+                return Err(color_eyre::Report::msg(format!("Failed to get table schema: {}", String::from_utf8_lossy(&result.stderr))));
             }
         }
         Err(e) => {
@@ -336,13 +334,12 @@ async fn fetch_postgres_batch(source: &str, table_name: &str, offset: u64, batch
                 }
                 Ok(batch_data)
             } else {
-                Err(color_eyre::eyre!("Failed to fetch batch: {}", 
-                    String::from_utf8_lossy(&result.stderr)))
+                return Err(color_eyre::Report::msg(format!("Failed to fetch batch: {}", String::from_utf8_lossy(&result.stderr))));
             }
         }
         Err(e) => {
             warn!("Could not fetch batch: {}", e);
-            Ok(vec![]) // Return empty on error
+            return Err(color_eyre::Report::msg(format!("Failed to fetch batch: {}", e)));
         }
     }
 }

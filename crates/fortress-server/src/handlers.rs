@@ -27,6 +27,7 @@ use uuid::Uuid;
 use utoipa::{
     OpenApi,
     ToSchema,
+    path,
 };
 
 /// Storage record (simplified for this example)
@@ -102,11 +103,26 @@ pub struct AppState {
 }
 
 /// Store data handler
+#[utoipa::path(
+    post,
+    path = "/api/v1/data",
+    request_body = StoreRequest,
+    responses(
+        (status = 200, description = "Data stored successfully", body = ApiResponse<StoreDataResponse>),
+        (status = 400, description = "Invalid request", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    tag = "data",
+    security(
+        ("jwt_auth" = [])
+    )
+)]
 pub async fn store_data(
     State(state): State<Arc<AppState>>,
     OptionalTokenClaims(claims): OptionalTokenClaims,
     Json(request): Json<StoreRequest>,
-) -> ServerResult<Json<ApiResponse<StoreResponse>>> {
+) -> ServerResult<Json<ApiResponse<StoreDataResponse>>> {
     let start_time = std::time::Instant::now();
     
     info!(
@@ -197,7 +213,7 @@ pub async fn store_data(
     state.storage.put(&data_id, &record_bytes).await
         .map_err(|e| ServerError::Core(e))?;
     
-    let response = StoreResponse {
+    let response = StoreDataResponse {
         id: data_id,
         key_id,
         stored_at: Utc::now(),
@@ -219,12 +235,29 @@ pub async fn store_data(
 }
 
 /// Retrieve data handler
+#[utoipa::path(
+    get,
+    path = "/api/v1/data/{id}",
+    params(
+        ("id" = String, Path, description = "Data ID to retrieve")
+    ),
+    responses(
+        (status = 200, description = "Data retrieved successfully", body = ApiResponse<RetrieveDataResponse>),
+        (status = 404, description = "Data not found", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    tag = "data",
+    security(
+        ("jwt_auth" = [])
+    )
+)]
 pub async fn retrieve_data(
     State(state): State<Arc<AppState>>,
     OptionalTokenClaims(claims): OptionalTokenClaims,
     Path(data_id): Path<String>,
     Query(_params): Query<RetrieveRequest>,
-) -> ServerResult<Json<ApiResponse<RetrieveResponse>>> {
+) -> ServerResult<Json<ApiResponse<RetrieveDataResponse>>> {
     let start_time = std::time::Instant::now();
     
     info!(

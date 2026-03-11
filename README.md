@@ -261,6 +261,58 @@ kubectl apply -f k8s/pvc.yaml
 helm upgrade my-fortress ./helm/fortress
 ```
 
+### 🔧 Troubleshooting
+
+If you encounter issues with the Helm installation:
+
+#### Common Issues
+
+**1. Namespace already exists**
+```bash
+kubectl delete namespace fortress
+helm install my-fortress ./helm/fortress
+```
+
+**2. PVC binding issues**
+```bash
+# Check PVC status
+kubectl get pvc -n fortress
+
+# Check available storage classes
+kubectl get storageclass
+
+# Update storage class in values.yaml
+helm upgrade my-fortress ./helm/fortress --set persistence.storageClass=standard
+```
+
+**3. Pod not starting**
+```bash
+# Check pod status
+kubectl get pods -n fortress
+
+# Describe pod for errors
+kubectl describe pod -n fortress <pod-name>
+
+# Check pod logs
+kubectl logs -n fortress <pod-name>
+```
+
+**4. Service connectivity**
+```bash
+# Test service endpoints
+kubectl get endpoints -n fortress
+
+# Port-forward to test locally
+kubectl port-forward -n fortress service/fortress-service 8080:8080
+curl http://localhost:8080/health
+```
+
+#### Getting Help
+
+- **Documentation**: [K8S Deployment Guide](docs/K8S_DEPLOYMENT.md)
+- **Issues**: [GitHub Issues](https://github.com/Genius740Code/Fortress/issues)
+- **Community**: [GitHub Discussions](https://github.com/Genius740Code/Fortress/discussions)
+
 ## 🚀 Getting Started
 
 ### 1. Create Your First Database

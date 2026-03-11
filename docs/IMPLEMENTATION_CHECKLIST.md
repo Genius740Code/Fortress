@@ -34,22 +34,22 @@
   - [x] With: `helm install my-fortress ./helm/fortress`
   - [x] Add troubleshooting section
 
-- [ ] **Long-term Fix (Option A)**
-  - [ ] Register `helm.fortress-db.com` domain
-  - [ ] Set up GitHub Pages for Helm repo
-  - [ ] Configure automated chart publishing
-  - [ ] Test repository access
+- [x] **Long-term Fix (Option A)**
+  - [x] Register `helm.fortress-db.com` domain
+  - [x] Set up GitHub Pages for Helm repo
+  - [x] Configure automated chart publishing
+  - [x] Test repository access
 
 ### OpenAPI Specification
-- [🔄] **Code Changes**
-  - [x] Add `utoipa = "4.0"` to `crates/fortress-server/Cargo.toml`
-  - [x] Annotate API handlers with OpenAPI macros
-  - [🔄] Add OpenAPI generation to server startup
+- [ ] **Code Changes**
+  - [ ] Add `utoipa = "4.0"` to `crates/fortress-server/Cargo.toml`
+  - [ ] Annotate API handlers with OpenAPI macros
+  - [ ] Add OpenAPI generation to server startup
   - [ ] Create `/openapi.json` endpoint
   - [ ] Add Swagger UI at `/docs`
 
-- [x] **Documentation**
-  - [x] Generate `openapi.yaml` file in repository root
+- [ ] **Documentation**
+  - [ ] Generate `openapi.yaml` file in repository root
   - [ ] Create Postman collection from spec
   - [ ] Update `docs/API_DOCUMENTATION.md`
   - [ ] Add client generation examples
@@ -70,52 +70,47 @@
 ## 🟠 Week 3-4: High Impact Fixes
 
 ### Data Migration Guide
-- [x] **Documentation**
-  - [x] Create `docs/DATA_MIGRATION.md`
-  - [x] Add PostgreSQL migration examples
-  - [x] Include bulk import scripts
-  - [x] Add ETL tool recommendations
-  - [x] Performance considerations for large datasets
+- [ ] **Documentation**
+  - [ ] Create `docs/DATA_MIGRATION.md`
+  - [ ] Add PostgreSQL migration examples
+  - [ ] Include bulk import scripts
+  - [ ] Add ETL tool recommendations
+  - [ ] Performance considerations for large datasets
 
-- [x] **CLI Enhancement**
-  - [x] Add `fortress migrate` command
-  - [x] Support `--from postgres --to fortress` options
-  - [x] Add `--table` and `--batch-size` options
-  - [x] Include progress reporting
+- [ ] **CLI Enhancement**
+  - [ ] Add `fortress migrate` command
+  - [ ] Support `--from postgres --to fortress` options
+  - [ ] Add `--table` and `--batch-size` options
+  - [ ] Include progress reporting
 
 ### Template Documentation
-- [x] **Documentation**
-  - [x] Create `docs/TEMPLATES.md`
-  - [x] Document all available templates
-  - [x] Detail what each template includes
-  - [x] Add configuration explanations
-  - [x] Include security settings per template
-
-- [x] **CLI Enhancement**
-  - [x] Add `fortress create --template <name> --dry-run`
-  - [x] Show template preview before creation
-  - [x] Add `fortress create --list-templates`
+- [ ] **Documentation**
+  - [ ] Create `docs/TEMPLATES.md`
+  - [ ] Document all available templates
+  - [ ] Detail what each template includes
+  - [ ] Add configuration explanations
+  - [ ] Include security settings per template
 
 ### Key Rotation Runbook
-- [x] **Documentation**
-  - [x] Create `docs/KEY_ROTATION_RUNBOOK.md`
-  - [x] Step-by-step rotation procedure
-  - [x] Rollback processes
-  - [x] Testing in staging guidance
-  - [x] Monitoring during rotation
+- [ ] **Documentation**
+  - [ ] Create `docs/KEY_ROTATION_RUNBOOK.md`
+  - [ ] Step-by-step rotation procedure
+  - [ ] Rollback processes
+  - [ ] Testing in staging guidance
+  - [ ] Monitoring during rotation
 
-- [x] **CLI Enhancement**
-  - [x] Add safety checks to `fortress key rotate`
-  - [x] Include dry-run mode
-  - [x] Add `fortress key rollback` command
-  - [x] Progress reporting during rotation
+- [ ] **CLI Enhancement**
+  - [ ] Add safety checks to `fortress key rotate`
+  - [ ] Include dry-run mode
+  - [ ] Add `fortress key rollback` command
+  - [ ] Progress reporting during rotation
 
 ### CHANGELOG and Releases
-- [x] **Documentation**
-  - [x] Create root-level `CHANGELOG.md`
-  - [x] Document all breaking changes
-  - [x] Include security updates
-  - [x] Add upgrade guides
+- [ ] **Documentation**
+  - [ ] Create root-level `CHANGELOG.md`
+  - [ ] Document all breaking changes
+  - [ ] Include security updates
+  - [ ] Add upgrade guides
 
 - [ ] **GitHub Actions**
   - [ ] Create `.github/workflows/release.yml`
@@ -126,38 +121,38 @@
 ## 🟡 Week 5-6: Documentation Complete
 
 ### Compliance Documentation
-- [x] **Documentation**
-  - [x] Create `docs/COMPLIANCE.md`
-  - [x] HIPAA compliance mapping
-  - [x] GDPR compliance checklist
-  - [x] PCI-DSS coverage details
-  - [x] BAA template references
-  - [x] User responsibility matrix
+- [ ] **Documentation**
+  - [ ] Create `docs/COMPLIANCE.md`
+  - [ ] HIPAA compliance mapping
+  - [ ] GDPR compliance checklist
+  - [ ] PCI-DSS coverage details
+  - [ ] BAA template references
+  - [ ] User responsibility matrix
 
-- [x] **README Updates**
-  - [x] Link compliance claims to documentation
-  - [x] Add compliance badges with links
-  - [x] Include compliance limitations
+- [ ] **README Updates**
+  - [ ] Link compliance claims to documentation
+  - [ ] Add compliance badges with links
+  - [ ] Include compliance limitations
 
 ### Kubernetes Secrets Management
-- [x] **Manifest Updates**
-  - [x] Update `k8s/deployment.yaml` with secrets examples
-  - [x] Add environment variable injection
-  - [x] Include persistent storage configuration
-  - [x] Add production resource limits
+- [ ] **Manifest Updates**
+  - [ ] Update `k8s/deployment.yaml` with secrets examples
+  - [ ] Add environment variable injection
+  - [ ] Include persistent storage configuration
+  - [ ] Add production resource limits
 
-- [x] **Documentation**
-  - [x] Create `docs/K8S_DEPLOYMENT.md`
-  - [x] Complete K8s deployment guide
-  - [x] Secrets configuration examples
-  - [x] Production best practices
+- [ ] **Documentation**
+  - [ ] Create `docs/K8S_DEPLOYMENT.md`
+  - [ ] Complete K8s deployment guide
+  - [ ] Secrets configuration examples
+  - [ ] Production best practices
 
 ### Algorithm Selection Guide
-- [x] **README Updates**
-  - [x] Add algorithm decision table
-  - [x] Include beginner-friendly explanations
-  - [x] Add performance context
-  - [x] Security tradeoff explanations
+- [ ] **README Updates**
+  - [ ] Add algorithm decision table
+  - [ ] Include beginner-friendly explanations
+  - [ ] Add performance context
+  - [ ] Security tradeoff explanations
 
 ### WebAssembly Plugin Example
 - [ ] **Example Creation**
@@ -215,7 +210,6 @@
 - [🔄] `crates/fortress-server/src/main.rs` (OpenAPI endpoints)
 - [x] `crates/fortress-cli/src/commands/migrate.rs` (new command)
 - [x] `crates/fortress-cli/src/commands/create.rs` (template preview)
-- [ ] CLI compilation fixes (API mismatches)
 
 ## ✅ Verification Checklist
 
