@@ -1,0 +1,30 @@
+[package]
+name = "fortress-enhanced-audit"
+version = "0.1.0"
+edition = "2021"
+authors = ["Fortress Team <team@fortress-db.com>"]
+description = "Enhanced audit logging plugin for Fortress with real-time analytics"
+license = "Apache-2.0"
+repository = "https://github.com/Genius740Code/Fortress"
+keywords = ["fortress", "plugin", "audit", "wasm", "analytics"]
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# Fortress plugin SDK (placeholder for demonstration)
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.6", features = ["v4", "serde"] }
+anyhow = "1.0"
+
+[dependencies.wasm-bindgen]
+version = "0.2"
+features = ["serde-serialize"]
+
+[profile.release]
+opt-level = "s"
+lto = true

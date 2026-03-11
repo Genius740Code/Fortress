@@ -7,6 +7,9 @@ metadata:
     app.kubernetes.io/name: fortress
     app.kubernetes.io/component: server
     app.kubernetes.io/part-of: fortress
+  annotations:
+    configmap.reloader.stakater.com/reload: "fortress-config"
+    secret.reloader.stakater.com/reload: "fortress-secrets"
 spec:
   replicas: 3
   strategy:
@@ -28,64 +31,149 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port: "8080"
         prometheus.io/path: "/metrics"
+        checksum/config: "{{ include (print $.Template.Name) . | sha256sum }}"
+        checksum/secrets: "{{ include (print $.Template.Name) . | sha256sum }}"
     spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
         runAsGroup: 1000
         fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: fortress-server
-        image: fortress-server:latest
+        image: fortressdb/fortress:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
           name: http
+          protocol: TCP
+        - containerPort: 9090
+          name: metrics
           protocol: TCP
         envFrom:
         - configMapRef:
             name: fortress-config
         - secretRef:
             name: fortress-secrets
+        env:
+        - name: FORTRESS_LOG_LEVEL
+          value: "info"
+        - name: FORTRESS_METRICS_ENABLED
+          value: "true"
+        - name: FORTRESS_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: FORTRESS_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: FORTRESS_POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
         volumeMounts:
         - name: data
           mountPath: /data
+          readOnly: false
         - name: logs
           mountPath: /app/logs
+          readOnly: false
+        - name: tmp
+          mountPath: /tmp
+          readOnly: false
         resources:
           requests:
-            memory: "256Mi"
+            memory: "512Mi"
             cpu: "250m"
           limits:
-            memory: "512Mi"
+            memory: "1Gi"
             cpu: "500m"
+            ephemeral-storage: "2Gi"
         livenessProbe:
           httpGet:
             path: /health
             port: http
+            scheme: HTTP
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 3
+          successThreshold: 1
         readinessProbe:
           httpGet:
             path: /health
             port: http
+            scheme: HTTP
           initialDelaySeconds: 5
           periodSeconds: 5
           timeoutSeconds: 3
           failureThreshold: 3
+          successThreshold: 1
+        startupProbe:
+          httpGet:
+            path: /health
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+          successThreshold: 1
         securityContext:
           allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: true
+          readOnlyRootFilesystem: false
           capabilities:
             drop:
             - ALL
+            add:
+            - NET_BIND_SERVICE
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 15"]
       volumes:
       - name: data
         persistentVolumeClaim:
           claimName: fortress-data-pvc
       - name: logs
-        emptyDir: {}
+        emptyDir: 
+          sizeLimit: "1Gi"
+      - name: tmp
+        emptyDir:
+          sizeLimit: "100Mi"
       restartPolicy: Always
       terminationGracePeriodSeconds: 30
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                  - fortress
+              topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: fortress
+            app.kubernetes.io/component: server
+      nodeSelector:
+        kubernetes.io/os: linux
+      tolerations:
+      - key: "fortress-dedicated"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+      priorityClassName: "high-priority"

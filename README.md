@@ -2,6 +2,15 @@
 
 🛡️ **Fortress** - Turnkey Simplicity + HashiCorp Vault Security
 
+## 🚦 Current Status: **Alpha - Not Production Ready**
+> Target v1.0 release: Q3 2026
+> 
+> ⚠️ **Not recommended for production workloads**
+> - APIs may change without notice  
+> - Data migration tools are experimental
+> - Security features are under audit
+> - Limited testing in production environments
+
 A highly customizable, secure database system with multi-layer encryption that combines the simplicity of modern databases with enterprise-grade security.
 
 ## 🚀 Quick Start
@@ -237,15 +246,19 @@ docker run -p 8080:8080 \
 ### Kubernetes Installation
 
 ```bash
-# Add the Helm repository
-helm repo add fortress https://helm.fortress-db.com
-helm repo update
+# Option 1: Install using local Helm chart (Recommended)
+git clone https://github.com/Genius740Code/Fortress.git
+cd Fortress
+helm install my-fortress ./helm/fortress
 
-# Install Fortress
-helm install my-fortress fortress/fortress
+# Option 2: Install using Kubernetes manifests directly
+kubectl apply -f k8s/namespace.yaml
+kubectl apply -f k8s/config.yaml
+kubectl apply -f k8s/deployment.yaml
+kubectl apply -f k8s/pvc.yaml
 
 # Upgrade Fortress
-helm upgrade my-fortress fortress/fortress
+helm upgrade my-fortress ./helm/fortress
 ```
 
 ## 🚀 Getting Started
@@ -337,6 +350,106 @@ cargo test --release -- --ignored performance
 # View detailed metrics
 curl http://localhost:8080/metrics/performance
 ```
+
+## 🔐 Encryption Algorithms
+
+### Algorithm Selection Guide
+
+| Use Case | Recommended Algorithm | Why | Performance |
+|----------|---------------------|------|-------------|
+| **General Purpose** | **AEGIS-256** | Fastest, post-quantum secure, hardware-accelerated | 1500+ MB/s |
+| **Mobile Applications** | ChaCha20-Poly1305 | Battery efficient, no hardware acceleration needed | 1200+ MB/s |
+| **Enterprise/Compliance** | AES-256-GCM | Industry standard, FIPS 140-2 certified, hardware acceleration | 1000+ MB/s |
+| **Maximum Security** | XChaCha20-Poly1305 | Extended nonce protection, future-proof | 1100+ MB/s |
+
+### Algorithm Details
+
+#### **AEGIS-256** (Recommended)
+- **Security Level**: Very High (Post-quantum resistant)
+- **Performance**: 1500+ MB/s (fastest)
+- **Use Cases**: General purpose, high-performance applications
+- **Compliance**: Suitable for most compliance frameworks
+- **Hardware**: Optimized for modern CPUs
+
+#### **ChaCha20-Poly1305**
+- **Security Level**: High
+- **Performance**: 1200+ MB/s
+- **Use Cases**: Mobile apps, battery-powered devices
+- **Compliance**: Widely accepted
+- **Hardware**: Software-based, no special requirements
+
+#### **AES-256-GCM**
+- **Security Level**: High
+- **Performance**: 1000+ MB/s (with hardware acceleration)
+- **Use Cases**: Enterprise, compliance-driven applications
+- **Compliance**: Industry standard, FIPS 140-2 certified
+- **Hardware**: AES-NI acceleration recommended
+
+#### **XChaCha20-Poly1305**
+- **Security Level**: Very High
+- **Performance**: 1100+ MB/s
+- **Use Cases**: Maximum security requirements, long-term data storage
+- **Compliance**: Acceptable under most frameworks
+- **Hardware**: Software-based, extended nonce protection
+
+### Performance Context
+
+All benchmarks are performed on:
+- **Hardware**: AWS c6i.large (Intel Xeon) with NVMe storage
+- **Data**: 1GB random data blocks
+- **Concurrency**: 4 parallel threads
+- **Metrics**: Throughput (MB/s) and latency (ms)
+
+**Real-world performance may vary based on**:
+- CPU architecture and capabilities
+- Data size and access patterns
+- Network latency (for client-server operations)
+- Storage performance (SSD vs HDD)
+
+### Decision Framework
+
+#### Choose AEGIS-256 if:
+- ✅ You need maximum performance
+- ✅ Future-proof security is important
+- ✅ Modern hardware is available
+- ✅ General-purpose encryption needs
+
+#### Choose ChaCha20-Poly1305 if:
+- ✅ Deploying to mobile devices
+- ✅ Battery life is a concern
+- ✅ No hardware acceleration available
+- ✅ Cross-platform compatibility needed
+
+#### Choose AES-256-GCM if:
+- ✅ Enterprise compliance required
+- ✅ FIPS certification needed
+- ✅ Hardware acceleration available
+- ✅ Industry standards preferred
+
+#### Choose XChaCha20-Poly1305 if:
+- ✅ Maximum security is required
+- ✅ Long-term data storage
+- ✅ High-value sensitive data
+- ✅ Future-proofing critical
+
+### Migration Between Algorithms
+
+```bash
+# Check current algorithm
+fortress config get encryption.default_algorithm
+
+# Change algorithm (requires key rotation)
+fortress config set encryption.default_algorithm aes256gcm
+fortress key rotate --database myapp_db --algorithm aes256gcm
+```
+
+### Security Recommendations
+
+1. **Use AEGIS-256** for new applications (best performance/security balance)
+2. **Prefer AES-256-GCM** for regulated industries (compliance-friendly)
+3. **Rotate algorithms** when security requirements change
+4. **Test performance** with your specific hardware and data patterns
+5. **Monitor performance** after algorithm changes
 
 ## 🔐 Security Features
 
