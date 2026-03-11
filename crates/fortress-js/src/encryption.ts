@@ -2,7 +2,7 @@
  * Encryption algorithm implementation for Fortress JavaScript/TypeScript SDK
  */
 
-import { EncryptionOptions, AlgorithmMetadata } from './types';
+import { EncryptionOptions, AlgorithmMetadata, EncryptionProfile } from './types';
 import { FortressError } from './error';
 import { Utils } from './utils';
 

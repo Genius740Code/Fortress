@@ -207,6 +207,10 @@ fortress-keys/
 fortress-backups/
 fortress-temp/
 
+# Python build artifacts
+crates/fortress-python/target/
+crates/fortress-python/*.egg-info/
+
 # Migration artifacts
 migration-logs/
 migration-temp/

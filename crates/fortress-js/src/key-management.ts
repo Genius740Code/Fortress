@@ -75,6 +75,19 @@ export class KeyManager {
     this.keys.delete(keyId);
   }
 
+  async getKey(keyId: string): Promise<Uint8Array> {
+    const keyEntry = this.keys.get(keyId);
+    if (!keyEntry) {
+      throw new Error(`Key not found: ${keyId}`);
+    }
+    
+    // Update usage count
+    keyEntry.metadata.usage_count++;
+    keyEntry.metadata.last_used = new Date();
+    
+    return keyEntry.data;
+  }
+
   async listKeys(): Promise<string[]> {
     return Array.from(this.keys.keys());
   }

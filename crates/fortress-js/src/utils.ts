@@ -27,7 +27,7 @@ export class Utils {
    */
   static hexToBytes(hex: string): Uint8Array {
     if (hex.length % 2 !== 0) {
-      throw new FortressError.validation('Hex string must have even length');
+      throw FortressError.validation('Hex string must have even length');
     }
     
     const bytes = new Uint8Array(hex.length / 2);
@@ -295,31 +295,31 @@ export class Utils {
 
     if (value === null || value === undefined) {
       if (required) {
-        throw new FortressError.validation(`${name} is required`);
+        throw FortressError.validation(`${name} is required`);
       }
       return;
     }
 
     if (type && typeof value !== type) {
-      throw new FortressError.validation(`${name} must be of type ${type}`);
+      throw FortressError.validation(`${name} must be of type ${type}`);
     }
 
     if (typeof value === 'string') {
       if (minLength !== undefined && value.length < minLength) {
-        throw new FortressError.validation(`${name} must be at least ${minLength} characters long`);
+        throw FortressError.validation(`${name} must be at least ${minLength} characters long`);
       }
       
       if (maxLength !== undefined && value.length > maxLength) {
-        throw new FortressError.validation(`${name} must be at most ${maxLength} characters long`);
+        throw FortressError.validation(`${name} must be at most ${maxLength} characters long`);
       }
       
       if (pattern && !pattern.test(value)) {
-        throw new FortressError.validation(`${name} does not match required pattern`);
+        throw FortressError.validation(`${name} does not match required pattern`);
       }
     }
 
     if (allowedValues && !allowedValues.includes(value)) {
-      throw new FortressError.validation(`${name} must be one of: ${allowedValues.join(', ')}`);
+      throw FortressError.validation(`${name} must be one of: ${allowedValues.join(', ')}`);
     }
   }
 

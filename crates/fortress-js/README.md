@@ -1,5 +1,7 @@
 # Fortress JavaScript/TypeScript SDK
 
+[![npm version](https://badge.fury.io/js/fortress.svg)](https://badge.fury.io/js/fortress)
+
 A modern JavaScript/TypeScript interface to the Fortress secure database system, providing enterprise-grade encryption, key management, and multi-tenant isolation.
 
 ## Features

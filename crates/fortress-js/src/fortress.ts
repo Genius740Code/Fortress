@@ -12,6 +12,7 @@ import { TenantManager } from './tenant';
 import { FortressError } from './error';
 import { Utils } from './utils';
 import { BuildInfo, CompatibilityInfo, EncryptionOptions, KeyGenerationOptions } from './types';
+import { FortressConfigOptions } from './config';
 
 // Import WASM module
 // TODO: Replace with actual WASM module import when built
@@ -22,11 +23,11 @@ import { BuildInfo, CompatibilityInfo, EncryptionOptions, KeyGenerationOptions }
  */
 export class Fortress {
   private config: FortressConfig;
-  private keyManager: KeyManager;
-  private storage: StorageBackend;
-  private policyEngine: PolicyEngine;
-  private auditLogger: AuditLogger;
-  private tenantManager: TenantManager;
+  private keyManager!: KeyManager;
+  private storage!: StorageBackend;
+  private policyEngine!: PolicyEngine;
+  private auditLogger!: AuditLogger;
+  private tenantManager!: TenantManager;
   private utils: Utils;
   private initialized: boolean = false;
 
@@ -48,9 +49,9 @@ export class Fortress {
       // await wasmModule();
 
       // Initialize components
-      this.keyManager = new KeyManager(this.config);
-      this.storage = new StorageBackend(this.config);
-      this.policyEngine = new PolicyEngine(this.config);
+      this.keyManager = new KeyManager(this.config.encryptionProfile);
+      this.storage = new StorageBackend(this.config.storageConfig);
+      this.policyEngine = new PolicyEngine(this.config.policyConfig);
       this.auditLogger = new AuditLogger(this.config);
       this.tenantManager = new TenantManager(this.config);
 
@@ -268,8 +269,11 @@ export class Fortress {
   /**
    * Update the configuration
    */
-  updateConfig(config: Partial<FortressConfig>): void {
-    this.config = { ...this.config, ...config };
+  updateConfig(config: Partial<FortressConfigOptions>): void {
+    // Create new config with merged properties
+    const currentConfig = this.config.toJSON();
+    const newConfig = { ...currentConfig, ...config };
+    this.config = FortressConfig.fromJSON(JSON.stringify(newConfig));
   }
 
   /**
