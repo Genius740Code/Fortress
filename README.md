@@ -49,6 +49,15 @@ cargo install fortress-core
 cargo install --git https://github.com/Genius740Code/Fortress fortress-core
 ```
 
+**Go**
+```bash
+# Add fortress-go as dependency
+go get github.com/Genius740Code/Fortress/fortress-go
+
+# Install from git repository
+go install github.com/Genius740Code/Fortress/fortress-go@latest
+```
+
 **Standalone Binaries**
 ```bash
 # Download from GitHub Releases

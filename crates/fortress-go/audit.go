@@ -2,7 +2,6 @@ package fortress
 
 import (
 	"encoding/json"
-	"fmt"
 	"sync"
 	"time"
 )
@@ -33,7 +32,11 @@ func (a *AuditLogger) Log(entry *AuditEntry) error {
 
 	// Generate ID if not provided
 	if entry.ID == "" {
-		entry.ID = GenerateRandomString(16)
+		id, err := GenerateRandomString(16)
+		if err != nil {
+			return err
+		}
+		entry.ID = id
 	}
 
 	// Set timestamp if not provided
@@ -196,12 +199,19 @@ func (a *AuditLogger) GetStats(options *AuditStatsOptions) (*AuditStats, error) 
 	}
 
 	stats := &AuditStats{
-		TotalEntries:        len(entries),
+		TotalEntries:         len(entries),
 		SuccessfulOperations: 0,
-		FailedOperations:    0,
-		UniqueUsers:          make(map[string]bool),
+		FailedOperations:     0,
+		UniqueUsers:          0,
+		UniqueResources:      0,
 		UniqueActions:        make(map[string]bool),
+		Actions:              make(map[string]int),
+		HourlyStats:          make([]int, 24),
 	}
+
+	// Track unique users and resources
+	uniqueUsers := make(map[string]bool)
+	uniqueResources := make(map[string]bool)
 
 	if len(entries) > 0 {
 		stats.TimeRange.Start = entries[len(entries)-1].Timestamp
@@ -216,10 +226,21 @@ func (a *AuditLogger) GetStats(options *AuditStatsOptions) (*AuditStats, error) 
 		}
 
 		if entry.UserID != "" {
-			stats.UniqueUsers[entry.UserID] = true
+			if !uniqueUsers[entry.UserID] {
+				uniqueUsers[entry.UserID] = true
+				stats.UniqueUsers++
+			}
+		}
+
+		if entry.Resource.ID != "" {
+			if !uniqueResources[entry.Resource.ID] {
+				uniqueResources[entry.Resource.ID] = true
+				stats.UniqueResources++
+			}
 		}
 
 		stats.UniqueActions[entry.Action] = true
+		stats.Actions[entry.Action]++
 	}
 
 	return stats, nil

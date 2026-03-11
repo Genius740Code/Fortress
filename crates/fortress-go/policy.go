@@ -3,20 +3,19 @@ package fortress
 import (
 	"fmt"
 	"sync"
-	"time"
 )
 
 // PolicyEngine manages access policies
 type PolicyEngine struct {
-	config  *Config
+	config   *Config
 	policies map[string]*PolicyConfig
-	mu      sync.RWMutex
+	mu       sync.RWMutex
 }
 
 // NewPolicyEngine creates a new policy engine
 func NewPolicyEngine(config *Config) *PolicyEngine {
 	return &PolicyEngine{
-		config:  config,
+		config:   config,
 		policies: make(map[string]*PolicyConfig),
 	}
 }
@@ -97,7 +96,7 @@ func (p *PolicyEngine) EvaluatePermission(userID string, resource *Resource, act
 // evaluatePolicy evaluates a single policy
 func (p *PolicyEngine) evaluatePolicy(policy *PolicyConfig, userID string, resource *Resource, action string, context map[string]interface{}) (bool, error) {
 	// Sort rules by priority (higher priority first)
-	sortedRules := make([]*PolicyRule, len(policy.Rules))
+	sortedRules := make([]PolicyRule, len(policy.Rules))
 	copy(sortedRules, policy.Rules)
 
 	// Simple sort by priority (higher first)
@@ -114,7 +113,7 @@ func (p *PolicyEngine) evaluatePolicy(policy *PolicyConfig, userID string, resou
 			continue
 		}
 
-		matches, err := p.evaluateRule(rule, userID, resource, action, context)
+		matches, err := p.evaluateRule(&rule, userID, resource, action, context)
 		if err != nil {
 			return false, err
 		}
@@ -132,8 +131,8 @@ func (p *PolicyEngine) evaluateRule(rule *PolicyRule, userID string, resource *R
 	// Check if action matches
 	permissionMatches := false
 	for _, permission := range rule.Permissions {
-		if permission.Resource.Type == resource.Type && 
-		   (permission.Resource.ID == "" || permission.Resource.ID == resource.ID) {
+		if permission.Resource.Type == resource.Type &&
+			(permission.Resource.ID == "" || permission.Resource.ID == resource.ID) {
 			for _, allowedAction := range permission.Actions {
 				if allowedAction == action {
 					permissionMatches = true
@@ -168,21 +167,21 @@ func (p *PolicyEngine) evaluateCondition(condition Condition, userID string, res
 
 	switch condition.Operator {
 	case "eq":
-		return p.compareValues(fieldValue, condition.Value, "==")
+		return p.compareValues(fieldValue, condition.Value, "=="), nil
 	case "ne":
-		return !p.compareValues(fieldValue, condition.Value, "==")
+		return !p.compareValues(fieldValue, condition.Value, "=="), nil
 	case "gt":
-		return p.compareValues(fieldValue, condition.Value, ">")
+		return p.compareValues(fieldValue, condition.Value, ">"), nil
 	case "gte":
-		return p.compareValues(fieldValue, condition.Value, ">=")
+		return p.compareValues(fieldValue, condition.Value, ">="), nil
 	case "lt":
-		return p.compareValues(fieldValue, condition.Value, "<")
+		return p.compareValues(fieldValue, condition.Value, "<"), nil
 	case "lte":
-		return p.compareValues(fieldValue, condition.Value, "<=")
+		return p.compareValues(fieldValue, condition.Value, "<="), nil
 	case "in":
-		return p.valueInArray(fieldValue, condition.Value)
+		return p.valueInArray(fieldValue, condition.Value), nil
 	case "contains":
-		return p.stringContains(fieldValue, condition.Value)
+		return p.stringContains(fieldValue, condition.Value), nil
 	default:
 		return false, NewPolicyError(fmt.Sprintf("unknown operator: %s", condition.Operator), nil)
 	}
@@ -290,8 +289,9 @@ func (p *PolicyEngine) stringContains(value, substr interface{}) bool {
 
 // CreatePermission creates a new permission
 func (p *PolicyEngine) CreatePermission(resource *Resource, actions []string) *Permission {
+	id, _ := GenerateRandomString(8)
 	return &Permission{
-		ID:       GenerateRandomString(8),
+		ID:       id,
 		Resource: *resource,
 		Actions:  actions,
 	}
@@ -299,8 +299,9 @@ func (p *PolicyEngine) CreatePermission(resource *Resource, actions []string) *P
 
 // CreateRule creates a new policy rule
 func (p *PolicyEngine) CreateRule(name string, conditions []Condition, action string, priority int) *PolicyRule {
+	id, _ := GenerateRandomString(8)
 	return &PolicyRule{
-		ID:         GenerateRandomString(8),
+		ID:         id,
 		Name:       name,
 		Conditions: conditions,
 		Action:     action,

@@ -1,7 +1,6 @@
 package fortress
 
 import (
-	"fmt"
 	"sync"
 	"time"
 )
@@ -28,7 +27,10 @@ func (t *TenantManager) CreateTenant(config *TenantConfig) (string, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	tenantID := GenerateRandomString(16)
+	tenantID, err := GenerateRandomString(16)
+	if err != nil {
+		return "", err
+	}
 	tenantConfig := *config
 	tenantConfig.ID = tenantID
 
@@ -256,7 +258,7 @@ func (t *TenantManager) GetTenantsNearLimits(threshold float64) []TenantLimitWar
 			limit    int
 		}{
 			{"keys", stats.TotalKeys, limits.MaxKeys},
-			{"storage", stats.StorageUsageBytes, limits.MaxStorageBytes},
+			{"storage", int(stats.StorageUsageBytes), limits.MaxStorageBytes},
 			{"encryptions", stats.TotalEncryptions, limits.MaxEncryptionsPerHour},
 			{"decryptions", stats.TotalDecryptions, limits.MaxDecryptionsPerHour},
 		}
@@ -282,8 +284,8 @@ func (t *TenantManager) createDefaultStats(tenantID string) *TenantStats {
 		TenantID:          tenantID,
 		TotalKeys:         0,
 		ActiveKeys:        0,
-		TotalEncryptions:   0,
-		TotalDecryptions:   0,
+		TotalEncryptions:  0,
+		TotalDecryptions:  0,
 		StorageUsageBytes: 0,
 		AuditEntries:      0,
 		LastActivity:      time.Now(),

@@ -1,24 +1,22 @@
 package fortress
 
 import (
-	"encoding/json"
-	"fmt"
 	"sync"
 	"time"
 )
 
 // StorageBackend manages data storage
 type StorageBackend struct {
-	config *Config
+	config  *Config
 	storage map[string]*StorageEntry
-	mu     sync.RWMutex
+	mu      sync.RWMutex
 }
 
 // StorageEntry represents a stored data entry
 type StorageEntry struct {
 	Value     []byte    `json:"value"`
 	Timestamp time.Time `json:"timestamp"`
-	TTL       *int64   `json:"ttl,omitempty"`
+	TTL       *int64    `json:"ttl,omitempty"`
 }
 
 // NewStorageBackend creates a new storage backend
@@ -156,9 +154,9 @@ func (s *StorageBackend) GetStats() (*StorageStats, error) {
 	defer s.mu.RUnlock()
 
 	stats := &StorageStats{
-		TotalKeys:  len(s.storage),
-		TotalSize:  0,
-		Backend:    s.config.Storage.Backend,
+		TotalKeys: len(s.storage),
+		TotalSize: 0,
+		Backend:   s.config.Storage.Backend,
 	}
 
 	for _, entry := range s.storage {

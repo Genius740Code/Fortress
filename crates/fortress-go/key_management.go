@@ -2,9 +2,7 @@ package fortress
 
 import (
 	"crypto/rand"
-	"fmt"
 	"sync"
-	"time"
 )
 
 // KeyManager manages encryption keys
@@ -50,7 +48,7 @@ func (km *KeyManager) GenerateKey(options *KeyGenerationOptions) ([]byte, error)
 	}
 
 	metadata := &KeyMetadata{
-		ID:        keyID,
+		ID:         keyID,
 		Algorithm:  options.Algorithm,
 		CreatedAt:  TimeNow(),
 		UsageCount: 0,
@@ -73,7 +71,7 @@ func (km *KeyManager) ImportKey(keyData []byte, algorithm string) (string, error
 	}
 
 	metadata := &KeyMetadata{
-		ID:        keyID,
+		ID:         keyID,
 		Algorithm:  algorithm,
 		CreatedAt:  TimeNow(),
 		UsageCount: 0,
@@ -94,7 +92,7 @@ func (km *KeyManager) ImportKey(keyData []byte, algorithm string) (string, error
 // ExportKey exports a key by ID
 func (km *KeyManager) ExportKey(keyID string) ([]byte, error) {
 	km.mu.RLock()
-	metadata, exists := km.keys[keyID]
+	_, exists := km.keys[keyID]
 	km.mu.RUnlock()
 
 	if !exists {
@@ -299,10 +297,10 @@ func (km *KeyManager) GetStats() (map[string]interface{}, error) {
 	defer km.mu.RUnlock()
 
 	stats := map[string]interface{}{
-		"total_keys":  len(km.keys),
-		"active_keys": 0,
+		"total_keys":      len(km.keys),
+		"active_keys":     0,
 		"deprecated_keys": 0,
-		"revoked_keys": 0,
+		"revoked_keys":    0,
 	}
 
 	for _, metadata := range km.keys {
