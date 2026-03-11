@@ -38,6 +38,7 @@ pub async fn handle_create_simple(
     template: String,
     data_dir: Option<String>,
     interactive: bool,
+    dry_run: bool,
 ) -> Result<()> {
     println!("{}", style("🏰 Fortress Database Creation").bold().cyan());
     println!();

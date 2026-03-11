@@ -14,6 +14,7 @@ pub async fn handle_create(
     template: String,
     data_dir: Option<String>,
     interactive: bool,
+    dry_run: bool,
 ) -> Result<()> {
     println!("{}", style("🏰 Fortress Database Creation").bold().cyan());
     println!();
@@ -56,6 +57,12 @@ pub async fn handle_create(
         template
     };
     
+    // Handle list-templates
+    if selected_template == "list-templates" {
+        list_available_templates();
+        return Ok(());
+    }
+    
     // Confirm creation
     if interactive {
         println!();
@@ -72,6 +79,20 @@ pub async fn handle_create(
             println!("Database creation cancelled.");
             return Ok(());
         }
+    }
+    
+    // Handle dry-run mode
+    if dry_run {
+        println!();
+        println!("{}", style("🔍 DRY RUN MODE - Template Preview").bold().yellow());
+        println!();
+        
+        let config = generate_config(&db_name, &selected_template)?;
+        display_template_preview(&selected_template, &config);
+        
+        println!();
+        println!("{}", style("ℹ️  Use --dry-run to preview templates without creating").cyan());
+        return Ok(());
     }
     
     // Create database
@@ -301,10 +322,105 @@ fn create_enterprise_template(name: &str) -> Config {
         }),
         monitoring: Some(MonitoringConfig {
             enable_metrics: true,
-            metrics_port: 9090,
-            enable_tracing: true,
-            jaeger_endpoint: None,
-            log_level: "info".to_string(),
-        }),
+}
+
+fn display_template_preview(template_name: &str, config: &Config) {
+    println!("{}", style("📋 Template Preview: {}").bold().cyan(), template_name);
+    println!("{}", "=".repeat(50));
+    
+    match template_name {
+        "startup" => {
+            println!("🚀 {}", style("Startup Template").bold().yellow());
+            println!("Perfect for development and small applications");
+            println!();
+            println!("📊 Database Configuration:");
+            println!("  Max Size: {}", style("1GB").bold());
+            println!("  Cache Size: {}", style("32MB").bold());
+            println!("  Pool Size: {}", style("5").bold());
+            println!();
+            println!("🔐 Encryption:");
+            println!("  Algorithm: {}", style("AEGIS-256").bold().green());
+            println!("  Key Rotation: {}", style("23 hours").bold());
+            println!("  Master Key Rotation: {}", style("90 days").bold());
+            println!();
+            println!("⚙️  Features:");
+            println!("  ✅ Development optimized");
+            println!("  ✅ Fast startup");
+            println!("  ✅ Minimal resource usage");
+        }
+        "enterprise" => {
+            println!("🏢 {}", style("Enterprise Template").bold().yellow());
+            println!("Production-ready with enhanced security and monitoring");
+            println!();
+            println!("📊 Database Configuration:");
+            println!("  Max Size: {}", style("10GB").bold());
+            println!("  Cache Size: {}", style("256MB").bold());
+            println!("  Pool Size: {}", style("20").bold());
+            println!();
+            println!("🔐 Encryption:");
+            println!("  Algorithm: {}", style("AES-256-GCM").bold().green());
+            println!("  Key Rotation: {}", style("7 days").bold());
+            println!("  Master Key Rotation: {}", style("30 days").bold());
+            println!("  Key Derivation: {}", style("Argon2id").bold());
+            println!();
+            println!("⚙️  Features:");
+            println!("  ✅ Production ready");
+            println!("  ✅ Enhanced security");
+            println!("  ✅ Monitoring enabled");
+            println!("  ✅ WebAssembly support");
+            println!("  ✅ Rate limiting");
+            println!("  ✅ JWT authentication");
+        }
+        "custom" => {
+            println!("🎨 {}", style("Custom Template").bold().yellow());
+            println!("Flexible configuration for specific requirements");
+            println!();
+            println!("📊 Database Configuration:");
+            println!("  Max Size: {}", style(config.database.max_size.unwrap_or(1024*1024*1024) / (1024*1024)).bold());
+            println!("  Cache Size: {}", style(config.encryption.key_derivation.memory_cost.unwrap_or(64*1024) / 1024).bold());
+            println!("  Pool Size: {}", style(config.database.pool_size).bold());
+            println!();
+            println!("🔐 Encryption:");
+            println!("  Algorithm: {}", style(config.encryption.default_algorithm).bold().green());
+            println!("  Key Rotation: {}", style(config.encryption.key_rotation_interval.as_secs() / 3600).bold());
+            println!("  Master Key Rotation: {}", style(config.encryption.master_key_rotation_interval.as_secs() / (24*3600)).bold());
+            println!();
+            println!("⚙️  Features:");
+            println!("  ✅ Customizable");
+            println!("  ✅ Flexible configuration");
+        }
+        _ => {
+            println!("❌ Unknown template: {}", style(template_name).red());
+            return;
+        }
     }
+    
+    println!();
+    println!("📁 Target Location: {}", style(config.database.path).bold());
+    println!("📂 Data Directory: {}", style(config.storage.base_path.as_ref().unwrap_or(&"./data".to_string())).bold());
+}
+
+fn list_available_templates() {
+    println!("{}", style("📋 Available Templates").bold().cyan());
+    println!("{}", "=".repeat(50));
+    
+    let templates = vec![
+        ("startup", "Development and small applications", "🚀"),
+        ("enterprise", "Production-ready with enhanced security", "🏢"),
+        ("custom", "Flexible configuration for specific needs", "🎨"),
+    ];
+    
+    for (name, description, icon) in templates {
+        println!("{} {} {}", style(icon).bold(), style(name).bold().yellow(), style(description).dim());
+    }
+    
+    println!();
+    println!("{}", style("Usage:").bold());
+    println!("  fortress create --template <name> <database_name>");
+    println!("  fortress create --template <name> --dry-run <database_name>");
+    println!();
+    println!("{}", style("Examples:").bold());
+    println!("  fortress create --template startup myapp");
+    println!("  fortress create --template enterprise --dry-run production_db");
+    println!("  fortress create --template custom --interactive");
 }

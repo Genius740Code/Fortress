@@ -5,7 +5,7 @@ use tracing::{info, error};
 mod commands;
 mod utils;
 
-use commands::{create_simple, cluster, tenant, plugin, start, status, key, config};
+use commands::{create_simple, cluster, tenant, plugin, start, status, key, config, migrate};
 
 #[derive(Parser)]
 #[command(name = "fortress")]
@@ -44,6 +44,40 @@ pub enum Commands {
         /// Interactive mode
         #[arg(short, long)]
         interactive: bool,
+        
+        /// Show template preview without creating
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Migrate data from PostgreSQL to Fortress
+    Migrate {
+        /// Source database type
+        #[arg(short, long, default_value = "postgres")]
+        from: String,
+        
+        /// Fortress database name
+        #[arg(short, long)]
+        to: String,
+        
+        /// Source database connection string
+        #[arg(short, long)]
+        source: String,
+        
+        /// Target data directory
+        #[arg(short, long)]
+        data_dir: Option<String>,
+        
+        /// Specific table to migrate
+        #[arg(short, long)]
+        table: Option<String>,
+        
+        /// Batch size for migration
+        #[arg(short, long, default_value = "1000")]
+        batch_size: usize,
+        
+        /// Enable progress reporting
+        #[arg(short, long)]
+        progress: bool,
     },
     /// Start Fortress server
     Start {
@@ -101,7 +135,21 @@ pub enum KeyAction {
     /// List all keys
     List,
     /// Rotate encryption key
-    Rotate,
+    Rotate {
+        /// Dry run mode (no actual rotation)
+        #[arg(long)]
+        dry_run: bool,
+        
+        /// Force rotation (skip safety checks)
+        #[arg(long)]
+        force: bool,
+    },
+    /// Rollback to previous key
+    Rollback {
+        /// Key version to rollback to
+        #[arg(long)]
+        version: Option<String>,
+    },
     /// Show key information
     Show {
         /// Key ID
@@ -154,8 +202,11 @@ async fn main() -> Result<()> {
 
 async fn run_command(command: Commands) -> Result<()> {
     match command {
-        Commands::Create { name, template, data_dir, interactive } => {
-            create_simple::handle_create_simple(name, template, data_dir, interactive).await
+        Commands::Create { name, template, data_dir, interactive, dry_run } => {
+            create_simple::handle_create_simple(name, template, data_dir, interactive, dry_run).await
+        }
+        Commands::Migrate { from, to, source, data_dir, table, batch_size, progress } => {
+            migrate::handle_migrate(from, to, source, data_dir, table, batch_size, progress).await
         }
         Commands::Start { data_dir, port, host } => {
             start::handle_start(data_dir, port, host).await
@@ -191,7 +242,7 @@ pub async fn run_cli_with_args(args: &[&str]) -> Result<String> {
     use std::io::{self, Write};
     
     // Capture stdout
-    let mut buffer = Vec::new();
+    let mut buffer: Vec<u8> = Vec::new();
     
     // Override stdout temporarily
     let original_stdout = io::stdout();

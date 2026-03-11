@@ -14,8 +14,8 @@ categories = ["command-line-utilities", "database"]
 crate-type = ["cdylib"]
 
 [dependencies]
-# Fortress core CLI - minimal features
-fortress-cli = { path = "../fortress-cli", default-features = false }
+# Fortress core CLI - use as binary dependency
+fortress-cli = { path = "../fortress-cli", default-features = false, optional = true }
 
 # NAPI bindings
 napi = { version = "2.0", default-features = false, features = ["napi4"] }
@@ -32,6 +32,9 @@ thiserror = "1.0"
 
 [build-dependencies]
 napi-build = "2.0"
+
+[package.metadata.napi]
+targets = ["x86_64-pc-windows-msvc"]
 
 [features]
 default = ["napi4"]

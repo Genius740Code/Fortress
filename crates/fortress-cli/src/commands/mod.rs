@@ -6,3 +6,4 @@ pub mod config;
 pub mod cluster;
 pub mod tenant;
 pub mod plugin;
+pub mod migrate;

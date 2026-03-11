@@ -200,4 +200,30 @@ jspm_packages/
 # Serverless directories
 .serverless
 
+# Fortress CLI development artifacts
+fortress-data/
+fortress-logs/
+fortress-keys/
+fortress-backups/
+fortress-temp/
+
+# Migration artifacts
+migration-logs/
+migration-temp/
+postgres-export/
+
+# Key management artifacts
+key-backups/
+key-rotation-temp/
+
+# CLI build artifacts
+target/debug/
+target/release/
+*.pdb
+*.exe
+
+# Configuration backups
+config-backups/
+*.toml.bak
+
 
