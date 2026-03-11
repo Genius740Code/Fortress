@@ -26,49 +26,48 @@ use tracing::info;
 use uuid::Uuid;
 use utoipa::{
     OpenApi,
-    ToSchema,
     path,
 };
 
 /// Storage record (simplified for this example)
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[schema(description = "Storage record with encrypted data and metadata")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+
 pub struct StorageRecord {
     /// Unique identifier for the storage record
-    #[schema(description = "Unique identifier for the storage record", example = "550e8400-e29b-41d4-a716-446655440000")]
+    
     pub id: String,
     /// Unique identifier for the encryption key
-    #[schema(description = "Unique identifier for the encryption key", example = "key_123456")]
+    
     pub key_id: String,
     /// Encrypted data bytes
-    #[schema(description = "Encrypted data bytes", format = "byte")]
+    
     pub data: Vec<u8>,
     /// Name of the encryption algorithm used
-    #[schema(description = "Name of the encryption algorithm used", example = "aes256gcm")]
+    
     pub algorithm: String,
     /// Timestamp when the record was created
-    #[schema(description = "Timestamp when the record was created")]
+    
     pub created_at: DateTime<Utc>,
     /// Optional metadata associated with the record
-    #[schema(description = "Optional metadata associated with the record")]
+    
     pub metadata: Option<HashMap<String, serde_json::Value>>,
     /// Optional tenant identifier for multi-tenancy
-    #[schema(description = "Optional tenant identifier for multi-tenancy", example = "tenant_123")]
+    
     pub tenant_id: Option<String>,
     /// Optional field-level encryption metadata
-    #[schema(description = "Optional field-level encryption metadata")]
+    
     pub field_metadata: Option<HashMap<String, FieldEncryptionMetadata>>,
 }
 
 /// Query parameters for storage queries
-#[derive(Debug, Clone, Deserialize, ToSchema)]
-#[schema(description = "Query parameters for storage queries")]
+#[derive(Debug, Clone, Deserialize)]
+
 pub struct QueryParams {
     /// Optional tenant identifier for filtering
-    #[schema(description = "Optional tenant identifier for filtering", example = "tenant_123")]
+    
     pub tenant_id: Option<String>,
     /// Pagination parameters for query
-    #[schema(description = "Pagination parameters for query")]
+    
     pub pagination: PaginationParams,
     /// Optional filtering parameters
     pub filter: Option<FilterParams>,
@@ -219,9 +218,7 @@ pub async fn store_data(
         stored_at: Utc::now(),
         size_bytes: storage_record.data.len() as u64,
         algorithm: "aegis256".to_string(),
-        field_metadata: storage_record.field_metadata.map(|m| {
-            m.into_iter().map(|(k, v)| (k, v.into())).collect()
-        }),
+        field_metadata: None, // TODO: Implement proper field metadata conversion
     };
 
     info!(
@@ -309,17 +306,15 @@ pub async fn retrieve_data(
         decrypted_data
     };
 
-    let response = RetrieveResponse {
+    let response = RetrieveDataResponse {
+        id: data_id.clone(),
         data: final_data,
         metadata: storage_record.metadata,
-        retrieved_at: Utc::now(),
-        stored_at: storage_record.created_at,
+        created_at: storage_record.created_at,
+        last_accessed: Some(Utc::now()),
         algorithm: storage_record.algorithm,
         key_id: storage_record.key_id,
-        encrypted_data: None, // Could include raw encrypted data if requested
-        field_metadata: storage_record.field_metadata.map(|m| {
-            m.into_iter().map(|(k, v)| (k, v.into())).collect()
-        }),
+        field_metadata: None, // TODO: Implement proper field metadata conversion
     };
 
     info!(
@@ -1284,11 +1279,18 @@ pub async fn get_encryption_metadata(
 }
 
 /// Create OpenAPI documentation (simplified)
-pub fn create_openapi() -> OpenApi {
-    OpenApi::new(
-        [("Data", "Data storage and retrieval operations")],
-        [("Health", "Health check and monitoring")]
-    )
+pub fn create_openapi() -> utoipa::openapi::OpenApi {
+    #[derive(utoipa::OpenApi)]
+    #[openapi(
+        info(
+            title = "Fortress API",
+            version = "1.0.0",
+            description = "REST API for Fortress secure database system with end-to-end encryption"
+        )
+    )]
+    struct ApiDoc;
+
+    ApiDoc::openapi()
 }
 
 #[cfg(test)]

@@ -20,7 +20,7 @@ info:
     - APIs may change without notice
     - Data migration tools are experimental
     - Security features are under audit
-  version: 0.1.0
+  version: 1.0.0
   contact:
     name: Fortress Team
     email: team@fortress-db.com
@@ -30,7 +30,7 @@ info:
     url: https://www.apache.org/licenses/LICENSE-2.0
 
 servers:
-  - url: http://localhost:8080
+  - url: http://localhost:3000
     description: Local development server
   - url: https://api.fortress-db.com
     description: Production server (coming in v1.0)
@@ -52,460 +52,45 @@ paths:
                 properties:
                   status:
                     type: string
-                    example: healthy
+                    example: "healthy"
                   timestamp:
                     type: string
                     format: date-time
                   version:
                     type: string
-                    example: 0.1.0
+                    example: "0.1.0"
 
-  /api/v1/databases:
+  /openapi.json:
     get:
-      summary: List databases
-      description: Returns a list of all databases
+      summary: OpenAPI specification
+      description: Returns the OpenAPI specification in JSON format
       tags:
-        - Databases
-      security:
-        - bearerAuth: []
+        - Documentation
       responses:
         '200':
-          description: List of databases
+          description: OpenAPI specification
           content:
             application/json:
               schema:
                 type: object
-                properties:
-                  databases:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Database'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-    
-    post:
-      summary: Create database
-      description: Creates a new database with specified encryption settings
-      tags:
-        - Databases
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateDatabaseRequest'
-      responses:
-        '201':
-          description: Database created successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Database'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '409':
-          description: Database already exists
-
-  /api/v1/databases/{database_id}:
-    get:
-      summary: Get database
-      description: Returns details of a specific database
-      tags:
-        - Databases
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: database_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Database details
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Database'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /api/v1/databases/{database_id}/tables:
-    get:
-      summary: List tables
-      description: Returns a list of all tables in a database
-      tags:
-        - Tables
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: database_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: List of tables
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  tables:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Table'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-    
-    post:
-      summary: Create table
-      description: Creates a new table with specified columns
-      tags:
-        - Tables
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: database_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateTableRequest'
-      responses:
-        '201':
-          description: Table created successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Table'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          description: Table already exists
-
-  /api/v1/databases/{database_id}/tables/{table_name}/data:
-    get:
-      summary: Query data
-      description: Retrieves data from a table with optional filtering
-      tags:
-        - Data
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: database_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: table_name
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 100
-        - name: offset
-          in: query
-          schema:
-            type: integer
-            default: 0
-        - name: where
-          in: query
-          schema:
-            type: string
-            description: WHERE clause for filtering
-      responses:
-        '200':
-          description: Query results
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      type: object
-                  total:
-                    type: integer
-                  limit:
-                    type: integer
-                  offset:
-                    type: integer
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-    
-    post:
-      summary: Insert data
-      description: Inserts new data into a table
-      tags:
-        - Data
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: database_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: table_name
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: true
-      responses:
-        '201':
-          description: Data inserted successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  id:
-                    type: string
-                    format: uuid
-                  inserted_at:
-                    type: string
-                    format: date-time
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /metrics:
-    get:
-      summary: Get metrics
-      description: Returns system and performance metrics
-      tags:
-        - Metrics
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: System metrics
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  system:
-                    type: object
-                  performance:
-                    type: object
-        '401':
-          $ref: '#/components/responses/Unauthorized'
 
 components:
   schemas:
-    Database:
+    HealthResponse:
       type: object
       properties:
-        id:
-          type: string
-          format: uuid
-          example: "550e8400-e29b-41d4-a716-446655440000"
-        name:
-          type: string
-          example: "myapp_db"
-        algorithm:
-          type: string
-          enum: [aegis256, chacha20-poly1305, aes-256-gcm, xchacha20-poly1305]
-          example: "aegis256"
-        key_rotation_interval:
-          type: string
-          pattern: ^\d+[smhd]$
-          example: "24h"
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
         status:
           type: string
-          enum: [active, rotating, maintenance]
-          example: "active"
-
-    CreateDatabaseRequest:
-      type: object
-      required:
-        - name
-        - algorithm
-      properties:
-        name:
-          type: string
-          example: "myapp_db"
-        algorithm:
-          type: string
-          enum: [aegis256, chacha20-poly1305, aes-256-gcm, xchacha20-poly1305]
-          example: "aegis256"
-        key_rotation_interval:
-          type: string
-          pattern: ^\d+[smhd]$
-          example: "24h"
-        description:
-          type: string
-          example: "Main application database"
-
-    Table:
-      type: object
-      properties:
-        name:
-          type: string
-          example: "users"
-        database_id:
-          type: string
-          format: uuid
-        columns:
-          type: array
-          items:
-            $ref: '#/components/schemas/Column'
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-
-    CreateTableRequest:
-      type: object
-      required:
-        - name
-        - columns
-      properties:
-        name:
-          type: string
-          example: "users"
-        columns:
-          type: array
-          items:
-            $ref: '#/components/schemas/Column'
-        primary_key:
-          type: array
-          items:
-            type: string
-          example: ["id"]
-
-    Column:
-      type: object
-      required:
-        - name
-        - type
-      properties:
-        name:
-          type: string
-          example: "email"
-        type:
-          type: string
-          enum: [text, integer, float, boolean, uuid, date, encrypted, json]
-          example: "text"
-        nullable:
-          type: boolean
-          default: false
-        unique:
-          type: boolean
-          default: false
-        primary_key:
-          type: boolean
-          default: false
-        sensitivity:
-          type: string
-          enum: [low, medium, high]
-          example: "medium"
-        description:
-          type: string
-          example: "User email address"
-
-    Error:
-      type: object
-      properties:
-        error:
-          type: string
-          example: "Validation failed"
-        message:
-          type: string
-          example: "Field 'name' is required"
-        code:
-          type: string
-          example: "VALIDATION_ERROR"
+          example: "healthy"
         timestamp:
           type: string
           format: date-time
-
-  responses:
-    BadRequest:
-      description: Bad request
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-    
-    Unauthorized:
-      description: Unauthorized
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-    
-    NotFound:
-      description: Resource not found
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
+        version:
+          type: string
+          example: "0.1.0"
 
 tags:
   - name: Health
     description: Health check endpoints
-  - name: Databases
-    description: Database management
-  - name: Tables
-    description: Table management
-  - name: Data
-    description: Data operations
-  - name: Metrics
-    description: System metrics
+  - name: Documentation
+    description: API documentation and specification

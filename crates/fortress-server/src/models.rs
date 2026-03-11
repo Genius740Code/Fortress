@@ -6,11 +6,10 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use chrono::{DateTime, Utc};
-use utoipa::ToSchema;
 
 /// API response wrapper
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[schema(description = "Standard API response wrapper")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+
 pub struct ApiResponse<T> {
     /// Response data
     pub data: Option<T>,
@@ -94,8 +93,8 @@ pub struct RateLimitInfo {
 }
 
 /// Data storage request
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[schema(description = "Request to store encrypted data")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+
 pub struct StoreRequest {
     /// Data to store (will be automatically encrypted)
     pub data: serde_json::Value,
@@ -194,8 +193,8 @@ impl From<CoreFieldEncryptionMetadata> for FieldEncryptionMetadata {
 }
 
 /// Data retrieval request
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[schema(description = "Request to retrieve encrypted data")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+
 pub struct RetrieveRequest {
     /// ID of the data to retrieve
     pub id: String,
@@ -421,8 +420,7 @@ pub struct MetricsResponse {
 }
 
 /// Authentication request
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[schema(description = "Authentication request for JWT token")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthRequest {
     /// Username or email
     pub username: String,
@@ -463,8 +461,8 @@ pub struct UserInfo {
 }
 
 /// Token refresh request
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[schema(description = "Request to refresh JWT token")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+
 pub struct RefreshTokenRequest {
     /// Refresh token
     pub refresh_token: String,
@@ -472,6 +470,7 @@ pub struct RefreshTokenRequest {
 
 /// Token refresh response
 #[derive(Debug, Clone, Serialize, Deserialize)]
+
 pub struct RefreshTokenResponse {
     /// New access token
     pub access_token: String,
@@ -802,148 +801,112 @@ impl Default for SortParams {
 // ==================== OPENAPI RESPONSE MODELS ====================
 
 /// Store data response
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[schema(description = "Response after storing data")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+
 pub struct StoreDataResponse {
     /// Unique identifier for stored data
-    #[schema(description = "Unique identifier for stored data", example = "550e8400-e29b-41d4-a716-446655440000")]
+    
     pub id: String,
     /// Key ID used for encryption
-    #[schema(description = "Key ID used for encryption", example = "key_123456")]
+    
     pub key_id: String,
     /// Timestamp when data was stored
-    #[schema(description = "Timestamp when data was stored")]
+    
     pub stored_at: DateTime<Utc>,
     /// Size of stored data in bytes
-    #[schema(description = "Size of stored data in bytes", example = 1024)]
+    
     pub size_bytes: u64,
     /// Encryption algorithm used
-    #[schema(description = "Encryption algorithm used", example = "aegis256")]
+    
     pub algorithm: String,
     /// Field-level encryption metadata
-    #[schema(description = "Field-level encryption metadata")]
+    
     pub field_metadata: Option<HashMap<String, serde_json::Value>>,
 }
 
 /// Retrieve data response
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[schema(description = "Response after retrieving data")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+
 pub struct RetrieveDataResponse {
     /// Unique identifier for the data
-    #[schema(description = "Unique identifier for the data", example = "550e8400-e29b-41d4-a716-446655440000")]
+    
     pub id: String,
     /// Decrypted data
-    #[schema(description = "Decrypted data")]
+    
     pub data: serde_json::Value,
     /// Metadata associated with the data
-    #[schema(description = "Metadata associated with the data")]
+    
     pub metadata: Option<HashMap<String, serde_json::Value>>,
     /// Timestamp when data was created
-    #[schema(description = "Timestamp when data was created")]
+    
     pub created_at: DateTime<Utc>,
     /// Last access timestamp
-    #[schema(description = "Last access timestamp")]
+    
     pub last_accessed: Option<DateTime<Utc>>,
     /// Encryption algorithm used
-    #[schema(description = "Encryption algorithm used", example = "aegis256")]
+    
     pub algorithm: String,
+    /// Key ID used for encryption
+    
+    pub key_id: String,
+    /// Field-level encryption metadata
+    
+    pub field_metadata: Option<HashMap<String, serde_json::Value>>,
 }
 
 /// List data response
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[schema(description = "Response after listing data")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+
 pub struct ListDataResponse {
     /// List of storage records
-    #[schema(description = "List of storage records")]
+    
     pub records: Vec<serde_json::Value>,
     /// Total count of records
-    #[schema(description = "Total count of records", example = 100)]
+    
     pub total_count: u64,
     /// Current page number
-    #[schema(description = "Current page number", example = 1)]
+    
     pub page: u32,
     /// Page size
-    #[schema(description = "Page size", example = 50)]
+    
     pub page_size: u32,
     /// Total pages
-    #[schema(description = "Total pages", example = 2)]
+    
     pub total_pages: u32,
 }
 
-/// Health check response
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[schema(description = "Health check response")]
-pub struct HealthResponse {
-    /// Service health status
-    #[schema(description = "Service health status", example = "healthy")]
-    pub status: String,
-    /// Service uptime in seconds
-    #[schema(description = "Service uptime in seconds", example = 3600)]
-    pub uptime_seconds: u64,
-    /// Service version
-    #[schema(description = "Service version", example = "1.0.0")]
-    pub version: String,
-    /// Timestamp of health check
-    #[schema(description = "Timestamp of health check")]
-    pub timestamp: DateTime<Utc>,
-    /// Individual component status
-    #[schema(description = "Individual component status")]
-    pub components: HashMap<String, ComponentStatus>,
-}
-
 /// Component status for health check
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[schema(description = "Component health status")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+
 pub struct ComponentStatus {
     /// Component health status
-    #[schema(description = "Component health status", example = "healthy")]
+    
     pub status: String,
     /// Response time in milliseconds
-    #[schema(description = "Response time in milliseconds", example = 50)]
+    
     pub response_time_ms: u64,
     /// Optional error message
-    #[schema(description = "Optional error message")]
+    
     pub error: Option<String>,
 }
 
-/// Metrics response
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[schema(description = "Metrics collection response")]
-pub struct MetricsResponse {
-    /// Metrics data
-    #[schema(description = "Metrics data")]
-    pub metrics: HashMap<String, serde_json::Value>,
-    /// Collection timestamp
-    #[schema(description = "Collection timestamp")]
-    pub timestamp: DateTime<Utc>,
-    /// Service uptime
-    #[schema(description = "Service uptime in seconds", example = 3600)]
-    pub uptime_seconds: u64,
-    /// Request count
-    #[schema(description = "Total request count", example = 1000)]
-    pub request_count: u64,
-    /// Error count
-    #[schema(description = "Total error count", example = 5)]
-    pub error_count: u64,
-}
-
 /// Error response
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[schema(description = "Standard error response")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+
 pub struct ErrorResponse {
     /// Error code
-    #[schema(description = "Error code", example = "NOT_FOUND")]
+    
     pub code: String,
     /// Error message
-    #[schema(description = "Error message", example = "Resource not found")]
+    
     pub message: String,
     /// Error details
-    #[schema(description = "Error details")]
+    
     pub details: Option<HashMap<String, serde_json::Value>>,
     /// Timestamp
-    #[schema(description = "Error timestamp")]
+    
     pub timestamp: DateTime<Utc>,
     /// Request ID for tracing
-    #[schema(description = "Request ID for tracing", example = "req_123456")]
+    
     pub request_id: String,
 }

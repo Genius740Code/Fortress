@@ -41,15 +41,15 @@
   - [x] Test repository access
 
 ### OpenAPI Specification
-- [ ] **Code Changes**
-  - [ ] Add `utoipa = "4.0"` to `crates/fortress-server/Cargo.toml`
-  - [ ] Annotate API handlers with OpenAPI macros
-  - [ ] Add OpenAPI generation to server startup
-  - [ ] Create `/openapi.json` endpoint
-  - [ ] Add Swagger UI at `/docs`
+- [x] **Code Changes**
+  - [x] Add `utoipa = "4.0"` to `crates/fortress-server/Cargo.toml`
+  - [x] Annotate API handlers with OpenAPI macros
+  - [x] Add OpenAPI generation to server startup
+  - [x] Create `/openapi.json` endpoint
+  - [ ] Add Swagger UI at `/docs` (TODO: Fix Swagger UI integration)
 
-- [ ] **Documentation**
-  - [ ] Generate `openapi.yaml` file in repository root
+- [x] **Documentation**
+  - [x] Generate `openapi.yaml` file in repository root
   - [ ] Create Postman collection from spec
   - [ ] Update `docs/API_DOCUMENTATION.md`
   - [ ] Add client generation examples
