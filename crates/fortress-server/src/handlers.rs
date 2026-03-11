@@ -1,6 +1,6 @@
 //! HTTP request handlers for the Fortress REST API
 //!
-//! This module contains all the request handlers for the various API endpoints,
+//! This module contains all the request handlers for various API endpoints,
 //! including data storage, retrieval, key management, and authentication.
 
 use crate::auth::{AuthManager, OptionalTokenClaims};
@@ -24,34 +24,50 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::info;
 use uuid::Uuid;
+use utoipa::{
+    OpenApi,
+    ToSchema,
+};
 
 /// Storage record (simplified for this example)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[schema(description = "Storage record with encrypted data and metadata")]
 pub struct StorageRecord {
     /// Unique identifier for the storage record
+    #[schema(description = "Unique identifier for the storage record", example = "550e8400-e29b-41d4-a716-446655440000")]
     pub id: String,
     /// Unique identifier for the encryption key
+    #[schema(description = "Unique identifier for the encryption key", example = "key_123456")]
     pub key_id: String,
     /// Encrypted data bytes
+    #[schema(description = "Encrypted data bytes", format = "byte")]
     pub data: Vec<u8>,
     /// Name of the encryption algorithm used
+    #[schema(description = "Name of the encryption algorithm used", example = "aes256gcm")]
     pub algorithm: String,
     /// Timestamp when the record was created
+    #[schema(description = "Timestamp when the record was created")]
     pub created_at: DateTime<Utc>,
     /// Optional metadata associated with the record
+    #[schema(description = "Optional metadata associated with the record")]
     pub metadata: Option<HashMap<String, serde_json::Value>>,
     /// Optional tenant identifier for multi-tenancy
+    #[schema(description = "Optional tenant identifier for multi-tenancy", example = "tenant_123")]
     pub tenant_id: Option<String>,
     /// Optional field-level encryption metadata
+    #[schema(description = "Optional field-level encryption metadata")]
     pub field_metadata: Option<HashMap<String, FieldEncryptionMetadata>>,
 }
 
 /// Query parameters for storage queries
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[schema(description = "Query parameters for storage queries")]
 pub struct QueryParams {
     /// Optional tenant identifier for filtering
+    #[schema(description = "Optional tenant identifier for filtering", example = "tenant_123")]
     pub tenant_id: Option<String>,
-    /// Pagination parameters for the query
+    /// Pagination parameters for query
+    #[schema(description = "Pagination parameters for query")]
     pub pagination: PaginationParams,
     /// Optional filtering parameters
     pub filter: Option<FilterParams>,
@@ -1232,6 +1248,14 @@ pub async fn get_encryption_metadata(
     );
 
     Ok(Json(ApiResponse::success(response)))
+}
+
+/// Create OpenAPI documentation (simplified)
+pub fn create_openapi() -> OpenApi {
+    OpenApi::new(
+        [("Data", "Data storage and retrieval operations")],
+        [("Health", "Health check and monitoring")]
+    )
 }
 
 #[cfg(test)]

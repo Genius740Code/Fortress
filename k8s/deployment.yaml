@@ -62,6 +62,53 @@ spec:
           value: "info"
         - name: FORTRESS_METRICS_ENABLED
           value: "true"
+        # Secrets from environment variables
+        - name: FORTRESS_JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: fortress-secrets
+              key: fortress-jwt-secret
+        - name: FORTRESS_MASTER_KEY
+          valueFrom:
+            secretKeyRef:
+              name: fortress-secrets
+              key: fortress-master-key
+        - name: FORTRESS_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: fortress-secrets
+              key: fortress-db-password
+        - name: FORTRESS_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: fortress-secrets
+              key: fortress-api-key
+        # Optional cloud storage secrets
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: fortress-secrets
+              key: aws-access-key-id
+              optional: true
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: fortress-secrets
+              key: aws-secret-access-key
+              optional: true
+        - name: AZURE_STORAGE_ACCOUNT
+          valueFrom:
+            secretKeyRef:
+              name: fortress-secrets
+              key: azure-storage-account
+              optional: true
+        - name: AZURE_STORAGE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: fortress-secrets
+              key: azure-storage-key
+              optional: true
+        # Kubernetes metadata
         - name: FORTRESS_NAMESPACE
           valueFrom:
             fieldRef:
@@ -86,12 +133,13 @@ spec:
           readOnly: false
         resources:
           requests:
-            memory: "512Mi"
-            cpu: "250m"
-          limits:
             memory: "1Gi"
             cpu: "500m"
-            ephemeral-storage: "2Gi"
+            ephemeral-storage: "1Gi"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+            ephemeral-storage: "5Gi"
         livenessProbe:
           httpGet:
             path: /health
@@ -142,8 +190,8 @@ spec:
         persistentVolumeClaim:
           claimName: fortress-data-pvc
       - name: logs
-        emptyDir: 
-          sizeLimit: "1Gi"
+        persistentVolumeClaim:
+          claimName: fortress-logs-pvc
       - name: tmp
         emptyDir:
           sizeLimit: "100Mi"

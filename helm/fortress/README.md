@@ -17,16 +17,49 @@ This chart bootstraps a Fortress deployment on a Kubernetes cluster using the He
 To install the chart with the release name `fortress`:
 
 ```bash
-helm repo add fortress https://helm.fortress-db.com
-helm install fortress fortress/fortress
+# Clone the repository
+git clone https://github.com/Genius740Code/Fortress.git
+cd Fortress
+
+# Install using local chart
+helm install my-fortress ./helm/fortress
 ```
+
+## Troubleshooting
+
+If you encounter issues with the installation:
+
+1. **Ensure Kubernetes cluster is accessible**:
+   ```bash
+   kubectl cluster-info
+   ```
+
+2. **Check Helm version**:
+   ```bash
+   helm version
+   ```
+
+3. **Verify chart dependencies**:
+   ```bash
+   helm dependency build ./helm/fortress
+   ```
+
+4. **Install with debug output**:
+   ```bash
+   helm install my-fortress ./helm/fortress --debug
+   ```
+
+5. **Check pod status**:
+   ```bash
+   kubectl get pods -l app.kubernetes.io/name=fortress
+   ```
 
 ## Uninstalling the Chart
 
-To uninstall/delete the `fortress` deployment:
+To uninstall/delete the `my-fortress` deployment:
 
 ```bash
-helm uninstall fortress
+helm uninstall my-fortress
 ```
 
 ## Configuration
@@ -52,13 +85,13 @@ The following table lists the configurable parameters of the Fortress chart and 
 Specify each parameter using the `--set key=value[,key=value]` argument to `helm install`. For example:
 
 ```bash
-helm install fortress fortress/fortress --set replicaCount=5
+helm install my-fortress ./helm/fortress --set replicaCount=5
 ```
 
 Alternatively, a YAML file that specifies the values for the parameters can be provided while installing the chart. For example:
 
 ```bash
-helm install fortress fortress/fortress -f values.yaml
+helm install my-fortress ./helm/fortress -f values.yaml
 ```
 
 ## Persistence

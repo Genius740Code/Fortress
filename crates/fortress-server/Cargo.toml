@@ -12,6 +12,10 @@ keywords = ["database", "encryption", "security", "api", "rest"]
 categories = ["database", "web-programming", "cryptography"]
 rust-version = "1.70"
 
+[[bin]]
+name = "fortress-server"
+path = "src/main.rs"
+
 [dependencies]
 # Core Fortress library
 fortress-core = { path = "../fortress-core", version = "0.1.0" }
