@@ -37,6 +37,18 @@ pip install fortress
 pip install fortress[dev]
 ```
 
+**Cargo (Rust)**
+```bash
+# Add fortress-core as dependency
+cargo add fortress-core
+
+# Install from crates.io (when published)
+cargo install fortress-core
+
+# Install from git repository
+cargo install --git https://github.com/Genius740Code/Fortress fortress-core
+```
+
 **Standalone Binaries**
 ```bash
 # Download from GitHub Releases
