@@ -3,10 +3,11 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "fortress"
+name = "fortress-db"
 version = "0.1.0"
 description = "Python SDK for Fortress secure database system"
 readme = "README.md"
+license = {text = "SSPL-1.0"}
 authors = [
     {name = "Fortress Team", email = "team@fortress-db.com"},
 ]
@@ -58,8 +59,6 @@ docs = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Genius740Code/Fortress"
-Documentation = "https://docs.fortress-db.com"
 Repository = "https://github.com/Genius740Code/Fortress"
 "Bug Tracker" = "https://github.com/Genius740Code/Fortress/issues"
 Changelog = "https://github.com/Genius740Code/Fortress/blob/main/CHANGELOG.md"

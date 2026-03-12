@@ -6,7 +6,7 @@
  * 
  * @example
  * ```typescript
- * import { Fortress, EncryptionAlgorithm } from 'fortress';
+ * import { Fortress, EncryptionAlgorithm } from 'fortress-db';
  * 
  * // Initialize Fortress
  * const fortress = new Fortress();
