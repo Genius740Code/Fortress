@@ -1,13 +1,11 @@
 [package]
-name = "fortress"
+name = "fortress-db"
 version = "0.1.0"
 edition = "2021"
 authors = ["Fortress Team <team@fortress-db.com>"]
-license = "Apache-2.0"
+license = "SSPL-1.0"
 description = "A highly customizable, secure database system with multi-layer encryption"
 homepage = "https://github.com/Genius740Code/Fortress"
-repository = "https://github.com/Genius740Code/Fortress"
-documentation = "https://docs.fortress-db.com"
 readme = "README.md"
 keywords = ["database", "encryption", "security", "privacy", "vault"]
 categories = ["database", "cryptography"]
