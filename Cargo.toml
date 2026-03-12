@@ -2,12 +2,14 @@
 name = "fortress-db"
 version = "0.1.0"
 edition = "2021"
-authors = ["Fortress Team <team@fortress-db.com>"]
+authors = ["Fortress Team <fortress.db@example.com>"]
 license = "SSPL-1.0"
-description = "A highly customizable, secure database system with multi-layer encryption"
+description = "🛡️ Fortress - Turnkey Simplicity + HashiCorp Vault Security. A highly customizable, secure database system with multi-layer encryption."
 homepage = "https://github.com/Genius740Code/Fortress"
 readme = "README.md"
-keywords = ["database", "encryption", "security", "privacy", "vault"]
+repository = "https://github.com/Genius740Code/Fortress"
+documentation = "https://github.com/Genius740Code/Fortress/blob/main/docs"
+keywords = ["database", "encryption", "security", "privacy", "vault", "aegis", "chacha20", "aes256", "field-encryption", "key-rotation", "hsm", "compliance", "gdpr", "hipaa", "pci-dss", "zero-trust", "enterprise", "cluster", "high-availability"]
 categories = ["database", "cryptography"]
 rust-version = "1.70"
 
@@ -22,11 +24,6 @@ members = [
 ]
 
 [dependencies]
-# Core dependencies
-fortress-core = { path = "crates/fortress-core", version = "0.1.0", optional = true }
-fortress-cli = { path = "crates/fortress-cli", version = "0.1.0", optional = true }
-fortress-server = { path = "crates/fortress-server", version = "0.1.0", optional = true }
-
 # Async runtime
 tokio = { version = "1.35", features = ["full"] }
 tokio-util = { version = "0.7", features = ["codec"] }
@@ -155,7 +152,6 @@ test-case = "3.3"
 
 [features]
 default = []
-core = ["fortress-core"]
 
 # Performance features
 simd = []
@@ -175,10 +171,8 @@ fips = []
 # Development features
 dev = ["tracing-subscriber/env-filter"]
 
-# Platform features
-cli = ["fortress-cli"]
-server = ["fortress-server"]
-# wasm = ["wasm-bindgen", "js-sys", "web-sys", "console_error_panic_hook"]
+# Note: fortress-core, fortress-cli, and fortress-server will be available as separate crates
+# once they are published to crates.io
 
 [profile.release]
 opt-level = 3

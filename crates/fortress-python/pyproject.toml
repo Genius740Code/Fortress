@@ -1,23 +1,29 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["setuptools>=61.0", "wheel", "maturin>=1.0,<2.0"]
+build-backend = "maturin"
 
 [project]
 name = "fortress-db"
 version = "0.1.0"
-description = "Python SDK for Fortress secure database system"
+description = "🛡️ Fortress - Turnkey Simplicity + HashiCorp Vault Security. Python SDK for Fortress secure database system with multi-layer encryption."
 readme = "README.md"
 license = {text = "SSPL-1.0"}
 authors = [
-    {name = "Fortress Team", email = "team@fortress-db.com"},
+    {name = "Fortress Team", email = "fortress.db@example.com"}
 ]
 maintainers = [
-    {name = "Fortress Team", email = "team@fortress-db.com"},
+    {name = "Fortress Team", email = "fortress.db@example.com"}
 ]
-keywords = ["database", "encryption", "security", "privacy", "vault", "rust"]
+keywords = [
+    "database", "encryption", "security", "privacy", "vault", "aegis", "chacha20", "aes256", 
+    "field-encryption", "key-rotation", "hsm", "compliance", "gdpr", "hipaa", "pci-dss", 
+    "zero-trust", "enterprise", "cluster", "high-availability", "cryptography", "multi-tenant", 
+    "audit", "rbac", "rust"
+]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
+    "License :: OSI Approved :: SSPL License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
@@ -29,42 +35,68 @@ classifiers = [
     "Topic :: Database",
     "Topic :: Security :: Cryptography",
     "Topic :: Software Development :: Libraries :: Python Modules",
-    "Typing :: Typed",
+    "Typing :: Typed"
 ]
 requires-python = ">=3.8"
 dependencies = [
-    "typing-extensions>=4.0.0",
+    "requests>=2.28.0",
+    "pydantic>=2.0.0",
+    "cryptography>=41.0.0",
+    "aiohttp>=3.8.0",
+    "typing-extensions>=4.5.0"
 ]
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",
-    "black>=22.0.0",
-    "isort>=5.10.0",
-    "mypy>=1.0.0",
-    "flake8>=5.0.0",
-    "sphinx>=5.0.0",
-    "sphinx-rtd-theme>=1.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.5.0",
+    "pre-commit>=3.0.0",
+    "sphinx>=6.0.0",
+    "sphinx-rtd-theme>=1.2.0"
 ]
 test = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.0.0",
-    "hypothesis>=6.0.0",
+    "httpx>=0.24.0"
 ]
 docs = [
-    "sphinx>=5.0.0",
-    "sphinx-rtd-theme>=1.0.0",
-    "myst-parser>=0.18.0",
+    "sphinx>=6.0.0",
+    "sphinx-rtd-theme>=1.2.0",
+    "myst-parser>=1.0.0"
 ]
+performance = [
+    "pytest-benchmark>=4.0.0",
+    "memory-profiler>=0.60.0"
+]
+dynamic = ["version"]
 
 [project.urls]
+Homepage = "https://github.com/Genius740Code/Fortress"
+Documentation = "https://github.com/Genius740Code/Fortress/blob/main/docs"
 Repository = "https://github.com/Genius740Code/Fortress"
 "Bug Tracker" = "https://github.com/Genius740Code/Fortress/issues"
 Changelog = "https://github.com/Genius740Code/Fortress/blob/main/CHANGELOG.md"
+Discussions = "https://github.com/Genius740Code/Fortress/discussions"
 
 [project.scripts]
-fortress-python = "fortress.cli:main"
+fortress = "fortress_cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["fortress*"]
+
+[tool.setuptools.package-data]
+fortress = ["py.typed", "*.pyi"]
+
+[tool.maturin]
+python-source = "python"
+module-name = "fortress._fortress"
+features = ["pyo3/extension-module"]
 
 [tool.black]
 line-length = 88

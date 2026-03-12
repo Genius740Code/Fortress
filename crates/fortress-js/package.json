@@ -1,13 +1,14 @@
 {
   "name": "fortress-db",
   "version": "0.1.0",
-  "description": "JavaScript/TypeScript SDK for Fortress secure database system",
+  "description": "🛡️ Fortress - Turnkey Simplicity + HashiCorp Vault Security. JavaScript/TypeScript SDK for Fortress secure database system with multi-layer encryption.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
     "dist/",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "docs/"
   ],
   "scripts": {
     "build": "tsc",
@@ -36,11 +37,26 @@
     "cryptography",
     "multi-tenant",
     "audit",
-    "rbac"
+    "rbac",
+    "aegis",
+    "chacha20",
+    "aes256",
+    "field-encryption",
+    "key-rotation",
+    "hsm",
+    "compliance",
+    "gdpr",
+    "hipaa",
+    "pci-dss",
+    "zero-trust",
+    "enterprise",
+    "cluster",
+    "high-availability"
   ],
   "author": {
     "name": "Fortress Team",
-    "email": "team@fortress-db.com"
+    "email": "fortress.db@example.com",
+    "url": "https://github.com/Genius740Code/Fortress"
   },
   "license": "SSPL-1.0",
   "repository": {
@@ -51,6 +67,7 @@
   "bugs": {
     "url": "https://github.com/Genius740Code/Fortress/issues"
   },
+  "homepage": "https://github.com/Genius740Code/Fortress#readme",
   "engines": {
     "node": ">=14.0.0"
   },

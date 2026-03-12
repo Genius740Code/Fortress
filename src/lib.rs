@@ -2,19 +2,25 @@
 //!
 //! A highly customizable, secure database system with multi-layer encryption.
 //!
-//! ## Features
-//!
-//! - Multi-layer encryption (field, row, table, database level)
-//! - Multiple encryption algorithms (AEGIS-256, ChaCha20-Poly1305, AES-256-GCM)
-//! - Time-based key rotation
-//! - Multiple storage backends (local, AWS S3, Azure, GCP)
-//! - Zero-knowledge architecture
-//! - High performance with hardware acceleration
+//! This is the main Fortress meta-package. The actual functionality is provided
+//! by the individual crates:
+//! - `fortress-core` - Core library
+//! - `fortress-cli` - Command-line interface
+//! - `fortress-server` - Server components
 //!
 //! ## Quick Start
 //!
+//! Add the following to your `Cargo.toml`:
+//!
+//! ```toml
+//! [dependencies]
+//! fortress-core = "0.1.0"
+//! ```
+//!
+//! Then use the core library directly:
+//!
 //! ```rust,no_run
-//! use fortress::{Fortress, Config};
+//! use fortress_core::{Fortress, Config};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -42,34 +48,6 @@
 #![warn(rust_2018_idioms)]
 #![warn(clippy::all)]
 #![allow(clippy::module_name_repetitions)]
-
-pub use fortress_core::{
-    error::{FortressError, Result},
-    config::Config,
-    encryption::{EncryptionAlgorithm, EncryptionProfile},
-    storage::StorageBackend,
-    query::{QueryEngine, QueryResult},
-};
-
-/// Re-export commonly used types
-pub mod prelude {
-    pub use fortress_core::{
-        error::{FortressError, Result},
-        config::Config,
-        encryption::{EncryptionAlgorithm, EncryptionProfile},
-        storage::StorageBackend,
-        query::{QueryEngine, QueryResult},
-    };
-}
-
-#[cfg(feature = "cli")]
-pub use fortress_cli as cli;
-
-#[cfg(feature = "server")]
-pub use fortress_server as server;
-
-// #[cfg(feature = "wasm")]
-// pub use fortress_wasm as wasm;
 
 /// Fortress version information
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

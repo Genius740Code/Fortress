@@ -2,13 +2,13 @@
 name = "fortress-core"
 version = "0.1.0"
 edition = "2021"
-authors = ["Fortress Team <team@fortress-db.com>"]
-license = "Apache-2.0"
-description = "Core library for Fortress secure database system"
+authors = ["Fortress Team <fortress.db@example.com>"]
+license = "SSPL-1.0"
+description = "🛡️ Fortress Core Library - Turnkey Simplicity + HashiCorp Vault Security. Core library for Fortress secure database system with multi-layer encryption."
 homepage = "https://github.com/Genius740Code/Fortress"
 repository = "https://github.com/Genius740Code/Fortress"
-documentation = "https://docs.rs/fortress-core"
-keywords = ["database", "encryption", "security", "privacy", "vault"]
+documentation = "https://github.com/Genius740Code/Fortress/blob/main/docs"
+keywords = ["database", "encryption", "security", "privacy", "vault", "aegis", "chacha20", "aes256", "field-encryption", "key-rotation", "hsm", "compliance", "gdpr", "hipaa", "pci-dss", "zero-trust", "enterprise", "cluster", "high-availability"]
 categories = ["database", "cryptography"]
 rust-version = "1.70"
 
