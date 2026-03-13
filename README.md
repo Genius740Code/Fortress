@@ -31,7 +31,7 @@ A highly customizable, secure database system with multi-layer encryption that c
 - **Multi-Tenant Support**: Isolated data per tenant/organization `[Stable]`
 - **Cluster Support**: High availability with Raft consensus `[In Development]`
 - **Audit Logging**: Comprehensive security event logging `[In Development]`
-- **Compliance Framework**: GDPR, HIPAA, PCI-DSS compliance features `[Planned]`
+- **Compliance Framework**: GDPR, HIPAA, PCI-DSS compliance features `[Not Implemented]`
 - **HSM Integration**: Hardware Security Module support `[In Development]`
 
 ### ⚡ High Performance
@@ -58,7 +58,25 @@ A highly customizable, secure database system with multi-layer encryption that c
 
 ### Installation
 
-#### Binary Packages (Recommended)
+#### Pre-built Binaries (Recommended)
+
+**Download from GitHub Releases**
+```bash
+# Download latest release for your platform
+# Visit: https://github.com/Genius740Code/Fortress/releases
+
+# Example for Linux AMD64
+curl -L "https://github.com/Genius740Code/Fortress/releases/latest/download/fortress-linux-amd64-latest" -o fortress
+chmod +x fortress
+sudo mv fortress /usr/local/bin/
+
+# Example for Windows
+# Download fortress-windows-amd64-latest.exe from releases page
+```
+
+> **Note**: First release coming soon! CI is now enabled and releases will be automatically published when tags are pushed.
+
+#### Package Managers
 
 **NPM (Node.js)**
 ```bash
@@ -482,6 +500,7 @@ This project is licensed under the Server Side Public License (SSPL) - see the [
 
 ## 📈 Metrics
 
+- **CI Status**: [![CI](https://github.com/Genius740Code/Fortress/workflows/CI/badge.svg)](https://github.com/Genius740Code/Fortress/actions)
 - **GitHub Stars**: [![GitHub stars](https://img.shields.io/github/stars/Genius740Code/Fortress)](https://github.com/Genius740Code/Fortress/stargazers)
 - **GitHub Forks**: [![GitHub forks](https://img.shields.io/github/forks/Genius740Code/Fortress)](https://github.com/Genius740Code/Fortress/network)
 - **GitHub Issues**: [![GitHub issues](https://img.shields.io/github/issues/Genius740Code/Fortress)](https://github.com/Genius740Code/Fortress/issues)

@@ -481,7 +481,6 @@ chmod +x .git/hooks/pre-commit
 - Documentation
 - Performance impact
 - Security implications
-- Breaking changes
 
 ## 🚨 Common Issues
 
@@ -499,12 +498,24 @@ chmod +x .git/hooks/pre-commit
 - Update test data
 - Check for race conditions
 
+### Broken Code in Repository
+If you find files with names like `*_broken.rs` or `*_experimental.rs`:
+
+1. **Do not use broken files** - they are not meant for production
+2. **Check for working alternatives** - usually there's a working version
+3. **Create an issue** to track the broken code if needed
+4. **Focus on clean code** - don't waste time fixing intentionally broken examples
+
+**Policy**: Broken code should either be:
+- Fixed and renamed to remove "_broken" suffix
+- Removed if a working alternative exists
+- Documented in a GitHub issue with clear TODO list
+
 ### Documentation Build
 
 - Install required tools
 - Check doc comments
 - Validate examples
-- Fix broken links
 
 ## 🎉 Celebrating Contributions
 

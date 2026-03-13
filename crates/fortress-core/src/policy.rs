@@ -504,7 +504,7 @@ impl PolicyEngine {
             Condition::Time(time_cond) => self.evaluate_time_condition(time_cond),
             Condition::Ip(ip_cond) => self.evaluate_ip_condition(ip_cond, user_id).await,
             Condition::Attribute(attr_cond) => self.evaluate_attribute_condition(attr_cond, user_id).await,
-            Condition::Custom(_) => Ok(true), // TODO: Implement custom condition evaluation
+            Condition::Custom(_) => Err(FortressError::PolicyError("Custom condition evaluation not implemented".to_string())),
         }
     }
 
@@ -536,21 +536,21 @@ impl PolicyEngine {
     async fn evaluate_ip_condition(&self, _condition: &IpCondition, _user_id: &str) -> Result<bool> {
         // TODO: Implement IP condition evaluation
         // This would require getting the user's IP address from context
-        Ok(true)
+        Err(FortressError::PolicyError("IP condition evaluation not implemented".to_string()))
     }
 
     /// Evaluate attribute-based conditions
     async fn evaluate_attribute_condition(&self, _condition: &AttributeCondition, _user_id: &str) -> Result<bool> {
         // TODO: Implement attribute condition evaluation
         // This would require getting user attributes from a user store
-        Ok(true)
+        Err(FortressError::PolicyError("Attribute condition evaluation not implemented".to_string()))
     }
 
     /// Log audit entry for policy decisions
     async fn log_audit_entry(&self, _entry: PolicyAuditEntry) -> Result<()> {
         // TODO: Implement audit logging
         // This would integrate with the audit logging system
-        Ok(())
+        Err(FortressError::PolicyError("Audit logging not implemented".to_string()))
     }
 }
 

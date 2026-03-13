@@ -1,5 +1,18 @@
 # Fortress Security Guide
 
+## ⚠️ **CRITICAL SECURITY WARNING**
+
+**COMPLIANCE FEATURES ARE NOT IMPLEMENTED**
+
+This documentation contains examples and configuration options for GDPR, HIPAA, and PCI-DSS compliance features. **These features are currently not implemented** and the policy engine contains placeholder code that may give a false sense of security.
+
+- Policy conditions return `Ok(true)` by default (always pass)
+- Audit logging is not implemented  
+- IP and attribute-based conditions are not evaluated
+- Using this system for compliance-critical workloads is **DANGEROUS**
+
+Do not deploy Fortress in production environments requiring regulatory compliance until these features are properly implemented and audited.
+
 ## Overview
 
 Fortress is designed with security as the primary concern. This guide covers the security model, features, and best practices for deploying and maintaining a secure Fortress deployment.

@@ -2348,6 +2348,46 @@ mod tests {
 
     #[tokio::test]
 
+    async fn test_zero_downtime_rotation_functionality() {
+        let manager = InMemoryKeyManager::new();
+        let algorithm = Aegis256::new();
+        
+        // Create a key
+        let key_id = "zero-downtime-test".to_string();
+        let key = manager.generate_key(&algorithm).await.unwrap();
+        
+        let metadata = KeyMetadata::new(
+            key_id.clone(),
+            algorithm.name().to_string(),
+            1,
+            Utc::now() - Duration::hours(25), // Created 25 hours ago
+            Utc::now() - Duration::hours(1),  // Expired 1 hour ago
+            "test".to_string(),
+            PerformanceProfile::Balanced,
+        );
+        
+        manager.store_key(&key_id, &key, &metadata).await.unwrap();
+        
+        // Test zero-downtime rotation directly
+        let (_, old_metadata) = manager.retrieve_key(&key_id).await.unwrap();
+        assert_eq!(old_metadata.version, 1);
+        
+        // Perform zero-downtime rotation
+        manager.rotate_key_with_zero_downtime(&key_id, &algorithm).await.unwrap();
+        
+        // Verify rotation worked
+        let (_, new_metadata) = manager.retrieve_key(&key_id).await.unwrap();
+        assert_eq!(new_metadata.version, 2);
+        assert!(new_metadata.created_at > old_metadata.created_at);
+        assert!(new_metadata.expires_at > old_metadata.expires_at);
+        
+        // Verify the key is still accessible (no downtime)
+        let (_, retrieved_metadata) = manager.retrieve_key(&key_id).await.unwrap();
+        assert_eq!(retrieved_metadata.version, 2);
+    }
+
+    #[tokio::test]
+
     async fn test_key_rotation_scheduler() {
 
         let manager = Arc::new(InMemoryKeyManager::new());
@@ -2398,10 +2438,18 @@ mod tests {
 
         let rotated_keys = scheduler.check_and_rotate().await.unwrap();
 
-        // TODO: Implement actual rotation logic
-        assert_eq!(rotated_keys.len(), 0); // No rotation implemented yet
+        // Verify that zero-downtime rotation is working
+
+        assert!(rotated_keys.len() > 0, "Expected at least one key to be rotated");
+
+        // Verify the key was actually rotated (version should be incremented)
+
+        let (_, new_metadata) = manager.retrieve_key(&key_id).await.unwrap();
+
+        assert_eq!(new_metadata.version, 2, "Key version should be incremented after rotation");
+
+        assert!(new_metadata.created_at > metadata.created_at, "New key should have later creation time");
 
     }
 
 }
-
