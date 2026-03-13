@@ -161,9 +161,7 @@ Help translate Fortress documentation and UI to other languages.
 ## 🌟 Show Your Support
 
 - **⭐ Star the repository** - It helps others discover Fortress
-- **🐦 Follow us** - Stay updated on Twitter [@fortressdb](https://twitter.com/fortressdb)
-- **💬 Join discussions** - Participate in [GitHub Discussions](https://github.com/Genius740Code/Fortress/discussions)
-- **📧 Subscribe** - Get updates at [fortress-db.com](https://fortress-db.com)
+- ** Join discussions** - Participate in [GitHub Discussions](https://github.com/Genius740Code/Fortress/discussions)
 
 ---
 

@@ -121,4 +121,3 @@ Please read our [Contributing Guide](../../CONTRIBUTING.md) before contributing.
 
 - **Issues**: [GitHub Issues](https://github.com/Genius740Code/Fortress/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/Genius740Code/Fortress/discussions)
-- **Email**: team@fortress-db.com

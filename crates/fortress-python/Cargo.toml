@@ -1,14 +1,14 @@
 [package]
 name = "fortress-python"
-version = "0.1.0"
+version = "1.0.0-alpha"
 edition = "2021"
-authors = ["Fortress Team <team@fortress-db.com>"]
-license = "Apache-2.0"
+authors = ["Fortress Team <team@fortressdb.io>"]
+license = "Fortress Sustainable Use License 1.0"
 description = "Python bindings for Fortress secure database system"
-homepage = "https://github.com/Genius740Code/Fortress"
+homepage = "https://fortressdb.io"
 repository = "https://github.com/Genius740Code/Fortress"
-documentation = "https://docs.fortress-db.com"
-keywords = ["database", "encryption", "security", "privacy", "vault", "python"]
+documentation = "https://fortressdb.io/docs"
+keywords = ["database", "encryption", "security", "privacy", "secure-storage", "python"]
 categories = ["database", "cryptography", "api-bindings"]
 rust-version = "1.70"
 
@@ -21,7 +21,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 # Fortress core
-fortress-core = { path = "../fortress-core" }
+fortress-core = { path = "../fortress-core", version = "1.0.0-alpha" }
 
 # Python bindings
 pyo3 = { version = "0.20", features = ["extension-module", "abi3-py38"] }

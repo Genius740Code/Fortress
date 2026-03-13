@@ -443,9 +443,6 @@ ws.onmessage = (event) => {
 - 📖 [Documentation](https://github.com/Genius740Code/Fortress/blob/main/docs)
 - 🐛 [Issue Tracker](https://github.com/Genius740Code/Fortress/issues)
 - 💬 [Discussions](https://github.com/Genius740Code/Fortress/discussions)
-- 📧 [Email Support](mailto:fortress.db@example.com)
-- 🐦 [Twitter](https://twitter.com/fortressdb)
-- 💬 [Discord](https://discord.gg/fortress)
 
 ## 📄 License
 

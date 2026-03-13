@@ -300,7 +300,7 @@ Technical considerations (optional)
 
 **Do NOT report security issues in public issues!**
 
-For security vulnerabilities, email: security@fortress-db.com
+For security vulnerabilities, please report them privately through GitHub's security advisory feature.
 
 ### Security Guidelines
 
@@ -396,10 +396,9 @@ For security vulnerabilities, email: security@fortress-db.com
 
 ### Resources
 
-- [Documentation](https://docs.fortress-db.com)
+- [Documentation](https://github.com/Genius740Code/Fortress/blob/main/docs)
 - [API Reference](docs/API_DOCUMENTATION.md)
 - [Examples](examples/)
-- [Discord Community](https://discord.gg/fortress)
 
 ### Asking Questions
 

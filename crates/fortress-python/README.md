@@ -421,10 +421,9 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 ## Support
 
-- **Documentation**: [https://docs.fortress-db.com](https://docs.fortress-db.com)
+- **Documentation**: [GitHub Docs](https://github.com/Genius740Code/Fortress/blob/main/docs)
 - **Issues**: [GitHub Issues](https://github.com/Genius740Code/Fortress/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/Genius740Code/Fortress/discussions)
-- **Email**: team@fortress-db.com
 
 ## Contributing
 

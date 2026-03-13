@@ -4,18 +4,18 @@ build-backend = "maturin"
 
 [project]
 name = "fortress-db"
-version = "0.1.0"
-description = "🛡️ Fortress - Turnkey Simplicity + HashiCorp Vault Security. Python SDK for Fortress secure database system with multi-layer encryption."
+version = "1.0.0-alpha"
+description = "🛡️ Fortress - Turnkey Simplicity + Enterprise Security. Python SDK for Fortress secure database system with multi-layer encryption."
 readme = "README.md"
-license = {text = "SSPL-1.0"}
+license = {text = "Fortress Sustainable Use License 1.0"}
 authors = [
-    {name = "Fortress Team", email = "fortress.db@example.com"}
+    {name = "Fortress Team", email = "team@fortressdb.io"}
 ]
 maintainers = [
-    {name = "Fortress Team", email = "fortress.db@example.com"}
+    {name = "Fortress Team", email = "team@fortressdb.io"}
 ]
 keywords = [
-    "database", "encryption", "security", "privacy", "vault", "aegis", "chacha20", "aes256", 
+    "database", "encryption", "security", "privacy", "secure-storage", "aegis", "chacha20", "aes256", 
     "field-encryption", "key-rotation", "hsm", "compliance", "gdpr", "hipaa", "pci-dss", 
     "zero-trust", "enterprise", "cluster", "high-availability", "cryptography", "multi-tenant", 
     "audit", "rbac", "rust"
@@ -23,7 +23,7 @@ keywords = [
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: SSPL License",
+    "License :: Other/Proprietary License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
@@ -76,7 +76,7 @@ performance = [
 dynamic = ["version"]
 
 [project.urls]
-Homepage = "https://github.com/Genius740Code/Fortress"
+Homepage = "https://fortressdb.io"
 Documentation = "https://github.com/Genius740Code/Fortress/blob/main/docs"
 Repository = "https://github.com/Genius740Code/Fortress"
 "Bug Tracker" = "https://github.com/Genius740Code/Fortress/issues"

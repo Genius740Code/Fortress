@@ -1,49 +1,104 @@
-                                 Server Side Public License
+# Fortress Sustainable Use License 1.0
 
-This license is based on the AGPL 3.0 license, with a modification to the definition of "Convey".
+Copyright (c) 2026 Fortress Project Contributors
 
-The modification is:
+## Acceptance
 
-"Convey" (or "Conveying") means preparing and having a third party use a Program, including in modified form, in any manner that would, absent this License, infringe any patent, copyright, or other intellectual property right of the person making the Conveyance. A Conveyance can occur through a service (e.g., SaaS), or other commercial arrangement.
+By using, copying, modifying, or distributing this software, you agree to
+the terms of this license. If you do not agree, do not use this software.
 
-The full text of the SSPL is as follows:
+## Definitions
 
-Copyright 2026 Fortress Team
+**"Software"** means the Fortress source code, binaries, documentation, and
+associated materials made available under this license.
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the Server Side Public License, version 1,
-as published by MongoDB, Inc.
+**"Commercial Distribution"** means selling, licensing, or distributing
+the Software, or a modified version of it, as part of a commercial software
+product or service offered to third parties.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-Server Side Public License for more details.
+**"Managed Service"** means making the Software's functionality available
+to third parties as a hosted or managed offering, whether or not a fee is
+charged.
 
-You should have received a copy of the Server Side Public License
-along with this program.
+## Permitted Uses
 
-As of the Change Date specified in that file, according to the
-Server Side Public License, version 1, the terms of this license will
-terminate and you may no longer use this file except in compliance
-with the applicable license terms from MongoDB, Inc.
+Permission is granted, free of charge, to any person obtaining a copy of
+this Software to:
+
+1. Use, copy, and modify the Software for any purpose — including
+   commercial internal use — such as personal projects, academic research,
+   evaluation, and running the Software within your own organisation.
+
+2. Distribute unmodified copies of the Software, provided this license and
+   all copyright notices are retained.
+
+3. Distribute modified copies of the Software, provided modifications are
+   clearly marked, dated, and made available under this same license.
+
+## Restrictions
+
+You may **not**, without a separate commercial license agreement:
+
+1. **Sell or distribute the Software as a product** — including embedding
+   it in a commercial software product or bundling it for resale or
+   sublicensing to third parties.
+
+2. **Offer a Managed Service** based on the Software — including any
+   hosted, cloud, or "as-a-service" offering that exposes the Software's
+   functionality to third parties.
+
+3. **Remove or alter** any copyright notices, license references, or
+   attribution statements in the Software or its documentation.
+
+## Commercial Licensing
+
+To use the Software under terms not covered above, contact:
+**licensing@fortressdb.io**
+
+Information about commercial license tiers is available at:
+https://fortressdb.io/pricing
+
+## Patents
+
+Each contributor grants you a non-exclusive, worldwide, royalty-free patent
+license to make, use, and distribute their contributions as part of this
+Software. This license terminates if you bring a patent claim against any
+contributor alleging that the Software infringes your patents.
+
+## Modifications and Forks
+
+Modified versions distributed publicly must:
+
+- Be clearly identified as modified from the original Fortress Software.
+- Include the date and a brief summary of material changes.
+- Be distributed under this license.
+
+## Disclaimer of Warranties
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. THE AUTHORS ARE NOT
+RESPONSIBLE FOR SECURITY VULNERABILITIES, DATA BREACHES, OR COMPLIANCE
+FAILURES ARISING FROM YOUR USE OF THE SOFTWARE.
+
+## Limitation of Liability
+
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES, OR OTHER LIABILITY, WHETHER IN CONTRACT, TORT, OR OTHERWISE,
+ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR ITS USE.
+
+## Termination
+
+Your rights under this license terminate automatically if you breach any of
+its terms. Sections covering Disclaimer, Liability, and Patents survive
+termination.
+
+## Governing Law
+
+This license is governed by the laws of the State of Delaware, United
+States, without regard to conflict of law provisions.
 
 ---
 
-Server Side Public License (SSPL) Version 1
-
-This license is based on the GNU Affero General Public License version 3
-(AGPLv3), with the following modifications:
-
-1. The term "Convey" is modified to include making the Program available
-   to third parties through a network service or other means.
-
-2. If you make the functionality of the Program or a modified version
-   available to third parties as a service, you must make the entire
-   Program, including all modifications, available under this license.
-
-This ensures that anyone who offers the Program as a service must share
-their modifications with the community, while still allowing individuals
-and organizations to use and modify the software for their own purposes.
-
-For the full text of the AGPLv3, please visit:
-https://www.gnu.org/licenses/agpl-3.0.html
+*For commercial licensing, cloud partnerships, or questions:*
+*licensing@fortressdb.io — https://fortressdb.io/license*

@@ -1,7 +1,7 @@
 {
   "name": "fortress-db",
-  "version": "0.1.0",
-  "description": "🛡️ Fortress - Turnkey Simplicity + HashiCorp Vault Security. JavaScript/TypeScript SDK for Fortress secure database system with multi-layer encryption.",
+  "version": "1.0.0-alpha",
+  "description": "🛡️ Fortress - Turnkey Simplicity + Enterprise Security. JavaScript/TypeScript SDK for Fortress secure database system with multi-layer encryption.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -31,7 +31,7 @@
     "encryption",
     "security",
     "privacy",
-    "vault",
+    "secure-storage",
     "typescript",
     "javascript",
     "cryptography",
@@ -55,10 +55,10 @@
   ],
   "author": {
     "name": "Fortress Team",
-    "email": "fortress.db@example.com",
-    "url": "https://github.com/Genius740Code/Fortress"
+    "email": "team@fortressdb.io",
+    "url": "https://fortressdb.io"
   },
-  "license": "SSPL-1.0",
+  "license": "Fortress Sustainable Use License 1.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/Genius740Code/Fortress.git",
@@ -67,7 +67,7 @@
   "bugs": {
     "url": "https://github.com/Genius740Code/Fortress/issues"
   },
-  "homepage": "https://github.com/Genius740Code/Fortress#readme",
+  "homepage": "https://fortressdb.io",
   "engines": {
     "node": ">=14.0.0"
   },

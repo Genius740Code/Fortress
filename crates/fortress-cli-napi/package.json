@@ -1,7 +1,7 @@
 {
   "name": "fortress-cli",
-  "version": "0.1.0",
-  "description": "Fortress CLI - Node.js bindings for Fortress secure database system",
+  "version": "1.0.0-alpha",
+  "description": "Fortress CLI - Node.js bindings for Fortress secure database system with enterprise-grade encryption",
   "main": "index.js",
   "types": "index.d.ts",
   "napi": {
@@ -50,20 +50,20 @@
     "encryption",
     "security",
     "privacy",
-    "vault",
+    "secure-storage",
     "napi",
     "native"
   ],
   "author": {
     "name": "Fortress Team",
-    "email": "team@fortress-db.com",
-    "url": "https://fortress-db.com"
+    "email": "team@fortressdb.io",
+    "url": "https://fortressdb.io"
   },
-  "license": "Apache-2.0",
+  "license": "Fortress Sustainable Use License 1.0",
   "bugs": {
     "url": "https://github.com/Genius740Code/Fortress/issues"
   },
-  "homepage": "https://docs.fortress-db.com",
+  "homepage": "https://fortressdb.io",
   "engines": {
     "node": ">= 14"
   },

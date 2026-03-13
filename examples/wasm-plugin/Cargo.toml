@@ -1,10 +1,10 @@
 [package]
 name = "fortress-enhanced-audit"
-version = "0.1.0"
+version = "1.0.0-alpha"
 edition = "2021"
 authors = ["Fortress Team <team@fortress-db.com>"]
 description = "Enhanced audit logging plugin for Fortress with real-time analytics"
-license = "Apache-2.0"
+license = "Fortress Sustainable Use License 1.0"
 repository = "https://github.com/Genius740Code/Fortress"
 keywords = ["fortress", "plugin", "audit", "wasm", "analytics"]
 
