@@ -48,7 +48,7 @@ pub enum LogLevel {
 }
 
 /// Log output formats
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum LogFormat {
     /// Plain text format
     Plain,

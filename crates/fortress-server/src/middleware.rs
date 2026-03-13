@@ -886,8 +886,9 @@ impl Default for MiddlewareStack {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::body::Empty;
+    use axum::body::Body;
     use axum::http::Method;
+    use crate::config::DdosProtectionConfig;
 
     #[test]
     fn test_client_id_extraction() {

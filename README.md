@@ -54,6 +54,18 @@ A highly customizable, secure database system with multi-layer encryption that c
 - **Helm Charts**: Easy deployment and management `[In Development]`
 - **Cloud Integration**: AWS, Azure, Google Cloud support `[Planned]`
 
+### 🧠 Privacy-Preserving ML & Homomorphic Encryption
+
+**Current Status: Prototype Only - Not Production Ready**
+
+- **Homomorphic Encryption**: Mathematical framework exists `[Prototype Only]`
+- **Privacy-Preserving ML**: Depends on real homomorphic encryption `[Depends: HE Implementation]`
+- **ML Integration**: Roadmap item blocked by missing crypto foundation `[Planned]`
+
+**Important Notice**: The homomorphic encryption module contains placeholder implementations only. The mathematical operations are **not cryptographically secure** and should never be used for real security purposes. For production use, either implement proper cryptographic schemes or remove the module entirely.
+
+See `crates/fortress-core/src/homomorphic_encryption.rs` for detailed warnings and current implementation status.
+
 ## 🚀 Quick Start
 
 ### Installation
@@ -483,7 +495,7 @@ This project is licensed under the Server Side Public License (SSPL) - see the [
 ### Version 0.2.0 (Q1 2026)
 - [ ] GraphQL API completion
 - [ ] Advanced plugin marketplace
-- [ ] Machine learning integration
+- [ ] Machine learning integration `[Depends: Real homomorphic encryption implementation]`
 - [ ] Mobile SDKs (iOS/Android)
 
 ### Version 0.3.0 (Q2 2026)

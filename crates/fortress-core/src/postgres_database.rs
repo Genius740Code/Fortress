@@ -1164,7 +1164,7 @@ mod tests {
         
         // Test JSONB query
         let query = PostgresJsonbQuery::Equals {
-            path: "category",
+            path: "category".to_string(),
             value: serde_json::Value::String("important".to_string()),
         };
         

@@ -125,7 +125,7 @@ pub struct SamplingConfig {
 }
 
 /// Sampling strategies
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum SamplingStrategy {
     /// Always sample
     AlwaysOn,

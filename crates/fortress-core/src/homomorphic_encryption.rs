@@ -1,16 +1,43 @@
 //! Homomorphic Encryption capabilities
 //!
+//! # ⚠️ SECURITY WARNING: NOT FOR PRODUCTION USE ⚠️
+//!
+//! This module contains **placeholder implementations only**. The cryptographic
+//! operations in this module are **NOT cryptographically secure** and should **NEVER**
+//! be used in production environments or for real security purposes.
+//!
+//! ## Current Status: **Prototype/Testing Only**
+//!
+//! - The mathematical implementations are simplified demonstrations
+//! - No proper prime number generation or validation
+//! - Missing modular exponentiation and other critical cryptographic operations  
+//! - Vulnerable to various cryptographic attacks
+//!
+//! This module exists solely to:
+//! 1. Demonstrate the API structure for future real implementations
+//! 2. Enable testing of the homomorphic encryption framework
+//! 3. Serve as a foundation for implementing actual secure schemes
+//!
+//! ## For Production Use:
+//!
+//! Either implement a real cryptographically secure scheme (e.g., using
+//! established libraries like `rug`, `num-bigint`, or dedicated crypto libraries)
+//! or remove this module entirely. Do not advertise "privacy-preserving ML"
+//! capabilities until real implementations are available.
+//!
+//! ---
+//!
 //! This module provides homomorphic encryption that allows computations to be performed
 //! on encrypted data without decrypting it first. This enables privacy-preserving
 //! data analysis and secure cloud computing scenarios.
 //!
-//! ## Features
+//! ## Features (Current Status: **Prototype Only**)
 //!
-//! - **Partially Homomorphic Encryption**: Support for addition and multiplication
-//! - **Fully Homomorphic Encryption**: Complete arithmetic operations on ciphertexts
-//! - **Performance Optimization**: Efficient implementations for common operations
-//! - **Security Guarantees**: Proven security properties for each scheme
-//! - **Compatibility**: Integration with existing Fortress encryption infrastructure
+//! - **Partially Homomorphic Encryption**: Support for addition and multiplication `[Prototype Only]`
+//! - **Fully Homomorphic Encryption**: Complete arithmetic operations on ciphertexts `[Planned]`
+//! - **Performance Optimization**: Efficient implementations for common operations `[Not Implemented]`
+//! - **Security Guarantees**: Proven security properties for each scheme `[Not Implemented]`
+//! - **Compatibility**: Integration with existing Fortress encryption infrastructure `[Prototype Only]`
 
 use crate::error::{FortressError, Result, EncryptionErrorCode};
 use crate::key::{SecureKey, KeyId};

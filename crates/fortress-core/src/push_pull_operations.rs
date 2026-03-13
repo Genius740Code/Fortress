@@ -244,7 +244,7 @@ pub struct PushPullResult {
 }
 
 /// Operation type
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum OperationType {
     /// Push operation
     Push,
@@ -317,6 +317,7 @@ pub enum ConflictType {
 }
 
 /// Push/Pull operations manager
+#[derive(Clone)]
 pub struct PushPullManager {
     config: PushPullConfig,
     // In a real implementation, this would hold storage connections
