@@ -2,12 +2,10 @@ use color_eyre::eyre::{Result, Context};
 use console::style;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde_json::{json, Value};
-use fortress_core::storage::StorageBackend;
-use fortress_core::config::{DatabaseConfig, EncryptionConfig, StorageConfig, ApiConfig, MonitoringConfig};
+use fortress_core::storage::{create_storage_backend, StorageConfig as StorageBackendConfig, StorageBackendType};
+use fortress_core::config::{DatabaseConfig, EncryptionConfig, StorageConfig, ApiConfig, MonitoringConfig, TransactionConfig, StreamingConfig, BackupConfig, AuditConfig, KeyDerivationConfig, Config};
 use std::path::PathBuf;
 use tracing::{info, debug, warn};
-use crate::config_manager::ConfigManager;
-use crate::utils::path_utils;
 use std::process::Command;
 
 pub async fn handle_migrate(
@@ -68,7 +66,13 @@ pub async fn handle_migrate(
     let fortress_config = create_fortress_config(&to, &target_dir)?;
     
     // Initialize Fortress storage
-    let storage = fortress_core::storage::initialize_storage(&fortress_config.storage)
+    let storage_config = StorageBackendConfig {
+        backend_type: StorageBackendType::FileSystem {
+            base_path: target_dir.to_string_lossy().to_string(),
+        },
+        config: std::collections::HashMap::new(),
+    };
+    let storage = create_storage_backend(storage_config)
         .await
         .context("Failed to initialize Fortress storage")?;
     
@@ -105,6 +109,7 @@ pub async fn handle_migrate(
             pb.set_style(
                 ProgressStyle::default_bar()
                     .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})")
+                    .expect("Invalid progress template")
                     .progress_chars("#>-")
             );
             pb.set_message(format!("Migrating {}", table_name));
@@ -119,12 +124,14 @@ pub async fn handle_migrate(
         while offset < row_count {
             let batch = fetch_postgres_batch(&source, table_name, offset, batch_size).await?;
             
-            for row in batch {
-                let fortress_row = serde_json::to_value(&row)
+            for row in &batch {
+                let fortress_row = serde_json::to_value(row)
                     .context("Failed to serialize row")?;
                 
                 // Insert into Fortress
-                storage.insert(table_name, &fortress_row).await
+                let row_json = serde_json::to_vec(&fortress_row)
+                    .context("Failed to serialize row")?;
+                storage.put(&format!("{}/{}", table_name, migrated_rows), &row_json).await
                     .context("Failed to insert row into Fortress")?;
                 
                 migrated_rows += 1;
@@ -151,11 +158,11 @@ pub async fn handle_migrate(
     println!("  📊 Total rows processed: {}", style(total_rows).bold());
     println!("  ✅ Total rows migrated: {}", style(total_migrated).bold().green());
     println!("  📋 Tables migrated: {}", style(tables.len()).bold());
-    println!("  🏰 Fortress database: {}", style(to).bold());
+    println!("  🏰 Fortress database: {}", style(&to).bold());
     println!("  📁 Location: {}", style(target_dir.display()).bold());
     
     println!("\n✅ Migration completed successfully!");
-    info!("Migration from PostgreSQL to '{}' completed", to);
+    info!("Migration from PostgreSQL to '{}' completed", &to);
     
     Ok(())
 }
@@ -163,18 +170,18 @@ pub async fn handle_migrate(
 fn create_fortress_config(name: &str, data_dir: &PathBuf) -> Result<Config> {
     Ok(Config {
         database: DatabaseConfig {
-            path: format!("{}/{}.db", data_dir.display()),
+            path: format!("{}/{}.db", data_dir.to_string_lossy(), name),
             max_size: Some(10 * 1024 * 1024 * 1024), // 10GB
             cache_size: Some(256 * 1024 * 1024), // 256MB
             enable_wal: true,
             pool_size: 20,
         },
         encryption: EncryptionConfig {
-            default_algorithm: "aes256gcm".to_string(),
+            default_algorithm: "aegis256".to_string(),
             key_rotation_interval: std::time::Duration::from_secs(7 * 24 * 3600), // 7 days
             master_key_rotation_interval: std::time::Duration::from_secs(30 * 24 * 3600), // 30 days
             profiles: std::collections::HashMap::new(),
-            key_derivation: fortress_core::config::KeyDerivationConfig::default(),
+            key_derivation: KeyDerivationConfig::default(),
         },
         storage: StorageConfig {
             backend: "filesystem".to_string(),
@@ -183,7 +190,7 @@ fn create_fortress_config(name: &str, data_dir: &PathBuf) -> Result<Config> {
             azure_blob: None,
             gcs: None,
             compression: true,
-            checksum: "sha512".to_string(),
+            checksum: "sha256".to_string(),
         },
         api: Some(ApiConfig {
             rest_port: 8080,
@@ -200,6 +207,10 @@ fn create_fortress_config(name: &str, data_dir: &PathBuf) -> Result<Config> {
             jaeger_endpoint: None,
             log_level: "info".to_string(),
         }),
+        transactions: Some(TransactionConfig::default()),
+        streaming: Some(StreamingConfig::default()),
+        backup: Some(BackupConfig::default()),
+        audit: Some(AuditConfig::default()),
     })
 }
 
@@ -286,7 +297,8 @@ async fn get_postgres_row_count(source: &str, table_name: &str) -> Result<u64> {
     match output {
         Ok(result) => {
             if result.status.success() {
-                let count_str = String::from_utf8_lossy(&result.stdout).trim();
+                let stdout_str = String::from_utf8_lossy(&result.stdout);
+                let count_str = stdout_str.trim();
                 count_str.parse::<u64>()
                     .context("Failed to parse row count")
             } else {
@@ -324,10 +336,10 @@ async fn fetch_postgres_batch(source: &str, table_name: &str, offset: u64, batch
                     
                     // Simple mapping - in production, use proper schema
                     if row_data.len() >= 4 {
-                        row_json.insert("id", json!(row_data[0]));
-                        row_json.insert("name", json!(row_data[1]));
-                        row_json.insert("email", json!(row_data[2]));
-                        row_json.insert("created_at", json!(row_data[3]));
+                        row_json.insert("id".to_string(), json!(row_data[0]));
+                        row_json.insert("name".to_string(), json!(row_data[1]));
+                        row_json.insert("email".to_string(), json!(row_data[2]));
+                        row_json.insert("created_at".to_string(), json!(row_data[3]));
                     }
                     
                     batch_data.push(Value::Object(row_json));
@@ -344,7 +356,7 @@ async fn fetch_postgres_batch(source: &str, table_name: &str, offset: u64, batch
     }
 }
 
-async fn create_fortress_table(storage: &dyn fortress_core::storage::Storage, table_name: &str, schema: &[Value]) -> Result<()> {
+async fn create_fortress_table(_storage: &Box<dyn fortress_core::storage::StorageBackend>, _table_name: &str, schema: &[Value]) -> Result<()> {
     // Create table schema in Fortress
     for column in schema {
         let column_name = column["name"].as_str().unwrap_or("unknown");
@@ -358,8 +370,8 @@ async fn create_fortress_table(storage: &dyn fortress_core::storage::Storage, ta
 }
 
 fn map_postgres_type_to_fortress(postgres_type: &str) -> &str {
-    match postgres_type.to_lowercase() {
-        "integer" | "int4" | "int8" => "integer",
+    match postgres_type.to_lowercase().as_str() {
+        "integer" | "int4" => "integer",
         "bigint" | "int8" => "integer",
         "varchar" | "text" | "char" => "text",
         "timestamp" | "timestamptz" => "date",

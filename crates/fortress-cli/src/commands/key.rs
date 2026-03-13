@@ -1,8 +1,7 @@
 use color_eyre::eyre::Result;
 use console::style;
-use dialoguer::{Confirm, Input, Select};
 use crate::KeyAction;
-use tracing::{info, warn, error};
+use tracing::{info, error};
 use std::time::Duration;
 
 pub async fn handle_key_action(action: KeyAction) -> Result<()> {

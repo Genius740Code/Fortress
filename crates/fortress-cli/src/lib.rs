@@ -12,7 +12,8 @@
 pub mod commands;
 pub mod config_manager;
 pub mod utils;
+pub mod types;
 
 // Re-export commonly used types
 pub use color_eyre::eyre::{Result, Context};
-pub use commands::Commands;
+pub use types::{Commands, KeyAction, ConfigAction};

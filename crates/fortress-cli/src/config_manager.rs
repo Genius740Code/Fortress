@@ -1,4 +1,4 @@
-use color_eyre::eyre::{Result, Context};
+use color_eyre::eyre::Result;
 use std::path::PathBuf;
 use fortress_core::config::Config;
 

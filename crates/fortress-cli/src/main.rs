@@ -1,11 +1,16 @@
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use color_eyre::eyre::Result;
 use tracing::{info, error};
 
 mod commands;
 mod utils;
+mod types;
 
 use commands::{create_simple, cluster, tenant, plugin, start, status, key, config, migrate};
+use types::{Commands, KeyAction, ConfigAction};
+use commands::cluster::ClusterCommands;
+use commands::tenant::TenantCommands;
+use commands::plugin::PluginAction;
 
 #[derive(Parser)]
 #[command(name = "fortress")]
@@ -23,155 +28,6 @@ pub struct Cli {
     /// Configuration file path
     #[arg(short, long, global = true)]
     pub config: Option<String>,
-}
-
-#[derive(Subcommand)]
-pub enum Commands {
-    /// Create a new Fortress database
-    Create {
-        /// Database name
-        #[arg(short, long)]
-        name: Option<String>,
-        
-        /// Template to use (startup, enterprise, custom)
-        #[arg(short, long, default_value = "startup")]
-        template: String,
-        
-        /// Data directory path
-        #[arg(short, long)]
-        data_dir: Option<String>,
-        
-        /// Interactive mode
-        #[arg(short, long)]
-        interactive: bool,
-        
-        /// Show template preview without creating
-        #[arg(long)]
-        dry_run: bool,
-    },
-    /// Migrate data from PostgreSQL to Fortress
-    Migrate {
-        /// Source database type
-        #[arg(short, long, default_value = "postgres")]
-        from: String,
-        
-        /// Fortress database name
-        #[arg(short, long)]
-        to: String,
-        
-        /// Source database connection string
-        #[arg(short, long)]
-        source: String,
-        
-        /// Target data directory
-        #[arg(short, long)]
-        data_dir: Option<String>,
-        
-        /// Specific table to migrate
-        #[arg(short, long)]
-        table: Option<String>,
-        
-        /// Batch size for migration
-        #[arg(short, long, default_value = "1000")]
-        batch_size: usize,
-        
-        /// Enable progress reporting
-        #[arg(short, long)]
-        progress: bool,
-    },
-    /// Start Fortress server
-    Start {
-        /// Data directory path
-        #[arg(short, long)]
-        data_dir: Option<String>,
-        
-        /// Port to listen on
-        #[arg(short = 'p', long, default_value = "8080")]
-        port: u16,
-        
-        /// Host to bind to
-        #[arg(long, default_value = "127.0.0.1")]
-        host: String,
-    },
-    /// Stop Fortress server
-    Stop,
-    /// Show database status
-    Status {
-        /// Data directory path
-        #[arg(short, long)]
-        data_dir: Option<String>,
-    },
-    /// Manage encryption keys
-    Key {
-        #[command(subcommand)]
-        action: KeyAction,
-    },
-    /// Manage configuration
-    Config {
-        #[command(subcommand)]
-        action: ConfigAction,
-    },
-    /// Manage cluster operations
-    Cluster {
-        #[command(subcommand)]
-        action: cluster::ClusterCommands,
-    },
-    /// Manage tenant operations
-    Tenant {
-        #[command(subcommand)]
-        action: tenant::TenantCommands,
-    },
-    /// Manage plugins
-    Plugin {
-        #[command(subcommand)]
-        action: plugin::PluginAction,
-    },
-}
-
-#[derive(Subcommand)]
-pub enum KeyAction {
-    /// Generate new encryption key
-    Generate,
-    /// List all keys
-    List,
-    /// Rotate encryption key
-    Rotate {
-        /// Dry run mode (no actual rotation)
-        #[arg(long)]
-        dry_run: bool,
-        
-        /// Force rotation (skip safety checks)
-        #[arg(long)]
-        force: bool,
-    },
-    /// Rollback to previous key
-    Rollback {
-        /// Key version to rollback to
-        #[arg(long)]
-        version: Option<String>,
-    },
-    /// Show key information
-    Show {
-        /// Key ID
-        key_id: String,
-    },
-}
-
-#[derive(Subcommand)]
-pub enum ConfigAction {
-    /// Show current configuration
-    Show,
-    /// Set configuration value
-    Set {
-        /// Configuration key
-        key: String,
-        /// Configuration value
-        value: String,
-    },
-    /// Reset configuration to defaults
-    Reset,
-    /// Validate configuration
-    Validate,
 }
 
 #[tokio::main]
@@ -226,13 +82,16 @@ async fn run_command(command: Commands) -> Result<()> {
             config::handle_config_action(action).await
         }
         Commands::Cluster { action } => {
-            cluster::execute_cluster_command(action).await.map_err(|e| color_eyre::eyre::eyre!("Cluster command failed: {}", e))
+            let actual_action = crate::commands::cluster::ClusterCommands::from(action);
+            cluster::execute_cluster_command(actual_action).await.map_err(|e| color_eyre::eyre::eyre!("Cluster command failed: {}", e))
         }
         Commands::Tenant { action } => {
-            tenant::execute_tenant_command(action).await.map_err(|e| color_eyre::eyre::eyre!("Tenant command failed: {}", e))
+            let actual_action = crate::commands::tenant::TenantCommands::from(action);
+            tenant::execute_tenant_command(actual_action).await.map_err(|e| color_eyre::eyre::eyre!("Tenant command failed: {}", e))
         }
         Commands::Plugin { action } => {
-            plugin::execute_plugin_command(action).await.map_err(|e| color_eyre::eyre::eyre!("Plugin command failed: {}", e))
+            let actual_action = crate::commands::plugin::PluginAction::from(action);
+            plugin::execute_plugin_command(actual_action).await.map_err(|e| color_eyre::eyre::eyre!("Plugin command failed: {}", e))
         }
     }
 }

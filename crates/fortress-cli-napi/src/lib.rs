@@ -1,6 +1,5 @@
 #![deny(clippy::all)]
 
-use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
 /// Get Fortress version
@@ -11,7 +10,7 @@ pub fn get_version() -> String {
 
 /// Execute a simple test command
 #[napi]
-pub async fn test_command(args: Vec<String>) -> Result<String> {
+pub fn test_command(args: Vec<String>) -> napi::Result<String> {
     Ok(format!("Test command executed with {} args", args.len()))
 }
 
@@ -31,20 +30,20 @@ impl FortressCli {
 
     /// Get version information
     #[napi]
-    pub async fn version(&self) -> Result<String> {
+    pub fn version(&self) -> napi::Result<String> {
         Ok("Fortress CLI v0.1.0 - NAPI Binding".to_string())
     }
 
     /// Get help information
     #[napi]
-    pub async fn help(&self) -> Result<String> {
+    pub fn help(&self) -> napi::Result<String> {
         Ok("Fortress CLI - NAPI Binding\nCommands:\n  version - Show version\n  help    - Show this help\n  test    - Run test command".to_string())
     }
 
     /// Execute test command
     #[napi]
-    pub async fn test(&self, args: Option<Vec<String>>) -> Result<String> {
-        let arg_count = args.as_ref().map_or(&0, |a| &a.len());
+    pub fn test(&self, args: Option<Vec<String>>) -> napi::Result<String> {
+        let arg_count = args.as_ref().map_or(0, |a| a.len());
         Ok(format!("Test command executed with {} arguments", arg_count))
     }
 }

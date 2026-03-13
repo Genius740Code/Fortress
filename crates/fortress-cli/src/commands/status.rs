@@ -1,7 +1,6 @@
-use color_eyre::eyre::{Result, Context};
+use color_eyre::eyre::Result;
 use console::style;
 use std::path::PathBuf;
-use tracing::info;
 
 pub async fn handle_status(data_dir: Option<String>) -> Result<()> {
     println!("{}", style("📊 Fortress Database Status").bold().cyan());

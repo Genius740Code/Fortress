@@ -1,7 +1,7 @@
-use color_eyre::eyre::{Result, Context};
+use color_eyre::eyre::Result;
 use console::style;
 use std::path::PathBuf;
-use tracing::{info, error};
+use tracing::info;
 
 pub async fn handle_start(
     data_dir: Option<String>,

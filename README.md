@@ -15,39 +15,44 @@ A highly customizable, secure database system with multi-layer encryption that c
 
 ## ✨ Key Features
 
-### 🔐 Security First
-- **Automatic Encryption**: All data encrypted before storage, decrypted after retrieval
-- **Multiple Algorithms**: AEGIS-256, ChaCha20-Poly1305, AES-256-GCM, and more
-- **Field-Level Encryption**: Encrypt specific fields with different algorithms
-- **Key Management**: Automatic key generation, rotation, and secure storage
-- **Zero-Downtime Rotation**: Rotate encryption keys without service interruption
+### � Feature Maturity Legend
+- `[Stable]` - Production-ready with comprehensive testing
+- `[In Development]` - Partial implementation, APIs may change
+- `[Planned]` - Designed but not yet implemented
+
+### �🔐 Security First
+- **Automatic Encryption**: All data encrypted before storage, decrypted after retrieval `[Stable]`
+- **Multiple Algorithms**: AEGIS-256, ChaCha20-Poly1305, AES-256-GCM, and more `[Stable]`
+- **Field-Level Encryption**: Encrypt specific fields with different algorithms `[Stable]`
+- **Key Management**: Automatic key generation, rotation, and secure storage `[Stable]`
+- **Zero-Downtime Rotation**: Rotate encryption keys without service interruption `[In Development]`
 
 ### 🏗️ Enterprise Architecture
-- **Multi-Tenant Support**: Isolated data per tenant/organization
-- **Cluster Support**: High availability with Raft consensus
-- **Audit Logging**: Comprehensive security event logging
-- **Compliance Framework**: GDPR, HIPAA, PCI-DSS compliance features
-- **HSM Integration**: Hardware Security Module support
+- **Multi-Tenant Support**: Isolated data per tenant/organization `[Stable]`
+- **Cluster Support**: High availability with Raft consensus `[In Development]`
+- **Audit Logging**: Comprehensive security event logging `[In Development]`
+- **Compliance Framework**: GDPR, HIPAA, PCI-DSS compliance features `[Planned]`
+- **HSM Integration**: Hardware Security Module support `[In Development]`
 
 ### ⚡ High Performance
-- **Optimized Algorithms**: AEGIS-256 for maximum speed
-- **Caching Layer**: Intelligent key and data caching
-- **Connection Pooling**: Efficient database connections
-- **Compression**: Built-in data compression
-- **Performance Monitoring**: Real-time metrics and profiling
+- **Optimized Algorithms**: AEGIS-256 for maximum speed `[Stable]`
+- **Caching Layer**: Intelligent key and data caching `[In Development]`
+- **Connection Pooling**: Efficient database connections `[Stable]`
+- **Compression**: Built-in data compression `[Stable]`
+- **Performance Monitoring**: Real-time metrics and profiling `[In Development]`
 
 ### 🔧 Developer Friendly
-- **REST API**: Standard HTTP methods with JSON payloads
-- **Multiple SDKs**: Python, JavaScript, Rust, Go, and more
-- **WebSocket API**: Real-time updates and streaming
-- **GraphQL Support**: Complex queries with GraphQL
-- **Plugin System**: Extensible functionality
+- **REST API**: Standard HTTP methods with JSON payloads `[Stable]`
+- **Multiple SDKs**: Python, JavaScript, Rust, Go, and more `[In Development]`
+- **WebSocket API**: Real-time updates and streaming `[In Development]`
+- **GraphQL Support**: Complex queries with GraphQL `[Planned]`
+- **Plugin System**: Extensible functionality `[In Development]`
 
 ### 🐳 Modern Deployment
-- **Docker Support**: Container-ready with official images
-- **Kubernetes**: Production-ready K8s manifests
-- **Helm Charts**: Easy deployment and management
-- **Cloud Integration**: AWS, Azure, Google Cloud support
+- **Docker Support**: Container-ready with official images `[Stable]`
+- **Kubernetes**: Production-ready K8s manifests `[In Development]`
+- **Helm Charts**: Easy deployment and management `[In Development]`
+- **Cloud Integration**: AWS, Azure, Google Cloud support `[Planned]`
 
 ## 🚀 Quick Start
 

@@ -34,7 +34,7 @@ use hmac::{Hmac, Mac};
 use argon2::PasswordHasher;
 type HmacSha256 = Hmac<Sha256>;
 type HmacSha512 = Hmac<Sha512>;
-// use aegis::aegis256::Aegis256; // TODO: Fix aegis import
+// aegis crate import removed - using custom Aegis256 implementation
 // use ring::aead::{LessSafeKey, UnboundKey, AES_256_GCM};
 // use ring::aead::Nonce as RingNonce;
 // use generic_array::GenericArray;
