@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial OpenAPI specification for REST API
 - Production readiness status documentation
+- Production Readiness Matrix with honest feature assessment
 - Data migration guide and tools
 - Key rotation runbook and procedures
 - Critical issues documentation

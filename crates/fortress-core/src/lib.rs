@@ -197,6 +197,9 @@ pub mod backup;
 /// Backup manager implementation
 pub mod backup_manager;
 
+/// Enhanced backup manager with additional safety features
+pub mod backup_manager_improvements;
+
 /// Disaster recovery manager implementation
 pub mod disaster_recovery;
 

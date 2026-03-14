@@ -628,7 +628,11 @@ impl BackupManager for DefaultBackupManager {
                         let backup_id = backup_id.clone();
                         let config = config.clone();
                         async move {
-                            let permit = manager.semaphore.acquire().await.unwrap();
+                            let permit = manager.semaphore.acquire().await.map_err(|e| FortressError::storage(
+                                format!("Failed to acquire semaphore permit: {}", e),
+                                "backup".to_string(),
+                                StorageErrorCode::InvalidOperation,
+                            ))?;
                             let result = manager.backup_single_key(source_storage, &key, &backup_id, &config).await;
                             drop(permit);
                             result
@@ -636,7 +640,6 @@ impl BackupManager for DefaultBackupManager {
                     })
                     .buffer_unordered(config.parallel_settings.max_workers as usize);
 
-                let mut processed_count = 0;
                 let backup_items = stream.collect::<Vec<_>>().await;
                 
                 for item_result in backup_items {
@@ -644,7 +647,6 @@ impl BackupManager for DefaultBackupManager {
                         Ok(item) => {
                             total_size += item.size;
                             items.push(item);
-                            processed_count += 1;
                         }
                         Err(e) => {
                             return Err(FortressError::storage(
@@ -961,8 +963,8 @@ impl BackupManager for DefaultBackupManager {
                 full_backup_storage: 0,
                 incremental_backup_storage: 0,
                 differential_backup_storage: 0,
-                oldest_backup: Some(backups.last().unwrap().created_at),
-                newest_backup: Some(backups.first().unwrap().created_at),
+                oldest_backup: backups.last().map(|b| b.created_at),
+                newest_backup: backups.first().map(|b| b.created_at),
                 average_backup_size: 0,
             };
             

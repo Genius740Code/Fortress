@@ -253,6 +253,7 @@ curl http://localhost:8080/metrics/performance
 ### Security & Compliance
 - 🔐 [Security Guide](docs/SECURITY.md) - Security features and best practices
 - 🔑 [Key Rotation Guide](docs/KEY_ROTATION.md) - Key management and rotation
+- 📊 [Production Readiness Matrix](docs/PRODUCTION_READINESS_MATRIX.md) - Honest assessment of production readiness
 
 ### Operations
 - 🚀 [Deployment Guide](docs/DEPLOYMENT_GUIDE.md) - Production deployment

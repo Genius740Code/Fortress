@@ -14,7 +14,7 @@ use sha2::{Sha256, Digest};
 use uuid::Uuid;
 
 /// Backup strategy types
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum BackupStrategy {
     /// Full backup of all data
     Full,
