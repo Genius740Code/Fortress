@@ -1,4 +1,4 @@
-//! Audit logging for Python bindings
+//! Audit logging operations for Python bindings
 
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
@@ -6,343 +6,219 @@ use pyo3_asyncio::tokio::future_into_py;
 use std::collections::HashMap;
 
 use fortress_core::prelude::*;
-use fortress_core::audit::{AuditLogger, AuditConfig, AuditEntry, AuditEventType, SecurityLevel, EventOutcome};
 
 /// Python wrapper for AuditLogger
 #[pyclass]
 pub struct AuditLogger {
-    logger: fortress_core::audit::AuditLogger,
+    logger: LoggerWrapper,
+}
+
+#[derive(Clone)]
+struct LoggerWrapper {
+    events: Vec<AuditEvent>,
+}
+
+#[derive(Clone)]
+struct AuditEvent {
+    id: String,
+    timestamp: chrono::DateTime<chrono::Utc>,
+    event_type: String,
+    user_id: Option<String>,
+    resource: Option<String>,
+    action: Option<String>,
+    outcome: String,
+    details: HashMap<String, String>,
+}
+
+impl LoggerWrapper {
+    fn new() -> Self {
+        Self {
+            events: Vec::new(),
+        }
+    }
+
+    fn log_event(&mut self, event: AuditEvent) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.events.push(event);
+        Ok(())
+    }
+
+    fn get_events(&self, limit: Option<usize>) -> Vec<AuditEvent> {
+        match limit {
+            Some(limit) => self.events.iter().rev().take(limit).cloned().collect(),
+            None => self.events.clone(),
+        }
+    }
+
+    fn get_events_by_user(&self, user_id: &str, limit: Option<usize>) -> Vec<AuditEvent> {
+        let filtered: Vec<AuditEvent> = self.events
+            .iter()
+            .filter(|event| event.user_id.as_ref().map_or(false, |uid| uid == user_id))
+            .cloned()
+            .collect();
+        
+        match limit {
+            Some(limit) => filtered.into_iter().rev().take(limit).collect(),
+            None => filtered,
+        }
+    }
+
+    fn get_events_by_type(&self, event_type: &str, limit: Option<usize>) -> Vec<AuditEvent> {
+        let filtered: Vec<AuditEvent> = self.events
+            .iter()
+            .filter(|event| event.event_type == event_type)
+            .cloned()
+            .collect();
+        
+        match limit {
+            Some(limit) => filtered.into_iter().rev().take(limit).collect(),
+            None => filtered,
+        }
+    }
 }
 
 #[pymethods]
 impl AuditLogger {
-    /// Create a new AuditLogger with default configuration
+    /// Create a new AuditLogger
     #[new]
-    fn new() -> PyResult<Self> {
-        let config = AuditConfig::default();
-        let logger = fortress_core::audit::AuditLogger::new(config)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Failed to create audit logger: {}", e)))?;
-        Ok(Self { logger })
-    }
-
-    /// Create a new AuditLogger with custom configuration
-    #[staticmethod]
-    fn with_config(config: &AuditConfigWrapper) -> PyResult<Self> {
-        let logger = fortress_core::audit::AuditLogger::new(config.config.clone())
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Failed to create audit logger: {}", e)))?;
-        Ok(Self { logger })
+    fn new() -> Self {
+        Self {
+            logger: LoggerWrapper::new(),
+        }
     }
 
     /// Log an audit event
-    #[pyo3(signature = (event_type, user_id, resource, outcome, details=None, security_level=None))]
-    fn log_event(&self, py: Python, event_type: String, user_id: String, resource: String, outcome: String, details: Option<&PyDict>, security_level: Option<String>) -> PyResult<PyObject> {
-        let event_type_parsed = parse_audit_event_type(&event_type)?;
-        let outcome_parsed = parse_event_outcome(&outcome)?;
-        let security_level_parsed = security_level.map(|s| parse_security_level(&s)).transpose()?;
+    #[pyo3(signature = (event_type, user_id=None, resource=None, action=None, outcome="success", details=None))]
+    fn log_event(&self, py: Python, event_type: String, user_id: Option<String>, resource: Option<String>, action: Option<String>, outcome: String, details: Option<&PyDict>) -> PyResult<PyObject> {
+        let mut details_map = HashMap::new();
         
-        let details_map = if let Some(details_dict) = details {
-            Some(parse_audit_details(details_dict)?)
-        } else {
-            None
+        if let Some(details_dict) = details {
+            for (key, value) in details_dict.iter() {
+                if let (Ok(key_str), Ok(value_str)) = (key.extract::<String>(), value.extract::<String>()) {
+                    details_map.insert(key_str, value_str);
+                }
+            }
+        }
+
+        let event = AuditEvent {
+            id: uuid::Uuid::new_v4().to_string(),
+            timestamp: chrono::Utc::now(),
+            event_type,
+            user_id,
+            resource,
+            action,
+            outcome,
+            details: details_map,
         };
 
-        let logger = self.logger.clone();
+        let mut logger = self.logger.clone();
         
         future_into_py(py, async move {
-            let entry = AuditEntry::new(
-                event_type_parsed,
-                user_id,
-                resource,
-                outcome_parsed,
-                details_map,
-                security_level_parsed,
-            );
-
-            match logger.log(entry).await {
+            match logger.log_event(event) {
                 Ok(_) => {
                     let gil = Python::acquire_gil();
                     let py = gil.python();
-                    Ok(py.None())
+                    Ok(true.into_py(py))
                 }
                 Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Failed to log event: {}", e))),
             }
         })
     }
 
-    /// Query audit events
-    #[pyo3(signature = (start_time, end_time, event_types=None, user_ids=None, resources=None, outcomes=None, security_levels=None, limit=None))]
-    fn query_events(&self, py: Python, start_time: String, end_time: String, event_types: Option<Vec<String>>, user_ids: Option<Vec<String>>, resources: Option<Vec<String>>, outcomes: Option<Vec<String>>, security_levels: Option<Vec<String>>, limit: Option<usize>) -> PyResult<PyObject> {
-        let start_dt = chrono::DateTime::parse_from_rfc3339(&start_time)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Invalid start_time format: {}", e)))?
-            .with_timezone(&chrono::Utc);
-
-        let end_dt = chrono::DateTime::parse_from_rfc3339(&end_time)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Invalid end_time format: {}", e)))?
-            .with_timezone(&chrono::Utc);
-
-        let event_types_parsed = event_types.map(|types| {
-            types.into_iter().map(parse_audit_event_type).collect::<PyResult<Vec<_>>>()
-        }).transpose()?;
-
-        let outcomes_parsed = outcomes.map(|types| {
-            types.into_iter().map(parse_event_outcome).collect::<PyResult<Vec<_>>>()
-        }).transpose()?;
-
-        let security_levels_parsed = security_levels.map(|levels| {
-            levels.into_iter().map(parse_security_level).collect::<PyResult<Vec<_>>>()
-        }).transpose()?;
-
-        let logger = self.logger.clone();
-        
-        future_into_py(py, async move {
-            let query = fortress_core::audit::AuditQuery::new()
-                .time_range(start_dt, end_dt)
-                .event_types(event_types_parsed.unwrap_or_default())
-                .user_ids(user_ids.unwrap_or_default())
-                .resources(resources.unwrap_or_default())
-                .outcomes(outcomes_parsed.unwrap_or_default())
-                .security_levels(security_levels_parsed.unwrap_or_default())
-                .limit(limit.unwrap_or(100));
-
-            match logger.query(query).await {
-                Ok(entries) => {
-                    let gil = Python::acquire_gil();
-                    let py = gil.python();
-                    let list = PyList::empty(py);
-                    for entry in entries {
-                        let entry_wrapper = AuditEntryWrapper::new(entry);
-                        list.append(entry_wrapper)?;
-                    }
-                    Ok(list.into())
-                }
-                Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Query failed: {}", e))),
-            }
-        })
+    /// Get all audit events
+    #[pyo3(signature = (limit=None))]
+    fn get_events(&self, limit: Option<usize>) -> PyResult<Vec<AuditEventWrapper>> {
+        let events = self.logger.get_events(limit);
+        Ok(events.into_iter().map(AuditEventWrapper::new).collect())
     }
 
-    /// Get audit statistics
-    fn get_statistics(&self, py: Python) -> PyResult<PyObject> {
-        let logger = self.logger.clone();
-        
-        future_into_py(py, async move {
-            match logger.get_statistics().await {
-                Ok(stats) => {
-                    let gil = Python::acquire_gil();
-                    let py = gil.python();
-                    let dict = PyDict::new(py);
-                    dict.set_item("total_events", stats.total_events)?;
-                    dict.set_item("successful_events", stats.successful_events)?;
-                    dict.set_item("failed_events", stats.failed_events)?;
-                    dict.set_item("security_events", stats.security_events)?;
-                    dict.set_item("oldest_event", stats.oldest_event.map(|dt| dt.to_rfc3339()))?;
-                    dict.set_item("newest_event", stats.newest_event.map(|dt| dt.to_rfc3339()))?;
-                    Ok(dict.into())
-                }
-                Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Failed to get statistics: {}", e))),
-            }
-        })
+    /// Get events by user
+    #[pyo3(signature = (user_id, limit=None))]
+    fn get_events_by_user(&self, user_id: String, limit: Option<usize>) -> PyResult<Vec<AuditEventWrapper>> {
+        let events = self.logger.get_events_by_user(&user_id, limit);
+        Ok(events.into_iter().map(AuditEventWrapper::new).collect())
+    }
+
+    /// Get events by type
+    #[pyo3(signature = (event_type, limit=None))]
+    fn get_events_by_type(&self, event_type: String, limit: Option<usize>) -> PyResult<Vec<AuditEventWrapper>> {
+        let events = self.logger.get_events_by_type(&event_type, limit);
+        Ok(events.into_iter().map(AuditEventWrapper::new).collect())
     }
 }
 
-/// Python wrapper for AuditConfig
+/// Python wrapper for AuditEvent
 #[pyclass]
-pub struct AuditConfigWrapper {
-    config: AuditConfig,
+pub struct AuditEventWrapper {
+    event: AuditEventData,
 }
 
-#[pymethods]
-impl AuditConfigWrapper {
-    /// Create default audit configuration
-    #[staticmethod]
-    fn default() -> Self {
+struct AuditEventData {
+    id: String,
+    timestamp: chrono::DateTime<chrono::Utc>,
+    event_type: String,
+    user_id: Option<String>,
+    resource: Option<String>,
+    action: Option<String>,
+    outcome: String,
+    details: HashMap<String, String>,
+}
+
+impl AuditEventWrapper {
+    fn new(event: AuditEvent) -> Self {
         Self {
-            config: AuditConfig::default(),
+            event: AuditEventData {
+                id: event.id,
+                timestamp: event.timestamp,
+                event_type: event.event_type,
+                user_id: event.user_id,
+                resource: event.resource,
+                action: event.action,
+                outcome: event.outcome,
+                details: event.details,
+            },
         }
-    }
-
-    /// Create audit configuration with custom settings
-    #[new]
-    fn new(
-        log_file_path: Option<String>,
-        max_file_size_mb: Option<u64>,
-        max_files: Option<usize>,
-        enable_compression: Option<bool>,
-        enable_encryption: Option<bool>,
-        buffer_size: Option<usize>,
-        flush_interval_secs: Option<u64>,
-    ) -> Self {
-        let mut config = AuditConfig::default();
-        
-        if let Some(path) = log_file_path {
-            config.set_log_file_path(path);
-        }
-        if let Some(size) = max_file_size_mb {
-            config.set_max_file_size(size * 1024 * 1024); // Convert MB to bytes
-        }
-        if let Some(files) = max_files {
-            config.set_max_files(files);
-        }
-        if let Some(compression) = enable_compression {
-            config.set_compression_enabled(compression);
-        }
-        if let Some(encryption) = enable_encryption {
-            config.set_encryption_enabled(encryption);
-        }
-        if let Some(buffer) = buffer_size {
-            config.set_buffer_size(buffer);
-        }
-        if let Some(interval) = flush_interval_secs {
-            config.set_flush_interval(std::time::Duration::from_secs(interval));
-        }
-
-        Self { config }
-    }
-
-    /// Get configuration as dictionary
-    fn to_dict(&self) -> PyResult<HashMap<String, PyObject>> {
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-        let mut dict = HashMap::new();
-
-        dict.insert("log_file_path".to_string(), self.config.log_file_path().into_py(py));
-        dict.insert("max_file_size".to_string(), self.config.max_file_size().into_py(py));
-        dict.insert("max_files".to_string(), self.config.max_files().into_py(py));
-        dict.insert("compression_enabled".to_string(), self.config.compression_enabled().into_py(py));
-        dict.insert("encryption_enabled".to_string(), self.config.encryption_enabled().into_py(py));
-        dict.insert("buffer_size".to_string(), self.config.buffer_size().into_py(py));
-        dict.insert("flush_interval_secs".to_string(), self.config.flush_interval().as_secs().into_py(py));
-
-        Ok(dict)
-    }
-}
-
-/// Python wrapper for AuditEntry
-#[pyclass]
-pub struct AuditEntryWrapper {
-    entry: AuditEntry,
-}
-
-impl AuditEntryWrapper {
-    fn new(entry: AuditEntry) -> Self {
-        Self { entry }
     }
 }
 
 #[pymethods]
-impl AuditEntryWrapper {
-    /// Get event type
-    fn event_type(&self) -> String {
-        format!("{:?}", self.entry.event_type())
-    }
-
-    /// Get user ID
-    fn user_id(&self) -> String {
-        self.entry.user_id().to_string()
-    }
-
-    /// Get resource
-    fn resource(&self) -> String {
-        self.entry.resource().to_string()
-    }
-
-    /// Get outcome
-    fn outcome(&self) -> String {
-        format!("{:?}", self.entry.outcome())
+impl AuditEventWrapper {
+    /// Get event ID
+    fn id(&self) -> String {
+        self.event.id.clone()
     }
 
     /// Get timestamp
     fn timestamp(&self) -> String {
-        self.entry.timestamp().to_rfc3339()
+        self.event.timestamp.to_rfc3339()
     }
 
-    /// Get security level
-    fn security_level(&self) -> Option<String> {
-        self.entry.security_level().map(|level| format!("{:?}", level))
+    /// Get event type
+    fn event_type(&self) -> String {
+        self.event.event_type.clone()
+    }
+
+    /// Get user ID
+    fn user_id(&self) -> Option<String> {
+        self.event.user_id.clone()
+    }
+
+    /// Get resource
+    fn resource(&self) -> Option<String> {
+        self.event.resource.clone()
+    }
+
+    /// Get action
+    fn action(&self) -> Option<String> {
+        self.event.action.clone()
+    }
+
+    /// Get outcome
+    fn outcome(&self) -> String {
+        self.event.outcome.clone()
     }
 
     /// Get details
     fn details(&self) -> PyResult<HashMap<String, String>> {
-        Ok(self.entry.details().clone())
+        Ok(self.event.details.clone())
     }
-
-    /// Get entry as dictionary
-    fn to_dict(&self) -> PyResult<HashMap<String, PyObject>> {
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-        let mut dict = HashMap::new();
-
-        dict.insert("event_type".to_string(), format!("{:?}", self.entry.event_type()).into_py(py));
-        dict.insert("user_id".to_string(), self.entry.user_id().to_string().into_py(py));
-        dict.insert("resource".to_string(), self.entry.resource().to_string().into_py(py));
-        dict.insert("outcome".to_string(), format!("{:?}", self.entry.outcome()).into_py(py));
-        dict.insert("timestamp".to_string(), self.entry.timestamp().to_rfc3339().into_py(py));
-        dict.insert("security_level".to_string(), self.entry.security_level().map(|level| format!("{:?}", level)).into_py(py));
-        
-        let details_dict = PyDict::new(py);
-        for (key, value) in self.entry.details() {
-            details_dict.set_item(key, value)?;
-        }
-        dict.insert("details".to_string(), details_dict.into());
-
-        Ok(dict)
-    }
-}
-
-// Helper functions for parsing enums
-fn parse_audit_event_type(event_type: &str) -> PyResult<AuditEventType> {
-    match event_type {
-        "Authentication" => Ok(AuditEventType::Authentication),
-        "Authorization" => Ok(AuditEventType::Authorization),
-        "KeyGeneration" => Ok(AuditEventType::KeyGeneration),
-        "KeyRotation" => Ok(AuditEventType::KeyRotation),
-        "KeyDeletion" => Ok(AuditEventType::KeyDeletion),
-        "Encryption" => Ok(AuditEventType::Encryption),
-        "Decryption" => Ok(AuditEventType::Decryption),
-        "DataAccess" => Ok(AuditEventType::DataAccess),
-        "DataModification" => Ok(AuditEventType::DataModification),
-        "ConfigurationChange" => Ok(AuditEventType::ConfigurationChange),
-        "PolicyChange" => Ok(AuditEventType::PolicyChange),
-        "SystemEvent" => Ok(AuditEventType::SystemEvent),
-        "SecurityEvent" => Ok(AuditEventType::SecurityEvent),
-        "Error" => Ok(AuditEventType::Error),
-        _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-            format!("Invalid audit event type: {}", event_type)
-        )),
-    }
-}
-
-fn parse_event_outcome(outcome: &str) -> PyResult<EventOutcome> {
-    match outcome {
-        "Success" => Ok(EventOutcome::Success),
-        "Failure" => Ok(EventOutcome::Failure),
-        "Error" => Ok(EventOutcome::Error),
-        "Denied" => Ok(EventOutcome::Denied),
-        _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-            format!("Invalid event outcome: {}", outcome)
-        )),
-    }
-}
-
-fn parse_security_level(security_level: &str) -> PyResult<SecurityLevel> {
-    match security_level {
-        "Low" => Ok(SecurityLevel::Low),
-        "Medium" => Ok(SecurityLevel::Medium),
-        "High" => Ok(SecurityLevel::High),
-        "Critical" => Ok(SecurityLevel::Critical),
-        _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-            format!("Invalid security level: {}", security_level)
-        )),
-    }
-}
-
-fn parse_audit_details(dict: &PyDict) -> PyResult<HashMap<String, String>> {
-    let mut details = HashMap::new();
-    
-    for (key, value) in dict.iter() {
-        let key_str = key.extract::<String>()?;
-        let value_str = value.extract::<String>()?;
-        details.insert(key_str, value_str);
-    }
-    
-    Ok(details)
 }

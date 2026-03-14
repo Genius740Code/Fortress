@@ -5,69 +5,12 @@ use pyo3::types::{PyBytes, PyDict};
 use pyo3_asyncio::tokio::future_into_py;
 
 use fortress_core::prelude::*;
-use fortress_core::encryption::{Aegis256, ChaCha20Poly1305, Aes256Gcm};
+use fortress_core::encryption::{EncryptionProfile, Aegis256, ChaCha20Poly1305, Aes256Gcm};
 
 /// Python wrapper for encryption algorithms
 #[pyclass]
 pub struct EncryptionAlgorithm {
-    algorithm: AlgorithmWrapper,
-}
-
-#[derive(Clone)]
-enum AlgorithmWrapper {
-    Aegis256(Aegis256),
-    ChaCha20Poly1305(ChaCha20Poly1305),
-    Aes256Gcm(Aes256Gcm),
-}
-
-impl AlgorithmWrapper {
-    fn encrypt(&self, plaintext: &[u8], key: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
-        match self {
-            AlgorithmWrapper::Aegis256(algo) => algo.encrypt(plaintext, key).map_err(|e| Box::new(e) as _),
-            AlgorithmWrapper::ChaCha20Poly1305(algo) => algo.encrypt(plaintext, key).map_err(|e| Box::new(e) as _),
-            AlgorithmWrapper::Aes256Gcm(algo) => algo.encrypt(plaintext, key).map_err(|e| Box::new(e) as _),
-        }
-    }
-
-    fn decrypt(&self, ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
-        match self {
-            AlgorithmWrapper::Aegis256(algo) => algo.decrypt(ciphertext, key).map_err(|e| Box::new(e) as _),
-            AlgorithmWrapper::ChaCha20Poly1305(algo) => algo.decrypt(ciphertext, key).map_err(|e| Box::new(e) as _),
-            AlgorithmWrapper::Aes256Gcm(algo) => algo.decrypt(ciphertext, key).map_err(|e| Box::new(e) as _),
-        }
-    }
-
-    fn name(&self) -> &str {
-        match self {
-            AlgorithmWrapper::Aegis256(algo) => algo.name(),
-            AlgorithmWrapper::ChaCha20Poly1305(algo) => algo.name(),
-            AlgorithmWrapper::Aes256Gcm(algo) => algo.name(),
-        }
-    }
-
-    fn key_size(&self) -> usize {
-        match self {
-            AlgorithmWrapper::Aegis256(algo) => algo.key_size(),
-            AlgorithmWrapper::ChaCha20Poly1305(algo) => algo.key_size(),
-            AlgorithmWrapper::Aes256Gcm(algo) => algo.key_size(),
-        }
-    }
-
-    fn nonce_size(&self) -> usize {
-        match self {
-            AlgorithmWrapper::Aegis256(algo) => algo.nonce_size(),
-            AlgorithmWrapper::ChaCha20Poly1305(algo) => algo.nonce_size(),
-            AlgorithmWrapper::Aes256Gcm(algo) => algo.nonce_size(),
-        }
-    }
-
-    fn tag_size(&self) -> usize {
-        match self {
-            AlgorithmWrapper::Aegis256(algo) => algo.tag_size(),
-            AlgorithmWrapper::ChaCha20Poly1305(algo) => algo.tag_size(),
-            AlgorithmWrapper::Aes256Gcm(algo) => algo.tag_size(),
-        }
-    }
+    algorithm: Box<dyn EncryptionAlgorithm + Send + Sync>,
 }
 
 #[pymethods]
@@ -76,7 +19,7 @@ impl EncryptionAlgorithm {
     #[staticmethod]
     fn aegis256() -> Self {
         Self {
-            algorithm: AlgorithmWrapper::Aegis256(Aegis256::new()),
+            algorithm: Box::new(Aegis256::new()),
         }
     }
 
@@ -84,7 +27,7 @@ impl EncryptionAlgorithm {
     #[staticmethod]
     fn chacha20poly1305() -> Self {
         Self {
-            algorithm: AlgorithmWrapper::ChaCha20Poly1305(ChaCha20Poly1305::new()),
+            algorithm: Box::new(ChaCha20Poly1305::new()),
         }
     }
 
@@ -92,7 +35,7 @@ impl EncryptionAlgorithm {
     #[staticmethod]
     fn aes256gcm() -> Self {
         Self {
-            algorithm: AlgorithmWrapper::Aes256Gcm(Aes256Gcm::new()),
+            algorithm: Box::new(Aes256Gcm::new()),
         }
     }
 
@@ -164,39 +107,7 @@ impl EncryptionAlgorithm {
 /// Python wrapper for encryption profiles
 #[pyclass]
 pub struct EncryptionProfile {
-    profile: ProfileWrapper,
-}
-
-#[derive(Clone)]
-struct ProfileWrapper {
-    algorithm: AlgorithmWrapper,
-    key_rotation_interval: std::time::Duration,
-}
-
-impl ProfileWrapper {
-    fn new(algorithm: AlgorithmWrapper, key_rotation_interval: std::time::Duration) -> Self {
-        Self {
-            algorithm,
-            key_rotation_interval,
-        }
-    }
-
-    fn name(&self) -> &str {
-        self.algorithm.name()
-    }
-
-    fn algorithm(&self) -> &AlgorithmWrapper {
-        &self.algorithm
-    }
-
-    fn key_rotation_interval(&self) -> std::time::Duration {
-        self.key_rotation_interval
-    }
-
-    fn is_secure(&self) -> bool {
-        // Basic security check - can be enhanced
-        self.key_rotation_interval.as_secs() > 0 && self.algorithm.key_size() >= 32
-    }
+    profile: fortress_core::encryption::EncryptionProfile,
 }
 
 #[pymethods]
@@ -205,15 +116,15 @@ impl EncryptionProfile {
     #[new]
     fn new(algorithm_name: String, key_rotation_interval_secs: u64) -> PyResult<Self> {
         let algorithm = match algorithm_name.as_str() {
-            "aegis256" => AlgorithmWrapper::Aegis256(Aegis256::new()),
-            "chacha20poly1305" => AlgorithmWrapper::ChaCha20Poly1305(ChaCha20Poly1305::new()),
-            "aes256gcm" => AlgorithmWrapper::Aes256Gcm(Aes256Gcm::new()),
+            "aegis256" => Box::new(Aegis256::new()) as Box<dyn EncryptionAlgorithm + Send + Sync>,
+            "chacha20poly1305" => Box::new(ChaCha20Poly1305::new()),
+            "aes256gcm" => Box::new(Aes256Gcm::new()),
             _ => return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                 format!("Unknown algorithm: {}", algorithm_name)
             )),
         };
 
-        let profile = ProfileWrapper::new(
+        let profile = fortress_core::encryption::EncryptionProfile::new(
             algorithm,
             std::time::Duration::from_secs(key_rotation_interval_secs),
         );
@@ -246,16 +157,16 @@ impl EncryptionProfile {
 #[pyfunction]
 fn generate_key(algorithm_name: String) -> PyResult<Vec<u8>> {
     let algorithm = match algorithm_name.as_str() {
-        "aegis256" => AlgorithmWrapper::Aegis256(Aegis256::new()),
-        "chacha20poly1305" => AlgorithmWrapper::ChaCha20Poly1305(ChaCha20Poly1305::new()),
-        "aes256gcm" => AlgorithmWrapper::Aes256Gcm(Aes256Gcm::new()),
+        "aegis256" => Box::new(Aegis256::new()) as Box<dyn EncryptionAlgorithm + Send + Sync>,
+        "chacha20poly1305" => Box::new(ChaCha20Poly1305::new()),
+        "aes256gcm" => Box::new(Aes256Gcm::new()),
         _ => return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
             format!("Unknown algorithm: {}", algorithm_name)
         )),
     };
 
     let key_manager = KeyManager::new();
-    match key_manager.generate_key(&algorithm) {
+    match key_manager.generate_key(&*algorithm) {
         Ok(key) => Ok(key.to_vec()),
         Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Key generation failed: {}", e))),
     }
@@ -264,9 +175,9 @@ fn generate_key(algorithm_name: String) -> PyResult<Vec<u8>> {
 #[pyfunction]
 fn generate_nonce(algorithm_name: String) -> PyResult<Vec<u8>> {
     let algorithm = match algorithm_name.as_str() {
-        "aegis256" => AlgorithmWrapper::Aegis256(Aegis256::new()),
-        "chacha20poly1305" => AlgorithmWrapper::ChaCha20Poly1305(ChaCha20Poly1305::new()),
-        "aes256gcm" => AlgorithmWrapper::Aes256Gcm(Aes256Gcm::new()),
+        "aegis256" => Box::new(Aegis256::new()) as Box<dyn EncryptionAlgorithm + Send + Sync>,
+        "chacha20poly1305" => Box::new(ChaCha20Poly1305::new()),
+        "aes256gcm" => Box::new(Aes256Gcm::new()),
         _ => return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
             format!("Unknown algorithm: {}", algorithm_name)
         )),

@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "fortress-db"
-version = "1.0.0-alpha"
+version = "1.0.1-alpha.1"
 description = "🛡️ Fortress - Turnkey Simplicity + Enterprise Security. Python SDK for Fortress secure database system with multi-layer encryption."
 readme = "README.md"
 license = {text = "Fortress Sustainable Use License 1.0"}
@@ -84,18 +84,18 @@ Changelog = "https://github.com/Genius740Code/Fortress/blob/main/CHANGELOG.md"
 Discussions = "https://github.com/Genius740Code/Fortress/discussions"
 
 [project.scripts]
-fortress = "fortress_cli:main"
+fortress-db = "fortress_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["fortress*"]
+include = ["fortress_db*"]
 
 [tool.setuptools.package-data]
-fortress = ["py.typed", "*.pyi"]
+fortress_db = ["py.typed", "*.pyi"]
 
 [tool.maturin]
 python-source = "python"
-module-name = "fortress._fortress"
+module-name = "fortress_db._fortress"
 features = ["pyo3/extension-module"]
 
 [tool.black]
@@ -120,7 +120,7 @@ extend-exclude = '''
 profile = "black"
 multi_line_output = 3
 line_length = 88
-known_first_party = ["fortress"]
+known_first_party = ["fortress_db"]
 
 [tool.mypy]
 python_version = "3.8"
@@ -139,7 +139,7 @@ strict_equality = true
 
 [[tool.mypy.overrides]]
 module = [
-    "fortress._fortress.*",
+    "fortress_db._fortress.*",
 ]
 ignore_missing_imports = true
 
@@ -157,7 +157,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["fortress"]
+source = ["fortress_db"]
 omit = [
     "*/tests/*",
     "*/test_*",

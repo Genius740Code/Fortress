@@ -6,7 +6,7 @@ use pyo3_asyncio::tokio::future_into_py;
 use std::collections::HashMap;
 
 use fortress_core::prelude::*;
-use fortress_core::key::{KeyId, KeyMetadata, RotationInterval, RotationMetrics};
+use fortress_core::key::{KeyId, RotationInterval, RotationMetrics};
 
 /// Python wrapper for KeyManager
 #[pyclass]
@@ -49,173 +49,156 @@ impl KeyManager {
                 Ok(key_id) => {
                     let gil = Python::acquire_gil();
                     let py = gil.python();
-                    Ok(PyString::new(py, &key_id.to_string()).into())
+                    Ok(key_id.to_string().into_py(py))
                 }
                 Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Key generation failed: {}", e))),
             }
         })
     }
 
-    /// Get a key by ID
-    #[pyo3(signature = (key_id))]
-    fn get_key(&self, py: Python, key_id: String) -> PyResult<PyObject> {
-        let key_id_parsed = KeyId::from_str(&key_id)
+    /// Get key metadata
+    fn get_key_metadata(&self, key_id: String) -> PyResult<KeyMetadataWrapper> {
+        let key_id = KeyId::from_string(&key_id)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Invalid key ID: {}", e)))?;
-
-        let manager = self.manager.clone();
         
-        future_into_py(py, async move {
-            match manager.get_key(&key_id_parsed).await {
-                Ok(key) => {
-                    let gil = Python::acquire_gil();
-                    let py = gil.python();
-                    Ok(PyBytes::new(py, &key).into())
-                }
-                Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Key retrieval failed: {}", e))),
-            }
-        })
-    }
-
-    /// Delete a key
-    #[pyo3(signature = (key_id))]
-    fn delete_key(&self, py: Python, key_id: String) -> PyResult<PyObject> {
-        let key_id_parsed = KeyId::from_str(&key_id)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Invalid key ID: {}", e)))?;
-
-        let manager = self.manager.clone();
-        
-        future_into_py(py, async move {
-            match manager.delete_key(&key_id_parsed).await {
-                Ok(_) => {
-                    let gil = Python::acquire_gil();
-                    let py = gil.python();
-                    Ok(py.None())
-                }
-                Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Key deletion failed: {}", e))),
-            }
-        })
+        match self.manager.get_metadata(&key_id) {
+            Some(metadata) => Ok(KeyMetadataWrapper::new(metadata)),
+            None => Err(PyErr::new::<pyo3::exceptions::PyKeyError, _>("Key not found")),
+        }
     }
 
     /// List all keys
-    fn list_keys(&self, py: Python) -> PyResult<PyObject> {
-        let manager = self.manager.clone();
-        
-        future_into_py(py, async move {
-            match manager.list_keys().await {
-                Ok(keys) => {
-                    let gil = Python::acquire_gil();
-                    let py = gil.python();
-                    let list = PyList::empty(py);
-                    for key_id in keys {
-                        list.append(PyString::new(py, &key_id.to_string()))?;
-                    }
-                    Ok(list.into())
-                }
-                Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Key listing failed: {}", e))),
-            }
-        })
+    fn list_keys(&self) -> PyResult<Vec<String>> {
+        let keys = self.manager.list_keys();
+        Ok(keys.into_iter().map(|id| id.to_string()).collect())
     }
 
     /// Rotate a key
-    #[pyo3(signature = (key_id))]
-    fn rotate_key(&self, py: Python, key_id: String) -> PyResult<PyObject> {
-        let key_id_parsed = KeyId::from_str(&key_id)
+    #[pyo3(signature = (key_id, force=false))]
+    fn rotate_key(&self, py: Python, key_id: String, force: bool) -> PyResult<PyObject> {
+        let key_id = KeyId::from_string(&key_id)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Invalid key ID: {}", e)))?;
-
+        
         let manager = self.manager.clone();
         
         future_into_py(py, async move {
-            match manager.rotate_key(&key_id_parsed).await {
+            match manager.rotate_key(&key_id, force).await {
                 Ok(new_key_id) => {
                     let gil = Python::acquire_gil();
                     let py = gil.python();
-                    Ok(PyString::new(py, &new_key_id.to_string()).into())
+                    Ok(new_key_id.to_string().into_py(py))
                 }
                 Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Key rotation failed: {}", e))),
             }
         })
     }
+
+    /// Delete a key
+    fn delete_key(&self, key_id: String) -> PyResult<bool> {
+        let key_id = KeyId::from_string(&key_id)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Invalid key ID: {}", e)))?;
+        
+        Ok(self.manager.delete_key(&key_id))
+    }
 }
 
 /// Python wrapper for KeyMetadata
 #[pyclass]
-pub struct KeyMetadata {
-    metadata: fortress_core::key::KeyMetadata,
+pub struct KeyMetadataWrapper {
+    metadata: KeyMetadataData,
+}
+
+struct KeyMetadataData {
+    id: String,
+    algorithm: String,
+    created_at: chrono::DateTime<chrono::Utc>,
+    last_rotated: Option<chrono::DateTime<chrono::Utc>>,
+    rotation_interval: RotationInterval,
+    usage_count: u64,
+}
+
+impl KeyMetadataWrapper {
+    fn new(metadata: fortress_core::key::KeyMetadata) -> Self {
+        Self {
+            metadata: KeyMetadataData {
+                id: metadata.id().to_string(),
+                algorithm: metadata.algorithm().to_string(),
+                created_at: metadata.created_at(),
+                last_rotated: metadata.last_rotated(),
+                rotation_interval: metadata.rotation_interval().clone(),
+                usage_count: metadata.usage_count(),
+            },
+        }
+    }
 }
 
 #[pymethods]
-impl KeyMetadata {
-    /// Create new key metadata
-    #[new]
-    fn new(
-        algorithm: String,
-        created_at: String,
-        expires_at: Option<String>,
-        purpose: Option<String>,
-        tags: Option<Vec<String>>,
-    ) -> PyResult<Self> {
-        let created_dt = chrono::DateTime::parse_from_rfc3339(&created_at)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Invalid created_at format: {}", e)))?
-            .with_timezone(&chrono::Utc);
-
-        let expires_dt = if let Some(exp_str) = expires_at {
-            Some(chrono::DateTime::parse_from_rfc3339(&exp_str)
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Invalid expires_at format: {}", e)))?
-                .with_timezone(&chrono::Utc))
-        } else {
-            None
-        };
-
-        let metadata = fortress_core::key::KeyMetadata::new(
-            algorithm,
-            created_dt,
-            expires_dt,
-            purpose,
-            tags.unwrap_or_default(),
-        );
-
-        Ok(Self { metadata })
+impl KeyMetadataWrapper {
+    /// Get key ID
+    fn id(&self) -> String {
+        self.metadata.id.clone()
     }
 
     /// Get algorithm name
     fn algorithm(&self) -> String {
-        self.metadata.algorithm().to_string()
+        self.metadata.algorithm.clone()
     }
 
-    /// Get creation timestamp
+    /// Get creation time
     fn created_at(&self) -> String {
-        self.metadata.created_at().to_rfc3339()
+        self.metadata.created_at.to_rfc3339()
     }
 
-    /// Get expiration timestamp
-    fn expires_at(&self) -> Option<String> {
-        self.metadata.expires_at().map(|dt| dt.to_rfc3339())
+    /// Get last rotation time
+    fn last_rotated(&self) -> Option<String> {
+        self.metadata.last_rotated.map(|dt| dt.to_rfc3339())
     }
 
-    /// Get purpose
-    fn purpose(&self) -> Option<String> {
-        self.metadata.purpose().map(|p| p.to_string())
+    /// Get rotation interval in seconds
+    fn rotation_interval_secs(&self) -> u64 {
+        self.metadata.rotation_interval.as_secs()
     }
 
-    /// Get tags
-    fn tags(&self) -> Vec<String> {
-        self.metadata.tags().clone()
+    /// Get usage count
+    fn usage_count(&self) -> u64 {
+        self.metadata.usage_count
+    }
+
+    /// Check if key needs rotation
+    fn needs_rotation(&self) -> bool {
+        if let Some(last_rotated) = self.metadata.last_rotated {
+            let now = chrono::Utc::now();
+            let elapsed = now.signed_duration_since(last_rotated);
+            elapsed.num_seconds() as u64 >= self.metadata.rotation_interval.as_secs()
+        } else {
+            true
+        }
     }
 }
 
-/// Helper function to parse key metadata from Python dict
-fn parse_key_metadata(dict: &PyDict) -> PyResult<KeyMetadata> {
-    let algorithm = dict.get_item("algorithm")
-        .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyKeyError, _>("Missing 'algorithm' field"))?
-        .extract::<String>()?;
+/// Parse key metadata from Python dictionary
+fn parse_key_metadata(py_dict: &PyDict) -> PyResult<fortress_core::key::KeyMetadata> {
+    let id = py_dict.get_item("id")
+        .and_then(|v| v.extract::<String>().ok())
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    
+    let algorithm = py_dict.get_item("algorithm")
+        .and_then(|v| v.extract::<String>().ok())
+        .unwrap_or_else(|| "aegis256".to_string());
+    
+    let rotation_interval_secs = py_dict.get_item("rotation_interval_secs")
+        .and_then(|v| v.extract::<u64>().ok())
+        .unwrap_or(86400); // 24 hours default
 
-    let created_at = dict.get_item("created_at")
-        .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyKeyError, _>("Missing 'created_at' field"))?
-        .extract::<String>()?;
+    let key_id = KeyId::from_string(&id)
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Invalid key ID: {}", e)))?;
 
-    let expires_at = dict.get_item("expires_at")?.extract::<Option<String>>()?;
-    let purpose = dict.get_item("purpose")?.extract::<Option<String>>()?;
-    let tags = dict.get_item("tags")?.extract::<Option<Vec<String>>>()?;
-
-    Ok(KeyMetadata::new(algorithm, created_at, expires_at, purpose, tags)?)
+    let rotation_interval = RotationInterval::from_secs(rotation_interval_secs);
+    
+    fortress_core::key::KeyMetadata::new(
+        key_id,
+        algorithm,
+        chrono::Utc::now(),
+        rotation_interval,
+    )
 }

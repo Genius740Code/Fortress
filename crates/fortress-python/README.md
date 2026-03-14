@@ -18,7 +18,7 @@ A Python interface to the Fortress secure database system, providing enterprise-
 ### From PyPI (Recommended)
 
 ```bash
-pip install fortress
+pip install fortress-db
 ```
 
 ### From Source
@@ -38,16 +38,17 @@ maturin develop
 ## Quick Start
 
 ```python
-import fortress
+import fortress_db
 import asyncio
 
 async def main():
     # Create configuration
-    config = fortress.FortressConfig.lightning()
+    config = fortress_db.FortressConfig("default")
     
     # Initialize encryption
-    algorithm = fortress.EncryptionAlgorithm.aegis256()
-    key = fortress.generate_key("aegis256")
+    algorithm = fortress_db.EncryptionAlgorithm.aegis256()
+    key_manager = fortress_db.KeyManager()
+    key = key_manager.generate_key("aegis256")
     
     # Encrypt and decrypt data
     plaintext = b"Hello, Fortress!"
