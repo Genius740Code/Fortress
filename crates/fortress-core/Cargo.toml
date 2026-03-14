@@ -1,6 +1,6 @@
 [package]
 name = "fortress-core"
-version = "1.0.0-alpha"
+version = "1.0.1-alpha"
 edition = "2021"
 authors = ["Fortress Team <team@fortressdb.io>"]
 license = "Fortress Sustainable Use License 1.0"

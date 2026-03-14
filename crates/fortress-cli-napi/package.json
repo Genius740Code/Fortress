@@ -1,6 +1,6 @@
 {
   "name": "fortress-cli",
-  "version": "1.0.0-alpha",
+  "version": "1.0.1-alpha",
   "description": "Fortress CLI - Node.js bindings for Fortress secure database system with enterprise-grade encryption",
   "main": "index.js",
   "types": "index.d.ts",

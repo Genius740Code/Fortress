@@ -1,6 +1,6 @@
 [package]
 name = "fortress-cli"
-version = "1.0.0-alpha"
+version = "1.0.1-alpha"
 edition = "2021"
 authors = ["Fortress Team <team@fortressdb.io>"]
 license = "Fortress Sustainable Use License 1.0"
@@ -16,7 +16,7 @@ path = "src/main.rs"
 
 [dependencies]
 # Core fortress library
-fortress-core = { path = "../fortress-core", version = "1.0.0-alpha" }
+fortress-core = { path = "../fortress-core", version = "1.0.1-alpha" }
 
 # CLI framework
 clap = { version = "4.4", features = ["derive", "env", "color"] }
