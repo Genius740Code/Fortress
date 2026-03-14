@@ -193,6 +193,22 @@ name = "fortress"
 path = "src/lib.rs"
 crate-type = ["cdylib", "rlib"]
 
+[[example]]
+name = "working_plugin_example"
+path = "examples/working_plugin_example.rs"
+
+[[example]]
+name = "simple_working_plugin"
+path = "examples/simple_working_plugin.rs"
+
+[[example]]
+name = "testplugin_demo"
+path = "examples/testplugin_demo.rs"
+
+[[example]]
+name = "testplugin_working_demo"
+path = "examples/testplugin_working_demo.rs"
+
 
 [workspace.dependencies]
 # Shared workspace dependencies for consistent versions

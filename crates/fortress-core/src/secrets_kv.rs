@@ -472,8 +472,8 @@ impl SecretsEngine for KvEngine {
 
     async fn status(&self) -> Result<EngineStatus> {
         let config = self.config.read().await;
-        let secrets = self.secrets.read().await;
-        let leases = self.leases.read().await;
+        let _secrets = self.secrets.read().await;
+        let _leases = self.leases.read().await;
         let stats = self.stats.read().await;
         
         Ok(EngineStatus {

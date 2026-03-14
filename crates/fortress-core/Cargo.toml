@@ -123,8 +123,11 @@ sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "chrono"
 # HTTP client for plugin marketplace
 reqwest = { version = "0.12", features = ["json"] }
 
-# Performance optimization dependencies
-parking_lot = { version = "0.12", features = ["send_guard"] }
+# WebAssembly runtime for plugin execution
+wasmtime = { version = "19.0", features = ["cranelift"] }
+
+# Archive handling for plugin packages
+tar = "0.4"
 dashmap = { version = "5.5", optional = true }
 crossbeam = { version = "0.8", optional = true }
 atomic = { version = "0.6", optional = true }

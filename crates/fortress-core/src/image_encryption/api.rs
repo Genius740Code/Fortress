@@ -11,13 +11,11 @@ use crate::error::{FortressError, Result};
 use crate::encryption::{EncryptionAlgorithm, SecureKey};
 use crate::image_encryption::{
     ImageEncryptor, encryptor::ImageEncryptorFactory, EncryptedImage, EncryptionOptions,
-    EncryptionMode, ImageFormat, ImageFormatInfo, ImageMetadata, EncryptedMetadata,
-    ThumbnailGenerator, ThumbnailSize, thumbnails::ThumbnailFormat, EncryptedThumbnail,
+    ThumbnailGenerator, ThumbnailSize, thumbnails::ThumbnailOptions, EncryptedThumbnail,
     StreamingImageEncryptor, ChunkConfig, streaming::{StreamingState, StreamingStatus, EncryptedChunk, StreamingResult, StreamingImageDecryptor},
     DataClassification, AccessPermissions,
-    SearchCriteria, ImageFilter, ImageSearchResult, ImageInfo, ColorSpace,
-    CompressionInfo, ImageEncryptionError, metadata::MetadataProcessor, formats::FormatProcessor,
-    ImageFormatDetector, thumbnails::ThumbnailOptions, EncryptionStats,
+    SearchCriteria, ImageFilter, ImageSearchResult, ImageInfo,
+    ImageMetadata, ImageFormatInfo,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -163,7 +161,7 @@ impl ImageEncryptionService {
             ))?;
 
         // Retrieve keys
-        let image_key = self.key_manager.get_key(&request.image_key_id).await?;
+        let _image_key = self.key_manager.get_key(&request.image_key_id).await?;
         let thumbnail_key = self.key_manager.get_key(&request.thumbnail_key_id).await?;
 
         // Generate thumbnails
@@ -213,7 +211,7 @@ impl ImageEncryptionService {
         let image_store = Arc::clone(&self.image_store);
         let session_id_clone = session_id.clone();
         let image_key_clone = image_key.clone();
-        let thumbnail_key_clone = thumbnail_key.clone();
+        let _thumbnail_key_clone = thumbnail_key.clone();
         let options_clone = request.options.clone();
 
         tokio::spawn(async move {

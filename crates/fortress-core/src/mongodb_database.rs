@@ -209,7 +209,7 @@ impl MongoKeyDatabase {
 
     /// Perform aggregation pipeline query
     pub async fn aggregate(&self, pipeline: MongoPipeline) -> Result<Vec<MongoAggregationResult>> {
-        let keys = self.keys_data.read().await;
+        let _keys = self.keys_data.read().await;
         let data = self.data_storage.read().await;
         
         // Simulate aggregation - in real implementation this would use MongoDB's aggregation framework

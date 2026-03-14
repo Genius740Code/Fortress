@@ -60,7 +60,7 @@ impl BackupScheduler {
             ))?;
 
         // Calculate next run time
-        let now = Utc::now();
+        let _now = Utc::now();
         let next_run = cron_schedule.upcoming(Utc).take(1).next().ok_or_else(|| {
             FortressError::configuration(
                 "Could not calculate next run time".to_string(),
@@ -189,12 +189,13 @@ impl BackupScheduler {
                     run_result.backup_id = Some(backup_metadata.backup_id.clone());
                     run_result.items_backed_up = Some(backup_metadata.item_count);
                     run_result.total_size = Some(backup_metadata.total_size);
-                    break;
+                    return run_result;
                 }
                 Err(e) => {
-                    last_error = Some(format!("Attempt {} failed: {}", attempt + 1, e));
+                    let error_msg = format!("Attempt {} failed: {}", attempt + 1, e);
+                    last_error = Some(error_msg.clone());
                     if attempt == schedule.max_retries {
-                        run_result.error_message = last_error;
+                        run_result.error_message = Some(error_msg);
                     }
                 }
             }

@@ -194,7 +194,7 @@ impl DefaultDisasterRecoveryManager {
     async fn execute_recovery_command(
         &self,
         command: &str,
-        backup_id: &str,
+        _backup_id: &str,
         target_storage: &dyn StorageBackend,
     ) -> Result<()> {
         // Parse and execute different types of commands

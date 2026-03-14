@@ -12,7 +12,7 @@ use crate::encryption::{EncryptionAlgorithm, SecureKey, EncryptedData};
 use crate::image_encryption::{
     ImageFormat, EncryptionOptions, EncryptionMode, ImageEncryptionError, 
     encryptor::ImageEncryptorFactory, EncryptedImage, ImageFormatInfo, 
-    ColorSpace, CompressionInfo, EncryptionStats
+    CompressionInfo
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -184,7 +184,7 @@ impl StreamingImageEncryptor {
     pub async fn start_encryption_session(
         &self,
         image_data: &[u8],
-        options: EncryptionOptions,
+        _options: EncryptionOptions,
     ) -> Result<String> {
         let session_id = self.generate_session_id();
         let total_size = image_data.len();

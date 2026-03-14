@@ -252,7 +252,7 @@ impl DefaultBackupManager {
         incremental_backups.sort_by(|a, b| a.created_at.cmp(&b.created_at)); // Chronological order
         
         // Start with full backup restore
-        let mut restore_status = self.restore_backup(
+        let restore_status = self.restore_backup(
             &base_backup.backup_id,
             target_storage,
             config,
@@ -263,7 +263,7 @@ impl DefaultBackupManager {
         }
         
         // Apply incremental backups in order
-        let mut total_items = restore_status.total_items;
+        let total_items = restore_status.total_items;
         let mut items_restored = restore_status.items_restored;
         let mut errors = restore_status.errors;
         
@@ -427,7 +427,7 @@ impl DefaultBackupManager {
                 Ok(None) => {
                     result.missing_items.push(item.original_key.clone());
                 }
-                Err(e) => {
+                Err(_e) => {
                     result.missing_items.push(item.original_key.clone());
                 }
             }

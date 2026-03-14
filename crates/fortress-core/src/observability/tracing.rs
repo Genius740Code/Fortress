@@ -469,7 +469,7 @@ impl ObservabilityTracer {
         &self,
         span_context: &SpanContext,
         event_name: &str,
-        attributes: HashMap<String, String>,
+        _attributes: HashMap<String, String>,
     ) -> Result<()> {
         if !self.config.enabled || span_context.is_empty() {
             return Ok(());

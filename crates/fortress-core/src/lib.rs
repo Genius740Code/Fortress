@@ -232,8 +232,7 @@ pub mod key_cache;
 
 pub mod database_key_manager;
 
-/// Plugin system for extensible functionality
-
+/// Plugin system with WebAssembly support
 pub mod plugin;
 
 /// Plugin marketplace and distribution system

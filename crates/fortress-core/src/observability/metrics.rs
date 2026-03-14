@@ -290,7 +290,7 @@ impl AdvancedMetricsCollector {
                 let buckets = self.config.aggregation.histogram_buckets
                     .iter()
                     .enumerate()
-                    .map(|(i, &bound)| (format!("le_{}", bound), 0))
+                    .map(|(_i, &bound)| (format!("le_{}", bound), 0))
                     .collect();
                 MetricStorage::Histogram(tokio::sync::RwLock::new(HistogramStorage {
                     buckets,

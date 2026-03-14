@@ -15,7 +15,6 @@ use std::sync::Arc;
 use std::collections::HashMap;
 use tokio::sync::{RwLock, Semaphore};
 use uuid::Uuid;
-use futures::stream::StreamExt;
 
 /// Cross-region replication manager
 #[derive(Debug)]

@@ -1,0 +1,18 @@
+[package]
+name = "fortress-simple-wasm-plugin"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "A simple working WebAssembly plugin example for Fortress"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+
+[profile.release]
+opt-level = "s"
+lto = true

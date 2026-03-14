@@ -372,10 +372,15 @@ impl PluginInstaller {
 
     /// Verify plugin compatibility
     fn verify_compatibility(&self, package: &PluginPackage) -> Result<()> {
-        // Check Fortress version compatibility (simplified)
+        // Check Fortress version compatibility using semantic versioning
         let current_version = env!("CARGO_PKG_VERSION");
-        // TODO: Implement proper version comparison
-        if *package.min_fortress_version > *current_version {
+        
+        // Parse versions for proper comparison
+        let current_parsed = self.parse_version(current_version)?;
+        let required_parsed = self.parse_version(&package.min_fortress_version)?;
+        
+        // Compare major.minor.patch versions
+        if current_parsed < required_parsed {
             return Err(FortressError::plugin(format!(
                 "Plugin requires Fortress version {} or higher, current version is {}",
                 package.min_fortress_version,
@@ -384,6 +389,26 @@ impl PluginInstaller {
         }
 
         Ok(())
+    }
+
+    /// Parse version string into comparable tuple (major, minor, patch)
+    fn parse_version(&self, version: &str) -> Result<(u32, u32, u32)> {
+        let parts: Vec<&str> = version.split('.').collect();
+        if parts.len() != 3 {
+            return Err(FortressError::plugin(format!(
+                "Invalid version format: {}. Expected major.minor.patch",
+                version
+            )));
+        }
+        
+        let major = parts[0].parse()
+            .map_err(|_| FortressError::plugin(format!("Invalid major version: {}", parts[0])))?;
+        let minor = parts[1].parse()
+            .map_err(|_| FortressError::plugin(format!("Invalid minor version: {}", parts[1])))?;
+        let patch = parts[2].parse()
+            .map_err(|_| FortressError::plugin(format!("Invalid patch version: {}", parts[2])))?;
+        
+        Ok((major, minor, patch))
     }
 
     /// Extract and install plugin package
@@ -405,15 +430,20 @@ impl PluginInstaller {
         fs::create_dir_all(&plugin_dir).await
             .map_err(|e| FortressError::plugin(format!("Failed to create plugin directory: {}", e)))?;
 
-        // Extract package (simplified - in real implementation, use zip extraction)
-        let _package_data = fs::read(package_path).await
+        // Read and extract package using tar/gzip
+        let package_data = fs::read(package_path).await
             .map_err(|e| FortressError::plugin(format!("Failed to read package: {}", e)))?;
 
-        // For now, assume package is a tar.gz and extract it
-        // TODO: Implement proper extraction with tar/gzip
-        let extracted_path = plugin_dir.join("extracted");
-        fs::create_dir_all(&extracted_path).await
-            .map_err(|e| FortressError::plugin(format!("Failed to create extraction directory: {}", e)))?;
+        // Extract tar.gz package
+        use flate2::read::GzDecoder;
+        use tar::Archive;
+        
+        let cursor = std::io::Cursor::new(package_data);
+        let decoder = GzDecoder::new(cursor);
+        let mut archive = Archive::new(decoder);
+        
+        archive.unpack(&plugin_dir)
+            .map_err(|e| FortressError::plugin(format!("Failed to extract package: {}", e)))?;
 
         // Write package metadata
         let metadata_path = plugin_dir.join("metadata.json");

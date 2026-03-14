@@ -16,7 +16,7 @@ pub mod thumbnails;
 pub mod api;
 
 use crate::error::{FortressError, Result};
-use crate::encryption::{EncryptedData, SecureKey};
+use crate::encryption::EncryptedData;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use chrono::{DateTime, Utc};

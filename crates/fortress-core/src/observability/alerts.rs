@@ -605,7 +605,7 @@ impl AlertManager {
     fn evaluate_condition<'a>(&'a self, condition: &'a AlertCondition) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<bool>> + Send + 'a>> {
         Box::pin(async move {
             match condition {
-                AlertCondition::Threshold { metric, operator, threshold, duration_seconds } => {
+                AlertCondition::Threshold { metric, operator, threshold, duration_seconds: _ } => {
                     let value = self.metrics_provider.get_metric(metric).await?;
                     
                     if let Some(value) = value {

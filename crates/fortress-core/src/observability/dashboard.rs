@@ -710,7 +710,7 @@ impl DashboardManager {
 
         // Clean up widget data
         let mut widget_data = self.widget_data.write().await;
-        widget_data.retain(|_, data| {
+        widget_data.retain(|_, _data| {
             // This would need to check if the data belongs to the deleted dashboard
             true // For now, keep all data
         });

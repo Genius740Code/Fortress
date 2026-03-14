@@ -10,12 +10,10 @@
 use crate::error::{FortressError, Result};
 use crate::encryption::{EncryptionAlgorithm, SecureKey, EncryptedData};
 use crate::image_encryption::{
-    ImageFormat, ImageFormatInfo, ImageMetadata, EncryptedMetadata, encryptor::ImageEncryptorFactory,
-    EncryptedImage,
+    ImageFormat, encryptor::ImageEncryptorFactory,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Arc;
 use chrono::{DateTime, Utc};
 use bytes::Bytes;
 

@@ -67,7 +67,7 @@ pub trait StorageBackend: Send + Sync + fmt::Debug {
     }
 
     /// Commit a transaction
-    async fn commit_transaction(&self, transaction_id: &TransactionId) -> Result<()> {
+    async fn commit_transaction(&self, _transaction_id: &TransactionId) -> Result<()> {
         Err(FortressError::storage(
             "Transactions not supported by this backend",
             &self.metadata().backend_type,
@@ -76,7 +76,7 @@ pub trait StorageBackend: Send + Sync + fmt::Debug {
     }
 
     /// Rollback a transaction
-    async fn rollback_transaction(&self, transaction_id: &TransactionId) -> Result<()> {
+    async fn rollback_transaction(&self, _transaction_id: &TransactionId) -> Result<()> {
         Err(FortressError::storage(
             "Transactions not supported by this backend",
             &self.metadata().backend_type,
@@ -85,7 +85,7 @@ pub trait StorageBackend: Send + Sync + fmt::Debug {
     }
 
     /// Get transaction status
-    async fn get_transaction_status(&self, transaction_id: &TransactionId) -> Result<TransactionStatus> {
+    async fn get_transaction_status(&self, _transaction_id: &TransactionId) -> Result<TransactionStatus> {
         Err(FortressError::storage(
             "Transactions not supported by this backend",
             &self.metadata().backend_type,
@@ -96,7 +96,7 @@ pub trait StorageBackend: Send + Sync + fmt::Debug {
     // Streaming support methods
     
     /// Create a new stream for data streaming
-    async fn create_stream(&self, stream_config: StreamConfig) -> Result<StreamId> {
+    async fn create_stream(&self, _stream_config: StreamConfig) -> Result<StreamId> {
         Err(FortressError::storage(
             "Streaming not supported by this backend",
             &self.metadata().backend_type,
@@ -105,7 +105,7 @@ pub trait StorageBackend: Send + Sync + fmt::Debug {
     }
 
     /// Write data to a stream
-    async fn write_to_stream(&self, stream_id: &StreamId, data: &[u8]) -> Result<()> {
+    async fn write_to_stream(&self, _stream_id: &StreamId, _data: &[u8]) -> Result<()> {
         Err(FortressError::storage(
             "Streaming not supported by this backend",
             &self.metadata().backend_type,
@@ -114,7 +114,7 @@ pub trait StorageBackend: Send + Sync + fmt::Debug {
     }
 
     /// Read data from a stream
-    async fn read_from_stream(&self, stream_id: &StreamId, buffer: &mut [u8]) -> Result<usize> {
+    async fn read_from_stream(&self, _stream_id: &StreamId, _buffer: &mut [u8]) -> Result<usize> {
         Err(FortressError::storage(
             "Streaming not supported by this backend",
             &self.metadata().backend_type,
@@ -123,7 +123,7 @@ pub trait StorageBackend: Send + Sync + fmt::Debug {
     }
 
     /// Close a stream
-    async fn close_stream(&self, stream_id: &StreamId) -> Result<()> {
+    async fn close_stream(&self, _stream_id: &StreamId) -> Result<()> {
         Err(FortressError::storage(
             "Streaming not supported by this backend",
             &self.metadata().backend_type,
@@ -134,7 +134,7 @@ pub trait StorageBackend: Send + Sync + fmt::Debug {
     // Backup/restore support methods
     
     /// Create a backup of the storage
-    async fn create_backup(&self, backup_config: BackupConfig) -> Result<BackupId> {
+    async fn create_backup(&self, _backup_config: BackupConfig) -> Result<BackupId> {
         Err(FortressError::storage(
             "Backups not supported by this backend",
             &self.metadata().backend_type,
@@ -143,7 +143,7 @@ pub trait StorageBackend: Send + Sync + fmt::Debug {
     }
 
     /// Restore from a backup
-    async fn restore_backup(&self, backup_id: &BackupId, restore_config: RestoreConfig) -> Result<()> {
+    async fn restore_backup(&self, _backup_id: &BackupId, _restore_config: RestoreConfig) -> Result<()> {
         Err(FortressError::storage(
             "Backups not supported by this backend",
             &self.metadata().backend_type,
@@ -161,7 +161,7 @@ pub trait StorageBackend: Send + Sync + fmt::Debug {
     }
 
     /// Delete a backup
-    async fn delete_backup(&self, backup_id: &BackupId) -> Result<()> {
+    async fn delete_backup(&self, _backup_id: &BackupId) -> Result<()> {
         Err(FortressError::storage(
             "Backups not supported by this backend",
             &self.metadata().backend_type,
@@ -172,7 +172,7 @@ pub trait StorageBackend: Send + Sync + fmt::Debug {
     // Audit logging support methods
     
     /// Log an audit event
-    async fn log_audit_event(&self, event: AuditEvent) -> Result<()> {
+    async fn log_audit_event(&self, _event: AuditEvent) -> Result<()> {
         Err(FortressError::storage(
             "Audit logging not supported by this backend",
             &self.metadata().backend_type,
@@ -181,7 +181,7 @@ pub trait StorageBackend: Send + Sync + fmt::Debug {
     }
 
     /// Query audit logs
-    async fn query_audit_logs(&self, query: AuditQuery) -> Result<Vec<AuditEvent>> {
+    async fn query_audit_logs(&self, _query: AuditQuery) -> Result<Vec<AuditEvent>> {
         Err(FortressError::storage(
             "Audit logging not supported by this backend",
             &self.metadata().backend_type,

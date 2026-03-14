@@ -8,7 +8,7 @@
 //! - Scientific formats: FITS, NIfTI
 
 use crate::error::{FortressError, Result};
-use crate::image_encryption::{ImageEncryptionError, ColorSpace, CompressionInfo};
+use crate::image_encryption::{ColorSpace, CompressionInfo};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

@@ -158,10 +158,10 @@ impl QueryOptimizer {
     /// Apply cost-based optimization
     async fn apply_cost_based_optimization(&self, mut plan: ExecutionPlan) -> Result<ExecutionPlan> {
         // Calculate current plan cost
-        let current_cost = self.calculate_plan_cost(&plan).await?;
+        let _current_cost = self.calculate_plan_cost(&plan).await?;
 
         // Try alternative access paths
-        for (i, node) in plan.nodes.iter_mut().enumerate() {
+        for (_i, node) in plan.nodes.iter_mut().enumerate() {
             if node.node_type == PlanNodeType::TableScan {
                 // Check if index scan would be better
                 if let Some(index_scan_cost) = self.estimate_index_scan_cost(node).await? {
