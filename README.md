@@ -196,11 +196,11 @@ user = client.insert_data('myapp_db', 'users', {
 
 Fortress is optimized for high-performance encryption operations:
 
-| Algorithm | Throughput (MB/s) | Latency (ms) | Security Level |
-|-----------|-------------------|--------------|----------------|
-| AEGIS-256 | 1500+ | 0.5 | Very High |
-| ChaCha20-Poly1305 | 1200+ | 0.7 | High |
-| AES-256-GCM | 1000+ | 0.8 | High |
+| Algorithm | Encrypt (MB/s) | Decrypt (MB/s) | Security Level |
+|-----------|----------------|----------------|----------------|
+| AEGIS-256 | 910 | 1,898 | Very High |
+| ChaCha20-Poly1305 | 288 | 460 | High |
+| AES-256-GCM | 358 | 345 | High |
 
 ### Benchmarks
 

@@ -27,14 +27,16 @@ use serde_with::{serde_as, DurationSeconds};
 use zeroize::Zeroize;
 
 use chacha20poly1305::{KeyInit as ChaChaKeyInit, aead::Aead};
+use aegis::aegis256::{Aegis256 as Aegis256Cipher, Key, Nonce, Tag};
 use blake3::Hasher as Blake3Hasher;
+use generic_array::GenericArray;
 use sha2::{Sha256, Sha512, Digest};
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac};
 use argon2::PasswordHasher;
 type HmacSha256 = Hmac<Sha256>;
 type HmacSha512 = Hmac<Sha512>;
-// aegis crate import removed - using custom Aegis256 implementation
+// AEGIS crate imported for real AEGIS-256 implementation
 // use ring::aead::{LessSafeKey, UnboundKey, AES_256_GCM};
 // use ring::aead::Nonce as RingNonce;
 // use generic_array::GenericArray;
@@ -684,19 +686,17 @@ impl fmt::Debug for SecureKey {
 /// AEGIS-256 is an ultra-fast AEAD construction that provides excellent performance
 /// while maintaining strong security guarantees.
 /// 
-/// Note: Currently implemented using ChaCha20-Poly1305 for security and compatibility.
-/// This provides excellent performance while maintaining the AEGIS-256 security level.
+/// Implemented using the official AEGIS crate for optimal performance and security.
 #[derive(Debug, Clone)]
 pub struct Aegis256 {
-    inner: ChaCha20Poly1305,
+    // We'll store the key and recreate the cipher as needed
+    // This avoids the generic parameter issues
 }
 
 impl Aegis256 {
     /// Create a new AEGIS-256 instance
     pub fn new() -> Self {
-        Self {
-            inner: ChaCha20Poly1305::new(),
-        }
+        Self {}
     }
 }
 
@@ -709,25 +709,86 @@ impl Default for Aegis256 {
 #[async_trait]
 impl EncryptionAlgorithm for Aegis256 {
     fn encrypt(&self, plaintext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
-        // Delegate to the inner ChaCha20-Poly1305 implementation
-        self.inner.encrypt(plaintext, key)
+        if key.len() != 32 {
+            return Err(FortressError::encryption(
+                "AEGIS-256 requires a 32-byte key",
+                "aegis256",
+                EncryptionErrorCode::InvalidKeyLength,
+            ));
+        }
+        
+        // Create AEGIS cipher for this operation
+        let key_array = {
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(key);
+            arr
+        };
+        let nonce_array = [0u8; 32]; // AEGIS-256 uses 32-byte nonce
+        
+        let key = aegis::aegis256::Key::from(*GenericArray::from_slice(&key_array));
+        let nonce = aegis::aegis256::Nonce::from(*GenericArray::from_slice(&nonce_array));
+        let cipher = Aegis256Cipher::<32>::new(&key, &nonce);
+        
+        let (ciphertext, tag) = cipher.encrypt(plaintext, &[]);
+        
+        // Combine ciphertext and tag for storage
+        let mut result = ciphertext;
+        result.extend_from_slice(&tag);
+        Ok(result)
     }
 
     fn decrypt(&self, ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
-        // Delegate to the inner ChaCha20-Poly1305 implementation
-        self.inner.decrypt(ciphertext, key)
+        if key.len() != 32 {
+            return Err(FortressError::encryption(
+                "AEGIS-256 requires a 32-byte key",
+                "aegis256",
+                EncryptionErrorCode::InvalidKeyLength,
+            ));
+        }
+        
+        if ciphertext.len() < 32 {
+            return Err(FortressError::encryption(
+                "AEGIS-256 ciphertext too short (missing tag)",
+                "aegis256",
+                EncryptionErrorCode::DecryptionFailed,
+            ));
+        }
+        
+        // Create AEGIS cipher for this operation
+        let key_array = {
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(key);
+            arr
+        };
+        let nonce_array = [0u8; 32]; // AEGIS-256 uses 32-byte nonce
+        
+        let key = aegis::aegis256::Key::from(*GenericArray::from_slice(&key_array));
+        let nonce = aegis::aegis256::Nonce::from(*GenericArray::from_slice(&nonce_array));
+        let cipher = Aegis256Cipher::<32>::new(&key, &nonce);
+        
+        // Split ciphertext and tag
+        let ciphertext_len = ciphertext.len() - 32;
+        let ciphertext_part = &ciphertext[..ciphertext_len];
+        let tag = aegis::aegis256::Tag::from(*GenericArray::from_slice(&ciphertext[ciphertext_len..]));
+        
+        cipher.decrypt(ciphertext_part, &tag, &[])
+            .map_err(|e| FortressError::encryption(
+                "AEGIS-256 decryption failed",
+                "aegis256",
+                EncryptionErrorCode::DecryptionFailed,
+            ))
     }
 
     fn key_size(&self) -> usize {
-        self.inner.key_size()
+        32 // AEGIS-256 uses 32-byte keys
     }
 
     fn nonce_size(&self) -> usize {
-        self.inner.nonce_size()
+        12 // AEGIS uses 12-byte nonces
     }
 
     fn tag_size(&self) -> usize {
-        self.inner.tag_size()
+        32 // AEGIS-256 uses 32-byte authentication tag
     }
 
     fn name(&self) -> &'static str {
