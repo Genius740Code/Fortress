@@ -17,6 +17,7 @@ use fortress_core::{
     key::{KeyManager, SecureKey, InMemoryKeyManager},
     storage::StorageBackend,
     field_encryption::FieldEncryptionManager,
+    tenant::{TenantManager, InMemoryTenantManager, CreateTenantRequest, TenantResourceLimits, TenantEncryptionConfig},
 };
 use crate::health::HealthChecker;
 use serde::{Deserialize, Serialize};
@@ -99,6 +100,8 @@ pub struct AppState {
     pub storage: Arc<dyn StorageBackend>,
     /// Health checker
     pub health_checker: Arc<HealthChecker>,
+    /// Tenant manager
+    pub tenant_manager: Arc<InMemoryTenantManager>,
 }
 
 /// Store data handler
@@ -1321,4 +1324,208 @@ mod tests {
         let fingerprint = generate_key_fingerprint(&key);
         assert_eq!(fingerprint.len(), 16);
     }
+}
+
+// ===== TENANT MANAGEMENT HANDLERS =====
+
+/// Response for tenant operations
+#[derive(Debug, Serialize)]
+pub struct TenantResponse {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub resource_limits: TenantResourceLimits,
+    pub active: bool,
+    pub created_at: DateTime<Utc>,
+    pub modified_at: DateTime<Utc>,
+}
+
+/// Create tenant handler
+#[utoipa::path(
+    post,
+    path = "/api/v1/tenants",
+    request_body = CreateTenantRequest,
+    responses(
+        (status = 201, description = "Tenant created successfully", body = ApiResponse<TenantResponse>),
+        (status = 400, description = "Invalid request", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    tag = "tenants",
+    security(
+        ("jwt_auth" = [])
+    )
+)]
+pub async fn create_tenant(
+    State(state): State<Arc<AppState>>,
+    OptionalTokenClaims(claims): OptionalTokenClaims,
+    Json(request): Json<CreateTenantRequest>,
+) -> ServerResult<Json<ApiResponse<TenantResponse>>> {
+    // Only admin users can create tenants
+    if let Some(ref claims) = claims {
+        if !claims.roles.contains(&"admin".to_string()) {
+            return Err(ServerError::access_denied("Admin access required"));
+        }
+    } else {
+        return Err(ServerError::auth("Authentication required"));
+    }
+
+    let tenant_request = fortress_core::tenant::CreateTenantRequest {
+        name: request.name.clone(),
+        description: request.description.clone(),
+        encryption_config: None,
+        resource_limits: request.resource_limits,
+    };
+
+    match state.tenant_manager.create_tenant(tenant_request).await {
+        Ok(tenant) => {
+            let response = TenantResponse {
+                id: tenant.id.to_string(),
+                name: tenant.name,
+                description: tenant.description,
+                resource_limits: tenant.resource_limits,
+                active: tenant.active,
+                created_at: tenant.created_at,
+                modified_at: tenant.modified_at,
+            };
+
+            info!(
+                tenant_id = %response.id,
+                tenant_name = %response.name,
+                "Tenant created successfully"
+            );
+
+            Ok(Json(ApiResponse::success(response)))
+        }
+        Err(e) => Err(ServerError::internal(format!("Failed to create tenant: {}", e))),
+    }
+}
+
+/// List tenants handler
+#[utoipa::path(
+    get,
+    path = "/api/v1/tenants",
+    responses(
+        (status = 200, description = "Tenants listed successfully", body = ApiResponse<Vec<TenantResponse>>),
+        (status = 401, description = "Unauthorized", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    tag = "tenants",
+    security(
+        ("jwt_auth" = [])
+    )
+)]
+pub async fn list_tenants(
+    State(state): State<Arc<AppState>>,
+    OptionalTokenClaims(claims): OptionalTokenClaims,
+) -> ServerResult<Json<ApiResponse<Vec<TenantResponse>>>> {
+    // Only admin users can list all tenants
+    if let Some(ref claims) = claims {
+        if !claims.roles.contains(&"admin".to_string()) {
+            return Err(ServerError::access_denied("Admin access required"));
+        }
+    } else {
+        return Err(ServerError::auth("Authentication required"));
+    }
+
+    match state.tenant_manager.list_tenants().await {
+        Ok(tenants) => {
+            let response: Vec<TenantResponse> = tenants.into_iter().map(|tenant| TenantResponse {
+                id: tenant.id.to_string(),
+                name: tenant.name,
+                description: tenant.description,
+                resource_limits: tenant.resource_limits,
+                active: tenant.active,
+                created_at: tenant.created_at,
+                modified_at: tenant.modified_at,
+            }).collect();
+
+            Ok(Json(ApiResponse::success(response)))
+        }
+        Err(e) => Err(ServerError::internal(format!("Failed to list tenants: {}", e))),
+    }
+}
+
+/// Get tenant statistics handler
+#[utoipa::path(
+    get,
+    path = "/api/v1/tenants/{tenant_id}/stats",
+    responses(
+        (status = 200, description = "Tenant statistics retrieved", body = ApiResponse<fortress_core::tenant::TenantStats>),
+        (status = 401, description = "Unauthorized", body = ErrorResponse),
+        (status = 404, description = "Tenant not found", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    params(
+        ("tenant_id" = String, Path, description = "Tenant ID")
+    ),
+    tag = "tenants",
+    security(
+        ("jwt_auth" = [])
+    )
+)]
+pub async fn get_tenant_stats(
+    State(state): State<Arc<AppState>>,
+    Path(tenant_id): Path<String>,
+    OptionalTokenClaims(claims): OptionalTokenClaims,
+) -> ServerResult<Json<ApiResponse<fortress_core::tenant::TenantStats>>> {
+    // Only admin users can view tenant stats
+    if let Some(ref claims) = claims {
+        if !claims.roles.contains(&"admin".to_string()) {
+            return Err(ServerError::access_denied("Admin access required"));
+        }
+    } else {
+        return Err(ServerError::auth("Authentication required"));
+    }
+
+    let tenant_uuid = Uuid::parse_str(&tenant_id)
+        .map_err(|_| ServerError::validation("Invalid tenant ID format"))?;
+
+    match state.tenant_manager.get_tenant_stats(&tenant_uuid).await {
+        Ok(stats) => Ok(Json(ApiResponse::success(stats))),
+        Err(e) => Err(ServerError::internal(format!("Failed to get tenant stats: {}", e))),
+    }
+}
+
+/// Admin data access handler (for cross-tenant visibility)
+#[utoipa::path(
+    get,
+    path = "/api/v1/admin/data",
+    responses(
+        (status = 200, description = "All data retrieved", body = ApiResponse<Vec<StorageRecord>>),
+        (status = 401, description = "Unauthorized", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    tag = "admin",
+    security(
+        ("jwt_auth" = [])
+    )
+)]
+pub async fn admin_list_data(
+    State(state): State<Arc<AppState>>,
+    OptionalTokenClaims(claims): OptionalTokenClaims,
+) -> ServerResult<Json<ApiResponse<Vec<StorageRecord>>>> {
+    // Only admin users can access all data
+    if let Some(ref claims) = claims {
+        if !claims.roles.contains(&"admin".to_string()) {
+            return Err(ServerError::access_denied("Admin access required"));
+        }
+    } else {
+        return Err(ServerError::auth("Authentication required"));
+    }
+
+    // List all data without tenant filtering
+    let keys = state.storage.list_prefix("").await
+        .map_err(|e| ServerError::Core(e))?;
+
+    let mut records = Vec::new();
+    for key in keys {
+        if let Ok(Some(record_bytes)) = state.storage.get(&key).await {
+            if let Ok(storage_record) = serde_json::from_slice::<StorageRecord>(&record_bytes) {
+                records.push(storage_record);
+            }
+        }
+    }
+
+    Ok(Json(ApiResponse::success(records)))
 }

@@ -28,6 +28,7 @@ use fortress_core::error::FortressError;
 use fortress_core::error::{EncryptionErrorCode, StorageErrorCode};
 use fortress_core::storage::{StorageMetadata, FileSystemStorage};
 use fortress_core::field_encryption::{FieldIdentifier, FieldEncryptionManager, EncryptedField, DecryptedField};
+use fortress_core::tenant::{InMemoryTenantManager, GlobalResourceLimits};
 use fortress_core::key::InMemoryKeyManager;
 use fortress_core::field_encryption_manager::DefaultFieldEncryptionManager;
 use std::collections::HashMap;
@@ -76,6 +77,16 @@ impl FortressServer {
         let health_registry = Arc::new(HealthCheckRegistry::new());
         let rate_limiter = Arc::new(AdvancedRateLimiter::new(config.security.rate_limit.clone()));
 
+        // Initialize tenant manager with demo limits
+        let global_limits = GlobalResourceLimits {
+            max_total_databases: Some(100),
+            max_total_storage: Some(10737418240), // 10GB
+            max_total_connections: Some(1000),
+            max_total_cpu: Some(80.0),
+            max_total_memory: Some(80.0),
+        };
+        let tenant_manager = Arc::new(InMemoryTenantManager::with_global_limits(global_limits));
+
         // Create application state
         let app_state = Arc::new(AppState {
             auth_manager,
@@ -84,6 +95,7 @@ impl FortressServer {
             field_encryption_manager,
             storage,
             health_checker: health_checker.clone(),
+            tenant_manager,
         });
 
         Ok(Self {

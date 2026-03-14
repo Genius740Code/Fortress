@@ -434,7 +434,13 @@ pub enum MongoPullFilter {
     Prefix(String),
     DateRange { start: DateTime<Utc>, end: DateTime<Utc> },
     SizeRange { min_size: i64, max_size: i64 },
-    Metadata { key: String, value: String },
+    /// Metadata key-value pair
+    Metadata { 
+        /// Metadata key
+        key: String, 
+        /// Metadata value
+        value: String 
+    },
 }
 
 /// MongoDB aggregation pipeline

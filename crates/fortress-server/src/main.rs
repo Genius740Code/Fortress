@@ -5,7 +5,7 @@
 
 use axum::{
     Router,
-    routing::{get, post},
+    routing::{get, post, put, delete},
     Json,
 };
 use std::net::SocketAddr;
@@ -17,8 +17,6 @@ use tower_http::{
     compression::CompressionLayer,
 };
 use tracing::info;
-use utoipa_swagger_ui::SwaggerUi;
-use chrono::Utc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -43,14 +41,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Create an application router with all endpoints
 async fn create_router(openapi: utoipa::openapi::OpenApi) -> Result<Router, Box<dyn std::error::Error>> {
+    use fortress_server::handlers::*;
+    
     // Create application state
-    let state = Arc::new(());
+    let state = create_app_state().await?;
 
-    // Create base router
+    // Create base router with all endpoints
     let app = Router::new()
-        // Simple health check route for testing
+        // Health and API documentation
         .route("/health", get(health_check))
         .route("/openapi.json", get(openapi_handler))
+        
+        // Data operations
+        .route("/api/v1/data", post(store_data))
+        .route("/api/v1/data/:key", get(retrieve_data))
+        .route("/api/v1/data/:key", put(update_data))
+        .route("/api/v1/data/:key", delete(delete_data))
+        .route("/api/v1/data", get(list_data))
+        
+        // Key management
+        .route("/api/v1/keys", post(generate_key))
+        
+        // Tenant management (admin only)
+        .route("/api/v1/tenants", post(create_tenant))
+        .route("/api/v1/tenants", get(list_tenants))
+        .route("/api/v1/tenants/:tenant_id/stats", get(get_tenant_stats))
+        
+        // Admin operations
+        .route("/api/v1/admin/data", get(admin_list_data))
         
         // Middleware
         .layer(
@@ -58,11 +76,63 @@ async fn create_router(openapi: utoipa::openapi::OpenApi) -> Result<Router, Box<
                 .layer(TraceLayer::new_for_http())
                 .layer(CompressionLayer::new())
                 .layer(CorsLayer::permissive())
-        );
+        )
+        .with_state(state);
 
-    // For now, just return the basic router without Swagger UI
-    // TODO: Fix Swagger UI integration
     Ok(app)
+}
+
+/// Create application state
+async fn create_app_state() -> Result<Arc<fortress_server::handlers::AppState>, Box<dyn std::error::Error>> {
+    use fortress_server::handlers::AppState;
+    use fortress_core::tenant::{InMemoryTenantManager, GlobalResourceLimits};
+    use fortress_server::config::FeatureFlags;
+    use fortress_core::field_encryption_manager::DefaultFieldEncryptionManager;
+    use chrono::Duration;
+    
+    // Initialize components
+    let auth_manager = Arc::new(fortress_server::auth::AuthManager::new(
+        "demo-jwt-secret", 
+        Duration::seconds(3600), 
+        Arc::new(fortress_server::auth::InMemoryUserStore::new())
+    ));
+    let metrics = Arc::new(fortress_server::metrics::MetricsCollector::new());
+    let key_manager = Arc::new(fortress_core::key::InMemoryKeyManager::new());
+    
+    // Initialize storage (using filesystem for now)
+    let storage = Arc::new(fortress_core::storage::FileSystemStorage::new("./data")?);
+    
+    // Initialize field encryption manager
+    let field_encryption_manager = Arc::new(
+        DefaultFieldEncryptionManager::new(key_manager.clone())
+    );
+    
+    // Initialize health checker
+    let health_checker = Arc::new(fortress_server::health::HealthChecker::new(
+        FeatureFlags::default()
+    ));
+
+    // Initialize tenant manager with demo limits
+    let global_limits = GlobalResourceLimits {
+        max_total_databases: Some(100),
+        max_total_storage: Some(10737418240), // 10GB
+        max_total_connections: Some(1000),
+        max_total_cpu: Some(80.0),
+        max_total_memory: Some(80.0),
+    };
+    let tenant_manager = Arc::new(InMemoryTenantManager::with_global_limits(global_limits));
+
+    let state = AppState {
+        auth_manager,
+        metrics,
+        key_manager,
+        field_encryption_manager,
+        storage,
+        health_checker,
+        tenant_manager,
+    };
+
+    Ok(Arc::new(state))
 }
 
 /// Simple health check for testing
@@ -78,37 +148,3 @@ async fn health_check() -> Json<serde_json::Value> {
 async fn openapi_handler() -> Json<utoipa::openapi::OpenApi> {
     Json(fortress_server::handlers::create_openapi())
 }
-
-/*
-/// Create application state
-async fn create_app_state() -> ServerResult<Arc<fortress_server::handlers::AppState>> {
-    use fortress_server::handlers::AppState;
-    
-    // Initialize components
-    let auth_manager = Arc::new(fortress_server::auth::AuthManager::new());
-    let metrics = Arc::new(fortress_server::metrics::MetricsCollector::new());
-    let key_manager = Arc::new(fortress_core::key::InMemoryKeyManager::new());
-    
-    // Initialize storage (using filesystem for now)
-    let storage = Arc::new(fortress_core::storage::FileStorage::new("./data")?);
-    
-    // Initialize field encryption manager
-    let field_encryption_manager = Arc::new(
-        fortress_core::field_encryption::DefaultFieldEncryptionManager::new(key_manager.clone())
-    );
-    
-    // Initialize health checker
-    let health_checker = Arc::new(fortress_server::health::HealthChecker::new());
-
-    let state = AppState {
-        auth_manager,
-        metrics,
-        key_manager,
-        field_encryption_manager,
-        storage,
-        health_checker,
-    };
-
-    Ok(Arc::new(state))
-}
-*/
