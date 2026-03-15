@@ -294,6 +294,10 @@ pub enum KeyErrorCode {
     /// Serialization error
     #[error("Serialization error")]
     SerializationError,
+    
+    /// Authentication error
+    #[error("Authentication error")]
+    AuthenticationError,
 }
 
 /// Storage error codes
