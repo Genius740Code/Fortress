@@ -3,11 +3,11 @@ name = "fortress-cli"
 version = "1.0.1-alpha"
 edition = "2021"
 authors = ["Fortress Team <team@fortressdb.io>"]
-license = "Fortress Sustainable Use License 1.0"
+license-file = "../../LICENSE"
 description = "Command-line interface for Fortress secure database"
 homepage = "https://fortressdb.io"
 repository = "https://github.com/Genius740Code/Fortress"
-keywords = ["cli", "database", "encryption", "security"]
+keywords = ["cli", "database", "encryption", "security", "command-line"]
 categories = ["command-line-utilities", "database"]
 
 [[bin]]

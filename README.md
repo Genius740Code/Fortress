@@ -92,20 +92,21 @@ sudo mv fortress /usr/local/bin/
 
 **NPM (Node.js)**
 ```bash
-# Install globally
+# Install CLI tool globally
 npm install -g fortress-cli
 
-# Install as dependency
+# Install as dependency in your project
 npm install fortress-cli
+npm install fortress-db
 ```
 
 **PyPI (Python)**
 ```bash
 # Install from PyPI
-pip install fortress
+pip install fortress-db
 
 # Install with development features
-pip install fortress[dev]
+pip install fortress-db[dev]
 ```
 
 **Cargo (Rust)**
@@ -115,6 +116,7 @@ cargo add fortress-core
 
 # Install from crates.io (when published)
 cargo install fortress-core
+cargo install fortress-cli
 
 # Install from git repository
 cargo install --git https://github.com/Genius740Code/Fortress fortress-core
@@ -168,7 +170,7 @@ fortress status --detailed
 ### API Quick Start
 
 ```python
-from fortress_client import FortressClient
+from fortress_db import FortressClient
 
 client = FortressClient('http://localhost:8080')
 

@@ -3,12 +3,12 @@ name = "fortress-core"
 version = "1.0.1-alpha"
 edition = "2021"
 authors = ["Fortress Team <team@fortressdb.io>"]
-license = "Fortress Sustainable Use License 1.0"
+license-file = "../../LICENSE"
 description = "🛡️ Fortress Core Library - Turnkey Simplicity + Enterprise Security. Core library for Fortress secure database system with multi-layer encryption."
 homepage = "https://fortressdb.io"
 repository = "https://github.com/Genius740Code/Fortress"
 documentation = "https://github.com/Genius740Code/Fortress/blob/main/docs"
-keywords = ["database", "encryption", "security", "privacy", "secure-storage", "aegis", "chacha20", "aes256", "field-encryption", "key-rotation", "hsm", "compliance", "gdpr", "hipaa", "pci-dss", "zero-trust", "enterprise", "cluster", "high-availability"]
+keywords = ["database", "encryption", "security", "cryptography", "privacy"]
 categories = ["database", "cryptography"]
 rust-version = "1.70"
 

@@ -953,7 +953,7 @@ ws.onmessage = (event) => {
 
 ### Python SDK
 ```python
-from fortress_client import FortressClient
+from fortress_db import FortressClient
 
 # Initialize client
 client = FortressClient('http://localhost:8080')

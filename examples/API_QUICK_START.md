@@ -201,7 +201,7 @@ await client.insertData('myapp_db', 'users', {
 ### Python
 
 ```python
-from fortress_client import FortressClient
+from fortress_db import FortressClient
 
 client = FortressClient('http://localhost:8080')
 

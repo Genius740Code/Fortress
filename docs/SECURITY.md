@@ -256,7 +256,7 @@ curl -X POST http://localhost:8080/api/v1/auth/roles \
 
 #### Usage Examples
 ```python
-from fortress_client import FortressClient
+from fortress_db import FortressClient
 
 client = FortressClient('http://localhost:8080')
 

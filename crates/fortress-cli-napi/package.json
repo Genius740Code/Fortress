@@ -76,5 +76,15 @@
   "publishConfig": {
     "registry": "https://registry.npmjs.org/",
     "access": "public"
+  },
+  "optionalDependencies": {
+    "fortress-cli-win32-x64-msvc": "1.0.1-alpha",
+    "fortress-cli-darwin-x64": "1.0.1-alpha",
+    "fortress-cli-linux-x64-gnu": "1.0.1-alpha",
+    "fortress-cli-win32-ia32-msvc": "1.0.1-alpha",
+    "fortress-cli-darwin-arm64": "1.0.1-alpha",
+    "fortress-cli-linux-x64-musl": "1.0.1-alpha",
+    "fortress-cli-linux-arm64-gnu": "1.0.1-alpha",
+    "fortress-cli-linux-arm-gnueabihf": "1.0.1-alpha"
   }
 }

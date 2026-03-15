@@ -15,7 +15,7 @@ Thank you for your interest in contributing to Fortress! This document provides 
 1. **Fork the repository**
    ```bash
    # Fork on GitHub, then clone your fork
-   git clone https://github.com/YOUR_USERNAME/Fortress.git
+   git clone https://github.com/Genius740Code/Fortress.git
    cd Fortress
    ```
 

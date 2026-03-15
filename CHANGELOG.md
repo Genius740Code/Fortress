@@ -5,6 +5,32 @@ All notable changes to Fortress will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1-alpha] - 2025-03-14
+
+### Added
+- Python SDK with PyO3 bindings for Fortress core functionality
+- Simplified Python module with encryption, key management, storage, policy, audit, and tenant management
+- JavaScript/TypeScript SDK improvements
+- Node.js CLI bindings via NAPI
+- Enhanced build configurations for all platforms
+
+### Changed
+- Updated all package versions to 1.0.1-alpha for consistent release
+- Fixed Python build issues by resolving PyO3 orphan rule violations
+- Simplified Python API to ensure stable functionality
+- Improved cross-platform compatibility
+
+### Fixed
+- Critical Python compilation errors preventing PyPI publishing
+- PyO3 binding issues with external fortress_core types
+- Version inconsistencies across package manifests
+- Build system improvements for reliable packaging
+
+### Security
+- Simplified Python module reduces attack surface
+- Maintained secure error handling patterns
+- Preserved encryption algorithm implementations
+
 ## [Unreleased]
 
 ### Added
