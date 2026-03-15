@@ -490,9 +490,93 @@ impl FormatProcessor for JpegProcessor {
         Ok(data.to_vec())
     }
     
-    fn extract_metadata(&self, _data: &[u8]) -> Result<HashMap<String, String>> {
-        // TODO: Implement JPEG metadata extraction (EXIF, IPTC, XMP)
-        Ok(HashMap::new())
+    fn extract_metadata(&self, data: &[u8]) -> Result<HashMap<String, String>> {
+        let mut metadata = HashMap::new();
+        
+        if data.len() < 4 {
+            return Ok(metadata);
+        }
+        
+        // Check for JPEG signature
+        if data[0] != 0xFF || data[1] != 0xD8 {
+            return Ok(metadata);
+        }
+        
+        let mut pos = 2;
+        
+        while pos + 4 <= data.len() {
+            // Look for marker
+            if data[pos] != 0xFF {
+                break;
+            }
+            
+            let marker = data[pos + 1];
+            pos += 2;
+            
+            // Skip SOF, EOI, and RST markers
+            if marker == 0xD8 || (marker >= 0xD0 && marker <= 0xD7) || marker == 0xD9 {
+                continue;
+            }
+            
+            // Read segment length
+            if pos + 2 > data.len() {
+                break;
+            }
+            
+            let segment_length = u16::from_be_bytes([data[pos], data[pos + 1]]) as usize;
+            if pos + segment_length > data.len() {
+                break;
+            }
+            
+            let segment_data = &data[pos + 2..pos + segment_length];
+            
+            // Extract metadata from different segments
+            match marker {
+                0xE0 => {
+                    metadata.insert("app0_jfif".to_string(), "JFIF".to_string());
+                }
+                0xE1 => {
+                    // EXIF data
+                    if segment_length > 6 && &segment_data[0..4] == b"Exif" {
+                        metadata.insert("exif_present".to_string(), "true".to_string());
+                        
+                        // Parse basic EXIF info
+                        self.parse_exif_data(segment_data, &mut metadata);
+                    }
+                    
+                    // XMP data (can also be in APP1)
+                    if segment_length > 30 {
+                        let segment_str = String::from_utf8_lossy(segment_data);
+                        if segment_str.contains("http://ns.adobe.com/xap/1.0/") {
+                            metadata.insert("xmp_present".to_string(), "true".to_string());
+                            self.parse_xmp_data(segment_data, &mut metadata);
+                        }
+                    }
+                }
+                0xED => {
+                    // IPTC data
+                    if segment_length > 14 && &segment_data[0..8] == b"Photoshop" {
+                        metadata.insert("iptc_present".to_string(), "true".to_string());
+                        self.parse_iptc_data(segment_data, &mut metadata);
+                    }
+                }
+                0xE2 => {
+                    // XMP data (in APP2)
+                    if segment_length > 30 {
+                        let segment_str = String::from_utf8_lossy(segment_data);
+                        if segment_str.contains("http://ns.adobe.com/xap/1.0/") {
+                            metadata.insert("xmp_present".to_string(), "true".to_string());
+                            self.parse_xmp_data(segment_data, &mut metadata);
+                        }
+                    }
+                }
+                _ => {}
+            };
+            
+            pos += segment_length;
+        }
+        
+        Ok(metadata)
     }
     
     fn get_compression_info(&self, _data: &[u8]) -> Result<Option<CompressionInfo>> {
@@ -504,9 +588,170 @@ impl FormatProcessor for JpegProcessor {
         }))
     }
     
-    fn get_dimensions(&self, _data: &[u8]) -> Result<Option<(u32, u32)>> {
-        // TODO: Implement JPEG dimension extraction
+    fn get_dimensions(&self, data: &[u8]) -> Result<Option<(u32, u32)>> {
+        if data.len() < 4 {
+            return Ok(None);
+        }
+        
+        // Check for JPEG signature
+        if data[0] != 0xFF || data[1] != 0xD8 {
+            return Ok(None);
+        }
+        
+        let mut pos = 2;
+        
+        while pos + 4 <= data.len() {
+            // Look for marker
+            if data[pos] != 0xFF {
+                break;
+            }
+            
+            let marker = data[pos + 1];
+            pos += 2;
+            
+            // Look for SOF (Start of Frame) markers which contain dimensions
+            match marker {
+                0xC0 | 0xC1 | 0xC2 | 0xC3 | 0xC5 | 0xC6 | 0xC7 | 0xC9 | 0xCA | 0xCB | 0xCD | 0xCE | 0xCF => {
+                    // SOF markers
+                    if pos + 2 > data.len() {
+                        break;
+                    }
+                    
+                    let segment_length = u16::from_be_bytes([data[pos], data[pos + 1]]) as usize;
+                    if pos + segment_length > data.len() || segment_length < 8 {
+                        break;
+                    }
+                    
+                    // Extract dimensions from SOF segment
+                    // Format: [length][precision][height][width]...
+                    let height = u16::from_be_bytes([data[pos + 3], data[pos + 4]]) as u32;
+                    let width = u16::from_be_bytes([data[pos + 5], data[pos + 6]]) as u32;
+                    
+                    return Ok(Some((width, height)));
+                }
+                _ => {
+                    // Skip other markers
+                    if pos + 2 > data.len() {
+                        break;
+                    }
+                    let segment_length = u16::from_be_bytes([data[pos], data[pos + 1]]) as usize;
+                    if pos + segment_length > data.len() {
+                        break;
+                    }
+                    pos += segment_length;
+                }
+            }
+        }
+        
         Ok(None)
+    }
+}
+
+impl JpegProcessor {
+    /// Parse basic EXIF data from segment
+    fn parse_exif_data(&self, data: &[u8], metadata: &mut HashMap<String, String>) {
+        if data.len() < 8 {
+            return;
+        }
+        
+        // Skip "Exif\0\0" header
+        let exif_data = &data[6..];
+        
+        // Look for TIFF header
+        if exif_data.len() < 8 {
+            return;
+        }
+        
+        // Check byte order (II for Intel, MM for Motorola)
+        let byte_order = if &exif_data[0..2] == b"II" {
+            "LittleEndian"
+        } else if &exif_data[0..2] == b"MM" {
+            "BigEndian"
+        } else {
+            return;
+        };
+        
+        metadata.insert("exif_byte_order".to_string(), byte_order.to_string());
+        
+        // Extract some basic EXIF tags (simplified implementation)
+        // In a full implementation, we would parse the IFD structure
+        metadata.insert("exif_format".to_string(), "TIFF".to_string());
+    }
+    
+    /// Parse basic IPTC data from segment
+    fn parse_iptc_data(&self, data: &[u8], metadata: &mut HashMap<String, String>) {
+        if data.len() < 14 {
+            return;
+        }
+        
+        // Look for 8BIM resource blocks
+        let mut pos = 0;
+        while pos + 8 < data.len() {
+            if &data[pos..pos + 4] == b"8BIM" {
+                pos += 4;
+                
+                if pos + 2 > data.len() {
+                    break;
+                }
+                
+                // Resource type and name
+                let resource_type = u16::from_be_bytes([data[pos], data[pos + 1]]);
+                pos += 2;
+                
+                // Skip name (p-string)
+                if pos >= data.len() {
+                    break;
+                }
+                let name_len = data[pos] as usize;
+                pos += 1 + name_len;
+                if pos % 2 == 1 {
+                    pos += 1; // Align to even byte
+                }
+                
+                // Resource size
+                if pos + 4 > data.len() {
+                    break;
+                }
+                let resource_size = u32::from_be_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]) as usize;
+                pos += 4;
+                
+                if pos + resource_size > data.len() {
+                    break;
+                }
+                
+                // Check for IPTC data (resource type 1028)
+                if resource_type == 1028 {
+                    metadata.insert("iptc_resource_size".to_string(), resource_size.to_string());
+                    // In a full implementation, we would parse the IPTC tags
+                    break;
+                }
+                
+                pos += resource_size;
+            } else {
+                pos += 1;
+            }
+        }
+    }
+    
+    /// Parse basic XMP data from segment
+    fn parse_xmp_data(&self, data: &[u8], metadata: &mut HashMap<String, String>) {
+        let xmp_str = String::from_utf8_lossy(data);
+        
+        // Extract some basic XMP information
+        if xmp_str.contains("x:xmpmeta") {
+            metadata.insert("xmp_format".to_string(), "XMP".to_string());
+        }
+        
+        // Look for common XMP namespaces
+        if xmp_str.contains("dc:") {
+            metadata.insert("xmp_dc_namespace".to_string(), "present".to_string());
+        }
+        if xmp_str.contains("xmp:") {
+            metadata.insert("xmp_xmp_namespace".to_string(), "present".to_string());
+        }
+        if xmp_str.contains("photoshop:") {
+            metadata.insert("xmp_photoshop_namespace".to_string(), "present".to_string());
+        }
     }
 }
 
@@ -519,9 +764,143 @@ impl FormatProcessor for PngProcessor {
         Ok(data.to_vec())
     }
     
-    fn extract_metadata(&self, _data: &[u8]) -> Result<HashMap<String, String>> {
-        // TODO: Implement PNG metadata extraction
-        Ok(HashMap::new())
+    fn extract_metadata(&self, data: &[u8]) -> Result<HashMap<String, String>> {
+        let mut metadata = HashMap::new();
+        
+        if data.len() < 8 {
+            return Ok(metadata);
+        }
+        
+        // Check for PNG signature
+        if &data[0..8] != b"\x89PNG\r\n\x1a\n" {
+            return Ok(metadata);
+        }
+        
+        let mut pos = 8;
+        
+        while pos + 8 <= data.len() {
+            // Read chunk length
+            let chunk_length = u32::from_be_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]) as usize;
+            pos += 4;
+            
+            if pos + 4 > data.len() {
+                break;
+            }
+            
+            // Read chunk type
+            let chunk_type = &data[pos..pos + 4];
+            pos += 4;
+            
+            if pos + chunk_length > data.len() {
+                break;
+            }
+            
+            let chunk_data = &data[pos..pos + chunk_length];
+            pos += chunk_length;
+            
+            // Skip CRC (4 bytes)
+            pos += 4;
+            
+            // Process different chunk types
+            match chunk_type {
+                b"IHDR" => {
+                    if chunk_length >= 13 {
+                        let width = u32::from_be_bytes([chunk_data[0], chunk_data[1], chunk_data[2], chunk_data[3]]);
+                        let height = u32::from_be_bytes([chunk_data[4], chunk_data[5], chunk_data[6], chunk_data[7]]);
+                        let bit_depth = chunk_data[8];
+                        let color_type = chunk_data[9];
+                        let compression = chunk_data[10];
+                        let filter = chunk_data[11];
+                        let interlace = chunk_data[12];
+                        
+                        metadata.insert("png_width".to_string(), width.to_string());
+                        metadata.insert("png_height".to_string(), height.to_string());
+                        metadata.insert("png_bit_depth".to_string(), bit_depth.to_string());
+                        metadata.insert("png_color_type".to_string(), color_type.to_string());
+                        metadata.insert("png_compression".to_string(), compression.to_string());
+                        metadata.insert("png_filter".to_string(), filter.to_string());
+                        metadata.insert("png_interlace".to_string(), interlace.to_string());
+                    }
+                }
+                b"tEXt" => {
+                    // Text metadata chunks
+                    if let Some(null_pos) = chunk_data.iter().position(|&b| b == 0) {
+                        if null_pos > 0 {
+                            let keyword = String::from_utf8_lossy(&chunk_data[..null_pos]);
+                            let text = String::from_utf8_lossy(&chunk_data[null_pos + 1..]);
+                            metadata.insert(format!("png_text_{}", keyword), text.to_string());
+                        }
+                    }
+                }
+                b"iTXt" => {
+                    // International text metadata chunks
+                    metadata.insert("png_itxt_present".to_string(), "true".to_string());
+                }
+                b"zTXt" => {
+                    // Compressed text metadata chunks
+                    if let Some(null_pos) = chunk_data.iter().position(|&b| b == 0) {
+                        if null_pos > 0 {
+                            let keyword = String::from_utf8_lossy(&chunk_data[..null_pos]);
+                            metadata.insert(format!("png_ztxt_{}", keyword), "compressed".to_string());
+                        }
+                    }
+                }
+                b"tIME" => {
+                    // Time chunk
+                    if chunk_length >= 7 {
+                        let year = u16::from_be_bytes([chunk_data[0], chunk_data[1]]);
+                        let month = chunk_data[2];
+                        let day = chunk_data[3];
+                        let hour = chunk_data[4];
+                        let minute = chunk_data[5];
+                        let second = chunk_data[6];
+                        
+                        metadata.insert("png_time".to_string(), 
+                            format!("{:04}-{:02}-{:02} {:02}:{:02}:{:02}", year, month, day, hour, minute, second));
+                    }
+                }
+                b"pHYs" => {
+                    // Physical pixel dimensions
+                    if chunk_length >= 9 {
+                        let pixels_per_unit_x = u32::from_be_bytes([chunk_data[0], chunk_data[1], chunk_data[2], chunk_data[3]]);
+                        let pixels_per_unit_y = u32::from_be_bytes([chunk_data[4], chunk_data[5], chunk_data[6], chunk_data[7]]);
+                        let unit = chunk_data[8];
+                        
+                        metadata.insert("png_pixels_per_unit_x".to_string(), pixels_per_unit_x.to_string());
+                        metadata.insert("png_pixels_per_unit_y".to_string(), pixels_per_unit_y.to_string());
+                        metadata.insert("png_unit".to_string(), if unit == 1 { "meter".to_string() } else { "unknown".to_string() });
+                    }
+                }
+                b"sRGB" => {
+                    // sRGB rendering intent
+                    if chunk_length >= 1 {
+                        let rendering_intent = chunk_data[0];
+                        metadata.insert("png_srgb".to_string(), "true".to_string());
+                        metadata.insert("png_rendering_intent".to_string(), rendering_intent.to_string());
+                    }
+                }
+                b"gAMA" => {
+                    // Gamma chunk
+                    if chunk_length >= 4 {
+                        let gamma = u32::from_be_bytes([chunk_data[0], chunk_data[1], chunk_data[2], chunk_data[3]]);
+                        let gamma_value = gamma as f64 / 100000.0;
+                        metadata.insert("png_gamma".to_string(), format!("{:.5}", gamma_value));
+                    }
+                }
+                b"cHRM" => {
+                    // Chromaticity chunk
+                    metadata.insert("png_chromaticity".to_string(), "present".to_string());
+                }
+                _ => {}
+            }
+            
+            // Break on IEND chunk
+            if chunk_type == b"IEND" {
+                break;
+            }
+        }
+        
+        Ok(metadata)
     }
     
     fn get_compression_info(&self, _data: &[u8]) -> Result<Option<CompressionInfo>> {
@@ -533,9 +912,32 @@ impl FormatProcessor for PngProcessor {
         }))
     }
     
-    fn get_dimensions(&self, _data: &[u8]) -> Result<Option<(u32, u32)>> {
-        // TODO: Implement PNG dimension extraction
-        Ok(None)
+    fn get_dimensions(&self, data: &[u8]) -> Result<Option<(u32, u32)>> {
+        if data.len() < 8 {
+            return Ok(None);
+        }
+        
+        // Check for PNG signature
+        if &data[0..8] != b"\x89PNG\r\n\x1a\n" {
+            return Ok(None);
+        }
+        
+        // The first chunk should be IHDR
+        if data.len() < 25 {
+            return Ok(None);
+        }
+        
+        // Check if first chunk is IHDR
+        if &data[12..16] != b"IHDR" {
+            return Ok(None);
+        }
+        
+        // Extract dimensions from IHDR chunk
+        // Format: [4 bytes length][4 bytes type][4 bytes width][4 bytes height]...
+        let width = u32::from_be_bytes([data[16], data[17], data[18], data[19]]);
+        let height = u32::from_be_bytes([data[20], data[21], data[22], data[23]]);
+        
+        Ok(Some((width, height)))
     }
 }
 
