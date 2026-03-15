@@ -5,6 +5,9 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"fmt"
+	"log"
+
+	"golang.org/x/crypto/chacha20poly1305"
 )
 
 // EncryptionAlgorithm represents an encryption algorithm
@@ -134,28 +137,55 @@ func (e *EncryptionAlgorithm) decryptAES256GCM(ciphertext, key []byte) ([]byte, 
 
 // encryptChaCha20Poly1305 encrypts data using ChaCha20-Poly1305
 func (e *EncryptionAlgorithm) encryptChaCha20Poly1305(plaintext, key []byte, options *EncryptionOptions) ([]byte, error) {
-	// TODO: Implement actual ChaCha20-Poly1305 encryption
-	// For now, fall back to AES-256-GCM
-	return e.encryptAES256GCM(plaintext, key, options)
+	aead, err := chacha20poly1305.New(key)
+	if err != nil {
+		return nil, NewEncryptionError("failed to create ChaCha20-Poly1305 AEAD", err)
+	}
+
+	nonce := make([]byte, aead.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, NewEncryptionError("failed to generate nonce", err)
+	}
+
+	ciphertext := aead.Seal(nonce, nonce, plaintext, options.AssociatedData)
+	return ciphertext, nil
 }
 
 // decryptChaCha20Poly1305 decrypts data using ChaCha20-Poly1305
 func (e *EncryptionAlgorithm) decryptChaCha20Poly1305(ciphertext, key []byte) ([]byte, error) {
-	// TODO: Implement actual ChaCha20-Poly1305 decryption
-	// For now, fall back to AES-256-GCM
-	return e.decryptAES256GCM(ciphertext, key)
+	aead, err := chacha20poly1305.New(key)
+	if err != nil {
+		return nil, NewEncryptionError("failed to create ChaCha20-Poly1305 AEAD", err)
+	}
+
+	nonceSize := aead.NonceSize()
+	if len(ciphertext) < nonceSize {
+		return nil, NewEncryptionError("ciphertext too short", nil)
+	}
+
+	nonce := ciphertext[:nonceSize]
+	encrypted := ciphertext[nonceSize:]
+
+	plaintext, err := aead.Open(nil, nonce, encrypted, nil)
+	if err != nil {
+		return nil, NewEncryptionError("failed to decrypt", err)
+	}
+
+	return plaintext, nil
 }
 
 // encryptAegis256 encrypts data using AEGIS-256
+// Note: AEGIS-256 is not natively supported in Go's crypto library
+// This implementation falls back to AES-256-GCM for compatibility
 func (e *EncryptionAlgorithm) encryptAegis256(plaintext, key []byte, options *EncryptionOptions) ([]byte, error) {
-	// TODO: Implement actual AEGIS-256 encryption
-	// For now, fall back to AES-256-GCM
+	log.Printf("AEGIS-256 encryption requested, falling back to AES-256-GCM for compatibility")
 	return e.encryptAES256GCM(plaintext, key, options)
 }
 
 // decryptAegis256 decrypts data using AEGIS-256
+// Note: AEGIS-256 is not natively supported in Go's crypto library
+// This implementation falls back to AES-256-GCM for compatibility
 func (e *EncryptionAlgorithm) decryptAegis256(ciphertext, key []byte) ([]byte, error) {
-	// TODO: Implement actual AEGIS-256 decryption
-	// For now, fall back to AES-256-GCM
+	log.Printf("AEGIS-256 decryption requested, falling back to AES-256-GCM for compatibility")
 	return e.decryptAES256GCM(ciphertext, key)
 }

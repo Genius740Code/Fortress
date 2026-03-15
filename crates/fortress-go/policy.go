@@ -272,10 +272,10 @@ func (p *PolicyEngine) valueInArray(value, array interface{}) bool {
 
 // stringContains checks if a string contains another string
 func (p *PolicyEngine) stringContains(value, substr interface{}) bool {
-	valueStr, ok := value.(string)
-	substrStr, ok := substr.(string)
+	valueStr, ok1 := value.(string)
+	substrStr, ok2 := substr.(string)
 
-	if !ok || !ok {
+	if !ok1 || !ok2 {
 		return false
 	}
 

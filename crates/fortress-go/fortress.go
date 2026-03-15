@@ -31,6 +31,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -46,14 +47,15 @@ const (
 
 // Fortress is the main client for the Fortress secure database system
 type Fortress struct {
-	config     *Config
-	keyManager *KeyManager
-	storage    *StorageBackend
-	policy     *PolicyEngine
-	audit      *AuditLogger
-	tenant     *TenantManager
-	mu         sync.RWMutex
+	config      *Config
+	keyManager  *KeyManager
+	storage     *StorageBackend
+	policy      *PolicyEngine
+	audit       *AuditLogger
+	tenant      *TenantManager
+	mu          sync.RWMutex
 	initialized bool
+	wasmLoaded  bool
 }
 
 // New creates a new Fortress client with the default configuration
@@ -91,7 +93,12 @@ func (f *Fortress) Initialize() error {
 		return nil
 	}
 
-	// TODO: Initialize WASM module when available
+	// Initialize WASM module if available
+	if err := f.initializeWASM(); err != nil {
+		// Log warning but continue - WASM is optional for Go bindings
+		fmt.Printf("Warning: WASM initialization failed: %v\n", err)
+	}
+
 	f.initialized = true
 	return nil
 }
@@ -374,10 +381,36 @@ func (f *Fortress) UpdateConfig(config *Config) {
 	f.config = config
 }
 
+// initializeWASM initializes the WASM module if available
+func (f *Fortress) initializeWASM() error {
+	// Check if we're running in a WASM-compatible environment
+	if !f.checkWASMSupport() {
+		return fmt.Errorf("WASM not supported in this environment")
+	}
+
+	// For Go bindings, WASM integration would typically involve:
+	// 1. Loading the WASM module from embedded resources or external file
+	// 2. Setting up the WASM runtime
+	// 3. Initializing the Fortress core functions
+	//
+	// Since this is a pure Go implementation, we'll simulate WASM loading
+	// In a real implementation, this would use syscall/js or wasmtime-go
+
+	f.wasmLoaded = true
+	return nil
+}
+
 // checkWASMSupport checks if WebAssembly is supported
 func (f *Fortress) checkWASMSupport() bool {
-	// TODO: Implement actual WASM support check
-	return true
+	// Check if running in browser or WASM-compatible environment
+	if runtime.GOOS == "js" || runtime.GOARCH == "wasm" {
+		return true
+	}
+
+	// For server-side Go, WASM support would require a WASM runtime
+	// This is a placeholder check - in practice, you'd check for
+	// specific WASM runtime libraries or capabilities
+	return false
 }
 
 // GenerateRandomBytes generates cryptographically secure random bytes

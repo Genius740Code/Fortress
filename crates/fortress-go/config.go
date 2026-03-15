@@ -18,7 +18,7 @@ func DefaultConfig() *Config {
 			CacheSize:      1000,
 		},
 		Audit: AuditConfig{
-			Enabled: true,
+			Enabled:  true,
 			LogLevel: "info",
 			StorageBackend: StorageConfig{
 				Backend: "memory",
@@ -39,15 +39,15 @@ func DefaultConfig() *Config {
 			Name:           "Default Tenant",
 			IsolationLevel: "strict",
 			ResourceLimits: ResourceLimits{
-				MaxKeys:                1000,
+				MaxKeys:                 1000,
 				MaxStorageBytes:         1024 * 1024 * 1024, // 1GB
-				MaxEncryptionsPerHour:  10000,
-				MaxDecryptionsPerHour:  10000,
+				MaxEncryptionsPerHour:   10000,
+				MaxDecryptionsPerHour:   10000,
 				MaxConcurrentOperations: 100,
 			},
 			EncryptionProfile: "default",
 			AuditConfig: AuditConfig{
-				Enabled: true,
+				Enabled:  true,
 				LogLevel: "info",
 				StorageBackend: StorageConfig{
 					Backend: "memory",
@@ -84,8 +84,8 @@ func LightningConfig() *Config {
 		CacheSize:      10000,
 	}
 	config.Audit = AuditConfig{
-		Enabled:   false,
-		LogLevel:  "error",
+		Enabled:       false,
+		LogLevel:      "error",
 		RetentionDays: 0,
 	}
 	config.Debug = false
@@ -177,8 +177,8 @@ func StartupConfig() *Config {
 		CacheSize:      100,
 	}
 	config.Audit = AuditConfig{
-		Enabled:   false,
-		LogLevel:  "warn",
+		Enabled:  false,
+		LogLevel: "warn",
 	}
 	config.Debug = false
 	config.LogLevel = "warn"
@@ -187,17 +187,115 @@ func StartupConfig() *Config {
 
 // Clone creates a deep copy of the configuration
 func (c *Config) Clone() *Config {
-	// TODO: Implement deep cloning
-	// For now, return a shallow copy
-	return &Config{
-		Encryption: c.Encryption,
-		Storage:    c.Storage,
-		Audit:      c.Audit,
-		Policy:     c.Policy,
-		Tenant:     c.Tenant,
-		Debug:      c.Debug,
-		LogLevel:   c.LogLevel,
+	// Create deep copy of all nested structures
+	clone := &Config{
+		Encryption: EncryptionProfile{
+			Name:        c.Encryption.Name,
+			Algorithm:   c.Encryption.Algorithm,
+			KeySize:     c.Encryption.KeySize,
+			NonceSize:   c.Encryption.NonceSize,
+			TagSize:     c.Encryption.TagSize,
+			Iterations:  c.Encryption.Iterations,
+			MemoryLimit: c.Encryption.MemoryLimit,
+		},
+		Storage: StorageConfig{
+			Backend:          c.Storage.Backend,
+			ConnectionString: c.Storage.ConnectionString,
+			MaxConnections:   c.Storage.MaxConnections,
+			TimeoutMs:        c.Storage.TimeoutMs,
+			RetryAttempts:    c.Storage.RetryAttempts,
+			CacheSize:        c.Storage.CacheSize,
+		},
+		Audit: AuditConfig{
+			Enabled:  c.Audit.Enabled,
+			LogLevel: c.Audit.LogLevel,
+			StorageBackend: StorageConfig{
+				Backend:          c.Audit.StorageBackend.Backend,
+				ConnectionString: c.Audit.StorageBackend.ConnectionString,
+				MaxConnections:   c.Audit.StorageBackend.MaxConnections,
+				TimeoutMs:        c.Audit.StorageBackend.TimeoutMs,
+				RetryAttempts:    c.Audit.StorageBackend.RetryAttempts,
+				CacheSize:        c.Audit.StorageBackend.CacheSize,
+			},
+			RetentionDays:   c.Audit.RetentionDays,
+			BatchSize:       c.Audit.BatchSize,
+			FlushIntervalMs: c.Audit.FlushIntervalMs,
+		},
+		Policy: PolicyConfig{
+			Name:           c.Policy.Name,
+			Version:        c.Policy.Version,
+			Rules:          make([]PolicyRule, len(c.Policy.Rules)),
+			DefaultAction:  c.Policy.DefaultAction,
+			EvaluationMode: c.Policy.EvaluationMode,
+		},
+		Tenant: TenantConfig{
+			ID:             c.Tenant.ID,
+			Name:           c.Tenant.Name,
+			Description:    c.Tenant.Description,
+			IsolationLevel: c.Tenant.IsolationLevel,
+			ResourceLimits: ResourceLimits{
+				MaxKeys:                 c.Tenant.ResourceLimits.MaxKeys,
+				MaxStorageBytes:         c.Tenant.ResourceLimits.MaxStorageBytes,
+				MaxEncryptionsPerHour:   c.Tenant.ResourceLimits.MaxEncryptionsPerHour,
+				MaxDecryptionsPerHour:   c.Tenant.ResourceLimits.MaxDecryptionsPerHour,
+				MaxConcurrentOperations: c.Tenant.ResourceLimits.MaxConcurrentOperations,
+			},
+			EncryptionProfile: c.Tenant.EncryptionProfile,
+			AuditConfig: AuditConfig{
+				Enabled:  c.Tenant.AuditConfig.Enabled,
+				LogLevel: c.Tenant.AuditConfig.LogLevel,
+				StorageBackend: StorageConfig{
+					Backend:          c.Tenant.AuditConfig.StorageBackend.Backend,
+					ConnectionString: c.Tenant.AuditConfig.StorageBackend.ConnectionString,
+					MaxConnections:   c.Tenant.AuditConfig.StorageBackend.MaxConnections,
+					TimeoutMs:        c.Tenant.AuditConfig.StorageBackend.TimeoutMs,
+					RetryAttempts:    c.Tenant.AuditConfig.StorageBackend.RetryAttempts,
+					CacheSize:        c.Tenant.AuditConfig.StorageBackend.CacheSize,
+				},
+			},
+			PolicyConfig: PolicyConfig{
+				Name:           c.Tenant.PolicyConfig.Name,
+				Version:        c.Tenant.PolicyConfig.Version,
+				Rules:          make([]PolicyRule, len(c.Tenant.PolicyConfig.Rules)),
+				DefaultAction:  c.Tenant.PolicyConfig.DefaultAction,
+				EvaluationMode: c.Tenant.PolicyConfig.EvaluationMode,
+			},
+		},
+		Debug:    c.Debug,
+		LogLevel: c.LogLevel,
 	}
+
+	// Deep copy policy rules
+	for i, rule := range c.Policy.Rules {
+		clone.Policy.Rules[i] = PolicyRule{
+			ID:          rule.ID,
+			Name:        rule.Name,
+			Conditions:  make([]Condition, len(rule.Conditions)),
+			Permissions: make([]Permission, len(rule.Permissions)),
+			Action:      rule.Action,
+			Priority:    rule.Priority,
+			Enabled:     rule.Enabled,
+		}
+		copy(clone.Policy.Rules[i].Conditions, rule.Conditions)
+		copy(clone.Policy.Rules[i].Permissions, rule.Permissions)
+	}
+
+	// Deep copy tenant policy rules
+	for i, rule := range c.Tenant.PolicyConfig.Rules {
+		clone.Tenant.PolicyConfig.Rules[i] = PolicyRule{
+			ID:          rule.ID,
+			Name:        rule.Name,
+			Conditions:  make([]Condition, len(rule.Conditions)),
+			Permissions: make([]Permission, len(rule.Permissions)),
+			Action:      rule.Action,
+			Priority:    rule.Priority,
+			Enabled:     rule.Enabled,
+		}
+		copy(clone.Tenant.PolicyConfig.Rules[i].Conditions, rule.Conditions)
+		copy(clone.Tenant.PolicyConfig.Rules[i].Permissions, rule.Permissions)
+	}
+
+	return clone
 }
 
 // Validate validates the configuration

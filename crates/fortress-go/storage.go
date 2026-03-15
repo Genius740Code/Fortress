@@ -1,6 +1,8 @@
 package fortress
 
 import (
+	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -113,7 +115,9 @@ func (s *StorageBackend) ListKeys(options *QueryOptions) ([]string, error) {
 
 		// Apply filters
 		if options != nil && options.Filter != nil {
-			// TODO: Implement filtering logic
+			if !s.applyFilters(key, entry, options.Filter) {
+				continue
+			}
 		}
 
 		keys = append(keys, key)
@@ -121,7 +125,7 @@ func (s *StorageBackend) ListKeys(options *QueryOptions) ([]string, error) {
 
 	// Apply sorting
 	if options != nil && options.SortBy != "" {
-		// TODO: Implement sorting logic
+		s.applySorting(keys, options.SortBy, options.SortOrder)
 	}
 
 	// Apply pagination
@@ -164,6 +168,118 @@ func (s *StorageBackend) GetStats() (*StorageStats, error) {
 	}
 
 	return stats, nil
+}
+
+// applyFilters applies filters to a key-value pair
+func (s *StorageBackend) applyFilters(key string, entry *StorageEntry, filters map[string]interface{}) bool {
+	for filterKey, filterValue := range filters {
+		switch filterKey {
+		case "key_prefix":
+			if prefix, ok := filterValue.(string); ok {
+				if !strings.HasPrefix(key, prefix) {
+					return false
+				}
+			} else {
+				return false
+			}
+		case "key_contains":
+			if contains, ok := filterValue.(string); ok {
+				if !strings.Contains(key, contains) {
+					return false
+				}
+			} else {
+				return false
+			}
+		case "created_after":
+			if timestamp, ok := filterValue.(float64); ok {
+				if entry.Timestamp.Unix() < int64(timestamp) {
+					return false
+				}
+			} else {
+				return false
+			}
+		case "created_before":
+			if timestamp, ok := filterValue.(float64); ok {
+				if entry.Timestamp.Unix() > int64(timestamp) {
+					return false
+				}
+			} else {
+				return false
+			}
+		case "has_ttl":
+			if hasTTL, ok := filterValue.(bool); ok {
+				if hasTTL && entry.TTL == nil {
+					return false
+				}
+				if !hasTTL && entry.TTL != nil {
+					return false
+				}
+			} else {
+				return false
+			}
+		case "size_min":
+			if minSize, ok := filterValue.(float64); ok {
+				if int64(len(entry.Value)) < int64(minSize) {
+					return false
+				}
+			} else {
+				return false
+			}
+		case "size_max":
+			if maxSize, ok := filterValue.(float64); ok {
+				if int64(len(entry.Value)) > int64(maxSize) {
+					return false
+				}
+			} else {
+				return false
+			}
+		default:
+			// Unknown filter, skip
+		}
+	}
+	return true
+}
+
+// applySorting applies sorting to the keys list
+func (s *StorageBackend) applySorting(keys []string, sortBy, sortOrder string) {
+	// Default sort order is ascending
+	ascending := sortOrder != "desc"
+
+	switch sortBy {
+	case "key":
+		sort.Slice(keys, func(i, j int) bool {
+			if ascending {
+				return keys[i] < keys[j]
+			}
+			return keys[i] > keys[j]
+		})
+	case "timestamp":
+		sort.Slice(keys, func(i, j int) bool {
+			entryI := s.storage[keys[i]]
+			entryJ := s.storage[keys[j]]
+			if ascending {
+				return entryI.Timestamp.Before(entryJ.Timestamp)
+			}
+			return entryI.Timestamp.After(entryJ.Timestamp)
+		})
+	case "size":
+		sort.Slice(keys, func(i, j int) bool {
+			sizeI := len(s.storage[keys[i]].Value)
+			sizeJ := len(s.storage[keys[j]].Value)
+			if ascending {
+				return sizeI < sizeJ
+			}
+			return sizeI > sizeJ
+		})
+	default:
+		// Default to key sorting
+		sort.Slice(keys, func(i, j int) bool {
+			if ascending {
+				return keys[i] < keys[j]
+			}
+			return keys[i] > keys[j]
+		})
+	}
 }
 
 // HealthCheck performs a health check

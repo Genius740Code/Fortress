@@ -2,6 +2,7 @@ package fortress
 
 import (
 	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -255,8 +256,29 @@ func (a *AuditLogger) Flush() error {
 		return nil
 	}
 
-	// TODO: Implement actual storage flush
-	// For now, just clear the entries
+	// Get storage backend - use memory storage for audit entries
+	// In a real implementation, this could be file, database, or remote storage
+	storageConfig := &Config{
+		Storage: a.config.Audit.StorageBackend,
+	}
+	storage := NewStorageBackend(storageConfig)
+
+	// Convert entries to JSON for storage
+	for _, entry := range a.entries {
+		entryData, err := json.Marshal(entry)
+		if err != nil {
+			return NewAuditError("failed to marshal audit entry", err)
+		}
+
+		// Store entry with key based on timestamp and ID
+		key := fmt.Sprintf("audit_%s_%s", entry.Timestamp.Format("20060102_150405"), entry.ID)
+		err = storage.Store(key, entryData, nil)
+		if err != nil {
+			return NewAuditError("failed to store audit entry", err)
+		}
+	}
+
+	// Clear entries after successful flush
 	a.entries = make([]*AuditEntry, 0)
 	return nil
 }

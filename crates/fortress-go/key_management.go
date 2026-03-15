@@ -1,22 +1,32 @@
 package fortress
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/rand"
 	"sync"
 )
 
 // KeyManager manages encryption keys
 type KeyManager struct {
-	config *Config
-	keys   map[string]*KeyMetadata
-	mu     sync.RWMutex
+	config    *Config
+	keys      map[string]*KeyMetadata
+	keyStore  map[string][]byte // Secure key storage
+	masterKey []byte            // Master key for encrypting stored keys
+	mu        sync.RWMutex
 }
 
 // NewKeyManager creates a new key manager
 func NewKeyManager(config *Config) *KeyManager {
+	// Generate master key for key encryption
+	masterKey := make([]byte, 32)
+	rand.Read(masterKey)
+
 	return &KeyManager{
-		config: config,
-		keys:   make(map[string]*KeyMetadata),
+		config:    config,
+		keys:      make(map[string]*KeyMetadata),
+		keyStore:  make(map[string][]byte),
+		masterKey: masterKey,
 	}
 }
 
@@ -79,12 +89,16 @@ func (km *KeyManager) ImportKey(keyData []byte, algorithm string) (string, error
 		Status:     "active",
 	}
 
+	// Encrypt and store the key data
+	encryptedKey, err := km.encryptKeyData(keyData)
+	if err != nil {
+		return "", NewKeyManagementError("failed to encrypt key data", err)
+	}
+
 	km.mu.Lock()
 	km.keys[keyID] = metadata
+	km.keyStore[keyID] = encryptedKey
 	km.mu.Unlock()
-
-	// TODO: Actually store the key data securely
-	// For now, we're just storing metadata
 
 	return keyID, nil
 }
@@ -99,9 +113,21 @@ func (km *KeyManager) ExportKey(keyID string) ([]byte, error) {
 		return nil, NewKeyManagementError("key not found", nil)
 	}
 
-	// TODO: Actually export the key data securely
-	// For now, return a placeholder
-	return make([]byte, km.config.Encryption.KeySize), nil
+	// Retrieve and decrypt the key data
+	km.mu.RLock()
+	encryptedKey, exists := km.keyStore[keyID]
+	km.mu.RUnlock()
+
+	if !exists {
+		return nil, NewKeyManagementError("key data not found", nil)
+	}
+
+	keyData, err := km.decryptKeyData(encryptedKey)
+	if err != nil {
+		return nil, NewKeyManagementError("failed to decrypt key data", err)
+	}
+
+	return keyData, nil
 }
 
 // DeleteKey deletes a key by ID
@@ -113,7 +139,9 @@ func (km *KeyManager) DeleteKey(keyID string) error {
 		return NewKeyManagementError("key not found", nil)
 	}
 
+	// Remove from both metadata and key store
 	delete(km.keys, keyID)
+	delete(km.keyStore, keyID)
 	return nil
 }
 
@@ -134,9 +162,21 @@ func (km *KeyManager) GetKey(keyID string) ([]byte, error) {
 	metadata.LastUsed = &now
 	km.mu.Unlock()
 
-	// TODO: Actually retrieve the key data securely
-	// For now, return a placeholder
-	return make([]byte, km.config.Encryption.KeySize), nil
+	// Retrieve and decrypt the key data
+	km.mu.RLock()
+	encryptedKey, exists := km.keyStore[keyID]
+	km.mu.RUnlock()
+
+	if !exists {
+		return nil, NewKeyManagementError("key data not found", nil)
+	}
+
+	keyData, err := km.decryptKeyData(encryptedKey)
+	if err != nil {
+		return nil, NewKeyManagementError("failed to decrypt key data", err)
+	}
+
+	return keyData, nil
 }
 
 // GetKeyMetadata retrieves key metadata by ID
@@ -197,12 +237,32 @@ func (km *KeyManager) RotateKey(keyID string) (string, error) {
 	metadata.Status = "deprecated"
 	km.mu.Unlock()
 
-	// TODO: Store the actual new key securely
-	_ = newKey
+	// Store the new key securely
+	newKeyID, err := GenerateRandomString(16)
+	if err != nil {
+		return "", NewKeyManagementError("failed to generate new key ID", err)
+	}
 
-	// Return new key ID (this is a placeholder - in real implementation,
-	// we'd need to store the key and return its ID)
-	return GenerateRandomString(16)
+	encryptedNewKey, err := km.encryptKeyData(newKey)
+	if err != nil {
+		return "", NewKeyManagementError("failed to encrypt new key data", err)
+	}
+
+	newMetadata := &KeyMetadata{
+		ID:         newKeyID,
+		Algorithm:  metadata.Algorithm,
+		CreatedAt:  TimeNow(),
+		UsageCount: 0,
+		Version:    metadata.Version + 1,
+		Status:     "active",
+	}
+
+	km.mu.Lock()
+	km.keys[newKeyID] = newMetadata
+	km.keyStore[newKeyID] = encryptedNewKey
+	km.mu.Unlock()
+
+	return newKeyID, nil
 }
 
 // UpdateKeyStatus updates the status of a key
@@ -315,4 +375,54 @@ func (km *KeyManager) GetStats() (map[string]interface{}, error) {
 	}
 
 	return stats, nil
+}
+
+// encryptKeyData encrypts key data using the master key
+func (km *KeyManager) encryptKeyData(keyData []byte) ([]byte, error) {
+	block, err := aes.NewCipher(km.masterKey)
+	if err != nil {
+		return nil, err
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, err
+	}
+
+	// Prepend nonce to ciphertext
+	ciphertext := gcm.Seal(nonce, nonce, keyData, nil)
+	return ciphertext, nil
+}
+
+// decryptKeyData decrypts key data using the master key
+func (km *KeyManager) decryptKeyData(encryptedData []byte) ([]byte, error) {
+	block, err := aes.NewCipher(km.masterKey)
+	if err != nil {
+		return nil, err
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+
+	nonceSize := gcm.NonceSize()
+	if len(encryptedData) < nonceSize {
+		return nil, NewKeyManagementError("encrypted data too short", nil)
+	}
+
+	nonce := encryptedData[:nonceSize]
+	ciphertext := encryptedData[nonceSize:]
+
+	keyData, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return keyData, nil
 }
