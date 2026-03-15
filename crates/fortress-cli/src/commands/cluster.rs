@@ -83,7 +83,7 @@ async fn init_cluster(args: InitArgs) -> Result<()> {
         min_nodes: args.min_nodes,
     };
 
-    let manager = ClusterManager::new(config)?;
+    let mut manager = ClusterManager::new(config)?;
     manager.start().await?;
 
     println!("✅ Cluster initialized successfully!");
@@ -109,7 +109,7 @@ async fn join_cluster(args: JoinArgs) -> Result<()> {
         min_nodes: 2,
     };
 
-    let manager = ClusterManager::new(config)?;
+    let mut manager = ClusterManager::new(config)?;
     manager.start().await?;
 
     println!("✅ Successfully joined cluster!");

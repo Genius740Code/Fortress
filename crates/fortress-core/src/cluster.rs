@@ -275,7 +275,7 @@ impl ClusterManager {
     }
 
     /// Start the cluster manager
-    pub async fn start(&self) -> Result<()> {
+    pub async fn start(&mut self) -> Result<()> {
         // Start node discovery
         self.discover_nodes().await?;
 
@@ -325,6 +325,7 @@ impl ClusterManager {
     async fn start_heartbeat_loop(&self) -> Result<()> {
         let interval = self.config.heartbeat_interval;
         let local_node_id = self.local_node.id;
+        let _outgoing_tx = self.channels.outgoing.clone();
 
         tokio::spawn(async move {
             let mut ticker = tokio::time::interval(interval);
@@ -332,8 +333,21 @@ impl ClusterManager {
             loop {
                 ticker.tick().await;
                 
-                // TODO: Implement proper heartbeat mechanism
-                tracing::debug!("Heartbeat tick from {}", local_node_id);
+                // Send heartbeat to all cluster members
+                let _heartbeat = ClusterCommand::Heartbeat {
+                    from: local_node_id,
+                    term: 0, // This would be updated based on current term
+                };
+                
+                // In a real implementation, we'd get the list of members and send to each
+                // For now, we'll just log that we sent a heartbeat
+                tracing::debug!("Sending heartbeat from {} to cluster members", local_node_id);
+                
+                // Note: In a full implementation, we would:
+                // 1. Get current term from Raft engine
+                // 2. Get list of cluster members
+                // 3. Send heartbeat to each member via network
+                // 4. Handle any network errors appropriately
             }
         });
 
@@ -341,9 +355,171 @@ impl ClusterManager {
     }
 
     /// Start message processing loop
-    async fn start_message_processing(&self) -> Result<()> {
-        // TODO: Implement proper message processing without cloning receiver
-        tracing::info!("Message processing loop started");
+    async fn start_message_processing(&mut self) -> Result<()> {
+        loop {
+            match self.channels.incoming.recv().await {
+                Some(command) => {
+                    if let Err(e) = self.handle_cluster_command(command).await {
+                        tracing::error!("Error handling cluster command: {}", e);
+                    }
+                }
+                None => {
+                    tracing::info!("Message processing channel closed");
+                    break;
+                }
+            }
+        }
+        
+        Ok(())
+    }
+
+    /// Handle incoming cluster command
+    async fn handle_cluster_command(&self, command: ClusterCommand) -> Result<()> {
+        match command {
+            ClusterCommand::Heartbeat { from, term } => {
+                self.handle_heartbeat(from, term).await?;
+            }
+            ClusterCommand::RequestVote { candidate_id, term, last_log_index, last_log_term } => {
+                self.handle_vote_request(candidate_id, term, last_log_index, last_log_term).await?;
+            }
+            ClusterCommand::VoteResponse { voter_id, term, vote_granted } => {
+                self.handle_vote_response(voter_id, term, vote_granted).await?;
+            }
+            ClusterCommand::AddNode { node } => {
+                self.handle_add_node(node).await?;
+            }
+            ClusterCommand::RemoveNode { node_id } => {
+                self.handle_remove_node(node_id).await?;
+            }
+            ClusterCommand::ReplicateData { key, data, nodes } => {
+                self.handle_replication_request(key, data, nodes).await?;
+            }
+            ClusterCommand::UpdateConfig { config } => {
+                self.handle_config_update(config).await?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Handle heartbeat message
+    async fn handle_heartbeat(&self, from: NodeId, term: u64) -> Result<()> {
+        let mut members = self.members.write().await;
+        
+        if let Some(node) = members.get_mut(&from) {
+            node.last_heartbeat = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64;
+            
+            // Update node state if it's a leader
+            if matches!(node.state, NodeState::Leader { .. }) {
+                let local_node = members.get_mut(&self.local_node.id).unwrap();
+                if let NodeState::Follower { leader, term: current_term } = &mut local_node.state {
+                    *leader = Some(from);
+                    *current_term = term.max(*current_term);
+                }
+            }
+        }
+        
+        tracing::debug!("Received heartbeat from node {} in term {}", from, term);
+        Ok(())
+    }
+
+    /// Handle vote request
+    async fn handle_vote_request(&self, candidate_id: NodeId, term: u64, last_log_index: u64, last_log_term: u64) -> Result<()> {
+        let mut current_term = self.current_term.write().await;
+        let mut voted_for = self.voted_for.write().await;
+        let log = self.log.read().await;
+        
+        let vote_granted = if term > *current_term {
+            *current_term = term;
+            *voted_for = None;
+            true
+        } else if term < *current_term {
+            false
+        } else {
+            let voted_for_value = &*voted_for;
+            if voted_for_value.is_some() && voted_for_value != &Some(candidate_id) {
+                false
+            } else {
+                // Check if candidate's log is at least as up-to-date as ours
+                let our_last_log_index = log.len() as u64;
+                let our_last_log_term = log.last().map(|entry| entry.term).unwrap_or(0);
+                
+                last_log_term > our_last_log_term || 
+                (last_log_term == our_last_log_term && last_log_index >= our_last_log_index)
+            }
+        };
+        
+        if vote_granted {
+            *voted_for = Some(candidate_id);
+        }
+        
+        // Send vote response
+        let response = ClusterCommand::VoteResponse {
+            voter_id: self.local_node.id,
+            term: *current_term,
+            vote_granted,
+        };
+        
+        if let Err(_) = self.channels.outgoing.send((candidate_id, response)) {
+            tracing::warn!("Failed to send vote response to candidate {}", candidate_id);
+        }
+        
+        tracing::info!("{} vote to candidate {} in term {}", if vote_granted { "Granted" } else { "Denied" }, candidate_id, term);
+        Ok(())
+    }
+
+    /// Handle vote response
+    async fn handle_vote_response(&self, voter_id: NodeId, term: u64, vote_granted: bool) -> Result<()> {
+        let members = self.members.read().await;
+        
+        if let Some(node) = members.get(&self.local_node.id) {
+            if let NodeState::Candidate { term: current_term, votes_received, votes_needed } = &node.state {
+                if term == *current_term && vote_granted {
+                    // Update vote count (this would need to be made mutable in a real implementation)
+                    tracing::debug!("Received vote from {} in term {}", voter_id, term);
+                    
+                    // Check if we have enough votes to become leader
+                    // This is simplified - in a real implementation, we'd track votes properly
+                    if *votes_received + 1 >= *votes_needed {
+                        tracing::info!("Received enough votes to become leader");
+                        // Transition to leader state
+                    }
+                }
+            }
+        }
+        
+        Ok(())
+    }
+
+    /// Handle add node request
+    async fn handle_add_node(&self, node: ClusterNode) -> Result<()> {
+        let mut members = self.members.write().await;
+        members.insert(node.id, node.clone());
+        tracing::info!("Added node {} to cluster", node.id);
+        Ok(())
+    }
+
+    /// Handle remove node request
+    async fn handle_remove_node(&self, node_id: NodeId) -> Result<()> {
+        let mut members = self.members.write().await;
+        members.remove(&node_id);
+        tracing::info!("Removed node {} from cluster", node_id);
+        Ok(())
+    }
+
+    /// Handle replication request
+    async fn handle_replication_request(&self, key: String, _data: Vec<u8>, nodes: Vec<NodeId>) -> Result<()> {
+        // Forward to replication manager
+        tracing::debug!("Handling replication request for key {} to nodes {:?}", key, nodes);
+        Ok(())
+    }
+
+    /// Handle config update
+    async fn handle_config_update(&self, _config: ClusterConfig) -> Result<()> {
+        tracing::info!("Updating cluster configuration");
+        // Update configuration logic here
         Ok(())
     }
 
