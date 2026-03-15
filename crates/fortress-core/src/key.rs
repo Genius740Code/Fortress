@@ -28,7 +28,7 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 // Import HSM types
-use crate::hsm::{HsmConfig, HsmKeyManager as HsmKeyManagerInner};
+use crate::hsm::{HsmConfig, HsmKeyManagerInner};
 
 // Import futures for concurrent processing
 use futures;

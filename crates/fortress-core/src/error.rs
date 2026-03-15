@@ -298,6 +298,30 @@ pub enum KeyErrorCode {
     /// Authentication error
     #[error("Authentication error")]
     AuthenticationError,
+    
+    /// Key generation error
+    #[error("Key generation error")]
+    KeyGenerationError,
+    
+    /// Key deletion error
+    #[error("Key deletion error")]
+    KeyDeletionError,
+    
+    /// Signing error
+    #[error("Signing error")]
+    SigningError,
+    
+    /// Verification error
+    #[error("Verification error")]
+    VerificationError,
+    
+    /// Encryption error
+    #[error("Encryption error")]
+    EncryptionError,
+    
+    /// Decryption error
+    #[error("Decryption error")]
+    DecryptionError,
 }
 
 /// Storage error codes
