@@ -1,17 +1,17 @@
 # Fortress Python SDK
 
-A Python interface to the Fortress secure database system, providing enterprise-grade encryption, key management, and multi-tenant isolation.
+A production-ready Python interface to the Fortress secure database system, providing enterprise-grade encryption, key management, and comprehensive security features.
 
-## Features
+## ✨ Features
 
-- **🔐 Enterprise-grade Encryption**: Support for AEGIS-256, ChaCha20-Poly1305, AES-256-GCM, and more
-- **🔑 Advanced Key Management**: Automatic key generation, rotation, and secure storage
-- **💾 Flexible Storage Backends**: Local filesystem, S3, Azure Blob Storage, and more
-- **👥 Multi-tenant Support**: Complete tenant isolation and resource management
-- **📊 Comprehensive Auditing**: Tamper-evident logging and security event tracking
-- **🛡️ Policy Engine**: Role-based access control (RBAC) with fine-grained permissions
-- **⚡ High Performance**: Rust-powered core with Python-friendly interface
-- **🔧 Easy Configuration**: Pre-built profiles for different use cases
+- **🔐 Enterprise-grade Encryption**: Support for AES-256-GCM, ChaCha20-Poly1305, AEGIS-256
+- **🔑 Advanced Key Management**: Secure key generation with cryptographically secure RNG
+- **⚡ High Performance**: Rust backend integration with connection pooling and caching
+- **�️ Security First**: Rate limiting, input validation, audit logging, and comprehensive error handling
+- **� Easy Configuration**: Flexible security and performance configurations
+- **� Monitoring**: Built-in performance metrics and health monitoring
+- **🧵 Thread Safe**: Concurrent access support with proper resource management
+- **� Context Manager**: Automatic resource cleanup with Python context manager support
 
 ## Installation
 
@@ -38,38 +38,91 @@ maturin develop
 ## Quick Start
 
 ```python
-import fortress_db
-import asyncio
+import fortress
+from fortress import Fortress, SecurityConfig, PerformanceConfig
 
-async def main():
-    # Create configuration
-    config = fortress_db.FortressConfig("default")
-    
-    # Initialize encryption
-    algorithm = fortress_db.EncryptionAlgorithm.aegis256()
-    key_manager = fortress_db.KeyManager()
-    key = key_manager.generate_key("aegis256")
-    
-    # Encrypt and decrypt data
-    plaintext = b"Hello, Fortress!"
-    ciphertext = await algorithm.encrypt(plaintext, key)
-    decrypted = await algorithm.decrypt(ciphertext, key)
-    
-    print(f"Original: {plaintext}")
-    print(f"Decrypted: {decrypted}")
-    
-    # Key management
-    key_manager = fortress.KeyManager()
-    key_id = await key_manager.generate_key("aegis256")
-    stored_key = await key_manager.get_key(key_id)
-    
-    # Storage operations
-    storage = fortress.StorageBackend.local("/tmp/fortress-data")
-    await storage.store("my-secret", ciphertext)
-    retrieved = await storage.retrieve("my-secret")
+# Basic usage with default configurations
+client = Fortress()
+client.initialize()
 
-# Run the async example
-asyncio.run(main())
+# Encrypt and decrypt data
+data = b"Hello, Fortress!"
+encrypted = client.encrypt(data)
+decrypted = client.decrypt(encrypted, "test_key")
+print(f"Original: {data}")
+print(f"Decrypted: {decrypted}")
+
+# Key management
+key_id = client.generate_key(algorithm="aes256gcm")
+print(f"Generated key: {key_id}")
+
+# List all keys
+keys = client.list_keys()
+print(f"Available keys: {keys}")
+
+# Use with context manager (recommended)
+with Fortress() as client:
+    encrypted = client.encrypt(b"Secure data")
+    decrypted = client.decrypt(encrypted, "auto_key")
+    # Automatic cleanup on exit
+```
+
+## Advanced Configuration
+
+```python
+from fortress import Fortress, SecurityConfig, PerformanceConfig
+
+# Security configuration
+security_config = SecurityConfig(
+    max_key_size=1024 * 1024,  # 1MB max key size
+    max_data_size=100 * 1024 * 1024,  # 100MB max data size
+    rate_limit_requests=1000,  # requests per minute
+    rate_limit_window=60,  # seconds
+    enable_audit_logging=True,
+    require_key_id=True,
+    allowed_algorithms=["aes256gcm", "chacha20poly1305"]
+)
+
+# Performance configuration
+performance_config = PerformanceConfig(
+    connection_pool_size=10,
+    connection_timeout=30.0,
+    request_timeout=60.0,
+    max_retries=3,
+    retry_backoff=1.0,
+    enable_caching=True,
+    cache_size=1000,
+    cache_ttl=300  # seconds
+)
+
+# Create client with custom configurations
+client = Fortress(
+    config={"profile": "production"},
+    security_config=security_config,
+    performance_config=performance_config
+)
+
+client.initialize()
+
+# Use the client
+try:
+    # Encrypt with specific algorithm
+    encrypted = client.encrypt(
+        b"Sensitive data", 
+        key_id="my_key",
+        algorithm="aes256gcm"
+    )
+    
+    # Decrypt
+    decrypted = client.decrypt(encrypted, "my_key", "aes256gcm")
+    
+    # Get performance metrics
+    metrics = client.get_performance_metrics()
+    print(f"Cache hit ratio: {metrics['cache_hit_ratio']:.2%}")
+    print(f"Active connections: {metrics['active_connections']}")
+    
+finally:
+    client.shutdown()
 ```
 
 ## Configuration
