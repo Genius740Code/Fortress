@@ -16,7 +16,7 @@ path = "src/main.rs"
 
 [dependencies]
 # Core fortress library
-fortress-core = { path = "../fortress-core", version = "1.0.1-alpha" }
+fortress-core = { path = "../fortress-core", version = "1.0.2-alpha" }
 
 # CLI framework
 clap = { version = "4.4", features = ["derive", "env", "color"] }
