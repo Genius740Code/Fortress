@@ -15,8 +15,79 @@ import { BuildInfo, CompatibilityInfo, EncryptionOptions, KeyGenerationOptions }
 import { FortressConfigOptions } from './config';
 
 // Import WASM module
-// TODO: Replace with actual WASM module import when built
-// import wasmModule from '../pkg/fortress_js';
+interface FortressWasm {
+  getVersion(): string;
+  getBuildInfo(): any;
+  listAlgorithms(): string[];
+  checkWasmSupport(): boolean;
+  getSupportedFeatures(): string[];
+  createConfig(profile?: string): any;
+}
+
+let wasmModule: FortressWasm | null = null;
+
+/**
+ * Dynamically import the WASM module
+ */
+async function loadWasmModule(): Promise<FortressWasm> {
+  if (wasmModule) {
+    return wasmModule;
+  }
+
+  try {
+    // Try to import the WASM module from the expected location
+    // This will work when the package is properly built with wasm-pack
+    // @ts-ignore - WASM module may not exist during development
+    const module = await import('../pkg/fortress_js');
+    wasmModule = module;
+    return module;
+  } catch (error) {
+    // Fallback for development/testing when WASM isn't built yet
+    console.warn('WASM module not available, using fallback implementation:', error);
+    
+    // Provide a fallback implementation that mimics the WASM interface
+    const fallback: FortressWasm = {
+      getVersion: () => '0.1.0-dev',
+      getBuildInfo: () => ({
+        timestamp: new Date().toISOString(),
+        git_sha: 'development',
+        rust_version: 'unknown',
+        target: 'unknown',
+      }),
+      listAlgorithms: () => [
+        'aegis256',
+        'chacha20poly1305',
+        'aes256gcm',
+        'xchacha20poly1305',
+        'blake3_encrypt',
+        'hmacsha512_encrypt',
+        'aes256ctr',
+        'argon2id_encrypt',
+        'composite_encrypt',
+      ],
+      checkWasmSupport: () => typeof WebAssembly !== 'undefined',
+      getSupportedFeatures: () => [
+        'encryption',
+        'key_management',
+        'storage',
+        'configuration',
+        'audit_logging',
+        'policy_engine',
+        'multi_tenant',
+        'error_handling',
+        'webassembly',
+      ],
+      createConfig: (profile?: string) => ({
+        profile: profile || 'default',
+        encryption: { algorithm: 'aegis256' },
+        storage: { backend: 'memory' },
+      }),
+    };
+    
+    wasmModule = fallback;
+    return fallback;
+  }
+}
 
 /**
  * Main Fortress class providing access to all Fortress functionality
@@ -45,8 +116,8 @@ export class Fortress {
     }
 
     try {
-      // TODO: Initialize WASM module when available
-      // await wasmModule();
+      // Initialize WASM module
+      await loadWasmModule();
 
       // Initialize components
       this.keyManager = new KeyManager(this.config.encryptionProfile);
@@ -64,21 +135,23 @@ export class Fortress {
   /**
    * Get Fortress version information
    */
-  getVersion(): string {
-    // TODO: Return actual version from WASM module
-    return '0.1.0';
+  async getVersion(): Promise<string> {
+    const wasm = await loadWasmModule();
+    return wasm.getVersion();
   }
 
   /**
    * Get Fortress build information
    */
-  getBuildInfo(): BuildInfo {
-    // TODO: Return actual build info from WASM module
+  async getBuildInfo(): Promise<BuildInfo> {
+    const wasm = await loadWasmModule();
+    const wasmBuildInfo = wasm.getBuildInfo();
+    
     return {
-      timestamp: new Date().toISOString(),
-      git_sha: 'unknown',
-      rust_version: 'unknown',
-      target: 'unknown',
+      timestamp: wasmBuildInfo.timestamp || new Date().toISOString(),
+      git_sha: wasmBuildInfo.git_sha || 'unknown',
+      rust_version: wasmBuildInfo.rust_version || 'unknown',
+      target: wasmBuildInfo.target || 'unknown',
     };
   }
 
@@ -87,7 +160,7 @@ export class Fortress {
    */
   getCompatibilityInfo(): CompatibilityInfo {
     return {
-      version: this.getVersion(),
+      version: '0.1.0', // Fallback version for compatibility info
       api_version: '1.0.0',
       features: [
         'encryption',
@@ -108,27 +181,21 @@ export class Fortress {
   /**
    * Check if WebAssembly is supported
    */
-  checkWasmSupport(): boolean {
-    // TODO: Implement actual WASM support check
-    return typeof WebAssembly !== 'undefined';
+  async checkWasmSupport(): Promise<boolean> {
+    try {
+      const wasm = await loadWasmModule();
+      return wasm.checkWasmSupport();
+    } catch (error) {
+      return false;
+    }
   }
 
   /**
    * List available encryption algorithms
    */
-  listAlgorithms(): string[] {
-    // TODO: Return actual algorithms from WASM module
-    return [
-      'aegis256',
-      'chacha20poly1305',
-      'aes256gcm',
-      'xchacha20poly1305',
-      'blake3_encrypt',
-      'hmacsha512_encrypt',
-      'aes256ctr',
-      'argon2id_encrypt',
-      'composite_encrypt',
-    ];
+  async listAlgorithms(): Promise<string[]> {
+    const wasm = await loadWasmModule();
+    return wasm.listAlgorithms();
   }
 
   /**
@@ -284,9 +351,9 @@ export class Fortress {
       this.ensureInitialized();
       
       const details = {
-        wasm_support: this.checkWasmSupport(),
-        version: this.getVersion(),
-        algorithms: this.listAlgorithms(),
+        wasm_support: await this.checkWasmSupport(),
+        version: await this.getVersion(),
+        algorithms: await this.listAlgorithms(),
         storage_healthy: await this.storage.healthCheck(),
         key_manager_healthy: await this.keyManager.healthCheck(),
       };

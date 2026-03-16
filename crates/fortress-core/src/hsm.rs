@@ -199,20 +199,8 @@ impl HsmKeyManagerInner {
         let provider: Arc<dyn HsmProvider> = match config.provider {
             HsmProviderType::AwsCloudHsm => Arc::new(AwsCloudHsmProvider::new().await?),
             HsmProviderType::Pkcs11 => Arc::new(Pkcs11Provider::new().await?),
-            HsmProviderType::AzureDedicatedHsm => {
-                return Err(FortressError::key_management(
-                    "Azure Dedicated HSM not yet implemented".to_string(),
-                    None,
-                    KeyErrorCode::ProviderError,
-                ));
-            }
-            HsmProviderType::GoogleCloudHsm => {
-                return Err(FortressError::key_management(
-                    "Google Cloud HSM not yet implemented".to_string(),
-                    None,
-                    KeyErrorCode::ProviderError,
-                ));
-            }
+            HsmProviderType::AzureDedicatedHsm => Arc::new(AzureDedicatedHsmProvider::new().await?),
+            HsmProviderType::GoogleCloudHsm => Arc::new(GoogleCloudHsmProvider::new().await?),
         };
 
         Ok(Self {

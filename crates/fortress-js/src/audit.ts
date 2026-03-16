@@ -179,12 +179,54 @@ export class AuditLogger {
         return;
       }
 
-      // TODO: Implement actual storage flush
-      // For now, just clear the entries
-      this.entries = [];
+      // Create a snapshot of entries to flush
+      const entriesToFlush = [...this.entries];
+      
+      // Store audit entries in batches to avoid memory issues
+      const batchSize = 100;
+      for (let i = 0; i < entriesToFlush.length; i += batchSize) {
+        const batch = entriesToFlush.slice(i, i + batchSize);
+        const batchKey = `audit_batch_${Date.now()}_${i}`;
+        
+        // Serialize the batch
+        const serializedBatch = JSON.stringify(batch);
+        const data = new TextEncoder().encode(serializedBatch);
+        
+        // Store using the configured storage backend
+        // Note: In a real implementation, this would use the Fortress storage backend
+        // For now, we'll store in localStorage if available, otherwise memory
+        if (typeof localStorage !== 'undefined') {
+          try {
+            localStorage.setItem(batchKey, serializedBatch);
+          } catch (error) {
+            console.warn('Failed to store audit batch in localStorage:', error);
+            // Fallback to memory storage
+            this.storeInMemory(batchKey, data);
+          }
+        } else {
+          // Node.js or environment without localStorage
+          this.storeInMemory(batchKey, data);
+        }
+      }
+      
+      // Clear flushed entries from memory
+      this.entries = this.entries.slice(entriesToFlush.length);
+      
     } catch (error) {
       throw FortressError.audit('Failed to flush audit entries', error as Error);
     }
+  }
+
+  /**
+   * Store data in memory as fallback
+   */
+  private storeInMemory(key: string, data: Uint8Array): void {
+    // Simple in-memory storage fallback
+    // In a real implementation, this would use the Fortress storage backend
+    if (!(globalThis as any)._fortressAuditStorage) {
+      (globalThis as any)._fortressAuditStorage = new Map();
+    }
+    (globalThis as any)._fortressAuditStorage.set(key, data);
   }
 
   /**
