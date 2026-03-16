@@ -1,13 +1,10 @@
 //! Standalone test for rate limiting functionality
 
 use std::sync::Arc;
-use std::time::{Duration, Instant};
-use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicU64, Ordering};
 
 // Copy the essential structures for testing
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum RateLimitAlgorithm {
     TokenBucket,
     SlidingWindow,

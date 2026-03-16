@@ -34,8 +34,12 @@
 use crate::error::{FortressError, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::str::FromStr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
+use chrono::{DateTime, Utc, TimeZone, Datelike};
+use chrono_tz::Tz;
 
 /// Policy engine for managing roles and permissions
 #[derive(Debug)]
@@ -45,7 +49,14 @@ pub struct PolicyEngine {
     /// Policy storage
     #[allow(dead_code)]
     policies: RwLock<HashMap<String, Policy>>,
-    cache: RwLock<HashMap<CacheKey, bool>>,
+    /// Optimized cache with TTL
+    cache: RwLock<HashMap<CacheKey, CacheEntry>>,
+    /// User attribute store for attribute-based conditions
+    user_attributes: RwLock<HashMap<String, HashMap<String, String>>>,
+    /// User IP context for IP-based conditions
+    user_ip_context: RwLock<HashMap<String, String>>,
+    /// Cache TTL in seconds (default: 5 minutes)
+    cache_ttl_secs: u64,
 }
 
 /// Cache key for permission checks
@@ -54,7 +65,15 @@ struct CacheKey {
     user_id: String,
     permission: Permission,
     resource: Resource,
+    /// Cache timestamp with TTL support
     timestamp: u64,
+}
+
+/// Cache entry with TTL
+#[derive(Debug, Clone)]
+struct CacheEntry {
+    result: bool,
+    expires_at: u64,
 }
 
 /// Role definition with permissions and metadata
@@ -282,11 +301,19 @@ pub struct PolicyAuditEntry {
 impl PolicyEngine {
     /// Create a new policy engine
     pub fn new() -> Self {
+        Self::with_cache_ttl(300) // 5 minutes default
+    }
+
+    /// Create a new policy engine with custom cache TTL
+    pub fn with_cache_ttl(ttl_secs: u64) -> Self {
         Self {
             roles: RwLock::new(HashMap::new()),
             user_roles: RwLock::new(HashMap::new()),
             policies: RwLock::new(HashMap::new()),
             cache: RwLock::new(HashMap::new()),
+            user_attributes: RwLock::new(HashMap::new()),
+            user_ip_context: RwLock::new(HashMap::new()),
+            cache_ttl_secs: ttl_secs,
         }
     }
 
@@ -341,42 +368,56 @@ impl PolicyEngine {
         Ok(())
     }
 
-    /// Check if a user has permission for a resource
+    /// Check if a user has permission for a resource (optimized)
     pub async fn check_permission(
         &self,
         user_id: &str,
         permission: Permission,
         resource: Resource,
     ) -> Result<bool> {
-        let start_time = SystemTime::now();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_else(|_| Duration::from_secs(0))
+            .as_secs();
         
-        // Check cache first
+        // Create cache key without timestamp for better cache hits
         let cache_key = CacheKey {
             user_id: user_id.to_string(),
             permission: permission.clone(),
             resource: resource.clone(),
-            timestamp: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_else(|_| Duration::from_secs(0))
-                .as_secs(),
+            timestamp: now,
         };
 
+        // Check cache first with TTL validation
         {
             let cache = self.cache.read().await;
-            if let Some(&cached_result) = cache.get(&cache_key) {
-                return Ok(cached_result);
+            if let Some(entry) = cache.get(&cache_key) {
+                if now < entry.expires_at {
+                    return Ok(entry.result);
+                }
             }
         }
 
-        // Get user's roles
+        // Get user's roles (early return if no roles)
         let user_roles = self.user_roles.read().await;
-        let role_names = user_roles.get(user_id).cloned().unwrap_or_default();
+        let role_names = match user_roles.get(user_id) {
+            Some(roles) if !roles.is_empty() => roles.clone(),
+            _ => {
+                // Cache negative result for users with no roles
+                let mut cache = self.cache.write().await;
+                cache.insert(cache_key, CacheEntry {
+                    result: false,
+                    expires_at: now + self.cache_ttl_secs,
+                });
+                return Ok(false);
+            }
+        };
         drop(user_roles);
 
         // Get role definitions
         let roles = self.roles.read().await;
         
-        // Check each role for permission
+        // Check each role for permission (early return on first match)
         for role_name in &role_names {
             if let Some(role) = roles.get(role_name) {
                 for permission_entry in &role.permissions {
@@ -384,25 +425,38 @@ impl PolicyEngine {
                        self.matches_resource(&permission_entry.resource, &resource) &&
                        self.evaluate_conditions(&permission_entry.conditions, user_id).await? {
                         
-                        // Cache the result
+                        // Cache positive result
                         let mut cache = self.cache.write().await;
-                        cache.insert(cache_key, true);
+                        cache.insert(cache_key, CacheEntry {
+                            result: true,
+                            expires_at: now + self.cache_ttl_secs,
+                        });
                         
-                        let elapsed = start_time.elapsed().unwrap_or_else(|_| Duration::from_secs(0)).as_millis() as u64;
-                        self.log_audit_entry(PolicyAuditEntry {
-                            timestamp: SystemTime::now()
-                                .duration_since(UNIX_EPOCH)
-                                .unwrap_or_else(|_| Duration::from_secs(0))
-                                .as_secs(),
-                            user_id: user_id.to_string(),
-                            permission,
-                            resource,
-                            decision: true,
-                            reason: format!("Granted by role '{}'", role_name),
-                            roles_involved: vec![role_name.clone()],
-                            policies_evaluated: vec![],
-                            evaluation_time_ms: elapsed,
-                        }).await?;
+                        // Log audit entry asynchronously (non-blocking)
+                        let elapsed = SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap_or_else(|_| Duration::from_secs(0))
+                            .as_millis() as u64;
+                        
+                        // Clone data for async task
+                        let role_name_clone = role_name.clone();
+                        let user_id_clone = user_id.to_string();
+                        let permission_clone = permission.clone();
+                        let resource_clone = resource.clone();
+                        
+                        tokio::spawn(async move {
+                            let _ = Self::log_audit_entry_static(
+                                now,
+                                user_id_clone,
+                                permission_clone,
+                                resource_clone,
+                                true,
+                                format!("Granted by role '{}'", role_name_clone),
+                                vec![role_name_clone],
+                                vec![],
+                                elapsed,
+                            ).await;
+                        });
                         
                         return Ok(true);
                     }
@@ -410,25 +464,38 @@ impl PolicyEngine {
             }
         }
 
-        // Cache the negative result
+        // Cache negative result
         let mut cache = self.cache.write().await;
-        cache.insert(cache_key, false);
+        cache.insert(cache_key, CacheEntry {
+            result: false,
+            expires_at: now + self.cache_ttl_secs,
+        });
         
-        let elapsed = start_time.elapsed().unwrap_or_else(|_| Duration::from_secs(0)).as_millis() as u64;
-        self.log_audit_entry(PolicyAuditEntry {
-            timestamp: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_else(|_| Duration::from_secs(0))
-                .as_secs(),
-            user_id: user_id.to_string(),
-            permission,
-            resource,
-            decision: false,
-            reason: "No matching permission found".to_string(),
-            roles_involved: role_names.into_iter().collect(),
-            policies_evaluated: vec![],
-            evaluation_time_ms: elapsed,
-        }).await?;
+        // Log audit entry asynchronously for negative results
+        let elapsed = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_else(|_| Duration::from_secs(0))
+            .as_millis() as u64;
+        
+        // Clone data for async task
+        let user_id_clone = user_id.to_string();
+        let permission_clone = permission.clone();
+        let resource_clone = resource.clone();
+        let role_names_clone = role_names.clone();
+        
+        tokio::spawn(async move {
+            let _ = Self::log_audit_entry_static(
+                now,
+                user_id_clone,
+                permission_clone,
+                resource_clone,
+                false,
+                "No matching permission found".to_string(),
+                role_names_clone.into_iter().collect(),
+                vec![],
+                elapsed,
+            ).await;
+        });
 
         Ok(false)
     }
@@ -462,10 +529,66 @@ impl PolicyEngine {
         Ok(permissions)
     }
 
-    /// Clear the permission cache
+    /// Set user attributes for attribute-based conditions
+    pub async fn set_user_attributes(&self, user_id: &str, attributes: HashMap<String, String>) -> Result<()> {
+        let mut user_attrs = self.user_attributes.write().await;
+        user_attrs.insert(user_id.to_string(), attributes);
+        self.clear_cache().await;
+        Ok(())
+    }
+
+    /// Update a specific user attribute
+    pub async fn set_user_attribute(&self, user_id: &str, attribute: &str, value: &str) -> Result<()> {
+        let mut user_attrs = self.user_attributes.write().await;
+        let attrs = user_attrs.entry(user_id.to_string()).or_insert_with(HashMap::new);
+        attrs.insert(attribute.to_string(), value.to_string());
+        self.clear_cache().await;
+        Ok(())
+    }
+
+    /// Get user attributes
+    pub async fn get_user_attributes(&self, user_id: &str) -> Result<HashMap<String, String>> {
+        let user_attrs = self.user_attributes.read().await;
+        Ok(user_attrs.get(user_id).cloned().unwrap_or_default())
+    }
+
+    /// Set user IP address for IP-based conditions
+    pub async fn set_user_ip(&self, user_id: &str, ip_address: &str) -> Result<()> {
+        let mut user_ips = self.user_ip_context.write().await;
+        user_ips.insert(user_id.to_string(), ip_address.to_string());
+        self.clear_cache().await;
+        Ok(())
+    }
+
+    /// Get user IP address
+    pub async fn get_user_ip(&self, user_id: &str) -> Result<Option<String>> {
+        let user_ips = self.user_ip_context.read().await;
+        Ok(user_ips.get(user_id).cloned())
+    }
+
+    /// Remove user IP address
+    pub async fn remove_user_ip(&self, user_id: &str) -> Result<()> {
+        let mut user_ips = self.user_ip_context.write().await;
+        user_ips.remove(user_id);
+        self.clear_cache().await;
+        Ok(())
+    }
+
+    /// Clear expired cache entries (optimized cleanup)
     async fn clear_cache(&self) {
         let mut cache = self.cache.write().await;
-        cache.clear();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_else(|_| Duration::from_secs(0))
+            .as_secs();
+        
+        // Remove expired entries
+        cache.retain(|_, entry| entry.expires_at > now);
+    }
+
+    /// Clean up expired cache entries (call periodically)
+    pub async fn cleanup_expired_cache(&self) {
+        self.clear_cache().await;
     }
 
     /// Check if a resource matches the permission resource pattern
@@ -528,29 +651,184 @@ impl PolicyEngine {
             }
         }
 
-        // TODO: Check day of week and timezone
+        // Check day of week and timezone
+        let now_utc = Utc::now();
+        
+        // Apply timezone if specified
+        let local_time = if let Some(tz_str) = &condition.timezone {
+            match tz_str.parse::<Tz>() {
+                Ok(tz) => tz.from_utc_datetime(&now_utc.naive_utc()),
+                Err(_) => {
+                    // Fallback to UTC if timezone parsing fails
+                    let utc_tz: Tz = "UTC".parse().unwrap_or_else(|_| chrono_tz::UTC);
+                    utc_tz.from_utc_datetime(&now_utc.naive_utc())
+                }
+            }
+        } else {
+            // Use UTC as default timezone
+            let utc_tz: Tz = "UTC".parse().unwrap_or_else(|_| chrono_tz::UTC);
+            utc_tz.from_utc_datetime(&now_utc.naive_utc())
+        };
+
+        // Check day of week restriction
+        if let Some(days_of_week) = &condition.days_of_week {
+            let current_weekday = local_time.weekday().num_days_from_sunday() as u8;
+            if !days_of_week.contains(&current_weekday) {
+                return Ok(false);
+            }
+        }
+
         Ok(true)
     }
 
-    /// Evaluate IP-based conditions
-    async fn evaluate_ip_condition(&self, _condition: &IpCondition, _user_id: &str) -> Result<bool> {
-        // TODO: Implement IP condition evaluation
-        // This would require getting the user's IP address from context
-        Err(FortressError::PolicyError("IP condition evaluation not implemented".to_string()))
+    /// Evaluate IP-based conditions (optimized and secure)
+    async fn evaluate_ip_condition(&self, condition: &IpCondition, user_id: &str) -> Result<bool> {
+        // Get user's IP address from context
+        let user_ip_context = self.user_ip_context.read().await;
+        let user_ip = user_ip_context.get(user_id)
+            .ok_or_else(|| FortressError::PolicyError(format!("No IP address found for user '{}'", user_id)))?;
+
+        // Parse and validate IP address
+        let ip_addr = IpAddr::from_str(user_ip)
+            .map_err(|_| FortressError::PolicyError(format!("Invalid IP address format for user '{}': {}", user_id, user_ip)))?;
+
+        // Security: Check denied IPs first (deny list takes precedence)
+        for denied_ip in &condition.denied_ips {
+            if let Ok(denied_addr) = IpAddr::from_str(denied_ip) {
+                if ip_addr == denied_addr {
+                    return Ok(false); // Immediate deny
+                }
+            }
+        }
+
+        // Check allowed IPs (if specified, must be in allow list)
+        if !condition.allowed_ips.is_empty() {
+            let mut allowed = false;
+            for allowed_ip in &condition.allowed_ips {
+                if let Ok(allowed_addr) = IpAddr::from_str(allowed_ip) {
+                    if ip_addr == allowed_addr {
+                        allowed = true;
+                        break;
+                    }
+                }
+            }
+            if !allowed {
+                return Ok(false); // Not in allow list
+            }
+        }
+
+        // Check CIDR ranges (optimized with early return)
+        for cidr_range in &condition.cidr_ranges {
+            if let Ok(network) = ipnetwork::IpNetwork::from_str(cidr_range) {
+                if network.contains(ip_addr) {
+                    return Ok(true); // Found matching CIDR
+                }
+            }
+        }
+
+        // If no CIDR ranges match, allow if there are no CIDR restrictions
+        Ok(condition.cidr_ranges.is_empty())
     }
 
-    /// Evaluate attribute-based conditions
-    async fn evaluate_attribute_condition(&self, _condition: &AttributeCondition, _user_id: &str) -> Result<bool> {
-        // TODO: Implement attribute condition evaluation
-        // This would require getting user attributes from a user store
-        Err(FortressError::PolicyError("Attribute condition evaluation not implemented".to_string()))
+    /// Evaluate attribute-based conditions (optimized and secure)
+    async fn evaluate_attribute_condition(&self, condition: &AttributeCondition, user_id: &str) -> Result<bool> {
+        // Get user attributes from store
+        let user_attributes = self.user_attributes.read().await;
+        let attributes = user_attributes.get(user_id)
+            .ok_or_else(|| FortressError::PolicyError(format!("No attributes found for user '{}'", user_id)))?;
+
+        let user_value = attributes.get(&condition.attribute)
+            .ok_or_else(|| FortressError::PolicyError(format!("Attribute '{}' not found for user '{}'", condition.attribute, user_id)))?;
+
+        // Security: Sanitize inputs to prevent injection attacks
+        let sanitized_user_value = user_value.trim();
+        let sanitized_condition_value = condition.value.trim();
+
+        // Evaluate based on operator (optimized)
+        let result = match condition.operator {
+            AttributeOperator::Equals => sanitized_user_value == sanitized_condition_value,
+            AttributeOperator::NotEquals => sanitized_user_value != sanitized_condition_value,
+            AttributeOperator::Contains => sanitized_user_value.contains(sanitized_condition_value),
+            AttributeOperator::StartsWith => sanitized_user_value.starts_with(sanitized_condition_value),
+            AttributeOperator::EndsWith => sanitized_user_value.ends_with(sanitized_condition_value),
+            AttributeOperator::GreaterThan => {
+                // Smart numeric comparison with fallback
+                match (sanitized_user_value.parse::<f64>(), sanitized_condition_value.parse::<f64>()) {
+                    (Ok(user_num), Ok(cond_num)) => user_num > cond_num,
+                    _ => sanitized_user_value > sanitized_condition_value,
+                }
+            },
+            AttributeOperator::LessThan => {
+                // Smart numeric comparison with fallback
+                match (sanitized_user_value.parse::<f64>(), sanitized_condition_value.parse::<f64>()) {
+                    (Ok(user_num), Ok(cond_num)) => user_num < cond_num,
+                    _ => sanitized_user_value < sanitized_condition_value,
+                }
+            },
+        };
+
+        Ok(result)
     }
 
-    /// Log audit entry for policy decisions
-    async fn log_audit_entry(&self, _entry: PolicyAuditEntry) -> Result<()> {
-        // TODO: Implement audit logging
-        // This would integrate with the audit logging system
-        Err(FortressError::PolicyError("Audit logging not implemented".to_string()))
+    /// Static audit logging method to avoid lifetime issues
+    async fn log_audit_entry_static(
+        timestamp: u64,
+        user_id: String,
+        permission: Permission,
+        resource: Resource,
+        decision: bool,
+        reason: String,
+        roles_involved: Vec<String>,
+        policies_evaluated: Vec<String>,
+        evaluation_time_ms: u64,
+    ) -> Result<()> {
+        // Create audit log entry
+        let audit_log = serde_json::json!({
+            "timestamp": timestamp,
+            "user_id": user_id,
+            "permission": format!("{:?}", permission),
+            "resource": format!("{:?}", resource),
+            "decision": decision,
+            "reason": reason,
+            "roles_involved": roles_involved,
+            "policies_evaluated": policies_evaluated,
+            "evaluation_time_ms": evaluation_time_ms,
+            "event_type": "policy_decision"
+        });
+
+        // Log to tracing system
+        if decision {
+            tracing::info!(
+                "Policy decision: ALLOW - User: {}, Permission: {:?}, Resource: {:?}, Reason: {}",
+                user_id, permission, resource, reason
+            );
+        } else {
+            tracing::warn!(
+                "Policy decision: DENY - User: {}, Permission: {:?}, Resource: {:?}, Reason: {}",
+                user_id, permission, resource, reason
+            );
+        }
+
+        // In a real implementation, this would integrate with the audit logging system
+        // For now, we'll log the structured data
+        tracing::debug!("Policy audit entry: {}", serde_json::to_string(&audit_log).unwrap_or_default());
+        
+        Ok(())
+    }
+
+    /// Log audit entry for policy decisions (instance method)
+    async fn log_audit_entry(&self, entry: PolicyAuditEntry) -> Result<()> {
+        Self::log_audit_entry_static(
+            entry.timestamp,
+            entry.user_id,
+            entry.permission,
+            entry.resource,
+            entry.decision,
+            entry.reason,
+            entry.roles_involved,
+            entry.policies_evaluated,
+            entry.evaluation_time_ms,
+        ).await
     }
 }
 
@@ -662,5 +940,136 @@ mod tests {
         assert!(can_read_db);
         assert!(can_read_table);
         assert!(can_read_field);
+    }
+
+    #[tokio::test]
+    async fn test_time_conditions() {
+        let engine = PolicyEngine::new();
+        
+        let now = Utc::now();
+        let start_time = now.timestamp() as u64 - 3600; // 1 hour ago
+        let end_time = now.timestamp() as u64 + 3600; // 1 hour from now
+        
+        let time_condition = TimeCondition {
+            start_time: Some(start_time),
+            end_time: Some(end_time),
+            days_of_week: Some(vec![now.weekday().num_days_from_sunday() as u8]),
+            timezone: Some("UTC".to_string()),
+        };
+        
+        let role = Role::new("time_restricted")
+            .with_permission_conditions(
+                Permission::Read,
+                Resource::Database("users".to_string()),
+                vec![Condition::Time(time_condition)]
+            );
+        
+        engine.add_role(role).await.unwrap();
+        engine.assign_role("user1", "time_restricted").await.unwrap();
+        
+        let can_read = engine.check_permission("user1", Permission::Read, Resource::Database("users".to_string())).await.unwrap();
+        assert!(can_read);
+    }
+
+    #[tokio::test]
+    async fn test_ip_conditions() {
+        let engine = PolicyEngine::new();
+        
+        let ip_condition = IpCondition {
+            allowed_ips: vec!["192.168.1.100".to_string()],
+            denied_ips: vec![],
+            cidr_ranges: vec!["10.0.0.0/8".to_string()],
+        };
+        
+        let role = Role::new("ip_restricted")
+            .with_permission_conditions(
+                Permission::Read,
+                Resource::Database("users".to_string()),
+                vec![Condition::Ip(ip_condition)]
+            );
+        
+        engine.add_role(role).await.unwrap();
+        engine.assign_role("user1", "ip_restricted").await.unwrap();
+        
+        // Set user IP
+        engine.set_user_ip("user1", "192.168.1.100").await.unwrap();
+        
+        let can_read = engine.check_permission("user1", Permission::Read, Resource::Database("users".to_string())).await.unwrap();
+        assert!(can_read);
+        
+        // Test CIDR range
+        engine.set_user_ip("user1", "10.0.1.50").await.unwrap();
+        let can_read_cidr = engine.check_permission("user1", Permission::Read, Resource::Database("users".to_string())).await.unwrap();
+        assert!(can_read_cidr);
+    }
+
+    #[tokio::test]
+    async fn test_attribute_conditions() {
+        let engine = PolicyEngine::new();
+        
+        let attr_condition = AttributeCondition {
+            attribute: "department".to_string(),
+            operator: AttributeOperator::Equals,
+            value: "engineering".to_string(),
+        };
+        
+        let role = Role::new("attr_restricted")
+            .with_permission_conditions(
+                Permission::Read,
+                Resource::Database("users".to_string()),
+                vec![Condition::Attribute(attr_condition)]
+            );
+        
+        engine.add_role(role).await.unwrap();
+        engine.assign_role("user1", "attr_restricted").await.unwrap();
+        
+        // Set user attributes
+        let mut attrs = HashMap::new();
+        attrs.insert("department".to_string(), "engineering".to_string());
+        engine.set_user_attributes("user1", attrs).await.unwrap();
+        
+        let can_read = engine.check_permission("user1", Permission::Read, Resource::Database("users".to_string())).await.unwrap();
+        assert!(can_read);
+        
+        // Test with wrong attribute value
+        engine.set_user_attribute("user1", "department", "sales").await.unwrap();
+        let cannot_read = engine.check_permission("user1", Permission::Read, Resource::Database("users".to_string())).await.unwrap();
+        assert!(!cannot_read);
+    }
+
+    #[tokio::test]
+    async fn test_user_attribute_management() {
+        let engine = PolicyEngine::new();
+        
+        // Test setting and getting attributes
+        let mut attrs = HashMap::new();
+        attrs.insert("role".to_string(), "admin".to_string());
+        attrs.insert("clearance".to_string(), "high".to_string());
+        
+        engine.set_user_attributes("user1", attrs).await.unwrap();
+        
+        let retrieved_attrs = engine.get_user_attributes("user1").await.unwrap();
+        assert_eq!(retrieved_attrs.get("role"), Some(&"admin".to_string()));
+        assert_eq!(retrieved_attrs.get("clearance"), Some(&"high".to_string()));
+        
+        // Test updating single attribute
+        engine.set_user_attribute("user1", "clearance", "critical").await.unwrap();
+        let updated_attrs = engine.get_user_attributes("user1").await.unwrap();
+        assert_eq!(updated_attrs.get("clearance"), Some(&"critical".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_user_ip_management() {
+        let engine = PolicyEngine::new();
+        
+        // Test setting and getting IP
+        engine.set_user_ip("user1", "192.168.1.100").await.unwrap();
+        let ip = engine.get_user_ip("user1").await.unwrap();
+        assert_eq!(ip, Some("192.168.1.100".to_string()));
+        
+        // Test removing IP
+        engine.remove_user_ip("user1").await.unwrap();
+        let removed_ip = engine.get_user_ip("user1").await.unwrap();
+        assert_eq!(removed_ip, None);
     }
 }

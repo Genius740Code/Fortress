@@ -11,7 +11,6 @@ mod aws_integration_tests {
         config::Config,
         encryption::{EncryptionAlgorithm, EncryptionProfile},
     };
-    use tokio::time::{timeout, Duration};
     use std::env;
     use serde_json::json;
 

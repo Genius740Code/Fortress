@@ -174,13 +174,14 @@ impl FieldEncryptionManager for DefaultFieldEncryptionManager {
             algorithm.encrypt(plaintext, &key.as_bytes())?
         };
 
-        // Create metadata
+        // Create metadata with actual key version
+        let key_version = self.key_manager.get_active_key_version(&key_id).await.unwrap_or(1);
         let mut metadata = FieldEncryptionMetadata::new(
             config.id.clone(),
             field.clone(),
             algorithm.name().to_string(),
             key_id,
-            1, // TODO: Get actual key version
+            key_version,
         )
         .with_nonce(nonce.clone());
 

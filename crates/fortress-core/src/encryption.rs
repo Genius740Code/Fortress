@@ -772,7 +772,7 @@ impl EncryptionAlgorithm for Aegis256 {
         let tag = aegis::aegis256::Tag::from(*GenericArray::from_slice(&ciphertext[ciphertext_len..]));
         
         cipher.decrypt(ciphertext_part, &tag, &[])
-            .map_err(|e| FortressError::encryption(
+            .map_err(|_| FortressError::encryption(
                 "AEGIS-256 decryption failed",
                 "aegis256",
                 EncryptionErrorCode::DecryptionFailed,

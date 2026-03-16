@@ -7,6 +7,7 @@ mod tests {
         AuditConfig, AuditEntry, AuditEventType, SecurityLevel, EventOutcome,
         DefaultAuditLogger, AuditLogger,
     };
+    use base64;
 
     #[test]
     fn test_basic_audit_functionality() {

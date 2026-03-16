@@ -54,6 +54,7 @@ anyhow = "1.0"
 
 # Time and date
 chrono = { version = "0.4", features = ["serde"] }
+chrono-tz = "0.8"
 time = "0.3"
 
 # UUID
@@ -90,6 +91,9 @@ derive_more = { version = "0.99", features = ["from", "into", "display"] }
 
 # Regular expressions
 regex = "1.10"
+
+# IP network support
+ipnetwork = "0.20"
 
 # Human-readable duration parsing
 humantime = "2.1"
