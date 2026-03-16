@@ -17,7 +17,7 @@ use fortress_core::{
     key::{KeyManager, SecureKey, InMemoryKeyManager},
     storage::StorageBackend,
     field_encryption::FieldEncryptionManager,
-    tenant::{TenantManager, InMemoryTenantManager, CreateTenantRequest, TenantResourceLimits, TenantEncryptionConfig},
+    tenant::{TenantManager, InMemoryTenantManager, CreateTenantRequest, TenantResourceLimits},
 };
 use crate::health::HealthChecker;
 use serde::{Deserialize, Serialize};
@@ -27,7 +27,6 @@ use tracing::info;
 use uuid::Uuid;
 use utoipa::{
     OpenApi,
-    path,
 };
 
 /// Storage record (simplified for this example)
@@ -221,7 +220,11 @@ pub async fn store_data(
         stored_at: Utc::now(),
         size_bytes: storage_record.data.len() as u64,
         algorithm: "aegis256".to_string(),
-        field_metadata: None, // TODO: Implement proper field metadata conversion
+        field_metadata: storage_record.field_metadata.map(|core_metadata| {
+            core_metadata.into_iter().map(|(field, meta)| {
+                (field, serde_json::to_value(meta).unwrap_or_default())
+            }).collect()
+        }),
     };
 
     info!(
@@ -317,7 +320,11 @@ pub async fn retrieve_data(
         last_accessed: Some(Utc::now()),
         algorithm: storage_record.algorithm,
         key_id: storage_record.key_id,
-        field_metadata: None, // TODO: Implement proper field metadata conversion
+        field_metadata: storage_record.field_metadata.map(|core_metadata| {
+            core_metadata.into_iter().map(|(field, meta)| {
+                (field, serde_json::to_value(meta).unwrap_or_default())
+            }).collect()
+        }),
     };
 
     info!(

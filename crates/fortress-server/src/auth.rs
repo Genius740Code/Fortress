@@ -382,21 +382,34 @@ pub async fn auth_middleware(
     Err(StatusCode::UNAUTHORIZED)
 }
 
-/// Role-based authorization middleware (placeholder)
-pub fn require_role(_role: &'static str) -> impl Fn(&Request) -> bool {
-    move |_request: &Request| {
-        // TODO: Implement proper role-based authorization
-        true
+/// Role-based authorization middleware
+pub fn require_role(role: &'static str) -> impl Fn(&Request) -> bool {
+    move |request: &Request| {
+        // Extract claims from request extensions
+        if let Some(claims) = request.extensions().get::<TokenClaims>() {
+            // Check if user has the required role
+            claims.roles.contains(&role.to_string())
+        } else {
+            // No authentication claims found
+            false
+        }
     }
 }
 
-/// Multi-role authorization middleware (placeholder)
-pub fn require_any_role(_roles: &'static [&'static str]) -> impl Fn(&Request) -> bool {
-    let _required_roles: HashSet<String> = _roles.iter().map(|&r| r.to_string()).collect();
+/// Multi-role authorization middleware
+pub fn require_any_role(roles: &'static [&'static str]) -> impl Fn(&Request) -> bool {
+    let required_roles: HashSet<String> = roles.iter().map(|&r| r.to_string()).collect();
     
-    move |_request: &Request| {
-        // TODO: Implement proper multi-role authorization
-        true
+    move |request: &Request| {
+        // Extract claims from request extensions
+        if let Some(claims) = request.extensions().get::<TokenClaims>() {
+            // Check if user has any of the required roles
+            let user_roles: HashSet<String> = claims.roles.iter().cloned().collect();
+            required_roles.iter().any(|role| user_roles.contains(role))
+        } else {
+            // No authentication claims found
+            false
+        }
     }
 }
 
