@@ -56,8 +56,22 @@ uuid = { version = "1.6", features = ["v4"] }
 # HTTP client for plugin downloads
 reqwest = { version = "0.12", features = ["json"] }
 
+# HTTP server
+hyper = { version = "0.14", features = ["full"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+
 # Cryptography for checksums
 sha2 = "0.10"
+
+# Version parsing
+semver = "1.0"
+
+# Regular expressions
+regex = "1.10"
+
+# CPU count
+num_cpus = "1.16"
 
 [dev-dependencies]
 tempfile = "3.8"

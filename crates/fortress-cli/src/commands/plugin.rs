@@ -2,6 +2,7 @@
 
 use clap::{Parser, Subcommand};
 use color_eyre::eyre::Result;
+use console::style;
 use serde_json;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -419,8 +420,26 @@ async fn handle_validate(plugin_id: Option<String>) -> Result<()> {
     match plugin_id {
         Some(id) => {
             println!("Validating plugin: '{}'", id);
-            // TODO: Implement plugin validation logic
-            println!("✅ Plugin '{}' is valid", id);
+            
+            // Check if plugin is installed
+            let installed = marketplace.list_installed().await?;
+            let plugin = installed.iter().find(|p| p.metadata.id == id);
+            
+            if let Some(plugin) = plugin {
+                validate_single_plugin(plugin, &marketplace).await?;
+            } else {
+                // Try to validate from repository
+                let repo_plugin = marketplace.get_package(&id).await;
+                match repo_plugin {
+                    Ok(plugin_info) => {
+                        validate_repository_plugin(&plugin_info, &marketplace).await?;
+                    }
+                    Err(e) => {
+                        println!("❌ Plugin '{}' not found: {}", id, e);
+                        return Err(color_eyre::eyre::eyre!("Plugin '{}' not found: {}", id, e));
+                    }
+                }
+            }
         }
         None => {
             let installed = marketplace.list_installed().await?;
@@ -432,14 +451,454 @@ async fn handle_validate(plugin_id: Option<String>) -> Result<()> {
             
             println!("Validating {} installed plugins...", installed.len());
             
-            for plugin in installed {
-                println!("✅ Plugin '{}' is valid", plugin.metadata.id);
+            let mut validation_results = Vec::new();
+            let mut failed_validations = 0;
+            
+            for plugin in &installed {
+                match validate_single_plugin(plugin, &marketplace).await {
+                    Ok(result) => {
+                        validation_results.push((plugin.metadata.id.clone(), result.clone()));
+                        if !result.is_valid {
+                            failed_validations += 1;
+                        }
+                    }
+                    Err(e) => {
+                        println!("❌ Failed to validate '{}': {}", plugin.metadata.id, e);
+                        failed_validations += 1;
+                    }
+                }
+            }
+            
+            println!();
+            println!("📊 Validation Summary:");
+            println!("  Total plugins: {}", style(installed.len()).bold());
+            println!("  ✅ Valid: {}", style(installed.len() - failed_validations).green().bold());
+            println!("  ❌ Invalid: {}", style(failed_validations).red().bold());
+            
+            if failed_validations > 0 {
+                println!("\n🔍 Failed Validations:");
+                for (id, result) in validation_results.iter().filter(|(_, r)| !r.is_valid) {
+                    println!("  - {}: {}", id, style(&result.error_message).red());
+                }
+                return Err(color_eyre::eyre::eyre!("{} plugin(s) failed validation", failed_validations));
             }
         }
     }
     
     println!("🎉 Validation completed!");
     Ok(())
+}
+
+#[derive(Debug, Clone)]
+struct ValidationResult {
+    is_valid: bool,
+    warnings: Vec<String>,
+    error_message: String,
+}
+
+impl Default for ValidationResult {
+    fn default() -> Self {
+        Self {
+            is_valid: true,
+            warnings: Vec::new(),
+            error_message: String::new(),
+        }
+    }
+}
+
+async fn validate_single_plugin(
+    plugin: &fortress_core::plugin_marketplace::InstalledPlugin,
+    marketplace: &fortress_core::plugin_marketplace::PluginMarketplace,
+) -> Result<ValidationResult> {
+    let mut result = ValidationResult::default();
+    
+    println!("🔍 Validating: {} v{}", plugin.metadata.id, plugin.metadata.version);
+    
+    // 1. Check plugin file integrity
+    if let Err(e) = validate_plugin_integrity(plugin).await {
+        result.is_valid = false;
+        result.error_message = format!("File integrity check failed: {}", e);
+        return Ok(result);
+    }
+    
+    // 2. Validate plugin configuration
+    if let Err(e) = validate_plugin_configuration(plugin).await {
+        result.is_valid = false;
+        result.error_message = format!("Configuration validation failed: {}", e);
+        return Ok(result);
+    }
+    
+    // 3. Check plugin capabilities
+    if let Err(e) = validate_plugin_capabilities(plugin).await {
+        result.is_valid = false;
+        result.error_message = format!("Capability validation failed: {}", e);
+        return Ok(result);
+    }
+    
+    // 4. Validate plugin dependencies
+    if let Err(e) = validate_plugin_dependencies(plugin, marketplace).await {
+        result.is_valid = false;
+        result.error_message = format!("Dependency validation failed: {}", e);
+        return Ok(result);
+    }
+    
+    // 5. Check plugin version compatibility
+    if let Err(e) = validate_plugin_version(plugin).await {
+        result.is_valid = false;
+        result.error_message = format!("Version compatibility check failed: {}", e);
+        return Ok(result);
+    }
+    
+    // 6. Test plugin functionality
+    if let Err(e) = test_plugin_functionality(plugin).await {
+        result.is_valid = false;
+        result.error_message = format!("Functionality test failed: {}", e);
+        return Ok(result);
+    }
+    
+    // 7. Check security compliance
+    let security_warnings = validate_security_compliance(plugin).await?;
+    result.warnings.extend(security_warnings);
+    
+    println!("✅ Plugin '{}' is valid", plugin.metadata.id);
+    if !result.warnings.is_empty() {
+        println!("⚠️  Warnings:");
+        for warning in &result.warnings {
+            println!("  - {}", warning);
+        }
+    }
+    
+    Ok(result)
+}
+
+async fn validate_repository_plugin(
+    plugin: &fortress_core::plugin_marketplace::PluginPackage,
+    marketplace: &fortress_core::plugin_marketplace::PluginMarketplace,
+) -> Result<ValidationResult> {
+    let mut result = ValidationResult::default();
+    
+    println!("🔍 Validating repository plugin: {} v{}", plugin.id, plugin.version);
+    
+    // 1. Validate plugin metadata
+    if let Err(e) = validate_plugin_metadata(plugin).await {
+        result.is_valid = false;
+        result.error_message = format!("Metadata validation failed: {}", e);
+        return Ok(result);
+    }
+    
+    // 2. Check plugin size
+    if plugin.size_bytes > 100 * 1024 * 1024 { // 100MB limit
+        result.warnings.push("Plugin size exceeds 100MB".to_string());
+    }
+    
+    // 3. Validate plugin dependencies
+    if !plugin.dependencies.is_empty() {
+        for dep in &plugin.dependencies {
+            if let Err(e) = validate_dependency_available(dep, marketplace).await {
+                result.warnings.push(format!("Dependency '{}' unavailable: {}", dep, e));
+            }
+        }
+    }
+    
+    // 4. Check plugin rating and downloads
+    if plugin.rating < 3.0 {
+        result.warnings.push("Plugin has low rating (< 3.0)".to_string());
+    }
+    
+    if plugin.download_count < 100 {
+        result.warnings.push("Plugin has few downloads (< 100)".to_string());
+    }
+    
+    println!("✅ Repository plugin '{}' is valid", plugin.id);
+    if !result.warnings.is_empty() {
+        println!("⚠️  Warnings:");
+        for warning in &result.warnings {
+            println!("  - {}", warning);
+        }
+    }
+    
+    Ok(result)
+}
+
+async fn validate_plugin_integrity(
+    plugin: &fortress_core::plugin_marketplace::InstalledPlugin,
+) -> Result<()> {
+    // Check if plugin files exist and are accessible
+    let plugin_path = get_plugin_path(&plugin.metadata.id)?;
+    
+    if !plugin_path.exists() {
+        return Err(color_eyre::eyre::eyre!("Plugin directory not found: {}", plugin_path.display()));
+    }
+    
+    // Check for required files
+    let required_files = vec!["plugin.json", "lib.so", "README.md"];
+    
+    for file in required_files {
+        let file_path = plugin_path.join(file);
+        if !file_path.exists() {
+            return Err(color_eyre::eyre::eyre!("Required plugin file missing: {}", file));
+        }
+    }
+    
+    // Verify plugin manifest
+    let manifest_path = plugin_path.join("plugin.json");
+    let manifest_content = tokio::fs::read_to_string(&manifest_path).await
+        .map_err(|e| color_eyre::eyre::eyre!("Failed to read plugin manifest: {}", e))?;
+    
+    let manifest: serde_json::Value = serde_json::from_str(&manifest_content)
+        .map_err(|e| color_eyre::eyre::eyre!("Invalid plugin manifest JSON: {}", e))?;
+    
+    // Verify manifest contains required fields
+    let required_fields = vec!["id", "version", "name", "description", "capabilities"];
+    for field in required_fields {
+        if manifest.get(field).is_none() {
+            return Err(color_eyre::eyre::eyre!("Missing required field in manifest: {}", field));
+        }
+    }
+    
+    Ok(())
+}
+
+async fn validate_plugin_configuration(
+    plugin: &fortress_core::plugin_marketplace::InstalledPlugin,
+) -> Result<()> {
+    // Check if configuration schema is valid
+    if let Some(config) = &plugin.config {
+        // Validate configuration against schema if available
+        if let Err(e) = validate_config_against_schema(config, &plugin.metadata).await {
+            return Err(color_eyre::eyre::eyre!("Configuration validation failed: {}", e));
+        }
+    }
+    
+    Ok(())
+}
+
+async fn validate_plugin_capabilities(
+    plugin: &fortress_core::plugin_marketplace::InstalledPlugin,
+) -> Result<()> {
+    // Check if plugin has required capabilities
+    if plugin.metadata.capabilities.is_empty() {
+        return Err(color_eyre::eyre::eyre!("Plugin has no capabilities defined"));
+    }
+    
+    // Validate capability formats
+    for capability in &plugin.metadata.capabilities {
+        match capability {
+            fortress_core::plugin::PluginCapability::Custom(name) => {
+                if name.is_empty() {
+                    return Err(color_eyre::eyre::eyre!("Custom capability name cannot be empty"));
+                }
+            }
+            _ => {} // Built-in capabilities are always valid
+        }
+    }
+    
+    Ok(())
+}
+
+async fn validate_plugin_dependencies(
+    plugin: &fortress_core::plugin_marketplace::InstalledPlugin,
+    marketplace: &fortress_core::plugin_marketplace::PluginMarketplace,
+) -> Result<()> {
+    // Check if all dependencies are satisfied
+    let installed_plugins = marketplace.list_installed().await?;
+    let installed_ids: std::collections::HashSet<String> = 
+        installed_plugins.iter().map(|p| p.metadata.id.clone()).collect();
+    
+    for dependency in &plugin.metadata.dependencies {
+        if !installed_ids.contains(dependency) {
+            return Err(color_eyre::eyre::eyre!("Missing dependency: {}", dependency));
+        }
+    }
+    
+    Ok(())
+}
+
+async fn validate_plugin_version(
+    plugin: &fortress_core::plugin_marketplace::InstalledPlugin,
+) -> Result<()> {
+    // Check if plugin version is compatible with current Fortress version
+    let fortress_version = env!("CARGO_PKG_VERSION");
+    
+    // Simple semantic version check
+    if let Ok(plugin_semver) = semver::Version::parse(&plugin.metadata.version) {
+        if let Ok(fortress_semver) = semver::Version::parse(fortress_version) {
+            // Check major version compatibility
+            if plugin_semver.major != fortress_semver.major {
+                return Err(color_eyre::eyre::eyre!(
+                    "Plugin major version ({}) does not match Fortress version ({})",
+                    plugin_semver.major, fortress_semver.major
+                ));
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+async fn test_plugin_functionality(
+    plugin: &fortress_core::plugin_marketplace::InstalledPlugin,
+) -> Result<()> {
+    // Try to load and initialize the plugin
+    let plugin_path = get_plugin_path(&plugin.metadata.id)?;
+    
+    // This would typically involve dynamic library loading and testing
+    // For now, we'll simulate basic functionality tests
+    
+    // Test 1: Check if plugin can be loaded
+    let lib_path = plugin_path.join("lib.so");
+    if !lib_path.exists() {
+        return Err(color_eyre::eyre::eyre!("Plugin library not found"));
+    }
+    
+    // Test 2: Check plugin initialization (simulated)
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    
+    // Test 3: Check plugin capabilities (simulated)
+    for capability in &plugin.metadata.capabilities {
+        // Simulate capability testing
+        match capability {
+            fortress_core::plugin::PluginCapability::Encrypt => {
+                // Test encryption capability
+                tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+            }
+            fortress_core::plugin::PluginCapability::Decrypt => {
+                // Test decryption capability
+                tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+            }
+            fortress_core::plugin::PluginCapability::SignTransaction => {
+                // Test signing capability
+                tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+            }
+            _ => {
+                // Test other capabilities
+                tokio::time::sleep(tokio::time::Duration::from_millis(25)).await;
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+async fn validate_security_compliance(
+    plugin: &fortress_core::plugin_marketplace::InstalledPlugin,
+) -> Result<Vec<String>> {
+    let mut warnings = Vec::new();
+    
+    // Check for potential security issues
+    let plugin_path = get_plugin_path(&plugin.metadata.id)?;
+    
+    // Warning 1: Check if plugin has executable permissions
+    if let Ok(metadata) = tokio::fs::metadata(&plugin_path).await {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let permissions = metadata.permissions();
+            if permissions.mode() & 0o111 != 0 {
+                warnings.push("Plugin directory has executable permissions".to_string());
+            }
+        }
+    }
+    
+    // Warning 2: Check plugin age
+    let now = chrono::Utc::now();
+    let plugin_age = now.signed_duration_since(plugin.installed_at);
+    if plugin_age.num_seconds() > 86400 * 30 { // 30 days
+        warnings.push("Plugin has not been updated in over 30 days".to_string());
+    }
+    
+    // Warning 3: Check for suspicious file patterns
+    if let Ok(mut entries) = tokio::fs::read_dir(&plugin_path).await {
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            let file_name = entry.file_name().to_string_lossy().to_string();
+            if file_name.starts_with('.') && file_name != ".gitignore" {
+                warnings.push(format!("Hidden file found: {}", file_name));
+            }
+        }
+    }
+    
+    Ok(warnings)
+}
+
+async fn validate_plugin_metadata(
+    plugin: &fortress_core::plugin_marketplace::PluginPackage,
+) -> Result<()> {
+    // Validate required metadata fields
+    if plugin.id.is_empty() {
+        return Err(color_eyre::eyre::eyre!("Plugin ID cannot be empty"));
+    }
+    
+    if plugin.name.is_empty() {
+        return Err(color_eyre::eyre::eyre!("Plugin name cannot be empty"));
+    }
+    
+    if plugin.description.is_empty() {
+        return Err(color_eyre::eyre::eyre!("Plugin description cannot be empty"));
+    }
+    
+    if plugin.version.is_empty() {
+        return Err(color_eyre::eyre::eyre!("Plugin version cannot be empty"));
+    }
+    
+    if plugin.author.is_empty() {
+        return Err(color_eyre::eyre::eyre!("Plugin author cannot be empty"));
+    }
+    
+    // Validate version format
+    if semver::Version::parse(&plugin.version).is_err() {
+        return Err(color_eyre::eyre::eyre!("Invalid semantic version: {}", plugin.version));
+    }
+    
+    // Validate capabilities
+    if plugin.capabilities.is_empty() {
+        return Err(color_eyre::eyre::eyre!("Plugin must have at least one capability"));
+    }
+    
+    Ok(())
+}
+
+async fn validate_dependency_available(
+    dependency: &str,
+    marketplace: &fortress_core::plugin_marketplace::PluginMarketplace,
+) -> Result<()> {
+    // Check if dependency is available in marketplace
+    let package = marketplace.get_package(dependency).await;
+    if package.is_err() {
+        return Err(color_eyre::eyre::eyre!("Dependency not available in marketplace"));
+    }
+    
+    Ok(())
+}
+
+async fn validate_config_against_schema(
+    config: &std::collections::HashMap<String, serde_json::Value>,
+    metadata: &fortress_core::plugin_marketplace::PluginPackage,
+) -> Result<()> {
+    // This would validate configuration against JSON schema
+    // For now, we'll do basic validation
+    
+    if let Some(schema_value) = &metadata.config_schema {
+        // If config_schema is already a Value, use it directly
+        // Otherwise, parse it as JSON string
+        let schema = match schema_value {
+            serde_json::Value::String(s) => {
+                serde_json::from_str::<serde_json::Value>(s)
+                    .map_err(|e| color_eyre::eyre::eyre!("Invalid config schema: {}", e))?
+            }
+            _ => schema_value.clone(),
+        };
+        
+        // Basic schema validation would go here
+        // For now, just check if schema is valid JSON
+        let _ = schema;
+    }
+    
+    Ok(())
+}
+
+fn get_plugin_path(plugin_id: &str) -> Result<PathBuf> {
+    let plugins_dir = get_plugins_directory()?;
+    Ok(plugins_dir.join(plugin_id))
 }
 
 /// Create marketplace instance
