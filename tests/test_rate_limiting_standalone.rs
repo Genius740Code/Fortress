@@ -207,5 +207,5 @@ fn main() {
     test_config_serialization();
     println!("✓ Configuration serialization test passed");
     
-    println!("All rate limiting tests passed! 🎉");
+    println!("All rate limiting tests passed successfully");
 }

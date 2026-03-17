@@ -85,7 +85,7 @@ async fn test_comprehensive_compliance_framework() {
     // Test right to be forgotten
     compliance_manager.delete_user_data("user_123").unwrap();
     
-    println!("✅ GDPR compliance tests passed");
+    println!("✓ GDPR compliance tests passed");
 
     // Test 2: HIPAA Compliance
     println!("=== Testing HIPAA Compliance ===");
@@ -100,7 +100,7 @@ async fn test_comprehensive_compliance_framework() {
     assert_eq!(hipaa_report.requirements_met, 2);
     assert_eq!(hipaa_report.compliance_percentage, 100.0);
     
-    println!("✅ HIPAA compliance tests passed");
+    println!("✓ HIPAA compliance tests passed");
 
     // Test 3: PCI DSS Compliance
     println!("=== Testing PCI DSS Compliance ===");
@@ -115,7 +115,7 @@ async fn test_comprehensive_compliance_framework() {
     assert_eq!(pci_report.requirements_met, 2);
     assert_eq!(pci_report.compliance_percentage, 100.0);
     
-    println!("✅ PCI DSS compliance tests passed");
+    println!("✓ PCI DSS compliance tests passed");
 
     // Test 4: SOC 2 Compliance
     println!("=== Testing SOC 2 Compliance ===");
@@ -124,7 +124,7 @@ async fn test_comprehensive_compliance_framework() {
     let soc2_report = compliance_manager.generate_soc2_report(SOC2TrustService::Security).unwrap();
     assert_eq!(soc2_report.trust_service, SOC2TrustService::Security);
     
-    println!("✅ SOC 2 compliance tests passed");
+    println!("✓ SOC 2 compliance tests passed");
 
     // Test 5: Policy Management
     println!("=== Testing Policy Management ===");
@@ -143,7 +143,7 @@ async fn test_comprehensive_compliance_framework() {
     let pci_policies = compliance_manager.get_policies_by_standard(&ComplianceStandard::PCIDSS);
     assert_eq!(pci_policies.len(), 1);
     
-    println!("✅ Policy management tests passed");
+    println!("✓ Policy management tests passed");
 
     // Test 6: Data Classification
     println!("=== Testing Data Classification ===");
@@ -163,7 +163,7 @@ async fn test_comprehensive_compliance_framework() {
         println!("Data classification: {:?}", classification);
     }
     
-    println!("✅ Data classification tests passed");
+    println!("✓ Data classification tests passed");
 
     println!("=== All Compliance Framework Tests Passed! ===");
 }
@@ -207,7 +207,7 @@ async fn test_gdpr_data_subject_rights() {
         assert_eq!(processed_request.status, RequestStatus::Completed);
     }
 
-    println!("✅ All GDPR data subject rights tests passed");
+    println!("✓ All GDPR data subject rights tests passed");
 }
 
 #[tokio::test]
@@ -231,7 +231,7 @@ async fn test_compliance_audit_events() {
     }
 
     // Verify audit events were created (this would be verified through the audit logger)
-    println!("✅ Compliance audit events test passed");
+    println!("✓ Compliance audit events test passed");
 }
 
 #[tokio::test]
@@ -285,5 +285,5 @@ async fn test_compliance_requirements() {
     assert_eq!(policy.requirements.len(), 2);
     assert_eq!(policy.standard, ComplianceStandard::Custom("Custom".to_string()));
 
-    println!("✅ Compliance requirements test passed");
+    println!("✓ Compliance requirements test passed");
 }

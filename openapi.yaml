@@ -16,7 +16,7 @@ info:
     ## Status
     **Alpha - Not Production Ready**
     
-    ⚠️ **Not recommended for production workloads**
+    **Not recommended for production workloads**
     - APIs may change without notice
     - Data migration tools are experimental
     - Security features are under audit

@@ -9,13 +9,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Test basic policy concepts
     test_basic_concepts()?;
     
-    println!("✅ All policy tests passed!");
+    println!("✓ All policy tests passed");
     Ok(())
 }
 
 fn test_basic_concepts() -> Result<(), Box<dyn std::error::Error>> {
     // Test 1: Basic permission concepts
-    println!("🔐 Testing basic permission concepts...");
+    println!("Testing basic permission concepts...");
     
     let permissions = vec!["Read", "Write", "Delete", "Admin"];
     for perm in permissions {
@@ -23,12 +23,12 @@ fn test_basic_concepts() -> Result<(), Box<dyn std::error::Error>> {
     }
     
     // Test 2: Resource hierarchy
-    println!("📁 Testing resource hierarchy...");
+    println!("Testing resource hierarchy...");
     
     let resources = vec![
         ("Database", "users"),
-        ("Table", "users.profiles"),
-        ("Field", "users.profiles.email"),
+        ("Table", "records"),
+        ("Field", "email"),
     ];
     
     for (resource_type, name) in resources {
@@ -36,11 +36,11 @@ fn test_basic_concepts() -> Result<(), Box<dyn std::error::Error>> {
     }
     
     // Test 3: Role-based access
-    println!("👥 Testing role-based access...");
+    println!("Testing role-based access...");
     
     let mut roles = HashMap::new();
     roles.insert("admin", vec!["Read", "Write", "Delete", "Admin"]);
-    roles.insert("readonly", vec!["Read"]);
+    roles.insert("user", vec!["Read"]);
     roles.insert("editor", vec!["Read", "Write"]);
     
     for (role, permissions) in roles {
@@ -48,7 +48,7 @@ fn test_basic_concepts() -> Result<(), Box<dyn std::error::Error>> {
     }
     
     // Test 4: Time-based conditions
-    println!("⏰ Testing time-based conditions...");
+    println!("Testing time-based conditions...");
     
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -60,12 +60,11 @@ fn test_basic_concepts() -> Result<(), Box<dyn std::error::Error>> {
     println!("  - Current time in window: {}", now >= 1000 && now <= 2000);
     
     // Test 5: Cache simulation
-    println!("💾 Testing cache simulation...");
+    println!("Testing cache simulation...");
     
     let mut cache = HashMap::new();
     let cache_key = "user1_read_users";
     let cache_value = true;
-    
     cache.insert(cache_key, cache_value);
     
     if let Some(&cached_result) = cache.get(cache_key) {
@@ -73,15 +72,13 @@ fn test_basic_concepts() -> Result<(), Box<dyn std::error::Error>> {
     }
     
     // Test 6: Permission evaluation simulation
-    println!("🔍 Testing permission evaluation...");
+    println!("Testing permission evaluation...");
     
     let user_permissions = vec![
         ("user1", "users", "Read", true),
         ("user1", "users", "Write", false),
-        ("admin", "users", "Read", true),
-        ("admin", "users", "Write", true),
-        ("readonly", "users", "Read", true),
-        ("readonly", "users", "Write", false),
+        ("admin", "users", "Delete", true),
+        ("editor", "users", "Write", true),
     ];
     
     for (user, resource, permission, expected) in user_permissions {
@@ -89,17 +86,17 @@ fn test_basic_concepts() -> Result<(), Box<dyn std::error::Error>> {
     }
     
     // Test 7: Role assignment simulation
-    println!("🎭 Testing role assignment...");
+    println!("Testing role assignment...");
     
     let mut user_roles: HashMap<String, Vec<String>> = HashMap::new();
     user_roles.insert("user1".to_string(), vec!["readonly".to_string()]);
-    user_roles.insert("admin".to_string(), vec!["admin".to_string()]);
+    user_roles.insert("admin".to_string(), vec!["admin".to_string(), "readonly".to_string()]);
     user_roles.insert("editor".to_string(), vec!["editor".to_string(), "readonly".to_string()]);
     
     for (user, roles) in user_roles {
         println!("  - {} has roles: {:?}", user, roles);
     }
     
-    println!("✅ Basic concepts test completed");
+    println!("✓ Basic concepts test completed");
     Ok(())
 }

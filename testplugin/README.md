@@ -14,19 +14,19 @@ This plugin serves as both a testing tool and a reference implementation for cre
 
 ## Features
 
-### 🔧 **Core Actions**
+### Core Actions
 - **hello**: Greets a user by name with timestamp
 - **echo**: Returns the input data unchanged (useful for testing)
 - **status**: Returns plugin status and metrics
 - **config**: Validates and returns current configuration
 
-### 📊 **Metrics & Monitoring**
+### Metrics & Monitoring
 - **Execution Time**: Tracks how long each action takes
 - **Memory Usage**: Monitors memory consumption during execution
 - **Custom Metrics**: Allows adding custom performance indicators
 - **Health Checks**: Regular health status reporting
 
-### ⚙️ **Configuration**
+### Configuration
 - **Dynamic Configuration**: Runtime configuration updates
 - **Validation**: Schema-based configuration validation
 - **Environment Integration**: Seamless integration with Fortress environment

@@ -6,15 +6,15 @@ A modern JavaScript/TypeScript interface to the Fortress secure database system,
 
 ## Features
 
-- **🔐 Enterprise-grade Encryption**: Support for AEGIS-256, ChaCha20-Poly1305, AES-256-GCM, and more
-- **🔑 Advanced Key Management**: Automatic key generation, rotation, and secure storage
-- **💾 Flexible Storage Backends**: Local filesystem, S3, Azure Blob Storage, and more
-- **👥 Multi-tenant Support**: Complete tenant isolation and resource management
-- **📊 Comprehensive Auditing**: Tamper-evident logging and security event tracking
-- **🛡️ Policy Engine**: Role-based access control (RBAC) with fine-grained permissions
-- **⚡ High Performance**: Rust-powered core with TypeScript-friendly interface
-- **🔧 Easy Configuration**: Pre-built profiles for different use cases
-- **📦 Full TypeScript Support**: Complete type definitions and IntelliSense
+- **Enterprise-grade Encryption**: Support for AEGIS-256, ChaCha20-Poly1305, AES-256-GCM, and more
+- **Advanced Key Management**: Automatic key generation, rotation, and secure storage
+- **Flexible Storage Backends**: Local filesystem, S3, Azure Blob Storage, and more
+- **Multi-tenant Support**: Complete tenant isolation and resource management
+- **Comprehensive Auditing**: Tamper-evident logging and security event tracking
+- **Policy Engine**: Role-based access control (RBAC) with fine-grained permissions
+- **High Performance**: Rust-powered core with TypeScript-friendly interface
+- **Easy Configuration**: Pre-built profiles for different use cases
+- **Full TypeScript Support**: Complete type definitions and IntelliSense
 
 ## Installation
 

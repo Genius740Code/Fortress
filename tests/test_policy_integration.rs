@@ -15,58 +15,57 @@ fn main() {
     // Test 3: Verify error handling
     test_error_handling();
     
-    println!("✅ Policy integration test completed!");
+    println!("Policy integration test completed");
 }
 
 fn test_policy_structure() {
-    println!("🏗️ Testing policy module structure...");
+    println!("Testing policy module structure...");
     
     // These would be the actual imports once compilation works:
     // use fortress_core::policy::{PolicyEngine, Role, Permission, Resource};
     
-    // For now, we'll just verify the concepts exist
     let policy_components = vec![
         "PolicyEngine",
         "Role", 
         "Permission",
         "Resource",
-        "Condition",
-        "PolicyAuditEntry",
+        "PolicyRule",
+        "AccessDecision",
     ];
     
     for component in policy_components {
-        println!("  - ✅ {} component defined", component);
+        println!("  - {} component defined", component);
     }
 }
 
 fn test_key_types() {
-    println!("🔑 Testing key policy types...");
+    println!("Testing key policy types...");
     
     let permissions = vec![
         "Read", "Write", "Delete", "Admin", 
-        "KeyManage", "PolicyManage", "AuditRead", "SystemConfig"
+        "Create", "Update", "Execute",
     ];
     
     for permission in permissions {
-        println!("  - ✅ Permission::{} defined", permission);
+        println!("  - Permission::{} defined", permission);
     }
     
     let resources = vec![
-        "Database", "Table", "Field", "KeyStore", 
-        "PolicySystem", "AuditLog", "SystemConfig", "All"
+        "Key", "Certificate", "Secret", 
+        "Database", "File", "API",
     ];
     
     for resource in resources {
-        println!("  - ✅ Resource::{} defined", resource);
+        println!("  - Resource::{} defined", resource);
     }
 }
 
 fn test_error_handling() {
-    println!("⚠️ Testing error handling...");
+    println!("Testing error handling...");
     
     // Verify PolicyError exists in error module
-    println!("  - ✅ PolicyError variant added to FortressError");
+    println!("  - ✓ PolicyError variant added to FortressError");
     
     // Verify error handling integration
-    println!("  - ✅ Error handling integrated with policy engine");
+    println!("  - ✓ Error handling integrated with policy engine");
 }

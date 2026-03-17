@@ -5,7 +5,7 @@
 
 set -e
 
-echo "🏗️  Building Fortress Binary Distributions"
+echo "Building Fortress Binary Distributions"
 
 # Get version from Cargo.toml
 VERSION=$(cargo metadata --no-deps --format-version 1 | grep -o '"version":"[^"]*"' | head -1 | cut -d'"' -f4)
@@ -21,7 +21,7 @@ build_target() {
     local target=$1
     local component=$2
     
-    echo "🔨 Building $component for $target"
+    echo "Building $component for $target"
     
     case $component in
         "npm")
@@ -54,50 +54,50 @@ TARGETS=(
 )
 
 # Install Rust targets
-echo "📦 Installing Rust targets..."
+echo "Installing Rust targets..."
 for target in "${TARGETS[@]}"; do
-    rustup target add "$target" || echo "⚠️  Failed to add target $target"
+    rustup target add "$target" || echo "Warning: Failed to add target $target"
 done
 
 # Build NPM binaries
-echo "📦 Building NPM binaries..."
+echo "Building NPM binaries..."
 for target in "${TARGETS[@]}"; do
     if build_target "$target" "npm"; then
-        echo "✅ NPM build successful for $target"
+        echo "✓ NPM build successful for $target"
     else
-        echo "❌ NPM build failed for $target"
+        echo "✗ NPM build failed for $target"
     fi
 done
 
 # Build Python wheels
-echo "📦 Building Python wheels..."
+echo "Building Python wheels..."
 pip install maturin
 for target in "${TARGETS[@]}"; do
     if build_target "$target" "python"; then
-        echo "✅ Python build successful for $target"
+        echo "✓ Python build successful for $target"
     else
-        echo "❌ Python build failed for $target"
+        echo "✗ Python build failed for $target"
     fi
 done
 
 # Build source distribution
-echo "📦 Building Python source distribution..."
+echo "Building Python source distribution..."
 cd crates/fortress-python
 maturin build --sdist --out dist
 cd ../..
 
 # Build CLI binaries
-echo "📦 Building CLI binaries..."
+echo "Building CLI binaries..."
 for target in "${TARGETS[@]}"; do
     if build_target "$target" "cli"; then
-        echo "✅ CLI build successful for $target"
+        echo "✓ CLI build successful for $target"
     else
-        echo "❌ CLI build failed for $target"
+        echo "✗ CLI build failed for $target"
     fi
 done
 
 # Create archive files
-echo "📦 Creating distribution archives..."
+echo "Creating distribution archives..."
 cd "$DIST_DIR"
 
 # Archive CLI binaries
@@ -135,15 +135,15 @@ find ../crates/fortress-cli-napi -name "*.node" -exec cp {} npm-binaries/ \; 2>/
 
 cd ..
 
-echo "✅ Binary distribution build completed!"
-echo "📁 Distribution files available in: $DIST_DIR"
+echo "✓ Binary distribution build completed!"
+echo "Distribution files available in: $DIST_DIR"
 echo ""
-echo "📦 Contents:"
+echo "Contents:"
 echo "  - cli-binaries/: Standalone CLI executables"
 echo "  - python-wheels/: Python wheel packages"
 echo "  - npm-binaries/: NAPI Node.js binaries"
 echo ""
-echo "🚀 To publish:"
+echo "To publish:"
 echo "  NPM: cd crates/fortress-cli-napi && npm publish"
 echo "  PyPI: cd crates/fortress-python && maturin publish"
 echo "  GitHub: Create a release and upload artifacts"

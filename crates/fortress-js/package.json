@@ -1,7 +1,7 @@
 {
   "name": "fortress-db",
   "version": "1.0.1-alpha",
-  "description": "🛡️ Fortress - Turnkey Simplicity + Enterprise Security. JavaScript/TypeScript SDK for Fortress secure database system with multi-layer encryption.",
+  "description": "Fortress - Turnkey Simplicity + Enterprise Security. JavaScript/TypeScript SDK for Fortress secure database system with multi-layer encryption.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [

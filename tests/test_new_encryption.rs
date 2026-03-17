@@ -11,7 +11,7 @@ async fn test_new_algorithms() {
     let ciphertext = alg.encrypt(plaintext, key.as_bytes()).unwrap();
     let decrypted = alg.decrypt(&ciphertext, key.as_bytes()).unwrap();
     assert_eq!(plaintext.to_vec(), decrypted);
-    println!("✅ XChaCha20-Poly1305 test passed");
+    println!("✓ XChaCha20-Poly1305 test passed");
 
     // Test Blake3Encrypt
     let alg = create_algorithm("blake3encrypt").unwrap();
@@ -20,7 +20,7 @@ async fn test_new_algorithms() {
     let ciphertext = alg.encrypt(plaintext, key.as_bytes()).unwrap();
     let decrypted = alg.decrypt(&ciphertext, key.as_bytes()).unwrap();
     assert_eq!(plaintext.to_vec(), decrypted);
-    println!("✅ Blake3Encrypt test passed");
+    println!("✓ Blake3Encrypt test passed");
 
     // Test HMAC-SHA512 Encrypt
     let alg = create_algorithm("hmacsha512encrypt").unwrap();
@@ -29,7 +29,7 @@ async fn test_new_algorithms() {
     let ciphertext = alg.encrypt(plaintext, key.as_bytes()).unwrap();
     let decrypted = alg.decrypt(&ciphertext, key.as_bytes()).unwrap();
     assert_eq!(plaintext.to_vec(), decrypted);
-    println!("✅ HMAC-SHA512 Encrypt test passed");
+    println!("✓ HMAC-SHA512 Encrypt test passed");
 }
 
 fn main() {
@@ -47,7 +47,7 @@ fn main() {
     for alg_name in algorithms {
         match create_algorithm(alg_name) {
             Ok(alg) => {
-                println!("✅ Successfully created algorithm: {}", alg.name());
+                println!("✓ Successfully created algorithm: {}", alg_name);
                 println!("   Key size: {} bytes", alg.key_size());
                 println!("   Nonce size: {} bytes", alg.nonce_size());
                 println!("   Tag size: {} bytes", alg.tag_size());
@@ -56,7 +56,7 @@ fn main() {
                 println!();
             }
             Err(e) => {
-                println!("❌ Failed to create algorithm {}: {:?}", alg_name, e);
+                println!("✗ Failed to create algorithm {}: {:?}", alg_name, e);
             }
         }
     }

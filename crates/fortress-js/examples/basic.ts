@@ -8,7 +8,7 @@
 import { Fortress, Utils } from '../src/index';
 
 async function basicExample(): Promise<void> {
-  console.log('🔐 Fortress Basic Example');
+  console.log('Fortress Basic Example');
   console.log('='.repeat(40));
 
   try {
@@ -60,9 +60,9 @@ async function basicExample(): Promise<void> {
     // Verify
     if (plaintext.length === decrypted.length && 
         plaintext.every((byte, index) => byte === decrypted[index])) {
-      console.log('✅ Encryption/Decryption successful!');
+      console.log('Encryption/Decryption successful!');
     } else {
-      console.log('❌ Encryption/Decryption failed!');
+      console.log('Encryption/Decryption failed!');
     }
 
     // Demonstrate utility functions
@@ -92,9 +92,9 @@ async function basicExample(): Promise<void> {
         const success = testPlaintext.length === testDecrypted.length && 
                      testPlaintext.every((byte, index) => byte === testDecrypted[index]);
         
-        console.log(`${algName}: ${success ? '✅' : '❌'}`);
+        console.log(`${algName}: ${success ? 'PASS' : 'FAIL'}`);
       } catch (error) {
-        console.log(`${algName}: ❌ (${error})`);
+        console.log(`${algName}: FAIL (${error})`);
       }
     }
 
@@ -114,9 +114,9 @@ async function basicExample(): Promise<void> {
       // Try to decrypt with wrong key
       const wrongKey = fortress.generateKey('aegis256');
       await algorithm.decrypt(ciphertext, wrongKey);
-      console.log('❌ Should have failed with wrong key');
+      console.log('Should have failed with wrong key');
     } catch (error) {
-      console.log('✅ Correctly failed with wrong key');
+      console.log('Correctly failed with wrong key');
       console.log(`Error: ${(error as Error).message}`);
     }
 
@@ -125,16 +125,16 @@ async function basicExample(): Promise<void> {
       const corruptedCiphertext = new Uint8Array(ciphertext);
       corruptedCiphertext[0] ^= 0xFF; // Flip first byte
       await algorithm.decrypt(corruptedCiphertext, key);
-      console.log('❌ Should have failed with corrupted data');
+      console.log('Should have failed with corrupted data');
     } catch (error) {
-      console.log('✅ Correctly failed with corrupted data');
+      console.log('Correctly failed with corrupted data');
       console.log(`Error: ${(error as Error).message}`);
     }
 
-    console.log('\n🎉 Basic example completed successfully!');
+    console.log('\nBasic example completed successfully!');
 
   } catch (error) {
-    console.error('❌ Example failed:', error);
+    console.error('Example failed:', error);
   }
 }
 

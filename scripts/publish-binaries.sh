@@ -5,7 +5,7 @@
 
 set -e
 
-echo "🚀 Publishing Fortress Binary Distributions"
+echo "Publishing Fortress Binary Distributions"
 
 # Get version from Cargo.toml
 VERSION=$(cargo metadata --no-deps --format-version 1 | grep -o '"version":"[^"]*"' | head -1 | cut -d'"' -f4)
@@ -14,26 +14,26 @@ echo "Publishing version: $VERSION"
 # Check if we're on a tag
 if [[ "$GITHUB_REF" == refs/tags/* ]]; then
     TAG_VERSION=${GITHUB_REF#refs/tags/}
-    echo "🏷️  Publishing from tag: $TAG_VERSION"
+    echo "Publishing from tag: $TAG_VERSION"
     
     if [[ "$TAG_VERSION" != "v$VERSION" ]]; then
-        echo "❌ Version mismatch: tag is $TAG_VERSION but Cargo.toml has $VERSION"
+        echo "Version mismatch: tag is $TAG_VERSION but Cargo.toml has $VERSION"
         exit 1
     fi
 else
-    echo "⚠️  Not on a tag, skipping publishing"
+    echo "Not on a tag, skipping publishing"
     exit 0
 fi
 
 # Function to publish to NPM
 publish_npm() {
-    echo "📦 Publishing to NPM..."
+    echo "Publishing to NPM..."
     
     cd crates/fortress-cli-napi
     
     # Check if NPM token is available
     if [[ -z "$NPM_TOKEN" ]]; then
-        echo "❌ NPM_TOKEN not set"
+        echo "NPM_TOKEN not set"
         return 1
     fi
     
@@ -45,18 +45,18 @@ publish_npm() {
     npm publish
     
     cd ../..
-    echo "✅ Published to NPM"
+    echo "Published to NPM"
 }
 
 # Function to publish to PyPI
 publish_pypi() {
-    echo "📦 Publishing to PyPI..."
+    echo "Publishing to PyPI..."
     
     cd crates/fortress-python
     
     # Check if PyPI token is available
     if [[ -z "$PYPI_TOKEN" ]]; then
-        echo "❌ PYPI_TOKEN not set"
+        echo "PYPI_TOKEN not set"
         return 1
     fi
     
@@ -67,15 +67,15 @@ publish_pypi() {
     maturin publish --username __token__ --password "$PYPI_TOKEN"
     
     cd ../..
-    echo "✅ Published to PyPI"
+    echo "Published to PyPI"
 }
 
 # Function to create GitHub release
 create_github_release() {
-    echo "📦 Creating GitHub release..."
+    echo "Creating GitHub release..."
     
     if [[ -z "$GITHUB_TOKEN" ]]; then
-        echo "❌ GITHUB_TOKEN not set"
+        echo "GITHUB_TOKEN not set"
         return 1
     fi
     
@@ -109,7 +109,7 @@ $(git log --pretty=format:"- %s" $(git describe --tags --abbrev=0 HEAD)^..HEAD)"
         dist/python-wheels/* \
         dist/npm-binaries/*
     
-    echo "✅ GitHub release created"
+    echo "GitHub release created"
 }
 
 # Main publishing logic
@@ -138,4 +138,4 @@ case "$1" in
         ;;
 esac
 
-echo "🎉 Publishing completed successfully!"
+echo "Publishing completed successfully!"

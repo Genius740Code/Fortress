@@ -1,60 +1,60 @@
 # Fortress
 
-🛡️ **Fortress** - Turnkey Simplicity + HashiCorp Vault Security
+**Fortress** - Turnkey Simplicity + HashiCorp Vault Security
 
 A highly customizable, secure database system with multi-layer encryption that combines the simplicity of modern databases with enterprise-grade security.
 
-## 🚦 Current Status: **Alpha - Not Production Ready**
+## Current Status: **Alpha - Not Production Ready**
 > Target v1.0 release: Q3 2026
 > 
-> ⚠️ **Not recommended for production workloads**
+> **Not recommended for production workloads**
 > - APIs may change without notice  
 > - Data migration tools are experimental
 > - Security features are under audit
 > - Limited testing in production environments
 
-## ✨ Key Features
+## Key Features
 
-### � Feature Maturity Legend
+### Feature Maturity Legend
 - `[Stable]` - Production-ready with comprehensive testing
 - `[In Development]` - Partial implementation, APIs may change
 - `[Planned]` - Designed but not yet implemented
 
-### �🔐 Security First
+### Security First
 - **Automatic Encryption**: All data encrypted before storage, decrypted after retrieval `[Stable]`
 - **Multiple Algorithms**: AEGIS-256, ChaCha20-Poly1305, AES-256-GCM, and more `[Stable]`
 - **Field-Level Encryption**: Encrypt specific fields with different algorithms `[Stable]`
 - **Key Management**: Automatic key generation, rotation, and secure storage `[Stable]`
 - **Zero-Downtime Rotation**: Rotate encryption keys without service interruption `[In Development]`
 
-### 🏗️ Enterprise Architecture
+### Enterprise Architecture
 - **Multi-Tenant Support**: Isolated data per tenant/organization `[Stable]`
 - **Cluster Support**: High availability with Raft consensus `[In Development]`
 - **Audit Logging**: Comprehensive security event logging `[In Development]`
 - **Compliance Framework**: GDPR, HIPAA, PCI-DSS compliance features `[Not Implemented]`
 - **HSM Integration**: Hardware Security Module support `[In Development]`
 
-### ⚡ High Performance
+### High Performance
 - **Optimized Algorithms**: AEGIS-256 for maximum speed `[Stable]`
 - **Caching Layer**: Intelligent key and data caching `[In Development]`
 - **Connection Pooling**: Efficient database connections `[Stable]`
 - **Compression**: Built-in data compression `[Stable]`
 - **Performance Monitoring**: Real-time metrics and profiling `[In Development]`
 
-### 🔧 Developer Friendly
+### Developer Friendly
 - **REST API**: Standard HTTP methods with JSON payloads `[Stable]`
 - **Multiple SDKs**: Python, JavaScript, Rust, Go, and more `[In Development]`
 - **WebSocket API**: Real-time updates and streaming `[In Development]`
 - **GraphQL Support**: Complex queries with GraphQL `[Planned]`
 - **Plugin System**: Extensible functionality `[In Development]`
 
-### 🐳 Modern Deployment
+### Modern Deployment
 - **Docker Support**: Container-ready with official images `[Stable]`
 - **Kubernetes**: Production-ready K8s manifests `[In Development]`
 - **Helm Charts**: Easy deployment and management `[In Development]`
 - **Cloud Integration**: AWS, Azure, Google Cloud support `[Planned]`
 
-### 🧠 Privacy-Preserving ML & Homomorphic Encryption
+### Privacy-Preserving ML & Homomorphic Encryption
 
 **Current Status: Prototype Only - Not Production Ready**
 
@@ -66,7 +66,7 @@ A highly customizable, secure database system with multi-layer encryption that c
 
 See `crates/fortress-core/src/homomorphic_encryption.rs` for detailed warnings and current implementation status.
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Installation
 
@@ -194,7 +194,7 @@ user = client.insert_data('myapp_db', 'users', {
 })
 ```
 
-## 📊 Performance
+## Performance
 
 Fortress is optimized for high-performance encryption operations:
 
@@ -217,7 +217,7 @@ cargo test --release -- --ignored performance
 curl http://localhost:8080/metrics/performance
 ```
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -245,22 +245,22 @@ curl http://localhost:8080/metrics/performance
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## 📚 Documentation
+## Documentation
 
 ### Getting Started
-- 📖 [Installation Guide](docs/DEPLOYMENT_GUIDE.md) - Complete installation instructions
-- 🚀 [API Reference](docs/API_REFERENCE.md) - Complete REST API documentation
-- 🏗️ [Architecture Guide](docs/ARCHITECTURE.md) - System architecture and design
+- [Installation Guide](docs/DEPLOYMENT_GUIDE.md) - Complete installation instructions
+- [API Reference](docs/API_REFERENCE.md) - Complete REST API documentation
+- [Architecture Guide](docs/ARCHITECTURE.md) - System architecture and design
 
 ### Security & Compliance
-- 🔐 [Security Guide](docs/SECURITY.md) - Security features and best practices
-- 🔑 [Key Rotation Guide](docs/KEY_ROTATION.md) - Key management and rotation
-- 📊 [Production Readiness Matrix](docs/PRODUCTION_READINESS_MATRIX.md) - Honest assessment of production readiness
+- [Security Guide](docs/SECURITY.md) - Security features and best practices
+- [Key Rotation Guide](docs/KEY_ROTATION.md) - Key management and rotation
+- [Production Readiness Matrix](docs/PRODUCTION_READINESS_MATRIX.md) - Honest assessment of production readiness
 
 ### Operations
-- 🚀 [Deployment Guide](docs/DEPLOYMENT_GUIDE.md) - Production deployment
+- [Deployment Guide](docs/DEPLOYMENT_GUIDE.md) - Production deployment
 
-## 🔧 Configuration
+## Configuration
 
 ### Basic Configuration
 
@@ -333,7 +333,7 @@ kubectl apply -f k8s/deployment.yaml
 kubectl apply -f k8s/service.yaml
 ```
 
-## 🌐 Cloud Integration
+## Cloud Integration
 
 ### AWS Integration
 
@@ -358,7 +358,7 @@ fortress config set storage.backend azure_blob
 fortress config set storage.azure.container fortress-data
 ```
 
-## 🧪 Development
+## Development
 
 ### Running Tests
 
@@ -401,7 +401,7 @@ cargo install --path crates/fortress-cli
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 📝 Examples
+## Examples
 
 ### Basic Rust Usage
 
@@ -423,7 +423,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let decrypted = algorithm.decrypt(&ciphertext, &key)?;
     
     assert_eq!(plaintext, decrypted);
-    println!("✅ Encryption successful!");
+    println!("Encryption successful!");
     
     Ok(())
 }
@@ -513,7 +513,7 @@ This project is licensed under the Server Side Public License (SSPL) - see the [
 - [ ] Enterprise features
 - [ ] Managed cloud service
 
-## 📈 Metrics
+## Metrics
 
 - **CI Status**: [![CI](https://github.com/Genius740Code/Fortress/workflows/CI/badge.svg)](https://github.com/Genius740Code/Fortress/actions)
 - **GitHub Stars**: [![GitHub stars](https://img.shields.io/github/stars/Genius740Code/Fortress)](https://github.com/Genius740Code/Fortress/stargazers)
@@ -523,4 +523,4 @@ This project is licensed under the Server Side Public License (SSPL) - see the [
 
 ---
 
-**Fortress** - Where security meets simplicity. 🛡️✨
+**Fortress** - Where security meets simplicity.
