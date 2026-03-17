@@ -517,12 +517,18 @@ pub mod prelude {
     };
 
     pub use crate::compliance::{
-        ComplianceManager, CompliancePolicy, ComplianceStandard, DataClassification,
-        ComplianceRequirement, ImplementationStatus, DataSubjectRequest, GDPRDataSubjectRight,
-        RequestStatus, ComplianceAuditEvent, ComplianceEventType, AuditOutcome,
-        UserDataExport, HIPAAComplianceReport, SOC2Report, PCIDSSValidationReport,
-        ComplianceAuditLogger, create_default_gdpr_policy, create_default_hipaa_policy,
-        create_default_pci_dss_policy,
+        ComplianceManager, ComplianceConfig, ComplianceFramework, DataClassification,
+        ComplianceEvent, EventSeverity, EventOutcome, ComplianceReport, ComplianceFinding,
+        FindingStatus, ComplianceIssue, DataSubject, ConsentRecord, RightsRequest,
+        RightsRequestType, RequestStatus, ProtectedHealthInfo, PhiType, AccessControl,
+        CardholderData, CardAccessEvent, PciRequirement, BreachNotificationConfig,
+        AuditConfig, EncryptionConfig, AccessControlConfig, PasswordPolicy,
+        GdprComplianceManager, DataProcessor, Dpia, DataBreach, BreachSeverity,
+        BreachStatus, HipaaComplianceManager, CoveredEntity, BusinessAssociate,
+        SecurityIncident, AuditLogEntry, AuditAction, AccessOutcome,
+        PciDssComplianceManager, PciEncryptionKey, SecurityControl, VulnerabilityScan,
+        ComplianceAssessment, ComplianceConfigManager, ComplianceAuditLogger,
+        RetentionPolicy, AuditFilter, IntegrityReport,
     };
 
     pub use crate::secrets::{
