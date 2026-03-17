@@ -7,7 +7,7 @@
 //! - Cluster health monitoring
 //! - Failover and recovery
 
-use crate::error::Result;
+use crate::error::{FortressError, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -246,7 +246,7 @@ impl ClusterManager {
             state: NodeState::Follower { leader: None, term: 0 },
             last_heartbeat: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_else(|_| Duration::from_secs(0))
                 .as_millis() as u64,
             capabilities: NodeCapabilities::default(),
             load_metrics: LoadMetrics::default(),
@@ -300,25 +300,133 @@ impl ClusterManager {
 
     /// Contact a seed node to join the cluster
     async fn contact_seed_node(&self, addr: SocketAddr) -> Result<()> {
-        // TODO: Implement actual network communication
+        use tokio::net::TcpStream;
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use serde_json;
+        
         tracing::info!("Contacting seed node at {}", addr);
         
-        // For now, simulate successful contact
-        let seed_node_id = Uuid::new_v4();
-        let seed_node = ClusterNode {
-            id: seed_node_id,
-            address: addr,
-            state: NodeState::Follower { leader: None, term: 0 },
-            last_heartbeat: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as u64,
-            capabilities: NodeCapabilities::default(),
-            load_metrics: LoadMetrics::default(),
+        // Attempt to connect to seed node
+        let mut stream = match tokio::time::timeout(
+            Duration::from_secs(5),
+            TcpStream::connect(addr)
+        ).await {
+            Ok(Ok(stream)) => stream,
+            Ok(Err(e)) => {
+                tracing::warn!("Failed to connect to seed node {}: {}", addr, e);
+                return Err(FortressError::cluster(
+                    format!("Failed to connect to seed node {}: {}", addr, e),
+                    None,
+                ));
+            }
+            Err(_) => {
+                tracing::warn!("Timeout connecting to seed node {}", addr);
+                return Err(FortressError::cluster(
+                    format!("Timeout connecting to seed node {}", addr),
+                    None,
+                ));
+            }
         };
-
-        self.members.write().await.insert(seed_node_id, seed_node);
-        Ok(())
+        
+        // Send join request
+        let join_request = serde_json::json!({
+            "type": "join_request",
+            "node_id": self.local_node.id.to_string(),
+            "address": self.local_node.address.to_string(),
+            "capabilities": self.local_node.capabilities,
+        });
+        
+        let request_bytes = serde_json::to_vec(&join_request)
+            .map_err(|e| FortressError::cluster(
+                format!("Failed to serialize join request: {}", e),
+                None,
+            ))?;
+        
+        // Send length prefix followed by data
+        let length = request_bytes.len() as u32;
+        if let Err(e) = stream.write_all(&length.to_le_bytes()).await {
+            tracing::warn!("Failed to send length to seed node {}: {}", addr, e);
+            return Err(FortressError::cluster(
+                format!("Failed to send length to seed node {}: {}", addr, e),
+                None,
+            ));
+        }
+        
+        if let Err(e) = stream.write_all(&request_bytes).await {
+            tracing::warn!("Failed to send join request to seed node {}: {}", addr, e);
+            return Err(FortressError::cluster(
+                format!("Failed to send join request to seed node {}: {}", addr, e),
+                None,
+            ));
+        }
+        
+        // Read response
+        let mut length_bytes = [0u8; 4];
+        if let Err(e) = stream.read_exact(&mut length_bytes).await {
+            tracing::warn!("Failed to read response length from seed node {}: {}", addr, e);
+            return Err(FortressError::cluster(
+                format!("Failed to read response length from seed node {}: {}", addr, e),
+                None,
+            ));
+        }
+        
+        let response_length = u32::from_le_bytes(length_bytes) as usize;
+        let mut response_bytes = vec![0u8; response_length];
+        
+        if let Err(e) = stream.read_exact(&mut response_bytes).await {
+            tracing::warn!("Failed to read response from seed node {}: {}", addr, e);
+            return Err(FortressError::cluster(
+                format!("Failed to read response from seed node {}: {}", addr, e),
+                None,
+            ));
+        }
+        
+        // Parse response
+        let response: serde_json::Value = serde_json::from_slice(&response_bytes)
+            .map_err(|e| FortressError::cluster(
+                format!("Failed to parse response from seed node {}: {}", addr, e),
+                None,
+            ))?;
+        
+        if let Some(success) = response.get("success").and_then(|v| v.as_bool()) {
+            if success {
+                tracing::info!("Successfully joined cluster via seed node {}", addr);
+                
+                // Add seed node to members list
+                let seed_node_id = response.get("node_id")
+                    .and_then(|v| v.as_str())
+                    .and_then(|s| Uuid::parse_str(s).ok())
+                    .unwrap_or_else(|| Uuid::new_v4());
+                
+                let seed_node = ClusterNode {
+                    id: seed_node_id,
+                    address: addr,
+                    state: NodeState::Follower { leader: None, term: 0 },
+                    last_heartbeat: std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_else(|_| Duration::from_secs(0))
+                        .as_millis() as u64,
+                    capabilities: NodeCapabilities::default(),
+                    load_metrics: LoadMetrics::default(),
+                };
+                
+                self.members.write().await.insert(seed_node_id, seed_node);
+                Ok(())
+            } else {
+                let error_msg = response.get("error")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Unknown error");
+                Err(FortressError::cluster(
+                    format!("Seed node {} rejected join request: {}", addr, error_msg),
+                    None,
+                ))
+            }
+        } else {
+            Err(FortressError::cluster(
+                format!("Invalid response from seed node {}", addr),
+                None,
+            ))
+        }
     }
 
     /// Start the heartbeat loop
@@ -408,15 +516,16 @@ impl ClusterManager {
         if let Some(node) = members.get_mut(&from) {
             node.last_heartbeat = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_else(|_| Duration::from_secs(0))
                 .as_millis() as u64;
             
             // Update node state if it's a leader
             if matches!(node.state, NodeState::Leader { .. }) {
-                let local_node = members.get_mut(&self.local_node.id).unwrap();
-                if let NodeState::Follower { leader, term: current_term } = &mut local_node.state {
-                    *leader = Some(from);
-                    *current_term = term.max(*current_term);
+                if let Some(local_node) = members.get_mut(&self.local_node.id) {
+                    if let NodeState::Follower { leader, term: current_term } = &mut local_node.state {
+                        *leader = Some(from);
+                        *current_term = term.max(*current_term);
+                    }
                 }
             }
         }
@@ -482,7 +591,7 @@ impl ClusterManager {
                     
                     // Check if we have enough votes to become leader
                     // This is simplified - in a real implementation, we'd track votes properly
-                    if *votes_received + 1 >= *votes_needed {
+                    if votes_received + 1 >= *votes_needed {
                         tracing::info!("Received enough votes to become leader");
                         // Transition to leader state
                     }
@@ -544,7 +653,7 @@ impl ClusterManager {
         let members = self.members.read().await;
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_else(|_| Duration::from_secs(0))
             .as_millis() as u64;
         
         let active_nodes = members.values()
@@ -583,7 +692,7 @@ impl ClusterManager {
         target_nodes.truncate(replication_factor);
 
         // Create replication command
-        let _command = ClusterCommand::ReplicateData {
+        let command = ClusterCommand::ReplicateData {
             key,
             data,
             nodes: target_nodes.clone(),
@@ -591,11 +700,129 @@ impl ClusterManager {
 
         // Send to target nodes
         for node_id in target_nodes {
-            // TODO: Send actual replication command
-            tracing::debug!("Replicating data to node {}", node_id);
+            if let Err(e) = self.send_replication_command(node_id, &command).await {
+                tracing::warn!("Failed to send replication command to node {}: {}", node_id, e);
+            } else {
+                tracing::debug!("Successfully sent replication command to node {}", node_id);
+            }
         }
 
         Ok(())
+    }
+
+    /// Send replication command to a specific node
+    async fn send_replication_command(&self, node_id: NodeId, command: &ClusterCommand) -> Result<()> {
+        use tokio::net::TcpStream;
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use serde_json;
+        
+        // Get node address
+        let node_address = {
+            let members = self.members.read().await;
+            members.get(&node_id)
+                .map(|node| node.address)
+                .ok_or_else(|| FortressError::cluster(
+                    format!("Node {} not found in cluster", node_id),
+                    None,
+                ))?
+        };
+        
+        tracing::debug!("Sending replication command to node {} at {:?}", node_id, command);
+        
+        // Connect to target node with timeout
+        let mut stream = match tokio::time::timeout(
+            Duration::from_secs(3),
+            TcpStream::connect(node_address)
+        ).await {
+            Ok(Ok(stream)) => stream,
+            Ok(Err(e)) => {
+                return Err(FortressError::cluster(
+                    format!("Failed to connect to node {}: {}", node_id, e),
+                    None,
+                ));
+            }
+            Err(_) => {
+                return Err(FortressError::cluster(
+                    format!("Timeout connecting to node {}", node_id),
+                    None,
+                ));
+            }
+        };
+        
+        // Serialize command
+        let command_bytes = serde_json::to_vec(command)
+            .map_err(|e| FortressError::cluster(
+                format!("Failed to serialize replication command: {}", e),
+                None,
+            ))?;
+        
+        // Send length prefix followed by data
+        let length = command_bytes.len() as u32;
+        if let Err(e) = stream.write_all(&length.to_le_bytes()).await {
+            return Err(FortressError::cluster(
+                format!("Failed to send command length to node {}: {}", node_id, e),
+                None,
+            ));
+        }
+        
+        if let Err(e) = stream.write_all(&command_bytes).await {
+            return Err(FortressError::cluster(
+                format!("Failed to send command to node {}: {}", node_id, e),
+                None,
+            ));
+        }
+        
+        // Read acknowledgment
+        let mut length_bytes = [0u8; 4];
+        if let Err(e) = stream.read_exact(&mut length_bytes).await {
+            return Err(FortressError::cluster(
+                format!("Failed to read acknowledgment length from node {}: {}", node_id, e),
+                None,
+            ));
+        }
+        
+        let ack_length = u32::from_le_bytes(length_bytes) as usize;
+        if ack_length > 1024 { // Reasonable limit for acknowledgment
+            return Err(FortressError::cluster(
+                format!("Acknowledgment too large from node {}: {} bytes", node_id, ack_length),
+                None,
+            ));
+        }
+        
+        let mut ack_bytes = vec![0u8; ack_length];
+        if let Err(e) = stream.read_exact(&mut ack_bytes).await {
+            return Err(FortressError::cluster(
+                format!("Failed to read acknowledgment from node {}: {}", node_id, e),
+                None,
+            ));
+        }
+        
+        // Parse acknowledgment
+        let ack: serde_json::Value = serde_json::from_slice(&ack_bytes)
+            .map_err(|e| FortressError::cluster(
+                format!("Failed to parse acknowledgment from node {}: {}", node_id, e),
+                None,
+            ))?;
+        
+        if let Some(success) = ack.get("success").and_then(|v| v.as_bool()) {
+            if success {
+                tracing::debug!("Node {} acknowledged replication command", node_id);
+                Ok(())
+            } else {
+                let error_msg = ack.get("error")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Unknown error");
+                Err(FortressError::cluster(
+                    format!("Node {} rejected replication command: {}", node_id, error_msg),
+                    None,
+                ))
+            }
+        } else {
+            Err(FortressError::cluster(
+                format!("Invalid acknowledgment from node {}", node_id),
+                None,
+            ))
+        }
     }
 
     /// Get cluster health status
@@ -608,7 +835,7 @@ impl ClusterManager {
             .filter(|node| {
                 let now = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
+                    .unwrap_or_else(|_| Duration::from_secs(0))
                     .as_millis() as u64;
                 now.saturating_sub(node.last_heartbeat) < 10000 // 10 seconds in milliseconds
             })

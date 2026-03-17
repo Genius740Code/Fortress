@@ -91,7 +91,7 @@ impl ReplicationOperation {
             consistency_level,
             created_at: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_else(|_| Duration::from_secs(0))
                 .as_millis() as u64,
             deadline: None,
             status: ReplicationStatus::Pending,
@@ -105,7 +105,7 @@ impl ReplicationOperation {
         self.deadline = Some(
             deadline
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_else(|_| Duration::from_secs(0))
                 .as_millis() as u64
         );
         self
@@ -117,7 +117,7 @@ impl ReplicationOperation {
         self.deadline = Some(
             deadline
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_else(|_| Duration::from_secs(0))
                 .as_millis() as u64
         );
         self
@@ -383,7 +383,11 @@ impl ReplicationManager {
         // Send replication requests
         let cluster_nodes = self.cluster_nodes.read().await;
         let active_operations = self.active_operations.read().await;
-        let operation = active_operations.get(&operation_id).unwrap();
+        let operation = active_operations.get(&operation_id)
+            .ok_or_else(|| FortressError::cluster(
+                format!("Operation {} not found", operation_id),
+                None,
+            ))?;
 
         for &node_id in &operation.target_nodes {
             if let Some(_node) = cluster_nodes.get(&node_id) {
@@ -431,13 +435,13 @@ impl ReplicationManager {
     ) -> Result<ReplicationOperation> {
         let deadline_timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_else(|_| Duration::from_secs(0))
             .as_millis() as u64 + timeout.as_millis() as u64;
         
         loop {
             let now_timestamp = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_else(|_| Duration::from_secs(0))
                 .as_millis() as u64;
             
             if now_timestamp >= deadline_timestamp {
@@ -576,7 +580,7 @@ impl ReplicationManager {
                 
                 let now_timestamp = SystemTime::now()
                     .duration_since(UNIX_EPOCH)
-                    .unwrap()
+                    .unwrap_or_else(|_| Duration::from_secs(0))
                     .as_millis() as u64;
                 
                 // Check for timed out operations
@@ -646,7 +650,7 @@ impl ReplicationManager {
                 
                 let now_timestamp = SystemTime::now()
                     .duration_since(UNIX_EPOCH)
-                    .unwrap()
+                    .unwrap_or_else(|_| Duration::from_secs(0))
                     .as_millis() as u64;
                 
                 let retention_ms = retention_period.as_millis() as u64;
@@ -779,7 +783,11 @@ impl ReplicationManager {
             
             // If operation is complete, move it to completed operations
             if operation.is_complete() {
-                let completed_op = active_operations.remove(&operation_id).unwrap();
+                let completed_op = active_operations.remove(&operation_id)
+                    .ok_or_else(|| FortressError::cluster(
+                        format!("Operation {} not found for completion", operation_id),
+                        None,
+                    ))?;
                 drop(active_operations); // Release the lock before accessing completed_operations
                 
                 let mut completed_operations = self.completed_operations.write().await;
