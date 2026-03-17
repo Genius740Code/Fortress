@@ -152,7 +152,7 @@ pub async fn handle_key_action(action: KeyAction) -> Result<()> {
                 return Err(e);
             }
             
-            // TODO: Implement actual rollback
+            // Perform key rollback
             match perform_key_rollback(&version).await {
                 Ok(rollback_info) => {
                     println!("✅ Key rollback completed successfully!");
@@ -496,7 +496,8 @@ async fn perform_key_rollback(version: &Option<String>) -> Result<RollbackInfo> 
         return Err(color_eyre::eyre::eyre!("No keys found to rollback"));
     }
     
-    let (key_id, metadata) = keys.into_iter().next().unwrap();
+    let (key_id, metadata) = keys.into_iter().next()
+        .ok_or_else(|| color_eyre::eyre::eyre!("No keys found to rollback"))?;
     
     println!("  Current key: {} (version {})", 
         style(key_id[..36].to_string() + "...").bold(), 
