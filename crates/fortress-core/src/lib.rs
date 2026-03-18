@@ -14,6 +14,8 @@
 
 //! - **Key Management**: Secure key generation, rotation, and storage
 
+//! - **Caching System**: Advanced multi-tier caching with intelligent invalidation
+
 //! - **Error Handling**: Comprehensive error types for security operations
 
 //! - **Utilities**: Helper functions for cryptographic operations
@@ -278,6 +280,34 @@ pub mod query_optimizer;
 /// Distributed caching layer
 
 pub mod distributed_cache;
+
+/// Advanced cache invalidation strategies
+
+pub mod cache_invalidation;
+
+/// Redis cache backend implementation
+
+pub mod cache_redis;
+
+/// Memcached cache backend implementation
+
+pub mod cache_memcached;
+
+/// Hybrid cache strategy (local + distributed)
+
+pub mod cache_hybrid;
+
+/// Unified cache manager
+
+pub mod cache_manager;
+
+/// Cache integration with key management and encryption
+
+pub mod cache_integration;
+
+/// Comprehensive cache tests
+
+pub mod cache_tests;
 
 /// Advanced connection pooling and load balancing
 

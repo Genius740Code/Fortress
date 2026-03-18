@@ -378,6 +378,30 @@ pub enum StorageErrorCode {
     #[error("Backend not available")]
     BackendNotAvailable,
     
+    /// Invalid configuration
+    #[error("Invalid configuration")]
+    InvalidConfiguration,
+    
+    /// Corrupted data
+    #[error("Corrupted data")]
+    CorruptedData,
+    
+    /// Serialization error
+    #[error("Serialization error")]
+    SerializationError,
+    
+    /// Operation failed
+    #[error("Operation failed")]
+    OperationFailed,
+    
+    /// Invalid data
+    #[error("Invalid data")]
+    InvalidData,
+    
+    /// Rate limited
+    #[error("Rate limited")]
+    RateLimited,
+    
     /// Invalid operation
     #[error("Invalid operation")]
     InvalidOperation,
@@ -386,9 +410,9 @@ pub enum StorageErrorCode {
     #[error("Not implemented")]
     NotImplemented,
     
-    /// Corrupted data
+    /// Corrupted data (duplicate, will be removed in next version)
     #[error("Corrupted data")]
-    CorruptedData,
+    CorruptedDataDuplicate,
     
     /// Operation cancelled
     #[error("Operation cancelled")]

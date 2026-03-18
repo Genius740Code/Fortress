@@ -109,7 +109,7 @@ pub struct CacheEntry {
 }
 
 /// Cache statistics
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CacheStatistics {
     /// Total number of entries
     pub total_entries: u64,
