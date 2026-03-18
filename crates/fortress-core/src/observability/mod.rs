@@ -12,6 +12,7 @@ pub mod alerts;
 pub mod dashboard;
 pub mod system_resources;
 pub mod enhanced_performance;
+pub mod realtime_dashboard;
 
 pub use tracing::{ObservabilityTracer, TraceConfig, SpanContext};
 pub use metrics::{AdvancedMetricsCollector, MetricRegistry, MetricType};
@@ -21,6 +22,7 @@ pub use alerts::{AlertManager, AlertRule, NotificationChannel};
 pub use dashboard::{DashboardManager, DashboardConfig, Widget};
 pub use system_resources::{SystemResourceMonitor, SystemResourceConfig, SystemSnapshot, ResourceAlert};
 pub use enhanced_performance::{EnhancedPerformanceMonitor, EnhancedPerformanceConfig, PerformanceAnomaly, PerformanceBaseline};
+pub use realtime_dashboard::{RealTimeDashboard, RealTimeDashboardConfig, DashboardMessage, DashboardStatistics};
 
 use std::sync::Arc;
 use serde::{Deserialize, Serialize};
