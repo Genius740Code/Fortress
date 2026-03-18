@@ -2,19 +2,23 @@ name: Cloud Integration Tests
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ master, develop ]
     paths:
       - 'crates/fortress-core/src/storage.rs'
       - 'tests/test_aws_integration.rs'
       - 'tests/test_azure_integration.rs'
       - 'tests/test_cloud_integration_framework.rs'
+      - 'crates/fortress-core/src/hsm.rs'
+      - 'tests/test_hsm_integration.rs'
   pull_request:
-    branches: [ main ]
+    branches: [ master ]
     paths:
       - 'crates/fortress-core/src/storage.rs'
       - 'tests/test_aws_integration.rs'
       - 'tests/test_azure_integration.rs'
       - 'tests/test_cloud_integration_framework.rs'
+      - 'crates/fortress-core/src/hsm.rs'
+      - 'tests/test_hsm_integration.rs'
   schedule:
     # Run daily at 2 AM UTC
     - cron: '0 2 * * *'
@@ -50,7 +54,7 @@ jobs:
   aws-integration:
     name: AWS Integration Tests
     runs-on: ubuntu-latest
-    if: github.event.inputs.cloud_provider == 'all' || github.event.inputs.cloud_provider == 'aws' || github.event.inputs.cloud_provider == ''
+    if: (github.event.inputs.cloud_provider == 'all' || github.event.inputs.cloud_provider == 'aws' || github.event.inputs.cloud_provider == '') || github.event_name != 'workflow_dispatch'
     
     strategy:
       matrix:
@@ -130,10 +134,10 @@ jobs:
       run: cargo clippy --all-targets --all-features -- -D warnings
 
     - name: Build with cloud features
-      run: cargo build --all --features cloud-storage
+      run: cargo build --all --features cloud-storage,hsm
 
     - name: Run unit tests
-      run: cargo test --lib --features cloud-storage
+      run: cargo test --lib --features cloud-storage,hsm
 
     - name: Run AWS integration tests
       env:
@@ -144,7 +148,7 @@ jobs:
       run: |
         if [ "${{ github.event.inputs.test_type }}" = "all" ] || [ "${{ github.event.inputs.test_type }}" = "" ] || [ "${{ github.event.inputs.test_type }}" = "${{ matrix.test-type }}" ]; then
           echo "Running ${{ matrix.test-type }} tests for AWS in ${{ matrix.region }}"
-          cargo test --test test_aws_integration --features cloud-storage -- --ignored --test-threads=1
+          cargo test --test test_aws_integration --features cloud-storage,hsm -- --ignored --test-threads=1
         else
           echo "Skipping ${{ matrix.test-type }} tests due to input filter"
         fi
@@ -172,7 +176,7 @@ jobs:
   azure-integration:
     name: Azure Integration Tests
     runs-on: ubuntu-latest
-    if: github.event.inputs.cloud_provider == 'all' || github.event.inputs.cloud_provider == 'azure' || github.event.inputs.cloud_provider == ''
+    if: (github.event.inputs.cloud_provider == 'all' || github.event.inputs.cloud_provider == 'azure' || github.event.inputs.cloud_provider == '') || github.event_name != 'workflow_dispatch'
     
     strategy:
       matrix:
@@ -205,13 +209,13 @@ jobs:
         curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
 
     - name: Login to Azure
-      if: env AZURE_CLIENT_SECRET != ''
+      if: ${{ secrets.AZURE_CREDENTIALS }}
       uses: azure/login@v1
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
 
     - name: Create Azure Storage Account (if credentials available)
-      if: env AZURE_CLIENT_SECRET != ''
+      if: ${{ secrets.AZURE_CREDENTIALS }}
       run: |
         # Create resource group
         az group create --name fortress-test-rg --location ${{ matrix.region }}
@@ -253,10 +257,10 @@ jobs:
       run: cargo clippy --all-targets --all-features -- -D warnings
 
     - name: Build with cloud features
-      run: cargo build --all --features cloud-storage
+      run: cargo build --all --features cloud-storage,hsm
 
     - name: Run unit tests
-      run: cargo test --lib --features cloud-storage
+      run: cargo test --lib --features cloud-storage,hsm
 
     - name: Run Azure integration tests
       env:
@@ -268,13 +272,13 @@ jobs:
       run: |
         if [ "${{ github.event.inputs.test_type }}" = "all" ] || [ "${{ github.event.inputs.test_type }}" = "" ] || [ "${{ github.event.inputs.test_type }}" = "${{ matrix.test-type }}" ]; then
           echo "Running ${{ matrix.test-type }} tests for Azure in ${{ matrix.region }}"
-          cargo test --test test_azure_integration --features cloud-storage -- --ignored --test-threads=1
+          cargo test --test test_azure_integration --features cloud-storage,hsm -- --ignored --test-threads=1
         else
           echo "Skipping ${{ matrix.test-type }} tests due to input filter"
         fi
 
     - name: Cleanup Azure resources
-      if: env AZURE_CLIENT_SECRET != '' && always()
+      if: ${{ secrets.AZURE_CREDENTIALS }} && always()
       run: |
         az group delete --name fortress-test-rg --yes --no-wait
 
@@ -318,7 +322,7 @@ jobs:
 
     - name: Run framework tests
       run: |
-        cargo test --test test_cloud_integration_framework --features cloud-storage -- --ignored --test-threads=1
+        cargo test --test test_cloud_integration_framework --features cloud-storage,hsm -- --ignored --test-threads=1
 
     - name: Generate comprehensive report
       run: |
@@ -388,7 +392,7 @@ jobs:
   performance-benchmark:
     name: Performance Benchmarking
     runs-on: ubuntu-latest
-    if: github.event.inputs.test_type == 'all' || github.event.inputs.test_type == 'performance' || github.event.inputs.test_type == ''
+    if: (github.event.inputs.test_type == 'all' || github.event.inputs.test_type == 'performance' || github.event.inputs.test_type == '') || github.event_name != 'workflow_dispatch'
 
     steps:
     - name: Checkout code
@@ -399,7 +403,7 @@ jobs:
 
     - name: Run performance benchmarks
       run: |
-        cargo bench --features cloud-storage
+        cargo bench --features cloud-storage,hsm
 
     - name: Upload benchmark results
       uses: actions/upload-artifact@v3
@@ -412,7 +416,7 @@ jobs:
   notify:
     name: Notify Results
     runs-on: ubuntu-latest
-    needs: [aws-integration, azure-integration, framework-tests, security-scan]
+    needs: [aws-integration, azure-integration, framework-tests, security-scan, performance-benchmark]
     if: always()
 
     steps:
@@ -422,12 +426,13 @@ jobs:
         echo "Azure Tests: ${{ needs.azure-integration.result }}" >> notification.txt
         echo "Framework Tests: ${{ needs.framework-tests.result }}" >> notification.txt
         echo "Security Scan: ${{ needs.security-scan.result }}" >> notification.txt
+        echo "Performance Benchmark: ${{ needs.performance-benchmark.result }}" >> notification.txt
 
     - name: Send notification (if webhook configured)
-      if: env.SLACK_WEBHOOK_URL != ''
+      if: env.SLACK_WEBHOOK_URL != '' && always()
       run: |
         curl -X POST -H 'Content-type: application/json' \
-          --data '{"text":"Cloud Integration Tests completed:\nAWS: ${{ needs.aws-integration.result }}\nAzure: ${{ needs.azure-integration.result }}\nFramework: ${{ needs.framework-tests.result }}\nSecurity: ${{ needs.security-scan.result }}"}' \
+          --data '{"text":"Cloud Integration Tests completed:\nAWS: ${{ needs.aws-integration.result }}\nAzure: ${{ needs.azure-integration.result }}\nFramework: ${{ needs.framework-tests.result }}\nSecurity: ${{ needs.security-scan.result }}\nPerformance: ${{ needs.performance-benchmark.result }}"}' \
           ${{ secrets.SLACK_WEBHOOK_URL }}
       env:
         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

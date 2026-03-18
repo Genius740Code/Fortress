@@ -168,7 +168,7 @@ all-cloud = ["aws", "azure"]
 cloud-storage = ["aws-config", "aws-sdk-s3", "aws-sdk-kms", "azure_storage_blobs", "azure_identity"]
 
 # Security features
-hsm = []
+hsm = ["fortress-core/hsm"]
 fips = []
 
 # Development features

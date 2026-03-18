@@ -40,21 +40,38 @@ pub struct MongoConfig {
 /// MongoDB read preferences
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MongoReadPreference {
+    /// Read from primary only
     Primary,
+    /// Read from primary if available, otherwise secondary
     PrimaryPreferred,
+    /// Read from secondary only
     Secondary,
+    /// Read from secondary if available, otherwise primary
     SecondaryPreferred,
+    /// Read from member with lowest network latency
     Nearest,
 }
 
 /// MongoDB write concerns
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MongoWriteConcern {
+    /// No acknowledgment required
     Unacknowledged,
+    /// Require acknowledgment from server
     Acknowledged,
+    /// Require write to be journaled
     Journaled,
+    /// Require acknowledgment from majority of replica set
     Majority,
-    Custom { w: i32, j: bool, wtimeout: Option<i32> },
+    /// Custom write concern settings
+    Custom { 
+        /// Write replication factor
+        w: i32, 
+        /// Journal write requirement
+        j: bool, 
+        /// Write timeout in milliseconds
+        wtimeout: Option<i32> 
+    },
 }
 
 impl Default for MongoConfig {
@@ -430,11 +447,25 @@ impl crate::key_database::KeyDatabase for MongoKeyDatabase {
 /// MongoDB pull filter options
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MongoPullFilter {
+    /// Pull all documents
     All,
+    /// Pull documents with key prefix
     Prefix(String),
-    DateRange { start: DateTime<Utc>, end: DateTime<Utc> },
-    SizeRange { min_size: i64, max_size: i64 },
-    /// Metadata key-value pair
+    /// Pull documents within date range
+    DateRange { 
+        /// Start date (inclusive)
+        start: DateTime<Utc>, 
+        /// End date (inclusive)
+        end: DateTime<Utc> 
+    },
+    /// Pull documents within size range
+    SizeRange { 
+        /// Minimum size in bytes
+        min_size: i64, 
+        /// Maximum size in bytes
+        max_size: i64 
+    },
+    /// Pull documents matching metadata key-value pair
     Metadata { 
         /// Metadata key
         key: String, 
@@ -446,23 +477,31 @@ pub enum MongoPullFilter {
 /// MongoDB aggregation pipeline
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MongoPipeline {
+    /// Pipeline operation type
     pub operation: String,
+    /// Aggregation stages
     pub stages: Vec<serde_json::Value>,
 }
 
 /// MongoDB aggregation result
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MongoAggregationResult {
+    /// Result identifier
     pub _id: String,
+    /// Document count
     pub count: i64,
+    /// Total size in bytes
     pub total_size: i64,
 }
 
 /// MongoDB search result
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MongoSearchResult {
+    /// Document key
     pub key: String,
+    /// Search relevance score
     pub score: f64,
+    /// Text snippet preview
     pub snippet: String,
     /// Additional metadata associated with the search result
     pub metadata: HashMap<String, String>,

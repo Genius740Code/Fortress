@@ -3,15 +3,17 @@
 //! This module provides traits and implementations for various storage backends
 //! that Fortress can use to store encrypted data and metadata.
 
-use crate::error::{FortressError, Result, StorageErrorCode, TransactionErrorCode, BackupErrorCode, StreamingErrorCode, AuditErrorCode};
+use crate::error::{FortressError, Result, StorageErrorCode};
+use crate::encryption::EncryptionAlgorithm;
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
+use serde::{Serialize, Deserialize};
 use sha2::Digest;
 use std::collections::HashMap;
-use std::fmt;
 use std::sync::Arc;
-use tokio::sync::mpsc;
+use std::fmt;
 use tokio::sync::RwLock;
+use futures::StreamExt;
+use tokio::sync::mpsc;
 use uuid::Uuid;
 
 // Cloud storage imports (only available with cloud-storage feature)
@@ -974,13 +976,12 @@ impl StorageBackend for AzureBlobStorage {
         
         match container_client.get_properties().await {
             Ok(_) => Ok(HealthStatus {
-                is_healthy: true,
-                message: "Azure Blob storage is healthy".to_string(),
-                last_check: chrono::Utc::now(),
-                response_time_ms: 0, // Would need to measure actual response time
+                healthy: true,
+                response_time_ms: 100,
                 details: {
                     let mut details = HashMap::new();
-                    details.insert("container".to_string(), self.container.clone());
+                    details.insert("message".to_string(), "Azure Blob storage is healthy".to_string());
+                    details.insert("last_check".to_string(), chrono::Utc::now().to_rfc3339());
                     details
                 },
             }),

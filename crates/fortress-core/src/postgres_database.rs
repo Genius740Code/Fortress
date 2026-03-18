@@ -46,11 +46,26 @@ pub struct PostgresConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PostgresPartitioning {
     /// Partition by date range
-    ByDate { column: String, interval: String },
+    ByDate { 
+        /// Column name for partitioning
+        column: String, 
+        /// Date interval (e.g., "daily", "weekly", "monthly")
+        interval: String 
+    },
     /// Partition by key hash
-    ByHash { column: String, partitions: u32 },
+    ByHash { 
+        /// Column name for partitioning
+        column: String, 
+        /// Number of partitions
+        partitions: u32 
+    },
     /// Partition by size
-    BySize { column: String, max_size_mb: u32 },
+    BySize { 
+        /// Column name for partitioning
+        column: String, 
+        /// Maximum partition size in MB
+        max_size_mb: u32 
+    },
 }
 
 /// PostgreSQL replication configuration
@@ -888,63 +903,118 @@ impl crate::key_database::KeyDatabase for PostgresKeyDatabase {
 /// Bulk entry for PostgreSQL COPY operations
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PostgresBulkEntry {
+    /// Entry key
     pub key: String,
+    /// Binary data
     pub data: Vec<u8>,
+    /// Entry metadata
     pub metadata: HashMap<String, String>,
+    /// Content type (e.g., "application/octet-stream")
     pub content_type: String,
+    /// Data encoding (e.g., "utf-8", "base64")
     pub encoding: String,
+    /// Compression algorithm (e.g., "gzip", "none")
     pub compression: String,
+    /// Optional partition key for sharding
     pub partition_key: Option<String>,
 }
 
 /// PostgreSQL query with cursor support
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PostgresQuery {
+    /// Key filter pattern
     pub key_filter: Option<String>,
+    /// Start date filter
     pub date_start: Option<DateTime<Utc>>,
+    /// End date filter
     pub date_end: Option<DateTime<Utc>>,
+    /// Minimum size filter in bytes
     pub min_size: Option<i64>,
+    /// Maximum size filter in bytes
     pub max_size: Option<i64>,
+    /// Content type filter
     pub content_type: Option<String>,
+    /// Result offset for pagination
     pub offset: Option<u32>,
+    /// Result limit for pagination
     pub limit: Option<u32>,
 }
 
 /// PostgreSQL cursor result
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PostgresCursor {
+    /// Query results
     pub results: Vec<PostgresRow>,
+    /// Whether more results are available
     pub has_more: bool,
+    /// Total result count
     pub total_count: u64,
 }
 
 /// PostgreSQL row result
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PostgresRow {
+    /// Row key
     pub key: String,
+    /// Row data
     pub data: Vec<u8>,
+    /// Row metadata as JSON
     pub metadata: serde_json::Value,
+    /// Creation timestamp
     pub created_at: DateTime<Utc>,
+    /// Data size in bytes
     pub size_bytes: i64,
 }
 
 /// PostgreSQL search result
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PostgresSearchResult {
+    /// Result key
     pub key: String,
+    /// Search relevance score
     pub score: f64,
+    /// Text snippet preview
     pub snippet: String,
+    /// Result metadata as JSON
     pub metadata: serde_json::Value,
 }
 
 /// PostgreSQL JSONB query
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PostgresJsonbQuery {
-    Exists { path: String },
-    Equals { path: String, value: serde_json::Value },
-    Contains { path: String, value: serde_json::Value },
-    GreaterThan { path: String, value: serde_json::Value },
-    LessThan { path: String, value: serde_json::Value },
+    /// Check if JSON path exists
+    Exists { 
+        /// JSON path (e.g., "metadata.tags")
+        path: String 
+    },
+    /// Check if JSON path equals value
+    Equals { 
+        /// JSON path
+        path: String, 
+        /// Value to compare
+        value: serde_json::Value 
+    },
+    /// Check if JSON path contains value
+    Contains { 
+        /// JSON path
+        path: String, 
+        /// Value to check for containment
+        value: serde_json::Value 
+    },
+    /// Check if JSON path is greater than value
+    GreaterThan { 
+        /// JSON path
+        path: String, 
+        /// Value to compare against
+        value: serde_json::Value 
+    },
+    /// Check if JSON path is less than value
+    LessThan { 
+        /// JSON path
+        path: String, 
+        /// Value to compare against
+        value: serde_json::Value 
+    },
 }
 
 /// Enhanced PostgreSQL storage backend
@@ -955,6 +1025,7 @@ pub struct PostgresStorage {
 }
 
 impl PostgresStorage {
+    /// Create a new PostgreSQL storage instance
     pub async fn new(config: PostgresConfig) -> Result<Self> {
         Ok(Self {
             config,

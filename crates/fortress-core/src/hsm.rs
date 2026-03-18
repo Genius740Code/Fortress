@@ -17,7 +17,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 /// HSM provider configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct HsmConfig {
     /// HSM provider type
     pub provider: HsmProviderType,
@@ -30,7 +30,7 @@ pub struct HsmConfig {
 }
 
 /// HSM provider types
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum HsmProviderType {
     /// AWS CloudHSM
     AwsCloudHsm,
@@ -43,7 +43,7 @@ pub enum HsmProviderType {
 }
 
 /// HSM connection details
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum HsmConnection {
     /// AWS CloudHSM cluster configuration
     AwsCloudHsm { 
@@ -76,7 +76,7 @@ pub enum HsmConnection {
 }
 
 /// HSM authentication credentials
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum HsmCredentials {
     /// AWS CloudHSM credentials
     Aws { 
@@ -111,7 +111,7 @@ pub enum HsmCredentials {
 }
 
 /// PKCS#11 user types
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Pkcs11UserType {
     /// Security Officer (SO)
     SecurityOfficer,
@@ -120,7 +120,7 @@ pub enum Pkcs11UserType {
 }
 
 /// HSM key storage settings
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct HsmKeySettings {
     /// Key template attributes
     pub key_template: HashMap<String, String>,

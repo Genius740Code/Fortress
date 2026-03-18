@@ -1330,20 +1330,25 @@ mod tests {
         let key = SecureKey::new(b"test_key_data_12345678901234567890123456789012".to_vec());
         let fingerprint = generate_key_fingerprint(&key);
         assert_eq!(fingerprint.len(), 16);
-    }
-}
 
 // ===== TENANT MANAGEMENT HANDLERS =====
 
 /// Response for tenant operations
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct TenantResponse {
+    /// Tenant unique identifier
     pub id: String,
+    /// Tenant display name
     pub name: String,
+    /// Optional tenant description
     pub description: Option<String>,
+    /// Resource limits for the tenant
     pub resource_limits: TenantResourceLimits,
+    /// Whether the tenant is currently active
     pub active: bool,
+    /// Tenant creation timestamp
     pub created_at: DateTime<Utc>,
+    /// Last modification timestamp
     pub modified_at: DateTime<Utc>,
 }
 

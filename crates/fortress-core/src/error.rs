@@ -171,6 +171,17 @@ pub enum FortressError {
         code: SecretsErrorCode,
     },
 
+    /// HSM-related errors
+    #[error("HSM error: {message}")]
+    Hsm {
+        /// Error message
+        message: String,
+        /// HSM provider if applicable
+        provider: Option<String>,
+        /// Error code for programmatic handling
+        code: HsmErrorCode,
+    },
+
     /// Transaction-related errors
     #[error("Transaction error: {message}")]
     Transaction {
@@ -343,6 +354,22 @@ pub enum StorageErrorCode {
     #[error("Permission denied")]
     PermissionDenied,
     
+    /// Authentication error
+    #[error("Authentication error")]
+    AuthenticationError,
+    
+    /// Read error
+    #[error("Read error")]
+    ReadError,
+    
+    /// Write error
+    #[error("Write error")]
+    WriteError,
+    
+    /// Delete error
+    #[error("Delete error")]
+    DeleteError,
+    
     /// Quota exceeded
     #[error("Quota exceeded")]
     QuotaExceeded,
@@ -355,13 +382,13 @@ pub enum StorageErrorCode {
     #[error("Invalid operation")]
     InvalidOperation,
     
+    /// Not implemented
+    #[error("Not implemented")]
+    NotImplemented,
+    
     /// Corrupted data
     #[error("Corrupted data")]
     CorruptedData,
-    
-    /// Operation not implemented
-    #[error("Operation not implemented")]
-    NotImplemented,
     
     /// Operation cancelled
     #[error("Operation cancelled")]
@@ -510,6 +537,66 @@ pub enum SecretsErrorCode {
     /// Secret already exists
     #[error("Secret already exists")]
     SecretAlreadyExists,
+}
+
+/// HSM error codes
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
+pub enum HsmErrorCode {
+    /// HSM not available
+    #[error("HSM not available")]
+    HsmNotAvailable,
+    
+    /// Connection failed
+    #[error("Connection failed")]
+    ConnectionFailed,
+    
+    /// Authentication failed
+    #[error("Authentication failed")]
+    AuthenticationFailed,
+    
+    /// Key not found
+    #[error("Key not found")]
+    KeyNotFound,
+    
+    /// Key already exists
+    #[error("Key already exists")]
+    KeyAlreadyExists,
+    
+    /// Invalid key format
+    #[error("Invalid key format")]
+    InvalidKeyFormat,
+    
+    /// Operation not supported
+    #[error("Operation not supported")]
+    OperationNotSupported,
+    
+    /// Invalid algorithm
+    #[error("Invalid algorithm")]
+    InvalidAlgorithm,
+    
+    /// HSM provider error
+    #[error("HSM provider error")]
+    ProviderError,
+    
+    /// Timeout
+    #[error("Timeout")]
+    Timeout,
+    
+    /// Invalid configuration
+    #[error("Invalid configuration")]
+    InvalidConfiguration,
+    
+    /// Permission denied
+    #[error("Permission denied")]
+    PermissionDenied,
+    
+    /// Resource exhausted
+    #[error("Resource exhausted")]
+    ResourceExhausted,
+    
+    /// Quota exceeded
+    #[error("Quota exceeded")]
+    QuotaExceeded,
 }
 
 /// Transaction error codes
@@ -968,6 +1055,28 @@ impl FortressError {
         }
     }
 
+    /// Create a new HSM error
+    pub fn hsm<S: Into<String>>(message: S) -> Self {
+        Self::Hsm {
+            message: message.into(),
+            provider: None,
+            code: HsmErrorCode::ProviderError,
+        }
+    }
+
+    /// Create a new HSM error with provider and code
+    pub fn hsm_with_code<S: Into<String>>(
+        message: S,
+        provider: Option<String>,
+        code: HsmErrorCode,
+    ) -> Self {
+        Self::Hsm {
+            message: message.into(),
+            provider,
+            code,
+        }
+    }
+
     /// Create a new transaction error
     pub fn transaction<S: Into<String>>(
         message: S,
@@ -1075,6 +1184,7 @@ impl FortressError {
             Self::Plugin { .. } => "plugin",
             Self::Compliance { .. } => "compliance",
             Self::Secrets { .. } => "secrets",
+            Self::Hsm { .. } => "hsm",
             Self::Transaction { .. } => "transaction",
             Self::Backup { .. } => "backup",
             Self::Streaming { .. } => "streaming",

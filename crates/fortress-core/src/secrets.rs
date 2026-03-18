@@ -132,8 +132,11 @@ pub enum EngineType {
 /// Cloud providers
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum CloudProvider {
+    /// Amazon Web Services
     Aws,
+    /// Microsoft Azure
     Azure,
+    /// Google Cloud Platform
     Gcp,
 }
 
