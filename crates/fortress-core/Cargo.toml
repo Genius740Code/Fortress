@@ -142,6 +142,9 @@ metrics-exporter-prometheus = { version = "0.12", optional = true }
 # CPU core count detection
 num_cpus = "1.16"
 
+# System information monitoring
+sysinfo = "0.30"
+
 # Distributed caching (optional features)
 redis = { version = "0.24", features = ["tokio-comp", "connection-manager"], optional = true }
 memcached = { version = "0.4.5-beta.2", optional = true }

@@ -10,6 +10,8 @@ pub mod logging;
 pub mod health;
 pub mod alerts;
 pub mod dashboard;
+pub mod system_resources;
+pub mod enhanced_performance;
 
 pub use tracing::{ObservabilityTracer, TraceConfig, SpanContext};
 pub use metrics::{AdvancedMetricsCollector, MetricRegistry, MetricType};
@@ -17,6 +19,8 @@ pub use logging::{StructuredLogger, LogConfig, LogFormat};
 pub use health::{HealthChecker, HealthStatus, ComponentHealth};
 pub use alerts::{AlertManager, AlertRule, NotificationChannel};
 pub use dashboard::{DashboardManager, DashboardConfig, Widget};
+pub use system_resources::{SystemResourceMonitor, SystemResourceConfig, SystemSnapshot, ResourceAlert};
+pub use enhanced_performance::{EnhancedPerformanceMonitor, EnhancedPerformanceConfig, PerformanceAnomaly, PerformanceBaseline};
 
 use std::sync::Arc;
 use serde::{Deserialize, Serialize};
@@ -38,6 +42,8 @@ pub struct ObservabilityConfig {
     pub alerts: alerts::AlertConfig,
     /// Dashboard configuration
     pub dashboard: DashboardConfig,
+    /// System resource monitoring configuration
+    pub system_resources: SystemResourceConfig,
 }
 
 impl Default for ObservabilityConfig {
@@ -49,6 +55,7 @@ impl Default for ObservabilityConfig {
             health: health::HealthConfig::default(),
             alerts: alerts::AlertConfig::default(),
             dashboard: DashboardConfig::default(),
+            system_resources: SystemResourceConfig::default(),
         }
     }
 }
@@ -69,6 +76,8 @@ pub struct ObservabilityManager {
     alert_manager: AlertManager,
     /// Dashboard manager
     dashboard_manager: DashboardManager,
+    /// System resource monitor
+    system_resource_monitor: SystemResourceMonitor,
 }
 
 impl std::fmt::Debug for ObservabilityManager {
@@ -91,6 +100,7 @@ impl ObservabilityManager {
         let mock_provider = Arc::new(crate::observability::alerts::MockMetricsProvider::new());
         let alert_manager = AlertManager::new(config.alerts.clone(), mock_provider);
         let dashboard_manager = DashboardManager::new(config.dashboard.clone());
+        let system_resource_monitor = SystemResourceMonitor::new(config.system_resources.clone());
 
         Ok(Self {
             config,
@@ -100,6 +110,7 @@ impl ObservabilityManager {
             health_checker,
             alert_manager,
             dashboard_manager,
+            system_resource_monitor,
         })
     }
 
@@ -128,9 +139,14 @@ impl ObservabilityManager {
         &self.alert_manager
     }
 
-    /// Get the dashboard manager
+    /// Get dashboard manager
     pub fn dashboard_manager(&self) -> &DashboardManager {
         &self.dashboard_manager
+    }
+
+    /// Get system resource monitor
+    pub fn system_resource_monitor(&self) -> &SystemResourceMonitor {
+        &self.system_resource_monitor
     }
 
     /// Start all observability components

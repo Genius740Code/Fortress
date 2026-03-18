@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "fortress-db"
-version = "1.0.1-alpha.1"
+version = "1.0.2-alpha"
 description = "🛡️ Fortress - Turnkey Simplicity + Enterprise Security. Python SDK for Fortress secure database system with multi-layer encryption."
 readme = "README.md"
 license = {text = "Fortress Sustainable Use License 1.0"}

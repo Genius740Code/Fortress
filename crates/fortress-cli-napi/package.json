@@ -1,6 +1,6 @@
 {
   "name": "fortress-cli",
-  "version": "1.0.1-alpha",
+  "version": "1.0.2-alpha",
   "description": "Fortress CLI - Node.js bindings for Fortress secure database system with enterprise-grade encryption",
   "main": "index.js",
   "types": "index.d.ts",
@@ -78,13 +78,13 @@
     "access": "public"
   },
   "optionalDependencies": {
-    "fortress-cli-win32-x64-msvc": "1.0.1-alpha",
-    "fortress-cli-darwin-x64": "1.0.1-alpha",
-    "fortress-cli-linux-x64-gnu": "1.0.1-alpha",
-    "fortress-cli-win32-ia32-msvc": "1.0.1-alpha",
-    "fortress-cli-darwin-arm64": "1.0.1-alpha",
-    "fortress-cli-linux-x64-musl": "1.0.1-alpha",
-    "fortress-cli-linux-arm64-gnu": "1.0.1-alpha",
-    "fortress-cli-linux-arm-gnueabihf": "1.0.1-alpha"
+    "fortress-cli-win32-x64-msvc": "1.0.2-alpha",
+    "fortress-cli-darwin-x64": "1.0.2-alpha",
+    "fortress-cli-linux-x64-gnu": "1.0.2-alpha",
+    "fortress-cli-win32-ia32-msvc": "1.0.2-alpha",
+    "fortress-cli-darwin-arm64": "1.0.2-alpha",
+    "fortress-cli-linux-x64-musl": "1.0.2-alpha",
+    "fortress-cli-linux-arm64-gnu": "1.0.2-alpha",
+    "fortress-cli-linux-arm-gnueabihf": "1.0.2-alpha"
   }
 }
