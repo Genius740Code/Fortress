@@ -149,6 +149,9 @@ tokio-test = "0.4"
 tracing-subscriber = "0.3"
 test-case = "3.3"
 
+# Example dependencies
+fortress-core = { path = "crates/fortress-core" }
+
 [features]
 default = []
 
@@ -162,6 +165,7 @@ azure = ["azure_storage_blobs", "azure_identity"]
 # gcp = ["google-cloud-storage", "google-cloud-kms"]
 # all-cloud = ["aws", "azure", "gcp"]
 all-cloud = ["aws", "azure"]
+cloud-storage = ["aws-config", "aws-sdk-s3", "aws-sdk-kms", "azure_storage_blobs", "azure_identity"]
 
 # Security features
 hsm = []

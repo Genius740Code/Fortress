@@ -21,7 +21,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create key manager
     let key_manager = Arc::new(InMemoryKeyManager::new());
-    let algorithm = create_algorithm("AES256-GCM")?;
+    let algorithm: Arc<dyn EncryptionAlgorithm> = Arc::from(create_algorithm("AES-256-GCM")?);
 
     // Create a test key for rotation
     let key_id = "production_data_key".to_string();
@@ -147,7 +147,7 @@ async fn test_concurrent_access(
     });
 
     // Wait for both tasks to complete
-    let rotation_result = rotation_task.await.unwrap()?;
+    let rotation_result = rotation_task.await;
     let successful_reads = read_task.await.unwrap();
 
     println!("📈 Concurrent Access Results:");
@@ -167,11 +167,11 @@ async fn test_failure_recovery(
     println!("🧪 Testing failure recovery mechanism...");
 
     // Get current version
-    let current_version = key_manager.get_active_key_version(key_id).await?;
+    let current_version = key_manager.get_active_key_version(&key_id.to_string()).await?;
     println!("📊 Current key version: {}", current_version);
 
     // Manually initiate transition
-    let new_version = key_manager.initiate_key_transition(key_id, algorithm.as_ref()).await?;
+    let new_version = key_manager.initiate_key_transition(&key_id.to_string(), algorithm.as_ref()).await?;
     println!("🔄 Transition initiated - new version: {}", new_version);
 
     // Simulate failure by deleting the new key
@@ -180,7 +180,7 @@ async fn test_failure_recovery(
     println!("💥 Simulated failure: deleted new key version");
 
     // Attempt zero-downtime rotation (should fail and rollback)
-    let result = key_manager.rotate_key_with_zero_downtime(key_id, algorithm.as_ref()).await;
+    let result = key_manager.rotate_key_with_zero_downtime(&key_id.to_string(), algorithm.as_ref()).await;
     
     match result {
         Ok(_) => {
@@ -192,7 +192,7 @@ async fn test_failure_recovery(
     }
 
     // Verify rollback occurred
-    let recovered_version = key_manager.get_active_key_version(key_id).await?;
+    let recovered_version = key_manager.get_active_key_version(&key_id.to_string()).await?;
     println!("🔄 Recovered key version: {}", recovered_version);
 
     if recovered_version == current_version {
@@ -202,7 +202,7 @@ async fn test_failure_recovery(
     }
 
     // Verify key is still accessible
-    let retrieve_result = key_manager.retrieve_key(key_id).await;
+    let retrieve_result = key_manager.retrieve_key(&key_id.to_string()).await;
     match retrieve_result {
         Ok((_, metadata)) => {
             println!("✅ Key still accessible after rollback (version: {})", metadata.version);

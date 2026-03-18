@@ -2350,7 +2350,7 @@ mod tests {
 
     async fn test_zero_downtime_rotation_functionality() {
         let manager = InMemoryKeyManager::new();
-        let algorithm = Aegis256::new();
+        let algorithm = crate::encryption::aegis::Aegis256::new();
         
         // Create a key
         let key_id = "zero-downtime-test".to_string();
@@ -2363,7 +2363,7 @@ mod tests {
             Utc::now() - Duration::hours(25), // Created 25 hours ago
             Utc::now() - Duration::hours(1),  // Expired 1 hour ago
             "test".to_string(),
-            PerformanceProfile::Balanced,
+            crate::encryption::PerformanceProfile::Balanced,
         );
         
         manager.store_key(&key_id, &key, &metadata).await.unwrap();
