@@ -3,7 +3,7 @@
 //! This module provides sophisticated query optimization capabilities including
 //! cost-based optimization, index selection, and query plan caching.
 
-use crate::error::{FortressError, Result, QueryErrorCode};
+use crate::error::Result;
 use crate::query::{ExecutionPlan, PlanNode, PlanNodeType, QueryEngine};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

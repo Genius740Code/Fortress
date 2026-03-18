@@ -4,7 +4,7 @@
 //! with multiple replication strategies, bandwidth management, and monitoring.
 
 use crate::backup::{
-    BackupManager, BackupMetadata, CrossRegionConfig, ReplicationStrategy, 
+    BackupManager, CrossRegionConfig, ReplicationStrategy, 
     ReplicationResult
 };
 use crate::storage::StorageBackend;

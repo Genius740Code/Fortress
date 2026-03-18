@@ -3,7 +3,7 @@
 //! Provides comprehensive audit logging capabilities for compliance frameworks
 //! with structured logging, retention policies, and audit trail integrity.
 
-use crate::error::{FortressError, Result};
+use crate::error::Result;
 use crate::compliance::framework::*;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc, Duration};
@@ -33,69 +33,117 @@ pub trait IntegrityChecker: Send + Sync {
     async fn generate_checksum(&self, events: &[AuditEvent]) -> Result<String>;
 }
 
-/// Retention policy
+/// Retention policy for audit events
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RetentionPolicy {
+    /// Default number of days to retain events
     pub default_retention_days: u32,
+    /// Framework-specific retention periods
     pub framework_retentions: HashMap<ComplianceFramework, u32>,
+    /// Event type-specific retention periods
     pub event_type_retentions: HashMap<String, u32>,
+    /// Whether automatic cleanup is enabled
     pub auto_cleanup_enabled: bool,
+    /// Interval in hours for cleanup runs
     pub cleanup_interval_hours: u32,
 }
 
-/// Audit filter
+/// Audit filter for retrieving audit events
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuditFilter {
+    /// Start date for filtering events (inclusive)
     pub start_date: Option<DateTime<Utc>>,
+    /// End date for filtering events (inclusive)
     pub end_date: Option<DateTime<Utc>>,
+    /// Compliance frameworks to filter by
     pub frameworks: Vec<ComplianceFramework>,
+    /// Event types to filter by
     pub event_types: Vec<String>,
+    /// Event severities to filter by
     pub severities: Vec<EventSeverity>,
+    /// Users to filter by
     pub users: Vec<String>,
+    /// Resources to filter by
     pub resources: Vec<String>,
+    /// Maximum number of events to return
     pub limit: Option<u32>,
 }
 
 /// Comprehensive audit event
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuditEvent {
+    /// Unique identifier for the audit event
     pub id: Uuid,
+    /// Timestamp when the event occurred
     pub timestamp: DateTime<Utc>,
+    /// Sequential number for event ordering
     pub sequence_number: u64,
+    /// Compliance framework this event belongs to
     pub framework: ComplianceFramework,
+    /// Type of audit event
     pub event_type: String,
+    /// Severity level of the event
     pub severity: EventSeverity,
+    /// ID of the user who performed the action
     pub user_id: Option<String>,
+    /// Session identifier for the user session
     pub session_id: Option<String>,
+    /// IP address of the source
     pub source_ip: Option<String>,
+    /// User agent string from client
     pub user_agent: Option<String>,
+    /// Action that was performed
     pub action: String,
+    /// Type of resource that was accessed
     pub resource_type: String,
+    /// ID of the specific resource accessed
     pub resource_id: Option<String>,
+    /// Outcome of the action (success/failure)
     pub outcome: EventOutcome,
+    /// Human-readable description of the event
     pub description: String,
+    /// Additional metadata about the event
     pub details: HashMap<String, String>,
+    /// List of affected data subjects (e.g., user IDs)
     pub affected_data_subjects: Vec<String>,
+    /// Legal basis for processing (GDPR)
     pub legal_basis: Option<String>,
+    /// Consent identifier for data processing
     pub consent_id: Option<String>,
+    /// Number of days this event should be retained
     pub retention_period_days: Option<u32>,
+    /// Checksum for integrity verification
     pub checksum: Option<String>,
+    /// ID of the previous event in a sequence
     pub previous_event_id: Option<Uuid>,
 }
 
 /// Integrity report
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IntegrityReport {
+    /// Timestamp when the integrity check was performed
     pub check_timestamp: DateTime<Utc>,
+    /// Total number of events that were checked
     pub total_events_checked: u64,
+    /// Whether the integrity check passed overall
     pub integrity_passed: bool,
+    /// List of missing event IDs
     pub missing_events: Vec<Uuid>,
+    /// List of events that appear to have been tampered with
     pub tampered_events: Vec<Uuid>,
+    /// List of events with checksum mismatches
     pub checksum_mismatches: Vec<Uuid>,
+    /// Recommendations for fixing integrity issues
     pub recommendations: Vec<String>,
 }
 
 impl ComplianceAuditLogger {
+    /// Create a new compliance audit logger
+    /// 
+    /// # Arguments
+    /// * `storage` - Storage backend for audit events
+    /// * `retention_policy` - Policy for event retention
+    /// * `integrity_checker` - Checker for verifying event integrity
     pub fn new(
         storage: Box<dyn AuditStorage>,
         retention_policy: RetentionPolicy,
@@ -108,6 +156,10 @@ impl ComplianceAuditLogger {
         }
     }
 
+    /// Log a compliance event to the audit trail
+    /// 
+    /// # Arguments
+    /// * `event` - The compliance event to log
     pub async fn log_event(&self, event: &ComplianceEvent) -> Result<()> {
         let audit_event = self.convert_to_audit_event(event).await?;
         
@@ -166,10 +218,24 @@ impl ComplianceAuditLogger {
         self.retention_policy.default_retention_days
     }
 
+    /// Retrieve audit trail events based on filter criteria
+    /// 
+    /// # Arguments
+    /// * `filter` - Filter criteria for retrieving events
+    /// 
+    /// # Returns
+    /// Vector of audit events matching the filter
     pub async fn retrieve_audit_trail(&self, filter: &AuditFilter) -> Result<Vec<AuditEvent>> {
         self.storage.retrieve_events(filter).await
     }
 
+    /// Verify the integrity of audit events
+    /// 
+    /// # Arguments
+    /// * `filter` - Optional filter for events to check (None checks all)
+    /// 
+    /// # Returns
+    /// Integrity report with findings and recommendations
     pub async fn verify_integrity(&self, filter: Option<&AuditFilter>) -> Result<IntegrityReport> {
         let events = if let Some(f) = filter {
             self.storage.retrieve_events(f).await?
@@ -229,6 +295,10 @@ impl ComplianceAuditLogger {
         Ok(())
     }
 
+    /// Clean up old audit events based on retention policy
+    /// 
+    /// # Returns
+    /// Number of events that were cleaned up
     pub async fn cleanup_old_events(&self) -> Result<u64> {
         if !self.retention_policy.auto_cleanup_enabled {
             return Ok(0);
@@ -241,10 +311,12 @@ impl ComplianceAuditLogger {
 
 /// Default audit storage implementation
 pub struct DefaultAuditStorage {
+    /// Thread-safe storage for audit events
     events: std::sync::Arc<tokio::sync::RwLock<Vec<AuditEvent>>>,
 }
 
 impl DefaultAuditStorage {
+    /// Create a new default audit storage instance
     pub fn new() -> Self {
         Self {
             events: std::sync::Arc::new(tokio::sync::RwLock::new(Vec::new())),
@@ -376,7 +448,7 @@ impl Default for DefaultIntegrityChecker {
 impl IntegrityChecker for DefaultIntegrityChecker {
     async fn verify_integrity(&self, events: &[AuditEvent]) -> Result<IntegrityReport> {
         let mut missing_events = Vec::new();
-        let mut tampered_events = Vec::new();
+        let tampered_events = Vec::new();
         let mut checksum_mismatches = Vec::new();
         
         // Check for sequence number gaps

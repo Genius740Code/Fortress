@@ -5,6 +5,33 @@ All notable changes to Fortress will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2-alpha] - 2026-03-18
+
+### Added
+- Complete HSM implementation with all 4 providers (AWS CloudHSM, PKCS#11, Azure Dedicated HSM, Google Cloud HSM)
+- Production-ready cluster management with Raft consensus
+- Full data replication with consistency levels
+- Comprehensive error handling eliminating all panic-prone code
+- Performance optimizations with connection pooling and metrics
+
+### Changed
+- Updated all package versions to 1.0.2-alpha for consistent release
+- Enhanced security with proper error handling throughout codebase
+- Improved cluster reliability with complete Raft implementation
+- Optimized HSM operations with connection pooling and monitoring
+
+### Fixed
+- Eliminated all unwrap(), expect(), and panic! calls in production code
+- Completed all TODO stubs in HSM and clustering modules
+- Fixed compilation errors across all modules
+- Enhanced network communication with proper timeout handling
+
+### Security
+- Zero panic-prone code in production paths
+- Complete HSM provider implementations with security validation
+- Enhanced input validation and error handling
+- Proper authentication and authorization in cluster operations
+
 ## [1.0.1-alpha] - 2025-03-14
 
 ### Added

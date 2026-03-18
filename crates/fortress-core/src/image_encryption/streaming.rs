@@ -834,7 +834,7 @@ mod tests {
         
         // Start multiple sessions
         let session1 = encryptor.start_encryption_session(&image_data, options.clone()).await.unwrap();
-        let session2 = encryptor.start_encryption_session(&image_data, options.clone()).await.unwrap();
+        let _session2 = encryptor.start_encryption_session(&image_data, options.clone()).await.unwrap();
         
         assert_eq!(encryptor.get_active_sessions_count().await, 2);
         

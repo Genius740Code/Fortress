@@ -6,8 +6,7 @@
 use crate::error::{FortressError, Result, EncryptionErrorCode};
 use crate::mpc::{
     MpcProtocol, MpcParty, MpcNetwork, MpcManager, ComputationConfig, SessionId,
-    PartyId, ComputationStatus, MpcMessage, ComputationResult,
-    SecretSharingScheme, ShamirSecretSharing,
+    PartyId, ComputationStatus, MpcMessage, ComputationResult, ShamirSecretSharing,
 };
 use crate::mpc_network::InMemoryMpcNetwork;
 

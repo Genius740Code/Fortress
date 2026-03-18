@@ -13,13 +13,12 @@ use crate::image_encryption::{
     ImageFormat, EncryptionOptions, EncryptionMode, ImageEncryptionError,
     EncryptedImage, ImageFormatInfo, ImageMetadata, EncryptionStats,
     formats::{FormatProcessorFactory},
-    metadata::{MetadataProcessor, DefaultMetadataExtractor, MetadataExtractor},
-    ColorSpace, CompressionInfo, ImageFormatDetector,
+    metadata::{MetadataProcessor, DefaultMetadataExtractor, MetadataExtractor}, ImageFormatDetector,
 };
 use bytes::Bytes;
 use std::collections::HashMap;
 use std::time::Instant;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 
 /// Main image encryptor
 pub struct ImageEncryptor {

@@ -7,7 +7,7 @@
 //! - RAW formats: CR2, NEF, ARW, DNG, etc.
 //! - Scientific formats: FITS, NIfTI
 
-use crate::error::{FortressError, Result};
+use crate::error::Result;
 use crate::image_encryption::{ColorSpace, CompressionInfo};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

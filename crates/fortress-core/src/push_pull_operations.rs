@@ -10,7 +10,6 @@ use crate::postgres_database::{PostgresKeyDatabase, PostgresQuery, PostgresBulkE
 use chrono::{DateTime, Utc, Duration};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use uuid::Uuid;
 
 /// Push/Pull operation configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]

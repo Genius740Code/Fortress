@@ -34,11 +34,11 @@
 use crate::error::{FortressError, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::net::IpAddr;
 use std::str::FromStr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
-use chrono::{DateTime, Utc, TimeZone, Datelike};
+use chrono::{Utc, TimeZone, Datelike};
 use chrono_tz::Tz;
 
 /// Policy engine for managing roles and permissions

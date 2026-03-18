@@ -5,9 +5,7 @@
 
 use crate::backup::{
     BackupManager, BackupConfig, BackupStrategy, RetentionPolicy, VerificationLevel, BackupMetadata, BackupManifest, BackupItem,
-    RestoreStatus, RestoreOperationStatus, BackupStorageStats,
-    ConflictResolution, VerificationResult, VerificationStatus, BackupSchedule, ScheduledRunResult,
-    CrossRegionConfig, ReplicationStrategy, ReplicationResult,
+    RestoreStatus, RestoreOperationStatus, BackupStorageStats, VerificationResult, VerificationStatus,
 };
 use crate::storage::StorageBackend;
 use crate::error::{FortressError, Result};

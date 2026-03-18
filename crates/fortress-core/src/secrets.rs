@@ -35,7 +35,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use uuid::Uuid;
 
 /// Secret data structure
 #[derive(Debug, Clone, Serialize, Deserialize)]

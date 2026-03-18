@@ -44,9 +44,9 @@ pub struct DataSubject {
     pub subject_type: String,
     /// Contact information for the data subject
     pub contact_info: Option<String>,
-    /// Consent records
+    /// Consent records for data processing
     pub consent_records: Vec<ConsentRecord>,
-    /// Data subject rights requests
+    /// Data subject rights requests (access, deletion, etc.)
     pub rights_requests: Vec<RightsRequest>,
 }
 

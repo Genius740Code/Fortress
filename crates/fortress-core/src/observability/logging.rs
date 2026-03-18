@@ -3,11 +3,11 @@
 //! Provides comprehensive structured logging with multiple output formats,
 //! log levels, filtering, and integration with observability stack.
 
-use crate::error::{FortressError, Result};
+use crate::error::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use tokio::sync::RwLock;
 
 #[cfg(feature = "tracing-subscriber")]

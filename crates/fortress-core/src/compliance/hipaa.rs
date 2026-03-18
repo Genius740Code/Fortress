@@ -3,7 +3,7 @@
 //! Implements Health Insurance Portability and Accountability Act compliance features
 //! including PHI protection, audit trails, access controls, and security safeguards.
 
-use crate::error::{FortressError, Result};
+use crate::error::Result;
 use crate::compliance::framework::*;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc, Duration};

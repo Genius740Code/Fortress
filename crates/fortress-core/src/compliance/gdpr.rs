@@ -4,7 +4,7 @@
 //! data subject rights, consent management, data breach notification, and
 //! privacy by design principles.
 
-use crate::error::{FortressError, Result};
+use crate::error::Result;
 use crate::compliance::framework::*;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc, Duration};

@@ -20,20 +20,30 @@ pub struct ComplianceReportGenerator {
 /// Report template definition
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReportTemplate {
+    /// Unique identifier for the template
     pub id: String,
+    /// Human-readable name of the report template
     pub name: String,
+    /// Compliance framework this template applies to
     pub framework: ComplianceFramework,
+    /// Type of report this template generates
     pub report_type: String,
+    /// Sections that make up this report
     pub sections: Vec<ReportSection>,
+    /// Types of evidence required for this report
     pub required_evidence: Vec<String>,
 }
 
-/// Report section
+/// Report section within a compliance report
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReportSection {
+    /// Unique identifier for the section
     pub id: String,
+    /// Title of the report section
     pub title: String,
+    /// Type of content this section contains
     pub content_type: SectionContentType,
+    /// Whether this section is required for the report
     pub required: bool,
 }
 

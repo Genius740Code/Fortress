@@ -5,7 +5,6 @@
 
 use crate::error::{FortressError, Result};
 use crate::compliance::framework::*;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use chrono::Duration;
 
@@ -17,12 +16,37 @@ pub struct ComplianceConfigManager {
 
 /// Configuration validator trait
 pub trait ConfigValidator: Send + Sync {
+    /// Validate a compliance configuration
+    /// 
+    /// # Arguments
+    /// * `config` - The configuration to validate
+    /// 
+    /// # Returns
+    /// Vector of compliance issues found during validation
     fn validate(&self, config: &ComplianceConfig) -> Result<Vec<ComplianceIssue>>;
+    
+    /// Get the default configuration for this validator
+    /// 
+    /// # Returns
+    /// Default compliance configuration
     fn get_default_config(&self) -> ComplianceConfig;
+    
+    /// Merge two configurations with override logic
+    /// 
+    /// # Arguments
+    /// * `base` - The base configuration
+    /// * `override_config` - The configuration to override with
+    /// 
+    /// # Returns
+    /// Merged configuration
     fn merge_configs(&self, base: &ComplianceConfig, override_config: &ComplianceConfig) -> Result<ComplianceConfig>;
 }
 
 impl ComplianceConfigManager {
+    /// Create a new compliance configuration manager
+    /// 
+    /// # Returns
+    /// Manager with default validators for GDPR, HIPAA, and PCI-DSS
     pub fn new() -> Self {
         let mut validators: HashMap<ComplianceFramework, Box<dyn ConfigValidator>> = HashMap::new();
         validators.insert(ComplianceFramework::GDPR, Box::new(GdprConfigValidator));
@@ -35,6 +59,14 @@ impl ComplianceConfigManager {
         }
     }
 
+    /// Add a new configuration to the manager
+    /// 
+    /// # Arguments
+    /// * `name` - Name identifier for the configuration
+    /// * `config` - The compliance configuration to add
+    /// 
+    /// # Returns
+    /// Ok if successful, Err if validation fails
     pub fn add_config(&mut self, name: String, config: ComplianceConfig) -> Result<()> {
         // Validate the configuration
         let issues = self.validate_config(&config)?;
@@ -49,10 +81,24 @@ impl ComplianceConfigManager {
         Ok(())
     }
 
+    /// Get a configuration by name
+    /// 
+    /// # Arguments
+    /// * `name` - Name of the configuration to retrieve
+    /// 
+    /// # Returns
+    /// Reference to the configuration if found, None otherwise
     pub fn get_config(&self, name: &str) -> Option<&ComplianceConfig> {
         self.configs.get(name)
     }
 
+    /// Validate a compliance configuration against all enabled frameworks
+    /// 
+    /// # Arguments
+    /// * `config` - The configuration to validate
+    /// 
+    /// # Returns
+    /// Vector of compliance issues found during validation
     pub fn validate_config(&self, config: &ComplianceConfig) -> Result<Vec<ComplianceIssue>> {
         let mut all_issues = Vec::new();
 
@@ -76,10 +122,25 @@ impl ComplianceConfigManager {
         Ok(all_issues)
     }
 
+    /// Get the default configuration for a specific compliance framework
+    /// 
+    /// # Arguments
+    /// * `framework` - The compliance framework to get defaults for
+    /// 
+    /// # Returns
+    /// Default configuration if framework is supported, None otherwise
     pub fn get_default_config(&self, framework: ComplianceFramework) -> Option<ComplianceConfig> {
         self.validators.get(&framework).map(|v| v.get_default_config())
     }
 
+    /// Merge two configurations using the appropriate validator
+    /// 
+    /// # Arguments
+    /// * `base_name` - Name of the base configuration
+    /// * `override_name` - Name of the configuration to override with
+    /// 
+    /// # Returns
+    /// Merged configuration
     pub fn merge_configs(&self, base_name: &str, override_name: &str) -> Result<ComplianceConfig> {
         let base = self.configs.get(base_name)
             .ok_or_else(|| FortressError::compliance(format!("Base config '{}' not found", base_name)))?;

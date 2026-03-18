@@ -478,7 +478,7 @@ impl RaftEngine {
                     // Randomize election timeout to avoid split votes
                     let randomized_timeout = election_timeout + 
                         Duration::from_millis(
-                            (rand::random::<u64>() % election_timeout.as_millis() as u64)
+                            rand::random::<u64>() % election_timeout.as_millis() as u64
                         );
                     
                     if time_since_heartbeat > randomized_timeout {
