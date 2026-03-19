@@ -33,6 +33,11 @@ blake3 = "1.5"
 hkdf = "0.12"
 password-hash = "0.5"
 
+# Big integer arithmetic for homomorphic encryption
+num-bigint = "0.4"
+num-traits = "0.2"
+num-integer = "0.1"
+
 # Random number generation
 rand = "0.8"
 getrandom = "0.2"
