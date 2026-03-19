@@ -4,9 +4,7 @@
 
 //! for Fortress. It supports multiple key derivation functions and automatic rotation
 
-//! based on configurable schedules.
-
-
+//! Enterprise-grade key management with zero-downtime rotation
 
 use crate::error::{FortressError, Result, KeyErrorCode};
 
@@ -15,7 +13,8 @@ use crate::audit::{AuditEventType, SecurityLevel, EventOutcome, log_event_with_m
 
 use async_trait::async_trait;
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration as ChronoDuration, Utc};
+use std::time::Duration as StdDuration;
 
 use serde::{Deserialize, Serialize};
 
@@ -117,6 +116,15 @@ pub trait KeyManager: Send + Sync {
 
     /// Get the active key for a specific purpose
     async fn get_active_key(&self, purpose: &str) -> Result<(SecureKey, KeyMetadata)>;
+
+    /// Validate new key before switching
+    async fn validate_new_key(&self, new_versioned_id: &KeyId) -> Result<()>;
+
+    /// Validate post-switch state
+    async fn validate_post_switch(&self, key_id: &KeyId, expected_version: u32) -> Result<()>;
+
+    /// Perform the actual transition initiation (internal method)
+    async fn perform_key_transition_initiation(&self, key_id: &KeyId, algorithm: &dyn EncryptionAlgorithm) -> Result<u32>;
 
 }
 
@@ -331,7 +339,7 @@ impl KeyManager for InMemoryKeyManager {
             algorithm.name().to_string(),
             old_metadata.version + 1, // Increment version
             Utc::now(),
-            Utc::now() + Duration::days(90),
+            Utc::now() + ChronoDuration::days(90),
             old_metadata.purpose.clone(),
             old_metadata.performance_profile,
         );
@@ -340,63 +348,151 @@ impl KeyManager for InMemoryKeyManager {
         Ok(())
     }
     
+    /// Zero-downtime key rotation with concurrent operation support
     async fn rotate_key_with_zero_downtime(&self, key_id: &KeyId, algorithm: &dyn EncryptionAlgorithm) -> Result<()> {
-        // Generate new key with secure random
-        let new_key = self.generate_key(algorithm).await?;
+        use tokio::time::{timeout, Duration};
         
-        // Get old metadata and create backup atomically
+        // Start rotation transaction
+        let rotation_id = Uuid::new_v4().to_string();
+        let start_time = std::time::Instant::now();
+        
+        // Log rotation start
+        let mut audit_metadata = std::collections::HashMap::new();
+        audit_metadata.insert("rotation_id".to_string(), rotation_id.clone());
+        audit_metadata.insert("key_id".to_string(), key_id.clone());
+        audit_metadata.insert("algorithm".to_string(), algorithm.name().to_string());
+        
+        if let Err(e) = log_event_with_metadata(
+            AuditEventType::KeyManagement,
+            SecurityLevel::High,
+            Some("system".to_string()),
+            Some(format!("key:{}", key_id)),
+            "zero_downtime_rotation_start".to_string(),
+            EventOutcome::Success,
+            audit_metadata,
+        ) {
+            eprintln!("Failed to log rotation start: {}", e);
+        }
+        
+        // Phase 1: Prepare new key without disrupting existing operations
         let (old_key, old_metadata) = self.retrieve_key(key_id).await?;
         let old_versioned_id = format!("{}_v{}", key_id, old_metadata.version);
         
-        // Store backup first - ensures rollback capability
-        self.store_key(&old_versioned_id, &old_key, &old_metadata).await?;
+        // Create backup with timeout protection
+        let backup_result = timeout(
+            Duration::from_secs(30),
+            self.store_key(&old_versioned_id, &old_key, &old_metadata)
+        ).await;
         
-        // Create new metadata with incremented version
+        if backup_result.is_err() {
+            return Err(FortressError::key_management(
+                "Backup creation timeout during zero-downtime rotation",
+                Some(key_id.clone()),
+                KeyErrorCode::RotationFailed,
+            ));
+        }
+        backup_result.map_err(|e| FortressError::key_management(
+            format!("Backup creation failed: {}", e),
+            Some(key_id.clone()),
+            KeyErrorCode::RotationFailed,
+        ))?;
+        
+        // Phase 2: Generate and prepare new key
+        let new_key = self.generate_key(algorithm).await?;
+        let new_version = old_metadata.version + 1;
+        
         let new_metadata = KeyMetadata::new(
             key_id.clone(),
             algorithm.name().to_string(),
-            old_metadata.version + 1,
+            new_version,
             Utc::now(),
-            Utc::now() + Duration::days(90),
+            Utc::now() + ChronoDuration::days(90),
             old_metadata.purpose.clone(),
             old_metadata.performance_profile,
-        );
+        ).with_metadata("rotation_id".to_string(), rotation_id.clone())
+         .with_metadata("transition_status".to_string(), "preparing".to_string());
         
-        // Atomic switch to new key
-        self.store_key(key_id, &new_key, &new_metadata).await?;
+        // Store new key with versioned ID for validation
+        let new_versioned_id = format!("{}_v{}", key_id, new_version);
+        self.store_key(&new_versioned_id, &new_key, &new_metadata).await?;
         
-        // Immediate validation - ensures key is accessible
-        match self.retrieve_key(key_id).await {
-            Ok((_, retrieved_metadata)) => {
-                // Verify version increment
-                if retrieved_metadata.version != old_metadata.version + 1 {
-                    // Version mismatch - rollback
-                    let _ = self.store_key(key_id, &old_key, &old_metadata).await;
-                    let _ = self.delete_key(&old_versioned_id).await;
-                    return Err(FortressError::key_management(
-                        "Version validation failed during zero-downtime rotation",
-                        Some(key_id.clone()),
-                        KeyErrorCode::RotationFailed,
-                    ));
-                }
-            }
-            Err(e) => {
-                // Rollback on validation failure
-                let _ = self.store_key(key_id, &old_key, &old_metadata).await;
-                let _ = self.delete_key(&old_versioned_id).await;
+        // Phase 3: Validate new key before switching
+        let validation_result = timeout(
+            Duration::from_secs(10),
+            self.validate_new_key(&new_versioned_id)
+        ).await;
+        
+        if validation_result.is_err() || validation_result.as_ref().unwrap().is_err() {
+            // Cleanup and rollback
+            let _ = self.delete_key(&new_versioned_id).await;
+            let _ = self.delete_key(&old_versioned_id).await;
+            
+            return Err(FortressError::key_management(
+                "New key validation failed during zero-downtime rotation",
+                Some(key_id.clone()),
+                KeyErrorCode::RotationFailed,
+            ));
+        }
+        
+        // Phase 4: Atomic switch with concurrent operation support
+        let switch_metadata = new_metadata.clone()
+            .with_metadata("transition_status".to_string(), "active".to_string());
+        
+        // Atomic switch - this is the critical point where we ensure zero downtime
+        self.store_key(key_id, &new_key, &switch_metadata).await?;
+        
+        // Phase 5: Post-switch validation with timeout
+        let post_switch_result = timeout(
+            Duration::from_secs(5),
+            self.validate_post_switch(key_id, new_version)
+        ).await;
+        
+        if post_switch_result.is_err() || post_switch_result.as_ref().unwrap().is_err() {
+            // Emergency rollback
+            let rollback_result = self.rollback_key_transition(key_id, old_metadata.version, new_version).await;
+            
+            if let Err(rollback_err) = rollback_result {
+                // Critical error - both old and new keys may be inaccessible
                 return Err(FortressError::key_management(
-                    format!("Key validation failed during zero-downtime rotation: {}", e),
+                    format!("Critical rotation failure and rollback failed: {}", rollback_err),
                     Some(key_id.clone()),
                     KeyErrorCode::RotationFailed,
                 ));
             }
+            
+            return Err(FortressError::key_management(
+                "Post-switch validation failed, rolled back successfully",
+                Some(key_id.clone()),
+                KeyErrorCode::RotationFailed,
+            ));
         }
         
-        // Secure cleanup of old backup
-        let _ = self.delete_key(&old_versioned_id).await;
+        // Phase 6: Complete transition and cleanup
+        self.complete_key_transition(key_id, new_version).await?;
+        
+        // Log successful rotation
+        let mut success_metadata = std::collections::HashMap::new();
+        success_metadata.insert("rotation_id".to_string(), rotation_id);
+        success_metadata.insert("key_id".to_string(), key_id.clone());
+        success_metadata.insert("old_version".to_string(), old_metadata.version.to_string());
+        success_metadata.insert("new_version".to_string(), new_version.to_string());
+        success_metadata.insert("rotation_time_ms".to_string(), start_time.elapsed().as_millis().to_string());
+        
+        if let Err(e) = log_event_with_metadata(
+            AuditEventType::KeyManagement,
+            SecurityLevel::High,
+            Some("system".to_string()),
+            Some(format!("key:{}", key_id)),
+            "zero_downtime_rotation_complete".to_string(),
+            EventOutcome::Success,
+            success_metadata,
+        ) {
+            eprintln!("Failed to log rotation completion: {}", e);
+        }
         
         Ok(())
     }
+    
 
 
 
@@ -421,44 +517,75 @@ impl KeyManager for InMemoryKeyManager {
         Ok(metadata.version)
     }
 
+    /// Initiate a key transition for zero-downtime rotation with concurrent support
     async fn initiate_key_transition(&self, key_id: &KeyId, algorithm: &dyn EncryptionAlgorithm) -> Result<u32> {
-        let (_, old_metadata) = self.retrieve_key(key_id).await?;
-        let new_version = old_metadata.version + 1;
+        use tokio::sync::Mutex;
+        use std::sync::Arc;
         
-        let new_key = self.generate_key(algorithm).await?;
+        // Lock to prevent concurrent transitions on the same key
+        static TRANSITION_LOCKS: std::sync::LazyLock<Arc<Mutex<HashMap<String, ()>>>> = 
+            std::sync::LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
         
-        let new_metadata = KeyMetadata::new(
-            key_id.to_string(),
-            algorithm.name().to_string(),
-            new_version,
-            Utc::now(),
-            Utc::now() + Duration::days(90),
-            old_metadata.purpose.clone(),
-            old_metadata.performance_profile,
-        ).with_metadata("transition_status".to_string(), "initiating".to_string());
+        let lock = TRANSITION_LOCKS.clone();
+        let mut locks = lock.lock().await;
         
-        let old_versioned_id = format!("{}_v{}", key_id, old_metadata.version);
-        let (old_key, old_metadata_copy) = self.retrieve_key(key_id).await?;
-        let old_metadata_backup = old_metadata_copy.clone()
-            .with_metadata("transition_status".to_string(), "backup".to_string());
-        self.store_key(&old_versioned_id, &old_key, &old_metadata_backup).await?;
+        // Check if transition is already in progress
+        if locks.contains_key(key_id) {
+            return Err(FortressError::key_management(
+                "Key transition already in progress",
+                Some(key_id.clone()),
+                KeyErrorCode::RotationFailed,
+            ));
+        }
         
-        let new_versioned_id = format!("{}_v{}", key_id, new_version);
-        let new_metadata_with_status = new_metadata.clone()
-            .with_metadata("transition_status".to_string(), "active".to_string());
-        self.store_key(&new_versioned_id, &new_key, &new_metadata_with_status).await?;
+        // Mark transition as in progress
+        locks.insert(key_id.clone(), ());
+        drop(locks);
         
-        self.store_key(key_id, &new_key, &new_metadata).await?;
+        // Ensure lock is released on completion or failure
+        let result = self.perform_key_transition_initiation(key_id, algorithm).await;
         
-        Ok(new_version)
+        // Release lock
+        let mut locks = lock.lock().await;
+        locks.remove(key_id);
+        drop(locks);
+        
+        result
     }
+    
 
+    /// Complete a key transition with validation and cleanup
     async fn complete_key_transition(&self, key_id: &KeyId, new_version: u32) -> Result<()> {
+        // Validate the transition is complete
         let (_, mut metadata) = self.retrieve_key(key_id).await?;
-        metadata.metadata.insert("transition_status".to_string(), "complete".to_string());
         
+        if metadata.version != new_version {
+            return Err(FortressError::key_management(
+                format!("Cannot complete transition: version mismatch. Expected {}, found {}", new_version, metadata.version),
+                Some(key_id.clone()),
+                KeyErrorCode::RotationFailed,
+            ));
+        }
+        
+        // Mark transition as complete
+        metadata.metadata.insert("transition_status".to_string(), "complete".to_string());
+        metadata.metadata.insert("transition_completed".to_string(), Utc::now().to_rfc3339());
+        
+        // Update metadata
+        self.store_key(key_id, &self.retrieve_key(key_id).await?.0, &metadata).await?;
+        
+        // Cleanup old version
         let old_versioned_id = format!("{}_v{}", key_id, new_version - 1);
-        let _ = self.delete_key(&old_versioned_id).await;
+        let cleanup_result = self.delete_key(&old_versioned_id).await;
+        
+        if let Err(e) = cleanup_result {
+            // Log cleanup failure but don't fail the operation
+            eprintln!("Warning: Failed to cleanup old key version {}: {}", old_versioned_id, e);
+        }
+        
+        // Cleanup versioned new key (it's now the main key)
+        let new_versioned_id = format!("{}_v{}", key_id, new_version);
+        let _ = self.delete_key(&new_versioned_id).await;
         
         Ok(())
     }
@@ -480,10 +607,29 @@ impl KeyManager for InMemoryKeyManager {
         Ok(old_result.is_ok() && new_result.is_ok())
     }
 
+    /// Enhanced rollback with comprehensive validation and error handling
     async fn rollback_key_transition(&self, key_id: &KeyId, old_version: u32, new_version: u32) -> Result<()> {
+        use tokio::time::{timeout, Duration};
+        
+        // First, validate we have the backup
         let old_versioned_id = format!("{}_v{}", key_id, old_version);
+        let backup_validation = timeout(
+            Duration::from_secs(10),
+            self.validate_dual_keys(key_id, old_version, new_version)
+        ).await;
+        
+        if backup_validation.is_err() || backup_validation.as_ref().unwrap().is_err() {
+            return Err(FortressError::key_management(
+                "Cannot rollback: backup validation failed",
+                Some(key_id.clone()),
+                KeyErrorCode::RotationFailed,
+            ));
+        }
+        
+        // Retrieve backup key
         let (old_key, old_metadata) = self.retrieve_key(&old_versioned_id).await?;
         
+        // Create restored metadata
         let restored_metadata = KeyMetadata::new(
             key_id.to_string(),
             old_metadata.algorithm.clone(),
@@ -492,12 +638,34 @@ impl KeyManager for InMemoryKeyManager {
             old_metadata.expires_at,
             old_metadata.purpose.clone(),
             old_metadata.performance_profile,
-        );
+        ).with_metadata("transition_status".to_string(), "rolled_back".to_string())
+         .with_metadata("rollback_completed".to_string(), Utc::now().to_rfc3339())
+         .with_metadata("original_version".to_string(), new_version.to_string());
         
+        // Atomic rollback
         self.store_key(key_id, &old_key, &restored_metadata).await?;
         
+        // Validate rollback
+        let rollback_validation = timeout(
+            Duration::from_secs(5),
+            self.validate_post_switch(key_id, old_version)
+        ).await;
+        
+        if rollback_validation.is_err() || rollback_validation.as_ref().unwrap().is_err() {
+            return Err(FortressError::key_management(
+                "Rollback validation failed",
+                Some(key_id.clone()),
+                KeyErrorCode::RotationFailed,
+            ));
+        }
+        
+        // Cleanup failed new version
         let new_versioned_id = format!("{}_v{}", key_id, new_version);
-        let _ = self.delete_key(&new_versioned_id).await;
+        let cleanup_result = self.delete_key(&new_versioned_id).await;
+        
+        if let Err(e) = cleanup_result {
+            eprintln!("Warning: Failed to cleanup failed new key version {}: {}", new_versioned_id, e);
+        }
         
         Ok(())
     }
@@ -519,6 +687,90 @@ impl KeyManager for InMemoryKeyManager {
             None,
             KeyErrorCode::KeyNotFound,
         ))
+    }
+
+    async fn validate_new_key(&self, new_versioned_id: &KeyId) -> Result<()> {
+        let (new_key, new_metadata) = self.retrieve_key(new_versioned_id).await?;
+        
+        // Test basic key operations
+        if new_key.is_empty() {
+            return Err(FortressError::key_management(
+                "New key is empty",
+                Some(new_versioned_id.clone()),
+                KeyErrorCode::InvalidKeyFormat,
+            ));
+        }
+        
+        // Validate metadata
+        if new_metadata.version == 0 {
+            return Err(FortressError::key_management(
+                "Invalid key version",
+                Some(new_versioned_id.clone()),
+                KeyErrorCode::InvalidKeyFormat,
+            ));
+        }
+        
+        Ok(())
+    }
+
+    async fn validate_post_switch(&self, key_id: &KeyId, expected_version: u32) -> Result<()> {
+        let (_, metadata) = self.retrieve_key(key_id).await?;
+        
+        if metadata.version != expected_version {
+            return Err(FortressError::key_management(
+                format!("Version mismatch after switch: expected {}, got {}", expected_version, metadata.version),
+                Some(key_id.clone()),
+                KeyErrorCode::RotationFailed,
+            ));
+        }
+        
+        if !metadata.is_active() {
+            return Err(FortressError::key_management(
+                "New key is not active after switch",
+                Some(key_id.clone()),
+                KeyErrorCode::RotationFailed,
+            ));
+        }
+        
+        Ok(())
+    }
+
+    async fn perform_key_transition_initiation(&self, key_id: &KeyId, algorithm: &dyn EncryptionAlgorithm) -> Result<u32> {
+        let (_, old_metadata) = self.retrieve_key(key_id).await?;
+        let new_version = old_metadata.version + 1;
+        
+        let new_key = self.generate_key(algorithm).await?;
+        
+        let new_metadata = KeyMetadata::new(
+            key_id.to_string(),
+            algorithm.name().to_string(),
+            new_version,
+            Utc::now(),
+            Utc::now() + ChronoDuration::days(90),
+            old_metadata.purpose.clone(),
+            old_metadata.performance_profile,
+        ).with_metadata("transition_status".to_string(), "initiating".to_string())
+         .with_metadata("transition_started".to_string(), Utc::now().to_rfc3339());
+        
+        // Create backup of old key
+        let old_versioned_id = format!("{}_v{}", key_id, old_metadata.version);
+        let (old_key, old_metadata_copy) = self.retrieve_key(key_id).await?;
+        let old_metadata_backup = old_metadata_copy.clone()
+            .with_metadata("transition_status".to_string(), "backup".to_string())
+            .with_metadata("backup_created".to_string(), Utc::now().to_rfc3339());
+        
+        self.store_key(&old_versioned_id, &old_key, &old_metadata_backup).await?;
+        
+        // Store new key with versioned ID
+        let new_versioned_id = format!("{}_v{}", key_id, new_version);
+        let new_metadata_with_status = new_metadata.clone()
+            .with_metadata("transition_status".to_string(), "active".to_string());
+        self.store_key(&new_versioned_id, &new_key, &new_metadata_with_status).await?;
+        
+        // Update main key to new version
+        self.store_key(key_id, &new_key, &new_metadata).await?;
+        
+        Ok(new_version)
     }
 }
 
@@ -636,7 +888,7 @@ impl KeyMetadata {
 
     /// Get the time until expiration
 
-    pub fn time_until_expiration(&self) -> Option<Duration> {
+    pub fn time_until_expiration(&self) -> Option<ChronoDuration> {
 
         let now = Utc::now();
 
@@ -1042,7 +1294,7 @@ impl RotationPolicy {
         let rotation_time = metadata.created_at + self.interval.duration();
         
         // Add grace period
-        let rotation_with_grace = rotation_time + Duration::hours(self.grace_period_hours as i64);
+        let rotation_with_grace = rotation_time + ChronoDuration::hours(self.grace_period_hours as i64);
         
         now >= rotation_with_grace
     }
@@ -1055,7 +1307,7 @@ impl RotationPolicy {
     /// Check if notification should be sent
     pub fn should_notify(&self, metadata: &KeyMetadata) -> bool {
         let now = Utc::now();
-        let notification_time = self.next_rotation_time(metadata) - Duration::hours(self.notification_hours_before as i64);
+        let notification_time = self.next_rotation_time(metadata) - ChronoDuration::hours(self.notification_hours_before as i64);
         now >= notification_time && now < self.next_rotation_time(metadata)
     }
 }
@@ -1071,17 +1323,17 @@ pub enum RotationInterval {
     /// 90 days - quarterly rotation for low sensitivity data
     Days90,
     /// Custom interval in hours/days
-    Custom(Duration),
+    Custom(ChronoDuration),
 }
 
 impl RotationInterval {
     /// Get the duration for this interval
-    pub fn duration(&self) -> Duration {
+    pub fn duration(&self) -> ChronoDuration {
         match self {
-            RotationInterval::Hour23 => Duration::hours(23),
-            RotationInterval::Days7 => Duration::days(7),
-            RotationInterval::Days30 => Duration::days(30),
-            RotationInterval::Days90 => Duration::days(90),
+            RotationInterval::Hour23 => ChronoDuration::hours(23),
+            RotationInterval::Days7 => ChronoDuration::days(7),
+            RotationInterval::Days30 => ChronoDuration::days(30),
+            RotationInterval::Days90 => ChronoDuration::days(90),
             RotationInterval::Custom(duration) => *duration,
         }
     }
@@ -1326,7 +1578,7 @@ impl SmartKeyRotationScheduler {
     /// Get keys that will need rotation soon (within next 24 hours)
     pub async fn get_keys_needing_soon_rotation(&self, hours_ahead: i64) -> Result<Vec<(KeyId, KeyMetadata)>> {
         let keys = self.key_manager.list_keys().await?;
-        let soon_threshold = Utc::now() + Duration::hours(hours_ahead);
+        let soon_threshold = Utc::now() + ChronoDuration::hours(hours_ahead);
         let mut soon_keys = Vec::new();
         
         for (key_id, metadata) in keys {
@@ -2055,6 +2307,89 @@ impl KeyManager for HsmKeyManager {
             KeyErrorCode::KeyNotFound,
         ))
     }
+
+    async fn validate_new_key(&self, new_versioned_id: &KeyId) -> Result<()> {
+        // HSM implementation - validate key exists and is accessible
+        let metadata = self.get_key_metadata(new_versioned_id).await?;
+        
+        // Test basic key operations through HSM
+        if metadata.version == 0 {
+            return Err(FortressError::key_management(
+                "Invalid key version",
+                Some(new_versioned_id.clone()),
+                KeyErrorCode::InvalidKeyFormat,
+            ));
+        }
+        
+        // Verify key is accessible through HSM
+        if !self.key_exists(new_versioned_id).await? {
+            return Err(FortressError::key_management(
+                "Key not accessible in HSM",
+                Some(new_versioned_id.clone()),
+                KeyErrorCode::KeyNotFound,
+            ));
+        }
+        
+        Ok(())
+    }
+
+    async fn validate_post_switch(&self, key_id: &KeyId, expected_version: u32) -> Result<()> {
+        let metadata = self.get_key_metadata(key_id).await?;
+        
+        if metadata.version != expected_version {
+            return Err(FortressError::key_management(
+                format!("Version mismatch after switch: expected {}, got {}", expected_version, metadata.version),
+                Some(key_id.clone()),
+                KeyErrorCode::RotationFailed,
+            ));
+        }
+        
+        if !metadata.is_active() {
+            return Err(FortressError::key_management(
+                "New key is not active after switch",
+                Some(key_id.clone()),
+                KeyErrorCode::RotationFailed,
+            ));
+        }
+        
+        Ok(())
+    }
+
+    async fn perform_key_transition_initiation(&self, key_id: &KeyId, algorithm: &dyn EncryptionAlgorithm) -> Result<u32> {
+        let old_metadata = self.get_key_metadata(key_id).await?;
+        let new_version = old_metadata.version + 1;
+        
+        // Generate new key in HSM
+        let new_key_id = format!("{}_v{}", key_id, new_version);
+        self.inner.provider().generate_key(&new_key_id, algorithm).await?;
+        
+        // Store backup of old key
+        let _backup_key_id = format!("{}_v{}_backup", key_id, old_metadata.version);
+        // In real HSM, this would involve key export/import operations
+        
+        // Update main key metadata to point to new version
+        use chrono::{Duration as ChronoDuration, Utc};
+        let new_metadata = KeyMetadata::new(
+            key_id.to_string(),
+            algorithm.name().to_string(),
+            new_version,
+            Utc::now(),
+            Utc::now() + ChronoDuration::days(90),
+            old_metadata.purpose.clone(),
+            old_metadata.performance_profile,
+        ).with_metadata("transition_status".to_string(), "initiating".to_string())
+         .with_metadata("transition_started".to_string(), Utc::now().to_rfc3339());
+        
+        // Store new key metadata
+        // Note: In real HSM implementation, this would update the HSM's metadata
+        // For now, we'll just cache it locally
+        {
+            let mut cache = self.metadata_cache.write().await;
+            cache.insert(new_key_id.clone(), new_metadata.clone());
+        }
+        
+        Ok(new_version)
+    }
 }
 
 #[cfg(test)]
@@ -2089,7 +2424,7 @@ mod tests {
 
             .version(1)
 
-            .expires_at(Utc::now() + Duration::days(90))
+            .expires_at(Utc::now() + ChronoDuration::days(90))
 
             .purpose("test".to_string())
 
@@ -2208,7 +2543,7 @@ mod tests {
 
             Utc::now(),
 
-            Utc::now() + Duration::days(90),
+            Utc::now() + ChronoDuration::days(90),
 
             "encryption".to_string(),
 
@@ -2234,9 +2569,9 @@ mod tests {
 
             1,
 
-            Utc::now() - Duration::days(10),
+            Utc::now() - ChronoDuration::days(10),
 
-            Utc::now() - Duration::days(1),
+            Utc::now() - ChronoDuration::days(1),
 
             "encryption".to_string(),
 

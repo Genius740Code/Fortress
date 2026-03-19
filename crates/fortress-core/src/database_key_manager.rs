@@ -658,6 +658,92 @@ impl KeyManager for DatabaseKeyManager {
             KeyErrorCode::KeyNotFound,
         ))
     }
+
+    async fn validate_new_key(&self, new_versioned_id: &KeyId) -> Result<()> {
+        // Use the database to validate the new key
+        let (new_key, new_metadata) = self.retrieve_key(new_versioned_id).await?;
+        
+        // Test basic key operations
+        if new_key.is_empty() {
+            return Err(FortressError::key_management(
+                "New key is empty",
+                Some(new_versioned_id.clone()),
+                KeyErrorCode::InvalidKeyFormat,
+            ));
+        }
+        
+        // Validate metadata
+        if new_metadata.version == 0 {
+            return Err(FortressError::key_management(
+                "Invalid key version",
+                Some(new_versioned_id.clone()),
+                KeyErrorCode::InvalidKeyFormat,
+            ));
+        }
+        
+        Ok(())
+    }
+
+    async fn validate_post_switch(&self, key_id: &KeyId, expected_version: u32) -> Result<()> {
+        let (_, metadata) = self.retrieve_key(key_id).await?;
+        
+        if metadata.version != expected_version {
+            return Err(FortressError::key_management(
+                format!("Version mismatch after switch: expected {}, got {}", expected_version, metadata.version),
+                Some(key_id.clone()),
+                KeyErrorCode::RotationFailed,
+            ));
+        }
+        
+        if !metadata.is_active() {
+            return Err(FortressError::key_management(
+                "New key is not active after switch",
+                Some(key_id.clone()),
+                KeyErrorCode::RotationFailed,
+            ));
+        }
+        
+        Ok(())
+    }
+
+    async fn perform_key_transition_initiation(&self, key_id: &KeyId, algorithm: &dyn EncryptionAlgorithm) -> Result<u32> {
+        let (_, old_metadata) = self.retrieve_key(key_id).await?;
+        let new_version = old_metadata.version + 1;
+        
+        let new_key = self.generate_key(algorithm).await?;
+        
+        use chrono::{Duration as ChronoDuration, Utc};
+        let new_metadata = KeyMetadata::new(
+            key_id.to_string(),
+            algorithm.name().to_string(),
+            new_version,
+            Utc::now(),
+            Utc::now() + ChronoDuration::days(90),
+            old_metadata.purpose.clone(),
+            old_metadata.performance_profile,
+        ).with_metadata("transition_status".to_string(), "initiating".to_string())
+         .with_metadata("transition_started".to_string(), Utc::now().to_rfc3339());
+        
+        // Create backup of old key
+        let old_versioned_id = format!("{}_v{}", key_id, old_metadata.version);
+        let (old_key, old_metadata_copy) = self.retrieve_key(key_id).await?;
+        let old_metadata_backup = old_metadata_copy.clone()
+            .with_metadata("transition_status".to_string(), "backup".to_string())
+            .with_metadata("backup_created".to_string(), Utc::now().to_rfc3339());
+        
+        self.store_key(&old_versioned_id, &old_key, &old_metadata_backup).await?;
+        
+        // Store new key with versioned ID
+        let new_versioned_id = format!("{}_v{}", key_id, new_version);
+        let new_metadata_with_status = new_metadata.clone()
+            .with_metadata("transition_status".to_string(), "active".to_string());
+        self.store_key(&new_versioned_id, &new_key, &new_metadata_with_status).await?;
+        
+        // Update main key to new version
+        self.store_key(key_id, &new_key, &new_metadata).await?;
+        
+        Ok(new_version)
+    }
 }
 
 /// Comprehensive statistics for the database key manager

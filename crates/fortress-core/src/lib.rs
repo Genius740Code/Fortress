@@ -93,6 +93,10 @@ pub mod encryption;
 /// Key management and rotation
 
 pub mod key;
+pub use key::*;
+
+pub mod key_rotation_optimized;
+pub use key_rotation_optimized::*;
 
 
 
