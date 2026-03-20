@@ -299,7 +299,7 @@ impl PluginInstaller {
         fs::remove_file(&package_path).await
             .map_err(|e| FortressError::plugin(format!("Failed to cleanup download: {}", e)))?;
 
-        println!("✅ Plugin '{}' v{} installed successfully!", package.name, package.version);
+        println!("Plugin '{}' v{} installed successfully!", package.name, package.version);
         Ok(())
     }
 
@@ -315,7 +315,7 @@ impl PluginInstaller {
         fs::remove_dir_all(&plugin_dir).await
             .map_err(|e| FortressError::plugin(format!("Failed to uninstall plugin: {}", e)))?;
 
-        println!("✅ Plugin '{}' uninstalled successfully!", plugin_id);
+        println!("Plugin '{}' uninstalled successfully!", plugin_id);
         Ok(())
     }
 
@@ -366,7 +366,7 @@ impl PluginInstaller {
         // Install latest version (preserve config)
         self.install(plugin_id, current.config).await?;
 
-        println!("✅ Plugin '{}' updated successfully!", plugin_id);
+        println!("Plugin '{}' updated successfully!", plugin_id);
         Ok(())
     }
 

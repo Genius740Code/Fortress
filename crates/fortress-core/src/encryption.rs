@@ -2660,7 +2660,7 @@ mod tests {
         let result = algorithm.encrypt(b"test data", invalid_key);
         assert!(result.is_err());
         if let Err(FortressError::Encryption { code: EncryptionErrorCode::InvalidKeyLength, .. }) = result {
-            println!("✅ Correctly caught invalid key length error");
+            println!("Correctly caught invalid key length error");
         } else {
             return Err(FortressError::encryption(
                 "Expected invalid key length error".to_string(),
@@ -3045,7 +3045,7 @@ mod tests {
         let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
         
         assert_eq!(&plaintext[..], &decrypted[..]);
-        println!("✅ AEGIS-256 implementation test passed");
+        println!("AEGIS-256 implementation test passed");
     }
 
     #[tokio::test]
@@ -3059,7 +3059,7 @@ mod tests {
         let decrypted = algorithm.decrypt_async(&ciphertext, key.as_bytes()).await.unwrap();
         
         assert_eq!(&plaintext[..], &decrypted[..]);
-        println!("✅ Async AEGIS-256 test passed");
+        println!("Async AEGIS-256 test passed");
     }
 
     #[test]
@@ -3073,7 +3073,7 @@ mod tests {
         let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
         
         assert_eq!(&plaintext[..], &decrypted[..]);
-        println!("✅ Salsa20 implementation test passed");
+        println!("Salsa20 implementation test passed");
     }
 
     #[test]
@@ -3087,7 +3087,7 @@ mod tests {
         let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
         
         assert_eq!(&plaintext[..], &decrypted[..]);
-        println!("✅ ASCON implementation test passed");
+        println!("ASCON implementation test passed");
     }
 
     #[test]
@@ -3101,7 +3101,7 @@ mod tests {
         let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
         
         assert_eq!(&plaintext[..], &decrypted[..]);
-        println!("✅ KMAC256 implementation test passed");
+        println!("KMAC256 implementation test passed");
     }
 
     #[test]

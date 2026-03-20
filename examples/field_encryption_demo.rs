@@ -106,10 +106,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let decrypted_data = field_manager.decrypt_fields_batch(&decrypt_inputs).await?;
 
-    println!("✅ Decryption completed successfully!");
+    println!("Decryption completed successfully!");
 
     // Verify data integrity
-    println!("\n🔍 Verifying data integrity...");
+    println!("\nVerifying data integrity...");
     let mut all_match = true;
     for (field, decrypted) in &decrypted_data {
         let original = user_data.get(field).unwrap();
@@ -126,13 +126,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     if all_match {
-        println!("\n🎉 All fields encrypted and decrypted successfully!");
+        println!("\nAll fields encrypted and decrypted successfully!");
     } else {
-        println!("\n❌ Some fields failed verification!");
+        println!("\nSome fields failed verification!");
     }
 
     // Demonstrate different encryption strategies
-    println!("\n📚 Encryption Strategy Examples:");
+    println!("\nEncryption Strategy Examples:");
     
     // Test different performance profiles
     let test_data = b"sensitive_test_data";
@@ -180,7 +180,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Show field configuration management
-    println!("\n⚙️  Field Configuration Management:");
+    println!("\nField Configuration Management:");
     let configs = field_manager.list_field_configs().await?;
     println!("  Total field configurations: {}", configs.len());
     

@@ -85,7 +85,7 @@ struct MemoryStats {
 /// High-concurrency load test
 #[tokio::test]
 async fn test_high_concurrency_load() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🚀 Starting High-Concurrency Load Test");
+    println!("Starting High-Concurrency Load Test");
     
     let config = LoadTestConfig {
         concurrent_rotations: 100,
@@ -106,7 +106,7 @@ async fn test_high_concurrency_load() -> Result<(), Box<dyn std::error::Error>> 
            "Average latency too high: {:.2}ms", results.avg_rotation_time_ms);
     assert!(results.throughput_rps > 10.0, "Throughput too low: {:.2} rps", results.throughput_rps);
     
-    println!("✅ High-concurrency load test passed:");
+    println!("High-concurrency load test passed:");
     println!("  - Successful rotations: {}", results.successful_rotations);
     println!("  - Error rate: {:.2}%", results.error_rate);
     println!("  - Average latency: {:.2}ms", results.avg_rotation_time_ms);
@@ -137,7 +137,7 @@ async fn test_sustained_load() -> Result<(), Box<dyn std::error::Error>> {
            "Memory growth too high: {:.2} MB/min", results.memory_stats.memory_growth_rate);
     assert!(results.throughput_rps > 5.0, "Throughput degraded too much: {:.2} rps", results.throughput_rps);
     
-    println!("✅ Sustained load test passed:");
+    println!("Sustained load test passed:");
     println!("  - Error rate: {:.2}%", results.error_rate);
     println!("  - Memory growth: {:.2} MB/min", results.memory_stats.memory_growth_rate);
     println!("  - Throughput: {:.2} rps", results.throughput_rps);
@@ -165,7 +165,7 @@ async fn test_maximum_stress() -> Result<(), Box<dyn std::error::Error>> {
     assert!(results.successful_rotations > 0, "System failed under stress");
     assert!(results.error_rate < 10.0, "Error rate too high under stress: {:.2}%", results.error_rate);
     
-    println!("✅ Maximum stress test passed:");
+    println!("Maximum stress test passed:");
     println!("  - Successful rotations: {}", results.successful_rotations);
     println!("  - Error rate: {:.2}%", results.error_rate);
     println!("  - P99 latency: {}ms", results.p99_latency_ms);
@@ -245,7 +245,7 @@ async fn test_bulk_operations_load() -> Result<(), Box<dyn std::error::Error>> {
                batch_size, rotation_time.as_millis());
     }
     
-    println!("✅ Bulk operations load test passed");
+    println!("Bulk operations load test passed");
     
     Ok(())
 }
@@ -253,7 +253,7 @@ async fn test_bulk_operations_load() -> Result<(), Box<dyn std::error::Error>> {
 /// Resource exhaustion test
 #[tokio::test]
 async fn test_resource_exhaustion() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🔋 Starting Resource Exhaustion Test");
+    println!("Starting Resource Exhaustion Test");
     
     let key_manager = Arc::new(InMemoryKeyManager::new());
     let mut config = OptimizedRotationConfig::default();
@@ -316,7 +316,7 @@ async fn test_resource_exhaustion() -> Result<(), Box<dyn std::error::Error>> {
         0.0
     };
     
-    println!("✅ Resource exhaustion test completed:");
+    println!("Resource exhaustion test completed:");
     println!("  - Success rate: {:.2}%", success_rate);
     println!("  - Average rotation time: {:.2}ms", avg_time);
     println!("  - Successful rotations: {}", successful_rotations);
@@ -440,7 +440,7 @@ async fn test_mixed_workload() -> Result<(), Box<dyn std::error::Error>> {
     let error_rate = (total_errors as f64 / total_operations as f64) * 100.0;
     let throughput = total_operations as f64 / test_duration.as_secs_f64();
     
-    println!("✅ Mixed workload test completed:");
+    println!("Mixed workload test completed:");
     println!("  - Total rotations: {}", total_rotations);
     println!("  - Total reads: {}", total_reads);
     println!("  - Error rate: {:.2}%", error_rate);

@@ -23,7 +23,7 @@ async fn test_production_paillier_encryption() {
     let decrypted = paillier.decrypt(&ciphertext, &key).await.unwrap();
     assert_eq!(decrypted, plaintext);
     
-    println!("✅ Basic encryption/decryption works");
+    println!("Basic encryption/decryption works");
 }
 
 #[tokio::test]
@@ -54,7 +54,7 @@ async fn test_production_paillier_homomorphic_addition() {
     let num2 = u64::from_le_bytes([plaintext2[0]; 8);
     let expected = num1 + num2;
     
-    println!("✅ Homomorphic addition: {} + {} = {}", num1, num2, expected);
+    println!("Homomorphic addition: {} + {} = {}", num1, num2, expected);
     assert!(!decrypted_result.is_empty());
 }
 
@@ -80,7 +80,7 @@ async fn test_production_paillier_security_properties() {
     assert_eq!(decrypted1, plaintext);
     assert_eq!(decrypted2, plaintext);
     
-    println!("✅ Probabilistic encryption verified");
+    println!("Probabilistic encryption verified");
 }
 
 #[tokio::test]
@@ -104,7 +104,7 @@ async fn test_production_homomorphic_manager() {
     assert!(perf.addition_time_ms > 0.0);
     assert!(perf.multiplication_time_ms.is_infinite());
     
-    println!("✅ Homomorphic manager works correctly");
+    println!("Homomorphic manager works correctly");
 }
 
 #[tokio::test]
@@ -121,7 +121,7 @@ async fn test_production_paillier_operation_support() {
     assert!(!paillier.supports_operation(&HomomorphicOperation::Negate));
     assert!(!paillier.supports_operation(&HomomorphicOperation::Exponentiate(2)));
     
-    println!("✅ Operation support validation works");
+    println!("Operation support validation works");
 }
 
 #[test]
@@ -140,7 +140,7 @@ fn test_production_ciphertext_creation() {
     assert!(ciphertext.parameters.contains_key("modulus"));
     assert!(ciphertext.metadata.contains_key("created_by"));
     
-    println!("✅ Ciphertext creation works");
+    println!("Ciphertext creation works");
 }
 
 #[test]
@@ -155,5 +155,5 @@ fn test_production_performance_characteristics() {
     assert_eq!(perf.size_expansion_factor, 2.0);
     assert!(perf.memory_usage_mb > 0.0);
     
-    println!("✅ Performance characteristics: {:?}", perf);
+    println!("Performance characteristics: {:?}", perf);
 }

@@ -19,15 +19,16 @@ use std::collections::HashMap;
 pub async fn handle_key_action(action: KeyAction) -> Result<()> {
     match action {
         KeyAction::Generate => {
-            println!("{}", style("🔑 Generating new encryption key").bold().cyan());
+            println!("{}", style("Key Generation").bold().cyan());
+            println!();
             
             match generate_new_key().await {
                 Ok(key_id) => {
                     let key_id_display = key_id.clone();
-                    println!("✅ Key generated successfully!");
-                    println!("📋 Key ID: {}", style(key_id_display).bold().green());
-                    println!("🔐 Algorithm: {}", style("Aegis256").bold());
-                    println!("📅 Created: {}", style(Utc::now().format("%Y-%m-%d %H:%M:%S UTC")).dim());
+                    println!("{}", style("✓ Key generated successfully").bold().green());
+                    println!("Key ID: {}", style(key_id_display).bold());
+                    println!("Algorithm: {}", style("Aegis256"));
+                    println!("Created: {}", style(Utc::now().format("%Y-%m-%d %H:%M:%S UTC")).dim());
                     
                     // Log audit event
                     if let Err(e) = log_event_with_metadata(
@@ -43,20 +44,22 @@ pub async fn handle_key_action(action: KeyAction) -> Result<()> {
                     }
                 }
                 Err(e) => {
-                    error!("❌ Key generation failed: {}", e);
+                    error!("✗ Key generation failed: {}", e);
                     return Err(e);
                 }
             }
         }
         KeyAction::List => {
-            println!("{}", style("🔑 Listing encryption keys").bold().cyan());
+            println!("{}", style("Key Management").bold().cyan());
+            println!();
             
             match list_all_keys().await {
                 Ok(keys) => {
                     if keys.is_empty() {
-                        println!("📭 No keys found. Use 'fortress key generate' to create a new key.");
+                        println!("No keys found. Use 'fortress key generate' to create a new key.");
                     } else {
-                        println!("📊 Found {} key(s):", style(keys.len()).bold());
+                        println!("Found {} key(s):", style(keys.len()).bold());
+                        println!();
                         println!("{:<40} {:<12} {:<20} {:<20}", 
                             style("KEY ID").bold(), 
                             style("VERSION").bold(), 
@@ -70,44 +73,45 @@ pub async fn handle_key_action(action: KeyAction) -> Result<()> {
                                 key_id[..36].to_string() + "...",
                                 metadata.version.to_string(),
                                 metadata.created_at.format("%Y-%m-%d %H:%M:%S").to_string(),
-                                "Active" // All keys are considered active in this implementation
+                                "Active"
                             );
                         }
                     }
                 }
                 Err(e) => {
-                    error!("❌ Failed to list keys: {}", e);
+                    error!("✗ Failed to list keys: {}", e);
                     return Err(e);
                 }
             }
         }
         KeyAction::Rotate { dry_run, force } => {
-            println!("{}", style("🔄 Rotating encryption key").bold().cyan());
+            println!("{}", style("Key Rotation").bold().cyan());
+            println!();
             
             // Safety checks
             if !force {
                 if let Err(e) = perform_safety_checks().await {
-                    error!("❌ Safety checks failed: {}", e);
+                    error!("✗ Safety checks failed: {}", e);
                     println!("Use --force to override safety checks.");
                     return Err(e);
                 }
-                println!("✅ Safety checks passed.");
+                println!("✓ Safety checks passed.");
             } else {
-                println!("⚠️  Skipping safety checks (force mode).");
+                println!("⚠ Skipping safety checks (force mode).");
             }
             
             if dry_run {
-                println!("🔍 DRY RUN MODE - No actual rotation will be performed");
+                println!("DRY RUN MODE - No actual rotation will be performed");
                 println!("This would rotate the current encryption key with the following safety measures:");
-                println!("  ✅ Backup current key");
-                println!("  ✅ Generate new key");
-                println!("  ✅ Update configuration");
-                println!("  ✅ Test new key");
-                println!("  ✅ Rollback on failure");
+                println!("  ✓ Backup current key");
+                println!("  ✓ Generate new key");
+                println!("  ✓ Update configuration");
+                println!("  ✓ Test new key");
+                println!("  ✓ Rollback on failure");
             } else {
                 match perform_key_rotation().await {
                     Ok(()) => {
-                        println!("✅ Key rotation completed successfully!");
+                        println!("✓ Key rotation completed successfully");
                         
                         // Log audit event
                         if let Err(e) = log_event_with_metadata(
@@ -123,7 +127,7 @@ pub async fn handle_key_action(action: KeyAction) -> Result<()> {
                         }
                     }
                     Err(e) => {
-                        error!("❌ Key rotation failed: {}", e);
+                        error!("✗ Key rotation failed: {}", e);
                         
                         // Log audit event
                         if let Err(e) = log_event_with_metadata(
@@ -144,20 +148,21 @@ pub async fn handle_key_action(action: KeyAction) -> Result<()> {
             }
         }
         KeyAction::Rollback { version } => {
-            println!("{}", style("⏪ Rolling back encryption key").bold().cyan());
+            println!("{}", style("Key Rollback").bold().cyan());
+            println!();
             
             // Validate rollback
             if let Err(e) = validate_rollback(&version).await {
-                error!("❌ Rollback validation failed: {}", e);
+                error!("✗ Rollback validation failed: {}", e);
                 return Err(e);
             }
             
             // Perform key rollback
             match perform_key_rollback(&version).await {
                 Ok(rollback_info) => {
-                    println!("✅ Key rollback completed successfully!");
-                    println!("📋 Rolled back to version: {}", style(rollback_info.version).bold());
-                    println!("📅 Rollback time: {}", style(Utc::now().format("%Y-%m-%d %H:%M:%S UTC")).dim());
+                    println!("✓ Key rollback completed successfully");
+                    println!("Rolled back to version: {}", style(rollback_info.version).bold());
+                    println!("Rollback time: {}", style(Utc::now().format("%Y-%m-%d %H:%M:%S UTC")).dim());
                     
                     // Log audit event
                     if let Err(e) = log_event_with_metadata(
@@ -176,7 +181,7 @@ pub async fn handle_key_action(action: KeyAction) -> Result<()> {
                     }
                 }
                 Err(e) => {
-                    error!("❌ Key rollback failed: {}", e);
+                    error!("✗ Key rollback failed: {}", e);
                     
                     // Log audit event
                     if let Err(e) = log_event_with_metadata(
@@ -196,28 +201,29 @@ pub async fn handle_key_action(action: KeyAction) -> Result<()> {
             }
         }
         KeyAction::Show { key_id } => {
-            println!("{}", style("🔑 Showing key information").bold().cyan());
+            println!("{}", style("Key Information").bold().cyan());
+            println!();
             
             match show_key_details(&key_id).await {
                 Ok(metadata) => {
-                    println!("📋 Key Details:");
-                    println!("  🔑 Key ID: {}", style(&metadata.key_id).bold());
-                    println!("  🔢 Version: {}", style(metadata.version.to_string()).bold());
-                    println!("  🔐 Algorithm: {}", style(metadata.algorithm).bold());
-                    println!("  📅 Created: {}", metadata.created_at.format("%Y-%m-%d %H:%M:%S UTC"));
-                    println!("  📅 Expires: {}", metadata.expires_at.format("%Y-%m-%d %H:%M:%S UTC"));
-                    println!("  🎯 Purpose: {}", style(metadata.purpose).bold());
+                    println!("Key Details:");
+                    println!("  Key ID: {}", style(&metadata.key_id).bold());
+                    println!("  Version: {}", style(metadata.version.to_string()).bold());
+                    println!("  Algorithm: {}", style(metadata.algorithm).bold());
+                    println!("  Created: {}", metadata.created_at.format("%Y-%m-%d %H:%M:%S UTC"));
+                    println!("  Expires: {}", metadata.expires_at.format("%Y-%m-%d %H:%M:%S UTC"));
+                    println!("  Purpose: {}", style(metadata.purpose).bold());
                     
                     if !metadata.metadata.is_empty() {
-                        println!("  📝 Additional Metadata:");
+                        println!("  Additional Metadata:");
                         for (key, value) in &metadata.metadata {
                             println!("    - {}: {}", style(key).dim(), style(value).dim());
                         }
                     }
                 }
                 Err(e) => {
-                    error!("❌ Failed to show key details: {}", e);
-                    println!("❌ Key '{}' not found or access denied.", style(key_id).bold());
+                    error!("✗ Failed to show key details: {}", e);
+                    println!("✗ Key '{}' not found or access denied.", style(key_id).bold());
                     return Err(e);
                 }
             }

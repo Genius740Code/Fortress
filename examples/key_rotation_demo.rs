@@ -73,13 +73,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     key_manager.store_key(&low_sensitivity_key, &key3, &metadata3).await?;
     
-    println!("✅ Created test keys with different security levels");
+    println!("Created test keys with different security levels");
     
     // Check and rotate keys
-    println!("\n🔄 Checking and rotating keys...");
+    println!("\nChecking and rotating keys...");
     let rotated_keys = smart_scheduler.check_and_rotate().await?;
     
-    println!("📊 Rotation Results:");
+    println!("Rotation Results:");
     println!("   Keys rotated: {}", rotated_keys.len());
     for (key_id, metadata) in &rotated_keys {
         println!("   - {} (purpose: {}, version: {})", key_id, metadata.purpose, metadata.version);
@@ -87,18 +87,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Get rotation metrics
     let metrics = smart_scheduler.get_metrics().await;
-    println!("\n📈 Rotation Metrics:");
+    println!("\nRotation Metrics:");
     println!("   Total rotations: {}", metrics.total_rotations);
     println!("   Successful: {}", metrics.successful_rotations);
     println!("   Failed: {}", metrics.failed_rotations);
     
     // Demonstrate Policy-Based Rotation Scheduler
-    println!("\n🎯 Policy-Based Rotation Scheduler");
+    println!("\nPolicy-Based Rotation Scheduler");
     let mut policy_scheduler = RotationScheduler::new(key_manager.clone());
     
     // Show default policies
     let policies = policy_scheduler.get_policies().await;
-    println!("📋 Default Rotation Policies:");
+    println!("Default Rotation Policies:");
     for policy in &policies {
         println!("   - {}: {} ({})", 
             policy.name, 
@@ -108,17 +108,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     
     // Test policy-based rotation
-    println!("\n🔄 Running policy-based rotation check...");
+    println!("\nRunning policy-based rotation check...");
     let policy_rotated_keys = policy_scheduler.check_rotation_now().await?;
     
-    println!("📊 Policy Rotation Results:");
+    println!("Policy Rotation Results:");
     println!("   Keys rotated: {}", policy_rotated_keys.len());
     for (key_id, metadata) in &policy_rotated_keys {
         println!("   - {} (purpose: {}, version: {})", key_id, metadata.purpose, metadata.version);
     }
     
     // Demonstrate zero-downtime rotation
-    println!("\n⚡ Zero-Downtime Rotation Demo");
+    println!("\nZero-Downtime Rotation Demo");
     let test_key = "zero_downtime_test".to_string();
     let key4 = key_manager.generate_key(algorithm.as_ref()).await?;
     let metadata4 = fortress_core::key::KeyMetadata::new(
@@ -132,20 +132,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     key_manager.store_key(&test_key, &key4, &metadata4).await?;
     
-    println!("🔑 Created expired key for zero-downtime test");
+    println!("Created expired key for zero-downtime test");
     
     // Force rotate with zero-downtime
     let start_time = std::time::Instant::now();
     key_manager.rotate_key_with_zero_downtime(&test_key, algorithm.as_ref()).await?;
     let rotation_time = start_time.elapsed();
     
-    println!("⚡ Zero-downtime rotation completed in {:?}", rotation_time);
+    println!("Zero-downtime rotation completed in {:?}", rotation_time);
     
     // Verify key is still available
     let (_, new_metadata) = key_manager.retrieve_key(&test_key).await?;
-    println!("✅ Key still available after rotation (new version: {})", new_metadata.version);
+    println!("Key still available after rotation (new version: {})", new_metadata.version);
     
-    println!("\n🎉 Smart Key Rotation System Demo Complete!");
+    println!("\nSmart Key Rotation System Demo Complete!");
     println!("==========================================");
     
     Ok(())

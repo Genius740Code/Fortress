@@ -17,7 +17,7 @@ pub async fn handle_migrate(
     batch_size: usize,
     progress: bool,
 ) -> Result<()> {
-    println!("{}", style("🔄 Data Migration: PostgreSQL → Fortress").bold().cyan());
+    println!("{}", style("Data Migration: PostgreSQL → Fortress").bold().cyan());
     println!();
     
     // Validate source database type
@@ -25,7 +25,7 @@ pub async fn handle_migrate(
         return Err(color_eyre::Report::msg("Only PostgreSQL migration is currently supported"));
     }
     
-    println!("📊 Connecting to PostgreSQL database...");
+    println!("Connecting to PostgreSQL database...");
     
     // Test PostgreSQL connection using psql command
     let test_result = Command::new("psql")
@@ -45,7 +45,7 @@ pub async fn handle_migrate(
         Err(e) => {
             warn!("Could not test PostgreSQL connection: {}", e);
             println!("  Continuing without connection test...");
-            println!("⚠️  Continuing without connection test...");
+            println!("⚠ Continuing without connection test...");
         }
     }
     
@@ -59,10 +59,10 @@ pub async fn handle_migrate(
             .join(&to)
     };
     
-    println!("📁 Target directory: {}", style(target_dir.display()).bold());
+    println!("Target directory: {}", style(target_dir.display()).bold());
     
     // Create Fortress database
-    println!("🏰 Creating Fortress database...");
+    println!("Creating Fortress database...");
     let fortress_config = create_fortress_config(&to, &target_dir)?;
     
     // Initialize Fortress storage

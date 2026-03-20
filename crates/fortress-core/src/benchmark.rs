@@ -60,9 +60,9 @@ impl BenchmarkResults {
 
     /// Print detailed results
     pub fn print_detailed(&self, algorithm_name: &str) {
-        println!("🔬 {} Performance Results:", algorithm_name);
-        println!("  📊 Data size: {} bytes", self.data_size);
-        println!("  ⚡ Encryption: {} ({})", 
+        println!("{} Performance Results:", algorithm_name);
+        println!("  Data size: {} bytes", self.data_size);
+        println!("  Encryption: {} ({})", 
             BenchmarkResults::format_throughput(self.encrypt_throughput_mbps),
             format_duration(self.encrypt_time_ns)
         );
@@ -104,7 +104,7 @@ impl AegisBenchmark {
 
     /// Run comprehensive benchmark suite
     pub fn run_suite(&self) -> Vec<BenchmarkResults> {
-        println!("🚀 Starting AEGIS-256 Performance Benchmark Suite");
+        println!("Starting AEGIS-256 Performance Benchmark Suite");
         println!("==================================================");
         
         let mut results = Vec::new();
@@ -155,7 +155,7 @@ impl AegisBenchmark {
 
     /// Print summary statistics
     fn print_summary(&self, results: &[BenchmarkResults]) {
-        println!("\n📊 Performance Summary");
+        println!("\nPerformance Summary");
         println!("=====================");
         
         if let (Some(min), Some(max)) = (
@@ -188,13 +188,13 @@ impl AegisBenchmark {
 
         // Performance validation
         if avg_encrypt >= 10_000.0 {
-            println!("✅ Excellent performance - exceeds 10 GB/s");
+            println!("Excellent performance - exceeds 10 GB/s");
         } else if avg_encrypt >= 1_000.0 {
-            println!("✅ Good performance - exceeds 1 GB/s");
+            println!("Good performance - exceeds 1 GB/s");
         } else if avg_encrypt >= 100.0 {
-            println!("⚠️  Moderate performance - below 1 GB/s");
+            println!("Moderate performance - below 1 GB/s");
         } else {
-            println!("❌ Poor performance - below 100 MB/s");
+            println!("Poor performance - below 100 MB/s");
         }
     }
 
@@ -246,12 +246,12 @@ impl AegisBenchmark {
         
         let total_time = start.elapsed();
         
-        println!("📊 Concurrent Results:");
-        println!("  🔢 Total operations: {}", operations);
-        println!("  ⏱️  Total time: {:?}", total_time);
-        println!("  🚀 Operations/sec: {:.2}", operations as f64 / total_time.as_secs_f64());
-        println!("  ⚡ Avg encryption: {}", format_duration(total_encrypt_time.as_nanos() / operations as u128));
-        println!("  🔓 Avg decryption: {}", format_duration(total_decrypt_time.as_nanos() / operations as u128));
+        println!("Concurrent Results:");
+        println!("  Total operations: {}", operations);
+        println!("  Total time: {:?}", total_time);
+        println!("  Operations/sec: {:.2}", operations as f64 / total_time.as_secs_f64());
+        println!("  Avg encryption: {}", format_duration(total_encrypt_time.as_nanos() / operations as u128));
+        println!("  Avg decryption: {}", format_duration(total_decrypt_time.as_nanos() / operations as u128));
     }
 }
 

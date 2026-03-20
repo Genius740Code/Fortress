@@ -91,13 +91,13 @@ pub async fn handle_config_action(action: ConfigAction) -> Result<()> {
 }
 
 async fn handle_config_show() -> Result<()> {
-    println!("{}", style("⚙️ Current configuration").bold().cyan());
+    println!("{}", style("Current Configuration").bold().cyan());
     println!();
     
     let config_path = get_config_path()?;
     
     if !config_path.exists() {
-        println!("{} No configuration file found. Using defaults.", style("⚠️").yellow());
+        println!("{} No configuration file found. Using defaults.", style("⚠").yellow());
         println!();
         print_default_config();
         return Ok(());
@@ -110,13 +110,14 @@ async fn handle_config_show() -> Result<()> {
         .map_err(|e| color_eyre::eyre::eyre!("Failed to parse config file: {}", e))?;
     
     print_config(&config);
-    println!("📁 Configuration file: {}", style(config_path.display()).bold());
+    println!("Configuration file: {}", style(config_path.display()).bold());
     
     Ok(())
 }
 
 async fn handle_config_set(key: String, value: String) -> Result<()> {
-    println!("{}", style("⚙️ Setting configuration").bold().cyan());
+    println!("{}", style("Configuration Management").bold().cyan());
+    println!();
     println!("{} = {}", style(key.clone()).bold(), style(value.clone()).bold());
     
     let config_path = get_config_path()?;
@@ -128,19 +129,20 @@ async fn handle_config_set(key: String, value: String) -> Result<()> {
     // Save the updated configuration
     save_config(&config_path, &config).await?;
     
-    println!("✅ Configuration updated successfully!");
+    println!("✓ Configuration updated successfully");
     info!("Configuration updated: {} = {}", key, value);
     
     Ok(())
 }
 
 async fn handle_config_reset() -> Result<()> {
-    println!("{}", style("⚙️ Resetting configuration").bold().cyan());
+    println!("{}", style("Configuration Reset").bold().cyan());
+    println!();
     
     let config_path = get_config_path()?;
     
     if !config_path.exists() {
-        println!("{} No configuration file exists. Nothing to reset.", style("ℹ️").blue());
+        println!("{} No configuration file exists. Nothing to reset.", style("ℹ").blue());
         return Ok(());
     }
     
@@ -149,25 +151,26 @@ async fn handle_config_reset() -> Result<()> {
     fs::copy(&config_path, &backup_path).await
         .map_err(|e| color_eyre::eyre::eyre!("Failed to create backup: {}", e))?;
     
-    println!("📋 Configuration backed up to: {}", style(backup_path.display()).bold());
+    println!("Configuration backed up to: {}", style(backup_path.display()).bold());
     
     // Reset to defaults
     let default_config = ConfigSettings::default();
     save_config(&config_path, &default_config).await?;
     
-    println!("✅ Configuration reset to defaults successfully!");
+    println!("✓ Configuration reset to defaults successfully");
     info!("Configuration reset to defaults");
     
     Ok(())
 }
 
 async fn handle_config_validate() -> Result<()> {
-    println!("{}", style("⚙️ Validating configuration").bold().cyan());
+    println!("{}", style("Configuration Validation").bold().cyan());
+    println!();
     
     let config_path = get_config_path()?;
     
     if !config_path.exists() {
-        println!("{} No configuration file found. Using defaults.", style("⚠️").yellow());
+        println!("{} No configuration file found. Using defaults.", style("⚠").yellow());
         let default_config = ConfigSettings::default();
         validate_config(&default_config)?;
         return Ok(());
@@ -181,8 +184,8 @@ async fn handle_config_validate() -> Result<()> {
     
     validate_config(&config)?;
     
-    println!("✅ Configuration is valid!");
-    println!("📁 Configuration file: {}", style(config_path.display()).bold());
+    println!("✓ Configuration is valid");
+    println!("Configuration file: {}", style(config_path.display()).bold());
     
     Ok(())
 }
@@ -351,7 +354,7 @@ fn validate_config(config: &ConfigSettings) -> Result<()> {
     }
     
     if !errors.is_empty() {
-        println!("{} Configuration validation failed:", style("❌").red());
+        println!("{} Configuration validation failed:", style("✗").red());
         for error in errors {
             println!("  - {}", style(error).red());
         }
@@ -362,25 +365,25 @@ fn validate_config(config: &ConfigSettings) -> Result<()> {
 }
 
 fn print_config(config: &ConfigSettings) {
-    println!("{} Server Configuration:", style("🖥️").blue());
+    println!("Server Configuration:");
     println!("  Host: {}", style(&config.server.host).bold());
     println!("  Port: {}", style(config.server.port).bold());
     println!("  Workers: {}", style(config.server.workers).bold());
     println!();
     
-    println!("{} Database Configuration:", style("💾").blue());
+    println!("Database Configuration:");
     println!("  Path: {}", style(&config.database.path).bold());
     println!("  Max Connections: {}", style(config.database.max_connections).bold());
     println!("  Connection Timeout: {}s", style(config.database.connection_timeout).bold());
     println!();
     
-    println!("{} Security Configuration:", style("🔐").blue());
+    println!("Security Configuration:");
     println!("  Encryption Algorithm: {}", style(&config.security.encryption_algorithm).bold());
     println!("  Key Rotation Interval: {}h", style(config.security.key_rotation_interval / 3600).bold());
     println!("  Audit Enabled: {}", style(config.security.audit_enabled).bold());
     println!();
     
-    println!("{} Logging Configuration:", style("📝").blue());
+    println!("Logging Configuration:");
     println!("  Level: {}", style(&config.logging.level).bold());
     if let Some(ref file_path) = config.logging.file_path {
         println!("  File Path: {}", style(file_path).bold());
@@ -391,7 +394,7 @@ fn print_config(config: &ConfigSettings) {
     println!();
     
     if !config.custom.is_empty() {
-        println!("{} Custom Configuration:", style("⚙️").blue());
+        println!("Custom Configuration:");
         for (key, value) in &config.custom {
             println!("  {}: {}", style(key).bold(), value);
         }

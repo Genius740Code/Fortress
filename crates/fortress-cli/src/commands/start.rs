@@ -49,7 +49,7 @@ pub async fn handle_start(
     port: u16,
     host: String,
 ) -> Result<()> {
-    println!("{}", style("🚀 Starting Fortress Server").bold().cyan());
+    println!("{}", style("Starting Fortress Server").bold().cyan());
     println!();
     
     // Validate and resolve data directory

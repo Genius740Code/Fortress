@@ -40,7 +40,7 @@ pub async fn handle_create_simple(
     interactive: bool,
     dry_run: bool,
 ) -> Result<()> {
-    println!("{}", style("🏰 Fortress Database Creation").bold().cyan());
+    println!("{}", style("Fortress Database Creation").bold().cyan());
     println!();
     
     // Get database name
@@ -94,7 +94,7 @@ pub async fn handle_create_simple(
     // Confirm creation
     if interactive {
         println!();
-        println!("{}", style("📋 Configuration Summary").bold().cyan());
+        println!("{}", style("Configuration Summary").bold().cyan());
         println!("Database name: {}", style(&db_name).bold());
         println!("Data directory: {}", style(db_path.display()).bold());
         println!("Template: {}", style(&selected_template).bold());
@@ -124,7 +124,7 @@ pub async fn handle_create_simple(
     create_database_simple(&db_name, &db_path, &selected_template, encryption_config, final_database_config).await?;
     
     println!();
-    println!("{}", style("✅ Database created successfully!").green().bold());
+    println!("{}", style("✓ Database created successfully").green().bold());
     println!("Name: {}", style(&db_name).bold());
     println!("Path: {}", style(db_path.display()).bold());
     println!("Template: {}", style(&selected_template).bold());

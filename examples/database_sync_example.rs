@@ -12,7 +12,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
     tracing_subscriber::fmt::init();
     
-    println!("🔐 Fortress Database Synchronization Example");
+    println!("Fortress Database Synchronization Example");
     println!("==========================================");
     
     // Create push/pull manager
@@ -68,22 +68,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     
     // Initialize databases
-    println!("📊 Initializing databases...");
+    println!("Initializing databases...");
     
     let mongo_db = MongoKeyDatabase::new(mongo_config.clone()).await?;
     mongo_db.initialize().await?;
-    println!("✅ MongoDB initialized");
+    println!("MongoDB initialized");
     
     let postgres_db = PostgresKeyDatabase::new(postgres_config.clone()).await?;
     postgres_db.initialize().await?;
-    println!("✅ PostgreSQL initialized");
+    println!("PostgreSQL initialized");
     
     // Add sample data to MongoDB
-    println!("📝 Adding sample data to MongoDB...");
+    println!("Adding sample data to MongoDB...");
     add_sample_data_to_mongo(&mongo_db).await?;
     
     // Perform MongoDB to PostgreSQL push
-    println!("🚀 Pushing data from MongoDB to PostgreSQL...");
+    println!("Pushing data from MongoDB to PostgreSQL...");
     let push_result = push_mongo_to_postgres(&manager, &mongo_config, &postgres_config).await?;
     
     print_operation_result(&push_result);
@@ -103,10 +103,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     demonstrate_postgres_features(&postgres_db).await?;
     
     // Demonstrate bidirectional sync
-    println!("🔄 Demonstrating bidirectional synchronization...");
+    println!("Demonstrating bidirectional synchronization...");
     demonstrate_bidirectional_sync(&manager, &mongo_config, &postgres_config).await?;
     
-    println!("✅ Database synchronization example completed successfully!");
+    println!("Database synchronization example completed successfully!");
     
     Ok(())
 }
@@ -180,7 +180,7 @@ async fn pull_postgres_to_mongo(
 
 /// Print operation result
 fn print_operation_result(result: &PushPullResult) {
-    println!("📊 Operation Result:");
+    println!("Operation Result:");
     println!("  Type: {:?}", result.operation_type);
     println!("  Success: {}", result.success);
     println!("  Items Processed: {}", result.items_processed);
@@ -206,7 +206,7 @@ fn print_operation_result(result: &PushPullResult) {
 /// Demonstrate advanced MongoDB features
 async fn demonstrate_mongo_features(mongo_db: &MongoKeyDatabase) -> Result<()> {
     // Test aggregation pipeline
-    println!("  📊 Testing MongoDB aggregation...");
+    println!("  Testing MongoDB aggregation...");
     let pipeline = MongoPipeline {
         operation: "count_by_type".to_string(),
         stages: vec![],
@@ -231,7 +231,7 @@ async fn demonstrate_mongo_features(mongo_db: &MongoKeyDatabase) -> Result<()> {
 /// Demonstrate advanced PostgreSQL features
 async fn demonstrate_postgres_features(postgres_db: &PostgresKeyDatabase) -> Result<()> {
     // Test cursor-based query
-    println!("  📊 Testing PostgreSQL cursor query...");
+    println!("  Testing PostgreSQL cursor query...");
     let query = PostgresQuery {
         key_filter: Some("item_".to_string()),
         date_start: None,
@@ -312,7 +312,7 @@ async fn demonstrate_bidirectional_sync(
     ];
     
     mongo_db.push_bulk(new_data).await?;
-    println!("  📝 Added new test data to MongoDB");
+    println!("  Added new test data to MongoDB");
     
     // Push to PostgreSQL
     let push_result = push_mongo_to_postgres(manager, mongo_config, postgres_config).await?;
@@ -333,7 +333,7 @@ async fn demonstrate_bidirectional_sync(
     ];
     
     postgres_db.push_bulk_copy(postgres_bulk).await?;
-    println!("  📝 Added new test data to PostgreSQL");
+    println!("  Added new test data to PostgreSQL");
     
     // Pull from PostgreSQL to MongoDB
     let pull_result = pull_postgres_to_mongo(manager, postgres_config, mongo_config).await?;
@@ -353,7 +353,7 @@ async fn demonstrate_bidirectional_sync(
     };
     let final_postgres_data = postgres_db.pull_cursor(final_postgres_query).await?;
     
-    println!("  ✅ Final verification:");
+    println!("  Final verification:");
     println!("    MongoDB items: {}", final_mongo_data.len());
     println!("    PostgreSQL items: {}", final_postgres_data.results.len());
     

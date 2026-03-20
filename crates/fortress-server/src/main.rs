@@ -21,7 +21,7 @@ use tracing::info;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize tracing
-    info!("Starting Fortress server");
+    info!("Fortress server starting");
 
     // Create OpenAPI specification
     let openapi = fortress_server::handlers::create_openapi();
@@ -31,7 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Start server
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-    info!("Server listening on {}", addr);
+    info!("Fortress server listening on {}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;

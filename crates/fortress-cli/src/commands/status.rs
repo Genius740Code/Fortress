@@ -8,7 +8,7 @@ use tracing::{info, warn, error};
 use serde_json;
 
 pub async fn handle_status(data_dir: Option<String>) -> Result<()> {
-    println!("{}", style("📊 Fortress Database Status").bold().cyan());
+    println!("{}", style("Fortress Database Status").bold().cyan());
     println!();
     
     let db_path = PathBuf::from(data_dir.unwrap_or_else(|| "./fortress".to_string()));
@@ -16,15 +16,15 @@ pub async fn handle_status(data_dir: Option<String>) -> Result<()> {
     // Check database directory
     if !db_path.exists() {
         println!("{} Database not found at: {}", 
-            style("❌").red(), 
+            style("✗").red(), 
             style(db_path.display()).bold()
         );
-        println!("💡 Use 'fortress create' to initialize a new database.");
+        println!("Use 'fortress create' to initialize a new database.");
         return Ok(());
     }
     
     println!("{} Database directory: {}", 
-        style("✅").green(), 
+        style("✓").green(), 
         style(db_path.display()).bold()
     );
     
@@ -32,22 +32,22 @@ pub async fn handle_status(data_dir: Option<String>) -> Result<()> {
     let config_path = db_path.join("config").join("fortress.toml");
     if config_path.exists() {
         println!("{} Configuration: {}", 
-            style("✅").green(), 
+            style("✓").green(), 
             style("Found").green()
         );
         
         // Load and display config summary
         if let Ok(config_content) = tokio::fs::read_to_string(&config_path).await {
             if let Ok(config) = toml::from_str::<crate::commands::config::ConfigSettings>(&config_content) {
-                println!("  🖥️  Server: {}:{}", config.server.host, config.server.port);
-                println!("  🔧 Workers: {}", config.server.workers);
-                println!("  💾 Max Connections: {}", config.database.max_connections);
-                println!("  🔐 Encryption: {}", config.security.encryption_algorithm);
+                println!("  Server: {}:{}", config.server.host, config.server.port);
+                println!("  Workers: {}", config.server.workers);
+                println!("  Max Connections: {}", config.database.max_connections);
+                println!("  Encryption: {}", config.security.encryption_algorithm);
             }
         }
     } else {
         println!("{} Configuration: {}", 
-            style("❌").red(), 
+            style("✗").red(), 
             style("Missing").red()
         );
     }

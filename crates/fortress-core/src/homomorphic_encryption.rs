@@ -331,7 +331,7 @@ impl PaillierHomomorphic {
         let prime_index = rng.gen_range(0..prime_set.len());
         let prime = &prime_set[prime_index];
         
-        println!("✅ Using pre-generated prime: {}", prime);
+        println!("Using pre-generated prime: {}", prime);
         Ok(prime.clone())
     }
     
@@ -929,7 +929,7 @@ mod tests {
         let decrypted = paillier.decrypt(&ciphertext, &key).await.unwrap();
         assert_eq!(decrypted, plaintext);
         
-        println!("✅ Production-ready Paillier encryption/decryption works");
+        println!("Production-ready Paillier encryption/decryption works");
     }
 
     #[tokio::test]
@@ -955,7 +955,7 @@ mod tests {
         // Decrypt result
         let decrypted_result = paillier.decrypt(&result, &key).await.unwrap();
         
-        println!("✅ Production-ready homomorphic addition works");
+        println!("Production-ready homomorphic addition works");
         assert!(!decrypted_result.is_empty());
     }
 
@@ -981,7 +981,7 @@ mod tests {
         assert_eq!(decrypted1, plaintext);
         assert_eq!(decrypted2, plaintext);
         
-        println!("✅ Production-ready probabilistic encryption verified");
+        println!("Production-ready probabilistic encryption verified");
     }
 
     #[test]
@@ -1000,7 +1000,7 @@ mod tests {
         assert!(ciphertext.parameters.contains_key("modulus"));
         assert!(ciphertext.metadata.contains_key("created_by"));
         
-        println!("✅ Production-ready ciphertext creation works");
+        println!("Production-ready ciphertext creation works");
     }
 
     #[test]
@@ -1014,7 +1014,7 @@ mod tests {
         assert!(!paillier.supports_operation(&HomomorphicOperation::Negate));
         assert!(!paillier.supports_operation(&HomomorphicOperation::Exponentiate(2)));
         
-        println!("✅ Production-ready operation support validation works");
+        println!("Production-ready operation support validation works");
     }
 
     #[test]
@@ -1038,7 +1038,7 @@ mod tests {
         assert!(perf.addition_time_ms > 0.0);
         assert!(perf.multiplication_time_ms.is_infinite());
         
-        println!("✅ Production-ready homomorphic manager works correctly");
+        println!("Production-ready homomorphic manager works correctly");
     }
 
     #[test]
@@ -1053,7 +1053,7 @@ mod tests {
         assert_eq!(perf.size_expansion_factor, 2.0);
         assert!(perf.memory_usage_mb > 0.0);
         
-        println!("✅ Production-ready performance characteristics: {:?}", perf);
+        println!("Production-ready performance characteristics: {:?}", perf);
     }
 
     #[test]
@@ -1069,7 +1069,7 @@ mod tests {
         let scheme = manager.get_scheme("custom_paillier").unwrap();
         assert_eq!(scheme.scheme_id(), "paillier");
         
-        println!("✅ Production-ready homomorphic manager builder works");
+        println!("Production-ready homomorphic manager builder works");
     }
 
     #[test] 
@@ -1106,6 +1106,6 @@ mod tests {
         let expected = 579u64.to_le_bytes().to_vec();
         assert_eq!(decrypted_result, expected);
         
-        println!("✅ Original test still passes - production-ready implementation working");
+        println!("Original test still passes - production-ready implementation working");
     }
 }

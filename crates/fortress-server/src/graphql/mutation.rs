@@ -68,7 +68,7 @@ impl Mutation {
         
         // Generate encryption key for the database
         let encryption_key = key_manager.generate_key(core_algorithm.as_ref()).await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to generate encryption key: {}", e)))?;
+            .map_err(|e| async_graphql::Error::new(format!("Encryption key generation failed: {}", e)))?;
         
         // Create database metadata
         let db_metadata = serde_json::json!({
@@ -96,7 +96,7 @@ impl Mutation {
         // Store database metadata
         let db_key = format!("db:{}", input.name);
         storage.put(&db_key, &serde_json::to_vec(&db_metadata).unwrap_or_default()).await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to create database: {}", e)))?;
+            .map_err(|e| async_graphql::Error::new(format!("Database creation failed: {}", e)))?;
         
         let database = Database {
             id: db_id.to_string(),
@@ -131,7 +131,7 @@ impl Mutation {
         // First, check if database exists
         let db_key = format!("db:{}", name);
         let db_exists = storage.exists(&db_key).await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to check database existence: {}", e)))?;
+            .map_err(|e| async_graphql::Error::new(format!("Database existence check failed: {}", e)))?;
         
         if !db_exists {
             return Ok(ApiResponse {
@@ -145,26 +145,26 @@ impl Mutation {
         // Delete all tables in the database
         let table_prefix = format!("db:{}:table:", name);
         let table_keys = storage.list_prefix(&table_prefix).await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to list tables for deletion: {}", e)))?;
+            .map_err(|e| async_graphql::Error::new(format!("Table listing failed: {}", e)))?;
         
         for table_key in table_keys {
             storage.delete(&table_key).await
-                .map_err(|e| async_graphql::Error::new(format!("Failed to delete table: {}", e)))?;
+                .map_err(|e| async_graphql::Error::new(format!("Table deletion failed: {}", e)))?;
         }
         
         // Delete all records in the database
         let record_prefix = format!("db:{}:table:", name);
         let record_keys = storage.list_prefix(&record_prefix).await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to list records for deletion: {}", e)))?;
+            .map_err(|e| async_graphql::Error::new(format!("Record listing failed: {}", e)))?;
         
         for record_key in record_keys {
             storage.delete(&record_key).await
-                .map_err(|e| async_graphql::Error::new(format!("Failed to delete record: {}", e)))?;
+                .map_err(|e| async_graphql::Error::new(format!("Record deletion failed: {}", e)))?;
         }
         
         // Delete the database metadata
         storage.delete(&db_key).await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to delete database: {}", e)))?;
+            .map_err(|e| async_graphql::Error::new(format!("Database deletion failed: {}", e)))?;
         
         Ok(ApiResponse {
             success: true,
@@ -188,7 +188,7 @@ impl Mutation {
         // Check if database exists
         let db_key = format!("db:{}", input.database);
         let db_exists = storage.exists(&db_key).await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to check database existence: {}", e)))?;
+            .map_err(|e| async_graphql::Error::new(format!("Database existence check failed: {}", e)))?;
         
         if !db_exists {
             return Ok(ApiResponse {
@@ -202,7 +202,7 @@ impl Mutation {
         // Check if table already exists
         let table_key = format!("db:{}:table:{}", input.database, input.name);
         let table_exists = storage.exists(&table_key).await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to check table existence: {}", e)))?;
+            .map_err(|e| async_graphql::Error::new(format!("Table existence check failed: {}", e)))?;
         
         if table_exists {
             return Ok(ApiResponse {
@@ -234,7 +234,7 @@ impl Mutation {
         
         // Store table metadata
         storage.put(&table_key, &serde_json::to_vec(&table_metadata).unwrap_or_default()).await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to create table: {}", e)))?;
+            .map_err(|e| async_graphql::Error::new(format!("Table creation failed: {}", e)))?;
         
         // Update database table count
         if let Some(db_data) = storage.get(&db_key).await
@@ -249,7 +249,7 @@ impl Mutation {
                     db_info["updated_at"] = serde_json::Value::String(Utc::now().to_rfc3339());
                     
                     storage.put(&db_key, &serde_json::to_vec(&db_info).unwrap()).await
-                        .map_err(|e| async_graphql::Error::new(format!("Failed to update database: {}", e)))?;
+                        .map_err(|e| async_graphql::Error::new(format!("Database update failed: {}", e)))?;
                 }
             }
         }
@@ -295,7 +295,7 @@ impl Mutation {
         // Check if table exists
         let table_key = format!("db:{}:table:{}", database, name);
         let table_exists = storage.exists(&table_key).await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to check table existence: {}", e)))?;
+            .map_err(|e| async_graphql::Error::new(format!("Table existence check failed: {}", e)))?;
         
         if !table_exists {
             return Ok(ApiResponse {
@@ -309,11 +309,11 @@ impl Mutation {
         // Delete all records in the table
         let record_prefix = format!("db:{}:table:{}:record:", database, name);
         let record_keys = storage.list_prefix(&record_prefix).await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to list records for deletion: {}", e)))?;
+            .map_err(|e| async_graphql::Error::new(format!("Record listing failed: {}", e)))?;
         
         for record_key in record_keys {
             storage.delete(&record_key).await
-                .map_err(|e| async_graphql::Error::new(format!("Failed to delete record: {}", e)))?;
+                .map_err(|e| async_graphql::Error::new(format!("Record deletion failed: {}", e)))?;
         }
         
         // Delete the table metadata
@@ -334,7 +334,7 @@ impl Mutation {
                     db_info["updated_at"] = serde_json::Value::String(Utc::now().to_rfc3339());
                     
                     storage.put(&db_key, &serde_json::to_vec(&db_info).unwrap()).await
-                        .map_err(|e| async_graphql::Error::new(format!("Failed to update database: {}", e)))?;
+                        .map_err(|e| async_graphql::Error::new(format!("Database update failed: {}", e)))?;
                 }
             }
         }
@@ -362,7 +362,7 @@ impl Mutation {
         // Check if table exists
         let table_key = format!("db:{}:table:{}", input.database, input.table);
         let table_exists = storage.exists(&table_key).await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to check table existence: {}", e)))?;
+            .map_err(|e| async_graphql::Error::new(format!("Table existence check failed: {}", e)))?;
         
         if !table_exists {
             return Ok(ApiResponse {
@@ -378,7 +378,7 @@ impl Mutation {
         
         // Process field encryption if needed
         let mut processed_data = input.data.clone();
-        if let Some(table_data) = storage.get(&table_key).await.map_err(|e| async_graphql::Error::new(format!("Failed to get table data: {}", e)))? {
+        if let Some(table_data) = storage.get(&table_key).await.map_err(|e| async_graphql::Error::new(format!("Table data retrieval failed: {}", e)))? {
             if let Ok(table_info) = serde_json::from_slice::<serde_json::Value>(&table_data) {
                 if let Some(fields) = table_info.get("fields").and_then(|v| v.as_array()) {
                     for field in fields {
@@ -424,10 +424,10 @@ impl Mutation {
         // Store the record
         let record_key = format!("db:{}:table:{}:record:{}", input.database, input.table, record_id);
         storage.put(&record_key, &serde_json::to_vec(&record_metadata).unwrap()).await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to insert record: {}", e)))?;
+            .map_err(|e| async_graphql::Error::new(format!("Record insertion failed: {}", e)))?;
         
         // Update table record count
-        if let Some(table_data) = storage.get(&table_key).await.map_err(|e| async_graphql::Error::new(format!("Failed to get table data: {}", e)))? {
+        if let Some(table_data) = storage.get(&table_key).await.map_err(|e| async_graphql::Error::new(format!("Table data retrieval failed: {}", e)))? {
             if let Ok(mut table_info) = serde_json::from_slice::<serde_json::Value>(&table_data) {
                 if let Some(record_count) = table_info.get_mut("record_count") {
                     *record_count = serde_json::Value::Number(serde_json::Number::from(
@@ -497,7 +497,7 @@ impl Mutation {
         // Process field encryption if needed
         let mut processed_data = input.data.clone();
         let table_key = format!("db:{}:table:{}", input.database, input.table);
-        if let Some(table_data) = storage.get(&table_key).await.map_err(|e| async_graphql::Error::new(format!("Failed to get table data: {}", e)))? {
+        if let Some(table_data) = storage.get(&table_key).await.map_err(|e| async_graphql::Error::new(format!("Table data retrieval failed: {}", e)))? {
             if let Ok(table_info) = serde_json::from_slice::<serde_json::Value>(&table_data) {
                 if let Some(fields) = table_info.get("fields").and_then(|v| v.as_array()) {
                     for field in fields {
@@ -589,7 +589,7 @@ impl Mutation {
         
         // Update table record count
         let table_key = format!("db:{}:table:{}", database, table);
-        if let Some(table_data) = storage.get(&table_key).await.map_err(|e| async_graphql::Error::new(format!("Failed to get table data: {}", e)))? {
+        if let Some(table_data) = storage.get(&table_key).await.map_err(|e| async_graphql::Error::new(format!("Table data retrieval failed: {}", e)))? {
             if let Ok(mut table_info) = serde_json::from_slice::<serde_json::Value>(&table_data) {
                 if let Some(record_count) = table_info.get_mut("record_count") {
                     *record_count = serde_json::Value::Number(serde_json::Number::from(
@@ -625,7 +625,7 @@ impl Mutation {
         // Check if table exists
         let table_key = format!("db:{}:table:{}", database, table);
         let table_exists = storage.exists(&table_key).await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to check table existence: {}", e)))?;
+            .map_err(|e| async_graphql::Error::new(format!("Table existence check failed: {}", e)))?;
         
         if !table_exists {
             return Ok(ApiResponse {
@@ -644,7 +644,7 @@ impl Mutation {
             
             // Process field encryption if needed
             let mut processed_data = item.clone();
-            if let Some(table_data) = storage.get(&table_key).await.map_err(|e| async_graphql::Error::new(format!("Failed to get table data: {}", e)))? {
+            if let Some(table_data) = storage.get(&table_key).await.map_err(|e| async_graphql::Error::new(format!("Table data retrieval failed: {}", e)))? {
                 if let Ok(table_info) = serde_json::from_slice::<serde_json::Value>(&table_data) {
                     if let Some(fields) = table_info.get("fields").and_then(|v| v.as_array()) {
                         for field in fields {
@@ -702,7 +702,7 @@ impl Mutation {
         }
         
         // Update table record count
-        if let Some(table_data) = storage.get(&table_key).await.map_err(|e| async_graphql::Error::new(format!("Failed to get table data: {}", e)))? {
+        if let Some(table_data) = storage.get(&table_key).await.map_err(|e| async_graphql::Error::new(format!("Table data retrieval failed: {}", e)))? {
             if let Ok(mut table_info) = serde_json::from_slice::<serde_json::Value>(&table_data) {
                 if let Some(record_count) = table_info.get_mut("record_count") {
                     *record_count = serde_json::Value::Number(serde_json::Number::from(
@@ -740,7 +740,7 @@ impl Mutation {
         // Check if table exists
         let table_key = format!("db:{}:table:{}", input.database, input.table);
         let table_exists = storage.exists(&table_key).await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to check table existence: {}", e)))?;
+            .map_err(|e| async_graphql::Error::new(format!("Table existence check failed: {}", e)))?;
         
         if !table_exists {
             return Ok(ApiResponse {
@@ -864,7 +864,7 @@ impl Mutation {
         // Check if table exists
         let table_key = format!("db:{}:table:{}", database, table);
         let table_exists = storage.exists(&table_key).await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to check table existence: {}", e)))?;
+            .map_err(|e| async_graphql::Error::new(format!("Table existence check failed: {}", e)))?;
         
         if !table_exists {
             return Ok(ApiResponse {

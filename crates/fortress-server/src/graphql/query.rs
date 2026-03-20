@@ -31,13 +31,13 @@ impl Query {
         
         // List all database metadata entries
         let db_keys = storage.list_prefix("db:").await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to list databases: {}", e)))?;
+            .map_err(|e| async_graphql::Error::new(format!("Database listing failed: {}", e)))?;
         
         let mut databases = Vec::new();
         
         for key in db_keys {
             if let Some(data) = storage.get(&key).await
-                .map_err(|e| async_graphql::Error::new(format!("Failed to get database data: {}", e)))? {
+                .map_err(|e| async_graphql::Error::new(format!("Database data retrieval failed: {}", e)))? {
                 
                 if let Ok(db_info) = serde_json::from_slice::<serde_json::Value>(&data) {
                     if let (Some(name), Some(status), Some(algorithm), Some(created_at)) = (
@@ -94,7 +94,7 @@ impl Query {
         let db_key = format!("db:{}", name);
         
         if let Some(data) = storage.get(&db_key).await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to get database: {}", e)))? {
+            .map_err(|e| async_graphql::Error::new(format!("Database retrieval failed: {}", e)))? {
             
             if let Ok(db_info) = serde_json::from_slice::<serde_json::Value>(&data) {
                 if let (Some(status), Some(algorithm), Some(created_at)) = (
@@ -151,13 +151,13 @@ impl Query {
         // List all table metadata entries for this database
         let table_prefix = format!("db:{}:table:", database);
         let table_keys = storage.list_prefix(&table_prefix).await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to list tables: {}", e)))?;
+            .map_err(|e| async_graphql::Error::new(format!("Table listing failed: {}", e)))?;
         
         let mut tables = Vec::new();
         
         for key in table_keys {
             if let Some(data) = storage.get(&key).await
-                .map_err(|e| async_graphql::Error::new(format!("Failed to get table data: {}", e)))? {
+                .map_err(|e| async_graphql::Error::new(format!("Table data retrieval failed: {}", e)))? {
                 
                 if let Ok(table_info) = serde_json::from_slice::<serde_json::Value>(&data) {
                     if let (Some(name), Some(created_at)) = (
@@ -245,7 +245,7 @@ impl Query {
         let table_key = format!("db:{}:table:{}", database, name);
         
         if let Some(data) = storage.get(&table_key).await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to get table: {}", e)))? {
+            .map_err(|e| async_graphql::Error::new(format!("Table retrieval failed: {}", e)))? {
             
             if let Ok(table_info) = serde_json::from_slice::<serde_json::Value>(&data) {
                 if let Some(created_at) = table_info.get("created_at").and_then(|v| v.as_str()) {
@@ -330,13 +330,13 @@ impl Query {
         // Query data records for the table
         let data_prefix = format!("db:{}:table:{}:record:", input.database, input.table);
         let record_keys = storage.list_prefix(&data_prefix).await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to query data: {}", e)))?;
+            .map_err(|e| async_graphql::Error::new(format!("Data query failed: {}", e)))?;
         
         let mut records = Vec::new();
         
         for key in record_keys {
             if let Some(data) = storage.get(&key).await
-                .map_err(|e| async_graphql::Error::new(format!("Failed to get record: {}", e)))? {
+                .map_err(|e| async_graphql::Error::new(format!("Record retrieval failed: {}", e)))? {
                 
                 if let Ok(record_info) = serde_json::from_slice::<serde_json::Value>(&data) {
                     if let (Some(id), Some(record_data), Some(created_at)) = (
@@ -396,7 +396,7 @@ impl Query {
         let record_key = format!("db:{}:table:{}:record:{}", database, table, id);
         
         if let Some(data) = storage.get(&record_key).await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to get record: {}", e)))? {
+            .map_err(|e| async_graphql::Error::new(format!("Record details retrieval failed: {}", e)))? {
             
             if let Ok(record_info) = serde_json::from_slice::<serde_json::Value>(&data) {
                 if let (Some(record_id), Some(record_data), Some(created_at)) = (
@@ -431,7 +431,7 @@ impl Query {
         let metadata_key = format!("db:{}:table:{}:encryption", database, table);
         
         if let Some(data) = storage.get(&metadata_key).await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to get encryption metadata: {}", e)))? {
+            .map_err(|e| async_graphql::Error::new(format!("Encryption metadata retrieval failed: {}", e)))? {
             
             if let Ok(metadata_info) = serde_json::from_slice::<serde_json::Value>(&data) {
                 if let Some(fields) = metadata_info.get("fields").and_then(|v| v.as_array()) {
@@ -474,7 +474,7 @@ impl Query {
         let rotation_key = format!("db:{}:table:{}:rotation:{}", database, table, rotation_id);
         
         if let Some(data) = storage.get(&rotation_key).await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to get rotation status: {}", e)))? {
+            .map_err(|e| async_graphql::Error::new(format!("Rotation status retrieval failed: {}", e)))? {
             
             if let Ok(rotation_info) = serde_json::from_slice::<serde_json::Value>(&data) {
                 if let Some(status) = rotation_info.get("status").and_then(|v| v.as_str()) {
