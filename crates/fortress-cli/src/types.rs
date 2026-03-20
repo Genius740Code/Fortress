@@ -22,12 +22,32 @@ pub enum TenantCommands {
     List,
 }
 
-#[derive(Debug, Clone, Subcommand)]
+#[derive(Debug, Subcommand)]
 pub enum PluginAction {
     /// List plugins
-    List,
+    List {
+        /// Show detailed information
+        #[arg(long)]
+        detailed: bool,
+        
+        /// Filter by category
+        #[arg(long)]
+        category: Option<String>,
+    },
     /// Install a plugin
-    Install,
+    Install {
+        /// Plugin name
+        #[arg(long)]
+        plugin_name: Option<String>,
+        
+        /// Plugin path
+        #[arg(long)]
+        plugin_path: Option<String>,
+        
+        /// Force installation
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -181,23 +201,61 @@ pub enum ConfigAction {
 
 // Conversion functions from placeholder types to actual command types
 impl From<ClusterCommands> for crate::commands::cluster::ClusterCommands {
-    fn from(_placeholder: ClusterCommands) -> Self {
-        // For now, return a default value
-        // In a real implementation, this would convert the placeholder to the actual type
-        crate::commands::cluster::ClusterCommands::Status
+    fn from(placeholder: ClusterCommands) -> Self {
+        match placeholder {
+            ClusterCommands::Init => crate::commands::cluster::ClusterCommands::Init(
+                crate::commands::cluster::InitArgs {
+                    bind_address: "127.0.0.1:8080".parse().unwrap_or_else(|_| "127.0.0.1:8080".parse().unwrap()),
+                    min_nodes: 3,
+                    replication_factor: 3,
+                    heartbeat_interval: 500,
+                    election_timeout: 5000,
+                }
+            ),
+            ClusterCommands::Status => crate::commands::cluster::ClusterCommands::Status,
+        }
     }
 }
 
 impl From<TenantCommands> for crate::commands::tenant::TenantCommands {
-    fn from(_placeholder: TenantCommands) -> Self {
-        // For now, return a default value
-        crate::commands::tenant::TenantCommands::List
+    fn from(placeholder: TenantCommands) -> Self {
+        match placeholder {
+            TenantCommands::Create => crate::commands::tenant::TenantCommands::Create(
+                crate::commands::tenant::CreateArgs {
+                    name: "default".to_string(),
+                    description: None,
+                    max_databases: None,
+                    max_storage: None,
+                    max_connections: None,
+                    resources: None,
+                }
+            ),
+            TenantCommands::List => crate::commands::tenant::TenantCommands::List(
+                crate::commands::tenant::ListArgs {
+                    detailed: false,
+                    status: None,
+                    limit: None,
+                }
+            ),
+        }
     }
 }
 
 impl From<PluginAction> for crate::commands::plugin::PluginAction {
-    fn from(_placeholder: PluginAction) -> Self {
-        // For now, return a default value
-        crate::commands::plugin::PluginAction::List { detailed: false, category: None }
+    fn from(placeholder: PluginAction) -> Self {
+        match placeholder {
+            PluginAction::List { detailed, category } => {
+                crate::commands::plugin::PluginAction::List {
+                    detailed,
+                    category,
+                }
+            }
+            PluginAction::Install { plugin_name, plugin_path: _, force: _ } => {
+                crate::commands::plugin::PluginAction::Search {
+                    query: plugin_name.unwrap_or_default(),
+                    limit: 10,
+                }
+            }
+        }
     }
 }

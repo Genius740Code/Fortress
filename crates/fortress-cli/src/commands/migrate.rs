@@ -63,7 +63,7 @@ pub async fn handle_migrate(
     
     // Create Fortress database
     println!("Creating Fortress database...");
-    let fortress_config = create_fortress_config(&to, &target_dir)?;
+    let _fortress_config = create_fortress_config(&to, &target_dir)?;
     
     // Initialize Fortress storage
     let storage_config = StorageBackendConfig {

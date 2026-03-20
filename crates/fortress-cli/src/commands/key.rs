@@ -3,17 +3,14 @@ use console::style;
 use crate::KeyAction;
 use tracing::{info, error, warn};
 use std::time::Duration;
-use std::path::PathBuf;
 use fortress_core::{
-    key::{KeyManager, InMemoryKeyManager, KeyMetadata, KeyId},
-    encryption::{Aegis256, EncryptionAlgorithm, SecureKey},
-    error::{FortressError, Result as FortressResult},
+    key::{KeyManager, InMemoryKeyManager, KeyMetadata},
+    encryption::Aegis256,
     audit::{AuditEventType, SecurityLevel, EventOutcome, log_event_with_metadata},
 };
 use chrono::Utc;
 use uuid::Uuid;
 use serde_json;
-use tokio::fs;
 use std::collections::HashMap;
 
 pub async fn handle_key_action(action: KeyAction) -> Result<()> {
@@ -299,7 +296,7 @@ async fn perform_safety_checks() -> Result<()> {
     Ok(())
 }
 
-async fn simulate_key_rotation() -> Result<()> {
+async fn _simulate_key_rotation() -> Result<()> {
     let steps = vec![
         "Backing up current key",
         "Generating new encryption key",
@@ -369,7 +366,7 @@ async fn validate_rollback(version: &Option<String>) -> Result<()> {
     Ok(())
 }
 
-async fn simulate_key_rollback(version: &Option<String>) -> Result<()> {
+async fn _simulate_key_rollback(version: &Option<String>) -> Result<()> {
     let target_version = version.as_deref().unwrap_or("latest");
     
     println!("  Preparing rollback to version: {}", style(target_version).bold());
@@ -538,7 +535,7 @@ async fn perform_key_rollback(version: &Option<String>) -> Result<RollbackInfo> 
     
     // Step 3: Perform the actual rollback
     println!("  ⏪ Performing rollback...");
-    let rollback_result = execute_rollback(&key_id, target_version).await?;
+    let _rollback_result = execute_rollback(&key_id, target_version).await?;
     
     // Step 4: Verify rollback integrity
     println!("  ✅ Verifying rollback integrity...");
@@ -666,7 +663,7 @@ async fn execute_rollback(key_id: &str, target_version: u32) -> Result<()> {
     ).map_err(|e| color_eyre::eyre::eyre!("Failed to parse backup metadata: {}", e))?;
     
     // Create new metadata for rolled back key
-    let rolled_back_metadata = fortress_core::key::KeyMetadata {
+    let _rolled_back_metadata = fortress_core::key::KeyMetadata {
         key_id: key_id.to_string(),
         version: target_version,
         algorithm: backup_metadata.algorithm,
@@ -687,7 +684,7 @@ async fn execute_rollback(key_id: &str, target_version: u32) -> Result<()> {
     };
     
     // Update key metadata in key manager
-    let key_manager = InMemoryKeyManager::new();
+    let _key_manager = InMemoryKeyManager::new();
     
     // Store the rolled back metadata - Note: Since store_key_metadata doesn't exist, we'll simulate
     println!("    📝 Storing rolled back metadata (simulated)");

@@ -1,6 +1,6 @@
 //! Tenant management commands for Fortress CLI
 
-use clap::Subcommand;
+use clap::{Subcommand, Args};
 use color_eyre::eyre::Result;
 use fortress_core::{
     tenant::{
@@ -16,29 +16,9 @@ use dialoguer::Confirm;
 #[derive(Debug, Subcommand)]
 pub enum TenantCommands {
     /// Create a new tenant
-    Create {
-        /// Tenant name
-        #[arg(short, long)]
-        name: String,
-        
-        /// Tenant description
-        #[arg(short, long)]
-        description: Option<String>,
-        
-        /// Maximum databases allowed
-        #[arg(long)]
-        max_databases: Option<u32>,
-        
-        /// Maximum storage size in bytes
-        #[arg(long)]
-        max_storage: Option<u64>,
-        
-        /// Maximum connections allowed
-        #[arg(long)]
-        max_connections: Option<u32>,
-    },
+    Create(CreateArgs),
     /// List all tenants
-    List,
+    List(ListArgs),
     /// Show tenant details
     Show {
         /// Tenant ID
@@ -59,6 +39,50 @@ pub enum TenantCommands {
     },
 }
 
+/// Arguments for tenant creation
+#[derive(Debug, Args)]
+pub struct CreateArgs {
+    /// Tenant name
+    #[arg(short, long)]
+    pub name: String,
+    
+    /// Tenant description
+    #[arg(short, long)]
+    pub description: Option<String>,
+    
+    /// Maximum databases allowed
+    #[arg(long)]
+    pub max_databases: Option<u32>,
+    
+    /// Maximum storage size in bytes
+    #[arg(long)]
+    pub max_storage: Option<u64>,
+    
+    /// Maximum connections allowed
+    #[arg(long)]
+    pub max_connections: Option<u32>,
+    
+    /// Resource configuration
+    #[arg(long)]
+    pub resources: Option<String>,
+}
+
+/// Arguments for tenant listing
+#[derive(Debug, Args)]
+pub struct ListArgs {
+    /// Show detailed information
+    #[arg(long)]
+    pub detailed: bool,
+    
+    /// Filter by status
+    #[arg(long)]
+    pub status: Option<String>,
+    
+    /// Limit number of results
+    #[arg(long)]
+    pub limit: Option<usize>,
+}
+
 /// Execute tenant commands
 pub async fn execute_tenant_command(command: TenantCommands) -> Result<()> {
     // Create tenant manager with default global limits
@@ -66,11 +90,11 @@ pub async fn execute_tenant_command(command: TenantCommands) -> Result<()> {
     let tenant_manager = InMemoryTenantManager::with_global_limits(global_limits);
     
     match command {
-        TenantCommands::Create { name, description, max_databases, max_storage, max_connections } => {
-            create_tenant(&tenant_manager, name, description, max_databases, max_storage, max_connections).await
+        TenantCommands::Create(args) => {
+            create_tenant(&tenant_manager, args.name, args.description, args.max_databases, args.max_storage, args.max_connections).await
         }
-        TenantCommands::List => {
-            list_tenants(&tenant_manager).await
+        TenantCommands::List(args) => {
+            list_tenants(&tenant_manager, args.detailed, args.status, args.limit).await
         }
         TenantCommands::Show { tenant_id } => {
             show_tenant(&tenant_manager, &tenant_id).await
@@ -142,7 +166,12 @@ async fn create_tenant(
 }
 
 /// List all tenants
-async fn list_tenants(manager: &InMemoryTenantManager) -> Result<()> {
+async fn list_tenants(
+    manager: &InMemoryTenantManager,
+    detailed: bool,
+    _status: Option<String>,
+    _limit: Option<usize>,
+) -> Result<()> {
     println!("🏢 Fortress Tenants");
     println!("==================");
     
@@ -163,6 +192,19 @@ async fn list_tenants(manager: &InMemoryTenantManager) -> Result<()> {
                 }
                 println!("   ✅ Status: {}", if tenant.active { "Active" } else { "Inactive" });
                 println!("   📅 Created: {}", tenant.created_at.format("%Y-%m-%d %H:%M:%S UTC"));
+                
+                if detailed {
+                    println!("   📊 Resource Limits:");
+                    if let Some(max_dbs) = tenant.resource_limits.max_databases {
+                        println!("     🗄️  Max databases: {}", max_dbs);
+                    }
+                    if let Some(max_storage) = tenant.resource_limits.max_storage_size {
+                        println!("     💾 Max storage: {} bytes", max_storage);
+                    }
+                    if let Some(max_conns) = tenant.resource_limits.max_connections {
+                        println!("     🔗 Max connections: {}", max_conns);
+                    }
+                }
                 println!();
             }
         }

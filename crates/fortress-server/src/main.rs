@@ -40,7 +40,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Create an application router with all endpoints
-async fn create_router(openapi: utoipa::openapi::OpenApi) -> Result<Router, Box<dyn std::error::Error>> {
+async fn create_router(_openapi: utoipa::openapi::OpenApi) -> Result<Router, Box<dyn std::error::Error>> {
     use fortress_server::handlers::*;
     
     // Create application state
@@ -136,7 +136,7 @@ async fn create_app_state() -> Result<Arc<fortress_server::handlers::AppState>, 
 }
 
 /// Simple health check for testing
-async fn health_check() -> Json<serde_json::Value> {
+async fn _health_check() -> Json<serde_json::Value> {
     Json(serde_json::json!({
         "status": "healthy",
         "timestamp": chrono::Utc::now(),

@@ -4,7 +4,6 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::time::Duration;
 use tokio::time::timeout;
-use tracing::{info, warn, error};
 use serde_json;
 
 pub async fn handle_status(data_dir: Option<String>) -> Result<()> {

@@ -334,7 +334,7 @@ async fn handle_show(plugin_id: String) -> Result<()> {
 }
 
 /// Handle plugin updates
-async fn handle_update(plugin_id: Option<String>, yes: bool) -> Result<()> {
+async fn handle_update(plugin_id: Option<String>, _yes: bool) -> Result<()> {
     let marketplace = create_marketplace()?;
     
     match plugin_id {
@@ -789,11 +789,11 @@ async fn validate_security_compliance(
     let plugin_path = get_plugin_path(&plugin.metadata.id)?;
     
     // Warning 1: Check if plugin has executable permissions
-    if let Ok(metadata) = tokio::fs::metadata(&plugin_path).await {
+    if let Ok(_metadata) = tokio::fs::metadata(&plugin_path).await {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let permissions = metadata.permissions();
+            let permissions = _metadata.permissions();
             if permissions.mode() & 0o111 != 0 {
                 warnings.push("Plugin directory has executable permissions".to_string());
             }
@@ -871,7 +871,7 @@ async fn validate_dependency_available(
 }
 
 async fn validate_config_against_schema(
-    config: &std::collections::HashMap<String, serde_json::Value>,
+    _config: &std::collections::HashMap<String, serde_json::Value>,
     metadata: &fortress_core::plugin_marketplace::PluginPackage,
 ) -> Result<()> {
     // This would validate configuration against JSON schema

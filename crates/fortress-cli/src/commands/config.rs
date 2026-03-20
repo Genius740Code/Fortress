@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tokio::fs;
-use tracing::{info, warn, error};
+use tracing::info;
 use crate::ConfigAction;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -314,7 +314,7 @@ fn validate_config(config: &ConfigSettings) -> Result<()> {
         errors.push("Server host cannot be empty");
     }
     
-    if config.server.port == 0 || config.server.port > 65535 {
+    if config.server.port == 0 {
         errors.push("Server port must be between 1 and 65535");
     }
     

@@ -8,9 +8,6 @@ mod types;
 
 use commands::{create_simple, cluster, tenant, plugin, start, status, key, config, migrate};
 use types::{Commands, KeyAction, ConfigAction};
-use commands::cluster::ClusterCommands;
-use commands::tenant::TenantCommands;
-use commands::plugin::PluginAction;
 
 #[derive(Parser)]
 #[command(name = "fortress")]
@@ -98,13 +95,13 @@ async fn run_command(command: Commands) -> Result<()> {
 
 /// Public function to run CLI with custom arguments (for NAPI bindings)
 pub async fn run_cli_with_args(args: &[&str]) -> Result<String> {
-    use std::io::{self, Write};
+    use std::io;
     
     // Capture stdout
-    let mut buffer: Vec<u8> = Vec::new();
+    let _buffer: Vec<u8> = Vec::new();
     
     // Override stdout temporarily
-    let original_stdout = io::stdout();
+    let _original_stdout = io::stdout();
     
     // Parse CLI with custom args
     let cli = match Cli::try_parse_from(args) {
@@ -115,7 +112,7 @@ pub async fn run_cli_with_args(args: &[&str]) -> Result<String> {
     };
     
     // Initialize logging
-    let log_level = if cli.verbose { "debug" } else { "info" };
+    let _log_level = if cli.verbose { "debug" } else { "info" };
     
     // Run the command and capture output
     match run_command(cli.command).await {

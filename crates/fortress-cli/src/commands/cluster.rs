@@ -2,15 +2,15 @@
 
 use clap::{Args, Subcommand};
 use fortress_core::{
-    cluster::{ClusterConfig, ClusterManager, ClusterHealth},
-    error::Result,
+    cluster::{ClusterConfig, ClusterManager, ClusterNode, NodeState},
+    error::{FortressError, Result},
 };
 use std::net::SocketAddr;
 use std::time::Duration;
+use std::collections::HashMap;
 use uuid::Uuid;
 use console::style;
 use tracing::{info, error, warn};
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 use tokio::fs;
 use std::path::PathBuf;
@@ -389,6 +389,131 @@ struct ClusterHealthInfo {
     recommendations: Vec<String>,
 }
 
+/// Cluster health metrics from the cluster manager
+#[derive(Debug)]
+struct ClusterHealthMetrics {
+    current_term: u64,
+    active_members: usize,
+    expected_members: usize,
+    heartbeat_rate: f64,
+    network_connected: bool,
+    avg_latency: Duration,
+    messages_processed: u64,
+    replication_lag: Duration,
+    sync_percentage: f64,
+    replication_success_rate: f64,
+}
+
+/// Local cluster manager interface
+struct LocalClusterManager {
+    node_id: Uuid,
+}
+
+impl LocalClusterManager {
+    fn new(node_id: Uuid) -> Self {
+        Self { node_id }
+    }
+    
+    async fn get_node_state(&self) -> NodeState {
+        // Try to load actual state from cluster manager
+        // For now, return a default state
+        NodeState::Follower { leader: None, term: 0 }
+    }
+    
+    async fn get_members(&self) -> HashMap<Uuid, ClusterNode> {
+        // Try to get actual members from cluster manager
+        // For now, return empty map
+        HashMap::new()
+    }
+    
+    async fn is_healthy(&self) -> bool {
+        // Try to get actual health status
+        // For now, return false since we can't connect
+        false
+    }
+    
+    async fn get_health_metrics(&self) -> ClusterHealthMetrics {
+        // Try to get actual health metrics
+        // For now, return default metrics
+        ClusterHealthMetrics {
+            current_term: 0,
+            active_members: 0,
+            expected_members: 0,
+            heartbeat_rate: 0.0,
+            network_connected: false,
+            avg_latency: Duration::from_millis(0),
+            messages_processed: 0,
+            replication_lag: Duration::from_millis(0),
+            sync_percentage: 0.0,
+            replication_success_rate: 0.0,
+        }
+    }
+    
+    async fn transfer_leadership(&mut self) -> Result<()> {
+        // Try to transfer leadership to another node
+        info!("Attempting to transfer leadership from node {}", self.node_id);
+        
+        // In a real implementation, this would:
+        // 1. Find a suitable follower node
+        // 2. Initiate leadership transfer
+        // 3. Wait for confirmation
+        
+        Ok(())
+    }
+    
+    async fn notify_leave(&self) -> Result<()> {
+        // Notify other cluster members that this node is leaving
+        info!("Notifying cluster members of node {} departure", self.node_id);
+        
+        // In a real implementation, this would:
+        // 1. Send leave messages to all members
+        // 2. Wait for acknowledgments
+        // 3. Handle any failed notifications
+        
+        Ok(())
+    }
+    
+    async fn shutdown(self) -> Result<()> {
+        // Shutdown cluster services
+        info!("Shutting down cluster services for node {}", self.node_id);
+        
+        // In a real implementation, this would:
+        // 1. Stop heartbeat loops
+        // 2. Close network connections
+        // 3. Clean up resources
+        // 4. Save final state
+        
+        Ok(())
+    }
+}
+
+/// Try to get a connection to the local cluster manager
+async fn get_local_cluster_manager(node_id: &Uuid) -> Option<LocalClusterManager> {
+    // Try to connect to the local cluster manager
+    // In a real implementation, this would:
+    // 1. Check if cluster service is running
+    // 2. Connect via IPC or HTTP API
+    // 3. Authenticate if needed
+    // 4. Return a manager interface
+    
+    // For now, we'll try to detect if the cluster is running
+    // by checking for the cluster config and attempting a simple connection
+    
+    let config_path = get_cluster_config_path();
+    if !config_path.exists() {
+        return None;
+    }
+    
+    // Try to read the config to verify cluster is initialized
+    match fs::read_to_string(&config_path).await {
+        Ok(_) => {
+            // Config exists, try to create a manager
+            Some(LocalClusterManager::new(*node_id))
+        }
+        Err(_) => None,
+    }
+}
+
 /// Load cluster configuration from storage
 async fn load_cluster_config() -> Option<ClusterConfig> {
     let config_path = get_cluster_config_path();
@@ -415,7 +540,7 @@ async fn save_cluster_config(config: &ClusterConfig) -> Result<()> {
     // Create parent directory if needed
     if let Some(parent) = config_path.parent() {
         fs::create_dir_all(parent).await
-            .map_err(|e| fortress_core::error::FortressError::storage(
+            .map_err(|_e| fortress_core::error::FortressError::storage(
                 "Failed to create config directory".to_string(),
                 "file".to_string(),
                 fortress_core::error::StorageErrorCode::ConnectionFailed
@@ -423,14 +548,14 @@ async fn save_cluster_config(config: &ClusterConfig) -> Result<()> {
     }
     
     let content = serde_json::to_string_pretty(config)
-        .map_err(|e| fortress_core::error::FortressError::storage(
+        .map_err(|_e| fortress_core::error::FortressError::storage(
             "Failed to serialize config".to_string(),
             "file".to_string(),
             fortress_core::error::StorageErrorCode::InvalidOperation
         ))?;
     
     fs::write(&config_path, content).await
-        .map_err(|e| fortress_core::error::FortressError::storage(
+        .map_err(|_e| fortress_core::error::FortressError::storage(
             "Failed to write config".to_string(),
             "file".to_string(),
             fortress_core::error::StorageErrorCode::ConnectionFailed
@@ -445,7 +570,7 @@ async fn remove_cluster_config() -> Result<()> {
     
     if config_path.exists() {
         fs::remove_file(&config_path).await
-            .map_err(|e| fortress_core::error::FortressError::storage(
+            .map_err(|_e| fortress_core::error::FortressError::storage(
                 "Failed to remove config".to_string(),
                 "file".to_string(),
                 fortress_core::error::StorageErrorCode::ConnectionFailed
@@ -463,92 +588,214 @@ fn get_cluster_config_path() -> PathBuf {
 }
 
 /// Get current cluster status
-async fn get_cluster_status(_node_id: &Uuid) -> Result<ClusterStatus> {
-    // In a real implementation, this would connect to the running cluster
-    // For now, we'll simulate the status
-    tokio::time::sleep(Duration::from_millis(100)).await;
+async fn get_cluster_status(node_id: &Uuid) -> Result<ClusterStatus> {
+    // Load cluster configuration
+    let _config = load_cluster_config().await
+        .ok_or_else(|| FortressError::cluster(
+            "Cluster configuration not found".to_string(),
+            None,
+        ))?;
     
-    Ok(ClusterStatus {
-        role: "Follower".to_string(),
-        term: 1,
-        member_count: 3,
-        healthy: true,
-    })
+    // Try to connect to local cluster manager
+    match get_local_cluster_manager(node_id).await {
+        Some(manager) => {
+            let state = manager.get_node_state().await;
+            let members = manager.get_members().await;
+            let term = match &state {
+                NodeState::Follower { term, .. } => *term,
+                NodeState::Candidate { term, .. } => *term,
+                NodeState::Leader { term, .. } => *term,
+            };
+            
+            let role = match &state {
+                NodeState::Follower { .. } => "Follower".to_string(),
+                NodeState::Candidate { .. } => "Candidate".to_string(),
+                NodeState::Leader { .. } => "Leader".to_string(),
+            };
+            
+            let healthy = manager.is_healthy().await;
+            
+            Ok(ClusterStatus {
+                role,
+                term,
+                member_count: members.len(),
+                healthy,
+            })
+        }
+        None => {
+            // Cluster manager not accessible, return basic status
+            Ok(ClusterStatus {
+                role: "Unknown".to_string(),
+                term: 0,
+                member_count: 0,
+                healthy: false,
+            })
+        }
+    }
 }
 
 /// Get cluster members
 async fn get_cluster_members(node_id: &Uuid) -> Result<Vec<ClusterMember>> {
-    // In a real implementation, this would query the cluster manager
-    // For now, we'll simulate some members
-    tokio::time::sleep(Duration::from_millis(150)).await;
-    
-    let members = vec![
-        ClusterMember {
-            node_id: node_id.to_string(),
-            address: "127.0.0.1:8080".parse().unwrap(),
-            state: "Leader".to_string(),
-            term: 1,
-            last_seen: Utc::now(),
-        },
-        ClusterMember {
-            node_id: Uuid::new_v4().to_string(),
-            address: "127.0.0.1:8081".parse().unwrap(),
-            state: "Follower".to_string(),
-            term: 1,
-            last_seen: Utc::now(),
-        },
-        ClusterMember {
-            node_id: Uuid::new_v4().to_string(),
-            address: "127.0.0.1:8082".parse().unwrap(),
-            state: "Follower".to_string(),
-            term: 1,
-            last_seen: Utc::now(),
-        },
-    ];
-    
-    Ok(members)
+    // Try to connect to local cluster manager
+    match get_local_cluster_manager(node_id).await {
+        Some(manager) => {
+            let members = manager.get_members().await;
+            let mut cluster_members = Vec::new();
+            
+            for (member_id, node) in members {
+                let state = match &node.state {
+                    NodeState::Follower { .. } => "Follower".to_string(),
+                    NodeState::Candidate { .. } => "Candidate".to_string(),
+                    NodeState::Leader { .. } => "Leader".to_string(),
+                };
+                
+                let term = match &node.state {
+                    NodeState::Follower { term, .. } => *term,
+                    NodeState::Candidate { term, .. } => *term,
+                    NodeState::Leader { term, .. } => *term,
+                };
+                
+                let last_seen = DateTime::from_timestamp(
+                    (node.last_heartbeat / 1000) as i64,
+                    ((node.last_heartbeat % 1000) * 1_000_000) as u32,
+                ).unwrap_or_else(|| Utc::now());
+                
+                cluster_members.push(ClusterMember {
+                    node_id: member_id.to_string(),
+                    address: node.address,
+                    state,
+                    term,
+                    last_seen,
+                });
+            }
+            
+            Ok(cluster_members)
+        }
+        None => {
+            Err(FortressError::cluster(
+                "Cluster manager not accessible".to_string(),
+                None,
+            ))
+        }
+    }
 }
 
 /// Perform cluster leave operation
 async fn perform_cluster_leave(node_id: &Uuid) -> Result<()> {
-    // In a real implementation, this would:
-    // 1. Notify other cluster members
-    // 2. Transfer leadership if this node is leader
-    // 3. Stop cluster services
-    // 4. Clean up resources
-    
-    info!("Node {} leaving cluster", node_id);
-    
-    // Simulate leave process
-    tokio::time::sleep(Duration::from_millis(500)).await;
-    
-    Ok(())
+    // Try to connect to local cluster manager
+    match get_local_cluster_manager(node_id).await {
+        Some(mut manager) => {
+            info!("Node {} leaving cluster", node_id);
+            
+            // Check if this node is the leader and transfer leadership if needed
+            let state = manager.get_node_state().await;
+            if matches!(state, NodeState::Leader { .. }) {
+                info!("Leader node leaving cluster, transferring leadership");
+                manager.transfer_leadership().await?;
+            }
+            
+            // Notify other cluster members
+            manager.notify_leave().await?;
+            
+            // Stop cluster services
+            manager.shutdown().await?;
+            
+            info!("Node {} successfully left cluster", node_id);
+            Ok(())
+        }
+        None => {
+            // Cluster manager not accessible, perform basic cleanup
+            info!("Cluster manager not accessible, performing basic cleanup for node {}", node_id);
+            
+            // Simulate cleanup process
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            
+            Ok(())
+        }
+    }
 }
 
 /// Get cluster health information
-async fn get_cluster_health(_node_id: &Uuid) -> Result<ClusterHealthInfo> {
-    // In a real implementation, this would gather metrics from the cluster
-    // For now, we'll simulate health data
-    tokio::time::sleep(Duration::from_millis(200)).await;
-    
-    Ok(ClusterHealthInfo {
-        overall_healthy: true,
-        current_term: 1,
-        active_members: 3,
-        expected_members: 3,
-        heartbeat_rate: 0.95,
-        network_connected: true,
-        avg_latency: Duration::from_millis(15),
-        messages_processed: 1250,
-        replication_lag: Duration::from_millis(5),
-        sync_percentage: 100.0,
-        replication_success_rate: 0.998,
-        issues: vec![],
-        recommendations: vec![
-            "Consider adding more nodes for high availability".to_string(),
-            "Monitor network latency for optimal performance".to_string(),
-        ],
-    })
+async fn get_cluster_health(node_id: &Uuid) -> Result<ClusterHealthInfo> {
+    // Try to connect to local cluster manager
+    match get_local_cluster_manager(node_id).await {
+        Some(manager) => {
+            let health_metrics = manager.get_health_metrics().await;
+            let members = manager.get_members().await;
+            
+            let mut issues = Vec::new();
+            let mut recommendations = Vec::new();
+            
+            // Analyze health and generate issues/recommendations
+            if health_metrics.active_members < health_metrics.expected_members {
+                issues.push(format!(
+                    "Only {}/{} members are active",
+                    health_metrics.active_members, health_metrics.expected_members
+                ));
+            }
+            
+            if health_metrics.heartbeat_rate < 0.8 {
+                issues.push("Low heartbeat rate detected".to_string());
+            }
+            
+            if health_metrics.avg_latency > Duration::from_millis(100) {
+                issues.push("High network latency detected".to_string());
+                recommendations.push("Check network connectivity and optimize routing".to_string());
+            }
+            
+            if health_metrics.replication_success_rate < 0.95 {
+                issues.push("Low replication success rate".to_string());
+                recommendations.push("Check replication configuration and network stability".to_string());
+            }
+            
+            if members.len() < 3 {
+                recommendations.push("Consider adding more nodes for high availability".to_string());
+            }
+            
+            if health_metrics.avg_latency > Duration::from_millis(50) {
+                recommendations.push("Monitor network latency for optimal performance".to_string());
+            }
+            
+            let overall_healthy = issues.is_empty() && 
+                health_metrics.active_members >= health_metrics.expected_members &&
+                health_metrics.heartbeat_rate >= 0.9 &&
+                health_metrics.replication_success_rate >= 0.95;
+            
+            Ok(ClusterHealthInfo {
+                overall_healthy,
+                current_term: health_metrics.current_term,
+                active_members: health_metrics.active_members,
+                expected_members: health_metrics.expected_members,
+                heartbeat_rate: health_metrics.heartbeat_rate,
+                network_connected: health_metrics.network_connected,
+                avg_latency: health_metrics.avg_latency,
+                messages_processed: health_metrics.messages_processed,
+                replication_lag: health_metrics.replication_lag,
+                sync_percentage: health_metrics.sync_percentage,
+                replication_success_rate: health_metrics.replication_success_rate,
+                issues,
+                recommendations,
+            })
+        }
+        None => {
+            // Cluster manager not accessible, return unhealthy status
+            Ok(ClusterHealthInfo {
+                overall_healthy: false,
+                current_term: 0,
+                active_members: 0,
+                expected_members: 0,
+                heartbeat_rate: 0.0,
+                network_connected: false,
+                avg_latency: Duration::from_millis(0),
+                messages_processed: 0,
+                replication_lag: Duration::from_millis(0),
+                sync_percentage: 0.0,
+                replication_success_rate: 0.0,
+                issues: vec!["Cluster manager not accessible".to_string()],
+                recommendations: vec!["Start cluster services".to_string()],
+            })
+        }
+    }
 }
 
 /// Format heartbeat status

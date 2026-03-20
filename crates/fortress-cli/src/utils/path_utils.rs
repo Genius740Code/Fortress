@@ -7,7 +7,7 @@ use std::path::PathBuf;
 /// 
 /// # Returns
 /// An absolute PathBuf
-pub fn normalize_path(path: &str) -> PathBuf {
+pub fn _normalize_path(path: &str) -> PathBuf {
     let path_buf = PathBuf::from(path);
     
     // Convert to absolute path if relative
@@ -27,7 +27,7 @@ pub fn normalize_path(path: &str) -> PathBuf {
 /// 
 /// # Returns
 /// Ok(()) if successful, Err(io::Error) if creation fails
-pub fn ensure_dir_exists(path: &PathBuf) -> Result<(), std::io::Error> {
+pub fn _ensure_dir_exists(path: &PathBuf) -> Result<(), std::io::Error> {
     if !path.exists() {
         std::fs::create_dir_all(path)?;
     }
@@ -38,7 +38,7 @@ pub fn ensure_dir_exists(path: &PathBuf) -> Result<(), std::io::Error> {
 /// 
 /// # Returns
 /// A PathBuf pointing to the default data directory
-pub fn get_default_data_dir() -> PathBuf {
+pub fn _get_default_data_dir() -> PathBuf {
     dirs::data_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join("fortress")

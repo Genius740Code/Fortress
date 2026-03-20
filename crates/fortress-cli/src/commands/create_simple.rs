@@ -38,7 +38,7 @@ pub async fn handle_create_simple(
     template: String,
     data_dir: Option<String>,
     interactive: bool,
-    dry_run: bool,
+    _dry_run: bool,
 ) -> Result<()> {
     println!("{}", style("Fortress Database Creation").bold().cyan());
     println!();
@@ -140,9 +140,9 @@ pub async fn handle_create_simple(
 }
 
 async fn create_database_simple(
-    name: &str,
+    _name: &str,
     path: &PathBuf,
-    template: &str,
+    _template: &str,
     encryption_config: EncryptionConfig,
     database_config: DatabaseConfig,
 ) -> Result<()> {
@@ -255,15 +255,49 @@ async fn save_simple_config(path: &PathBuf, config: &SimpleConfig) -> Result<()>
 }
 
 async fn generate_simple_keys(path: &PathBuf) -> Result<()> {
-    // Generate a simple master key file (placeholder)
-    let key_path = path.join("keys").join("master.key");
-    let key_data = format!("master_key_placeholder_{}", chrono::Utc::now().timestamp());
+    use fortress_core::key::{SecureKey, KeyId};
+    
+    // Generate a real cryptographic key
+    let key = SecureKey::generate(32); // 256-bit key
+    let key_id = KeyId::new();
+    
+    // Create keys directory
+    let keys_dir = path.join("keys");
+    tokio::fs::create_dir_all(&keys_dir).await
+        .with_context(|| format!("Failed to create keys directory: {}", keys_dir.display()))?;
+    
+    // Save the key securely
+    let key_path = keys_dir.join("master.key");
+    let key_data = key.as_bytes();
     
     tokio::fs::write(&key_path, key_data)
         .await
         .with_context(|| format!("Failed to save master key: {}", key_path.display()))?;
     
-    debug!("Generated and saved simple master key");
+    // Save key metadata
+    let metadata_path = keys_dir.join("master.meta");
+    let metadata = serde_json::json!({
+        "key_id": key_id.to_string(),
+        "algorithm": "aegis256",
+        "created_at": chrono::Utc::now().to_rfc3339(),
+        "key_size": 32
+    });
+    
+    tokio::fs::write(&metadata_path, metadata.to_string())
+        .await
+        .with_context(|| format!("Failed to save key metadata: {}", metadata_path.display()))?;
+    
+    // Set restrictive permissions (Unix only)
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = tokio::fs::metadata(&key_path).await?.permissions();
+        perms.set_mode(0o600); // Read/write for owner only
+        tokio::fs::set_permissions(&key_path, perms).await
+            .with_context(|| format!("Failed to set key permissions: {}", key_path.display()))?;
+    }
+    
+    debug!("Generated and saved secure master key with ID: {}", key_id);
     Ok(())
 }
 
