@@ -65,6 +65,7 @@ impl Default for ResourceThresholds {
 
 impl Default for SystemResourceConfig {
     fn default() -> Self {
+        tracing::info!("Default system resource configuration created");
         Self {
             enabled: true,
             collection_interval_seconds: 5,
@@ -312,7 +313,7 @@ impl SystemResourceMonitor {
                         }
                     }
                     Err(e) => {
-                        eprintln!("Failed to collect system snapshot: {}", e);
+                        tracing::error!("Failed to collect system snapshot: {}", e);
                     }
                 }
             }

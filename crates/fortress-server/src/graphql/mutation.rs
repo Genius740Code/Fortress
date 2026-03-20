@@ -16,7 +16,7 @@ use fortress_core::{
 };
 use serde_json;
 use uuid::Uuid;
-use base64;
+use base64::{Engine as _, engine::general_purpose};
 
 /// GraphQL mutation root
 pub struct Mutation;
@@ -394,7 +394,7 @@ impl Mutation {
                                         match field_encryption_manager.encrypt_field(&field_id, value_str.as_bytes()).await {
                                             Ok(encrypted_field) => {
                                                 // Store encrypted data as base64 string
-                                                processed_data[field_name] = serde_json::Value::String(base64::encode(&encrypted_field.ciphertext));
+                                                processed_data[field_name] = serde_json::Value::String(base64::engine::general_purpose::STANDARD.encode(&encrypted_field.ciphertext));
                                             }
                                             Err(_) => {
                                                 // If encryption fails, keep original value (fallback)
@@ -513,7 +513,7 @@ impl Mutation {
                                         match field_encryption_manager.encrypt_field(&field_id, value_str.as_bytes()).await {
                                             Ok(encrypted_field) => {
                                                 // Store encrypted data as base64 string
-                                                processed_data[field_name] = serde_json::Value::String(base64::encode(&encrypted_field.ciphertext));
+                                                processed_data[field_name] = serde_json::Value::String(base64::engine::general_purpose::STANDARD.encode(&encrypted_field.ciphertext));
                                             }
                                             Err(_) => {
                                                 // If encryption fails, keep original value (fallback)
@@ -660,7 +660,7 @@ impl Mutation {
                                             match field_encryption_manager.encrypt_field(&field_id, value_str.as_bytes()).await {
                                                 Ok(encrypted_field) => {
                                                     // Store encrypted data as base64 string
-                                                    processed_data[field_name] = serde_json::Value::String(base64::encode(&encrypted_field.ciphertext));
+                                                    processed_data[field_name] = serde_json::Value::String(base64::engine::general_purpose::STANDARD.encode(&encrypted_field.ciphertext));
                                                 }
                                                 Err(_) => {
                                                     // If encryption fails, keep original value (fallback)

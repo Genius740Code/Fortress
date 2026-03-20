@@ -428,7 +428,7 @@ impl AdvancedPerformanceMonitor {
                     &recommendations,
                     &thresholds,
                 ).await {
-                    eprintln!("Metrics aggregation failed: {}", e);
+                    tracing::error!("Metrics aggregation failed: {}", e);
                 }
             }
         });

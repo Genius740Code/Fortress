@@ -31,13 +31,13 @@ impl Subscription {
             DataChangeEvent {
                 id: "550e8400-e29b-41d4-a716-446655440005".to_string(),
                 event_type: DataChangeEventType::Inserted,
-                table_name: table.clone(),
-                database_name: database.clone(),
+                table_name: table.to_string(),
+                database_name: database.to_string(),
                 record_id: "550e8400-e29b-41d4-a716-446655440006".to_string(),
                 old_data: None,
                 new_data: Some(async_graphql::Json(serde_json::json!({
                     "id": "550e8400-e29b-41d4-a716-446655440000",
-                    "username": "new_user"
+                    "username": "new_user".to_string()
                 }))),
                 timestamp: Utc::now(),
                 user_id: Some("system".to_string()),
@@ -45,14 +45,14 @@ impl Subscription {
             DataChangeEvent {
                 id: "550e8400-e29b-41d4-a716-446655440007".to_string(),
                 event_type: DataChangeEventType::Updated,
-                table_name: table.clone(),
-                database_name: database.clone(),
+                table_name: table.to_string(),
+                database_name: database.to_string(),
                 record_id: "550e8400-e29b-41d4-a716-446655440008".to_string(),
                 old_data: Some(async_graphql::Json(serde_json::json!({
-                    "username": "old_name"
+                    "username": "old_name".to_string()
                 }))),
                 new_data: Some(async_graphql::Json(serde_json::json!({
-                    "username": "new_name"
+                    "username": "new_name".to_string()
                 }))),
                 timestamp: Utc::now(),
                 user_id: Some("system".to_string()),

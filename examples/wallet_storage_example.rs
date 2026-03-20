@@ -274,13 +274,23 @@ impl SecureWalletStorage {
         let old_key = self.key_manager.get_key(&key_id)?;
         
         // Decrypt with old key
-        let decrypted_key = self.algorithm.decrypt(&encrypted_key, old_key.as_bytes())?;
+        let decrypted_key = self.algorithm.decrypt(&encrypted_key, old_key.as_bytes())
+            .map_err(|e| FortressError::encryption(
+                format!("Failed to decrypt wallet key during rotation: {}", e),
+                "rotate_wallet_key".to_string(),
+                EncryptionErrorCode::DecryptionFailed,
+            ))?;
         
         // Generate a new encryption key
         let new_key = self.key_manager.generate_key(&*self.algorithm)?;
         
         // Re-encrypt with new key
-        let new_encrypted_key = self.algorithm.encrypt(&decrypted_key, new_key.as_bytes())?;
+        let new_encrypted_key = self.algorithm.encrypt(&decrypted_key, new_key.as_bytes())
+            .map_err(|e| FortressError::encryption(
+                format!("Failed to encrypt wallet key during rotation: {}", e),
+                "rotate_wallet_key".to_string(),
+                EncryptionErrorCode::EncryptionFailed,
+            ))?;
         
         // Update cache with new encrypted private key
         self.key_cache.store(&key_id, new_encrypted_key, None).await?;
@@ -319,7 +329,7 @@ impl SecureWalletStorage {
         println!("🗑️  Deleting wallet: {}", wallet_id);
         
         // Create key ID
-        let key_id = KeyId::new(wallet_id.to_string());
+        let key_id = KeyId::new();
         
         // Remove from cache
         self.key_cache.remove(&key_id).await?;
@@ -351,7 +361,8 @@ impl SecureWalletStorage {
         getrandom::getrandom(&mut private_key)
             .map_err(|e| FortressError::encryption(
                 format!("Failed to generate secure random key: {}", e),
-                "generate_secure_private_key".to_string()
+                "generate_secure_private_key".to_string(),
+                EncryptionErrorCode::KeyGenerationFailed,
             ))?;
         
         Ok(private_key)
@@ -491,7 +502,11 @@ async fn main() -> Result<()> {
     println!("Example 6: Cache performance statistics");
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
     
-    let stats = storage.key_cache.get_stats().await?;
+    let stats = storage.key_cache.get_stats().await
+        .map_err(|e| FortressError::cache(
+            format!("Failed to get cache statistics: {}", e),
+            "get_stats".to_string(),
+        ))?;
     println!("Cache Statistics:");
     println!("  Total Keys: {}", stats.total_keys);
     println!("  Cache Hits: {}", stats.cache_hits);

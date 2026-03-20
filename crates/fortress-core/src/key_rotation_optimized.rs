@@ -495,7 +495,7 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
 
         if let Err(e) = cleanup_result {
             // Log cleanup failure but don't fail the operation
-            eprintln!("Warning: Failed to cleanup old key version {}: {}", old_versioned_id, e);
+            tracing::warn!("Warning: Failed to cleanup old key version {}: {}", old_versioned_id, e);
         }
 
         // Cleanup versioned new key
@@ -652,7 +652,7 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
                     Ok(rotation_id) => results.push(rotation_id),
                     Err(e) => {
                         // Log error but continue with other keys
-                        eprintln!("Bulk rotation error: {}", e);
+                        tracing::error!("Bulk rotation error: {}", e);
                     }
                 }
             }
@@ -703,7 +703,7 @@ mod tests {
         let rotation_id = rotation_manager.rotate_key_optimized(&key_id, algorithm.as_ref(), security_context).await?;
         let rotation_time = start_time.elapsed();
 
-        println!("Optimized rotation completed in {:?} with ID: {}", rotation_time, rotation_id);
+        tracing::info!("Optimized rotation completed in {:?} with ID: {}", rotation_time, rotation_id);
 
         // Verify metrics
         let metrics = rotation_manager.get_metrics().await;
@@ -753,7 +753,7 @@ mod tests {
         let rotation_ids = rotation_manager.bulk_rotate_keys(&key_ids, algorithm.as_ref(), security_context).await?;
         let bulk_time = start_time.elapsed();
 
-        println!("Bulk rotation completed in {:?} for {} keys", bulk_time, rotation_ids.len());
+        tracing::info!("Bulk rotation completed in {:?} for {} keys", bulk_time, rotation_ids.len());
         assert_eq!(rotation_ids.len(), key_ids.len());
 
         // Verify all keys were rotated

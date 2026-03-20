@@ -604,7 +604,7 @@ impl SecurityTestSuite {
         let mut tasks = Vec::new();
 
         for i in 0..concurrent_requests {
-            let security_manager = self.security_manager.clone();
+            let security_manager = Arc::clone(&self.security_manager);
             let task = tokio::spawn(async move {
                 let request = crate::graphql::security::SecurityRequest::new(
                     format!("client_{}", i),
@@ -633,7 +633,7 @@ impl SecurityTestSuite {
                     total_duration += duration;
                     match validation_result {
                         Ok(crate::graphql::security::SecurityValidationResult::Allowed) => successful_validations += 1,
-                        Ok(crate::graphql::security::SecurityValidationResult::Blocked { .. }) => failed_validations += 1,
+                        Ok(crate::graphql::security::SecurityValidationResult::Blocked { reason: _ }) => failed_validations += 1,
                         Err(_) => failed_validations += 1,
                     }
                 }
@@ -780,28 +780,43 @@ impl SecurityTestSuite {
 /// Test result structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TestResult {
+    /// Whether the test passed
     pub passed: bool,
+    /// Test details and description
     pub details: String,
 }
 
 /// Comprehensive security test results
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecurityTestResults {
+    /// Rate limiting test results
     pub rate_limiting: RateLimitingTestResults,
+    /// Input validation test results
     pub input_validation: InputValidationTestResults,
+    /// Query complexity test results
     pub query_complexity: QueryComplexityTestResults,
+    /// Authentication test results
     pub authentication: AuthenticationTestResults,
+    /// Authorization test results
     pub authorization: AuthorizationTestResults,
+    /// Data encryption test results
     pub data_encryption: DataEncryptionTestResults,
+    /// Session management test results
     pub session_management: SessionManagementTestResults,
+    /// Security policy test results
     pub security_policies: SecurityPolicyTestResults,
+    /// Performance under load test results
     pub performance_under_load: PerformanceTestResults,
+    /// Vulnerability scan results
     pub vulnerability_scan: VulnerabilityScanResults,
+    /// Total test duration
     pub total_duration: Duration,
+    /// Overall security score (0-100)
     pub overall_score: f64,
 }
 
 impl SecurityTestResults {
+    /// Create new security test results with default values
     pub fn new() -> Self {
         Self {
             rate_limiting: RateLimitingTestResults::new(),
@@ -823,96 +838,147 @@ impl SecurityTestResults {
 // Individual test result structures
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RateLimitingTestResults {
+    /// Normal rate limiting test result
     pub normal_rate_limiting: TestResult,
+    /// Burst rate limiting test result
     pub burst_rate_limiting: TestResult,
+    /// IP blocking test result
     pub ip_blocking: TestResult,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InputValidationTestResults {
+    /// SQL injection prevention test result
     pub sql_injection_prevention: TestResult,
+    /// XSS prevention test result
     pub xss_prevention: TestResult,
+    /// Path traversal prevention test result
     pub path_traversal_prevention: TestResult,
+    /// Input size limits test result
     pub input_size_limits: TestResult,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueryComplexityTestResults {
+    /// Simple query test result
     pub simple_query: TestResult,
+    /// Deep query test result
     pub deep_query: TestResult,
+    /// Complex query test result
     pub complex_query: TestResult,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthenticationTestResults {
+    /// Valid credentials test result
     pub valid_credentials: TestResult,
+    /// Invalid credentials test result
     pub invalid_credentials: TestResult,
+    /// Token verification test result
     pub token_verification: TestResult,
+    /// Token refresh test result
     pub token_refresh: TestResult,
+    /// Logout test result
     pub logout: TestResult,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthorizationTestResults {
+    /// Admin role access test result
     pub admin_role_access: TestResult,
+    /// User role access test result
     pub user_role_access: TestResult,
+    /// Unauthorized role access test result
     pub unauthorized_role_access: TestResult,
+    /// Admin permission access test result
     pub admin_permission_access: TestResult,
+    /// User permission access test result
     pub user_permission_access: TestResult,
+    /// Unauthorized permission access test result
     pub unauthorized_permission_access: TestResult,
+    /// Admin resource access test result
     pub admin_resource_access: TestResult,
+    /// User resource access test result
     pub user_resource_access: TestResult,
+    /// Unauthorized resource access test result
     pub unauthorized_resource_access: TestResult,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DataEncryptionTestResults {
+    /// Field encryption test result
     pub field_encryption: TestResult,
+    /// Field decryption test result
     pub field_decryption: TestResult,
+    /// Encryption round-trip test result
     pub encryption_round_trip: TestResult,
+    /// Record encryption test result
     pub record_encryption: TestResult,
+    /// Record decryption test result
     pub record_decryption: TestResult,
+    /// Record round-trip test result
     pub record_round_trip: TestResult,
+    /// Key rotation test result
     pub key_rotation: TestResult,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionManagementTestResults {
+    /// Session validation test result
     pub session_validation: TestResult,
+    /// Session expiration test result
     pub session_expiration: TestResult,
+    /// Session logout test result
     pub session_logout: TestResult,
+    /// Post-logout validation test result
     pub post_logout_validation: TestResult,
+    /// Session cleanup test result
     pub session_cleanup: TestResult,
+    /// Session statistics test result
     pub session_statistics: TestResult,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecurityPolicyTestResults {
+    /// Policy evaluation test result
     pub policy_evaluation: TestResult,
+    /// Role-based policies test result
     pub role_based_policies: TestResult,
+    /// Time-based policies test result
     pub time_based_policies: TestResult,
+    /// IP-based policies test result
     pub ip_based_policies: TestResult,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PerformanceTestResults {
+    /// Concurrent validations test result
     pub concurrent_validations: TestResult,
+    /// Performance metrics test result
     pub performance_metrics: TestResult,
+    /// Memory usage test result
     pub memory_usage: TestResult,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VulnerabilityScanResults {
+    /// SQL injection vulnerabilities test result
     pub sql_injection_vulnerabilities: TestResult,
+    /// XSS vulnerabilities test result
     pub xss_vulnerabilities: TestResult,
+    /// CSRF vulnerabilities test result
     pub csrf_vulnerabilities: TestResult,
+    /// Authentication bypass test result
     pub authentication_bypass: TestResult,
+    /// Authorization bypass test result
     pub authorization_bypass: TestResult,
+    /// Data exposure test result
     pub data_exposure: TestResult,
 }
 
 // Implement new() methods for all test result structures
 impl RateLimitingTestResults {
+    /// Create new rate limiting test results with default values
     pub fn new() -> Self {
         Self {
             normal_rate_limiting: TestResult { passed: false, details: String::new() },
@@ -923,6 +989,7 @@ impl RateLimitingTestResults {
 }
 
 impl InputValidationTestResults {
+    /// Create new input validation test results with default values
     pub fn new() -> Self {
         Self {
             sql_injection_prevention: TestResult { passed: false, details: String::new() },
@@ -934,6 +1001,7 @@ impl InputValidationTestResults {
 }
 
 impl QueryComplexityTestResults {
+    /// Create new query complexity test results with default values
     pub fn new() -> Self {
         Self {
             simple_query: TestResult { passed: false, details: String::new() },
@@ -944,6 +1012,7 @@ impl QueryComplexityTestResults {
 }
 
 impl AuthenticationTestResults {
+    /// Create new authentication test results with default values
     pub fn new() -> Self {
         Self {
             valid_credentials: TestResult { passed: false, details: String::new() },

@@ -299,7 +299,7 @@ impl PluginInstaller {
         fs::remove_file(&package_path).await
             .map_err(|e| FortressError::plugin(format!("Failed to cleanup download: {}", e)))?;
 
-        println!("Plugin '{}' v{} installed successfully!", package.name, package.version);
+        tracing::info!("Plugin '{}' v{} installed successfully!", package.name, package.version);
         Ok(())
     }
 
@@ -315,7 +315,7 @@ impl PluginInstaller {
         fs::remove_dir_all(&plugin_dir).await
             .map_err(|e| FortressError::plugin(format!("Failed to uninstall plugin: {}", e)))?;
 
-        println!("Plugin '{}' uninstalled successfully!", plugin_id);
+        tracing::info!("Plugin '{}' uninstalled successfully!", plugin_id);
         Ok(())
     }
 
@@ -354,11 +354,11 @@ impl PluginInstaller {
 
         // Check if update is needed
         if current.metadata.version == latest.version {
-            println!("Plugin '{}' is already up to date!", plugin_id);
+            tracing::info!("Plugin '{}' is already up to date!", plugin_id);
             return Ok(());
         }
 
-        println!("Updating plugin '{}' from v{} to v{}...", plugin_id, current.metadata.version, latest.version);
+        tracing::info!("Updating plugin '{}' from v{} to v{}...", plugin_id, current.metadata.version, latest.version);
 
         // Uninstall current version
         self.uninstall(plugin_id).await?;
@@ -366,7 +366,7 @@ impl PluginInstaller {
         // Install latest version (preserve config)
         self.install(plugin_id, current.config).await?;
 
-        println!("Plugin '{}' updated successfully!", plugin_id);
+        tracing::info!("Plugin '{}' updated successfully!", plugin_id);
         Ok(())
     }
 
