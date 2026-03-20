@@ -15,10 +15,13 @@ use crate::middleware::{create_cors_layer, create_timeout_layer,
 };
 use crate::prelude::*;
 use axum::{
-    extract::DefaultBodyLimit,
-    routing::{get, post, put, delete},
     Router,
+    routing::{get, post, put, delete},
+    response::Json,
+    http::StatusCode,
 };
+use tower_http::trace::TraceLayer;
+use tracing::info;
 use fortress_core::storage::StorageBackend;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -34,7 +37,6 @@ use fortress_core::field_encryption_manager::DefaultFieldEncryptionManager;
 use std::collections::HashMap;
 use chrono::Utc;
 use tokio::time::interval;
-use tracing::info;
 
 /// Query parameters for storage queries
 #[derive(Debug, Clone)]
@@ -160,44 +162,30 @@ impl FortressServer {
             .route("/api/v1/databases/:database/tables", post(crate::handlers::create_table))
             .route("/api/v1/databases/:database/tables", get(crate::handlers::list_tables))
             .route("/api/v1/databases/:database/tables/:table", get(crate::handlers::get_table_schema))
-            .route("/api/v1/databases/:database/tables/:table", delete(crate::handlers::drop_table))
             
-            // API v1 Data Operations
+            // API v1 Data Management
             .route("/api/v1/databases/:database/tables/:table/data", post(crate::handlers::insert_data))
             .route("/api/v1/databases/:database/tables/:table/data", get(crate::handlers::query_data))
-            .route("/api/v1/databases/:database/tables/:table/bulk", post(crate::handlers::bulk_insert))
             .route("/api/v1/databases/:database/tables/:table/data/:id", put(crate::handlers::update_data))
             .route("/api/v1/databases/:database/tables/:table/data/:id", delete(crate::handlers::delete_data))
             
-            // API v1 Query Operations
-            .route("/api/v1/databases/:database/query", post(crate::handlers::execute_query))
-            
             // API v1 Encryption Management
+            .route("/api/v1/databases/:database/tables/:table/encryption", get(crate::handlers::get_encryption_metadata))
             .route("/api/v1/databases/:database/tables/:table/rotate-keys", post(crate::handlers::rotate_keys))
-            .route("/api/v1/databases/:database/tables/:table/rotate-keys-zero-downtime", post(crate::handlers::rotate_keys_zero_downtime))
-            .route("/api/v1/databases/:database/tables/:table/rotation-status", get(crate::handlers::get_rotation_status))
-            .route("/api/v1/databases/:database/tables/:table/encryption-metadata", get(crate::handlers::get_encryption_metadata))
+            .route("/api/v1/databases/:database/tables/:table/rotate-keys/zero-downtime", post(crate::handlers::rotate_keys_zero_downtime))
+            .route("/api/v1/databases/:database/tables/:table/rotation/:rotation_id", get(crate::handlers::get_rotation_status))
             
-            // Legacy routes for backward compatibility
-            .route("/data", post(crate::handlers::store_data))
-            .route("/data/:id", get(crate::handlers::retrieve_data))
-            .route("/data/:id", delete(crate::handlers::delete_data))
-            .route("/data", get(crate::handlers::list_data))
-            .route("/keys", post(crate::handlers::generate_key))
-            
-            .layer(DefaultBodyLimit::max(self.config.network.max_body_size))
-            .layer(create_cors_layer(&self.config.security.cors))
-            .layer(create_timeout_layer(self.config.network.request_timeout));
-
-        // Add state to router
-        router = router.with_state(app_state.clone());
-
-        // Add authentication routes
-        router = router
+            // Authentication routes
             .route("/auth/login", post(crate::handlers::authenticate))
             .route("/auth/refresh", post(crate::handlers::refresh_token))
             .route("/api/v1/auth/login", post(crate::handlers::authenticate))
-            .route("/api/v1/auth/refresh", post(crate::handlers::refresh_token));
+            .route("/api/v1/auth/refresh", post(crate::handlers::refresh_token))
+            
+            .layer(create_timeout_layer(30))
+            .layer(create_cors_layer(&self.config.security.cors));
+
+        // Add state to router
+        router = router.with_state(app_state.clone());
 
         // Add API routes with authentication
         if self.config.features.auth_enabled {

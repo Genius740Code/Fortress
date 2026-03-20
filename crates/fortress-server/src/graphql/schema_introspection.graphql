@@ -1,0 +1,69 @@
+query IntrospectionQuery {
+  __schema {
+    queryType {
+      name
+      description
+    }
+    mutationType {
+      name
+      description
+    }
+    subscriptionType {
+      name
+      description
+    }
+    types {
+      ...TypeRef
+    }
+    directives {
+      name
+      description
+      locations
+      args {
+        ...InputValue
+      }
+    }
+  }
+}
+
+fragment TypeRef on __Type {
+  kind
+  name
+  description
+  ofType {
+    kind
+    name
+  }
+  fields {
+    name
+    description
+    type {
+      ...TypeRef
+    }
+    args {
+      ...InputValue
+    }
+  }
+  inputFields {
+    ...InputValue
+  }
+  interfaces {
+    ...TypeRef
+  }
+  enumValues {
+    name
+    description
+  }
+  possibleTypes {
+    ...TypeRef
+  }
+}
+
+fragment InputValue on __InputValue {
+  name
+  description
+  type {
+    ...TypeRef
+  }
+  defaultValue
+}

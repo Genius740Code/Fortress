@@ -48,6 +48,16 @@ pub trait StorageBackend: Send + Sync + fmt::Debug {
     /// List all keys with a given prefix
     async fn list_prefix(&self, prefix: &str) -> Result<Vec<String>>;
 
+    /// Batch get multiple keys efficiently
+    async fn batch_get(&self, keys: &[String]) -> Result<Vec<(String, Option<Vec<u8>>)>> {
+        let mut results = Vec::new();
+        for key in keys {
+            let value = self.get(key).await?;
+            results.push((key.clone(), value));
+        }
+        Ok(results)
+    }
+
     /// Get metadata about the storage backend
     fn metadata(&self) -> StorageMetadata;
 

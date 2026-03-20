@@ -49,6 +49,7 @@ pub mod metrics;
 pub mod health;
 pub mod grpc;
 pub mod cluster;
+pub mod graphql;
 
 /// Re-export commonly used types
 pub mod prelude {

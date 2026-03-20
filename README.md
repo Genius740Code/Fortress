@@ -44,6 +44,7 @@ A comprehensive, production-ready security platform that provides enterprise-gra
 - **Multiple SDKs**: Python, JavaScript, Rust, Go, and more `[Stable]`
 - **gRPC API**: High-performance RPC interface `[Stable]`
 - **WebSocket API**: Real-time updates and streaming `[Stable]`
+- **GraphQL API**: Flexible query language with real-time subscriptions `[Stable]`
 - **Plugin System**: Extensible WASM-based functionality `[Stable]`
 
 ### Modern Deployment
@@ -581,7 +582,7 @@ This project is licensed under the Server Side Public License (SSPL) - see the [
 ## 🗺️ Roadmap
 
 ### Version 0.2.0 (Q1 2026)
-- [ ] GraphQL API completion
+- [x] GraphQL API completion
 - [ ] Advanced plugin marketplace
 - [ ] Machine learning integration `[Depends: Real homomorphic encryption implementation]`
 - [ ] Mobile SDKs (iOS/Android)

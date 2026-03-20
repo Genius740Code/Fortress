@@ -2,11 +2,28 @@
 
 ## Overview
 
-Fortress provides a comprehensive REST API for secure data storage with automatic encryption. The API is designed to be intuitive while providing enterprise-grade security features.
+Fortress provides comprehensive APIs for secure data storage with automatic encryption. The APIs are designed to be intuitive while providing enterprise-grade security features.
 
-### Base URL
+## Available APIs
+
+- **REST API**: Traditional HTTP-based API with JSON payloads
+- **GraphQL API**: Flexible query language with real-time subscriptions
+- **gRPC API**: High-performance RPC interface
+- **WebSocket API**: Real-time updates and streaming
+
+### REST API Base URL
 ```
 http://localhost:8080/api/v1
+```
+
+### GraphQL API Endpoint
+```
+http://localhost:8080/graphql
+```
+
+### GraphQL Playground
+```
+http://localhost:8080/graphql/playground
 ```
 
 ### Authentication Methods
@@ -29,7 +46,264 @@ All API responses follow a consistent format:
 }
 ```
 
-## Authentication
+## GraphQL API
+
+### Overview
+
+The Fortress GraphQL API provides a flexible and efficient way to interact with your secure databases. GraphQL allows you to request exactly the data you need, reducing over-fetching and under-fetching of data.
+
+### Authentication
+
+Include your JWT token in the Authorization header:
+
+```http
+Authorization: Bearer YOUR_JWT_TOKEN
+```
+
+### Basic Queries
+
+#### Get All Databases
+```graphql
+query {
+  databases {
+    id
+    name
+    status
+    encryptionAlgorithm
+    createdAt
+    tableCount
+    storageSizeBytes
+  }
+}
+```
+
+#### Get Specific Database
+```graphql
+query {
+  database(name: "my_database") {
+    id
+    name
+    description
+    status
+    encryptionAlgorithm
+    createdAt
+    tableCount
+  }
+}
+```
+
+#### Query Data from Table
+```graphql
+query {
+  queryData(input: {
+    database: "my_database"
+    table: "users"
+    pagination: {
+      page: 0
+      pageSize: 10
+    }
+  }) {
+    records {
+      id
+      data
+      createdAt
+      updatedAt
+    }
+    totalCount
+    hasMore
+  }
+}
+```
+
+### Mutations
+
+#### Create Database
+```graphql
+mutation {
+  createDatabase(input: {
+    name: "my_database"
+    description: "My secure database"
+    encryptionAlgorithm: AEGIS256
+    tags: ["production", "secure"]
+  }) {
+    success
+    data {
+      id
+      name
+      description
+      status
+      encryptionAlgorithm
+      tags
+    }
+    errorMessage
+    errorCode
+  }
+}
+```
+
+#### Create Table
+```graphql
+mutation {
+  createTable(input: {
+    name: "users"
+    database: "my_database"
+    fields: [
+      {
+        name: "id"
+        fieldType: UUID
+        required: true
+        description: "User ID"
+      },
+      {
+        name: "username"
+        fieldType: TEXT
+        required: true
+        description: "Username"
+      },
+      {
+        name: "email"
+        fieldType: TEXT
+        required: true
+        description: "Email address"
+      },
+      {
+        name: "password_hash"
+        fieldType: ENCRYPTED
+        required: true
+        description: "Hashed password"
+        encryptionAlgorithm: AEGIS256
+      }
+    ]
+    primaryKey: ["id"]
+  }) {
+    success
+    data {
+      id
+      name
+      database
+      fields {
+        name
+        fieldType
+        required
+        encrypted
+      }
+      primaryKey
+    }
+  }
+}
+```
+
+#### Insert Data
+```graphql
+mutation {
+  insertData(input: {
+    database: "my_database"
+    table: "users"
+    data: {
+      "username": "alice"
+      "email": "alice@example.com"
+      "password_hash": "encrypted_hash_here"
+    }
+  }) {
+    success
+    data {
+      id
+      data
+      createdAt
+    }
+  }
+}
+```
+
+### Subscriptions
+
+#### Subscribe to Data Changes
+```graphql
+subscription {
+  dataChanges(database: "my_database", table: "users") {
+    id
+    eventType
+    tableName
+    databaseName
+    recordId
+    newData
+    oldData
+    timestamp
+    userId
+  }
+}
+```
+
+#### Subscribe to System Health Events
+```graphql
+subscription {
+  healthEvents {
+    id
+    eventType
+    serviceName
+    status
+    message
+    details
+    timestamp
+  }
+}
+```
+
+#### Subscribe to Key Rotation Events
+```graphql
+subscription {
+  keyRotationEvents(database: "my_database") {
+    id
+    rotationId
+    eventType
+    databaseName
+    tableName
+    algorithm
+    progressPercentage
+    recordsProcessed
+    totalRecords
+    message
+    timestamp
+  }
+}
+```
+
+### Error Handling
+
+GraphQL errors are returned in the standard GraphQL format:
+
+```json
+{
+  "errors": [
+    {
+      "message": "Authentication required",
+      "extensions": {
+        "code": "AUTH_REQUIRED"
+      }
+    }
+  ],
+  "data": null
+}
+```
+
+### Rate Limiting
+
+GraphQL queries are subject to rate limiting based on:
+- Query complexity
+- Authentication status
+- User role
+- Request frequency
+
+### Real-time Features
+
+The GraphQL API supports real-time subscriptions for:
+- Data changes (insert, update, delete)
+- System health events
+- Key rotation progress
+- Audit events
+- Performance metrics
+
+## REST API
 
 ### Login with Credentials
 ```http
