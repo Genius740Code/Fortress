@@ -1,0 +1,28 @@
+{{- if .Values.verticalPodAutoscaling.enabled }}
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: {{ include "fortress.fullname" . }}-vpa
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "fortress.labels" . | nindent 4 }}
+    app.kubernetes.io/component: vpa
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "fortress.fullname" . }}
+  updatePolicy:
+    updateMode: {{ .Values.verticalPodAutoscaling.updateMode }}
+  {{- if .Values.verticalPodAutoscaling.minReplicas }}
+  minReplicas: {{ .Values.verticalPodAutoscaling.minReplicas }}
+  {{- end }}
+  {{- if .Values.verticalPodAutoscaling.resourcePolicy }}
+  resourcePolicy:
+    {{- toYaml .Values.verticalPodAutoscaling.resourcePolicy | nindent 4 }}
+  {{- end }}
+  {{- if .Values.verticalPodAutoscaling.recommenders }}
+  recommenders:
+    {{- toYaml .Values.verticalPodAutoscaling.recommenders | nindent 4 }}
+  {{- end }}
+{{- end }}

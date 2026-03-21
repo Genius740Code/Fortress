@@ -1,0 +1,99 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fortress-config
+  namespace: fortress
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: config
+    app.kubernetes.io/part-of: fortress
+data:
+  fortress.toml: |
+    [server]
+    host = "0.0.0.0"
+    port = 8080
+    workers = 4
+    max_connections = 10000
+    
+    [database]
+    backend = "postgresql"
+    host = "fortress-postgresql"
+    port = 5432
+    name = "fortress"
+    user = "fortress"
+    ssl_mode = "require"
+    connection_pool_size = 20
+    max_connections = 100
+    
+    [encryption]
+    default_algorithm = "aegis256"
+    key_rotation_interval = "24h"
+    auto_rotation = true
+    key_derivation_iterations = 100000
+    
+    [cache]
+    backend = "redis"
+    host = "fortress-redis"
+    port = 6379
+    database = 0
+    ttl = 3600
+    max_connections = 50
+    
+    [logging]
+    level = "info"
+    format = "json"
+    file_path = "/app/logs/fortress.log"
+    max_file_size = "100MB"
+    max_files = 10
+    
+    [metrics]
+    enabled = true
+    port = 9090
+    path = "/metrics"
+    collection_interval = 30
+    
+    [security]
+    jwt_secret = "${FORTRESS_JWT_SECRET}"
+    max_login_attempts = 5
+    lockout_duration = "15m"
+    session_timeout = "1h"
+    
+    [audit]
+    enabled = true
+    log_file = "/app/logs/audit.log"
+    max_file_size = "50MB"
+    max_files = 20
+    
+    [cluster]
+    enabled = true
+    node_id = "${FORTRESS_NODE_ID}"
+    seed_nodes = "${FORTRESS_SEED_NODES}"
+    heartbeat_interval = "5s"
+    election_timeout = "10s"
+    
+    [hsm]
+    enabled = false
+    provider = "aws_cloudhsm"
+    region = "us-west-2"
+    cluster_id = "${FORTRESS_HSM_CLUSTER_ID}"
+    
+    [performance]
+    compression = true
+    compression_algorithm = "lz4"
+    batch_size = 1000
+    parallel_workers = 4
+    
+    [compliance]
+    gdpr_enabled = true
+    hipaa_enabled = true
+    pci_dss_enabled = false
+    data_retention_days = 2555
+    
+    [backup]
+    enabled = true
+    schedule = "0 2 * * *"
+    retention_days = 30
+    storage_backend = "s3"
+    s3_bucket = "${FORTRESS_BACKUP_BUCKET}"
+    s3_region = "us-west-2"

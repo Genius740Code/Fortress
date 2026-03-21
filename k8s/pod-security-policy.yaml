@@ -1,0 +1,87 @@
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: fortress-psp
+  namespace: fortress
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: psp
+    app.kubernetes.io/part-of: fortress
+  annotations:
+    description: "Pod security policy for Fortress with strict security controls"
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  requiredDropCapabilities:
+    - ALL
+  allowedCapabilities:
+    - NET_BIND_SERVICE
+  volumes:
+    - 'configMap'
+    - 'emptyDir'
+    - 'projected'
+    - 'secret'
+    - 'downwardAPI'
+    - 'persistentVolumeClaim'
+  runAsUser:
+    rule: 'MustRunAsNonRoot'
+    ranges:
+    - min: 1000
+      max: 65535
+  seLinux:
+    rule: 'RunAsAny'
+  fsGroup:
+    rule: 'MustRunAs'
+    ranges:
+    - min: 1000
+      max: 65535
+  readOnlyRootFilesystem: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  supplementalGroups:
+    rule: 'MustRunAs'
+    ranges:
+    - min: 1000
+      max: 65535
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: fortress-psp-user
+  namespace: fortress
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: psp
+    app.kubernetes.io/part-of: fortress
+rules:
+- apiGroups: ['policy']
+  resources: ['podsecuritypolicies']
+  verbs: ['use']
+  resourceNames:
+  - fortress-psp
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: fortress-psp-binding
+  namespace: fortress
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: psp
+    app.kubernetes.io/part-of: fortress
+roleRef:
+  kind: Role
+  name: fortress-psp-user
+  apiGroup: rbac.authorization.k8s.io
+subjects:
+- kind: ServiceAccount
+  name: fortress-server
+  namespace: fortress
+- kind: ServiceAccount
+  name: default
+  namespace: fortress

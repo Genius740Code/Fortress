@@ -1,0 +1,113 @@
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: fortress-pdb
+  namespace: fortress
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: pdb
+    app.kubernetes.io/part-of: fortress
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: fortress
+      app.kubernetes.io/component: server
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: fortress-hpa
+  namespace: fortress
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: hpa
+    app.kubernetes.io/part-of: fortress
+  annotations:
+    metric-config.object.type.kubernetes.io/external.googleapis.com/scrape-interval: 30s
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: fortress-server
+  minReplicas: 3
+  maxReplicas: 50
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  - type: Pods
+    pods:
+      metric:
+        name: http_requests_per_second
+      target:
+        type: AverageValue
+        averageValue: "100"
+  - type: External
+    external:
+      metric:
+        name: custom.googleapis.com/Fortress_Queue_Depth
+      target:
+        type: Value
+        value: "1000"
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+      selectPolicy: Min
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+      - type: Pods
+        value: 5
+        periodSeconds: 60
+      selectPolicy: Max
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: fortress-vpa
+  namespace: fortress
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: vpa
+    app.kubernetes.io/part-of: fortress
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: fortress-server
+  updatePolicy:
+    updateMode: "Auto"
+  resourcePolicy:
+    containerPolicies:
+    - containerName: fortress-server
+      minAllowed:
+        cpu: 100m
+        memory: 128Mi
+        ephemeral-storage: 100Mi
+      maxAllowed:
+        cpu: 4000m
+        memory: 8Gi
+        ephemeral-storage: 20Gi
+      controlledResources: ["cpu", "memory", "ephemeral-storage"]
+      controlledValues: RequestsAndLimits

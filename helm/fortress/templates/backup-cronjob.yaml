@@ -1,0 +1,102 @@
+{{- if .Values.backup.enabled }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "fortress.fullname" . }}-backup
+  namespace: {{ include "fortress.namespace" . }}
+  labels:
+    {{- include "fortress.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+spec:
+  schedule: "{{ .Values.backup.schedule }}"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            {{- include "fortress.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: backup
+        spec:
+          serviceAccountName: {{ include "fortress.serviceAccountName" . }}
+          restartPolicy: OnFailure
+          containers:
+          - name: backup
+            image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+            imagePullPolicy: {{ .Values.image.pullPolicy }}
+            command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "Starting Fortress backup..."
+              
+              # Create backup
+              fortress backup create \
+                --name "fortress-backup-$(date +%Y%m%d-%H%M%S)" \
+                --format "{{ .Values.backup.format }}" \
+                --compression {{ .Values.backup.compression }}
+              
+              # Upload to cloud storage
+              {{- if eq .Values.backup.storageBackend "s3" }}
+              fortress backup upload \
+                --name "fortress-backup-$(date +%Y%m%d-%H%M%S)" \
+                --backend s3 \
+                --bucket {{ .Values.backup.s3.bucket }} \
+                --region {{ .Values.backup.s3.region }}
+              {{- end }}
+              
+              {{- if eq .Values.backup.storageBackend "azure" }}
+              fortress backup upload \
+                --name "fortress-backup-$(date +%Y%m%d-%H%M%S)" \
+                --backend azure \
+                --container {{ .Values.backup.azure.container }}
+              {{- end }}
+              
+              {{- if eq .Values.backup.storageBackend "gcs" }}
+              fortress backup upload \
+                --name "fortress-backup-$(date +%Y%m%d-%H%M%S)" \
+                --backend gcs \
+                --bucket {{ .Values.backup.gcs.bucket }}
+              {{- end }}
+              
+              # Cleanup old backups
+              fortress backup cleanup \
+                --retention-days {{ .Values.backup.retentionDays }} \
+                --storage-backend {{ .Values.backup.storageBackend }}
+              
+              echo "Backup completed successfully"
+            envFrom:
+            - configMapRef:
+                name: {{ include "fortress.fullname" . }}-config
+            - secretRef:
+                name: {{ include "fortress.fullname" . }}-secrets
+            volumeMounts:
+            - name: data
+              mountPath: /data
+              readOnly: true
+            - name: logs
+              mountPath: /app/logs
+            - name: backup-temp
+              mountPath: /tmp/backup
+            resources:
+              requests:
+                memory: "256Mi"
+                cpu: "100m"
+              limits:
+                memory: "512Mi"
+                cpu: "500m"
+          volumes:
+          - name: data
+            persistentVolumeClaim:
+              claimName: {{ include "fortress.fullname" . }}-data
+          - name: logs
+            persistentVolumeClaim:
+              claimName: {{ include "fortress.fullname" . }}-logs
+          - name: backup-temp
+            emptyDir:
+              sizeLimit: "1Gi"
+{{- end }}

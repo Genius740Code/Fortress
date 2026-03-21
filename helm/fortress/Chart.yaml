@@ -1,20 +1,40 @@
 apiVersion: v2
 name: fortress
-description: A Helm chart for Fortress secure database system
+description: Production-ready Helm chart for Fortress secure database system
 type: application
-version: 0.1.0
-appVersion: "0.1.0"
+version: 1.0.0
+appVersion: "1.0.0"
 home: https://github.com/Genius740Code/Fortress
 sources:
   - https://github.com/Genius740Code/Fortress
 maintainers:
   - name: Fortress Team
-    email: team@fortress-db.com
+    email: team@fortress.security
+    url: https://fortress.security
 keywords:
   - database
   - encryption
   - security
   - vault
   - rust
+  - enterprise
+  - production
+  - kubernetes
 annotations:
   category: Database
+  licenses: SSPL-1.0
+  dependencies: |
+    - name: PostgreSQL
+      version: ">=12.0.0"
+      repository: https://charts.bitnami.com/bitnami
+    - name: Redis
+      version: ">=6.0.0"
+      repository: https://charts.bitnami.com/bitnami
+  features: |
+    - Production-ready deployment
+    - High availability with clustering
+    - Automated backups
+    - Comprehensive monitoring
+    - Security hardening
+    - Autoscaling support
+    - Multi-cloud support

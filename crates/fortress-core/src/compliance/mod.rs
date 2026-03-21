@@ -11,6 +11,7 @@ pub mod pci_dss;
 pub mod reporting;
 pub mod audit;
 pub mod config;
+pub mod unified_manager;
 
 pub use framework::*;
 pub use gdpr::*;
@@ -19,6 +20,7 @@ pub use pci_dss::*;
 pub use reporting::*;
 pub use audit::*;
 pub use config::*;
+pub use unified_manager::*;
 
 // Re-export RiskLevel to avoid ambiguity
 pub use pci_dss::RiskLevel;

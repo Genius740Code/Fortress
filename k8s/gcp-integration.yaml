@@ -1,0 +1,246 @@
+---
+# GCP Service Account for Fortress
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fortress-server
+  namespace: fortress
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: service-account
+    app.kubernetes.io/part-of: fortress
+  annotations:
+    iam.gke.io/gcp-service-account: "fortress-sa@PROJECT_ID.iam.gserviceaccount.com"
+---
+# GCP StorageClass for Fortress data
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fortress-gcp-ssd
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: storage-class
+    app.kubernetes.io/part-of: fortress
+  annotations:
+    description: "GCP SSD storage class for Fortress with optimized performance"
+provisioner: pd.csi.storage.gke.io
+parameters:
+  type: pd-ssd
+  replication-type: regional-pd
+  zones: "us-central1-a,us-central1-b,us-central1-c"
+allowVolumeExpansion: true
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+---
+# GCP GKE Ingress with Cloud Armor
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fortress-gke-ingress
+  namespace: fortress
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: ingress
+    app.kubernetes.io/part-of: fortress
+  annotations:
+    kubernetes.io/ingress.global-static-ip-name: "fortress-static-ip"
+    kubernetes.io/ingress.class: "gce"
+    networking.gke.io/managed-certificates: "fortress-ssl-cert"
+    networking.gke.io/v1beta1.FrontendConfig: "fortress-frontend-config"
+    cloud.google.com/backend-config: '{"ports": {"8080":"fortress-backend-config"}}'
+    cloud.google.com/neg: '{"ingress": true}'
+    cloud.google.com/load-balancer-type: "External"
+spec:
+  tls:
+  - hosts:
+    - fortress.example.com
+    secretName: fortress-tls-secret
+  rules:
+  - host: fortress.example.com
+    http:
+      paths:
+      - path: /*
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: fortress-server
+            port:
+              number: 8080
+---
+# GCP Managed Certificate
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: fortress-ssl-cert
+  namespace: fortress
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: certificate
+    app.kubernetes.io/part-of: fortress
+spec:
+  domains:
+  - fortress.example.com
+---
+# GCP Backend Config
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: fortress-backend-config
+  namespace: fortress
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: backend-config
+    app.kubernetes.io/part-of: fortress
+spec:
+  healthCheck:
+    checkIntervalSec: 30
+    timeoutSec: 5
+    healthyThreshold: 2
+    unhealthyThreshold: 3
+    type: HTTP
+    requestPath: /health
+    port: 8080
+  sessionAffinity:
+    affinityType: CLIENT_IP
+  cdn:
+    enabled: true
+    cachePolicy:
+      cacheMode: CACHE_ALL_STATIC
+      clientTtl: 3600
+      defaultTtl: 86400
+      maxTtl: 604800
+      negativeCaching: true
+      negativeCachingPolicy:
+        - code: 404
+          ttl: 60
+        - code: 503
+          ttl: 30
+  securityPolicy:
+    name: "fortress-security-policy"
+---
+# GCP Frontend Config
+apiVersion: networking.gke.io/v1beta1
+kind: FrontendConfig
+metadata:
+  name: fortress-frontend-config
+  namespace: fortress
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: frontend-config
+    app.kubernetes.io/part-of: fortress
+spec:
+  redirectToHttps:
+    enabled: true
+    responseCodeName: MOVED_PERMANENTLY_DEFAULT
+  sslPolicy: "fortress-ssl-policy"
+---
+# GCP Cloud Armor Security Policy
+apiVersion: security.cnrm.cloud.google.com/v1beta1
+kind: SecurityPolicy
+metadata:
+  name: fortress-security-policy
+  namespace: fortress
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: security-policy
+    app.kubernetes.io/part-of: fortress
+spec:
+  type: "CLOUD_ARMOR"
+  description: "Security policy for Fortress with DDoS protection and WAF rules"
+  rules:
+  - action: "allow"
+    priority: 1000
+    description: "Allow all traffic by default"
+    match:
+      versionedExpr: "SRC_IPS_V1"
+      config:
+        srcIpRanges:
+        - "*"
+  - action: "deny"
+    priority: 1001
+    description: "Block known malicious IPs"
+    match:
+      versionedExpr: "SRC_IPS_V1"
+      config:
+        srcIpRanges:
+        - "192.0.2.0/24"
+        - "198.51.100.0/24"
+    preview: false
+  - action: "rate_based_ban"
+    priority: 1002
+    description: "Rate limit suspicious traffic"
+    match:
+      versionedExpr: "SRC_IPS_V1"
+      config:
+        srcIpRanges:
+        - "*"
+    rateLimitOptions:
+      rateLimitThreshold:
+        count: 100
+        intervalSec: 60
+      banDurationSec: 3600
+    preview: false
+---
+# GCP Cloud Monitoring Integration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fortress-gcp-monitoring-config
+  namespace: fortress
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: fortress
+data:
+  gcp-monitoring.json: |
+    {
+      "gcp": {
+        "project_id": "PROJECT_ID",
+        "zone": "ZONE",
+        "cluster": "CLUSTER_NAME"
+      },
+      "monitoring": {
+        "enabled": true,
+        "metrics": {
+          "prometheus": {
+            "enabled": true,
+            "port": 9090,
+            "path": "/metrics",
+            "scrapeInterval": "30s"
+          },
+          "custom": {
+            "enabled": true,
+            "interval": "60s"
+          }
+        },
+        "logging": {
+          "enabled": true,
+          "logName": "projects/PROJECT_ID/logs/fortress",
+          "resource": {
+            "type": "k8s_container",
+            "labels": {
+              "namespace_name": "fortress",
+              "pod_name": "fortress-server"
+            }
+          }
+        }
+      }
+    }
+---
+# GCP Workload Identity
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  name: fortress-workload-identity
+  namespace: fortress
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: workload-identity
+    app.kubernetes.io/part-of: fortress
+spec:
+  member: "serviceAccount:PROJECT_ID.svc.id.goog[fortress/fortress-server]"
+  role: roles/iam.workloadIdentityUser
+  resourceRef:
+    apiVersion: iam.cnrm.cloud.google.com/v1beta1
+    kind: IAMServiceAccount
+    name: fortress-sa

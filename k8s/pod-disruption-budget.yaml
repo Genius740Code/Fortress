@@ -1,0 +1,35 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: fortress-pdb
+  namespace: fortress
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: pdb
+    app.kubernetes.io/part-of: fortress
+  annotations:
+    description: "Pod disruption budget for Fortress to ensure high availability"
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: fortress
+      app.kubernetes.io/component: server
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: fortress-pdb-percent
+  namespace: fortress
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: pdb-percent
+    app.kubernetes.io/part-of: fortress
+  annotations:
+    description: "Percentage-based pod disruption budget for Fortress"
+spec:
+  minAvailable: 50%
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: fortress
+      app.kubernetes.io/component: server

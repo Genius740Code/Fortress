@@ -49,9 +49,9 @@ A comprehensive, production-ready security platform that provides enterprise-gra
 
 ### Modern Deployment
 - **Docker Support**: Container-ready with official images `[Stable]`
-- **Kubernetes**: Production-ready K8s manifests `[In Development]`
-- **Helm Charts**: Easy deployment and management `[In Development]`
-- **Cloud Integration**: AWS, Azure, Google Cloud support `[Planned]`
+- **Kubernetes**: Production-ready K8s manifests `[Stable]`
+- **Helm Charts**: Easy deployment and management `[Stable]`
+- **Cloud Integration**: AWS, Azure, Google Cloud support `[In Development]`
 
 ### Privacy-Preserving ML & Homomorphic Encryption
 

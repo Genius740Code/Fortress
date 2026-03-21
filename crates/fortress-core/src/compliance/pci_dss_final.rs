@@ -5,6 +5,7 @@
 
 use crate::error::{FortressError, Result};
 use crate::compliance::framework::*;
+use crate::compliance::unified_manager::ComplianceDeadline;
 use crate::key::KeyId;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc, Duration};
@@ -36,7 +37,7 @@ pub struct PciDssComplianceManager {
 }
 
 /// PCI-DSS encryption key with additional metadata
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PciEncryptionKey {
     /// Key identifier
     pub key_id: KeyId,
@@ -76,7 +77,7 @@ pub enum KeyPurpose {
 }
 
 /// Key rotation schedule
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RotationSchedule {
     /// Rotation frequency in days
     pub frequency_days: u32,
@@ -89,7 +90,7 @@ pub struct RotationSchedule {
 }
 
 /// Security control implementation
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecurityControl {
     /// Unique identifier for the control
     pub id: String,
@@ -131,7 +132,7 @@ pub enum ControlStatus {
 }
 
 /// Vulnerability scan results
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VulnerabilityScan {
     /// Unique identifier for the scan
     pub id: Uuid,
@@ -175,7 +176,7 @@ pub enum ScanType {
 }
 
 /// Vulnerability finding
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VulnerabilityFinding {
     /// Vulnerability identifier
     pub id: String,
@@ -228,7 +229,7 @@ pub enum RemediationStatus {
 }
 
 /// PCI-DSS compliance assessment
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComplianceAssessment {
     /// Unique identifier for the assessment
     pub id: Uuid,
@@ -283,7 +284,7 @@ pub enum OverallComplianceStatus {
 }
 
 /// Requirement assessment result
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RequirementResult {
     /// PCI-DSS requirement
     pub requirement: PciRequirement,
@@ -313,7 +314,7 @@ pub enum RequirementOutcome {
 }
 
 /// Non-compliance issue
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NonComplianceIssue {
     /// Unique identifier for the issue
     pub id: Uuid,
@@ -353,7 +354,7 @@ pub enum IssueStatus {
 }
 
 /// Corrective action plan
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CorrectiveActionPlan {
     /// Plan creation date
     pub created_date: DateTime<Utc>,
@@ -370,7 +371,7 @@ pub struct CorrectiveActionPlan {
 }
 
 /// Action item
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActionItem {
     /// Unique identifier
     pub id: Uuid,
@@ -764,7 +765,7 @@ impl PciDssComplianceManager {
     }
 
     /// Get upcoming deadlines
-    async fn get_upcoming_deadlines(&self) -> Result<Vec<ComplianceDeadline>> {
+    pub async fn get_upcoming_deadlines(&self) -> Result<Vec<ComplianceDeadline>> {
         let mut deadlines = Vec::new();
         
         // Add quarterly scan deadline
@@ -780,6 +781,8 @@ impl PciDssComplianceManager {
                     description: format!("Quarterly vulnerability scan due for: {}", scan.id),
                     due_date: next_scan_date,
                     framework: ComplianceFramework::PCIDSS,
+                    severity: "Medium".to_string(),
+                    resource_id: Some(scan.id.to_string()),
                 });
             }
         }
@@ -815,11 +818,11 @@ impl PciDssComplianceManager {
             recommendations.push("Continue maintaining PCI-DSS compliance".to_string());
         }
         
-        Ok(recommendations)
+        recommendations
     }
 
     /// Collect compliance findings for a period
-    async fn collect_findings(&self, start_date: DateTime<Utc>, end_date: DateTime<Utc>) -> Result<Vec<ComplianceFinding>> {
+    pub async fn collect_findings(&self, start_date: DateTime<Utc>, end_date: DateTime<Utc>) -> Result<Vec<ComplianceFinding>> {
         let mut findings = Vec::new();
         
         // Check vulnerability scan requirements
@@ -845,25 +848,39 @@ impl PciDssComplianceManager {
     }
 
     /// Collect metrics (simplified version)
-    async fn collect_metrics(&self) -> Result<ComplianceMetrics> {
+    pub async fn collect_metrics(&self) -> Result<ComplianceMetrics> {
         let scans = self.vulnerability_scans.read().await;
         
         Ok(ComplianceMetrics {
-            total_events: scans.len() as u64,
-            events_by_severity: {
-                let mut severity_map = HashMap::new();
-                severity_map.insert(EventSeverity::Info, scans.len() as u64);
-                severity_map.insert(EventSeverity::Warning, scans.iter().map(|s| s.high_risk_vulnerabilities as u64).sum());
-                severity_map
-            },
-            avg_response_time: 5.0, // Placeholder
+            total_scans: scans.len(),
+            high_risk_findings: scans.iter().map(|s| s.high_risk_vulnerabilities).sum(),
             compliance_score: 95.0,
+            last_updated: Utc::now(),
+        })
+    }
+
+    /// Get comprehensive compliance status
+    pub async fn get_compliance_status(&self) -> Result<ComplianceStatus> {
+        let active_issues = self.assess_compliance_issues().await?;
+        let open_requests = self.get_open_rights_requests().await?;
+        let upcoming_deadlines = self.get_upcoming_deadlines().await?;
+        
+        let overall_score = self.calculate_compliance_score(&active_issues).await?;
+        
+        Ok(ComplianceStatus {
+            overall_score,
+            active_issues: active_issues.clone(),
+            open_requests,
+            expired_consent_records: Vec::new(), // PCI-DSS doesn't use consent records
+            upcoming_deadlines,
+            recommendations: self.generate_recommendations(&active_issues.clone()).await?,
+            last_assessment: Utc::now(),
         })
     }
 }
 
 /// PCI-DSS-specific compliance report
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PciDssReport {
     /// Unique identifier for report
     pub id: Uuid,
@@ -1052,7 +1069,7 @@ impl ComplianceManager for PciDssComplianceManager {
     }
     
     /// Get upcoming deadlines
-    async fn get_upcoming_deadlines(&self) -> Result<Vec<ComplianceDeadline>> {
+    pub async fn get_upcoming_deadlines(&self) -> Result<Vec<ComplianceDeadline>> {
         Ok(Vec::new())
     }
     
@@ -1067,24 +1084,19 @@ impl ComplianceManager for PciDssComplianceManager {
     }
     
     /// Collect metrics (simplified version)
-    async fn collect_metrics(&self) -> Result<ComplianceMetrics> {
+    pub async fn collect_metrics(&self) -> Result<ComplianceMetrics> {
         let scans = self.vulnerability_scans.read().await;
         
         Ok(ComplianceMetrics {
-            total_events: scans.len() as u64,
-            events_by_severity: {
-                let mut severity_map = HashMap::new();
-                severity_map.insert(EventSeverity::Info, scans.len() as u64);
-                severity_map.insert(EventSeverity::Warning, scans.iter().map(|s| s.high_risk_vulnerabilities as u64).sum());
-                severity_map
-            },
-            avg_response_time: 5.0, // Placeholder
+            total_scans: scans.len(),
+            high_risk_findings: scans.iter().map(|s| s.high_risk_vulnerabilities).sum(),
             compliance_score: 95.0,
+            last_updated: Utc::now(),
         })
     }
 
     /// Get comprehensive compliance status
-    async fn get_compliance_status(&self) -> Result<ComplianceStatus> {
+    pub async fn get_compliance_status(&self) -> Result<ComplianceStatus> {
         let active_issues = self.assess_compliance_issues().await?;
         let open_requests = self.get_open_rights_requests().await?;
         let upcoming_deadlines = self.get_upcoming_deadlines().await?;
@@ -1092,19 +1104,18 @@ impl ComplianceManager for PciDssComplianceManager {
         let overall_score = self.calculate_compliance_score(&active_issues).await?;
         
         Ok(ComplianceStatus {
-            compliance_percentage: overall_score,
-            active_issues: active_issues.len() as u32,
+            overall_score,
+            active_issues: active_issues.clone(),
+            open_requests,
+            expired_consent_records: Vec::new(), // PCI-DSS doesn't use consent records
+            upcoming_deadlines,
+            recommendations: self.generate_recommendations(&active_issues.clone()).await?,
             last_assessment: Utc::now(),
-            framework_status: {
-                let mut status = HashMap::new();
-                status.insert("PCI-DSS".to_string(), overall_score);
-                status
-            },
         })
     }
     
     /// Collect compliance findings for a period
-    async fn collect_findings(&self, start_date: DateTime<Utc>, end_date: DateTime<Utc>) -> Result<Vec<ComplianceFinding>> {
+    pub async fn collect_findings(&self, start_date: DateTime<Utc>, end_date: DateTime<Utc>) -> Result<Vec<ComplianceFinding>> {
         let mut findings = Vec::new();
         
         // Check vulnerability scan requirements
@@ -1130,7 +1141,7 @@ impl ComplianceManager for PciDssComplianceManager {
     }
     
     /// Generate daily report
-    async fn generate_daily_report(&self) -> Result<()> {
+    pub async fn generate_daily_report(&self) -> Result<()> {
         let now = Utc::now();
         let start_date = now - Duration::days(1);
         
@@ -1143,16 +1154,28 @@ impl ComplianceManager for PciDssComplianceManager {
         Ok(())
     }
 
-    /// Process expired consent (PCI-DSS doesn't use consent records)
-    async fn process_expired_consent(&self) -> Result<()> {
-        // PCI-DSS doesn't use consent records, but implement for trait compatibility
-        log::info!("PCI-DSS processing expired consent");
-        Ok(())
+    /// Get comprehensive compliance status
+    pub async fn get_compliance_status(&self) -> Result<ComplianceStatus> {
+        let active_issues = self.assess_compliance_issues().await?;
+        let open_requests = self.get_open_rights_requests().await?;
+        let upcoming_deadlines = self.get_upcoming_deadlines().await?;
+        
+        let overall_score = self.calculate_compliance_score(&active_issues).await?;
+        
+        Ok(ComplianceStatus {
+            overall_score,
+            active_issues: active_issues.clone(),
+            open_requests,
+            expired_consent_records: Vec::new(), // PCI-DSS doesn't use consent records
+            upcoming_deadlines,
+            recommendations: self.generate_recommendations(&active_issues.clone()).await?,
+            last_assessment: Utc::now(),
+        })
     }
 }
 
 /// PCI-DSS compliance status
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PciDssComplianceStatus {
     pub overall_score: f64,
     pub active_issues: Vec<ComplianceIssue>,
@@ -1164,10 +1187,9 @@ pub struct PciDssComplianceStatus {
 }
 
 /// PCI-DSS metrics
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct PciDssMetrics {
-    pub total_scans: usize,
-    pub high_risk_findings: u32,
-    pub compliance_score: f64,
-    pub last_updated: DateTime<Utc>,
+async fn process_expired_consent(&self) -> Result<()> {
+        // PCI-DSS doesn't use consent records, but implement for trait compatibility
+        log::info!("PCI-DSS processing expired consent");
+        Ok(())
+    }
 }

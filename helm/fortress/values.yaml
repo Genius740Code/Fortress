@@ -4,12 +4,53 @@
 
 # Fortress server configuration
 image:
-  repository: fortress-server
+  repository: fortressdb/fortress
   pullPolicy: IfNotPresent
   tag: "latest"
+  pullSecrets: []
 
 # Number of replicas
 replicaCount: 3
+
+# Deployment strategy
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 1
+
+# Priority class
+priorityClassName: ""
+
+# Termination grace period
+terminationGracePeriodSeconds: 30
+
+# Init containers
+initContainers: []
+
+# Extra volumes and volume mounts
+extraVolumes: []
+extraVolumeMounts: []
+
+# Container lifecycle
+lifecycle:
+  preStop:
+    exec:
+      command: ["/bin/sh", "-c", "sleep 15"]
+
+# Pod labels
+podLabels: {}
+
+# ConfigMap reloader
+configmapReloader:
+  enabled: false
+
+# Secret reloader
+secretReloader:
+  enabled: false
+
+# Tmp directory size
+tmpDirSize: "100Mi"
 
 # Service configuration
 service:
@@ -49,7 +90,52 @@ autoscaling:
   minReplicas: 1
   maxReplicas: 100
   targetCPUUtilizationPercentage: 80
-  # targetMemoryUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+  annotations: {}
+  customMetrics: []
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+      selectPolicy: Min
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+      - type: Pods
+        value: 5
+        periodSeconds: 60
+      selectPolicy: Max
+
+# Vertical Pod Autoscaling
+verticalPodAutoscaling:
+  enabled: false
+  updateMode: "Auto"
+  minReplicas: 3
+  resourcePolicy:
+    containerPolicies:
+    - containerName: fortress
+      minAllowed:
+        cpu: 100m
+        memory: 128Mi
+        ephemeral-storage: 100Mi
+      maxAllowed:
+        cpu: 4000m
+        memory: 8Gi
+        ephemeral-storage: 20Gi
+      controlledResources: ["cpu", "memory", "ephemeral-storage"]
+      controlledValues: RequestsAndLimits
+  recommenders:
+  - name: kubernetes.io/standard-recommender
+  - name: kubernetes.io/empty-recommender
 
 # Persistence configuration
 persistence:
@@ -84,20 +170,32 @@ containerSecurityContext:
     drop:
     - ALL
 
+# Environment variables from configmaps/secrets
+envFrom: []
+
 # Environment variables
 env:
   RUST_LOG: "info"
   FORTRESS_SERVER_HOST: "0.0.0.0"
   FORTRESS_SERVER_PORT: "8080"
   FORTRESS_DATA_DIR: "/data"
+  FORTRESS_LOG_LEVEL: "info"
+  FORTRESS_METRICS_ENABLED: "true"
 
 # Secrets
 secrets:
   encryptionKey: ""  # Set to base64 encoded encryption key
   jwtSecret: ""      # Set to base64 encoded JWT secret
+  dbPassword: ""     # Set to base64 encoded database password
+  apiKey: ""         # Set to base64 encoded API key
+  awsAccessKeyId: "" # Set to base64 encoded AWS access key ID
+  awsSecretAccessKey: "" # Set to base64 encoded AWS secret access key
+  azureStorageAccount: "" # Set to base64 encoded Azure storage account
+  azureStorageKey: "" # Set to base64 encoded Azure storage key
 
 # Health checks
 livenessProbe:
+  enabled: true
   httpGet:
     path: /health
     port: http
@@ -105,8 +203,10 @@ livenessProbe:
   periodSeconds: 10
   timeoutSeconds: 5
   failureThreshold: 3
+  successThreshold: 1
 
 readinessProbe:
+  enabled: true
   httpGet:
     path: /health
     port: http
@@ -114,6 +214,18 @@ readinessProbe:
   periodSeconds: 5
   timeoutSeconds: 3
   failureThreshold: 3
+  successThreshold: 1
+
+startupProbe:
+  enabled: true
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 30
+  successThreshold: 1
 
 # Node selector
 nodeSelector: {}
@@ -141,6 +253,7 @@ serviceAccount:
 podDisruptionBudget:
   enabled: true
   minAvailable: 1
+  # maxUnavailable: 1
 
 # Network policies
 networkPolicy:
@@ -148,13 +261,136 @@ networkPolicy:
   ingress: []
   egress: []
 
-# Monitoring
+# Topology spread constraints
+topologySpreadConstraints: []
+
+# Cloud integration
+cloud:
+  aws:
+    enabled: false
+    region: "us-west-2"
+    account_id: ""
+    role_arn: ""
+  azure:
+    enabled: false
+    tenant_id: ""
+    client_id: ""
+    subscription_id: ""
+    resource_group: ""
+  gcp:
+    enabled: false
+    project_id: ""
+    region: "us-central1"
+    zone: "us-central1-a"
+    cluster: ""
+    service_account: ""
+
+# Metrics configuration
+metrics:
+  enabled: true
+  port: 9090
+  path: "/metrics"
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    scrapeTimeout: 10s
+    honorLabels: true
+    labels: {}
+    annotations: {}
+    metricRelabelings: []
+    relabelings: []
+    path: "/metrics"
+  prometheusRule:
+    enabled: false
+    labels: {}
+    annotations: {}
+    ruleLabels: {}
+    rules: []
+
+# ConfigMap reloader
+configmapReloader:
+  enabled: false
+  image:
+    repository: stakater/reloader
+    tag: v1.0.0
+    pullPolicy: IfNotPresent
+
+# Backup configuration
+backup:
+  enabled: false
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  format: "tar.gz"
+  compression: true
+  retentionDays: 30
+  storageBackend: "s3"  # s3, azure, gcs
+  s3:
+    bucket: ""
+    region: "us-west-2"
+  azure:
+    container: ""
+  gcs:
+    bucket: ""
+
+# Ingress configuration
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: "/"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
+  hosts:
+    - host: fortress.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: fortress-tls
+      hosts:
+        - fortress.example.com
+
+# RBAC configuration
+rbac:
+  create: true
+
+# Enhanced monitoring
 monitoring:
   serviceMonitor:
     enabled: false
     interval: 30s
     scrapeTimeout: 10s
-
-# RBAC
-rbac:
-  create: true
+  prometheusRule:
+    enabled: false
+    rules:
+      - alert: FortressDown
+        expr: up{job="fortress"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Fortress instance is down"
+          description: "Fortress instance {{ $labels.instance }} has been down for more than 5 minutes."
+      - alert: FortressHighMemoryUsage
+        expr: (container_memory_usage_bytes{pod=~"fortress-.*"} / container_spec_memory_limit_bytes) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Fortress high memory usage"
+          description: "Fortress pod {{ $labels.pod }} memory usage is above 90%."
+      - alert: FortressHighCPUUsage
+        expr: rate(container_cpu_usage_seconds_total{pod=~"fortress-.*"}[5m]) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Fortress high CPU usage"
+          description: "Fortress pod {{ $labels.pod }} CPU usage is above 80%."

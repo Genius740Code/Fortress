@@ -1,0 +1,27 @@
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: fortress-high-priority
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: priority-class
+    app.kubernetes.io/part-of: fortress
+  annotations:
+    description: "High priority class for Fortress workloads"
+value: 1000
+globalDefault: false
+description: "High priority class for Fortress database workloads"
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: fortress-critical-priority
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: priority-class
+    app.kubernetes.io/part-of: fortress
+  annotations:
+    description: "Critical priority class for essential Fortress components"
+value: 1000000
+globalDefault: false
+description: "Critical priority class for essential Fortress components"

@@ -1,0 +1,91 @@
+{{- if .Values.configmapReloader.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "fortress.fullname" . }}-config-reloader
+  namespace: {{ include "fortress.namespace" . }}
+  labels:
+    {{- include "fortress.labels" . | nindent 4 }}
+data:
+  config-reloader.sh: |
+    #!/bin/sh
+    set -e
+    
+    CONFIGMAP_FILE="/app/config/fortress.toml"
+    SECRETS_FILE="/app/secrets/fortress-secrets"
+    
+    echo "Starting Fortress configuration reloader..."
+    
+    # Watch for ConfigMap changes
+    while true; do
+      inotifywait -e modify,create,delete /app/config/ || true
+      echo "Configuration change detected, reloading..."
+      
+      # Send reload signal to Fortress process
+      kill -HUP 1 || true
+      
+      # Log the reload
+      echo "$(date): Configuration reloaded" >> /app/logs/config-reload.log
+    done
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "fortress.fullname" . }}-config-reloader
+  namespace: {{ include "fortress.namespace" . }}
+  labels:
+    {{- include "fortress.labels" . | nindent 4 }}
+    app.kubernetes.io/component: config-reloader
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "fortress.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: config-reloader
+  template:
+    metadata:
+      labels:
+        {{- include "fortress.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: config-reloader
+    spec:
+      serviceAccountName: {{ include "fortress.serviceAccountName" . }}
+      containers:
+      - name: config-reloader
+        image: {{ .Values.configmapReloader.image.repository }}:{{ .Values.configmapReloader.image.tag }}
+        imagePullPolicy: {{ .Values.configmapReloader.image.pullPolicy }}
+        command:
+        - /bin/sh
+        - -c
+        - |
+          chmod +x /app/config-reloader.sh
+          /app/config-reloader.sh
+        volumeMounts:
+        - name: config
+          mountPath: /app/config
+          readOnly: true
+        - name: config-reloader-script
+          mountPath: /app/config-reloader.sh
+          subPath: config-reloader.sh
+        - name: logs
+          mountPath: /app/logs
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "10m"
+          limits:
+            memory: "64Mi"
+            cpu: "50m"
+      volumes:
+      - name: config
+        configMap:
+          name: {{ include "fortress.fullname" . }}-config
+      - name: config-reloader-script
+        configMap:
+          name: {{ include "fortress.fullname" . }}-config-reloader
+          defaultMode: 0755
+      - name: logs
+        emptyDir:
+          sizeLimit: "100Mi"
+      restartPolicy: Always
+{{- end }}

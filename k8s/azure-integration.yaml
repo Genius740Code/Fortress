@@ -1,0 +1,203 @@
+---
+# Azure Service Account for Fortress
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fortress-server
+  namespace: fortress
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: service-account
+    app.kubernetes.io/part-of: fortress
+  annotations:
+    azure.workload.identity/client-id: "AZURE_CLIENT_ID"
+    azure.workload.identity/tenant-id: "AZURE_TENANT_ID"
+---
+# Azure StorageClass for Fortress data
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fortress-azure-premium
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: storage-class
+    app.kubernetes.io/part-of: fortress
+  annotations:
+    description: "Azure Premium SSD storage class for Fortress"
+provisioner: disk.csi.azure.com
+parameters:
+  skuName: Premium_LRS
+  kind: Managed
+  cachingMode: ReadOnly
+  fsType: ext4
+  zones: "1,2,3"
+allowVolumeExpansion: true
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+mountOptions:
+- debug
+- noatime
+---
+# Azure Application Gateway Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fortress-agw-ingress
+  namespace: fortress
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: ingress
+    app.kubernetes.io/part-of: fortress
+  annotations:
+    kubernetes.io/ingress.class: "azure/application-gateway"
+    appgw.ingress.kubernetes.io/health-probe-path: "/health"
+    appgw.ingress.kubernetes.io/health-probe-interval: "30"
+    appgw.ingress.kubernetes.io/health-probe-timeout: "5"
+    appgw.ingress.kubernetes.io/health-probe-unhealthy-threshold: "3"
+    appgw.ingress.kubernetes.io/ssl-redirect: "true"
+    appgw.ingress.kubernetes.io/use-private-ip: "false"
+    appgw.ingress.kubernetes.io/waf-policy: "fortress-waf-policy"
+spec:
+  tls:
+  - hosts:
+    - fortress.example.com
+    secretName: fortress-tls-secret
+  rules:
+  - host: fortress.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: fortress-server
+            port:
+              number: 8080
+---
+# Azure Monitor Integration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fortress-azure-monitor-config
+  namespace: fortress
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: fortress
+data:
+  azure-monitor.json: |
+    {
+      "azureMonitor": {
+        "enabled": true,
+        "resourceId": "/subscriptions/SUBSCRIPTION_ID/resourceGroups/RESOURCE_GROUP/providers/Microsoft.ContainerService/managedClusters/CLUSTER_NAME",
+        "region": "REGION",
+        "metrics": {
+          "enabled": true,
+          "interval": "PT1M",
+          "aggregationInterval": "PT1M"
+        },
+        "logs": {
+          "enabled": true,
+          "logAnalyticsWorkspaceId": "WORKSPACE_ID",
+          "logAnalyticsWorkspaceKey": "WORKSPACE_KEY"
+        }
+      },
+      "prometheus": {
+        "enabled": true,
+        "port": 9090,
+        "path": "/metrics",
+        "scrapeInterval": "30s"
+      }
+    }
+---
+# Azure Key Vault Integration
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: fortress-azure-keyvault
+  namespace: fortress
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: secret-provider
+    app.kubernetes.io/part-of: fortress
+spec:
+  provider: azure
+  parameters:
+    usePodIdentity: "false"
+    useVMManagedIdentity: "true"
+    userAssignedIdentityID: "USER_ASSIGNED_IDENTITY_ID"
+    keyvaultName: "fortress-kv"
+    objects: |
+      array:
+        - |
+          objectName: fortress-jwt-secret
+          objectType: secret
+          objectVersion: ""
+        - |
+          objectName: fortress-master-key
+          objectType: secret
+          objectVersion: ""
+        - |
+          objectName: fortress-db-password
+          objectType: secret
+          objectVersion: ""
+        - |
+          objectName: fortress-api-key
+          objectType: secret
+          objectVersion: ""
+    tenantId: "TENANT_ID"
+---
+# Azure Disk Autoscaler
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: azure-disk-autoscaler
+  namespace: fortress
+  labels:
+    app.kubernetes.io/name: azure-disk-autoscaler
+    app.kubernetes.io/component: autoscaler
+    app.kubernetes.io/part-of: fortress
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: azure-disk-autoscaler
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: azure-disk-autoscaler
+    spec:
+      serviceAccountName: azure-disk-autoscaler
+      containers:
+      - image: mcr.microsoft.com/k8s/azuredisk-csi/latest:latest
+        name: azure-disk-autoscaler
+        args:
+        - "--node-name=$(NODE_NAME)"
+        - "--namespace=$(NAMESPACE)"
+        - "--cluster-name=$(CLUSTER_NAME)"
+        - "--cloud-config=/etc/kubernetes/azure.json"
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: NAMESPACE
+          value: fortress
+        - name: CLUSTER_NAME
+          value: fortress-cluster
+        volumeMounts:
+        - name: azure-config
+          mountPath: /etc/kubernetes
+          readOnly: true
+        resources:
+          requests:
+            cpu: 50m
+            memory: 50Mi
+          limits:
+            cpu: 100m
+            memory: 100Mi
+      volumes:
+      - name: azure-config
+        hostPath:
+          path: /etc/kubernetes
+          type: Directory

@@ -1,0 +1,69 @@
+{{- if .Values.monitoring.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "fortress.fullname" . }}-alerts
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "fortress.labels" . | nindent 4 }}
+    app.kubernetes.io/component: monitoring
+    {{- if .Values.monitoring.prometheusRule.labels }}
+    {{- toYaml .Values.monitoring.prometheusRule.labels | nindent 4 }}
+    {{- end }}
+  annotations:
+    {{- if .Values.monitoring.prometheusRule.annotations }}
+    {{- toYaml .Values.monitoring.prometheusRule.annotations | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+  - name: {{ include "fortress.fullname" . }}.rules
+    rules:
+    {{- if .Values.monitoring.prometheusRule.rules }}
+    {{- toYaml .Values.monitoring.prometheusRule.rules | nindent 4 }}
+    {{- else }}
+    - alert: FortressDown
+      expr: up{job="{{ include "fortress.fullname" . }}"} == 0
+      for: 1m
+      labels:
+        severity: critical
+        {{- if .Values.monitoring.prometheusRule.ruleLabels }}
+        {{- toYaml .Values.monitoring.prometheusRule.ruleLabels | nindent 8 }}
+        {{- end }}
+      annotations:
+        summary: "Fortress server is down"
+        description: "Fortress server {{ include "fortress.fullname" . }} has been down for more than 1 minute."
+    - alert: FortressHighMemoryUsage
+      expr: container_memory_usage_bytes{pod=~"{{ include "fortress.fullname" . }}-.*"} / container_spec_memory_limit_bytes{pod=~"{{ include "fortress.fullname" . }}-.*"} > 0.9
+      for: 5m
+      labels:
+        severity: warning
+        {{- if .Values.monitoring.prometheusRule.ruleLabels }}
+        {{- toYaml .Values.monitoring.prometheusRule.ruleLabels | nindent 8 }}
+        {{- end }}
+      annotations:
+        summary: "Fortress high memory usage"
+        description: "Fortress memory usage is above 90% for more than 5 minutes."
+    - alert: FortressHighCPUUsage
+      expr: rate(container_cpu_usage_seconds_total{pod=~"{{ include "fortress.fullname" . }}-.*"}[5m]) > 0.8
+      for: 5m
+      labels:
+        severity: warning
+        {{- if .Values.monitoring.prometheusRule.ruleLabels }}
+        {{- toYaml .Values.monitoring.prometheusRule.ruleLabels | nindent 8 }}
+        {{- end }}
+      annotations:
+        summary: "Fortress high CPU usage"
+        description: "Fortress CPU usage is above 80% for more than 5 minutes."
+    - alert: FortressHighErrorRate
+      expr: rate(fortress_http_requests_total{status=~"5.."}[5m]) / rate(fortress_http_requests_total[5m]) > 0.05
+      for: 2m
+      labels:
+        severity: critical
+        {{- if .Values.monitoring.prometheusRule.ruleLabels }}
+        {{- toYaml .Values.monitoring.prometheusRule.ruleLabels | nindent 8 }}
+        {{- end }}
+      annotations:
+        summary: "Fortress high error rate"
+        description: "Fortress error rate is above 5% for more than 2 minutes."
+    {{- end }}
+{{- end }}

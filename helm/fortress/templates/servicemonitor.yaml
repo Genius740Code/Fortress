@@ -1,0 +1,36 @@
+{{- if .Values.monitoring.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "fortress.fullname" . }}-metrics
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "fortress.labels" . | nindent 4 }}
+    app.kubernetes.io/component: monitoring
+    {{- if .Values.monitoring.serviceMonitor.labels }}
+    {{- toYaml .Values.monitoring.serviceMonitor.labels | nindent 4 }}
+    {{- end }}
+  annotations:
+    {{- if .Values.monitoring.serviceMonitor.annotations }}
+    {{- toYaml .Values.monitoring.serviceMonitor.annotations | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "fortress.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: server
+  endpoints:
+  - port: metrics
+    path: {{ .Values.monitoring.serviceMonitor.path | default "/metrics" }}
+    interval: {{ .Values.monitoring.serviceMonitor.interval | default "30s" }}
+    scrapeTimeout: {{ .Values.monitoring.serviceMonitor.scrapeTimeout | default "10s" }}
+    honorLabels: {{ .Values.monitoring.serviceMonitor.honorLabels | default true }}
+    {{- if .Values.monitoring.serviceMonitor.metricRelabelings }}
+    metricRelabelings:
+      {{- toYaml .Values.monitoring.serviceMonitor.metricRelabelings | nindent 6 }}
+    {{- end }}
+    {{- if .Values.monitoring.serviceMonitor.relabelings }}
+    relabelings:
+      {{- toYaml .Values.monitoring.serviceMonitor.relabelings | nindent 6 }}
+    {{- end }}
+{{- end }}

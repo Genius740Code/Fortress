@@ -1,0 +1,224 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: promtail-config
+  namespace: monitoring
+  labels:
+    app: promtail
+    component: config
+data:
+  promtail.yml: |
+    server:
+      http_listen_port: 9080
+      grpc_listen_port: 0
+    
+    positions:
+      filename: /tmp/positions.yaml
+    
+    clients:
+      - url: http://loki:3100/loki/api/v1/push
+    
+    scrape_configs:
+    # Fortress logs
+    - job_name: fortress-logs
+      kubernetes_sd_configs:
+        - role: pod
+          namespaces:
+            names:
+              - fortress
+      relabel_configs:
+        - source_labels: [__meta_kubernetes_pod_name]
+          target_label: pod
+        - source_labels: [__meta_kubernetes_pod_namespace]
+          target_label: namespace
+        - source_labels: [__meta_kubernetes_pod_container_name]
+          target_label: container
+        - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+          target_label: app
+        - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_component]
+          target_label: component
+        - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+          action: keep
+          regex: true
+        - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+          target_label: __path__
+          regex: (.+)
+        - source_labels: [__address__]
+          target_label: instance
+          regex: (.*)
+          replacement: ${1}
+        - target_label: __path__
+          replacement: /var/log/containers/*${pod}_*.log
+    
+    # System logs
+    - job_name: system-logs
+      static_configs:
+        - targets:
+            - localhost
+          labels:
+            job: syslog
+            __path__: /var/log/syslog
+    
+    # Kubernetes system logs
+    - job_name: kubernetes-system
+      kubernetes_sd_configs:
+        - role: pod
+          namespaces:
+            names:
+              - kube-system
+      relabel_configs:
+        - source_labels: [__meta_kubernetes_pod_name]
+          target_label: pod
+        - source_labels: [__meta_kubernetes_pod_namespace]
+          target_label: namespace
+        - source_labels: [__meta_kubernetes_pod_container_name]
+          target_label: container
+        - target_label: __path__
+          replacement: /var/log/containers/*${pod}_*.log
+    
+    # Application logs with structured parsing
+    - job_name: fortress-app-logs
+      kubernetes_sd_configs:
+        - role: pod
+          namespaces:
+            names:
+              - fortress
+      relabel_configs:
+        - source_labels: [__meta_kubernetes_pod_name]
+          target_label: pod
+        - source_labels: [__meta_kubernetes_pod_namespace]
+          target_label: namespace
+        - source_labels: [__meta_kubernetes_pod_container_name]
+          target_label: container
+        - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+          target_label: app
+        - target_label: __path__
+          replacement: /var/log/containers/*${pod}_*.log
+      pipeline_stages:
+        - json:
+            expressions:
+              level: level
+              timestamp: timestamp
+              message: message
+              request_id: request_id
+              user_id: user_id
+              duration: duration
+              status_code: status_code
+        - timestamp:
+            format: RFC3339Nano
+            source: timestamp
+        - labels:
+            level:
+            request_id:
+            user_id:
+            status_code:
+        - output:
+            source: message
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: promtail
+  namespace: monitoring
+  labels:
+    app: promtail
+    component: agent
+spec:
+  selector:
+    matchLabels:
+      app: promtail
+      component: agent
+  template:
+    metadata:
+      labels:
+        app: promtail
+        component: agent
+    spec:
+      serviceAccountName: promtail
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+      containers:
+      - name: promtail
+        image: grafana/promtail:2.7.0
+        args:
+          - "-config.file=/etc/promtail/promtail.yml"
+          - "-config.expand-env=true"
+        env:
+        - name: HOSTNAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        ports:
+        - containerPort: 9080
+          name: http
+        volumeMounts:
+        - name: promtail-config
+          mountPath: /etc/promtail
+        - name: positions
+          mountPath: /tmp
+        - name: varlog
+          mountPath: /var/log
+          readOnly: true
+        - name: varlibdockercontainers
+          mountPath: /var/lib/docker/containers
+          readOnly: true
+        - name: varlogpods
+          mountPath: /var/log/pods
+          readOnly: true
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        livenessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: promtail-config
+        configMap:
+          name: promtail-config
+      - name: positions
+        emptyDir: {}
+      - name: varlog
+        hostPath:
+          path: /var/log
+      - name: varlibdockercontainers
+        hostPath:
+          path: /var/lib/docker/containers
+      - name: varlogpods
+        hostPath:
+          path: /var/log/pods
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: promtail
+  namespace: monitoring
+  labels:
+    app: promtail
+    component: agent
+spec:
+  type: ClusterIP
+  ports:
+  - port: 9080
+    targetPort: 9080
+    name: http
+  selector:
+    app: promtail
+    component: agent

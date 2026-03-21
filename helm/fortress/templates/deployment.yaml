@@ -6,13 +6,22 @@ metadata:
   labels:
     {{- include "fortress.labels" . | nindent 4 }}
     app.kubernetes.io/component: server
+  annotations:
+    {{- if .Values.configmapReloader.enabled }}
+    configmap.reloader.stakater.com/reload: {{ include "fortress.fullname" . }}-config
+    {{- end }}
+    {{- if .Values.secretReloader.enabled }}
+    secret.reloader.stakater.com/reload: {{ include "fortress.fullname" . }}-secrets
+    {{- end }}
 spec:
   replicas: {{ .Values.replicaCount }}
   strategy:
-    type: RollingUpdate
+    type: {{ .Values.strategy.type }}
+    {{- if eq .Values.strategy.type "RollingUpdate" }}
     rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 1
+      maxSurge: {{ .Values.strategy.rollingUpdate.maxSurge }}
+      maxUnavailable: {{ .Values.strategy.rollingUpdate.maxUnavailable }}
+    {{- end }}
   selector:
     matchLabels:
       {{- include "fortress.selectorLabels" . | nindent 6 }}
@@ -21,17 +30,32 @@ spec:
     metadata:
       annotations:
         {{- toYaml .Values.podAnnotations | nindent 8 }}
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secrets: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
+        {{- if .Values.podAnnotations }}
+        {{- toYaml .Values.podAnnotations | nindent 8 }}
+        {{- end }}
       labels:
         {{- include "fortress.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: server
+        {{- if .Values.podLabels }}
+        {{- toYaml .Values.podLabels | nindent 8 }}
+        {{- end }}
     spec:
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "fortress.serviceAccountName" . }}
+      {{- if .Values.priorityClassName }}
+      priorityClassName: {{ .Values.priorityClassName }}
+      {{- end }}
       securityContext:
         {{- toYaml .Values.securityContext | nindent 8 }}
+      {{- if .Values.initContainers }}
+      initContainers:
+        {{- toYaml .Values.initContainers | nindent 8 }}
+      {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
@@ -42,6 +66,11 @@ spec:
             - name: http
               containerPort: 8080
               protocol: TCP
+            {{- if .Values.metrics.enabled }}
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+            {{- end }}
           env:
             {{- range $key, $value := .Values.env }}
             - name: {{ $key }}
@@ -61,22 +90,111 @@ spec:
                   name: {{ include "fortress.fullname" . }}-secrets
                   key: jwtSecret
             {{- end }}
+            {{- if .Values.secrets.dbPassword }}
+            - name: FORTRESS_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "fortress.fullname" . }}-secrets
+                  key: dbPassword
+            {{- end }}
+            {{- if .Values.secrets.apiKey }}
+            - name: FORTRESS_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "fortress.fullname" . }}-secrets
+                  key: apiKey
+            {{- end }}
+            {{- if .Values.cloud.aws.enabled }}
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "fortress.fullname" . }}-secrets
+                  key: awsAccessKeyId
+                  optional: true
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "fortress.fullname" . }}-secrets
+                  key: awsSecretAccessKey
+                  optional: true
+            {{- end }}
+            {{- if .Values.cloud.azure.enabled }}
+            - name: AZURE_STORAGE_ACCOUNT
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "fortress.fullname" . }}-secrets
+                  key: azureStorageAccount
+                  optional: true
+            - name: AZURE_STORAGE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "fortress.fullname" . }}-secrets
+                  key: azureStorageKey
+                  optional: true
+            {{- end }}
+            {{- if .Values.cloud.gcp.enabled }}
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: "/var/secrets/google/service-account.json"
+            {{- end }}
+            # Kubernetes metadata
+            - name: FORTRESS_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: FORTRESS_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: FORTRESS_POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            {{- if .Values.envFrom }}
+            envFrom:
+              {{- toYaml .Values.envFrom | nindent 14 }}
+            {{- end }}
+          {{- if .Values.livenessProbe.enabled }}
           livenessProbe:
             {{- toYaml .Values.livenessProbe | nindent 12 }}
+          {{- end }}
+          {{- if .Values.readinessProbe.enabled }}
           readinessProbe:
             {{- toYaml .Values.readinessProbe | nindent 12 }}
+          {{- end }}
+          {{- if .Values.startupProbe.enabled }}
+          startupProbe:
+            {{- toYaml .Values.startupProbe | nindent 12 }}
+          {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
             - name: data
               mountPath: /data
+              readOnly: false
             {{- if .Values.logsPersistence.enabled }}
             - name: logs
               mountPath: /app/logs
+              readOnly: false
             {{- else }}
             - name: logs
               mountPath: /app/logs
+              readOnly: false
             {{- end }}
+            - name: tmp
+              mountPath: /tmp
+              readOnly: false
+            {{- if .Values.cloud.gcp.enabled }}
+            - name: google-secret
+              mountPath: /var/secrets/google
+              readOnly: true
+            {{- end }}
+            {{- if .Values.extraVolumeMounts }}
+            {{- toYaml .Values.extraVolumeMounts | nindent 12 }}
+            {{- end }}
+          {{- if .Values.lifecycle }}
+          lifecycle:
+            {{- toYaml .Values.lifecycle | nindent 12 }}
+          {{- end }}
       volumes:
         - name: data
           {{- if .Values.persistence.enabled }}
@@ -92,15 +210,31 @@ spec:
           {{- else }}
           emptyDir: {}
           {{- end }}
-      {{- with .Values.nodeSelector }}
+        - name: tmp
+          emptyDir:
+            sizeLimit: {{ .Values.tmpDirSize | default "100Mi" }}
+        {{- if .Values.cloud.gcp.enabled }}
+        - name: google-secret
+          secret:
+            secretName: {{ include "fortress.fullname" . }}-gcp-secret
+        {{- end }}
+        {{- if .Values.extraVolumes }}
+        {{- toYaml .Values.extraVolumes | nindent 8 }}
+        {{- end }}
+      {{- if .Values.nodeSelector }}
       nodeSelector:
-        {{- toYaml . | nindent 8 }}
+        {{- toYaml .Values.nodeSelector | nindent 8 }}
       {{- end }}
-      {{- with .Values.affinity }}
-      affinity:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.tolerations }}
+      {{- if .Values.tolerations }}
       tolerations:
-        {{- toYaml . | nindent 8 }}
+        {{- toYaml .Values.tolerations | nindent 8 }}
       {{- end }}
+      {{- if .Values.affinity }}
+      affinity:
+        {{- toYaml .Values.affinity | nindent 8 }}
+      {{- end }}
+      {{- if .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml .Values.topologySpreadConstraints | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds | default 30 }}

@@ -1,0 +1,34 @@
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: fortress-server-vpa
+  namespace: fortress
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: vpa
+    app.kubernetes.io/part-of: fortress
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: fortress-server
+  updatePolicy:
+    updateMode: "Auto"
+    minReplicas: 3
+  resourcePolicy:
+    containerPolicies:
+    - containerName: fortress-server
+      minAllowed:
+        cpu: 100m
+        memory: 128Mi
+        ephemeral-storage: 100Mi
+      maxAllowed:
+        cpu: 4000m
+        memory: 8Gi
+        ephemeral-storage: 20Gi
+      controlledResources: ["cpu", "memory", "ephemeral-storage"]
+      controlledValues: RequestsAndLimits
+      mode: "Auto"
+  recommenders:
+  - name: kubernetes.io/standard-recommender
+  - name: kubernetes.io/empty-recommender

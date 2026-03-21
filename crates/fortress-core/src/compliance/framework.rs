@@ -334,6 +334,36 @@ pub trait ComplianceManager: Send + Sync {
 
     /// Validate compliance configuration
     async fn validate_configuration(&self, config: &ComplianceConfig) -> Result<Vec<ComplianceIssue>>;
+
+    /// Collect compliance findings for a period
+    async fn collect_findings(&self, start_date: DateTime<Utc>, end_date: DateTime<Utc>) -> Result<Vec<ComplianceFinding>>;
+
+    /// Assess compliance issues
+    async fn assess_compliance_issues(&self) -> Result<Vec<ComplianceIssue>>;
+
+    /// Get upcoming compliance deadlines
+    async fn get_upcoming_deadlines(&self) -> Result<Vec<ComplianceDeadline>>;
+
+    /// Calculate compliance score
+    async fn calculate_compliance_score(&self, issues: &[ComplianceIssue]) -> Result<f64>;
+
+    /// Generate recommendations
+    async fn generate_recommendations(&self, issues: &[ComplianceIssue]) -> Result<Vec<String>>;
+
+    /// Get compliance status
+    async fn get_compliance_status(&self) -> Result<ComplianceStatus>;
+
+    /// Generate daily report
+    async fn generate_daily_report(&self) -> Result<()>;
+
+    /// Process expired consent
+    async fn process_expired_consent(&self) -> Result<()>;
+
+    /// Get open rights requests
+    async fn get_open_rights_requests(&self) -> Result<Vec<RightsRequest>>;
+
+    /// Collect metrics
+    async fn collect_metrics(&self) -> Result<ComplianceMetrics>;
 }
 
 /// Compliance configuration
@@ -480,14 +510,106 @@ pub enum FindingStatus {
 /// Compliance issue found during validation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComplianceIssue {
-    /// Severity of the issue
+    /// Severity of issue
     pub severity: EventSeverity,
-    /// Description of the issue
+    /// Description of issue
     pub description: String,
     /// Affected configuration section
     pub affected_section: String,
     /// Recommended fix
     pub recommendation: String,
+}
+
+/// Compliance deadline for tracking
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComplianceDeadline {
+    /// Unique identifier
+    pub id: Uuid,
+    /// Deadline type
+    pub deadline_type: String,
+    /// Description
+    pub description: String,
+    /// Due date
+    pub due_date: DateTime<Utc>,
+    /// Associated framework
+    pub framework: ComplianceFramework,
+}
+
+/// Compliance status
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComplianceStatus {
+    /// Overall compliance percentage
+    pub compliance_percentage: f64,
+    /// Number of active issues
+    pub active_issues: u32,
+    /// Last assessment date
+    pub last_assessment: DateTime<Utc>,
+    /// Framework-specific status
+    pub framework_status: HashMap<String, f64>,
+}
+
+/// Compliance metrics
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComplianceMetrics {
+    /// Total compliance events
+    pub total_events: u64,
+    /// Events by severity
+    pub events_by_severity: HashMap<EventSeverity, u64>,
+    /// Average response time
+    pub avg_response_time: f64,
+    /// Compliance score
+    pub compliance_score: f64,
+}
+
+/// Risk assessment
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RiskAssessment {
+    /// Overall risk level
+    pub overall_risk: String,
+    /// Risk by category
+    pub risk_by_category: HashMap<String, String>,
+    /// High risk areas
+    pub high_risk_areas: Vec<String>,
+    /// Risk trends
+    pub risk_trends: Vec<String>,
+}
+
+/// Action item for compliance
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActionItem {
+    /// Unique identifier
+    pub id: Uuid,
+    /// Title
+    pub title: String,
+    /// Description
+    pub description: String,
+    /// Priority
+    pub priority: String,
+    /// Assigned to
+    pub assigned_to: Option<String>,
+    /// Due date
+    pub due_date: DateTime<Utc>,
+    /// Status
+    pub status: String,
+    /// Framework
+    pub framework: String,
+}
+
+/// Evidence attachment
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EvidenceAttachment {
+    /// Unique identifier
+    pub id: Uuid,
+    /// Evidence type
+    pub evidence_type: String,
+    /// Description
+    pub description: String,
+    /// Location
+    pub location: String,
+    /// Collection timestamp
+    pub collected_at: DateTime<Utc>,
+    /// Whether verified
+    pub verified: bool,
 }
 
 /// Default compliance manager implementation
@@ -706,5 +828,150 @@ impl ComplianceManager for DefaultComplianceManager {
         }
         
         Ok(issues)
+    }
+
+    async fn collect_findings(&self, start_date: DateTime<Utc>, end_date: DateTime<Utc>) -> Result<Vec<ComplianceFinding>> {
+        let events = self.events.read().await;
+        let mut findings = Vec::new();
+        
+        for event in events.iter().filter(|e| e.timestamp >= start_date && e.timestamp <= end_date) {
+            if matches!(event.severity, EventSeverity::Error | EventSeverity::Critical) {
+                findings.push(ComplianceFinding {
+                    id: Uuid::new_v4(),
+                    severity: event.severity.clone(),
+                    category: event.event_type.clone(),
+                    description: event.description.clone(),
+                    affected_controls: event.affected_resources.clone(),
+                    status: FindingStatus::Fail,
+                    evidence: vec![format!("Event: {}", event.description)],
+                });
+            }
+        }
+        
+        Ok(findings)
+    }
+
+    async fn assess_compliance_issues(&self) -> Result<Vec<ComplianceIssue>> {
+        let events = self.events.read().await;
+        let mut issues = Vec::new();
+        
+        // Check for recent critical events
+        let recent_critical = events.iter()
+            .filter(|e| e.timestamp > Utc::now() - chrono::Duration::days(7))
+            .filter(|e| matches!(e.severity, EventSeverity::Critical))
+            .count();
+            
+        if recent_critical > 0 {
+            issues.push(ComplianceIssue {
+                severity: EventSeverity::Critical,
+                description: format!("{} critical events in the last 7 days", recent_critical),
+                affected_section: "event_monitoring".to_string(),
+                recommendation: "Investigate and resolve critical events immediately".to_string(),
+            });
+        }
+        
+        Ok(issues)
+    }
+
+    async fn get_upcoming_deadlines(&self) -> Result<Vec<ComplianceDeadline>> {
+        // Return some example deadlines
+        Ok(vec![
+            ComplianceDeadline {
+                id: Uuid::new_v4(),
+                deadline_type: "Assessment".to_string(),
+                description: "Quarterly compliance assessment".to_string(),
+                due_date: Utc::now() + chrono::Duration::days(30),
+                framework: ComplianceFramework::GDPR,
+            },
+        ])
+    }
+
+    async fn calculate_compliance_score(&self, issues: &[ComplianceIssue]) -> Result<f64> {
+        let critical_count = issues.iter().filter(|i| matches!(i.severity, EventSeverity::Critical)).count();
+        let warning_count = issues.iter().filter(|i| matches!(i.severity, EventSeverity::Warning)).count();
+        let error_count = issues.iter().filter(|i| matches!(i.severity, EventSeverity::Error)).count();
+        
+        let base_score = 100.0;
+        let critical_penalty = (critical_count as f64) * 20.0;
+        let error_penalty = (error_count as f64) * 10.0;
+        let warning_penalty = (warning_count as f64) * 5.0;
+        
+        Ok((base_score - critical_penalty - error_penalty - warning_penalty).max(0.0))
+    }
+
+    async fn generate_recommendations(&self, issues: &[ComplianceIssue]) -> Result<Vec<String>> {
+        let mut recommendations = Vec::new();
+        
+        for issue in issues {
+            recommendations.push(issue.recommendation.clone());
+        }
+        
+        if recommendations.is_empty() {
+            recommendations.push("Continue monitoring compliance posture".to_string());
+        }
+        
+        Ok(recommendations)
+    }
+
+    async fn get_compliance_status(&self) -> Result<ComplianceStatus> {
+        let issues = self.assess_compliance_issues().await?;
+        let score = self.calculate_compliance_score(&issues).await?;
+        
+        let mut framework_status = HashMap::new();
+        framework_status.insert("GDPR".to_string(), score);
+        framework_status.insert("HIPAA".to_string(), score);
+        framework_status.insert("PCI-DSS".to_string(), score);
+        
+        Ok(ComplianceStatus {
+            compliance_percentage: score,
+            active_issues: issues.len() as u32,
+            last_assessment: Utc::now(),
+            framework_status,
+        })
+    }
+
+    async fn generate_daily_report(&self) -> Result<()> {
+        log::info!("Generating daily compliance report");
+        let now = Utc::now();
+        let start_date = now - chrono::Duration::days(1);
+        let end_date = now;
+        
+        let findings = self.collect_findings(start_date, end_date).await?;
+        log::info!("Daily report: {} findings found", findings.len());
+        
+        Ok(())
+    }
+
+    async fn process_expired_consent(&self) -> Result<()> {
+        log::info!("Processing expired consent records");
+        // In a real implementation, this would check and expire consent records
+        Ok(())
+    }
+
+    async fn get_open_rights_requests(&self) -> Result<Vec<RightsRequest>> {
+        // Return empty for now - in a real implementation, would query pending requests
+        Ok(Vec::new())
+    }
+
+    async fn collect_metrics(&self) -> Result<ComplianceMetrics> {
+        let events = self.events.read().await;
+        let total_events = events.len() as u64;
+        
+        let mut events_by_severity = HashMap::new();
+        events_by_severity.insert(EventSeverity::Info, 0);
+        events_by_severity.insert(EventSeverity::Warning, 0);
+        events_by_severity.insert(EventSeverity::Error, 0);
+        events_by_severity.insert(EventSeverity::Critical, 0);
+        
+        for event in events.iter() {
+            *events_by_severity.entry(event.severity.clone()).or_insert(0) += 1;
+        }
+        
+        Ok(ComplianceMetrics {
+            total_events,
+            events_by_severity,
+            avg_response_time: 24.0, // Placeholder
+            compliance_score: 85.0, // Placeholder
+        })
     }
 }

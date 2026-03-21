@@ -1,0 +1,81 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "fortress.fullname" . }}-network-policy
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "fortress.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+  annotations:
+    description: "Network policy for Fortress pods - zero trust security model"
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "fortress.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: server
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow traffic from ingress controllers
+  {{- if .Values.networkPolicy.ingress }}
+  {{- toYaml .Values.networkPolicy.ingress | nindent 2 }}
+  {{- else }}
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    - namespaceSelector:
+        matchLabels:
+          name: istio-system
+    ports:
+    - protocol: TCP
+      port: 8080
+  # Allow traffic from monitoring systems
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+    ports:
+    - protocol: TCP
+      port: 9090
+  # Allow traffic from same namespace
+  - from:
+    - podSelector:
+        matchLabels:
+          {{- include "fortress.selectorLabels" . | nindent 10 }}
+    ports:
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 9090
+  {{- end }}
+  egress:
+  # Allow DNS resolution
+  {{- if .Values.networkPolicy.egress }}
+  {{- toYaml .Values.networkPolicy.egress | nindent 2 }}
+  {{- else }}
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # Allow traffic to Kubernetes API
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 6443
+  # Allow traffic to external services (HTTPS)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+  {{- end }}
+{{- end }}

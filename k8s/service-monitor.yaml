@@ -1,0 +1,102 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: fortress-metrics
+  namespace: fortress
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: fortress
+    release: prometheus
+  annotations:
+    description: "Service monitor for Fortress metrics collection"
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: fortress
+      app.kubernetes.io/component: server
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+    honorLabels: true
+    metricRelabelings:
+    - sourceLabels: [__name__]
+      regex: 'fortress_.*'
+      targetLabel: __tmp_name
+      replacement: '${1}'
+    - sourceLabels: [__tmp_name]
+      regex: '(.*)'
+      targetLabel: __name__
+      replacement: 'fortress_${1}'
+    relabelings:
+    - sourceLabels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+      action: keep
+      regex: true
+    - sourceLabels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+      action: replace
+      targetLabel: __metrics_path__
+      regex: (.+)
+    - sourceLabels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+      action: replace
+      regex: ([^:]+)(?::\d+)?;(\d+)
+      replacement: $1:$2
+      targetLabel: __address__
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: fortress-alerts
+  namespace: fortress
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: fortress
+    release: prometheus
+  annotations:
+    description: "Alerting rules for Fortress monitoring"
+spec:
+  groups:
+  - name: fortress.rules
+    rules:
+    - alert: FortressDown
+      expr: up{job="fortress-server"} == 0
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Fortress server is down"
+        description: "Fortress server has been down for more than 1 minute."
+    - alert: FortressHighMemoryUsage
+      expr: container_memory_usage_bytes{pod=~"fortress-server-.*"} / container_spec_memory_limit_bytes{pod=~"fortress-server-.*"} > 0.9
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Fortress high memory usage"
+        description: "Fortress memory usage is above 90% for more than 5 minutes."
+    - alert: FortressHighCPUUsage
+      expr: rate(container_cpu_usage_seconds_total{pod=~"fortress-server-.*"}[5m]) > 0.8
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Fortress high CPU usage"
+        description: "Fortress CPU usage is above 80% for more than 5 minutes."
+    - alert: FortressHighErrorRate
+      expr: rate(fortress_http_requests_total{status=~"5.."}[5m]) / rate(fortress_http_requests_total[5m]) > 0.05
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Fortress high error rate"
+        description: "Fortress error rate is above 5% for more than 2 minutes."
+    - alert: FortressSlowQueries
+      expr: histogram_quantile(0.95, rate(fortress_query_duration_seconds_bucket[5m])) > 1
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Fortress slow queries"
+        description: "Fortress 95th percentile query latency is above 1 second."

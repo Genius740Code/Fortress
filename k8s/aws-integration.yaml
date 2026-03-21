@@ -1,0 +1,181 @@
+---
+# AWS IAM Service Account for Fortress
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fortress-server
+  namespace: fortress
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: service-account
+    app.kubernetes.io/part-of: fortress
+  annotations:
+    eks.amazonaws.com/role-arn: "arn:aws:iam::ACCOUNT_ID:role/FortressServiceRole"
+    eks.amazonaws.com/audience: "sts.amazonaws.com"
+    eks.amazonaws.com/token-expiration: "86400"
+---
+# AWS StorageClass for Fortress data
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fortress-aws-gp3
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: storage-class
+    app.kubernetes.io/part-of: fortress
+  annotations:
+    description: "AWS gp3 storage class for Fortress with optimized performance"
+provisioner: kubernetes.io/aws-ebs
+parameters:
+  type: gp3
+  iops: "3000"
+  throughput: "125"
+  encrypted: "true"
+  fsType: ext4
+allowVolumeExpansion: true
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+mountOptions:
+- debug
+---
+# AWS Cluster Autoscaler
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cluster-autoscaler
+  namespace: fortress
+  labels:
+    app.kubernetes.io/name: cluster-autoscaler
+    app.kubernetes.io/component: autoscaler
+    app.kubernetes.io/part-of: fortress
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cluster-autoscaler
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cluster-autoscaler
+    spec:
+      serviceAccountName: cluster-autoscaler
+      containers:
+      - image: k8s.gcr.io/autoscaling/cluster-autoscaler:v1.21.0
+        name: cluster-autoscaler
+        resources:
+          limits:
+            cpu: 100m
+            memory: 300Mi
+          requests:
+            cpu: 100m
+            memory: 300Mi
+        command:
+        - ./cluster-autoscaler
+        - --v=4
+        - --stderrthreshold=info
+        - --cloud-provider=aws
+        - --skip-nodes-with-local-storage=false
+        - --expander=least-waste
+        - --node-group-auto-discovery=asg:tag=k8s.io/cluster-autoscaler/enabled,k8s.io/cluster-autoscaler/fortress
+        - --balance-similar-node-groups
+        - --skip-nodes-with-system-pods=false
+---
+# AWS Application Load Balancer Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fortress-alb-ingress
+  namespace: fortress
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: ingress
+    app.kubernetes.io/part-of: fortress
+  annotations:
+    kubernetes.io/ingress.class: "alb"
+    alb.ingress.kubernetes.io/scheme: "internet-facing"
+    alb.ingress.kubernetes.io/target-type: "ip"
+    alb.ingress.kubernetes.io/healthcheck-path: "/health"
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "30"
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: "5"
+    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: "3"
+    alb.ingress.kubernetes.io/success-codes: "200"
+    alb.ingress.kubernetes.io/load-balancer-attributes: "idle_timeout.timeout_seconds=60"
+    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:REGION:ACCOUNT_ID:certificate/CERTIFICATE_ID"
+    alb.ingress.kubernetes.io/ssl-policy: "ELBSecurityPolicy-TLS-1-2-2017-01"
+    alb.ingress.kubernetes.io/redirect-http-to-https: "true"
+    alb.ingress.kubernetes.io/wafv2-acl-arn: "arn:aws:wafv2:REGION:ACCOUNT_ID:global/webacl/FORTRESS-WAF/ID"
+spec:
+  rules:
+  - host: fortress.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: fortress-server
+            port:
+              number: 8080
+---
+# AWS CloudWatch Metrics
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fortress-cloudwatch-config
+  namespace: fortress
+  labels:
+    app.kubernetes.io/name: fortress
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: fortress
+data:
+  cloudwatch.json: |
+    {
+      "agent": {
+        "metrics_collection_interval": 60,
+        "run_as_user": "cwagent"
+      },
+      "logs": {
+        "logs_collected": {
+          "files": {
+            "collect_list": [
+              {
+                "file_path": "/app/logs/*.log",
+                "log_group_name": "/fortress/fortress-server",
+                "log_stream_name": "{instance_id}",
+                "timezone": "UTC"
+              }
+            ]
+          }
+        }
+      },
+      "metrics": {
+        "namespace": "Fortress",
+        "metrics_collected": {
+          "cpu": {
+            "measurement": [
+              "cpu_usage_idle",
+              "cpu_usage_iowait",
+              "cpu_usage_user",
+              "cpu_usage_system"
+            ],
+            "metrics_collection_interval": 60
+          },
+          "disk": {
+            "measurement": [
+              "used_percent"
+            ],
+            "metrics_collection_interval": 60,
+            "resources": [
+              "*"
+            ]
+          },
+          "mem": {
+            "measurement": [
+              "mem_used_percent"
+            ],
+            "metrics_collection_interval": 60
+          }
+        }
+      }
+    }
