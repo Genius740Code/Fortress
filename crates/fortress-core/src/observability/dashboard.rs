@@ -931,6 +931,10 @@ pub struct MockDataProvider {
 }
 
 impl MockDataProvider {
+    /// Create a new mock data provider
+    /// 
+    /// # Arguments
+    /// * `provider_type` - Type of data source to mock
     pub fn new(provider_type: DataSourceType) -> Self {
         Self { provider_type }
     }

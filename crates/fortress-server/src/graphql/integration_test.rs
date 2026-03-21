@@ -368,17 +368,26 @@ impl IntegrationTestSuite {
 /// Integration test results
 #[derive(Debug, Clone)]
 pub struct IntegrationTestResults {
+    /// Security integration test result
     pub security_integration: TestResult,
+    /// Authentication integration test result
     pub auth_integration: TestResult,
+    /// Cache integration test result
     pub cache_integration: TestResult,
+    /// Performance integration test result
     pub performance_integration: TestResult,
+    /// End-to-end workflow test result
     pub end_to_end_workflow: TestResult,
+    /// Security test suite result
     pub security_test_suite: TestResult,
+    /// Performance benchmark test result
     pub performance_benchmark: TestResult,
+    /// Overall success status
     pub overall_success: bool,
 }
 
 impl IntegrationTestResults {
+    /// Create new integration test results with default values
     pub fn new() -> Self {
         Self {
             security_integration: TestResult { passed: false, details: String::new() },
@@ -392,6 +401,7 @@ impl IntegrationTestResults {
         }
     }
 
+    /// Calculate overall success from all test results
     pub fn calculate_overall_success(&self) -> bool {
         self.security_integration.passed
             && self.auth_integration.passed
@@ -402,6 +412,7 @@ impl IntegrationTestResults {
             && self.performance_benchmark.passed
     }
 
+    /// Generate a formatted test report
     pub fn generate_report(&self) -> String {
         let mut report = String::new();
         
@@ -480,7 +491,9 @@ impl IntegrationTestResults {
 /// Test result structure
 #[derive(Debug, Clone)]
 pub struct TestResult {
+    /// Whether the test passed
     pub passed: bool,
+    /// Detailed information about the test result
     pub details: String,
 }
 

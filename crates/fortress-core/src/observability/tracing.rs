@@ -20,16 +20,22 @@ use uuid::Uuid;
 // Fallback Span trait for when OpenTelemetry is not available
 #[cfg(not(feature = "opentelemetry"))]
 pub trait Span: Send + Sync {
+    /// Add an event to the span
     fn add_event(&mut self, name: &str, _attributes: Vec<String>);
+    /// Add a link to the span
     fn add_link(&mut self, _link: String);
+    /// Set the status of the span
     fn set_status(&mut self, _status: String);
+    /// Set an attribute on the span
     fn set_attribute(&mut self, _attribute: String);
+    /// End the span with a timestamp
     fn end_with_timestamp(&mut self, _timestamp: u64);
 }
 
 // Fallback Tracer trait for when OpenTelemetry is not available
 #[cfg(not(feature = "opentelemetry"))]
 pub trait Tracer: Send + Sync {
+    /// Start a new span with context
     fn start_with_context(&self, name: &str) -> Box<dyn Span + Send + Sync>;
 }
 
@@ -37,7 +43,9 @@ pub trait Tracer: Send + Sync {
 #[cfg(not(feature = "opentelemetry"))]
 #[derive(Debug)]
 pub enum TracerImpl {
+    /// No-operation tracer
     NoOp(NoOpTracer),
+    /// Console tracer
     Console(ConsoleTracer),
 }
 
@@ -324,8 +332,11 @@ impl ObservabilityTracer {
 #[cfg(not(feature = "opentelemetry"))]
 #[derive(Debug)]
 pub struct TracerConfig {
+    /// Whether tracing is enabled
     pub enabled: bool,
+    /// Name of the service being traced
     pub service_name: String,
+    /// Version of the service being traced
     pub service_version: String,
 }
 
@@ -537,6 +548,11 @@ impl ObservabilityTracer {
 
     /// Inject span context into headers (no-op when feature not enabled)
     #[cfg(not(feature = "tracing-opentelemetry"))]
+    /// Inject span context into HTTP headers for distributed tracing
+    /// 
+    /// # Arguments
+    /// * `context` - Span context to inject
+    /// * `headers` - HTTP headers to inject into
     pub fn inject_context(&self, context: &SpanContext, headers: &mut HashMap<String, String>) -> Result<()> {
         if !self.config.enabled || context.is_empty() {
             return Ok(());
@@ -553,7 +569,10 @@ impl ObservabilityTracer {
         Ok(())
     }
 
-    /// Get active spans
+    /// Get active spans from the tracer
+    /// 
+    /// # Returns
+    /// * `Vec<ActiveSpanInfo>` - List of active span information
     pub async fn get_active_spans(&self) -> Result<Vec<ActiveSpanInfo>> {
         let active_spans = self.active_spans.read().await;
         let spans: Vec<ActiveSpanInfo> = active_spans
@@ -569,7 +588,10 @@ impl ObservabilityTracer {
         Ok(spans)
     }
 
-    /// Start the tracer
+    /// Start the distributed tracer
+    /// 
+    /// # Returns
+    /// * `Result<()>` - Success status
     pub async fn start(&self) -> Result<()> {
         if self.config.enabled {
             tracing::info!("Distributed tracing started");
@@ -577,7 +599,10 @@ impl ObservabilityTracer {
         Ok(())
     }
 
-    /// Shutdown the tracer
+    /// Shutdown the distributed tracer
+    /// 
+    /// # Returns
+    /// * `Result<()>` - Success status
     pub async fn shutdown(&self) -> Result<()> {
         if self.config.enabled {
             // Finish any remaining active spans

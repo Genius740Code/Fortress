@@ -433,6 +433,7 @@ pub struct ComplianceReport {
     pub generated_at: DateTime<Utc>,
     /// Report period
     pub period_start: DateTime<Utc>,
+    /// End of the reporting period
     pub period_end: DateTime<Utc>,
     /// Overall compliance score (0-100)
     pub compliance_score: u32,

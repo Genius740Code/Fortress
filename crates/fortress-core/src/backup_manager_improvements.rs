@@ -397,8 +397,11 @@ pub struct BackupIntegrityReport {
     pub items_valid: usize,
     pub items_total: usize,
     pub corrupted_items: Vec<String>,
+/// List of missing backup items
     pub missing_items: Vec<String>,
+    /// Overall validation status
     pub overall_valid: bool,
+    /// Duration of validation process
     pub validation_duration: chrono::Duration,
 }
 

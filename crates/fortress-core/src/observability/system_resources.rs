@@ -710,27 +710,36 @@ pub struct ResourceAlert {
     pub threshold_value: f64,
 }
 
-/// Resource types
+/// Resource types for monitoring
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum ResourceType {
+    /// CPU resource
     Cpu,
+    /// Memory resource
     Memory,
+    /// Disk storage resource
     Disk,
+    /// Network resource
     Network,
 }
 
-/// Alert severity
+/// Alert severity levels
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum AlertSeverity {
+    /// Warning level alert
     Warning,
+    /// Critical level alert
     Critical,
 }
 
-/// Performance trend
+/// Performance trend direction
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Trend {
+    /// Increasing trend
     Increasing,
+    /// Decreasing trend
     Decreasing,
+    /// Stable trend
     Stable,
 }
 

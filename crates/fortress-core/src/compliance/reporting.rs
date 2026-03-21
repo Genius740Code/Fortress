@@ -47,37 +47,71 @@ pub struct ReportSection {
     pub required: bool,
 }
 
+/// Types of compliance reports
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ReportType {
+    /// Findings from compliance assessment
+    Findings,
+    /// Recommendations for improvement
+    Recommendations,
+    /// Evidence collected during audit
+    Evidence,
+    /// Audit trail of compliance events
+    AuditTrail,
+    /// Risk assessment results
+    RiskAssessment,
+}
+
 /// Section content types
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SectionContentType {
+    /// Executive summary of the report
     ExecutiveSummary,
+    /// Compliance score based on assessment
     ComplianceScore,
+    /// Findings from compliance assessment
     Findings,
+    /// Recommendations for improvement
     Recommendations,
+    /// Evidence collected during audit
     Evidence,
+    /// Audit trail of compliance events
     AuditTrail,
+    /// Risk assessment results
     RiskAssessment,
 }
 
 /// Evidence collector trait
 #[async_trait]
 pub trait EvidenceCollector: Send + Sync {
+    /// Collect evidence for a specific compliance framework
     async fn collect_evidence(&self, framework: ComplianceFramework, evidence_type: &str) -> Result<Vec<EvidenceItem>>;
 }
 
-/// Evidence item
+/// Evidence item collected during compliance audit
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvidenceItem {
+    /// Unique identifier for the evidence item
     pub id: Uuid,
+    /// Name or title of the evidence
     pub name: String,
+    /// Detailed description of the evidence
     pub description: String,
+    /// When the evidence was collected
     pub collection_date: DateTime<Utc>,
+    /// Type of evidence (log, screenshot, document, etc.)
     pub evidence_type: String,
+    /// Actual evidence content
     pub content: String,
+    /// Additional metadata about the evidence
     pub metadata: HashMap<String, String>,
 }
 
 impl ComplianceReportGenerator {
+    /// Create a new compliance report generator
+    /// 
+    /// # Arguments
+    /// * `evidence_collector` - Boxed trait object for collecting evidence
     pub fn new(evidence_collector: Box<dyn EvidenceCollector>) -> Self {
         let mut templates = HashMap::new();
         
@@ -122,6 +156,14 @@ impl ComplianceReportGenerator {
         }
     }
 
+    /// Generate a compliance report
+    /// 
+    /// # Arguments
+    /// * `&self` - Reference to the report generator
+    /// * `framework` - Compliance framework to use for the report
+    /// * `report_type` - Type of report to generate
+    /// * `start_date` - Start date of the reporting period
+    /// * `end_date` - End date of the reporting period
     pub async fn generate_report(
         &self,
         framework: ComplianceFramework,
@@ -152,18 +194,27 @@ impl ComplianceReportGenerator {
 /// Generated compliance report
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GeneratedReport {
+    /// Unique identifier for the generated report
     pub id: Uuid,
+    /// Template identifier used for this report
     pub template_id: String,
+    /// Compliance framework used
     pub framework: ComplianceFramework,
+    /// Type of report generated
     pub report_type: String,
+    /// When the report was generated
     pub generated_at: DateTime<Utc>,
+    /// Start of the reporting period
     pub period_start: DateTime<Utc>,
+    /// End of the reporting period
     pub period_end: DateTime<Utc>,
+    /// Report sections with their content
     pub sections: HashMap<String, String>,
+    /// Evidence collected during audit
     pub evidence: HashMap<String, Vec<EvidenceItem>>,
 }
 
-/// Default evidence collector
+/// Default evidence collector for testing and development
 pub struct DefaultEvidenceCollector;
 
 #[async_trait]
@@ -178,6 +229,7 @@ impl EvidenceCollector for DefaultEvidenceCollector {
 }
 
 impl DefaultEvidenceCollector {
+    /// Collect GDPR evidence
     async fn collect_gdpr_evidence(&self, evidence_type: &str) -> Result<Vec<EvidenceItem>> {
         match evidence_type {
             "consent_records" => Ok(vec![EvidenceItem {
@@ -193,6 +245,7 @@ impl DefaultEvidenceCollector {
         }
     }
 
+    /// Collect HIPAA evidence
     async fn collect_hipaa_evidence(&self, evidence_type: &str) -> Result<Vec<EvidenceItem>> {
         match evidence_type {
             "phi_access_logs" => Ok(vec![EvidenceItem {
@@ -208,6 +261,7 @@ impl DefaultEvidenceCollector {
         }
     }
 
+    /// Collect PCI DSS evidence
     async fn collect_pci_dss_evidence(&self, evidence_type: &str) -> Result<Vec<EvidenceItem>> {
         match evidence_type {
             "vulnerability_scans" => Ok(vec![EvidenceItem {

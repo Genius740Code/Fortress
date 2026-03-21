@@ -16,18 +16,27 @@ pub enum CacheBackend {
     /// In-memory cache (for single-node deployments)
     InMemory,
     /// Redis cluster
+/// Redis cluster configuration
     Redis { 
+        /// List of Redis node addresses
         nodes: Vec<String>,
+        /// Authentication password
         password: Option<String>,
+        /// Redis database number
         db: i64,
     },
     /// Memcached cluster
+/// Memcached cluster configuration
     Memcached {
+        /// List of Memcached server addresses
         servers: Vec<String>,
     },
     /// Hybrid cache (local + distributed)
+/// Hybrid cache configuration (local + distributed)
     Hybrid {
+        /// Size of local cache
         local_cache_size: usize,
+        /// Distributed cache backend
         distributed_backend: Box<CacheBackend>,
     },
 }

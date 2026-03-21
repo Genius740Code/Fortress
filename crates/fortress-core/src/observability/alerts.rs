@@ -855,6 +855,11 @@ impl MockMetricsProvider {
         }
     }
 
+    /// Set a metric value for testing
+    /// 
+    /// # Arguments
+    /// * `name` - Name of the metric
+    /// * `value` - Metric value to set
     pub async fn set_metric(&self, name: &str, value: f64) {
         let mut metrics = self.metrics.write().await;
         metrics.insert(name.to_string(), value);

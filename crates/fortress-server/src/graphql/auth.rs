@@ -833,10 +833,15 @@ pub enum PolicyEvaluationResult {
 /// Security context for policy evaluation
 #[derive(Debug, Clone)]
 pub struct SecurityContext {
+    /// Timestamp when the security context was created (Unix timestamp in seconds)
     pub timestamp: u64,
+    /// IP address of the client making the request
     pub ip_address: String,
+    /// User agent string from the client's request headers
     pub user_agent: String,
+    /// API endpoint or resource path being accessed
     pub request_path: String,
+    /// HTTP method used for the request (GET, POST, PUT, DELETE, etc.)
     pub request_method: String,
 }
 

@@ -29,6 +29,7 @@ pub struct CacheManagerConfig {
     pub redis_config: Option<RedisConfig>,
     #[cfg(feature = "memcached")]
     pub memcached_config: Option<MemcachedConfig>,
+    /// Hybrid cache configuration (local + distributed)
     pub hybrid_config: Option<HybridCacheConfig>,
     /// Invalidation configuration
     pub invalidation_config: InvalidationConfig,

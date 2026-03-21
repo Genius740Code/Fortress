@@ -27,32 +27,6 @@ impl FortressServer {
         }
     }
     
-    async fn handle_request(&self, req: hyper::Request<hyper::Body>) -> hyper::Response<hyper::Body> {
-        let path = req.uri().path();
-        let method = req.method();
-        
-        match (method.as_str(), path) {
-            ("GET", "/") => {
-                let body = serde_json::json!({
-                    "message": "Fortress Server",
-                    "version": env!("CARGO_PKG_VERSION"),
-                    "status": "running"
-                });
-                hyper::Response::builder()
-                    .status(hyper::StatusCode::OK)
-                    .header("content-type", "application/json")
-                    .body(hyper::Body::from(body.to_string()))
-                    .unwrap()
-            }
-            _ => {
-                hyper::Response::builder()
-                    .status(hyper::StatusCode::NOT_FOUND)
-                    .body(hyper::Body::from("Not Found"))
-                    .unwrap()
-            }
-        }
-    }
-    
     async fn health_check(&self) -> Result<serde_json::Value> {
         let uptime = chrono::Utc::now() - self.start_time;
         Ok(serde_json::json!({

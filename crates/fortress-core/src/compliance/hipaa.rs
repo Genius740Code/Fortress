@@ -158,21 +158,29 @@ pub struct ImpactAssessment {
     pub impact_level: ImpactLevel,
 }
 
-/// Risk levels
+/// Risk levels for HIPAA compliance assessment
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RiskLevel {
+    /// Low risk level
     Low,
+    /// Medium risk level
     Medium,
+    /// High risk level
     High,
+    /// Critical risk level
     Critical,
 }
 
-/// Impact levels
+/// Impact levels for security incidents
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ImpactLevel {
+    /// Minimal impact
     Minimal,
+    /// Moderate impact
     Moderate,
+    /// Significant impact
     Significant,
+    /// Severe impact
     Severe,
 }
 
@@ -630,6 +638,7 @@ pub struct HipaaReport {
     pub generated_at: DateTime<Utc>,
     /// Report period
     pub period_start: DateTime<Utc>,
+    /// End of the reporting period
     pub period_end: DateTime<Utc>,
     /// Total number of covered entities
     pub total_covered_entities: usize,

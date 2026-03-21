@@ -50,8 +50,8 @@ async fn test_production_paillier_homomorphic_addition() {
     let decrypted_result = paillier.decrypt(&result, &key).await.unwrap();
     
     // Convert to numbers and verify
-    let num1 = u64::from_le_bytes([plaintext1[0]; 8);
-    let num2 = u64::from_le_bytes([plaintext2[0]; 8);
+    let num1 = u64::from_le_bytes([plaintext1[0]; 8]);
+    let num2 = u64::from_le_bytes([plaintext2[0]; 8]);
     let expected = num1 + num2;
     
     println!("Homomorphic addition: {} + {} = {}", num1, num2, expected);

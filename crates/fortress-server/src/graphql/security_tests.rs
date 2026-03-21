@@ -835,7 +835,7 @@ impl SecurityTestResults {
     }
 }
 
-// Individual test result structures
+/// Rate limiting security test results
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RateLimitingTestResults {
     /// Normal rate limiting test result
@@ -846,6 +846,7 @@ pub struct RateLimitingTestResults {
     pub ip_blocking: TestResult,
 }
 
+/// Input validation security test results
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InputValidationTestResults {
     /// SQL injection prevention test result
@@ -858,6 +859,7 @@ pub struct InputValidationTestResults {
     pub input_size_limits: TestResult,
 }
 
+/// Query complexity security test results
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueryComplexityTestResults {
     /// Simple query test result
@@ -868,6 +870,7 @@ pub struct QueryComplexityTestResults {
     pub complex_query: TestResult,
 }
 
+/// Authentication security test results
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthenticationTestResults {
     /// Valid credentials test result
@@ -882,6 +885,7 @@ pub struct AuthenticationTestResults {
     pub logout: TestResult,
 }
 
+/// Authorization security test results
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthorizationTestResults {
     /// Admin role access test result
@@ -904,6 +908,7 @@ pub struct AuthorizationTestResults {
     pub unauthorized_resource_access: TestResult,
 }
 
+/// Data encryption security test results
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DataEncryptionTestResults {
     /// Field encryption test result
@@ -922,6 +927,7 @@ pub struct DataEncryptionTestResults {
     pub key_rotation: TestResult,
 }
 
+/// Session management security test results
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionManagementTestResults {
     /// Session validation test result
@@ -938,6 +944,7 @@ pub struct SessionManagementTestResults {
     pub session_statistics: TestResult,
 }
 
+/// Security policy test results
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecurityPolicyTestResults {
     /// Policy evaluation test result
@@ -950,6 +957,7 @@ pub struct SecurityPolicyTestResults {
     pub ip_based_policies: TestResult,
 }
 
+/// Performance security test results
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PerformanceTestResults {
     /// Concurrent validations test result
@@ -960,6 +968,7 @@ pub struct PerformanceTestResults {
     pub memory_usage: TestResult,
 }
 
+/// Vulnerability scan security test results
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VulnerabilityScanResults {
     /// SQL injection vulnerabilities test result
@@ -1025,6 +1034,7 @@ impl AuthenticationTestResults {
 }
 
 impl AuthorizationTestResults {
+    /// Create new authorization test results with default values
     pub fn new() -> Self {
         Self {
             admin_role_access: TestResult { passed: false, details: String::new() },
@@ -1041,6 +1051,7 @@ impl AuthorizationTestResults {
 }
 
 impl DataEncryptionTestResults {
+    /// Create new data encryption test results with default values
     pub fn new() -> Self {
         Self {
             field_encryption: TestResult { passed: false, details: String::new() },
@@ -1055,6 +1066,7 @@ impl DataEncryptionTestResults {
 }
 
 impl SessionManagementTestResults {
+    /// Create new session management test results with default values
     pub fn new() -> Self {
         Self {
             session_validation: TestResult { passed: false, details: String::new() },
@@ -1068,6 +1080,7 @@ impl SessionManagementTestResults {
 }
 
 impl SecurityPolicyTestResults {
+    /// Create new security policy test results with default values
     pub fn new() -> Self {
         Self {
             policy_evaluation: TestResult { passed: false, details: String::new() },
@@ -1079,6 +1092,7 @@ impl SecurityPolicyTestResults {
 }
 
 impl PerformanceTestResults {
+    /// Create new performance test results with default values
     pub fn new() -> Self {
         Self {
             concurrent_validations: TestResult { passed: false, details: String::new() },
@@ -1089,6 +1103,7 @@ impl PerformanceTestResults {
 }
 
 impl VulnerabilityScanResults {
+    /// Create new vulnerability scan test results with default values
     pub fn new() -> Self {
         Self {
             sql_injection_vulnerabilities: TestResult { passed: false, details: String::new() },

@@ -12,12 +12,16 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 
-/// Risk levels
+/// Risk levels for PCI-DSS compliance assessment
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RiskLevel {
+    /// Low risk level
     Low,
+    /// Medium risk level
     Medium,
+    /// High risk level
     High,
+    /// Critical risk level
     Critical,
 }
 
@@ -193,17 +197,22 @@ pub struct VulnerabilityFinding {
     pub business_impact: String,
 }
 
-/// Vulnerability severity levels
+/// Vulnerability severity levels for PCI-DSS
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum VulnerabilitySeverity {
+    /// Critical severity - requires immediate action
     Critical,
+    /// High severity - should be addressed quickly
     High,
+    /// Medium severity - should be addressed in reasonable time
     Medium,
+    /// Low severity - can be addressed during routine maintenance
     Low,
+    /// Informational - for awareness only
     Informational,
 }
 
-/// Remediation status
+/// Remediation status for vulnerabilities
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RemediationStatus {
     /// Remediation completed
@@ -377,13 +386,18 @@ pub struct ActionItem {
     pub dependencies: Vec<Uuid>,
 }
 
-/// Action item status
+/// Action item status for PCI-DSS compliance
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ActionItemStatus {
+    /// Action item not yet started
     NotStarted,
+    /// Action item currently in progress
     InProgress,
+    /// Action item completed
     Completed,
+    /// Action item blocked by dependencies
     Blocked,
+    /// Action item cancelled
     Cancelled,
 }
 
@@ -732,6 +746,7 @@ pub struct PciDssReport {
     pub generated_at: DateTime<Utc>,
     /// Report period
     pub period_start: DateTime<Utc>,
+    /// End of the reporting period
     pub period_end: DateTime<Utc>,
     /// Total number of cardholder data records
     pub total_cardholder_data_records: usize,

@@ -468,6 +468,7 @@ pub struct GdprReport {
     pub generated_at: DateTime<Utc>,
     /// Report period
     pub period_start: DateTime<Utc>,
+    /// End of the reporting period
     pub period_end: DateTime<Utc>,
     /// Total number of registered data processors
     pub total_data_processors: usize,

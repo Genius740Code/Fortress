@@ -16,64 +16,122 @@ use fortress_core::key::KeyManager;
 /// Field-level encryption configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FieldEncryptionConfig {
+    /// Name of the field to be encrypted
     pub field_name: String,
+    /// Type of resource (table, collection, etc.)
     pub resource_type: String,
+    /// Whether encryption is enabled for this field
     pub encryption_enabled: bool,
+    /// Encryption algorithm to use (AES-256-GCM, ChaCha20-Poly1305, etc.)
     pub encryption_algorithm: String,
+    /// Whether automatic key rotation is enabled
     pub key_rotation_enabled: bool,
+    /// Interval in days for key rotation
     pub key_rotation_interval_days: u32,
+    /// List of roles that can access this field
     pub access_roles: Vec<String>,
+    /// Specific permissions required for field access
     pub access_permissions: Vec<String>,
+    /// Whether data masking is enabled for this field
     pub masking_enabled: bool,
+    /// Type of masking to apply to the field data
     pub masking_type: MaskingType,
 }
 
 /// Data masking types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MaskingType {
+    /// No masking applied
     None,
-    Partial { visible_chars: usize, mask_char: char },
+    /// Partial masking with specified visible characters and mask character
+    Partial { 
+        /// Number of characters to remain visible at the start
+        visible_chars: usize, 
+        /// Character to use for masking the rest
+        mask_char: char 
+    },
+    /// Complete masking of the entire field
     Full,
+    /// Email address masking (show only domain)
     Email,
+    /// Phone number masking (show only last 4 digits)
     Phone,
+    /// Credit card masking (show only last 4 digits)
     CreditCard,
-    Custom { pattern: String },
+    /// Custom masking using a regex pattern
+    Custom { 
+        /// Regex pattern for custom masking
+        pattern: String 
+    },
 }
 
 /// Encryption key metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncryptionKeyMetadata {
+    /// Unique identifier for the encryption key
     pub key_id: String,
+    /// Encryption algorithm used by this key
     pub algorithm: String,
+    /// Timestamp when the key was created (Unix timestamp)
     pub created_at: u64,
+    /// Optional timestamp when the key expires (Unix timestamp)
     pub expires_at: Option<u64>,
+    /// Timestamp when the key was last rotated (Unix timestamp)
     pub last_rotated: u64,
+    /// Number of times this key has been rotated
     pub rotation_count: u32,
+    /// Current status of the key
     pub status: KeyStatus,
+    /// List of access policies for this key
     pub access_policies: Vec<KeyAccessPolicy>,
 }
 
+/// Status of an encryption key
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum KeyStatus {
+    /// Key is active and can be used for encryption/decryption
     Active,
+    /// Key is currently being rotated
     Rotating,
+    /// Key is deprecated but may still be used for decryption
     Deprecated,
+    /// Key has been revoked and cannot be used
     Revoked,
+    /// Key has expired and is no longer valid
     Expired,
 }
 
+/// Access policy for encryption keys
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyAccessPolicy {
+    /// Role that this policy applies to
     pub role: String,
+    /// Permission granted to the role (encrypt, decrypt, manage)
     pub permission: String,
+    /// Conditions that must be met for access
     pub conditions: Vec<AccessCondition>,
 }
 
+/// Conditions for key access
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AccessCondition {
-    TimeRestriction { start_hour: u32, end_hour: u32 },
-    IpWhitelist { ips: Vec<String> },
-    DeviceWhitelist { devices: Vec<String> },
+    /// Time-based access restrictions
+    TimeRestriction { 
+        /// Start hour (24-hour format)
+        start_hour: u32, 
+        /// End hour (24-hour format)
+        end_hour: u32 
+    },
+    /// IP address whitelist for access
+    IpWhitelist { 
+        /// List of allowed IP addresses
+        ips: Vec<String> 
+    },
+    /// Device whitelist for access
+    DeviceWhitelist { 
+        /// List of allowed device identifiers
+        devices: Vec<String> 
+    },
 }
 
 /// Data encryption manager
@@ -85,14 +143,22 @@ pub struct DataEncryptionManager {
     config: EncryptionConfig,
 }
 
+/// Configuration for data encryption system
 #[derive(Debug, Clone)]
 pub struct EncryptionConfig {
+    /// Default encryption algorithm for new keys
     pub default_algorithm: String,
+    /// Interval for automatic key rotation
     pub key_rotation_interval: Duration,
+    /// Maximum number of cached encryption results
     pub cache_size: usize,
+    /// Whether to log all encryption operations
     pub audit_encryption: bool,
+    /// Whether field-level encryption is enabled
     pub enable_field_level_encryption: bool,
+    /// Whether data masking is enabled
     pub enable_data_masking: bool,
+    /// Whether to use secure key storage
     pub secure_key_storage: bool,
 }
 
@@ -111,6 +177,11 @@ impl Default for EncryptionConfig {
 }
 
 impl DataEncryptionManager {
+    /// Create a new data encryption manager
+    /// 
+    /// # Arguments
+    /// * `key_manager` - Arc to key manager for cryptographic operations
+    /// * `config` - Configuration for encryption settings
     pub fn new(key_manager: Arc<dyn KeyManager>, config: EncryptionConfig) -> Self {
         Self {
             key_manager,
@@ -621,83 +692,123 @@ impl DataEncryptionManager {
 /// Encrypted field data
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncryptedField {
+    /// Name of the encrypted field
     pub field_name: String,
+    /// Encrypted or masked field data
     pub data: String,
+    /// Whether the field data is encrypted
     pub is_encrypted: bool,
+    /// Whether the field data is masked
     pub is_masked: bool,
+    /// ID of encryption key used (if encrypted)
     pub key_id: Option<String>,
+    /// Encryption algorithm used (if encrypted)
     pub algorithm: Option<String>,
 }
 
 /// Decrypted field data
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DecryptedField {
+    /// Name of the decrypted field
     pub field_name: String,
+    /// Decrypted field data
     pub data: String,
+    /// Whether the field was originally encrypted
     pub is_encrypted: bool,
+    /// Whether the field is currently masked
     pub is_masked: bool,
 }
 
 /// Encrypted record data
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncryptedRecord {
+    /// Type of resource (table, collection, etc.)
     pub resource_type: String,
+    /// List of encrypted fields in the record
     pub fields: Vec<EncryptedField>,
+    /// Access levels for different fields
     pub access_levels: Vec<FieldAccess>,
+    /// Encryption metadata for the record
     pub encryption_metadata: EncryptionMetadata,
 }
 
-/// Field access level
+/// Field access level information
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FieldAccess {
+    /// Name of the field
     pub field_name: String,
+    /// Access level granted for this field
     pub access_level: AccessLevel,
 }
 
+/// Access levels for field data
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AccessLevel {
+    /// Plain text access (no encryption or masking)
     Plain,
+    /// Masked access (data is partially or fully masked)
     Masked,
+    /// Encrypted access (data is encrypted)
     Encrypted,
 }
 
-/// Encryption metadata
+/// Encryption metadata for resources
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncryptionMetadata {
+    /// Type of resource (table, collection, etc.)
     pub resource_type: String,
+    /// List of encrypted field names
     pub encrypted_fields: Vec<String>,
+    /// Whether encryption is enabled for this resource
     pub encryption_enabled: bool,
+    /// Timestamp of last key rotation (Unix timestamp)
     pub last_key_rotation: u64,
 }
 
 /// Cached encrypted data
 #[derive(Debug, Clone)]
 pub struct EncryptedData {
+    /// Raw encrypted bytes
     pub encrypted_data: Vec<u8>,
+    /// ID of encryption key used
     pub key_id: String,
+    /// Encryption algorithm name
     pub algorithm: String,
+    /// Creation timestamp (Unix timestamp)
     pub created_at: u64,
 }
 
 /// User context for access control
 #[derive(Debug, Clone)]
 pub struct UserContext {
+    /// Unique user identifier
     pub user_id: String,
+    /// List of user roles
     pub roles: Vec<String>,
+    /// List of user permissions
     pub permissions: Vec<String>,
+    /// Optional tenant identifier for multi-tenancy
     pub tenant_id: Option<String>,
+    /// IP address of the user
     pub ip_address: String,
+    /// Optional device identifier
     pub device_id: Option<String>,
 }
 
 /// Encryption statistics
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncryptionStats {
+    /// Total number of fields managed
     pub total_fields: usize,
+    /// Number of fields that are encrypted
     pub encrypted_fields: usize,
+    /// Total number of encryption keys
     pub total_keys: usize,
+    /// Number of currently active keys
     pub active_keys: usize,
+    /// Current cache size
     pub cache_size: usize,
+    /// Default encryption algorithm
     pub default_algorithm: String,
 }
 
@@ -707,45 +818,75 @@ pub struct DataProtectionPolicyManager {
     policies: Arc<RwLock<Vec<DataProtectionPolicy>>>,
 }
 
+/// Data protection policy configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DataProtectionPolicy {
+    /// Unique policy identifier
     pub id: String,
+    /// Human-readable policy name
     pub name: String,
+    /// Detailed policy description
     pub description: String,
+    /// Type of resource this policy applies to
     pub resource_type: String,
+    /// Data classification level
     pub data_classification: DataClassification,
+    /// Retention period in days
     pub retention_period_days: u32,
+    /// Whether encryption is required
     pub encryption_required: bool,
+    /// Whether data masking is required
     pub masking_required: bool,
+    /// List of access controls
     pub access_controls: Vec<AccessControl>,
+    /// Audit requirements for this policy
     pub audit_requirements: Vec<AuditRequirement>,
+    /// Whether this policy is enabled
     pub enabled: bool,
 }
 
+/// Data classification levels
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DataClassification {
+    /// Public data - no restrictions
     Public,
+    /// Internal data - company internal use
     Internal,
+    /// Confidential data - sensitive company data
     Confidential,
+    /// Restricted data - highly sensitive, limited access
     Restricted,
+    /// Secret data - highest sensitivity, very limited access
     Secret,
 }
 
+/// Access control configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccessControl {
+    /// Role this access control applies to
     pub role: String,
+    /// List of permissions granted
     pub permissions: Vec<String>,
+    /// Conditions that must be met for access
     pub conditions: Vec<AccessCondition>,
 }
 
+/// Audit requirement configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuditRequirement {
+    /// Type of event to audit
     pub event_type: String,
+    /// Log level for audit entries
     pub log_level: String,
+    /// Retention period in days for audit logs
     pub retention_days: u32,
 }
 
 impl DataProtectionPolicyManager {
+    /// Create a new data protection policy manager
+    /// 
+    /// # Arguments
+    /// * `encryption_manager` - Arc to the encryption manager for policy enforcement
     pub fn new(encryption_manager: Arc<DataEncryptionManager>) -> Self {
         Self {
             encryption_manager,
@@ -803,9 +944,13 @@ impl DataProtectionPolicyManager {
 /// Policy evaluation result
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PolicyEvaluationResult {
+    /// List of applicable data protection policies
     pub applicable_policies: Vec<DataProtectionPolicy>,
+    /// Whether encryption is required by policies
     pub encryption_required: bool,
+    /// Whether data masking is required by policies
     pub masking_required: bool,
+    /// Maximum retention period in days from all applicable policies
     pub max_retention_days: u32,
 }
 

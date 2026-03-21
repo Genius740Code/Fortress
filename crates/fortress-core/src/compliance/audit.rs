@@ -11,25 +11,67 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 
-/// Audit logger for compliance events
+/// Compliance audit logger for regulatory compliance
+/// 
+/// This struct provides a comprehensive audit logging system for regulatory compliance
+/// including GDPR, HIPAA, PCI DSS, and other frameworks.
+/// 
+/// It supports event storage, retrieval, integrity checking, and automated cleanup.
+/// 
+/// # Examples
+/// ```
+/// let audit_logger = ComplianceAuditLogger::new(
+///     storage, 
+///     retention_policy, 
+///     integrity_checker
+/// ).await?;
+/// 
+/// audit_logger.store_event(event).await?;
+/// ```
 pub struct ComplianceAuditLogger {
+    /// Storage backend for audit events
     storage: Box<dyn AuditStorage>,
+    /// Retention policy for audit events
     retention_policy: RetentionPolicy,
+    /// Integrity checker for audit log verification
     integrity_checker: Box<dyn IntegrityChecker>,
 }
 
-/// Audit storage trait
+/// Audit storage trait for compliance audit events
 #[async_trait]
 pub trait AuditStorage: Send + Sync {
+    /// Store an audit event in the audit log
+    /// 
+    /// # Arguments
+    /// * `event` - The audit event to store
     async fn store_event(&self, event: &AuditEvent) -> Result<()>;
+
+    /// Retrieve audit events based on filter criteria
+    /// 
+    /// # Arguments
+    /// * `filter` - Filter criteria for event retrieval
     async fn retrieve_events(&self, filter: &AuditFilter) -> Result<Vec<AuditEvent>>;
+
+    /// Delete audit events older than specified date
+    /// 
+    /// # Arguments
+    /// * `before` - Delete events older than this date
     async fn delete_old_events(&self, before: DateTime<Utc>) -> Result<u64>;
 }
 
-/// Integrity checker trait
+/// Integrity checker trait for audit log verification
 #[async_trait]
 pub trait IntegrityChecker: Send + Sync {
+    /// Verify the integrity of audit events
+    /// 
+    /// # Arguments
+    /// * `events` - Events to verify
     async fn verify_integrity(&self, events: &[AuditEvent]) -> Result<IntegrityReport>;
+
+    /// Generate checksum for audit events
+    /// 
+    /// # Arguments
+    /// * `events` - Events to generate checksum for
     async fn generate_checksum(&self, events: &[AuditEvent]) -> Result<String>;
 }
 
@@ -49,6 +91,9 @@ pub struct RetentionPolicy {
 }
 
 /// Audit filter for retrieving audit events
+/// 
+/// This struct defines filter criteria for retrieving audit events, including start and end dates,
+/// compliance frameworks, event types, severities, users, resources, and maximum number of events.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuditFilter {
     /// Start date for filtering events (inclusive)
@@ -70,6 +115,9 @@ pub struct AuditFilter {
 }
 
 /// Comprehensive audit event
+/// 
+/// This struct represents a comprehensive audit event for compliance tracking.
+/// It includes all necessary metadata for regulatory compliance and security auditing.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuditEvent {
     /// Unique identifier for the audit event
@@ -118,14 +166,14 @@ pub struct AuditEvent {
     pub previous_event_id: Option<Uuid>,
 }
 
-/// Integrity report
+/// Integrity report from audit log verification
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IntegrityReport {
-    /// Timestamp when the integrity check was performed
+    /// Timestamp when integrity check was performed
     pub check_timestamp: DateTime<Utc>,
     /// Total number of events that were checked
     pub total_events_checked: u64,
-    /// Whether the integrity check passed overall
+    /// Whether integrity check passed overall
     pub integrity_passed: bool,
     /// List of missing event IDs
     pub missing_events: Vec<Uuid>,
