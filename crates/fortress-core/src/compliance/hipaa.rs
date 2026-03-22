@@ -129,6 +129,7 @@ pub enum NotificationStatus {
     Delivered,
     Failed,
     Pending,
+    InProgress,
 }
 
 /// Media notification status
@@ -930,7 +931,7 @@ impl HipaaComplianceManager {
         let incidents = self.security_incidents.read().await;
         let incident = incidents.iter().find(|i| i.id == breach.incident_id);
         
-        if let Some(inc) = incident {
+        if let Some(_inc) = incident {
             // In a real implementation, this would query the actual affected individuals
             let simulated_individuals = vec![
                 IndividualContact {
@@ -1281,6 +1282,123 @@ impl HipaaComplianceManager {
             ],
             last_assessment: Utc::now(),
         })
+    }
+
+    /// Submit breach report to HHS
+    async fn submit_hhs_breach_report(&self, breach: &BreachAssessment) -> Result<ReportSubmission> {
+        log::info!("Submitting HHS breach report for breach assessment: {}", breach.id);
+        
+        // Simulate HHS submission process
+        let start_time = std::time::Instant::now();
+        
+        // Create HHS breach report
+        let _hhs_report = HhsBreachReport {
+            id: Uuid::new_v4(),
+            breach_assessment_id: breach.id,
+            submission_timestamp: Utc::now(),
+            covered_entity_info: CoveredEntityInfo {
+                entity_name: "Example Healthcare Provider".to_string(),
+                entity_type: "Healthcare Provider".to_string(),
+                npi_number: "1234567890".to_string(),
+                address: "123 Medical Ave, Health City, HC 12345".to_string(),
+                contact_info: EntityContactInfo {
+                    privacy_officer: "Jane Smith".to_string(),
+                    security_officer: "John Doe".to_string(),
+                    phone: "+1-555-0123".to_string(),
+                    email: "privacy@example.com".to_string(),
+                },
+            },
+            business_associate_info: BusinessAssociateInfo {
+                total_associates: 5,
+                baas_with_current_agreements: 4,
+                baas_with_expired_agreements: 1,
+                risk_assessment_completed: true,
+                last_audit_date: Utc::now() - chrono::Duration::days(90),
+            },
+            breach_details: BreachDetails {
+                discovery_date: breach.assessed_at.to_rfc3339(),
+                breach_type: "Unauthorized Access".to_string(),
+                individuals_affected: breach.individuals_affected,
+                phi_types_disclosed: breach.phi_types_compromised.clone(),
+                breach_description: "Unauthorized access to patient records through compromised credentials".to_string(),
+            },
+            notification_timeline: NotificationTimeline {
+                discovery_to_assessment_days: 3,
+                assessment_to_notification_days: 5,
+                notification_method: "Email".to_string(),
+                individual_notification_date: (breach.assessed_at + chrono::Duration::days(3)).to_rfc3339(),
+                media_notification_date: Some((breach.assessed_at + chrono::Duration::days(7)).to_rfc3339()),
+            },
+            protective_measures: vec![
+                "Immediate password reset for all affected accounts".to_string(),
+                "Enhanced monitoring of access logs".to_string(),
+                "Additional security training for staff".to_string(),
+            ],
+            compliance_attestations: vec![
+                ComplianceAttestation {
+                    requirement: "Risk Assessment".to_string(),
+                    compliance_status: "Compliant".to_string(),
+                    attestation_date: Utc::now(),
+                    attestation_method: "Annual Assessment".to_string(),
+                    evidence: "Risk assessment completed on schedule".to_string(),
+                },
+                ComplianceAttestation {
+                    requirement: "Breach Notification".to_string(),
+                    compliance_status: "Compliant".to_string(),
+                    attestation_date: Utc::now(),
+                    attestation_method: "Policy Review".to_string(),
+                    evidence: "All affected individuals notified within 60 days".to_string(),
+                },
+            ],
+            contact_information: HhsContactInfo {
+                organization_name: "Privacy Office".to_string(),
+                contact_person: "Jane Smith".to_string(),
+                title: "Chief Privacy Officer".to_string(),
+                phone: "+1-555-0123".to_string(),
+                email: "privacy@example.com".to_string(),
+                address: "123 Medical Ave, Health City, HC 12345".to_string(),
+            },
+            submission_method: "Online Portal".to_string(),
+        };
+
+        // Simulate API call to HHS
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        
+        let processing_time = start_time.elapsed().as_millis() as u64;
+        
+        // Create HHS submission result
+        let result = HhsSubmissionResult {
+            status: SubmissionStatus::Confirmed,
+            confirmation_number: Some(format!("HHS-{}-{:06}", 
+                Utc::now().format("%Y"), 
+                rand::random::<u32>() % 999999 + 1)),
+            processing_time_ms: processing_time,
+            response_code: Some(200),
+        };
+
+        // Create and store submission record
+        let submission = ReportSubmission {
+            id: Uuid::new_v4(),
+            breach_assessment_id: breach.id,
+            regulatory_body: "HHS".to_string(),
+            submission_method: "Online Portal".to_string(),
+            submitted_at: Utc::now(),
+            status: SubmissionStatus::Confirmed,
+            confirmation_number: result.confirmation_number.clone(),
+            follow_up_requirements: vec![
+                "Monitor for additional affected individuals".to_string(),
+                "Submit follow-up report if new information discovered".to_string(),
+            ],
+        };
+
+        // Store submission record
+        let mut submissions = self.report_submissions.write().await;
+        submissions.push(submission.clone());
+
+        log::info!("HHS breach report submitted successfully with confirmation: {:?}", 
+                  result.confirmation_number);
+
+        Ok(submission)
     }
 }
 

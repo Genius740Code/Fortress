@@ -349,7 +349,7 @@ impl GdprComplianceManager {
             let exists = stored_alerts.iter().any(|existing| {
                 existing.consent_id == alert.consent_id && 
                 existing.days_until_expiry == alert.days_until_expiry &&
-                existing.created_at.date() == alert.created_at.date()
+                existing.created_at.date_naive() == alert.created_at.date_naive()
             });
             
             if !exists {
@@ -481,7 +481,7 @@ impl GdprComplianceManager {
                 meta.insert("data_id".to_string(), data_id.to_string());
                 meta.insert("access_granted".to_string(), granted.to_string());
                 meta.insert("applicable_consents".to_string(), format!("{:?}", applicable_consents));
-                meta.insert("reason".to_string(), reason);
+                meta.insert("reason".to_string(), reason.clone());
                 meta
             },
         };
