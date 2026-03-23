@@ -4,13 +4,11 @@
 //! that Fortress can use to store encrypted data and metadata.
 
 use crate::error::{FortressError, Result, StorageErrorCode};
-use crate::encryption::EncryptionAlgorithm;
 use async_trait::async_trait;
 use serde::{Serialize, Deserialize};
 use sha2::Digest;
 use std::collections::HashMap;
 use std::fmt;
-use futures::StreamExt;
 use uuid::Uuid;
 
 // Cloud storage imports (only available with cloud-storage feature)

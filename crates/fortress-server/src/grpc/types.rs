@@ -200,3 +200,135 @@ pub struct HistogramData {
     /// Count of values in each bucket
     pub bucket_counts: Vec<u64>,
 }
+
+// Batch encryption types
+
+/// Batch encryption request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchEncryptRequest {
+    /// Database ID
+    pub database_id: String,
+    /// Items to encrypt
+    pub items: Vec<BatchEncryptItem>,
+}
+
+/// Item to encrypt in batch
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchEncryptItem {
+    /// Data to encrypt
+    pub data: Vec<u8>,
+    /// Key ID to use
+    pub key_id: String,
+    /// Encryption algorithm
+    pub encryption_algorithm: Option<String>,
+    /// Additional context
+    pub context: HashMap<String, String>,
+}
+
+/// Batch encryption response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchEncryptResponse {
+    /// Results for each item
+    pub results: Vec<BatchEncryptResult>,
+    /// Errors that occurred
+    pub errors: Vec<BatchEncryptError>,
+    /// Total number of items
+    pub total_items: u32,
+    /// Number of successful items
+    pub successful_items: u32,
+    /// Number of failed items
+    pub failed_items: u32,
+}
+
+/// Result of batch encryption for a single item
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchEncryptResult {
+    /// Item index
+    pub index: u32,
+    /// Encrypted data
+    pub encrypted_data: String,
+    /// Algorithm used
+    pub algorithm: String,
+    /// Key ID used
+    pub key_id: String,
+    /// Timestamp of encryption
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    /// Whether encryption was successful
+    pub success: bool,
+    /// Error message if failed
+    pub error: Option<String>,
+}
+
+/// Error in batch encryption
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchEncryptError {
+    /// Item index
+    pub index: u32,
+    /// Error message
+    pub error: String,
+}
+
+/// Batch decryption request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchDecryptRequest {
+    /// Database ID
+    pub database_id: String,
+    /// Items to decrypt
+    pub items: Vec<BatchDecryptItem>,
+}
+
+/// Item to decrypt in batch
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchDecryptItem {
+    /// Encrypted data
+    pub encrypted_data: String,
+    /// Key ID to use
+    pub key_id: String,
+    /// Encryption algorithm
+    pub algorithm: Option<String>,
+    /// Additional context
+    pub context: HashMap<String, String>,
+}
+
+/// Batch decryption response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchDecryptResponse {
+    /// Results for each item
+    pub results: Vec<BatchDecryptResult>,
+    /// Errors that occurred
+    pub errors: Vec<BatchDecryptError>,
+    /// Total number of items
+    pub total_items: u32,
+    /// Number of successful items
+    pub successful_items: u32,
+    /// Number of failed items
+    pub failed_items: u32,
+}
+
+/// Result of batch decryption for a single item
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchDecryptResult {
+    /// Item index
+    pub index: u32,
+    /// Decrypted data
+    pub data: Vec<u8>,
+    /// Algorithm used
+    pub algorithm: String,
+    /// Key ID used
+    pub key_id: String,
+    /// Timestamp of decryption
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    /// Whether decryption was successful
+    pub success: bool,
+    /// Error message if failed
+    pub error: Option<String>,
+}
+
+/// Error in batch decryption
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchDecryptError {
+    /// Item index
+    pub index: u32,
+    /// Error message
+    pub error: String,
+}

@@ -695,7 +695,7 @@ impl GdprComplianceManager {
 
 #[async_trait::async_trait]
 impl ComplianceManager for GdprComplianceManager {
-    async fn initialize(&self, config: &ComplianceConfig) -> Result<()> {
+    async fn initialize(&self, _config: &ComplianceConfig) -> Result<()> {
         log::info!("Initializing GDPR compliance manager");
         Ok(())
     }

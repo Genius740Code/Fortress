@@ -743,18 +743,18 @@ impl PciDssComplianceManager {
         log::info!("Generating PCI-DSS compliance report from {} to {}", start_date, end_date);
         
         let cardholder_data = self.cardholder_data_registry.read().await;
-        let encryption_keys = self.encryption_keys.read().await;
+        let _encryption_keys = self.encryption_keys.read().await;
         let security_controls = self.security_controls.read().await;
         let vulnerability_scans = self.vulnerability_scans.read().await;
         let compliance_assessments = self.compliance_assessments.read().await;
         
         // Count vulnerability scans in the period
-        let period_scans: Vec<&VulnerabilityScan> = vulnerability_scans.iter()
+        let _period_scans: Vec<&VulnerabilityScan> = vulnerability_scans.iter()
             .filter(|s| s.scan_date >= start_date && s.scan_date <= end_date)
             .collect();
         
         // Count assessments in the period
-        let period_assessments: Vec<&ComplianceAssessment> = compliance_assessments.iter()
+        let _period_assessments: Vec<&ComplianceAssessment> = compliance_assessments.iter()
             .filter(|a| a.assessment_date >= start_date && a.assessment_date <= end_date)
             .collect();
         
@@ -767,7 +767,7 @@ impl PciDssComplianceManager {
             cardholder_data_count: cardholder_data.len(),
             vulnerability_scan_count: vulnerability_scans.len(),
             security_assessment_count: compliance_assessments.len(),
-            critical_findings: vec![], // TODO: Generate actual critical findings from scans
+            critical_findings: self.generate_critical_findings_from_scans(&vulnerability_scans, &security_controls).await?,
         };
         
         Ok(report)
@@ -939,6 +939,133 @@ impl PciDssComplianceManager {
             compliance_score: 95.0,
         })
     }
+
+    /// Generate critical findings from vulnerability scans and security controls
+    async fn generate_critical_findings_from_scans(
+        &self,
+        vulnerability_scans: &Vec<VulnerabilityScan>,
+        security_controls: &HashMap<String, SecurityControl>,
+    ) -> Result<Vec<ComplianceFinding>> {
+        let mut critical_findings = Vec::new();
+
+        // Analyze vulnerability scans for critical and high-severity findings
+        for scan in vulnerability_scans.iter() {
+            // Check for critical vulnerabilities
+            for finding in scan.findings.iter().filter(|f| matches!(f.severity, VulnerabilitySeverity::Critical)) {
+                critical_findings.push(ComplianceFinding {
+                    id: Uuid::new_v4(),
+                    severity: EventSeverity::Critical,
+                    category: "Vulnerability Management".to_string(),
+                    description: format!("Critical vulnerability detected: {}", finding.title),
+                    affected_controls: vec![finding.affected_system.clone()],
+                    status: FindingStatus::Fail,
+                    evidence: vec![
+                        format!("CVSS Score: {:?}", finding.cvss_score),
+                        format!("Affected System: {}", finding.affected_system),
+                        format!("Exploitable: {}", finding.exploitable),
+                        format!("Business Impact: {}", finding.business_impact),
+                    ],
+                });
+            }
+
+            // Check for high-severity vulnerabilities that are exploitable
+            for finding in scan.findings.iter().filter(|f| 
+                matches!(f.severity, VulnerabilitySeverity::High) && f.exploitable
+            ) {
+                critical_findings.push(ComplianceFinding {
+                    id: Uuid::new_v4(),
+                    severity: EventSeverity::Error,
+                    category: "Vulnerability Management".to_string(),
+                    description: format!("Exploitable high-severity vulnerability: {}", finding.title),
+                    affected_controls: vec![finding.affected_system.clone()],
+                    status: FindingStatus::Fail,
+                    evidence: vec![
+                        format!("CVSS Score: {:?}", finding.cvss_score),
+                        format!("Affected System: {}", finding.affected_system),
+                        format!("Remediation: {}", finding.remediation),
+                    ],
+                });
+            }
+
+            // Check for overdue remediation
+            if matches!(scan.remediation_status, RemediationStatus::NotRequired) && scan.high_risk_vulnerabilities > 0 {
+                critical_findings.push(ComplianceFinding {
+                    id: Uuid::new_v4(),
+                    severity: EventSeverity::Error,
+                    category: "Remediation Management".to_string(),
+                    description: format!("High-risk vulnerabilities require remediation but marked as 'Not Required': {}", scan.id),
+                    affected_controls: scan.systems_scanned.clone(),
+                    status: FindingStatus::Fail,
+                    evidence: vec![
+                        format!("High Risk Count: {}", scan.high_risk_vulnerabilities),
+                        format!("Scan Type: {:?}", scan.scan_type),
+                        format!("Scanning Tool: {}", scan.scanning_tool),
+                    ],
+                });
+            }
+        }
+
+        // Analyze security controls for failures
+        for (control_name, control) in security_controls.iter() {
+            if !matches!(control.status, ControlStatus::Implemented) {
+                critical_findings.push(ComplianceFinding {
+                    id: Uuid::new_v4(),
+                    severity: EventSeverity::Critical,
+                    category: "Security Controls".to_string(),
+                    description: format!("Security control not properly implemented: {}", control.name),
+                    affected_controls: vec![control_name.clone()],
+                    status: FindingStatus::Fail,
+                    evidence: vec![
+                        format!("Requirement: {:?}", control.requirement),
+                        format!("Status: {:?}", control.status),
+                        format!("Owner: {}", control.owner),
+                        format!("Next Assessment: {}", control.next_assessment),
+                    ],
+                });
+            }
+            
+            // Check for overdue assessments
+            if control.next_assessment < Utc::now() {
+                critical_findings.push(ComplianceFinding {
+                    id: Uuid::new_v4(),
+                    severity: EventSeverity::Error,
+                    category: "Security Controls".to_string(),
+                    description: format!("Security control assessment overdue: {}", control.name),
+                    affected_controls: vec![control_name.clone()],
+                    status: FindingStatus::Fail,
+                    evidence: vec![
+                        format!("Requirement: {:?}", control.requirement),
+                        format!("Next Assessment Was: {}", control.next_assessment),
+                        format!("Owner: {}", control.owner),
+                    ],
+                });
+            }
+        }
+
+        // Check for missing quarterly scans (PCI-DSS requirement 11.2)
+        let now = Utc::now();
+        let recent_quarterly_scans = vulnerability_scans.iter()
+            .filter(|s| matches!(s.scan_type, ScanType::External | ScanType::Internal))
+            .filter(|s| now.signed_duration_since(s.scan_date).num_days() <= 90)
+            .count();
+
+        if recent_quarterly_scans == 0 && !vulnerability_scans.is_empty() {
+            critical_findings.push(ComplianceFinding {
+                id: Uuid::new_v4(),
+                severity: EventSeverity::Error,
+                category: "Vulnerability Scanning".to_string(),
+                description: "Quarterly vulnerability scan not completed (PCI-DSS Requirement 11.2)".to_string(),
+                affected_controls: vec!["Vulnerability Management Program".to_string()],
+                status: FindingStatus::Fail,
+                evidence: vec![
+                    "PCI-DSS Requirement 11.2: Run external and internal vulnerability scans at least quarterly".to_string(),
+                    format!("Last scan: {:?}", vulnerability_scans.iter().map(|s| s.scan_date).max()),
+                ],
+            });
+        }
+
+        Ok(critical_findings)
+    }
 }
 
 impl PciDssComplianceManager {
@@ -946,7 +1073,7 @@ impl PciDssComplianceManager {
     async fn generate_remediation_priority_list(&self, findings: &[VulnerabilityFinding]) -> Result<Vec<RemediationPriority>> {
         let mut priorities = Vec::new();
         
-        for (index, finding) in findings.iter().enumerate() {
+        for (_index, finding) in findings.iter().enumerate() {
             let priority = RemediationPriority {
                 vulnerability_id: finding.id.clone(),
                 priority_level: match finding.severity {
@@ -1277,22 +1404,32 @@ impl PciDssComplianceManager {
 /// PCI-DSS compliance status
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PciDssComplianceStatus {
+    /// Overall compliance score (0-100)
     pub overall_score: f64,
+    /// List of active compliance issues
     pub active_issues: Vec<ComplianceIssue>,
-    // ... (rest of the code remains the same)
+    /// Open rights requests from data subjects
     pub open_requests: Vec<RightsRequest>,
+    /// Expired consent records that need attention
     pub expired_consent_records: Vec<ConsentRecord>,
+    /// Upcoming compliance deadlines
     pub upcoming_deadlines: Vec<ComplianceDeadline>,
+    /// Recommendations for improving compliance
     pub recommendations: Vec<String>,
+    /// Date of the last compliance assessment
     pub last_assessment: DateTime<Utc>,
 }
 
 /// PCI-DSS metrics
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PciDssMetrics {
+    /// Total number of vulnerability scans performed
     pub total_scans: usize,
+    /// Number of high-risk findings detected
     pub high_risk_findings: u32,
+    /// Overall compliance score
     pub compliance_score: f64,
+    /// Last updated timestamp
     pub last_updated: DateTime<Utc>,
 }
 
@@ -1310,7 +1447,7 @@ impl ComplianceManager for PciDssComplianceManager {
         Ok(())
     }
 
-    async fn record_consent(&self, subject_id: &str, consent: &ConsentRecord) -> Result<()> {
+    async fn record_consent(&self, subject_id: &str, _consent: &ConsentRecord) -> Result<()> {
         // PCI-DSS doesn't use consent records, but implement for trait compatibility
         log::info!("PCI-DSS recording consent for subject: {}", subject_id);
         Ok(())
@@ -1328,7 +1465,7 @@ impl ComplianceManager for PciDssComplianceManager {
 
     async fn check_access_compliance(
         &self,
-        user_id: &str,
+        _user_id: &str,
         data_id: &str,
         framework: ComplianceFramework,
     ) -> Result<bool> {
@@ -1355,7 +1492,7 @@ impl ComplianceManager for PciDssComplianceManager {
         }
 
         let findings = self.collect_findings(start_date, end_date).await?;
-        let issues = self.assess_compliance_issues().await?;
+        let _issues = self.assess_compliance_issues().await?;
         let recommendations = self.generate_pci_dss_recommendations(
             &*self.security_controls.read().await,
             &*self.vulnerability_scans.read().await,
@@ -1594,4 +1731,273 @@ pub struct PciDssReport {
     pub security_assessment_count: usize,
     /// Critical findings
     pub critical_findings: Vec<ComplianceFinding>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::compliance::framework::{EventSeverity, FindingStatus};
+    use chrono::Utc;
+
+    #[tokio::test]
+    async fn test_generate_critical_findings_from_critical_vulnerabilities() {
+        let base_manager = Box::new(crate::compliance::framework::DefaultComplianceManager::new());
+        let pci_manager = PciDssComplianceManager::new(base_manager);
+        
+        let scan = VulnerabilityScan {
+            id: Uuid::new_v4(),
+            scan_date: Utc::now(),
+            scan_type: ScanType::External,
+            scanning_tool: "Nessus".to_string(),
+            systems_scanned: vec!["web-server-01".to_string()],
+            total_vulnerabilities: 5,
+            high_risk_vulnerabilities: 2,
+            medium_risk_vulnerabilities: 2,
+            low_risk_vulnerabilities: 1,
+            findings: vec![
+                VulnerabilityFinding {
+                    id: "CVE-2023-0001".to_string(),
+                    title: "Critical Remote Code Execution".to_string(),
+                    severity: VulnerabilitySeverity::Critical,
+                    cvss_score: Some(10.0),
+                    affected_system: "web-server-01".to_string(),
+                    description: "Critical vulnerability allows remote code execution".to_string(),
+                    remediation: "Apply security patch immediately".to_string(),
+                    exploitable: true,
+                    business_impact: "High - Could compromise cardholder data".to_string(),
+                },
+            ],
+            remediation_status: RemediationStatus::InProgress,
+            approved_by: Some("security-team".to_string()),
+            approval_date: Some(Utc::now()),
+        };
+
+        let vulnerability_scans = vec![scan];
+        let security_controls = HashMap::new();
+
+        let findings = pci_manager.generate_critical_findings_from_scans(&vulnerability_scans, &security_controls).await.unwrap();
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].severity, EventSeverity::Critical);
+        assert_eq!(findings[0].category, "Vulnerability Management");
+        assert!(findings[0].description.contains("Critical Remote Code Execution"));
+        assert_eq!(findings[0].status, FindingStatus::Fail);
+    }
+
+    #[tokio::test]
+    async fn test_generate_critical_findings_from_exploitable_high_vulnerabilities() {
+        let base_manager = Box::new(crate::compliance::framework::DefaultComplianceManager::new());
+        let pci_manager = PciDssComplianceManager::new(base_manager);
+        
+        let scan = VulnerabilityScan {
+            id: Uuid::new_v4(),
+            scan_date: Utc::now(),
+            scan_type: ScanType::Internal,
+            scanning_tool: "OpenVAS".to_string(),
+            systems_scanned: vec!["db-server-01".to_string()],
+            total_vulnerabilities: 3,
+            high_risk_vulnerabilities: 1,
+            medium_risk_vulnerabilities: 1,
+            low_risk_vulnerabilities: 1,
+            findings: vec![
+                VulnerabilityFinding {
+                    id: "CVE-2023-0002".to_string(),
+                    title: "SQL Injection Vulnerability".to_string(),
+                    severity: VulnerabilitySeverity::High,
+                    cvss_score: Some(8.5),
+                    affected_system: "db-server-01".to_string(),
+                    description: "SQL injection vulnerability in web application".to_string(),
+                    remediation: "Update application framework and implement parameterized queries".to_string(),
+                    exploitable: true,
+                    business_impact: "Medium - Could expose cardholder data".to_string(),
+                },
+            ],
+            remediation_status: RemediationStatus::Planned,
+            approved_by: Some("security-team".to_string()),
+            approval_date: Some(Utc::now()),
+        };
+
+        let vulnerability_scans = vec![scan];
+        let security_controls = HashMap::new();
+
+        let findings = pci_manager.generate_critical_findings_from_scans(&vulnerability_scans, &security_controls).await.unwrap();
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].severity, EventSeverity::Error);
+        assert_eq!(findings[0].category, "Vulnerability Management");
+        assert!(findings[0].description.contains("SQL Injection"));
+        assert_eq!(findings[0].status, FindingStatus::Fail);
+    }
+
+    #[tokio::test]
+    async fn test_generate_critical_findings_from_overdue_remediation() {
+        let base_manager = Box::new(crate::compliance::framework::DefaultComplianceManager::new());
+        let pci_manager = PciDssComplianceManager::new(base_manager);
+        
+        let scan = VulnerabilityScan {
+            id: Uuid::new_v4(),
+            scan_date: Utc::now(),
+            scan_type: ScanType::External,
+            scanning_tool: "Nessus".to_string(),
+            systems_scanned: vec!["payment-gateway-01".to_string()],
+            total_vulnerabilities: 10,
+            high_risk_vulnerabilities: 5,
+            medium_risk_vulnerabilities: 3,
+            low_risk_vulnerabilities: 2,
+            findings: vec![],
+            remediation_status: RemediationStatus::NotRequired, // This should trigger a finding
+            approved_by: Some("security-team".to_string()),
+            approval_date: Some(Utc::now()),
+        };
+
+        let vulnerability_scans = vec![scan];
+        let security_controls = HashMap::new();
+
+        let findings = pci_manager.generate_critical_findings_from_scans(&vulnerability_scans, &security_controls).await.unwrap();
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].severity, EventSeverity::Error);
+        assert_eq!(findings[0].category, "Remediation Management");
+        assert!(findings[0].description.contains("marked as 'Not Required'"));
+        assert_eq!(findings[0].status, FindingStatus::Fail);
+    }
+
+    #[tokio::test]
+    async fn test_generate_critical_findings_from_failed_security_controls() {
+        let base_manager = Box::new(crate::compliance::framework::DefaultComplianceManager::new());
+        let pci_manager = PciDssComplianceManager::new(base_manager);
+        
+        let mut security_controls = HashMap::new();
+        security_controls.insert("firewall-control".to_string(), SecurityControl {
+            id: "firewall-control".to_string(),
+            requirement: PciRequirement::NetworkSecurity,
+            name: "Firewall Configuration".to_string(),
+            description: "Network firewall controls".to_string(),
+            status: ControlStatus::NotImplemented, // This should trigger a finding
+            last_assessed: Some(Utc::now() - chrono::Duration::days(30)),
+            next_assessment: Utc::now() + chrono::Duration::days(60),
+            owner: "network-team".to_string(),
+            evidence: vec!["Configuration review pending".to_string()],
+            gaps: vec!["No firewall rules configured".to_string()],
+            remediation_plans: vec!["Implement firewall rules by next quarter".to_string()],
+        });
+
+        let vulnerability_scans = vec![];
+        let findings = pci_manager.generate_critical_findings_from_scans(&vulnerability_scans, &security_controls).await.unwrap();
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].severity, EventSeverity::Critical);
+        assert_eq!(findings[0].category, "Security Controls");
+        assert!(findings[0].description.contains("Firewall Configuration"));
+        assert_eq!(findings[0].status, FindingStatus::Fail);
+    }
+
+    #[tokio::test]
+    async fn test_generate_critical_findings_from_overdue_assessments() {
+        let base_manager = Box::new(crate::compliance::framework::DefaultComplianceManager::new());
+        let pci_manager = PciDssComplianceManager::new(base_manager);
+        
+        let mut security_controls = HashMap::new();
+        security_controls.insert("access-control".to_string(), SecurityControl {
+            id: "access-control".to_string(),
+            requirement: PciRequirement::AccessControl,
+            name: "Access Control System".to_string(),
+            description: "User access controls".to_string(),
+            status: ControlStatus::Implemented,
+            last_assessed: Some(Utc::now() - chrono::Duration::days(400)), // Overdue
+            next_assessment: Utc::now() - chrono::Duration::days(50), // Past due
+            owner: "security-team".to_string(),
+            evidence: vec!["Access control system implemented".to_string()],
+            gaps: vec![],
+            remediation_plans: vec![],
+        });
+
+        let vulnerability_scans = vec![];
+        let findings = pci_manager.generate_critical_findings_from_scans(&vulnerability_scans, &security_controls).await.unwrap();
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].severity, EventSeverity::Error);
+        assert_eq!(findings[0].category, "Security Controls");
+        assert!(findings[0].description.contains("assessment overdue"));
+        assert_eq!(findings[0].status, FindingStatus::Fail);
+    }
+
+    #[tokio::test]
+    async fn test_generate_critical_findings_missing_quarterly_scans() {
+        let base_manager = Box::new(crate::compliance::framework::DefaultComplianceManager::new());
+        let pci_manager = PciDssComplianceManager::new(base_manager);
+        
+        // Old scan from 6 months ago (beyond 90 days)
+        let old_scan = VulnerabilityScan {
+            id: Uuid::new_v4(),
+            scan_date: Utc::now() - chrono::Duration::days(180),
+            scan_type: ScanType::External,
+            scanning_tool: "Nessus".to_string(),
+            systems_scanned: vec!["web-server-01".to_string()],
+            total_vulnerabilities: 0,
+            high_risk_vulnerabilities: 0,
+            medium_risk_vulnerabilities: 0,
+            low_risk_vulnerabilities: 0,
+            findings: vec![],
+            remediation_status: RemediationStatus::Completed,
+            approved_by: Some("security-team".to_string()),
+            approval_date: Some(Utc::now() - chrono::Duration::days(180)),
+        };
+
+        let vulnerability_scans = vec![old_scan];
+        let security_controls = HashMap::new();
+
+        let findings = pci_manager.generate_critical_findings_from_scans(&vulnerability_scans, &security_controls).await.unwrap();
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].severity, EventSeverity::Error);
+        assert_eq!(findings[0].category, "Vulnerability Scanning");
+        assert!(findings[0].description.contains("Quarterly vulnerability scan not completed"));
+        assert!(findings[0].description.contains("PCI-DSS Requirement 11.2"));
+        assert_eq!(findings[0].status, FindingStatus::Fail);
+    }
+
+    #[tokio::test]
+    async fn test_generate_critical_findings_no_issues() {
+        let base_manager = Box::new(crate::compliance::framework::DefaultComplianceManager::new());
+        let pci_manager = PciDssComplianceManager::new(base_manager);
+        
+        // Recent scan with no issues
+        let recent_scan = VulnerabilityScan {
+            id: Uuid::new_v4(),
+            scan_date: Utc::now() - chrono::Duration::days(30), // Within 90 days
+            scan_type: ScanType::External,
+            scanning_tool: "Nessus".to_string(),
+            systems_scanned: vec!["web-server-01".to_string()],
+            total_vulnerabilities: 0,
+            high_risk_vulnerabilities: 0,
+            medium_risk_vulnerabilities: 0,
+            low_risk_vulnerabilities: 0,
+            findings: vec![],
+            remediation_status: RemediationStatus::Completed,
+            approved_by: Some("security-team".to_string()),
+            approval_date: Some(Utc::now() - chrono::Duration::days(30)),
+        };
+
+        let mut security_controls = HashMap::new();
+        security_controls.insert("firewall-control".to_string(), SecurityControl {
+            id: "firewall-control".to_string(),
+            requirement: PciRequirement::NetworkSecurity,
+            name: "Firewall Configuration".to_string(),
+            description: "Network firewall controls".to_string(),
+            status: ControlStatus::Implemented,
+            last_assessed: Some(Utc::now() - chrono::Duration::days(30)),
+            next_assessment: Utc::now() + chrono::Duration::days(60),
+            owner: "network-team".to_string(),
+            evidence: vec!["Firewall rules configured and tested".to_string()],
+            gaps: vec![],
+            remediation_plans: vec![],
+        });
+
+        let vulnerability_scans = vec![recent_scan];
+        let findings = pci_manager.generate_critical_findings_from_scans(&vulnerability_scans, &security_controls).await.unwrap();
+
+        // Should have no critical findings
+        assert_eq!(findings.len(), 0);
+    }
 }

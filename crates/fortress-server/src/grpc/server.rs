@@ -1,5 +1,7 @@
 use crate::grpc::service::FortressGrpcService;
 use crate::error::ServerError;
+use fortress_core::encryption::Aegis256;
+use fortress_core::key::InMemoryKeyManager;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use axum::{
@@ -25,9 +27,12 @@ pub struct GrpcServer {
 impl GrpcServer {
     /// Create a new gRPC server instance
     pub fn new(addr: SocketAddr) -> Self {
+        let encryption_manager = Arc::new(Aegis256::new());
+        let key_manager = Arc::new(InMemoryKeyManager::new());
+        
         Self {
             addr,
-            service: Arc::new(FortressGrpcService::new()),
+            service: Arc::new(FortressGrpcService::new(encryption_manager, key_manager)),
         }
     }
 

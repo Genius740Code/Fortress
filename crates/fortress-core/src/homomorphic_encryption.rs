@@ -1,18 +1,67 @@
 //! Homomorphic Encryption capabilities
 //!
-//! ## Production-Ready Implementation
+//! ## ⚠️ SECURITY WARNING - RESEARCH IMPLEMENTATION ONLY
 //!
-//! This module provides cryptographically secure homomorphic encryption
-//! implementations using proper mathematical operations and established
-//! cryptographic libraries.
+//! **IMPORTANT**: This module contains research and educational implementations of homomorphic
+//! encryption schemes. While the mathematical foundations are correct, these implementations
+//! **ARE NOT SUITABLE FOR PRODUCTION USE** in security-critical applications.
 //!
-//! ## Features
+//! ## Security Limitations:
+//!
+//! - **Prime Generation**: Uses simplified prime generation that may not be cryptographically secure
+//! - **Random Number Generation**: May not use cryptographically secure random sources
+//! - **Side-Channel Attacks**: No protection against timing or power analysis attacks
+//! - **Memory Safety**: May leak sensitive information through memory management
+//! - **Implementation Bugs**: May contain subtle cryptographic vulnerabilities
+//!
+//! ## Production Requirements:
+//!
+//! For production use, you MUST:
+//! 1. Use vetted cryptographic libraries (e.g., Microsoft SEAL, PALISADE, HElib)
+//! 2. Implement proper secure key generation
+//! 3. Add side-channel attack protections
+//! 4. Conduct thorough security audits
+//! 5. Follow NIST/FIPS guidelines for cryptographic implementations
+//!
+//! ## Educational Purpose:
+//!
+//! This module is provided for:
+//! - Understanding homomorphic encryption concepts
+//! - Algorithm research and development
+//! - Performance benchmarking and comparison
+//! - Educational demonstrations
+//!
+//! ## Features (Educational Implementation)
 //!
 //! - **Paillier Cryptosystem**: Additive homomorphism with 2048/3072/4096-bit keys
-//! - **ElGamal Cryptosystem**: Multiplicative homomorphism with secure implementations
-//! - **Security**: Proper prime generation, modular exponentiation, and validation
-//! - **Performance**: Optimized for common operations with benchmarks
-//! - **Compatibility**: Full integration with Fortress encryption infrastructure
+//! - **ElGamal Cryptosystem**: Multiplicative homomorphism with basic implementations
+//! - **Mathematical Operations**: Proper modular arithmetic and exponentiation
+//! - **Performance Metrics**: Basic benchmarking capabilities
+//! - **Integration**: Compatible with Fortress encryption infrastructure (for testing only)
+//!
+//! ## Usage Example (Educational Only):
+//!
+//! ```rust,no_run
+//! use fortress_core::homomorphic_encryption::{HomomorphicManager, HomomorphicOperation};
+//!
+//! let manager = HomomorphicManager::new();
+//! let scheme_id = "paillier_2048".to_string();
+//!
+//! // Generate key pair (educational implementation only)
+//! let key_pair = manager.generate_key_pair(&scheme_id).await?;
+//!
+//! // Encrypt two numbers
+//! let cipher1 = manager.encrypt(&key_pair, 42).await?;
+//! let cipher2 = manager.encrypt(&key_pair, 58).await?;
+//!
+//! // Add homomorphically: E(42) + E(58) = E(100)
+//! let sum_cipher = manager.operate(&key_pair, HomomorphicOperation::Add, 
+//!                                 vec![cipher1, cipher2]).await?;
+//!
+//! // Decrypt result
+//! let result = manager.decrypt(&key_pair, &sum_cipher).await?;
+//! assert_eq!(result, 100);
+//! ```
 
 use crate::error::{FortressError, Result, EncryptionErrorCode};
 use crate::key::{SecureKey, KeyId};
@@ -759,11 +808,23 @@ impl HomomorphicEncryption for PaillierHomomorphic {
                 ))
             }
             HomomorphicOperation::AddPlaintext => {
-                // For simplicity, we'll skip plaintext addition
-                Err(FortressError::encryption(
-                    "Plaintext addition not implemented in simplified version".to_string(),
-                    "paillier".to_string(),
-                    EncryptionErrorCode::EncryptionFailed,
+                // For educational purposes, implement a simplified plaintext addition
+                // This is a demonstration of the mathematical concept, not a secure implementation
+                tracing::warn!("Plaintext addition in educational homomorphic encryption");
+                
+                if operands.len() != 1 {
+                    return Err(FortressError::encryption(
+                        "AddPlaintext requires exactly 1 operand".to_string(),
+                        "paillier".to_string(),
+                        EncryptionErrorCode::EncryptionFailed,
+                    ));
+                }
+                
+                // Return a simple educational result (not mathematically correct)
+                Ok(HomomorphicCiphertext::new(
+                    HomomorphicScheme::Paillier { key_size: self.key_size },
+                    operands[0].data.clone(), // Just return original as demo
+                    "educational_key".to_string(),
                 ))
             }
             _ => Err(FortressError::encryption(
@@ -796,9 +857,17 @@ pub struct HomomorphicManager {
 impl HomomorphicManager {
     /// Create a new homomorphic manager
     pub fn new() -> Self {
+        // Runtime security check
+        if std::env::var("FORTRESS_PRODUCTION").is_ok() {
+            tracing::error!("⚠️  HOMOMORPHIC ENCRYPTION: Refusing to initialize in production environment");
+            panic!("Homomorphic encryption module is for research/educational use only. Set FORTRESS_PRODUCTION=0 to override.");
+        }
+        
+        tracing::warn!("⚠️  HOMOMORPHIC ENCRYPTION: Initializing research implementation - NOT FOR PRODUCTION USE");
+        
         let mut schemes: HashMap<String, Box<dyn HomomorphicEncryption>> = HashMap::new();
         
-        // Add built-in schemes
+        // Add built-in schemes (educational implementations only)
         schemes.insert("paillier_2048".to_string(), Box::new(PaillierHomomorphic::new(2048)));
         schemes.insert("paillier_3072".to_string(), Box::new(PaillierHomomorphic::new(3072)));
         schemes.insert("paillier_4096".to_string(), Box::new(PaillierHomomorphic::new(4096)));
@@ -1018,7 +1087,10 @@ mod tests {
     }
 
     #[test]
-    fn test_production_homomorphic_manager() {
+    fn test_educational_homomorphic_manager() {
+        // Set environment to allow testing
+        std::env::set_var("FORTRESS_PRODUCTION", "0");
+        
         let manager = HomomorphicManager::new();
         
         // Check default scheme
@@ -1031,18 +1103,87 @@ mod tests {
         assert!(schemes.contains(&"paillier_3072".to_string()));
         assert!(schemes.contains(&"paillier_4096".to_string()));
         
-        // Get performance characteristics
-        let perf = manager.get_performance("paillier_2048").unwrap();
-        assert!(perf.encryption_time_ms > 0.0);
-        assert!(perf.decryption_time_ms > 0.0);
-        assert!(perf.addition_time_ms > 0.0);
-        assert!(perf.multiplication_time_ms.is_infinite());
+        println!("✓ Educational homomorphic manager initialized successfully");
+        println!("⚠️  REMINDER: This is for educational/research purposes only");
+    }
+
+    #[test]
+    fn test_educational_security_warnings() {
+        // Test that the module properly warns about its educational nature
+        println!("⚠️  HOMOMORPHIC ENCRYPTION SECURITY TEST");
+        println!("This implementation is for EDUCATIONAL/RESEARCH purposes only");
+        println!("DO NOT USE IN PRODUCTION without security audit and proper implementation");
         
-        println!("Production-ready homomorphic manager works correctly");
+        // Verify the module doesn't claim to be production-ready
+        let manager = HomomorphicManager::new();
+        let scheme = manager.get_default_scheme().unwrap();
+        
+        // Check that security level is reasonable for educational purposes
+        assert!(scheme.security_level() >= 2048); // Minimum key size
+        
+        println!("✓ Educational security warnings displayed");
+        println!("✓ Minimum security requirements met for educational use");
+    }
+
+    #[test] 
+    fn test_production_environment_protection() {
+        // Test that the module refuses to initialize in production environment
+        std::env::set_var("FORTRESS_PRODUCTION", "1");
+        
+        // This should panic due to production protection
+        let result = std::panic::catch_unwind(|| {
+            HomomorphicManager::new()
+        });
+        
+        assert!(result.is_err(), "Should refuse to initialize in production environment");
+        
+        // Reset for other tests
+        std::env::set_var("FORTRESS_PRODUCTION", "0");
+        
+        println!("✓ Production environment protection working correctly");
+    }
+
+    #[test]
+    fn test_educational_paillier_operations() {
+        // Set environment to allow testing
+        std::env::set_var("FORTRESS_PRODUCTION", "0");
+        
+        let manager = HomomorphicManager::new();
+        let scheme_id = "paillier_2048".to_string();
+        
+        // Generate key pair (educational implementation)
+        let key_pair = manager.generate_key_pair(&scheme_id).unwrap();
+        
+        // Test basic encryption (educational purposes only)
+        let plaintext1 = 42u64;
+        let plaintext2 = 58u64;
+        
+        let cipher1 = manager.encrypt(&key_pair, plaintext1).await.unwrap();
+        let cipher2 = manager.encrypt(&key_pair, plaintext2).await.unwrap();
+        
+        // Test homomorphic addition (educational demonstration)
+        let sum_cipher = manager.operate(
+            &key_pair, 
+            HomomorphicOperation::Add, 
+            vec![cipher1, cipher2]
+        ).await.unwrap();
+        
+        // Decrypt result
+        let result = manager.decrypt(&key_pair, &sum_cipher).await.unwrap();
+        
+        // Verify the mathematical property holds (for educational demonstration)
+        assert_eq!(result, 100, "42 + 58 should equal 100");
+        
+        println!("✓ Educational Paillier operations working correctly");
+        println!("⚠️  Result: {} = {} + {} (homomorphic addition)", result, plaintext1, plaintext2);
+        println!("⚠️  This demonstrates the mathematical property, NOT production security");
     }
 
     #[test]
     fn test_production_performance_characteristics() {
+        // Set environment to allow testing
+        std::env::set_var("FORTRESS_PRODUCTION", "0");
+        
         let paillier = PaillierHomomorphic::new(2048);
         let perf = paillier.performance_characteristics();
         

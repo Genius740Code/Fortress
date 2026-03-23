@@ -97,7 +97,7 @@ impl OptimizedQuery {
                             Ok(records) => {
                                 let data_records: Vec<DataRecord> = records
                                     .into_iter()
-                                    .filter_map(|(key, data)| {
+                                    .filter_map(|(_key, data)| {
                                         data.and_then(|bytes| {
                                             serde_json::from_slice::<serde_json::Value>(&bytes).ok()
                                                 .and_then(|record_info| {

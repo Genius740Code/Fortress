@@ -656,13 +656,30 @@ impl AdvancedRestoreManager {
 
     /// Load backup manifest
     async fn load_backup_manifest(&self, backup_id: &str) -> Result<BackupManifest> {
-        // This would need to be implemented in the backup manager
-        // For now, return a placeholder
-        Err(FortressError::storage(
-            "Backup manifest loading not implemented".to_string(),
-            "restore".to_string(),
-            StorageErrorCode::InvalidOperation,
-        ))
+        // Load the backup manifest from storage
+        let manifest_key = format!("backup_manifests/{}", backup_id);
+        
+        match self.backup_manager.storage.get(&manifest_key).await {
+            Some(manifest_data) => {
+                // Deserialize the manifest
+                let manifest: BackupManifest = serde_json::from_slice(&manifest_data)
+                    .map_err(|e| FortressError::storage(
+                        format!("Failed to deserialize backup manifest: {}", e),
+                        "restore",
+                        StorageErrorCode::CorruptedData,
+                    ))?;
+                
+                tracing::info!("Successfully loaded backup manifest for: {}", backup_id);
+                Ok(manifest)
+            }
+            None => {
+                Err(FortressError::storage(
+                    format!("Backup manifest not found for backup ID: {}", backup_id),
+                    "restore",
+                    StorageErrorCode::NotFound,
+                ))
+            }
+        }
     }
 
     /// Validate restore data
@@ -979,13 +996,33 @@ impl BackupManagerExt for dyn BackupManager {
         backup_key: &'a str,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Option<Vec<u8>>>> + Send + 'a>> {
         Box::pin(async move {
-            // This would need to be implemented in the concrete backup manager
-            // For now, return an error
-            Err(FortressError::storage(
-                "get_backup_data not implemented".to_string(),
-                "backup".to_string(),
-                StorageErrorCode::InvalidOperation,
-            ))
+            // Parse the backup key to extract backup_id and item_key
+            let parts: Vec<&str> = backup_key.split('/').collect();
+            if parts.len() < 3 || parts[0] != "backup_data" {
+                return Err(FortressError::storage(
+                    format!("Invalid backup key format: {}", backup_key),
+                    "backup",
+                    StorageErrorCode::InvalidOperation,
+                ));
+            }
+            
+            let backup_id = parts[1];
+            let item_key = parts[2..].join("/");
+            
+            // Get the backup data from storage
+            let storage = &self.storage();
+            let full_backup_key = format!("backup_data/{}/{}", backup_id, item_key);
+            
+            match storage.get(&full_backup_key).await {
+                Some(data) => {
+                    tracing::debug!("Successfully retrieved backup data for key: {}", item_key);
+                    Ok(Some(data))
+                }
+                None => {
+                    tracing::warn!("Backup data not found for key: {}", item_key);
+                    Ok(None)
+                }
+            }
         })
     }
 }

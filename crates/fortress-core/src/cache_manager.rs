@@ -685,7 +685,6 @@ impl CacheManager for FortressCacheManager {
         // Note: In a real implementation, you would also tag the cache entries
         // For now, we'll just use the invalidation manager
         let manager = self.invalidation_manager.as_ref();
-        use crate::cache_invalidation::CacheInvalidation;
         manager.add_tags(key, tags)
     }
 
@@ -695,7 +694,6 @@ impl CacheManager for FortressCacheManager {
         // Note: In a real implementation, you would also untag the cache entries
         // For now, we'll just use the invalidation manager
         let manager = self.invalidation_manager.as_ref();
-        use crate::cache_invalidation::CacheInvalidation;
         manager.remove_tags(key, tags)
     }
 

@@ -804,7 +804,7 @@ impl UnifiedComplianceManager {
             .filter(|f| matches!(f.status, FindingStatus::Fail))
             .count();
 
-        let summary = ReportSummary {
+        let _summary = ReportSummary {
             total_findings: all_findings.len(),
             active_issues,
             critical_findings,
@@ -870,7 +870,7 @@ impl UnifiedComplianceManager {
             .filter(|f| matches!(f.status, FindingStatus::Fail))
             .count();
 
-        let summary = ReportSummary {
+        let _summary = ReportSummary {
             total_findings: all_findings.len(),
             active_issues,
             critical_findings,
@@ -1149,7 +1149,7 @@ impl ComplianceManager for UnifiedComplianceManager {
     }
 
     async fn collect_metrics(&self) -> Result<ComplianceMetrics> {
-        let mut total_events = 0u64;
+        let total_events = 0u64;
         let mut events_by_severity = HashMap::new();
 
         events_by_severity.insert(EventSeverity::Info, 0);

@@ -301,10 +301,15 @@ pub struct HhsSubmissionResult {
 /// Compliance attestation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComplianceAttestation {
+    /// HIPAA requirement being attested
     pub requirement: String,
+    /// Current compliance status for the requirement
     pub compliance_status: String,
+    /// Date when the attestation was made
     pub attestation_date: DateTime<Utc>,
+    /// Method used for attestation (audit, review, etc.)
     pub attestation_method: String,
+    /// Evidence supporting the attestation
     pub evidence: String,
 }
 
@@ -1136,9 +1141,9 @@ impl HipaaComplianceManager {
     
     /// Get comprehensive compliance status
     pub async fn get_compliance_status(&self) -> Result<HipaaComplianceStatus> {
-        let covered_entities = self.covered_entities.read().await;
-        let business_associates = self.business_associates.read().await;
-        let incidents = self.security_incidents.read().await;
+        let _covered_entities = self.covered_entities.read().await;
+        let _business_associates = self.business_associates.read().await;
+        let _incidents = self.security_incidents.read().await;
         
         let active_issues = self.assess_compliance_issues().await?;
         let open_requests = self.get_open_rights_requests().await?;
@@ -1241,7 +1246,7 @@ impl HipaaComplianceManager {
         
         // Filter PHI records for the period
         let period_phi: Vec<_> = phi_records.values()
-            .filter(|phi| true) // In a real implementation, filter by creation/update date
+            .filter(|_phi| true) // In a real implementation, filter by creation/update date
             .cloned()
             .collect();
         
@@ -1265,10 +1270,10 @@ impl HipaaComplianceManager {
     
     /// Get comprehensive compliance status (HIPAA-specific)
     pub async fn get_hipaa_compliance_status(&self) -> Result<HipaaComplianceStatus> {
-        let covered_entities = self.covered_entities.read().await;
-        let business_associates = self.business_associates.read().await;
-        let phi_records = self.phi_registry.read().await;
-        let security_policies = self.security_policies.read().await;
+        let _covered_entities = self.covered_entities.read().await;
+        let _business_associates = self.business_associates.read().await;
+        let _phi_records = self.phi_registry.read().await;
+        let _security_policies = self.security_policies.read().await;
         
         Ok(HipaaComplianceStatus {
             overall_score: 95.0, // Placeholder calculation
@@ -1405,22 +1410,34 @@ impl HipaaComplianceManager {
 /// HIPAA compliance status
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct HipaaComplianceStatus {
+    /// Overall compliance score (0-100)
     pub overall_score: f64,
+    /// List of active compliance issues
     pub active_issues: Vec<ComplianceIssue>,
+    /// Open rights requests from data subjects
     pub open_requests: Vec<RightsRequest>,
+    /// Expired consent records that need attention
     pub expired_consent_records: Vec<ConsentRecord>,
+    /// Upcoming compliance deadlines
     pub upcoming_deadlines: Vec<ComplianceDeadline>,
+    /// Recommendations for improving compliance
     pub recommendations: Vec<String>,
+    /// Date of the last compliance assessment
     pub last_assessment: DateTime<Utc>,
 }
 
 /// HIPAA metrics
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct HipaaMetrics {
+    /// Total number of covered entities
     pub total_covered_entities: usize,
+    /// Total number of business associates
     pub total_business_associates: usize,
+    /// Number of active security incidents
     pub active_incidents: usize,
+    /// Overall compliance score
     pub compliance_score: f64,
+    /// Last updated timestamp
     pub last_updated: DateTime<Utc>,
 }
 
@@ -1529,7 +1546,7 @@ impl ComplianceManager for HipaaComplianceManager {
     
     async fn calculate_compliance_score(
         &self,
-        issues: &[ComplianceIssue],
+        _issues: &[ComplianceIssue],
     ) -> Result<f64> {
         // Placeholder implementation
         Ok(95.0)
@@ -1537,12 +1554,12 @@ impl ComplianceManager for HipaaComplianceManager {
 
     async fn generate_recommendations(
         &self,
-        issues: &[ComplianceIssue],
+        _issues: &[ComplianceIssue],
     ) -> Result<Vec<String>> {
         Ok(vec!["Continue maintaining HIPAA compliance".to_string()])
     }
 
-    async fn collect_findings(&self, start_date: DateTime<Utc>, end_date: DateTime<Utc>) -> Result<Vec<ComplianceFinding>> {
+    async fn collect_findings(&self, _start_date: DateTime<Utc>, _end_date: DateTime<Utc>) -> Result<Vec<ComplianceFinding>> {
         Ok(Vec::new()) // Placeholder implementation
     }
 

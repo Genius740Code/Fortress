@@ -529,7 +529,15 @@ pub fn global_trng() -> Result<Arc<TrueRandomGenerator>> {
         *guard = Some(Arc::new(TrueRandomGenerator::default()));
     }
     
-    Ok(guard.as_ref().unwrap().clone())
+    // Since we initialize if None above, this should always be Some
+    match guard.as_ref() {
+        Some(trng) => Ok(trng.clone()),
+        None => Err(FortressError::key_management(
+            "Failed to initialize global TRNG", 
+            None, 
+            crate::error::KeyErrorCode::ProviderError
+        ))
+    }
 }
 
 /// Convenience function to generate random bytes using global TRNG

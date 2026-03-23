@@ -394,7 +394,7 @@ impl CacheInvalidation for CacheInvalidationManager {
         Ok(0)
     }
 
-    fn invalidate_by_tag(&self, tag: &str, reason: InvalidationReason) -> Result<usize> {
+    fn invalidate_by_tag(&self, _tag: &str, reason: InvalidationReason) -> Result<usize> {
         // For sync implementation, return placeholder
         let keys = HashSet::new();
         let key_list: Vec<String> = keys.into_iter().collect();
