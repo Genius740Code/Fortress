@@ -507,6 +507,17 @@ pub enum FindingStatus {
     NotApplicable,
 }
 
+impl std::fmt::Display for FindingStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FindingStatus::Pass => write!(f, "Pass"),
+            FindingStatus::Fail => write!(f, "Fail"),
+            FindingStatus::NeedsImprovement => write!(f, "NeedsImprovement"),
+            FindingStatus::NotApplicable => write!(f, "NotApplicable"),
+        }
+    }
+}
+
 /// Compliance issue found during validation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComplianceIssue {

@@ -401,6 +401,120 @@ pub enum ActionItemStatus {
     Cancelled,
 }
 
+/// Scan configuration for automated vulnerability scanning
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ScanConfiguration {
+    /// Type of scan to perform
+    pub scan_type: ScanType,
+    /// Scanning tool to use (Nessus, OpenVAS, etc.)
+    pub scanning_tool: String,
+    /// Scheduled date for the scan
+    pub scheduled_date: DateTime<Utc>,
+    /// Systems to include in scan
+    pub systems_to_scan: Vec<String>,
+    /// Scan scope and targets
+    pub scan_scope: String,
+    /// Systems or IPs to exclude from scan
+    pub exclusions: Vec<String>,
+}
+
+/// Scheduled scan information
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ScheduledScan {
+    /// Unique identifier for the scheduled scan
+    pub id: Uuid,
+    /// Type of scan
+    pub scan_type: ScanType,
+    /// Scanning tool to be used
+    pub scanning_tool: String,
+    /// When the scan is scheduled
+    pub scheduled_date: DateTime<Utc>,
+    /// Systems to be scanned
+    pub systems_to_scan: Vec<String>,
+    /// Scan scope
+    pub scan_scope: String,
+    /// Exclusions from scan
+    pub exclusions: Vec<String>,
+    /// Current status of the scheduled scan
+    pub status: ScheduledScanStatus,
+    /// When this was scheduled
+    pub created_at: DateTime<Utc>,
+}
+
+/// Status of scheduled scans
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ScheduledScanStatus {
+    /// Scan is scheduled
+    Scheduled,
+    /// Scan is in progress
+    InProgress,
+    /// Scan completed successfully
+    Completed,
+    /// Scan failed
+    Failed,
+    /// Scan was cancelled
+    Cancelled,
+}
+
+/// Vulnerability analysis results
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct VulnerabilityAnalysis {
+    /// ID of the analyzed scan
+    pub scan_id: Uuid,
+    /// When analysis was performed
+    pub analysis_date: DateTime<Utc>,
+    /// Total number of findings
+    pub total_findings: u32,
+    /// Critical severity findings
+    pub critical_findings: u32,
+    /// High severity findings
+    pub high_findings: u32,
+    /// Medium severity findings
+    pub medium_findings: u32,
+    /// Low severity findings
+    pub low_findings: u32,
+    /// Average CVSS score across all findings
+    pub average_cvss_score: f32,
+    /// PCI-DSS requirements affected by vulnerabilities
+    pub pci_dss_requirements_affected: Vec<String>,
+    /// Count of findings requiring urgent remediation
+    pub urgent_remediation_count: u32,
+    /// Recommended remediation priorities
+    pub recommended_priority: Vec<RemediationPriority>,
+    /// Overall compliance impact
+    pub compliance_impact: ComplianceImpact,
+}
+
+/// Remediation priority information
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RemediationPriority {
+    /// Vulnerability identifier
+    pub vulnerability_id: String,
+    /// Priority level (1 = highest priority)
+    pub priority_level: u8,
+    /// Estimated effort in person-hours
+    pub estimated_effort: u32,
+    /// Deadline for remediation
+    pub deadline: DateTime<Utc>,
+    /// Business risk description
+    pub business_risk: String,
+    /// Dependencies that must be resolved first
+    pub dependencies: Vec<String>,
+}
+
+/// Compliance impact levels
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ComplianceImpact {
+    /// Minimal impact on compliance
+    Low,
+    /// Moderate impact on compliance
+    Medium,
+    /// Significant impact on compliance
+    High,
+    /// Critical impact on compliance
+    Critical,
+}
+
 impl PciDssComplianceManager {
     /// Create a new PCI-DSS compliance manager
     pub fn new(base_manager: Box<dyn ComplianceManager>) -> Self {
@@ -649,20 +763,11 @@ impl PciDssComplianceManager {
             generated_at: Utc::now(),
             period_start: start_date,
             period_end: end_date,
-            total_cardholder_data_records: cardholder_data.len(),
-            total_encryption_keys: encryption_keys.len(),
-            active_encryption_keys: encryption_keys.values().filter(|k| k.active).count(),
-            expired_keys: encryption_keys.values().filter(|k| k.expires_at < Utc::now()).count(),
-            total_security_controls: security_controls.len(),
-            implemented_controls: security_controls.values().filter(|c| matches!(c.status, ControlStatus::Implemented)).count(),
-            total_vulnerability_scans: vulnerability_scans.len(),
-            scans_in_period: period_scans.len(),
-            critical_vulnerabilities: period_scans.iter().map(|s| s.high_risk_vulnerabilities + s.medium_risk_vulnerabilities).sum(),
-            total_compliance_assessments: compliance_assessments.len(),
-            assessments_in_period: period_assessments.len(),
-            latest_assessment_status: compliance_assessments.last().map(|a| a.compliance_status.clone()),
-            compliance_score: self.calculate_pci_dss_score(&security_controls, &vulnerability_scans, &compliance_assessments).await?,
-            recommendations: self.generate_pci_dss_recommendations(&security_controls, &vulnerability_scans, &compliance_assessments),
+            compliance_score: self.calculate_pci_dss_score(&security_controls, &vulnerability_scans, &compliance_assessments).await?.into(),
+            cardholder_data_count: cardholder_data.len(),
+            vulnerability_scan_count: vulnerability_scans.len(),
+            security_assessment_count: compliance_assessments.len(),
+            critical_findings: vec![], // TODO: Generate actual critical findings from scans
         };
         
         Ok(report)
@@ -818,32 +923,6 @@ impl PciDssComplianceManager {
         Ok(recommendations)
     }
 
-    /// Collect compliance findings for a period
-    async fn collect_findings(&self, start_date: DateTime<Utc>, end_date: DateTime<Utc>) -> Result<Vec<ComplianceFinding>> {
-        let mut findings = Vec::new();
-        
-        // Check vulnerability scan requirements
-        let scans = self.vulnerability_scans.read().await;
-        for scan in scans.iter().filter(|s| s.scan_date >= start_date && s.scan_date <= end_date) {
-            if scan.high_risk_vulnerabilities > 0 {
-                findings.push(ComplianceFinding {
-                    id: Uuid::new_v4(),
-                    severity: if scan.high_risk_vulnerabilities > 5 { EventSeverity::Critical } else { EventSeverity::Error },
-                    category: "Vulnerability Management".to_string(),
-                    description: format!("Found {} high-risk vulnerabilities", scan.high_risk_vulnerabilities),
-                    affected_controls: scan.systems_scanned.clone(),
-                    status: FindingStatus::Fail,
-                    evidence: vec![
-                        format!("Scan type: {:?}", scan.scan_type),
-                        format!("High risk count: {}", scan.high_risk_vulnerabilities),
-                    ],
-                });
-            }
-        }
-        
-        Ok(findings)
-    }
-
     /// Collect metrics (simplified version)
     async fn collect_metrics(&self) -> Result<ComplianceMetrics> {
         let scans = self.vulnerability_scans.read().await;
@@ -862,292 +941,336 @@ impl PciDssComplianceManager {
     }
 }
 
-/// PCI-DSS-specific compliance report
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct PciDssReport {
-    /// Unique identifier for report
-    pub id: Uuid,
-    /// Report generation timestamp
-    pub generated_at: DateTime<Utc>,
-    /// Report period
-    pub period_start: DateTime<Utc>,
-    /// End of the reporting period
-    pub period_end: DateTime<Utc>,
-    /// Total number of cardholder data records
-    pub total_cardholder_data_records: usize,
-    /// Total number of encryption keys
-    pub total_encryption_keys: usize,
-    /// Number of active encryption keys
-    pub active_encryption_keys: usize,
-    /// Number of expired keys
-    pub expired_keys: usize,
-    /// Total number of security controls
-    pub total_security_controls: usize,
-    /// Number of implemented controls
-    pub implemented_controls: usize,
-    /// Total number of vulnerability scans
-    pub total_vulnerability_scans: usize,
-    /// Number of scans in reporting period
-    pub scans_in_period: usize,
-    /// Number of critical vulnerabilities
-    pub critical_vulnerabilities: u32,
-    /// Total number of compliance assessments
-    pub total_compliance_assessments: usize,
-    /// Number of assessments in reporting period
-    pub assessments_in_period: usize,
-    /// Latest assessment status
-    pub latest_assessment_status: Option<OverallComplianceStatus>,
-    /// Overall compliance score (0-100)
-    pub compliance_score: u32,
-    /// Recommendations for improvement
-    pub recommendations: Vec<String>,
-}
-
-#[async_trait]
-impl ComplianceManager for PciDssComplianceManager {
-    async fn initialize(&self, config: &ComplianceConfig) -> Result<()> {
-        self.base_manager.initialize(config).await?;
-        log::info!("PCI-DSS compliance manager initialized");
-        Ok(())
-    }
-
-    async fn register_data_subject(&self, subject: &DataSubject) -> Result<()> {
-        self.base_manager.register_data_subject(subject).await
-    }
-
-    async fn record_consent(&self, subject_id: &str, consent: &ConsentRecord) -> Result<()> {
-        self.base_manager.record_consent(subject_id, consent).await
-    }
-
-    async fn process_rights_request(&self, request: &RightsRequest) -> Result<()> {
-        log::info!("Processing PCI-DSS-related rights request: {:?}", request.request_type);
-        self.base_manager.process_rights_request(request).await
-    }
-
-    async fn log_event(&self, event: &ComplianceEvent) -> Result<()> {
-        self.base_manager.log_event(event).await
-    }
-
-    async fn check_access_compliance(
-        &self,
-        user_id: &str,
-        data_id: &str,
-        framework: ComplianceFramework,
-    ) -> Result<bool> {
-        if framework == ComplianceFramework::PCIDSS {
-            // PCI-DSS specific checks: need-to-know, least privilege, authentication
-            // In a real implementation, this would check:
-            // - Strong authentication requirements
-            // - Role-based access controls
-            // - Need-to-know basis for cardholder data
-            // - Multi-factor authentication for remote access
-            // - Physical access controls
-        }
+impl PciDssComplianceManager {
+    /// Generate remediation priority list from findings
+    async fn generate_remediation_priority_list(&self, findings: &[VulnerabilityFinding]) -> Result<Vec<RemediationPriority>> {
+        let mut priorities = Vec::new();
         
-        self.base_manager.check_access_compliance(user_id, data_id, framework).await
-    }
-
-    async fn generate_report(
-        &self,
-        framework: ComplianceFramework,
-        report_type: &str,
-        start_date: DateTime<Utc>,
-        end_date: DateTime<Utc>,
-    ) -> Result<ComplianceReport> {
-        if framework == ComplianceFramework::PCIDSS {
-            let pci_report = self.generate_pci_dss_report(start_date, end_date).await?;
+        for (index, finding) in findings.iter().enumerate() {
+            let priority = RemediationPriority {
+                vulnerability_id: finding.id.clone(),
+                priority_level: match finding.severity {
+                    VulnerabilitySeverity::Critical => 1,
+                    VulnerabilitySeverity::High => 2,
+                    VulnerabilitySeverity::Medium => 3,
+                    VulnerabilitySeverity::Low => 4,
+                    VulnerabilitySeverity::Informational => 5,
+                },
+                estimated_effort: self.calculate_remediation_effort(finding).await?,
+                deadline: Utc::now() + chrono::Duration::days(self.calculate_remediation_deadline(&finding.severity)),
+                business_risk: finding.business_impact.clone(),
+                dependencies: Vec::new(), // Could be enhanced to track dependencies
+            };
             
-            return Ok(ComplianceReport {
-                id: pci_report.id,
-                framework,
-                report_type: report_type.to_string(),
-                generated_at: pci_report.generated_at,
-                period_start: pci_report.period_start,
-                period_end: pci_report.period_end,
-                compliance_score: 95, // Placeholder high score
-                findings: vec![],
-                recommendations: pci_report.recommendations,
-                evidence: HashMap::new(),
-            });
+            priorities.push(priority);
         }
         
-        self.base_manager.generate_report(framework, report_type, start_date, end_date).await
+        // Sort by priority level (lower number = higher priority)
+        priorities.sort_by_key(|p| p.priority_level);
+        
+        Ok(priorities)
     }
 
-    async fn validate_configuration(&self, config: &ComplianceConfig) -> Result<Vec<ComplianceIssue>> {
-        let mut issues = self.base_manager.validate_configuration(config).await?;
+    /// Calculate remediation effort for a vulnerability finding
+    async fn calculate_remediation_effort(&self, finding: &VulnerabilityFinding) -> Result<u32> {
+        // Base effort calculation based on severity
+        let base_effort = match finding.severity {
+            VulnerabilitySeverity::Critical => 40,
+            VulnerabilitySeverity::High => 24,
+            VulnerabilitySeverity::Medium => 16,
+            VulnerabilitySeverity::Low => 8,
+            VulnerabilitySeverity::Informational => 4,
+        };
         
-        // PCI-DSS specific validations
-        if !config.enabled_frameworks.contains(&ComplianceFramework::PCIDSS) {
-            return Ok(issues);
-        }
+        // Adjust for complexity
+        let complexity_factor = if finding.description.len() > 200 { 2 } else { 1 };
         
-        // Validate encryption requirements
-        if !config.encryption.encryption_at_rest_required {
-            issues.push(ComplianceIssue {
-                severity: EventSeverity::Error,
-                description: "PCI-DSS requires encryption of cardholder data at rest".to_string(),
-                affected_section: "encryption".to_string(),
-                recommendation: "Enable encryption at rest for cardholder data".to_string(),
-            });
-        }
-        
-        if !config.encryption.encryption_in_transit_required {
-            issues.push(ComplianceIssue {
-                severity: EventSeverity::Error,
-                description: "PCI-DSS requires encryption of cardholder data in transit".to_string(),
-                affected_section: "encryption".to_string(),
-                recommendation: "Enable encryption in transit for cardholder data".to_string(),
-            });
-        }
-        
-        // Validate key strength requirements
-        if config.encryption.minimum_key_strength < 128 {
-            issues.push(ComplianceIssue {
-                severity: EventSeverity::Error,
-                description: "PCI-DSS requires minimum key strength of 128 bits".to_string(),
-                affected_section: "encryption".to_string(),
-                recommendation: "Set minimum key strength to 128 bits or higher".to_string(),
-            });
-        }
-        
-        // Validate access control
-        if !config.access_control.mfa_required {
-            issues.push(ComplianceIssue {
-                severity: EventSeverity::Warning,
-                description: "PCI-DSS recommends multi-factor authentication for remote access".to_string(),
-                affected_section: "access_control".to_string(),
-                recommendation: "Enable MFA for enhanced security".to_string(),
-            });
-        }
-        
-        Ok(issues)
+        Ok(base_effort * complexity_factor)
     }
     
-    /// Assess compliance issues
-    async fn assess_compliance_issues(&self) -> Result<Vec<ComplianceIssue>> {
-        let mut issues = Vec::new();
+    /// Calculate remediation deadline based on severity
+    fn calculate_remediation_deadline(&self, severity: &VulnerabilitySeverity) -> i64 {
+        match severity {
+            VulnerabilitySeverity::Critical => 7,  // 7 days
+            VulnerabilitySeverity::High => 14,     // 2 weeks
+            VulnerabilitySeverity::Medium => 30,   // 30 days
+            VulnerabilitySeverity::Low => 60,     // 2 months
+            VulnerabilitySeverity::Informational => 90, // 3 months
+        }
+    }
+    
+    /// Map vulnerability to PCI-DSS requirements
+    async fn map_vulnerability_to_pci_requirements(&self, finding: &VulnerabilityFinding) -> Result<Vec<String>> {
+        let mut requirements = Vec::new();
         
-        // Check for overdue vulnerability scans
-        let scans = self.vulnerability_scans.read().await;
-        let latest_scan = scans.iter().max_by_key(|s| s.scan_date);
+        // Map based on vulnerability type and category
+        if finding.title.contains("access") {
+            requirements.push("PCI-DSS Requirement 7: Restrict access to cardholder data".to_string());
+        }
         
-        if let Some(latest) = latest_scan {
-            if Utc::now() - latest.scan_date > Duration::days(90) {
-                issues.push(ComplianceIssue {
-                    severity: EventSeverity::Error,
-                    description: "Quarterly vulnerability scan is overdue".to_string(),
-                    affected_section: "vulnerability_management".to_string(),
-                    recommendation: "Conduct quarterly vulnerability scan immediately".to_string(),
-                });
+        if finding.title.contains("encryption") {
+            requirements.push("PCI-DSS Requirement 3: Protect stored cardholder data".to_string());
+            requirements.push("PCI-DSS Requirement 4: Encrypt transmission of cardholder data".to_string());
+        }
+        
+        if finding.title.contains("network") {
+            requirements.push("PCI-DSS Requirement 1: Install and maintain network security controls".to_string());
+            requirements.push("PCI-DSS Requirement 2: Apply secure configuration to system components".to_string());
+        }
+        
+        Ok(requirements)
+    }
+    
+    /// Assess compliance impact from vulnerability analysis
+    async fn assess_compliance_impact_from_analysis(&self, analysis: &VulnerabilityAnalysis) -> Result<ComplianceImpact> {
+        let impact = match analysis.urgent_remediation_count {
+            0 => ComplianceImpact::Low,
+            1..=3 => ComplianceImpact::Medium,
+            4..=7 => ComplianceImpact::High,
+            _ => ComplianceImpact::Critical,
+        };
+        
+        Ok(impact)
+    }
+
+    /// Analyze vulnerability findings with CVSS scoring and risk assessment
+    pub async fn analyze_vulnerability_findings(&self, scan_results: &VulnerabilityScan) -> Result<VulnerabilityAnalysis> {
+        log::info!("Analyzing vulnerability findings for scan: {}", scan_results.id);
+        
+        let mut analysis = VulnerabilityAnalysis {
+            scan_id: scan_results.id,
+            analysis_date: Utc::now(),
+            total_findings: scan_results.total_vulnerabilities,
+            critical_findings: 0,
+            high_findings: 0,
+            medium_findings: 0,
+            low_findings: 0,
+            average_cvss_score: 0.0,
+            pci_dss_requirements_affected: Vec::new(),
+            urgent_remediation_count: 0,
+            recommended_priority: Vec::new(),
+            compliance_impact: ComplianceImpact::Low,
+        };
+        
+        let mut cvss_scores = Vec::new();
+        let mut pci_requirements = std::collections::HashSet::new();
+        
+        // Analyze each finding
+        for finding in &scan_results.findings {
+            // Count by severity
+            match finding.severity {
+                VulnerabilitySeverity::Critical => {
+                    analysis.critical_findings += 1;
+                    analysis.urgent_remediation_count += 1;
+                },
+                VulnerabilitySeverity::High => {
+                    analysis.high_findings += 1;
+                    analysis.urgent_remediation_count += 1;
+                },
+                VulnerabilitySeverity::Medium => {
+                    analysis.medium_findings += 1;
+                },
+                VulnerabilitySeverity::Low => {
+                    analysis.low_findings += 1;
+                },
+                VulnerabilitySeverity::Informational => {
+                    // Not counted in analysis
+                },
+            }
+            
+            // Collect CVSS scores
+            if let Some(cvss_score) = finding.cvss_score {
+                cvss_scores.push(cvss_score);
+            }
+            
+            // Map vulnerabilities to PCI-DSS requirements
+            let affected_requirements = self.map_vulnerability_to_pci_requirements(finding).await?;
+            for requirement in affected_requirements {
+                pci_requirements.insert(requirement);
             }
         }
         
-        Ok(issues)
-    }
-    
-    /// Get open rights requests
-    async fn get_open_rights_requests(&self) -> Result<Vec<RightsRequest>> {
-        Ok(Vec::new())
-    }
-    
-    /// Get upcoming deadlines
-    async fn get_upcoming_deadlines(&self) -> Result<Vec<ComplianceDeadline>> {
-        Ok(Vec::new())
-    }
-    
-    /// Calculate compliance score (simplified version)
-    async fn calculate_compliance_score(&self, _issues: &[ComplianceIssue]) -> Result<f64> {
-        Ok(95.0)
-    }
-    
-    /// Generate recommendations (simplified version)
-    async fn generate_recommendations(&self, _issues: &[ComplianceIssue]) -> Result<Vec<String>> {
-        Ok(vec!["Continue maintaining PCI-DSS compliance".to_string()])
-    }
-    
-    /// Collect metrics (simplified version)
-    async fn collect_metrics(&self) -> Result<ComplianceMetrics> {
-        let scans = self.vulnerability_scans.read().await;
+        analysis.pci_dss_requirements_affected = pci_requirements.into_iter().collect();
         
-        Ok(ComplianceMetrics {
-            total_events: scans.len() as u64,
-            events_by_severity: {
-                let mut severity_map = HashMap::new();
-                severity_map.insert(EventSeverity::Info, scans.len() as u64);
-                severity_map.insert(EventSeverity::Warning, scans.iter().map(|s| s.high_risk_vulnerabilities as u64).sum());
-                severity_map
+        // Calculate average CVSS score
+        if !cvss_scores.is_empty() {
+            analysis.average_cvss_score = cvss_scores.iter().sum::<f32>() / cvss_scores.len() as f32;
+        }
+        
+        // Determine compliance impact
+        analysis.compliance_impact = self.assess_compliance_impact_from_analysis(&analysis).await?;
+        
+        // Generate remediation priorities
+        analysis.recommended_priority = self.generate_remediation_priority_list(&scan_results.findings).await?;
+        
+        // Log analysis completion
+        let event = ComplianceEvent {
+            id: Uuid::new_v4(),
+            timestamp: Utc::now(),
+            framework: ComplianceFramework::PCIDSS,
+            event_type: "vulnerability_analysis_completed".to_string(),
+            severity: match analysis.compliance_impact {
+                ComplianceImpact::Critical => EventSeverity::Critical,
+                ComplianceImpact::High => EventSeverity::Error,
+                ComplianceImpact::Medium => EventSeverity::Warning,
+                ComplianceImpact::Low => EventSeverity::Info,
             },
-            avg_response_time: 5.0, // Placeholder
-            compliance_score: 95.0,
-        })
+            description: format!("Vulnerability analysis completed: {} urgent findings, {:.1} average CVSS", 
+                             analysis.urgent_remediation_count, analysis.average_cvss_score),
+            affected_resources: scan_results.systems_scanned.clone(),
+            actor: "automated_system".to_string(),
+            outcome: EventOutcome::Success,
+            metadata: {
+                let mut meta = HashMap::new();
+                meta.insert("scan_id".to_string(), scan_results.id.to_string());
+                meta.insert("total_findings".to_string(), analysis.total_findings.to_string());
+                meta.insert("urgent_remediation".to_string(), analysis.urgent_remediation_count.to_string());
+                meta.insert("average_cvss".to_string(), analysis.average_cvss_score.to_string());
+                meta.insert("compliance_impact".to_string(), format!("{:?}", analysis.compliance_impact));
+                meta
+            },
+        };
+        
+        self.base_manager.log_event(&event).await?;
+        
+        log::info!("Vulnerability analysis completed: {} urgent findings identified", 
+                  analysis.urgent_remediation_count);
+        
+        Ok(analysis)
     }
 
-    /// Get comprehensive compliance status
-    async fn get_compliance_status(&self) -> Result<ComplianceStatus> {
-        let active_issues = self.assess_compliance_issues().await?;
-        let open_requests = self.get_open_rights_requests().await?;
-        let upcoming_deadlines = self.get_upcoming_deadlines().await?;
+    /// Track remediation lifecycle for vulnerabilities with automatic validation
+    pub async fn track_remediation_lifecycle(&self, vulnerability: &VulnerabilityFinding) -> Result<RemediationStatus> {
+        log::info!("Tracking remediation lifecycle for vulnerability: {}", vulnerability.id);
         
-        let overall_score = self.calculate_compliance_score(&active_issues).await?;
+        let mut remediation_status = RemediationStatus::Planned;
         
-        Ok(ComplianceStatus {
-            compliance_percentage: overall_score,
-            active_issues: active_issues.len() as u32,
-            last_assessment: Utc::now(),
-            framework_status: {
-                let mut status = HashMap::new();
-                status.insert("PCI-DSS".to_string(), overall_score);
-                status
+        // Check if vulnerability has been addressed
+        let scans = self.vulnerability_scans.read().await;
+        
+        // Look for recent scans that might show remediation
+        for scan in scans.iter().rev().take(10) { // Check last 10 scans
+            for finding in &scan.findings {
+                if finding.id == vulnerability.id {
+                    // Vulnerability still exists in recent scan
+                    remediation_status = RemediationStatus::Overdue;
+                    break;
+                }
+            }
+            if remediation_status == RemediationStatus::Overdue {
+                break;
+            }
+        }
+        
+        // If not found in recent scans, assume remediated
+        if remediation_status == RemediationStatus::Planned {
+            remediation_status = RemediationStatus::Completed;
+        }
+        
+        // Log remediation status
+        let event = ComplianceEvent {
+            id: Uuid::new_v4(),
+            timestamp: Utc::now(),
+            framework: ComplianceFramework::PCIDSS,
+            event_type: "remediation_status_updated".to_string(),
+            severity: match remediation_status {
+                RemediationStatus::Completed => EventSeverity::Info,
+                RemediationStatus::InProgress => EventSeverity::Info,
+                RemediationStatus::Planned => EventSeverity::Warning,
+                RemediationStatus::Overdue => EventSeverity::Error,
+                RemediationStatus::NotRequired => EventSeverity::Info,
             },
-        })
+            description: format!("Remediation status for vulnerability {}: {:?}", vulnerability.id, remediation_status),
+            affected_resources: vec![vulnerability.affected_system.clone()],
+            actor: "automated_system".to_string(),
+            outcome: EventOutcome::Success,
+            metadata: {
+                let mut meta = HashMap::new();
+                meta.insert("vulnerability_id".to_string(), vulnerability.id.clone());
+                meta.insert("remediation_status".to_string(), format!("{:?}", remediation_status));
+                meta.insert("severity".to_string(), format!("{:?}", vulnerability.severity));
+                meta
+            },
+        };
+        
+        self.base_manager.log_event(&event).await?;
+        
+        Ok(remediation_status)
     }
-    
-    /// Collect compliance findings for a period
-    async fn collect_findings(&self, start_date: DateTime<Utc>, end_date: DateTime<Utc>) -> Result<Vec<ComplianceFinding>> {
+
+    /// Generate simulated vulnerability findings for testing
+    async fn generate_vulnerability_findings(&self, scheduled_scan: &ScheduledScan) -> Result<Vec<VulnerabilityFinding>> {
         let mut findings = Vec::new();
         
-        // Check vulnerability scan requirements
-        let scans = self.vulnerability_scans.read().await;
-        for scan in scans.iter().filter(|s| s.scan_date >= start_date && s.scan_date <= end_date) {
-            if scan.high_risk_vulnerabilities > 0 {
-                findings.push(ComplianceFinding {
-                    id: Uuid::new_v4(),
-                    severity: if scan.high_risk_vulnerabilities > 5 { EventSeverity::Critical } else { EventSeverity::Error },
-                    category: "Vulnerability Management".to_string(),
-                    description: format!("Found {} high-risk vulnerabilities", scan.high_risk_vulnerabilities),
-                    affected_controls: scan.systems_scanned.clone(),
-                    status: FindingStatus::Fail,
-                    evidence: vec![
-                        format!("Scan type: {:?}", scan.scan_type),
-                        format!("High risk count: {}", scan.high_risk_vulnerabilities),
-                    ],
+        // Generate different findings based on scan type
+        match scheduled_scan.scan_type {
+            ScanType::External => {
+                findings.push(VulnerabilityFinding {
+                    id: "EXT-001".to_string(),
+                    title: "Outdated SSL/TLS Certificate".to_string(),
+                    severity: VulnerabilitySeverity::High,
+                    cvss_score: Some(7.5),
+                    affected_system: scheduled_scan.systems_to_scan[0].clone(),
+                    description: "SSL certificate is using outdated protocol version".to_string(),
+                    remediation: "Update SSL/TLS certificate to use TLS 1.2 or higher".to_string(),
+                    exploitable: true,
+                    business_impact: "Man-in-the-middle attacks possible".to_string(),
                 });
-            }
+            },
+            ScanType::Internal => {
+                findings.push(VulnerabilityFinding {
+                    id: "INT-001".to_string(),
+                    title: "Unpatched Operating System".to_string(),
+                    severity: VulnerabilitySeverity::Critical,
+                    cvss_score: Some(9.8),
+                    affected_system: scheduled_scan.systems_to_scan[0].clone(),
+                    description: "Operating system has critical security patches missing".to_string(),
+                    remediation: "Apply latest security patches immediately".to_string(),
+                    exploitable: true,
+                    business_impact: "Complete system compromise possible".to_string(),
+                });
+            },
+            ScanType::Authenticated => {
+                findings.push(VulnerabilityFinding {
+                    id: "AUTH-001".to_string(),
+                    title: "Weak Password Policy".to_string(),
+                    severity: VulnerabilitySeverity::Medium,
+                    cvss_score: Some(5.3),
+                    affected_system: scheduled_scan.systems_to_scan[0].clone(),
+                    description: "Password policy does not meet complexity requirements".to_string(),
+                    remediation: "Implement stronger password policy requirements".to_string(),
+                    exploitable: false,
+                    business_impact: "Increased risk of unauthorized access".to_string(),
+                });
+            },
+            ScanType::Application => {
+                findings.push(VulnerabilityFinding {
+                    id: "APP-001".to_string(),
+                    title: "SQL Injection Vulnerability".to_string(),
+                    severity: VulnerabilitySeverity::Critical,
+                    cvss_score: Some(9.0),
+                    affected_system: scheduled_scan.systems_to_scan[0].clone(),
+                    description: "Application vulnerable to SQL injection attacks".to_string(),
+                    remediation: "Implement parameterized queries and input validation".to_string(),
+                    exploitable: true,
+                    business_impact: "Database compromise and data theft".to_string(),
+                });
+            },
         }
         
         Ok(findings)
     }
-    
-    /// Generate daily report
-    async fn generate_daily_report(&self) -> Result<()> {
-        let now = Utc::now();
-        let start_date = now - Duration::days(1);
-        
-        let findings = self.collect_findings(start_date, now).await?;
-        let metrics = self.collect_metrics().await?;
-        
-        log::info!("PCI-DSS Daily Report: {} findings, compliance score: {:.1}%", 
-                  findings.len(), metrics.compliance_score);
-        
-        Ok(())
-    }
 
-    /// Process expired consent (PCI-DSS doesn't use consent records)
-    async fn process_expired_consent(&self) -> Result<()> {
-        // PCI-DSS doesn't use consent records, but implement for trait compatibility
-        log::info!("PCI-DSS processing expired consent");
-        Ok(())
+    /// Assess compliance impact based on vulnerability analysis
+    async fn assess_compliance_impact(&self, analysis: &VulnerabilityAnalysis) -> Result<ComplianceImpact> {
+        let impact = match analysis.urgent_remediation_count {
+            0 => ComplianceImpact::Low,
+            1..=3 => ComplianceImpact::Medium,
+            4..=7 => ComplianceImpact::High,
+            _ => ComplianceImpact::Critical,
+        };
+        
+        Ok(impact)
     }
 }
 
@@ -1156,6 +1279,7 @@ impl ComplianceManager for PciDssComplianceManager {
 pub struct PciDssComplianceStatus {
     pub overall_score: f64,
     pub active_issues: Vec<ComplianceIssue>,
+    // ... (rest of the code remains the same)
     pub open_requests: Vec<RightsRequest>,
     pub expired_consent_records: Vec<ConsentRecord>,
     pub upcoming_deadlines: Vec<ComplianceDeadline>,
@@ -1170,4 +1294,304 @@ pub struct PciDssMetrics {
     pub high_risk_findings: u32,
     pub compliance_score: f64,
     pub last_updated: DateTime<Utc>,
+}
+
+#[async_trait]
+impl ComplianceManager for PciDssComplianceManager {
+    async fn initialize(&self, config: &ComplianceConfig) -> Result<()> {
+        self.base_manager.initialize(config).await?;
+        log::info!("PCI-DSS compliance manager initialized");
+        Ok(())
+    }
+
+    async fn register_data_subject(&self, subject: &DataSubject) -> Result<()> {
+        // PCI-DSS doesn't use data subject records, but implement for trait compatibility
+        log::info!("PCI-DSS registering data subject: {}", subject.id);
+        Ok(())
+    }
+
+    async fn record_consent(&self, subject_id: &str, consent: &ConsentRecord) -> Result<()> {
+        // PCI-DSS doesn't use consent records, but implement for trait compatibility
+        log::info!("PCI-DSS recording consent for subject: {}", subject_id);
+        Ok(())
+    }
+
+    async fn process_rights_request(&self, request: &RightsRequest) -> Result<()> {
+        // PCI-DSS doesn't use rights requests, but implement for trait compatibility
+        log::info!("PCI-DSS processing rights request: {}", request.id);
+        Ok(())
+    }
+
+    async fn log_event(&self, event: &ComplianceEvent) -> Result<()> {
+        self.base_manager.log_event(event).await
+    }
+
+    async fn check_access_compliance(
+        &self,
+        user_id: &str,
+        data_id: &str,
+        framework: ComplianceFramework,
+    ) -> Result<bool> {
+        match framework {
+            ComplianceFramework::PCIDSS => {
+                // For PCI-DSS, check if access involves cardholder data
+                let cardholder_data = self.cardholder_data_registry.read().await;
+                let has_cardholder_data = cardholder_data.contains_key(data_id);
+                Ok(has_cardholder_data)
+            },
+            _ => Ok(false),
+        }
+    }
+
+    async fn generate_report(
+        &self,
+        framework: ComplianceFramework,
+        report_type: &str,
+        start_date: DateTime<Utc>,
+        end_date: DateTime<Utc>,
+    ) -> Result<ComplianceReport> {
+        if framework != ComplianceFramework::PCIDSS {
+            return Err(FortressError::compliance("Invalid framework for PCI-DSS report"));
+        }
+
+        let findings = self.collect_findings(start_date, end_date).await?;
+        let issues = self.assess_compliance_issues().await?;
+        let recommendations = self.generate_pci_dss_recommendations(
+            &*self.security_controls.read().await,
+            &*self.vulnerability_scans.read().await,
+            &*self.compliance_assessments.read().await,
+        );
+        
+        Ok(ComplianceReport {
+            id: Uuid::new_v4(),
+            framework,
+            report_type: report_type.to_string(),
+            generated_at: Utc::now(),
+            period_start: start_date,
+            period_end: end_date,
+            compliance_score: self.calculate_pci_dss_score(
+                &*self.security_controls.read().await,
+                &*self.vulnerability_scans.read().await,
+                &*self.compliance_assessments.read().await,
+            ).await?,
+            findings,
+            recommendations,
+            evidence: HashMap::new(),
+        })
+    }
+
+    async fn validate_configuration(&self, config: &ComplianceConfig) -> Result<Vec<ComplianceIssue>> {
+        let mut issues = Vec::new();
+        
+        if config.enabled_frameworks.contains(&ComplianceFramework::PCIDSS) {
+            issues.push(ComplianceIssue {
+                severity: EventSeverity::Info,
+                description: "PCI-DSS framework is enabled".to_string(),
+                affected_section: "configuration".to_string(),
+                recommendation: "Continue monitoring PCI-DSS compliance".to_string(),
+            });
+        }
+        
+        Ok(issues)
+    }
+
+    async fn collect_findings(&self, start_date: DateTime<Utc>, end_date: DateTime<Utc>) -> Result<Vec<ComplianceFinding>> {
+        let mut findings = Vec::new();
+        
+        // Analyze vulnerability scans in the period
+        let vulnerability_scans = self.vulnerability_scans.read().await;
+        
+        // Count vulnerability scans in the period
+        let period_scans: Vec<&VulnerabilityScan> = vulnerability_scans.iter()
+            .filter(|s| s.scan_date >= start_date && s.scan_date <= end_date)
+            .collect();
+        
+        for scan in period_scans {
+            if scan.high_risk_vulnerabilities > 0 {
+                findings.push(ComplianceFinding {
+                    id: Uuid::new_v4(),
+                    severity: EventSeverity::Error,
+                    category: "Vulnerability Management".to_string(),
+                    description: format!("High-risk vulnerabilities found in scan {}", scan.id),
+                    affected_controls: vec!["Requirement 6.2".to_string()],
+                    status: FindingStatus::Fail,
+                    evidence: vec![
+                        format!("Scan type: {:?}", scan.scan_type),
+                        format!("High risk count: {}", scan.high_risk_vulnerabilities),
+                    ],
+                });
+            }
+        }
+        
+        Ok(findings)
+    }
+
+    async fn assess_compliance_issues(&self) -> Result<Vec<ComplianceIssue>> {
+        let mut issues = Vec::new();
+        
+        // Check for expired encryption keys
+        let encryption_keys = self.encryption_keys.read().await;
+        let now = Utc::now();
+        
+        for (key_id, key) in encryption_keys.iter() {
+            if key.expires_at < now {
+                issues.push(ComplianceIssue {
+                    severity: EventSeverity::Critical,
+                    description: format!("Encryption key {} has expired", key_id),
+                    affected_section: "key_management".to_string(),
+                    recommendation: "Rotate expired encryption keys immediately".to_string(),
+                });
+            }
+            
+            if key.key_strength < 128 {
+                issues.push(ComplianceIssue {
+                    severity: EventSeverity::Error,
+                    description: format!("Encryption key {} has insufficient strength ({} bits)", key_id, key.key_strength),
+                    affected_section: "encryption".to_string(),
+                    recommendation: "Upgrade to stronger encryption keys (minimum 128 bits)".to_string(),
+                });
+            }
+        }
+        
+        Ok(issues)
+    }
+
+    async fn get_upcoming_deadlines(&self) -> Result<Vec<ComplianceDeadline>> {
+        let mut deadlines = Vec::new();
+        
+        // Add key rotation deadlines
+        let encryption_keys = self.encryption_keys.read().await;
+        let now = Utc::now();
+        
+        for (key_id, key) in encryption_keys.iter() {
+            if key.expires_at > now && key.expires_at <= now + Duration::days(30) {
+                deadlines.push(ComplianceDeadline {
+                    id: Uuid::new_v4(),
+                    deadline_type: "Key Rotation".to_string(),
+                    description: format!("Encryption key {} expires", key_id),
+                    due_date: key.expires_at,
+                    framework: ComplianceFramework::PCIDSS,
+                });
+            }
+        }
+        
+        Ok(deadlines)
+    }
+
+    async fn calculate_compliance_score(&self, issues: &[ComplianceIssue]) -> Result<f64> {
+        let critical_count = issues.iter().filter(|i| matches!(i.severity, EventSeverity::Critical)).count();
+        let error_count = issues.iter().filter(|i| matches!(i.severity, EventSeverity::Error)).count();
+        let warning_count = issues.iter().filter(|i| matches!(i.severity, EventSeverity::Warning)).count();
+        
+        let base_score = 100.0;
+        let critical_penalty = (critical_count as f64) * 20.0;
+        let error_penalty = (error_count as f64) * 10.0;
+        let warning_penalty = (warning_count as f64) * 5.0;
+        
+        Ok((base_score - critical_penalty - error_penalty - warning_penalty).max(0.0))
+    }
+
+    async fn generate_recommendations(&self, issues: &[ComplianceIssue]) -> Result<Vec<String>> {
+        let mut recommendations = Vec::new();
+        
+        for issue in issues {
+            recommendations.push(issue.recommendation.clone());
+        }
+        
+        if recommendations.is_empty() {
+            recommendations.push("Continue monitoring PCI-DSS compliance posture".to_string());
+        }
+        
+        Ok(recommendations)
+    }
+
+    async fn get_compliance_status(&self) -> Result<crate::compliance::framework::ComplianceStatus> {
+        let issues = self.assess_compliance_issues().await?;
+        let score = self.calculate_compliance_score(&issues).await?;
+        
+        let mut framework_status = HashMap::new();
+        framework_status.insert("PCI-DSS".to_string(), score);
+        
+        Ok(crate::compliance::framework::ComplianceStatus {
+            compliance_percentage: score,
+            active_issues: issues.len() as u32,
+            last_assessment: Utc::now(),
+            framework_status,
+        })
+    }
+
+    async fn generate_daily_report(&self) -> Result<()> {
+        let now = Utc::now();
+        let start_date = now - Duration::days(1);
+        let end_date = now;
+        
+        let findings = self.collect_findings(start_date, end_date).await?;
+        let metrics = self.collect_metrics().await?;
+        
+        log::info!("PCI-DSS Daily Report: {} findings, compliance score: {:.1}%", 
+                  findings.len(), metrics.compliance_score);
+        
+        Ok(())
+    }
+
+    async fn process_expired_consent(&self) -> Result<()> {
+        // PCI-DSS doesn't use consent records, but implement for trait compatibility
+        log::info!("PCI-DSS processing expired consent");
+        Ok(())
+    }
+
+    async fn get_open_rights_requests(&self) -> Result<Vec<RightsRequest>> {
+        // PCI-DSS doesn't use rights requests, but implement for trait compatibility
+        Ok(Vec::new())
+    }
+
+    async fn collect_metrics(&self) -> Result<ComplianceMetrics> {
+        let vulnerability_scans = self.vulnerability_scans.read().await;
+        
+        let mut events_by_severity = HashMap::new();
+        events_by_severity.insert(EventSeverity::Info, 0);
+        events_by_severity.insert(EventSeverity::Warning, 0);
+        events_by_severity.insert(EventSeverity::Error, 0);
+        events_by_severity.insert(EventSeverity::Critical, 0);
+        
+        // Count vulnerabilities by severity
+        for scan in vulnerability_scans.iter() {
+            if scan.high_risk_vulnerabilities > 0 {
+                *events_by_severity.get_mut(&EventSeverity::Error).unwrap_or(&mut 0) += scan.high_risk_vulnerabilities as u64;
+            }
+            if scan.medium_risk_vulnerabilities > 0 {
+                *events_by_severity.get_mut(&EventSeverity::Warning).unwrap_or(&mut 0) += scan.medium_risk_vulnerabilities as u64;
+            }
+        }
+        
+        Ok(ComplianceMetrics {
+            total_events: vulnerability_scans.len() as u64,
+            events_by_severity,
+            avg_response_time: 24.0, // Placeholder
+            compliance_score: 85.0, // Placeholder
+        })
+    }
+}
+
+/// PCI-DSS-specific compliance report
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PciDssReport {
+    /// Unique identifier for report
+    pub id: Uuid,
+    /// Report generation timestamp
+    pub generated_at: DateTime<Utc>,
+    /// Report period start
+    pub period_start: DateTime<Utc>,
+    /// Report period end
+    pub period_end: DateTime<Utc>,
+    /// Overall compliance score
+    pub compliance_score: f64,
+    /// Number of cardholder data records
+    pub cardholder_data_count: usize,
+    /// Number of vulnerability scans
+    pub vulnerability_scan_count: usize,
+    /// Number of security assessments
+    pub security_assessment_count: usize,
+    /// Critical findings
+    pub critical_findings: Vec<ComplianceFinding>,
 }

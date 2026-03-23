@@ -25,7 +25,7 @@ use num_bigint::BigUint;
 use num_traits::{Zero, One};
 use num_integer::Integer;
 use rand::rngs::OsRng;
-use rand::{Rng, RngCore};
+use rand::Rng;
 
 /// Identifier for homomorphic encryption scheme
 pub type SchemeId = String;

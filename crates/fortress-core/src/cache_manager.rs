@@ -556,7 +556,7 @@ impl CacheManager for FortressCacheManager {
         self.update_performance_metrics(elapsed_us, success).await;
 
         // Also invalidate from invalidation manager
-        let _ = self.invalidation_manager.invalidate_key(key, InvalidationReason::Manual).await;
+        let _ = self.invalidation_manager.invalidate_key(key, InvalidationReason::Manual);
 
         result
     }
@@ -625,7 +625,7 @@ impl CacheManager for FortressCacheManager {
         self.update_health_status().await;
         
         let cache_stats = self.cache.get_statistics().await?;
-        let invalidation_stats = self.invalidation_manager.get_invalidation_stats().await?;
+        let invalidation_stats = self.invalidation_manager.get_invalidation_stats()?;
         let performance_metrics = self.performance_metrics.read().await.clone();
         let health_status = self.health_status.read().await.clone();
         let recommendations = self.generate_recommendations().await;
@@ -686,7 +686,7 @@ impl CacheManager for FortressCacheManager {
         // For now, we'll just use the invalidation manager
         let manager = self.invalidation_manager.as_ref();
         use crate::cache_invalidation::CacheInvalidation;
-        manager.add_tags(key, tags).await
+        manager.add_tags(key, tags)
     }
 
     /// Remove tags from a key
@@ -696,11 +696,11 @@ impl CacheManager for FortressCacheManager {
         // For now, we'll just use the invalidation manager
         let manager = self.invalidation_manager.as_ref();
         use crate::cache_invalidation::CacheInvalidation;
-        manager.remove_tags(key, tags).await
+        manager.remove_tags(key, tags)
     }
 
     async fn invalidate_by_tag(&self, tag: &str) -> Result<usize> {
-        self.invalidation_manager.invalidate_by_tag(tag, InvalidationReason::Manual).await
+        self.invalidation_manager.invalidate_by_tag(tag, InvalidationReason::Manual)
     }
 
     async fn warm_up(&self, keys: Vec<String>) -> Result<usize> {
