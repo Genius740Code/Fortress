@@ -1,17 +1,19 @@
 # Fortress Security Guide
 
-## ⚠️ **CRITICAL SECURITY WARNING**
+## ⚠️ **IMPORTANT SECURITY WARNING**
 
 **COMPLIANCE FEATURES ARE NOT IMPLEMENTED**
 
 This documentation contains examples and configuration options for GDPR, HIPAA, and PCI-DSS compliance features. **These features are currently not implemented** and the policy engine contains placeholder code that may give a false sense of security.
 
 - Policy conditions return `Ok(true)` by default (always pass)
-- Audit logging is not implemented  
+- Audit logging is partially implemented  
 - IP and attribute-based conditions are not evaluated
 - Using this system for compliance-critical workloads is **DANGEROUS**
 
-Do not deploy Fortress in production environments requiring regulatory compliance until these features are properly implemented and audited.
+**Do not deploy Fortress in production environments requiring regulatory compliance until these features are properly implemented and audited.**
+
+See the [Production Readiness Matrix](PRODUCTION_READINESS_MATRIX.md) for current implementation status.
 
 ## Overview
 
@@ -462,42 +464,48 @@ system_events = true
 
 ### Compliance Features
 
-#### GDPR Compliance
+**⚠️ NOT IMPLEMENTED - DO NOT USE FOR PRODUCTION COMPLIANCE**
+
+The following sections describe planned compliance features. These are **not currently implemented** and should not be relied upon for regulatory compliance.
+
+#### GDPR Compliance (In Development)
 ```bash
-# Enable GDPR features
-fortress config set compliance.gdpr.enabled true
+# Enable GDPR features (NOT YET IMPLEMENTED)
+# fortress config set compliance.gdpr.enabled true
 
-# Configure data retention
-fortress config set compliance.gdpr.data_retention_days 2555
+# Configure data retention (NOT YET IMPLEMENTED)
+# fortress config set compliance.gdpr.data_retention_days 2555
 
-# Enable consent management
-fortress config set compliance.gdpr.consent_management true
+# Enable consent management (NOT YET IMPLEMENTED)
+# fortress config set compliance.gdpr.consent_management true
 ```
 
-#### HIPAA Compliance
+#### HIPAA Compliance (In Development)
 ```bash
-# Enable HIPAA features
-fortress config set compliance.hipaa.enabled true
+# Enable HIPAA features (NOT YET IMPLEMENTED)
+# fortress config set compliance.hipaa.enabled true
 
-# Configure audit requirements
-fortress config set compliance.hipaa.audit_retention_years 6
+# Configure audit requirements (NOT YET IMPLEMENTED)
+# fortress config set compliance.hipaa.audit_retention_years 6
 
-# Enable access controls
-fortress config set compliance.hipaa.strict_access_controls true
+# Enable access controls (NOT YET IMPLEMENTED)
+# fortress config set compliance.hipaa.strict_access_controls true
 ```
 
-#### PCI-DSS Compliance
+#### PCI-DSS Compliance (In Development)
 ```bash
-# Enable PCI-DSS features
-fortress config set compliance.pci_dss.enabled true
+# Enable PCI-DSS features (NOT YET IMPLEMENTED)
+# fortress config set compliance.pci_dss.enabled true
 
-# Configure encryption requirements
-fortress config set compliance.pci_dss.encryption_algorithm aes256gcm
-fortress config set compliance.pci_dss.key_rotation_days 90
+# Configure encryption requirements (NOT YET IMPLEMENTED)
+# fortress config set compliance.pci_dss.encryption_algorithm aes256gcm
+# fortress config set compliance.pci_dss.key_rotation_days 90
 
-# Enable tokenization
-fortress config set compliance.pci_dss.tokenization_enabled true
+# Enable tokenization (NOT YET IMPLEMENTED)
+# fortress config set compliance.pci_dss.tokenization_enabled true
 ```
+
+**Current Status**: All compliance frameworks are in development phase. Basic framework exists but compliance features are not yet functional. See [Production Readiness Matrix](PRODUCTION_READINESS_MATRIX.md) for detailed implementation status.
 
 ## Security Best Practices
 

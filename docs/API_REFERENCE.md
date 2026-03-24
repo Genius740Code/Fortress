@@ -4,12 +4,14 @@
 
 Fortress provides comprehensive APIs for secure data storage with automatic encryption. The APIs are designed to be intuitive while providing enterprise-grade security features.
 
+> **⚠️ Important**: Fortress is currently in Alpha stage (v0.1.0). APIs may change and some features documented here may not be fully implemented. See the [Production Readiness Matrix](PRODUCTION_READINESS_MATRIX.md) for current implementation status.
+
 ## Available APIs
 
-- **REST API**: Traditional HTTP-based API with JSON payloads
-- **GraphQL API**: Flexible query language with real-time subscriptions
-- **gRPC API**: High-performance RPC interface
-- **WebSocket API**: Real-time updates and streaming
+- **REST API**: Traditional HTTP-based API with JSON payloads `[Stable]`
+- **GraphQL API**: Flexible query language with real-time subscriptions `[In Development]`
+- **gRPC API**: High-performance RPC interface `[Stable]`
+- **WebSocket API**: Real-time updates and streaming `[In Development]`
 
 ### REST API Base URL
 ```
@@ -48,9 +50,13 @@ All API responses follow a consistent format:
 
 ## GraphQL API
 
+> **⚠️ Status: In Development**
+
+The GraphQL API is currently under development. Basic structure exists but advanced features are not yet complete. Please use the REST API for production use cases.
+
 ### Overview
 
-The Fortress GraphQL API provides a flexible and efficient way to interact with your secure databases. GraphQL allows you to request exactly the data you need, reducing over-fetching and under-fetching of data.
+The Fortress GraphQL API will provide a flexible and efficient way to interact with your secure databases. GraphQL allows you to request exactly the data you need, reducing over-fetching and under-fetching of data.
 
 ### Authentication
 
@@ -62,8 +68,11 @@ Authorization: Bearer YOUR_JWT_TOKEN
 
 ### Basic Queries
 
+> **Note**: The following GraphQL examples are for the development version. These queries may not work until the GraphQL API is fully implemented.
+
 #### Get All Databases
 ```graphql
+# This query is planned but not yet functional
 query {
   databases {
     id
@@ -79,6 +88,7 @@ query {
 
 #### Get Specific Database
 ```graphql
+# This query is planned but not yet functional
 query {
   database(name: "my_database") {
     id
@@ -94,6 +104,7 @@ query {
 
 #### Query Data from Table
 ```graphql
+# This query is planned but not yet functional
 query {
   queryData(input: {
     database: "my_database"
@@ -288,7 +299,7 @@ GraphQL errors are returned in the standard GraphQL format:
 
 ### Rate Limiting
 
-GraphQL queries are subject to rate limiting based on:
+GraphQL queries will be subject to rate limiting based on:
 - Query complexity
 - Authentication status
 - User role
@@ -296,7 +307,7 @@ GraphQL queries are subject to rate limiting based on:
 
 ### Real-time Features
 
-The GraphQL API supports real-time subscriptions for:
+The GraphQL API will support real-time subscriptions for:
 - Data changes (insert, update, delete)
 - System health events
 - Key rotation progress
@@ -1100,6 +1111,218 @@ Authorization: Bearer <token>
   "timestamp": "2024-01-15T10:30:00Z",
   "request_id": "req_123456789"
 }
+```
+
+### Common Error Scenarios and Solutions
+
+#### Authentication Errors
+```bash
+# Error: Invalid credentials
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "wrong"}'
+
+# Response:
+{
+  "error": {
+    "code": "UNAUTHORIZED",
+    "message": "Invalid username or password"
+  },
+  "success": false
+}
+
+# Solution: Check credentials and try again
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "correct-password"}'
+```
+
+#### Validation Errors
+```bash
+# Error: Invalid database name
+curl -X POST http://localhost:8080/api/v1/databases \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "", "algorithm": "aegis256"}'
+
+# Response:
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Database name cannot be empty"
+  },
+  "success": false
+}
+
+# Solution: Provide valid data
+curl -X POST http://localhost:8080/api/v1/databases \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "myapp_db", "algorithm": "aegis256"}'
+```
+
+#### Rate Limiting Errors
+```bash
+# Error: Too many requests
+curl -X GET http://localhost:8080/api/v1/databases \
+  -H "Authorization: Bearer <token>"
+
+# Response:
+{
+  "error": {
+    "code": "RATE_LIMITED",
+    "message": "Rate limit exceeded",
+    "details": {
+      "limit": 1000,
+      "window": "1h",
+      "reset_at": "2024-01-15T11:30:00Z"
+    }
+  },
+  "success": false
+}
+
+# Solution: Wait and retry
+sleep 3600  # Wait for rate limit reset
+curl -X GET http://localhost:8080/api/v1/databases \
+  -H "Authorization: Bearer <token>"
+```
+
+#### Database Connection Errors
+```bash
+# Error: Database unavailable
+curl -X POST http://localhost:8080/api/v1/databases \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "test_db", "algorithm": "aegis256"}'
+
+# Response:
+{
+  "error": {
+    "code": "SERVICE_UNAVAILABLE",
+    "message": "Database connection failed"
+  },
+  "success": false
+}
+
+# Solution: Check database status and restart if needed
+fortress db status
+fortress restart
+```
+
+### Error Handling Best Practices
+
+#### 1. Always Check Response Status
+```bash
+# Check HTTP status code
+response=$(curl -s -w "%{http_code}" -o response.json http://localhost:8080/api/v1/databases)
+
+if [ "$response" -eq 200 ]; then
+    echo "Success: $(cat response.json)"
+else
+    echo "Error: $(cat response.json)"
+    exit 1
+fi
+```
+
+#### 2. Handle Authentication Gracefully
+```bash
+# Function to get and refresh token
+get_token() {
+    local response=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
+        -H "Content-Type: application/json" \
+        -d '{"username": "admin", "password": "password"}')
+    
+    local token=$(echo "$response" | jq -r '.data.access_token')
+    
+    if [ "$token" = "null" ]; then
+        echo "Authentication failed"
+        return 1
+    fi
+    
+    echo "$token"
+}
+
+# Use token with retry logic
+TOKEN=$(get_token)
+if [ $? -eq 0 ]; then
+    curl -X GET http://localhost:8080/api/v1/databases \
+        -H "Authorization: Bearer $TOKEN"
+else
+    echo "Cannot authenticate"
+    exit 1
+fi
+```
+
+#### 3. Implement Exponential Backoff
+```bash
+# Function with retry logic
+api_call() {
+    local url="$1"
+    local max_retries=3
+    local retry_delay=1
+    
+    for i in $(seq 1 $max_retries); do
+        local response=$(curl -s -w "%{http_code}" -o response.json "$url")
+        
+        if [ "$response" -eq 200 ]; then
+            cat response.json
+            return 0
+        elif [ "$response" -eq 429 ]; then
+            # Rate limited - wait longer
+            retry_delay=$((retry_delay * 2))
+            echo "Rate limited, retrying in $retry_delay seconds..."
+            sleep $retry_delay
+        elif [ "$response" -ge 500 ]; then
+            # Server error - retry with backoff
+            echo "Server error, retrying in $retry_delay seconds..."
+            sleep $retry_delay
+            retry_delay=$((retry_delay * 2))
+        else
+            # Client error - don't retry
+            echo "Client error: $(cat response.json)"
+            return 1
+        fi
+    done
+    
+    echo "Max retries exceeded"
+    return 1
+}
+```
+
+#### 4. Parse and Validate Responses
+```bash
+# Validate JSON response
+validate_response() {
+    local response_file="$1"
+    
+    # Check if valid JSON
+    if ! jq empty "$response_file" >/dev/null 2>&1; then
+        echo "Invalid JSON response"
+        return 1
+    fi
+    
+    # Check success field
+    local success=$(jq -r '.success' "$response_file")
+    if [ "$success" != "true" ]; then
+        local error_code=$(jq -r '.error.code' "$response_file")
+        local error_message=$(jq -r '.error.message' "$response_file")
+        echo "API Error: $error_code - $error_message"
+        return 1
+    fi
+    
+    return 0
+}
+
+# Usage example
+response=$(curl -s http://localhost:8080/api/v1/databases)
+echo "$response" > response.json
+
+if validate_response response.json; then
+    databases=$(jq -r '.data.databases' response.json)
+    echo "Databases: $databases"
+else
+    echo "API call failed"
+fi
 ```
 
 ### Common Error Codes
