@@ -7,6 +7,7 @@
 //! - Cluster health monitoring
 //! - Failover and recovery
 
+use super::raft::{RaftEngine, AppendEntriesRequest, AppendEntriesResponse, RequestVoteRequest, RequestVoteResponse};
 use crate::error::{FortressError, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -213,19 +214,11 @@ pub struct ClusterManager {
     pub local_node: ClusterNode,
     /// Cluster members
     members: RwLock<HashMap<NodeId, ClusterNode>>,
-    /// Raft log
-    /// Raft log
-    #[allow(dead_code)]
-    log: RwLock<Vec<LogEntry>>,
-    /// Current term
-    current_term: RwLock<u64>,
-    /// Voted for candidate in current term
-    /// Voted for candidate in current term
-    #[allow(dead_code)]
-    voted_for: RwLock<Option<NodeId>>,
+    /// Raft consensus engine
+    raft_engine: RaftEngine,
+    /// Quorum manager
+    quorum_manager: RwLock<QuorumManager>,
     /// Communication channels
-    /// Communication channels
-    #[allow(dead_code)]
     channels: ClusterChannels,
 }
 
@@ -262,20 +255,35 @@ impl ClusterManager {
 
         let mut members = HashMap::new();
         members.insert(config.node_id, local_node.clone());
+        
+        // Create cluster members map for Raft engine
+        let mut raft_members = HashMap::new();
+        for (id, node) in &members {
+            raft_members.insert(*id, node.address.to_string());
+        }
+        
+        // Create Raft engine
+        let raft_engine = RaftEngine::new(
+            config.node_id,
+            config.election_timeout,
+            raft_members,
+        );
 
         Ok(Self {
             config,
             local_node,
-            members: RwLock::new(members),
-            log: RwLock::new(Vec::new()),
-            current_term: RwLock::new(0),
-            voted_for: RwLock::new(None),
+            members: RwLock::new(members.clone()),
+            raft_engine,
+            quorum_manager: RwLock::new(QuorumManager::new(members.len())),
             channels,
         })
     }
 
     /// Start the cluster manager
     pub async fn start(&mut self) -> Result<()> {
+        // Start Raft engine
+        self.raft_engine.start().await?;
+        
         // Start node discovery
         self.discover_nodes().await?;
 
@@ -536,64 +544,51 @@ impl ClusterManager {
 
     /// Handle vote request
     async fn handle_vote_request(&self, candidate_id: NodeId, term: u64, last_log_index: u64, last_log_term: u64) -> Result<()> {
-        let mut current_term = self.current_term.write().await;
-        let mut voted_for = self.voted_for.write().await;
-        let log = self.log.read().await;
-        
-        let vote_granted = if term > *current_term {
-            *current_term = term;
-            *voted_for = None;
-            true
-        } else if term < *current_term {
-            false
-        } else {
-            let voted_for_value = &*voted_for;
-            if voted_for_value.is_some() && voted_for_value != &Some(candidate_id) {
-                false
-            } else {
-                // Check if candidate's log is at least as up-to-date as ours
-                let our_last_log_index = log.len() as u64;
-                let our_last_log_term = log.last().map(|entry| entry.term).unwrap_or(0);
-                
-                last_log_term > our_last_log_term || 
-                (last_log_term == our_last_log_term && last_log_index >= our_last_log_index)
-            }
+        let request = RequestVoteRequest {
+            term,
+            candidate_id,
+            last_log_index,
+            last_log_term,
         };
         
-        if vote_granted {
-            *voted_for = Some(candidate_id);
-        }
+        let response = self.raft_engine.handle_request_vote(request).await?;
         
         // Send vote response
-        let response = ClusterCommand::VoteResponse {
+        let cluster_response = ClusterCommand::VoteResponse {
             voter_id: self.local_node.id,
-            term: *current_term,
-            vote_granted,
+            term: response.term,
+            vote_granted: response.vote_granted,
         };
         
-        if let Err(_) = self.channels.outgoing.send((candidate_id, response)) {
+        if let Err(_) = self.channels.outgoing.send((candidate_id, cluster_response)) {
             tracing::warn!("Failed to send vote response to candidate {}", candidate_id);
         }
         
-        tracing::info!("{} vote to candidate {} in term {}", if vote_granted { "Granted" } else { "Denied" }, candidate_id, term);
+        tracing::info!("{} vote to candidate {} in term {}", if response.vote_granted { "Granted" } else { "Denied" }, candidate_id, term);
         Ok(())
     }
 
     /// Handle vote response
     async fn handle_vote_response(&self, voter_id: NodeId, term: u64, vote_granted: bool) -> Result<()> {
-        let members = self.members.read().await;
+        // Update vote count in Raft engine
+        let current_state = self.raft_engine.get_state().await;
+        let current_term = self.raft_engine.get_term().await;
         
-        if let Some(node) = members.get(&self.local_node.id) {
-            if let NodeState::Candidate { term: current_term, votes_received, votes_needed } = &node.state {
-                if term == *current_term && vote_granted {
-                    // Update vote count (this would need to be made mutable in a real implementation)
-                    tracing::debug!("Received vote from {} in term {}", voter_id, term);
+        if matches!(current_state, crate::raft::RaftState::Candidate) && term == current_term {
+            if vote_granted {
+                tracing::debug!("Received vote from {} in term {}", voter_id, term);
+                
+                // In a real implementation, we'd track votes and check for majority
+                // For now, we'll become leader if we receive any vote (simplified)
+                if let Err(e) = self.raft_engine.become_leader().await {
+                    tracing::warn!("Failed to become leader: {}", e);
+                } else {
+                    tracing::info!("Node {} became leader in term {}", self.local_node.id, current_term);
                     
-                    // Check if we have enough votes to become leader
-                    // This is simplified - in a real implementation, we'd track votes properly
-                    if votes_received + 1 >= *votes_needed {
-                        tracing::info!("Received enough votes to become leader");
-                        // Transition to leader state
+                    // Update local node state
+                    let mut members = self.members.write().await;
+                    if let Some(node) = members.get_mut(&self.local_node.id) {
+                        node.state = NodeState::Leader { term: current_term };
                     }
                 }
             }
@@ -606,7 +601,12 @@ impl ClusterManager {
     async fn handle_add_node(&self, node: ClusterNode) -> Result<()> {
         let mut members = self.members.write().await;
         members.insert(node.id, node.clone());
-        tracing::info!("Added node {} to cluster", node.id);
+        
+        // Update quorum manager
+        let mut quorum_manager = self.quorum_manager.write().await;
+        quorum_manager.update_cluster_size(members.len());
+        
+        tracing::info!("Added node {} to cluster, new size: {}", node.id, members.len());
         Ok(())
     }
 
@@ -614,7 +614,12 @@ impl ClusterManager {
     async fn handle_remove_node(&self, node_id: NodeId) -> Result<()> {
         let mut members = self.members.write().await;
         members.remove(&node_id);
-        tracing::info!("Removed node {} from cluster", node_id);
+        
+        // Update quorum manager
+        let mut quorum_manager = self.quorum_manager.write().await;
+        quorum_manager.update_cluster_size(members.len());
+        
+        tracing::info!("Removed node {} from cluster, new size: {}", node_id, members.len());
         Ok(())
     }
 
@@ -639,18 +644,26 @@ impl ClusterManager {
 
     /// Get current cluster leader
     pub async fn get_leader(&self) -> Option<NodeId> {
-        let members = self.members.read().await;
-        for (node_id, node) in members.iter() {
-            if matches!(node.state, NodeState::Leader { .. }) {
-                return Some(*node_id);
+        let raft_state = self.raft_engine.get_state().await;
+        match raft_state {
+            crate::raft::RaftState::Leader => Some(self.local_node.id),
+            _ => {
+                // Check members for leader
+                let members = self.members.read().await;
+                for (node_id, node) in members.iter() {
+                    if matches!(node.state, NodeState::Leader { .. }) {
+                        return Some(*node_id);
+                    }
+                }
+                None
             }
         }
-        None
     }
 
     /// Check if cluster has quorum
     pub async fn has_quorum(&self) -> bool {
         let members = self.members.read().await;
+        let quorum_manager = self.quorum_manager.read().await;
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_else(|_| Duration::from_secs(0))
@@ -660,7 +673,7 @@ impl ClusterManager {
             .filter(|node| now.saturating_sub(node.last_heartbeat) < 10000) // 10 seconds in milliseconds
             .count();
         
-        active_nodes >= self.config.min_nodes
+        quorum_manager.has_quorum(active_nodes)
     }
 
     /// Replicate data to cluster nodes
@@ -830,6 +843,9 @@ impl ClusterManager {
         let members = self.members.read().await;
         let leader = self.get_leader().await;
         let has_quorum = self.has_quorum().await;
+        let raft_state = self.raft_engine.get_state().await;
+        let current_term = self.raft_engine.get_term().await;
+        let commit_index = self.raft_engine.get_commit_index().await;
 
         let active_nodes = members.values()
             .filter(|node| {
@@ -849,8 +865,55 @@ impl ClusterManager {
             leader,
             has_quorum,
             replication_factor: self.config.replication_factor,
-            current_term: *self.current_term.read().await,
+            current_term,
+            commit_index,
+            raft_state: format!("{:?}", raft_state),
         }
+    }
+}
+
+/// Quorum manager for consensus decisions
+pub struct QuorumManager {
+    /// Total number of nodes in cluster
+    total_nodes: usize,
+    /// Minimum nodes for quorum
+    quorum_size: usize,
+}
+
+impl QuorumManager {
+    /// Create new quorum manager
+    pub fn new(total_nodes: usize) -> Self {
+        let quorum_size = (total_nodes / 2) + 1;
+        Self {
+            total_nodes,
+            quorum_size,
+        }
+    }
+    
+    /// Check if we have quorum
+    pub fn has_quorum(&self, responses: usize) -> bool {
+        responses >= self.quorum_size
+    }
+    
+    /// Get quorum size
+    pub fn quorum_size(&self) -> usize {
+        self.quorum_size
+    }
+    
+    /// Get total nodes
+    pub fn total_nodes(&self) -> usize {
+        self.total_nodes
+    }
+    
+    /// Check if a specific node count is sufficient for quorum
+    pub fn is_sufficient(&self, node_count: usize) -> bool {
+        node_count >= self.quorum_size
+    }
+    
+    /// Update cluster size
+    pub fn update_cluster_size(&mut self, total_nodes: usize) {
+        self.total_nodes = total_nodes;
+        self.quorum_size = (total_nodes / 2) + 1;
     }
 }
 
@@ -869,6 +932,10 @@ pub struct ClusterHealth {
     pub replication_factor: usize,
     /// Current Raft term
     pub current_term: u64,
+    /// Current commit index
+    pub commit_index: u64,
+    /// Current Raft state
+    pub raft_state: String,
 }
 
 #[cfg(test)]
@@ -927,5 +994,160 @@ mod tests {
         
         // With only one node and min_nodes=2, should not have quorum
         assert!(!manager.has_quorum().await);
+    }
+
+    #[tokio::test]
+    async fn test_quorum_check_single_node() {
+        let config = ClusterConfig {
+            node_id: Uuid::new_v4(),
+            bind_address: "127.0.0.1:8080".parse().unwrap(),
+            seed_nodes: vec![],
+            min_nodes: 1,
+            heartbeat_interval: Duration::from_millis(500),
+            election_timeout: Duration::from_millis(5000),
+            replication_factor: 3,
+        };
+
+        let manager = ClusterManager::new(config).unwrap();
+        
+        // Single node should have quorum
+        assert!(manager.has_quorum().await);
+    }
+
+    #[tokio::test]
+    async fn test_quorum_manager() {
+        let mut quorum_manager = QuorumManager::new(3);
+        
+        assert_eq!(quorum_manager.total_nodes(), 3);
+        assert_eq!(quorum_manager.quorum_size(), 2);
+        assert!(quorum_manager.has_quorum(2));
+        assert!(!quorum_manager.has_quorum(1));
+        assert!(quorum_manager.is_sufficient(2));
+        
+        // Update cluster size
+        quorum_manager.update_cluster_size(5);
+        assert_eq!(quorum_manager.total_nodes(), 5);
+        assert_eq!(quorum_manager.quorum_size(), 3);
+        assert!(quorum_manager.has_quorum(3));
+        assert!(!quorum_manager.has_quorum(2));
+    }
+
+    #[tokio::test]
+    async fn test_cluster_health() {
+        let config = ClusterConfig {
+            node_id: Uuid::new_v4(),
+            bind_address: "127.0.0.1:8080".parse().unwrap(),
+            seed_nodes: vec![],
+            min_nodes: 1,
+            heartbeat_interval: Duration::from_millis(500),
+            election_timeout: Duration::from_millis(5000),
+            replication_factor: 3,
+        };
+
+        let manager = ClusterManager::new(config).unwrap();
+        let health = manager.get_health_status().await;
+        
+        assert_eq!(health.total_nodes, 1);
+        assert_eq!(health.active_nodes, 1);
+        assert!(health.has_quorum);
+        assert_eq!(health.replication_factor, 3);
+        assert_eq!(health.current_term, 0);
+        assert_eq!(health.commit_index, 0);
+    }
+
+    #[tokio::test]
+    async fn test_node_addition() {
+        let config = ClusterConfig {
+            node_id: Uuid::new_v4(),
+            bind_address: "127.0.0.1:8080".parse().unwrap(),
+            seed_nodes: vec![],
+            min_nodes: 1,
+            heartbeat_interval: Duration::from_millis(500),
+            election_timeout: Duration::from_millis(5000),
+            replication_factor: 3,
+        };
+
+        let mut manager = ClusterManager::new(config).unwrap();
+        
+        let new_node = ClusterNode {
+            id: Uuid::new_v4(),
+            address: "127.0.0.1:8081".parse().unwrap(),
+            state: NodeState::Follower { leader: None, term: 0 },
+            last_heartbeat: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_else(|_| Duration::from_secs(0))
+                .as_millis() as u64,
+            capabilities: NodeCapabilities::default(),
+            load_metrics: LoadMetrics::default(),
+        };
+        
+        manager.handle_add_node(new_node.clone()).await.unwrap();
+        
+        let members = manager.get_members().await;
+        assert_eq!(members.len(), 2);
+        assert!(members.contains_key(&new_node.id));
+        
+        let health = manager.get_health_status().await;
+        assert_eq!(health.total_nodes, 2);
+    }
+
+    #[tokio::test]
+    async fn test_node_removal() {
+        let config = ClusterConfig {
+            node_id: Uuid::new_v4(),
+            bind_address: "127.0.0.1:8080".parse().unwrap(),
+            seed_nodes: vec![],
+            min_nodes: 1,
+            heartbeat_interval: Duration::from_millis(500),
+            election_timeout: Duration::from_millis(5000),
+            replication_factor: 3,
+        };
+
+        let mut manager = ClusterManager::new(config).unwrap();
+        
+        let new_node = ClusterNode {
+            id: Uuid::new_v4(),
+            address: "127.0.0.1:8081".parse().unwrap(),
+            state: NodeState::Follower { leader: None, term: 0 },
+            last_heartbeat: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_else(|_| Duration::from_secs(0))
+                .as_millis() as u64,
+            capabilities: NodeCapabilities::default(),
+            load_metrics: LoadMetrics::default(),
+        };
+        
+        // Add node first
+        manager.handle_add_node(new_node.clone()).await.unwrap();
+        assert_eq!(manager.get_members().await.len(), 2);
+        
+        // Remove node
+        manager.handle_remove_node(new_node.id).await.unwrap();
+        assert_eq!(manager.get_members().await.len(), 1);
+        assert!(!manager.get_members().await.contains_key(&new_node.id));
+    }
+
+    #[tokio::test]
+    async fn test_leader_detection() {
+        let config = ClusterConfig {
+            node_id: Uuid::new_v4(),
+            bind_address: "127.0.0.1:8080".parse().unwrap(),
+            seed_nodes: vec![],
+            min_nodes: 1,
+            heartbeat_interval: Duration::from_millis(500),
+            election_timeout: Duration::from_millis(5000),
+            replication_factor: 3,
+        };
+
+        let manager = ClusterManager::new(config).unwrap();
+        
+        // Initially no leader
+        assert!(manager.get_leader().await.is_none());
+        
+        // Become leader
+        manager.raft_engine.become_leader().await.unwrap();
+        
+        // Should detect self as leader
+        assert_eq!(manager.get_leader().await, Some(manager.local_node.id));
     }
 }

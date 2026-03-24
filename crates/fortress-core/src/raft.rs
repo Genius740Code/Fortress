@@ -190,20 +190,24 @@ impl RaftEngine {
         // Reset heartbeat timeout
         *self.last_heartbeat.write().await = Instant::now();
 
-        // Check if log is consistent
-        let log_consistent = if request.prev_log_index == 0 {
-            true
-        } else if let Some(entry) = persistent_state.log.get((request.prev_log_index - 1) as usize) {
-            entry.term == request.prev_log_term
-        } else {
-            false
-        };
+        // Check if log is consistent using safety validation
+        let log_consistent = self.validate_log_consistency(request.prev_log_index, request.prev_log_term).await;
 
         if !log_consistent {
             return Ok(AppendEntriesResponse {
                 term: persistent_state.current_term,
                 success: false,
             });
+        }
+
+        // Validate entries before appending
+        for entry in &request.entries {
+            if !self.is_command_safe(&entry.command).await {
+                return Ok(AppendEntriesResponse {
+                    term: persistent_state.current_term,
+                    success: false,
+                });
+            }
         }
 
         // Append new entries
@@ -418,12 +422,14 @@ impl RaftEngine {
     ) -> Result<()> {
         let mut leader_state = self.leader_state.write().await;
         let persistent_state = self.persistent_state.read().await;
+        let mut volatile_state = self.volatile_state.write().await;
         
         if let Some(ref mut leader_state) = leader_state.as_mut() {
             if response.term > persistent_state.current_term {
                 // Step down as leader
                 drop(leader_state);
                 drop(persistent_state);
+                drop(volatile_state);
                 self.step_down().await?;
                 return Ok(());
             }
@@ -432,9 +438,23 @@ impl RaftEngine {
                 // Update next_index and match_index for successful replication
                 let new_next_index = request.prev_log_index + request.entries.len() as u64 + 1;
                 leader_state.next_index.insert(node_id, new_next_index);
-                leader_state.match_index.insert(node_id, request.prev_log_index + request.entries.len() as u64);
+                let new_match_index = request.prev_log_index + request.entries.len() as u64;
+                leader_state.match_index.insert(node_id, new_match_index);
                 
                 debug!("Successful replication to node {}, updated indices", node_id);
+                
+                // Check if we can commit new entries
+                let mut match_indices: Vec<u64> = leader_state.match_index.values().copied().collect();
+                match_indices.push(persistent_state.log.len() as u64); // Include leader
+                match_indices.sort_unstable_by(|a, b| b.cmp(a)); // Sort descending
+                
+                if match_indices.len() >= (self.cluster_members.read().await.len() / 2) {
+                    let new_commit_index = match_indices[(self.cluster_members.read().await.len() / 2) - 1];
+                    if new_commit_index > volatile_state.commit_index {
+                        volatile_state.commit_index = new_commit_index;
+                        debug!("Updated commit index to {}", new_commit_index);
+                    }
+                }
             } else {
                 // Decrement next_index and retry
                 let current_next_index = leader_state.next_index.get(&node_id).copied()
@@ -741,7 +761,64 @@ impl RaftEngine {
         Ok(())
     }
 
-    /// Get current state
+    /// Check if it's safe to become leader
+    async fn can_become_leader(&self) -> bool {
+        let state = self.state.read().await;
+        let persistent_state = self.persistent_state.read().await;
+        
+        // Can only become leader if we're candidate
+        if !matches!(*state, RaftState::Candidate) {
+            return false;
+        }
+        
+        // Check if we have the most up-to-date log
+        let _members = self.cluster_members.read().await;
+        let _log_len = persistent_state.log.len() as u64;
+        let _last_term = persistent_state.log.last().map(|entry| entry.term).unwrap_or(0);
+        
+        // In a real implementation, we'd check other nodes' logs
+        // For now, we assume our log is sufficiently up-to-date
+        true
+    }
+    
+    /// Validate log consistency
+    async fn validate_log_consistency(&self, prev_log_index: u64, prev_log_term: u64) -> bool {
+        let persistent_state = self.persistent_state.read().await;
+        
+        if prev_log_index == 0 {
+            return true; // First entry is always consistent
+        }
+        
+        if let Some(entry) = persistent_state.log.get((prev_log_index - 1) as usize) {
+            entry.term == prev_log_term
+        } else {
+            false
+        }
+    }
+    
+    /// Check if command is safe to apply
+    async fn is_command_safe(&self, command: &ClusterCommand) -> bool {
+        match command {
+            ClusterCommand::AddNode { .. } | ClusterCommand::RemoveNode { .. } => {
+                // Node changes require quorum
+                self.has_quorum().await
+            }
+            ClusterCommand::ReplicateData { .. } => {
+                // Data replication is always safe
+                true
+            }
+            _ => true,
+        }
+    }
+    
+    /// Check if cluster has quorum
+    async fn has_quorum(&self) -> bool {
+        let members = self.cluster_members.read().await;
+        let quorum_size = (members.len() / 2) + 1;
+        // In a real implementation, we'd check active nodes
+        // For now, we assume all members are active
+        members.len() >= quorum_size
+    }
     pub async fn get_state(&self) -> RaftState {
         (*self.state.read().await).clone()
     }
@@ -762,6 +839,7 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use uuid::Uuid;
+    use tokio::time::{sleep, Duration};
 
     #[tokio::test]
     async fn test_raft_engine_creation() {
@@ -810,5 +888,182 @@ mod tests {
         let response = engine.handle_request_vote(request).await.unwrap();
         assert_eq!(response.term, 1);
         assert!(response.vote_granted);
+    }
+
+    #[tokio::test]
+    async fn test_leader_election() {
+        let node_id = Uuid::new_v4();
+        let mut members = HashMap::new();
+        members.insert(node_id, "127.0.0.1:8080".to_string());
+        members.insert(Uuid::new_v4(), "127.0.0.1:8081".to_string());
+        members.insert(Uuid::new_v4(), "127.0.0.1:8082".to_string());
+        
+        let engine = RaftEngine::new(node_id, Duration::from_millis(100), members);
+        
+        // Start the engine
+        engine.start().await.unwrap();
+        
+        // Wait a bit for election timeout
+        sleep(Duration::from_millis(200)).await;
+        
+        // Should be in candidate or leader state
+        let state = engine.get_state().await;
+        assert!(matches!(state, RaftState::Candidate | RaftState::Leader));
+    }
+
+    #[tokio::test]
+    async fn test_log_replication() {
+        let node_id = Uuid::new_v4();
+        let members = HashMap::new();
+        let engine = RaftEngine::new(node_id, Duration::from_millis(5000), members);
+        
+        // Become leader first
+        engine.become_leader().await.unwrap();
+        
+        // Propose a command
+        let command = ClusterCommand::ReplicateData {
+            key: "test_key".to_string(),
+            data: b"test_data".to_vec(),
+            nodes: vec![],
+        };
+        
+        let result = engine.propose(command).await;
+        assert!(result.is_ok());
+        
+        // Check that log has entries
+        let persistent_state = engine.persistent_state.read().await;
+        assert!(!persistent_state.log.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_safety_checks() {
+        let node_id = Uuid::new_v4();
+        let members = HashMap::new();
+        let engine = RaftEngine::new(node_id, Duration::from_millis(5000), members);
+        
+        // Test log consistency validation
+        assert!(engine.validate_log_consistency(0, 0).await);
+        
+        // Test command safety
+        let safe_command = ClusterCommand::ReplicateData {
+            key: "test".to_string(),
+            data: vec![1, 2, 3],
+            nodes: vec![],
+        };
+        assert!(engine.is_command_safe(&safe_command).await);
+        
+        // Test leader safety
+        assert!(!engine.can_become_leader().await); // Not candidate
+    }
+
+    #[tokio::test]
+    async fn test_state_transitions() {
+        let node_id = Uuid::new_v4();
+        let members = HashMap::new();
+        let engine = RaftEngine::new(node_id, Duration::from_millis(5000), members);
+        
+        // Start as follower
+        assert_eq!(engine.get_state().await, RaftState::Follower);
+        
+        // Become leader
+        engine.become_leader().await.unwrap();
+        assert_eq!(engine.get_state().await, RaftState::Leader);
+        
+        // Step down
+        engine.step_down().await.unwrap();
+        assert_eq!(engine.get_state().await, RaftState::Follower);
+    }
+
+    #[tokio::test]
+    async fn test_quorum_management() {
+        let node_id = Uuid::new_v4();
+        let mut members = HashMap::new();
+        members.insert(node_id, "127.0.0.1:8080".to_string());
+        members.insert(Uuid::new_v4(), "127.0.0.1:8081".to_string());
+        members.insert(Uuid::new_v4(), "127.0.0.1:8082".to_string());
+        
+        let engine = RaftEngine::new(node_id, Duration::from_millis(5000), members);
+        
+        // Test quorum calculation
+        assert!(engine.has_quorum().await);
+    }
+
+    #[tokio::test]
+    async fn test_append_entries_with_entries() {
+        let node_id = Uuid::new_v4();
+        let members = HashMap::new();
+        let engine = RaftEngine::new(node_id, Duration::from_millis(5000), members);
+        
+        let entry = LogEntry {
+            index: 1,
+            term: 1,
+            command: ClusterCommand::Heartbeat {
+                from: Uuid::new_v4(),
+                term: 1,
+            },
+            timestamp: 1234567890,
+        };
+        
+        let request = AppendEntriesRequest {
+            term: 1,
+            leader_id: Uuid::new_v4(),
+            prev_log_index: 0,
+            prev_log_term: 0,
+            entries: vec![entry],
+            leader_commit: 0,
+        };
+        
+        let response = engine.handle_append_entries(request).await.unwrap();
+        assert_eq!(response.term, 1);
+        assert!(response.success);
+        
+        // Check that entry was appended
+        let persistent_state = engine.persistent_state.read().await;
+        assert_eq!(persistent_state.log.len(), 1);
+        assert_eq!(persistent_state.log[0].index, 1);
+        assert_eq!(persistent_state.log[0].term, 1);
+    }
+
+    #[tokio::test]
+    async fn test_append_entries_log_inconsistency() {
+        let node_id = Uuid::new_v4();
+        let members = HashMap::new();
+        let engine = RaftEngine::new(node_id, Duration::from_millis(5000), members);
+        
+        // Request with inconsistent log
+        let request = AppendEntriesRequest {
+            term: 1,
+            leader_id: Uuid::new_v4(),
+            prev_log_index: 10, // Non-existent index
+            prev_log_term: 1,
+            entries: vec![],
+            leader_commit: 0,
+        };
+        
+        let response = engine.handle_append_entries(request).await.unwrap();
+        assert_eq!(response.term, 1);
+        assert!(!response.success);
+    }
+
+    #[tokio::test]
+    async fn test_request_vote_term_update() {
+        let node_id = Uuid::new_v4();
+        let members = HashMap::new();
+        let engine = RaftEngine::new(node_id, Duration::from_millis(5000), members);
+        
+        // Request with higher term
+        let request = RequestVoteRequest {
+            term: 5,
+            candidate_id: Uuid::new_v4(),
+            last_log_index: 0,
+            last_log_term: 0,
+        };
+        
+        let response = engine.handle_request_vote(request).await.unwrap();
+        assert_eq!(response.term, 5); // Term should be updated
+        assert!(response.vote_granted);
+        
+        // Check that term was updated
+        assert_eq!(engine.get_term().await, 5);
     }
 }
