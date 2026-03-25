@@ -265,8 +265,8 @@ pub mod mpc_party;
 
 pub mod mpc_network;
 
-/// Homomorphic encryption capabilities
-
+/// Homomorphic encryption capabilities (experimental)
+#[cfg(feature = "experimental")]
 pub mod homomorphic_encryption;
 
 /// Quantum-resistant encryption options
@@ -493,6 +493,7 @@ pub mod prelude {
 
     pub use crate::mpc_network::{InMemoryMpcNetwork, MpcNetworkBuilder, NetworkStats};
 
+    #[cfg(feature = "experimental")]
     pub use crate::homomorphic_encryption::{
         HomomorphicEncryption, HomomorphicScheme, HomomorphicOperation, HomomorphicCiphertext,
         HomomorphicManager, HomomorphicManagerBuilder, HomomorphicPerformance,

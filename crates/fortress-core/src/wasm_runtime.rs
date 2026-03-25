@@ -272,7 +272,7 @@ impl WasmPlugin {
         Ok(())
     }
     
-    /// Execute a plugin function
+    /// Execute a plugin function with proper memory management
     pub fn call_function(
         &mut self,
         function_name: &str,
@@ -297,7 +297,24 @@ impl WasmPlugin {
         store.add_fuel(self.config.max_execution_time_ms.unwrap_or(5000) * 1000)
             .map_err(|e| FortressError::plugin(format!("Failed to set fuel limit: {}", e)))?;
         
-        // Get the function from the instance
+        // Get memory export for data transfer
+        let memory = instance
+            .get_memory(&mut store, "memory")
+            .ok_or_else(|| FortressError::plugin("Plugin does not export memory"))?;
+        
+        // Serialize input data
+        let input_json = serde_json::to_string(input)
+            .map_err(|e| FortressError::plugin(format!("Failed to serialize input: {}", e)))?;
+        let input_bytes = input_json.as_bytes();
+        
+        // Allocate space for input data in WASM memory
+        let input_len = input_bytes.len() as i32;
+        let input_ptr = self.allocate_wasm_memory(&mut store, instance, memory, input_len)?;
+        
+        // Write input data to WASM memory
+        Self::write_memory(memory, input_ptr, input_bytes)?;
+        
+        // Get the function from the instance with proper type checking
         let func = instance
             .get_typed_func::<(i32, i32), i32>(&mut store, function_name)
             .or_else(|_| {
@@ -308,45 +325,14 @@ impl WasmPlugin {
                 // Try with no return value
                 instance.get_typed_func::<(i32, i32), ()>(&mut store, function_name)
             })
+            .or_else(|_| {
+                // Try with just return value
+                instance.get_typed_func::<(), ()>(&mut store, function_name)
+            })
             .map_err(|e| FortressError::plugin(format!("Function '{}' not found or invalid signature: {}", function_name, e)))?;
         
-        // Serialize input data
-        let input_json = serde_json::to_string(input)
-            .map_err(|e| FortressError::plugin(format!("Failed to serialize input: {}", e)))?;
-        let input_bytes = input_json.as_bytes();
-        
-        // Get memory export for data transfer
-        let memory = instance
-            .get_memory(&mut store, "memory")
-            .ok_or_else(|| FortressError::plugin("Plugin does not export memory"))?;
-        
-        // Write input data to WASM memory (simplified approach)
-        // In a real implementation, we'd allocate memory in the WASM module
-        let input_ptr = 0x1000; // Fixed address for simplicity
-        let input_len = input_bytes.len() as i32;
-        
-        if input_bytes.len() > 4096 {
-            return Err(FortressError::plugin("Input data too large"));
-        }
-        
-        Self::write_memory(memory, input_ptr, input_bytes)?;
-        
-        // Execute the function
-        let result = match func.type_(&store).params().len() {
-            0 => {
-                // No parameters
-                let func_no_params = instance.get_typed_func::<(), i32>(&mut store, function_name)
-                    .map_err(|e| FortressError::plugin(format!("Failed to get function: {}", e)))?;
-                func_no_params.call(&mut store, ())
-            }
-            2 => {
-                // Two parameters (ptr, len)
-                func.call(&mut store, (input_ptr, input_len))
-            }
-            _ => {
-                return Err(FortressError::plugin("Unsupported function signature"));
-            }
-        };
+        // Execute the function with proper signature handling
+        let result = self.execute_function_with_signature(&func, &mut store, instance, function_name, input_ptr, input_len)?;
         
         let execution_time = start_time.elapsed().as_millis() as u64;
         
@@ -358,34 +344,93 @@ impl WasmPlugin {
             context.stats.memory_usage_bytes = memory.size(&mut store) * 65536;
         }
         
-        // Handle the result
+        // Handle the result and read output data
+        self.handle_function_result(result, memory, &mut store, execution_time)
+    }
+    
+    /// Allocate memory in WASM module
+    fn allocate_wasm_memory(
+        &self,
+        store: &mut Store<WasmContext>,
+        instance: &Instance,
+        memory: &Memory,
+        size: i32,
+    ) -> Result<i32> {
+        // Try to call an allocation function if available
+        if let Ok(alloc_func) = instance.get_typed_func::<i32, i32>(store, "allocate") {
+            let ptr = alloc_func.call(store, size)
+                .map_err(|e| FortressError::plugin(format!("Failed to allocate WASM memory: {}", e)))?;
+            Ok(ptr)
+        } else {
+            // Fallback to a simple allocation strategy
+            // Use a fixed region starting at 0x10000 for dynamic allocations
+            let base_ptr = 0x10000;
+            let current_offset = {
+                let ctx = store.data();
+                // In a real implementation, we'd track allocations in the context
+                0 // Simplified for now
+            };
+            let ptr = base_ptr + current_offset;
+            
+            // Check if we have enough memory
+            let memory_size = memory.size(store) * 65536;
+            if (ptr as usize) + (size as usize) > memory_size {
+                return Err(FortressError::plugin("Insufficient WASM memory for allocation"));
+            }
+            
+            Ok(ptr)
+        }
+    }
+    
+    /// Execute function based on its signature
+    fn execute_function_with_signature(
+        &self,
+        func: &TypedFunc<(i32, i32), i32>,
+        store: &mut Store<WasmContext>,
+        instance: &Instance,
+        function_name: &str,
+        input_ptr: i32,
+        input_len: i32,
+    ) -> Result<std::result::Result<i32, wasmtime::anyhow::Error>> {
+        match func.type_().params().len() {
+            0 => {
+                // No parameters
+                let func_no_params = instance.get_typed_func::<(), i32>(store, function_name)
+                    .map_err(|e| FortressError::plugin(format!("Failed to get function: {}", e)))?;
+                Ok(func_no_params.call(store, ()))
+            }
+            1 => {
+                // One parameter (might be a struct or pointer)
+                if let Ok(func_one_param) = instance.get_typed_func::<i32, i32>(store, function_name) {
+                    Ok(func_one_param.call(store, input_ptr))
+                } else {
+                    let func_no_params = instance.get_typed_func::<(), i32>(store, function_name)
+                        .map_err(|e| FortressError::plugin(format!("Failed to get function: {}", e)))?;
+                    Ok(func_no_params.call(store, ()))
+                }
+            }
+            2 => {
+                // Two parameters (ptr, len)
+                func.call(store, (input_ptr, input_len))
+            }
+            _ => {
+                Err(FortressError::plugin("Unsupported function signature"))
+            }
+        }
+    }
+    
+    /// Handle function result and read output data
+    fn handle_function_result(
+        &self,
+        result: std::result::Result<i32, wasmtime::anyhow::Error>,
+        memory: &Memory,
+        store: &mut Store<WasmContext>,
+        execution_time: u64,
+    ) -> Result<PluginResult> {
         match result {
             Ok(return_code) => {
-                // Read output data from WASM memory if return code indicates success
-                let output_data = if return_code == 0 {
-                    // Try to read output from a fixed location
-                    let output_ptr = 0x2000;
-                    let output_len = 1024; // Maximum output size
-                    
-                    match Self::read_memory(memory, output_ptr, output_len) {
-                        Ok(data) => {
-                            // Try to parse as JSON
-                            let data_str = String::from_utf8_lossy(&data);
-                            if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(&data_str) {
-                                Some(json_value)
-                            } else {
-                                // Return as string if not valid JSON
-                                Some(serde_json::Value::String(data_str.trim_end_matches('\0').to_string()))
-                            }
-                        }
-                        Err(_) => None,
-                    }
-                } else {
-                    Some(serde_json::json!({
-                        "error_code": return_code,
-                        "message": "Plugin execution failed"
-                    }))
-                };
+                // Read output data from WASM memory
+                let output_data = self.read_output_from_wasm(memory, store, return_code)?;
                 
                 Ok(PluginResult {
                     success: return_code == 0,
@@ -393,10 +438,11 @@ impl WasmPlugin {
                     error: if return_code == 0 { None } else { Some(format!("Plugin returned error code: {}", return_code)) },
                     metrics: crate::plugin::PluginMetrics {
                         execution_time_ms: execution_time,
-                        memory_usage_bytes: memory.size(&mut store) * 65536,
+                        memory_usage_bytes: memory.size(store) * 65536,
                         custom_metrics: {
                             let mut custom = HashMap::new();
                             custom.insert("fuel_consumed".to_string(), serde_json::Value::Number(serde_json::Number::from(store.fuel_consumed().unwrap_or(0))));
+                            custom.insert("return_code".to_string(), serde_json::Value::Number(serde_json::Number::from(return_code)));
                             custom
                         },
                     },
@@ -406,6 +452,8 @@ impl WasmPlugin {
                 // Handle execution errors (including fuel exhaustion)
                 let error_msg = if e.is::<Trap>() && e.to_string().contains("all fuel consumed") {
                     "Plugin execution timed out".to_string()
+                } else if e.is::<Trap>()() && e.to_string().contains("out of bounds memory access") {
+                    "Plugin memory access violation".to_string()
                 } else {
                     format!("Plugin execution failed: {}", e)
                 };
@@ -416,11 +464,76 @@ impl WasmPlugin {
                     error: Some(error_msg),
                     metrics: crate::plugin::PluginMetrics {
                         execution_time_ms: execution_time,
-                        memory_usage_bytes: memory.size(&mut store) * 65536,
+                        memory_usage_bytes: memory.size(store) * 65536,
                         custom_metrics: HashMap::new(),
                     },
                 })
             }
+        }
+    }
+    
+    /// Read output data from WASM memory based on return code
+    fn read_output_from_wasm(
+        &self,
+        memory: &Memory,
+        store: &mut Store<WasmContext>,
+        return_code: i32,
+    ) -> Result<Option<serde_json::Value>> {
+        if return_code == 0 {
+            // Try to get output from a result buffer
+            // First try to call a get_output function if available
+            if let Ok(instance) = &self.instance {
+                if let Ok(get_output_func) = instance.get_typed_func::<(i32, i32), i32>(store, "get_output") {
+                    // Call get_output with buffer info
+                    let output_ptr = 0x2000;
+                    let output_len = 4096;
+                    
+                    match get_output_func.call(store, (output_ptr, output_len)) {
+                        Ok(actual_len) if actual_len > 0 => {
+                            // Read the actual output data
+                            let read_len = std::cmp::min(actual_len as usize, output_len as usize);
+                            match Self::read_memory(memory, output_ptr, read_len as i32) {
+                                Ok(data) => {
+                                    let data_str = String::from_utf8_lossy(&data[..read_len]);
+                                    if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(&data_str) {
+                                        return Ok(Some(json_value));
+                                    } else {
+                                        return Ok(Some(serde_json::Value::String(data_str.trim_end_matches('\0').to_string())));
+                                    }
+                                }
+                                Err(_) => return Ok(None),
+                            }
+                        }
+                        _ => return Ok(None),
+                    }
+                }
+            }
+            
+            // Fallback: try to read from fixed output location
+            let output_ptr = 0x2000;
+            let output_len = 4096;
+            
+            match Self::read_memory(memory, output_ptr, output_len) {
+                Ok(data) => {
+                    // Find null terminator or use full length
+                    let actual_len = data.iter().position(|&b| b == 0).unwrap_or(data.len());
+                    let data_str = String::from_utf8_lossy(&data[..actual_len]);
+                    
+                    if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(&data_str) {
+                        Some(json_value)
+                    } else if !data_str.trim().is_empty() {
+                        Some(serde_json::Value::String(data_str.trim().to_string()))
+                    } else {
+                        None
+                    }
+                }
+                Err(_) => None,
+            }
+        } else {
+            Some(serde_json::json!({
+                "error_code": return_code,
+                "message": "Plugin execution failed"
+            }))
         }
     }
 }

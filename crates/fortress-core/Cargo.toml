@@ -109,6 +109,9 @@ urlencoding = "2.1"
 # Memory management
 bytes = { version = "1.5", features = ["serde"] }
 
+# LRU cache for barrier pattern
+lru = "0.12"
+
 # HSM and PKCS#11 support
 # pkcs11 = { version = "0.5", optional = true }  # Commented out to use mock implementation
 aws-sdk-cloudhsmv2 = { version = "0.28", optional = true }
@@ -180,6 +183,7 @@ advanced-profiling = ["performance-optimization", "pprof", "tracing-subscriber"]
 monitoring = ["performance-optimization", "metrics-exporter-prometheus"]
 full-performance = ["performance-optimization", "distributed-cache", "advanced-profiling", "monitoring"]
 observability = ["tracing-subscriber", "opentelemetry", "opentelemetry_sdk", "tracing-opentelemetry", "gethostname"]
+experimental = []  # Experimental features including homomorphic encryption
 
 [[bench]]
 name = "encryption_bench"

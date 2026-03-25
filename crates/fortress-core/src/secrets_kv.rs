@@ -95,26 +95,47 @@ pub struct VersionedSecret {
     pub encryption_nonce: Option<String>,
 }
 
-/// KV secrets engine implementation
+/// KV secrets engine implementation with Barrier pattern
 #[derive(Debug)]
 pub struct KvEngine {
     /// Engine configuration
     config: Arc<RwLock<KvConfig>>,
-    /// Secret storage by path (in-memory cache)
-    secrets: Arc<RwLock<HashMap<String, KvSecretEntry>>>,
+    /// Secret metadata cache only (full data stored in backend)
+    secret_metadata: Arc<RwLock<HashMap<String, KvSecretMetadata>>>,
     /// Lease management
     leases: Arc<RwLock<HashMap<String, LeaseInfo>>>,
     /// Statistics
     stats: Arc<RwLock<EngineStats>>,
-    /// Storage backend for persistence
+    /// Storage backend for persistence (the actual data store)
     storage: Arc<dyn StorageBackend>,
-    /// Encryption algorithm
+    /// Encryption algorithm (the Barrier)
     encryption: Arc<Box<dyn EncryptionAlgorithm>>,
     /// Master encryption key
     master_key: Arc<RwLock<Vec<u8>>>,
+    /// Simple cache for frequently accessed encrypted data
+    barrier_cache: Arc<RwLock<HashMap<String, Vec<u8>>>>,
 }
 
-/// KV secret entry with version history
+/// Lightweight metadata for secrets (stored in memory, full data encrypted at rest)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KvSecretMetadata {
+    /// Path to the secret
+    pub path: String,
+    /// Current version number
+    pub current_version: u64,
+    /// Next version number
+    pub next_version: u64,
+    /// Creation timestamp
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    /// Last updated timestamp
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+    /// Number of versions
+    pub version_count: u64,
+    /// Whether this secret is encrypted at rest
+    pub encrypted_at_rest: bool,
+}
+
+/// KV secret entry with version history (stored encrypted in backend)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct KvSecretEntry {
     /// Path to the secret
@@ -123,7 +144,7 @@ struct KvSecretEntry {
     versions: HashMap<u64, VersionedSecret>,
     /// Current version
     current_version: u64,
-    /// Next version number
+    /// Next version
     next_version: u64,
 }
 
@@ -174,7 +195,7 @@ impl KvEngine {
 
         Self {
             config: Arc::new(RwLock::new(config)),
-            secrets: Arc::new(RwLock::new(HashMap::new())),
+            secret_metadata: Arc::new(RwLock::new(HashMap::new())),
             leases: Arc::new(RwLock::new(HashMap::new())),
             stats: Arc::new(RwLock::new(EngineStats {
                 total_secrets: 0,
@@ -185,6 +206,7 @@ impl KvEngine {
             storage,
             encryption: Arc::new(Box::new(Aegis256::new())),
             master_key: Arc::new(RwLock::new(master_key)),
+            barrier_cache: Arc::new(RwLock::new(HashMap::new())), // Simple HashMap cache
         }
     }
 
@@ -196,41 +218,178 @@ impl KvEngine {
         key
     }
 
-    /// Encrypt secret data if encryption is enabled
-    async fn encrypt_secret_data(&self, data: &serde_json::Value) -> Result<(serde_json::Value, String)> {
+    /// Barrier: Encrypt and serialize secret data for storage
+    async fn barrier_encrypt_and_serialize(&self, data: &serde_json::Value) -> Result<Vec<u8>> {
         let config = self.config.read().await;
         
         if !config.encryption_at_rest {
-            return Ok((data.clone(), String::new()));
+            // If encryption disabled, just serialize
+            return serde_json::to_vec(data)
+                .map_err(|e| FortressError::secrets(format!("Failed to serialize secret data: {}", e)));
         }
         
         let master_key = self.master_key.read().await;
+        
+        // Serialize the data first
         let data_bytes = serde_json::to_vec(data)
             .map_err(|e| FortressError::secrets(format!("Failed to serialize secret data: {}", e)))?;
         
-        // Generate nonce
-        let nonce = Self::generate_nonce();
-        let nonce_bytes = base64::engine::general_purpose::STANDARD.decode(&nonce)
-            .map_err(|e| FortressError::secrets(format!("Failed to decode nonce: {}", e)))?;
-        
-        // Encrypt data
-        let mut encrypted_data = self.encryption.encrypt(&data_bytes, &master_key)
+        // Apply the Barrier: encrypt the serialized data
+        let encrypted_data = self.encryption.encrypt(&data_bytes, &master_key)
             .map_err(|e| FortressError::secrets(format!("Failed to encrypt secret data: {}", e)))?;
         
-        // Add nonce to encrypted data
-        encrypted_data.extend_from_slice(&nonce_bytes);
-        
-        // Return as base64 JSON value
-        let encrypted_b64 = base64::engine::general_purpose::STANDARD.encode(&encrypted_data);
-        let encrypted_json = serde_json::json!({
-            "encrypted": true,
-            "data": encrypted_b64
-        });
-        
-        Ok((encrypted_json, nonce))
+        Ok(encrypted_data)
     }
 
-    /// Decrypt secret data
+    /// Barrier: Decrypt and deserialize secret data from storage
+    async fn barrier_decrypt_and_deserialize(&self, encrypted_data: &[u8]) -> Result<serde_json::Value> {
+        let config = self.config.read().await;
+        
+        if !config.encryption_at_rest {
+            // If encryption disabled, just deserialize
+            return serde_json::from_slice(encrypted_data)
+                .map_err(|e| FortressError::secrets(format!("Failed to deserialize secret data: {}", e)));
+        }
+        
+        let master_key = self.master_key.read().await;
+        
+        // Apply the Barrier: decrypt the data
+        let decrypted_bytes = self.encryption.decrypt(encrypted_data, &master_key)
+            .map_err(|e| FortressError::secrets(format!("Failed to decrypt secret data: {}", e)))?;
+        
+        // Deserialize the decrypted data
+        let decrypted_json: serde_json::Value = serde_json::from_slice(&decrypted_bytes)
+            .map_err(|e| FortressError::secrets(format!("Failed to deserialize decrypted data: {}", e)))?;
+        
+        Ok(decrypted_json)
+    }
+
+    /// Store encrypted secret data using the Barrier pattern
+    async fn barrier_store_secret(&self, path: &str, entry: &KvSecretEntry) -> Result<()> {
+        // Serialize the complete secret entry
+        let serialized_entry = serde_json::to_vec(entry)
+            .map_err(|e| FortressError::secrets(format!("Failed to serialize secret entry: {}", e)))?;
+        
+        // Apply Barrier: encrypt the serialized entry
+        let master_key = self.master_key.read().await;
+        let encrypted_entry = self.encryption.encrypt(&serialized_entry, &master_key)
+            .map_err(|e| FortressError::secrets(format!("Failed to encrypt secret entry: {}", e)))?;
+        
+        // Store encrypted data in backend
+        let storage_key = format!("kv/secrets/{}", path);
+        self.storage.put(&storage_key, &encrypted_entry).await
+            .map_err(|e| FortressError::secrets(format!("Failed to store encrypted secret: {}", e)))?;
+        
+        // Update cache with encrypted data
+        {
+            let mut cache = self.barrier_cache.write().await;
+            cache.insert(path.to_string(), encrypted_entry);
+        }
+        
+        Ok(())
+    }
+
+    /// Load and decrypt secret data using the Barrier pattern
+    async fn barrier_load_secret(&self, path: &str) -> Result<Option<KvSecretEntry>> {
+        // Check cache first
+        let cache_key = path.to_string();
+        let maybe_cached_data = {
+            let cache = self.barrier_cache.read().await;
+            cache.get(&cache_key).cloned()
+        };
+        
+        if let Some(encrypted_data) = maybe_cached_data {
+            // Decrypt cached data
+            let master_key = self.master_key.read().await;
+            let decrypted_data = self.encryption.decrypt(&encrypted_data, &master_key)
+                .map_err(|e| FortressError::secrets(format!("Failed to decrypt cached secret: {}", e)))?;
+            
+            let entry: KvSecretEntry = serde_json::from_slice(&decrypted_data)
+                .map_err(|e| FortressError::secrets(format!("Failed to deserialize cached secret: {}", e)))?;
+            return Ok(Some(entry));
+        }
+        
+        // Load from storage backend
+        let storage_key = format!("kv/secrets/{}", path);
+        
+        if let Some(encrypted_data) = self.storage.get(&storage_key).await
+            .map_err(|e| FortressError::secrets(format!("Failed to load secret from storage: {}", e)))? {
+            
+            // Apply Barrier: decrypt the data
+            let master_key = self.master_key.read().await;
+            let decrypted_data = self.encryption.decrypt(&encrypted_data, &master_key)
+                .map_err(|e| FortressError::secrets(format!("Failed to decrypt secret data: {}", e)))?;
+            
+            // Deserialize the decrypted entry
+            let entry: KvSecretEntry = serde_json::from_slice(&decrypted_data)
+                .map_err(|e| FortressError::secrets(format!("Failed to deserialize secret entry: {}", e)))?;
+            
+            // Update cache
+            {
+                let mut cache = self.barrier_cache.write().await;
+                cache.insert(path.to_string(), encrypted_data);
+            }
+            
+            Ok(Some(entry))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Initialize metadata from storage on startup using Barrier pattern
+    pub async fn initialize_from_storage(&self) -> Result<()> {
+        let prefix = "kv/secrets/";
+        let keys = self.storage.list_prefix(prefix).await
+            .map_err(|e| FortressError::secrets(format!("Failed to list secrets from storage: {}", e)))?;
+        
+        let mut metadata = self.secret_metadata.write().await;
+        let mut loaded_count = 0;
+        
+        for key in keys {
+            // Extract path from storage key
+            let path = match key.strip_prefix(prefix) {
+                Some(p) => p,
+                None => continue,
+            };
+            
+            // Load and decrypt secret entry using Barrier
+            if let Ok(Some(entry)) = self.barrier_load_secret(path).await {
+                // Create lightweight metadata for memory cache
+                let secret_metadata = KvSecretMetadata {
+                    path: path.to_string(),
+                    current_version: entry.current_version,
+                    next_version: entry.next_version,
+                    created_at: entry.versions.values()
+                        .min_by_key(|v| v.created_at)
+                        .map(|v| v.created_at)
+                        .unwrap_or_else(|| chrono::Utc::now()),
+                    updated_at: entry.versions.values()
+                        .max_by_key(|v| v.created_at)
+                        .map(|v| v.created_at)
+                        .unwrap_or_else(|| chrono::Utc::now()),
+                    version_count: entry.versions.len() as u64,
+                    encrypted_at_rest: self.config.read().await.encryption_at_rest,
+                };
+                
+                metadata.insert(path.to_string(), secret_metadata);
+                loaded_count += 1;
+            }
+        }
+        
+        // Update stats
+        {
+            let mut stats = self.stats.write().await;
+            stats.total_secrets = metadata.len() as u64;
+        }
+        
+        if loaded_count > 0 {
+            log::info!("Loaded {} secret metadata from encrypted storage", loaded_count);
+        }
+        
+        Ok(())
+    }
+
+    /// Decrypt secret data (backward compatibility method)
     async fn decrypt_secret_data(&self, encrypted_data: &serde_json::Value, nonce: &str) -> Result<serde_json::Value> {
         let config = self.config.read().await;
         
@@ -268,160 +427,100 @@ impl KvEngine {
         Ok(decrypted_json)
     }
 
-    /// Generate encryption nonce
-    fn generate_nonce() -> String {
-        use rand::RngCore;
-        let mut nonce = vec![0u8; 12]; // 96-bit nonce for AEGIS-256
-        rand::thread_rng().fill_bytes(&mut nonce);
-        base64::engine::general_purpose::STANDARD.encode(&nonce)
-    }
-
-    /// Persist secret to storage backend
-    async fn persist_secret(&self, path: &str, entry: &KvSecretEntry) -> Result<()> {
-        let serialized = serde_json::to_vec(entry)
-            .map_err(|e| FortressError::secrets(format!("Failed to serialize secret entry: {}", e)))?;
-        
-        let storage_key = format!("kv/secrets/{}", path);
-        self.storage.put(&storage_key, &serialized).await
-            .map_err(|e| FortressError::secrets(format!("Failed to persist secret: {}", e)))?;
-        
-        Ok(())
-    }
-
-    /// Load secret from storage backend
-    async fn load_secret(&self, path: &str) -> Result<Option<KvSecretEntry>> {
-        let storage_key = format!("kv/secrets/{}", path);
-        
-        if let Some(data) = self.storage.get(&storage_key).await
-            .map_err(|e| FortressError::secrets(format!("Failed to load secret: {}", e)))? {
-            let entry: KvSecretEntry = serde_json::from_slice(&data)
-                .map_err(|e| FortressError::secrets(format!("Failed to deserialize secret entry: {}", e)))?;
-            Ok(Some(entry))
-        } else {
-            Ok(None)
-        }
-    }
-
-    /// Initialize secrets from storage on startup
-    pub async fn initialize_from_storage(&self) -> Result<()> {
-        let prefix = "kv/secrets/";
-        let keys = self.storage.list_prefix(prefix).await
-            .map_err(|e| FortressError::secrets(format!("Failed to list secrets from storage: {}", e)))?;
-        
-        let mut secrets = self.secrets.write().await;
-        let mut loaded_count = 0;
-        
-        for key in keys {
-            if let Some(data) = self.storage.get(&key).await
-                .map_err(|e| FortressError::secrets(format!("Failed to load secret {}: {}", key, e)))? {
-                if let Ok(entry) = serde_json::from_slice::<KvSecretEntry>(&data) {
-                    let path = key.strip_prefix(prefix).unwrap_or(&key);
-                    secrets.insert(path.to_string(), entry);
-                    loaded_count += 1;
-                }
-            }
-        }
-        
-        // Update stats
-        {
-            let mut stats = self.stats.write().await;
-            stats.total_secrets = secrets.len() as u64;
-        }
-        
-        if loaded_count > 0 {
-            log::info!("Loaded {} secrets from persistent storage", loaded_count);
-        }
-        
-        Ok(())
-    }
-
-    /// Read a specific version of a secret
+    /// Read a specific version of a secret using Barrier pattern
     pub async fn read_version(&self, path: &str, version: u64) -> Result<Option<Secret>> {
         self.record_operation("read_version").await;
         
-        // Try to load from storage if not in memory
-        let secrets = self.secrets.read().await;
-        if !secrets.contains_key(path) {
-            drop(secrets);
-            if let Ok(Some(entry)) = self.load_secret(path).await {
-                let mut secrets = self.secrets.write().await;
-                secrets.insert(path.to_string(), entry);
-            }
-        }
+        // Load full secret entry using Barrier (decrypts from storage)
+        let entry = match self.barrier_load_secret(path).await? {
+            Some(entry) => entry,
+            None => return Ok(None),
+        };
         
-        let secrets = self.secrets.read().await;
         let leases = self.leases.read().await;
         
-        if let Some(entry) = secrets.get(path) {
-            if let Some(versioned) = entry.versions.get(&version) {
-                let lease_id = format!("kv:{}:{}", path, version);
-                let lease = leases.get(&lease_id).cloned();
-                
-                // Decrypt data if needed
-                let decrypted_data = if versioned.is_encrypted {
-                    let nonce = versioned.encryption_nonce.as_ref()
-                        .ok_or_else(|| FortressError::secrets("Missing encryption nonce".to_string()))?;
+        if let Some(versioned) = entry.versions.get(&version) {
+            let lease_id = format!("kv:{}:{}", path, version);
+            let lease = leases.get(&lease_id).cloned();
+            
+            // Decrypt data using Barrier if needed
+            let decrypted_data = if versioned.is_encrypted {
+                // For backward compatibility, handle old encrypted format
+                if let Some(nonce) = &versioned.encryption_nonce {
                     self.decrypt_secret_data(&versioned.data, nonce).await?
                 } else {
+                    // Data should already be decrypted by Barrier
                     versioned.data.clone()
-                };
-                
-                let secret = Secret {
-                    data: decrypted_data,
-                    metadata: SecretMetadata {
-                        version: versioned.version,
-                        created_at: versioned.created_at,
-                        updated_at: None,
-                        lease,
-                        custom: versioned.custom_metadata.clone(),
-                    },
-                };
-                
-                Ok(Some(secret))
+                }
             } else {
-                Ok(None)
-            }
+                versioned.data.clone()
+            };
+            
+            let secret = Secret {
+                data: decrypted_data,
+                metadata: SecretMetadata {
+                    version: versioned.version,
+                    created_at: versioned.created_at,
+                    updated_at: None,
+                    lease,
+                    custom: versioned.custom_metadata.clone(),
+                },
+            };
+            
+            Ok(Some(secret))
         } else {
             Ok(None)
         }
     }
 
-    /// Get all versions of a secret
+    /// Get all versions of a secret using Barrier pattern
     pub async fn list_versions(&self, path: &str) -> Result<Vec<u64>> {
-        let secrets = self.secrets.read().await;
-        
-        if let Some(entry) = secrets.get(path) {
-            let mut versions: Vec<u64> = entry.versions.keys().cloned().collect();
-            versions.sort();
-            Ok(versions)
-        } else {
-            Ok(vec![])
+        // Load full secret entry using Barrier
+        match self.barrier_load_secret(path).await? {
+            Some(entry) => {
+                let mut versions: Vec<u64> = entry.versions.keys().cloned().collect();
+                versions.sort();
+                Ok(versions)
+            },
+            None => Ok(vec![])
         }
     }
 
-    /// Delete a specific version
+    /// Delete a specific version using Barrier pattern
     pub async fn delete_version(&self, path: &str, version: u64) -> Result<()> {
         self.record_operation("delete_version").await;
         
-        let mut secrets = self.secrets.write().await;
+        // Load full secret entry using Barrier
+        let mut entry = match self.barrier_load_secret(path).await? {
+            Some(entry) => entry,
+            None => return Err(FortressError::secrets("Secret not found".to_string())),
+        };
         
-        if let Some(entry) = secrets.get_mut(path) {
-            if let Some(versioned) = entry.versions.get_mut(&version) {
-                versioned.deleted_at = Some(chrono::Utc::now());
-                Ok(())
-            } else {
-                Err(FortressError::secrets("Version not found".to_string()))
+        if let Some(versioned) = entry.versions.get_mut(&version) {
+            versioned.deleted_at = Some(chrono::Utc::now());
+            
+            // Store updated entry using Barrier
+            self.barrier_store_secret(path, &entry).await?;
+            
+            // Update metadata
+            {
+                let mut metadata = self.secret_metadata.write().await;
+                if let Some(meta) = metadata.get_mut(path) {
+                    meta.updated_at = chrono::Utc::now();
+                    meta.version_count = entry.versions.len() as u64;
+                }
             }
+            
+            Ok(())
         } else {
-            Err(FortressError::secrets("Secret not found".to_string()))
+            Err(FortressError::secrets("Version not found".to_string()))
         }
     }
 
-    /// Permanently destroy a secret and all versions
+    /// Permanently destroy a secret and all versions using Barrier pattern
     pub async fn destroy(&self, path: &str) -> Result<()> {
         self.record_operation("destroy").await;
         
-        let mut secrets = self.secrets.write().await;
         let mut leases = self.leases.write().await;
         
         // Remove all leases for this path
@@ -434,8 +533,29 @@ impl KvEngine {
             leases.remove(&lease_id);
         }
         
-        // Remove the secret entry
-        secrets.remove(path);
+        // Remove from encrypted storage
+        let storage_key = format!("kv/secrets/{}", path);
+        self.storage.delete(&storage_key).await
+            .map_err(|e| FortressError::secrets(format!("Failed to delete secret from storage: {}", e)))?;
+        
+        // Remove from cache
+        {
+            let mut cache = self.barrier_cache.write().await;
+            cache.remove(path);
+        }
+        
+        // Remove from metadata
+        {
+            let mut metadata = self.secret_metadata.write().await;
+            metadata.remove(path);
+        }
+        
+        // Update stats
+        {
+            let mut stats = self.stats.write().await;
+            stats.total_secrets = self.secret_metadata.read().await.len() as u64;
+            stats.active_leases = leases.len() as u64;
+        }
         
         Ok(())
     }
@@ -481,7 +601,7 @@ impl KvEngine {
         }
     }
 
-    /// Cleanup old versions based on configuration
+    /// Cleanup old versions based on configuration using Barrier pattern
     async fn cleanup_old_versions(&self, entry: &mut KvSecretEntry) {
         let config = self.config.read().await;
         
@@ -511,46 +631,65 @@ impl SecretsEngine for KvEngine {
     async fn write(&self, path: &str, data: &serde_json::Value) -> Result<Secret> {
         self.record_operation("write").await;
         
-        let mut secrets = self.secrets.write().await;
         let config = self.config.read().await;
         
-        let entry = secrets.entry(path.to_string()).or_insert_with(|| KvSecretEntry {
-            path: path.to_string(),
-            versions: HashMap::new(),
-            current_version: 0,
-            next_version: 1,
-        });
+        // Load existing entry or create new one using Barrier
+        let mut entry = match self.barrier_load_secret(path).await? {
+            Some(entry) => entry,
+            None => KvSecretEntry {
+                path: path.to_string(),
+                versions: HashMap::new(),
+                current_version: 0,
+                next_version: 1,
+            },
+        };
         
         let version = entry.next_version;
         entry.next_version += 1;
         entry.current_version = version;
         
-        // Encrypt data if needed
-        let (encrypted_data, nonce) = self.encrypt_secret_data(data).await?;
-        
+        // Create versioned secret with Barrier encryption
         let versioned = VersionedSecret {
-            data: encrypted_data,
+            data: data.clone(), // Store as-is (Barrier handles encryption at storage level)
             version,
             created_at: chrono::Utc::now(),
             deleted_at: None,
             custom_metadata: HashMap::new(),
-            is_encrypted: config.encryption_at_rest,
-            encryption_nonce: if config.encryption_at_rest { Some(nonce) } else { None },
+            is_encrypted: config.encryption_at_rest, // Mark as encrypted for backward compatibility
+            encryption_nonce: None, // Barrier handles nonce internally
         };
         
         entry.versions.insert(version, versioned);
         
         // Cleanup old versions if needed
         drop(config);
-        self.cleanup_old_versions(entry).await;
+        self.cleanup_old_versions(&mut entry).await;
         
-        // Persist to storage
-        self.persist_secret(path, entry).await?;
+        // Store using Barrier (encrypts and serializes)
+        self.barrier_store_secret(path, &entry).await?;
+        
+        // Update metadata cache
+        {
+            let mut metadata = self.secret_metadata.write().await;
+            let secret_metadata = KvSecretMetadata {
+                path: path.to_string(),
+                current_version: entry.current_version,
+                next_version: entry.next_version,
+                created_at: entry.versions.values()
+                    .min_by_key(|v| v.created_at)
+                    .map(|v| v.created_at)
+                    .unwrap_or_else(|| chrono::Utc::now()),
+                updated_at: chrono::Utc::now(),
+                version_count: entry.versions.len() as u64,
+                encrypted_at_rest: self.config.read().await.encryption_at_rest,
+            };
+            metadata.insert(path.to_string(), secret_metadata);
+        }
         
         // Update stats
         {
             let mut stats = self.stats.write().await;
-            stats.total_secrets = secrets.len() as u64;
+            stats.total_secrets = self.secret_metadata.read().await.len() as u64;
         }
         
         // Create lease if configured
@@ -571,57 +710,39 @@ impl SecretsEngine for KvEngine {
     async fn read(&self, path: &str) -> Result<Option<Secret>> {
         self.record_operation("read").await;
         
-        // Try to load from storage if not in memory
-        let secrets = self.secrets.read().await;
-        if !secrets.contains_key(path) {
-            drop(secrets);
-            if let Ok(Some(entry)) = self.load_secret(path).await {
-                let mut secrets = self.secrets.write().await;
-                secrets.insert(path.to_string(), entry);
-            }
-        }
-        
-        let secrets = self.secrets.read().await;
-        
-        if let Some(entry) = secrets.get(path) {
-            if let Some(versioned) = entry.versions.get(&entry.current_version) {
-                let lease_id = self.generate_lease_id(path, versioned.version);
-                let lease = {
-                    let leases = self.leases.read().await;
-                    leases.get(&lease_id).cloned()
-                };
+        // Load full secret entry using Barrier
+        match self.barrier_load_secret(path).await? {
+            Some(entry) => {
+                let leases = self.leases.read().await;
                 
-                // Decrypt data if needed
-                let decrypted_data = if versioned.is_encrypted {
-                    let nonce = versioned.encryption_nonce.as_ref()
-                        .ok_or_else(|| FortressError::secrets("Missing encryption nonce".to_string()))?;
-                    self.decrypt_secret_data(&versioned.data, nonce).await?
+                if let Some(versioned) = entry.versions.get(&entry.current_version) {
+                    let lease_id = self.generate_lease_id(path, versioned.version);
+                    let lease = leases.get(&lease_id).cloned();
+                    
+                    // Data is already decrypted by Barrier
+                    let decrypted_data = versioned.data.clone();
+                    
+                    Ok(Some(Secret {
+                        data: decrypted_data,
+                        metadata: SecretMetadata {
+                            version: versioned.version,
+                            created_at: versioned.created_at,
+                            updated_at: None,
+                            lease,
+                            custom: versioned.custom_metadata.clone(),
+                        },
+                    }))
                 } else {
-                    versioned.data.clone()
-                };
-                
-                Ok(Some(Secret {
-                    data: decrypted_data,
-                    metadata: SecretMetadata {
-                        version: versioned.version,
-                        created_at: versioned.created_at,
-                        updated_at: None,
-                        lease,
-                        custom: versioned.custom_metadata.clone(),
-                    },
-                }))
-            } else {
-                Ok(None)
-            }
-        } else {
-            Ok(None)
+                    Ok(None)
+                }
+            },
+            None => Ok(None)
         }
     }
 
     async fn delete(&self, path: &str) -> Result<()> {
         self.record_operation("delete").await;
         
-        let mut secrets = self.secrets.write().await;
         let mut leases = self.leases.write().await;
         
         // Remove all leases for this path
@@ -634,18 +755,27 @@ impl SecretsEngine for KvEngine {
             leases.remove(&lease_id);
         }
         
-        // Remove the secret from memory
-        secrets.remove(path);
-        
-        // Remove from persistent storage
+        // Remove from encrypted storage
         let storage_key = format!("kv/secrets/{}", path);
         self.storage.delete(&storage_key).await
             .map_err(|e| FortressError::secrets(format!("Failed to delete secret from storage: {}", e)))?;
         
+        // Remove from cache
+        {
+            let mut cache = self.barrier_cache.write().await;
+            cache.remove(path);
+        }
+        
+        // Remove from metadata
+        {
+            let mut metadata = self.secret_metadata.write().await;
+            metadata.remove(path);
+        }
+        
         // Update stats
         {
             let mut stats = self.stats.write().await;
-            stats.total_secrets = secrets.len() as u64;
+            stats.total_secrets = self.secret_metadata.read().await.len() as u64;
             stats.active_leases = leases.len() as u64;
         }
         
@@ -655,12 +785,12 @@ impl SecretsEngine for KvEngine {
     async fn list(&self, path: &str) -> Result<Vec<String>> {
         self.record_operation("list").await;
         
-        let secrets = self.secrets.read().await;
+        let metadata = self.secret_metadata.read().await;
         let config = self.config.read().await;
         
         let mut results = Vec::new();
         
-        for secret_path in secrets.keys() {
+        for secret_path in metadata.keys() {
             let normalized_path = if config.case_sensitive {
                 secret_path.clone()
             } else {
@@ -734,7 +864,7 @@ impl SecretsEngine for KvEngine {
 
     async fn status(&self) -> Result<EngineStatus> {
         let config = self.config.read().await;
-        let _secrets = self.secrets.read().await;
+        let _metadata = self.secret_metadata.read().await;
         let _leases = self.leases.read().await;
         let stats = self.stats.read().await;
         
