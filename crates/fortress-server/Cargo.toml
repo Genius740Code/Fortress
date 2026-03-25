@@ -62,6 +62,7 @@ prometheus = "0.13"
 
 # Cryptography
 sha2 = "0.10"
+argon2 = "0.5"
 
 # gRPC dependencies (simplified implementation for now)
 # tonic = "0.10"

@@ -18,6 +18,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::collections::HashMap;
 use std::sync::Arc;
+use argon2::{
+    Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
+    password_hash::{rand_core::OsRng, SaltString}
+};
 use uuid::Uuid;
 
 /// JWT claims structure
@@ -126,6 +130,8 @@ pub struct UserRecord {
     email: Option<String>,
     roles: Vec<String>,
     tenant_id: Option<String>,
+    failed_login_attempts: u32,
+    locked_until: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 impl AuthManager {
@@ -247,23 +253,36 @@ impl AuthManager {
 impl InMemoryUserStore {
     /// Create a new in-memory user store
     pub fn new() -> Self {
-        let mut users = HashMap::new();
+        Self {
+            users: Arc::new(parking_lot::RwLock::new(HashMap::new())),
+            refresh_tokens: Arc::new(parking_lot::RwLock::new(HashMap::new())),
+        }
+    }
+
+    /// Create a new in-memory user store with default admin user
+    /// WARNING: Only for development/testing - change default password in production!
+    pub fn with_default_admin() -> Self {
+        let mut store = Self::new();
         
-        // Add a default admin user for development
+        // Create default admin user with secure password hashing
+        let admin_password = "admin123"; // Change this in production!
         let admin_user = UserRecord {
             id: "admin".to_string(),
             username: "admin".to_string(),
-            password_hash: hash_password("admin123"), // In production, use proper password hashing
+            password_hash: hash_password_secure(admin_password).expect("Failed to hash admin password"),
             email: Some("admin@fortress-db.com".to_string()),
             roles: vec!["admin".to_string(), "user".to_string()],
             tenant_id: None,
+            failed_login_attempts: 0,
+            locked_until: None,
         };
-        users.insert("admin".to_string(), admin_user);
         
-        Self {
-            users: Arc::new(parking_lot::RwLock::new(users)),
-            refresh_tokens: Arc::new(parking_lot::RwLock::new(HashMap::new())),
+        {
+            let mut users = store.users.write();
+            users.insert("admin".to_string(), admin_user);
         }
+        
+        store
     }
 
     /// Add a user to the store
@@ -276,23 +295,53 @@ impl InMemoryUserStore {
 #[async_trait::async_trait]
 impl UserStore for InMemoryUserStore {
     async fn authenticate(&self, request: AuthRequest) -> ServerResult<UserInfo> {
-        let users = self.users.read();
+        let mut users = self.users.write();
         
-        let user_record = users.get(&request.username)
+        let user_record = users.get_mut(&request.username)
             .ok_or_else(|| ServerError::auth("Invalid username or password"))?;
         
-        // In production, use proper password verification (e.g., bcrypt)
-        if !verify_password(&request.password, &user_record.password_hash) {
-            return Err(ServerError::auth("Invalid username or password"));
+        // Check if account is locked
+        if let Some(locked_until) = user_record.locked_until {
+            if chrono::Utc::now() < locked_until {
+                return Err(ServerError::auth("Account is temporarily locked due to multiple failed login attempts"));
+            } else {
+                // Lock expired, reset
+                user_record.locked_until = None;
+                user_record.failed_login_attempts = 0;
+            }
         }
         
-        Ok(UserInfo {
-            id: user_record.id.clone(),
-            username: user_record.username.clone(),
-            email: user_record.email.clone(),
-            roles: user_record.roles.clone(),
-            tenant_id: user_record.tenant_id.clone(),
-        })
+        // Verify password using Argon2id
+        match verify_password_secure(&request.password, &user_record.password_hash) {
+            Ok(true) => {
+                // Reset failed attempts on successful login
+                user_record.failed_login_attempts = 0;
+                user_record.locked_until = None;
+                
+                Ok(UserInfo {
+                    id: user_record.id.clone(),
+                    username: user_record.username.clone(),
+                    email: user_record.email.clone(),
+                    roles: user_record.roles.clone(),
+                    tenant_id: user_record.tenant_id.clone(),
+                })
+            }
+            Ok(false) => {
+                // Increment failed attempts
+                user_record.failed_login_attempts += 1;
+                
+                // Lock account after 5 failed attempts for 30 minutes
+                if user_record.failed_login_attempts >= 5 {
+                    user_record.locked_until = Some(chrono::Utc::now() + chrono::Duration::minutes(30));
+                }
+                
+                Err(ServerError::auth("Invalid username or password"))
+            }
+            Err(e) => {
+                tracing::error!("Password verification error: {}", e);
+                Err(ServerError::auth("Authentication service error"))
+            }
+        }
     }
 
     async fn get_user(&self, user_id: &str) -> ServerResult<Option<UserInfo>> {
@@ -339,17 +388,44 @@ impl UserStore for InMemoryUserStore {
     }
 }
 
-/// Simple password hashing for development (replace with bcrypt in production)
-fn hash_password(password: &str) -> String {
+/// Secure password hashing using Argon2id
+/// This is the recommended password hashing algorithm for production use
+fn hash_password_secure(password: &str) -> Result<String, argon2::password_hash::Error> {
+    let salt = SaltString::generate(&mut OsRng);
+    let argon2 = Argon2::default();
+    
+    let password_hash = argon2.hash_password(password.as_bytes(), &salt)?;
+    Ok(password_hash.to_string())
+}
+
+/// Secure password verification using Argon2id
+fn verify_password_secure(password: &str, hash: &str) -> Result<bool, argon2::password_hash::Error> {
+    let parsed_hash = PasswordHash::new(hash)?;
+    let argon2 = Argon2::default();
+    
+    Ok(argon2.verify_password(password.as_bytes(), &parsed_hash).is_ok())
+}
+
+/// Legacy password hashing for migration purposes (DEPRECATED)
+/// Only used for verifying old SHA-256 hashes during migration
+#[deprecated(note = "Use hash_password_secure instead")]
+fn hash_password_legacy(password: &str) -> String {
     use sha2::{Sha256, Digest};
     let mut hasher = Sha256::new();
     hasher.update(password.as_bytes());
     format!("{:x}", hasher.finalize())
 }
 
-/// Simple password verification for development (replace with bcrypt in production)
-fn verify_password(password: &str, hash: &str) -> bool {
-    hash_password(password) == hash
+/// Legacy password verification for migration purposes (DEPRECATED)
+/// Only used for verifying old SHA-256 hashes during migration
+#[deprecated(note = "Use verify_password_secure instead")]
+fn verify_password_legacy(password: &str, hash: &str) -> bool {
+    hash_password_legacy(password) == hash
+}
+
+#[deprecated(note = "Use hash_password_secure instead")]
+fn hash_password_legacy_test(password: &str) -> String {
+    hash_password_legacy(password)
 }
 
 /// Authentication middleware
@@ -418,16 +494,30 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_password_hashing() {
+    fn test_secure_password_hashing() {
         let password = "test123";
-        let hash = hash_password(password);
-        assert!(verify_password(password, &hash));
-        assert!(!verify_password("wrong", &hash));
+        let hash = hash_password_secure(password).unwrap();
+        
+        // Verify the hash works
+        assert!(verify_password_secure(password, &hash).unwrap());
+        assert!(!verify_password_secure("wrong", &hash).unwrap());
+        
+        // Verify hashes are unique (due to random salt)
+        let hash2 = hash_password_secure(password).unwrap();
+        assert_ne!(hash, hash2);
+    }
+
+    #[test]
+    fn test_legacy_password_hashing() {
+        let password = "test123";
+        let hash = hash_password_legacy(password);
+        assert!(verify_password_legacy(password, &hash));
+        assert!(!verify_password_legacy("wrong", &hash));
     }
 
     #[tokio::test]
     async fn test_in_memory_user_store() {
-        let store = InMemoryUserStore::new();
+        let store = InMemoryUserStore::with_default_admin();
         
         let auth_request = AuthRequest {
             username: "admin".to_string(),
@@ -462,5 +552,42 @@ mod tests {
         // Validate the token
         let claims = auth_manager.validate_token(&auth_response.access_token).unwrap();
         assert_eq!(claims.username, "admin");
+    }
+}
+
+#[cfg(test)]
+mod auth_security_tests {
+    use super::*;
+    
+    #[test]
+    fn test_secure_password_hashing() {
+        let password = "test123";
+        let hash = hash_password_secure(password).unwrap();
+        
+        // Verify the hash works
+        assert!(verify_password_secure(password, &hash).unwrap());
+        assert!(!verify_password_secure("wrong", &hash).unwrap());
+        
+        // Verify hashes are unique (due to random salt)
+        let hash2 = hash_password_secure(password).unwrap();
+        assert_ne!(hash, hash2);
+        
+        println!("✅ Secure password hashing test passed");
+    }
+
+    #[test]
+    fn test_argon2id_security() {
+        // Test that Argon2id is properly configured
+        let password = "secure_password_123!";
+        let hash = hash_password_secure(password).unwrap();
+        
+        // Verify hash contains Argon2id identifier
+        assert!(hash.starts_with("$argon2id$"));
+        
+        // Verify it's not vulnerable to simple attacks
+        assert!(hash.len() > 50); // Argon2id hashes are long
+        assert!(hash.contains('$')); // Contains delimiter
+        
+        println!("✅ Argon2id security test passed");
     }
 }

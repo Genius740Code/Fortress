@@ -13,6 +13,10 @@ use jsonwebtoken::{encode, decode, Validation, Algorithm, Header, DecodingKey, E
 use uuid::Uuid;
 use regex::Regex;
 use once_cell::sync::Lazy;
+use argon2::{
+    Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
+    password_hash::{rand_core::OsRng, SaltString}
+};
 
 /// JWT token claims structure
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -443,14 +447,49 @@ impl AuthManager {
                 .extend_with(|_, e| e.set("code", "TOKEN_GENERATION_FAILED")))
     }
 
-    /// Verify password (simplified implementation)
+    /// Verify password using Argon2id
     fn verify_password(&self, password: &str, user: &AuthenticatedUser) -> Result<bool> {
-        // In a real implementation, this would use bcrypt or Argon2
-        // For demo purposes, we'll use a simple hash comparison
-        let password_hash = md5::compute(password.as_bytes());
-        let stored_hash = user.metadata.get("password_hash").and_then(|v| v.as_str()).unwrap_or("");
+        // Get stored password hash from user metadata
+        let stored_hash = user.metadata.get("password_hash")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| Error::new("Password hash not found")
+                .extend_with(|_, e| e.set("code", "PASSWORD_HASH_MISSING")))?;
         
-        Ok(password_hash == stored_hash)
+        // Verify using Argon2id
+        match verify_password_secure(password, stored_hash) {
+            Ok(is_valid) => Ok(is_valid),
+            Err(e) => {
+                tracing::error!("Password verification error: {}", e);
+                Err(Error::new("Password verification failed")
+                    .extend_with(|_, e| e.set("code", "PASSWORD_VERIFICATION_ERROR")))
+            }
+        }
+    }
+
+    /// Create a new user with secure password hashing
+    pub async fn create_user(&self, username: &str, password: &str, email: &str, roles: Vec<String>) -> Result<AuthenticatedUser> {
+        let user_id = Uuid::new_v4().to_string();
+        let password_hash = hash_password_secure(password)
+            .map_err(|e| Error::new(format!("Failed to hash password: {}", e))
+                .extend_with(|_, e| e.set("code", "PASSWORD_HASHING_FAILED")))?;
+        
+        let user = AuthenticatedUser {
+            id: user_id.clone(),
+            username: username.to_string(),
+            email: email.to_string(),
+            roles,
+            permissions: vec![],
+            tenant_id: None,
+            session_id: String::new(),
+            last_login: None,
+            device_id: None,
+            metadata: serde_json::json!({
+                "password_hash": password_hash
+            }),
+        };
+        
+        self.upsert_user(user.clone()).await?;
+        Ok(user)
     }
 
     /// Generate device fingerprint
@@ -594,18 +633,21 @@ pub struct SessionStats {
     pub max_sessions_per_user: usize,
 }
 
-/// Simple MD5 implementation for demo purposes
-mod md5 {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-    use hex;
+/// Secure password hashing using Argon2id
+fn hash_password_secure(password: &str) -> Result<String, argon2::password_hash::Error> {
+    let salt = SaltString::generate(&mut OsRng);
+    let argon2 = Argon2::default();
+    
+    let password_hash = argon2.hash_password(password.as_bytes(), &salt)?;
+    Ok(password_hash.to_string())
+}
 
-    pub fn compute(data: &[u8]) -> String {
-        let mut hasher = DefaultHasher::new();
-        data.hash(&mut hasher);
-        let hash_value = hasher.finish();
-        format!("{:x}", hash_value)
-    }
+/// Secure password verification using Argon2id
+fn verify_password_secure(password: &str, hash: &str) -> Result<bool, argon2::password_hash::Error> {
+    let parsed_hash = PasswordHash::new(hash)?;
+    let argon2 = Argon2::default();
+    
+    Ok(argon2.verify_password(password.as_bytes(), &parsed_hash).is_ok())
 }
 
 /// Security policy enforcement
@@ -854,7 +896,8 @@ mod tests {
         let config = AuthConfig::default();
         let auth_manager = AuthManager::new(config).unwrap();
 
-        // Create a test user
+        // Create a test user with secure password hashing
+        let password_hash = hash_password_secure("password123").unwrap();
         let user = AuthenticatedUser {
             id: "test_user".to_string(),
             username: "testuser".to_string(),
@@ -866,7 +909,7 @@ mod tests {
             last_login: None,
             device_id: None,
             metadata: serde_json::json!({
-                "password_hash": md5::compute("password123")
+                "password_hash": password_hash
             }),
         };
 
@@ -882,7 +925,8 @@ mod tests {
         let config = AuthConfig::default();
         let auth_manager = AuthManager::new(config).unwrap();
 
-        // Create and authenticate a user
+        // Create and authenticate a user with secure password hashing
+        let password_hash = hash_password_secure("password123").unwrap();
         let user = AuthenticatedUser {
             id: "test_user".to_string(),
             username: "testuser".to_string(),
@@ -894,7 +938,7 @@ mod tests {
             last_login: None,
             device_id: None,
             metadata: serde_json::json!({
-                "password_hash": md5::compute("password123")
+                "password_hash": password_hash
             }),
         };
 

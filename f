@@ -34,11 +34,11 @@
        * Status: ⚠️ UNSAFE
        * Finding: The file explicitly states it is a "RESEARCH IMPLEMENTATION ONLY" and "NOT SUITABLE FOR PRODUCTION." 
          It uses simplified prime generation and lacks side-channel protections.
-   * WASM Plugin Runtime (wasm_runtime.rs):
-       * Status: 🚧 STUBBED
-       * Finding: The runtime initializes the Wasmtime engine but the call_function method returns mock JSON responses 
-         (// In a real implementation...) instead of actually executing the guest code. Plugins currently do nothing.  
-   * Authentication (auth.rs):
+    * WASM Plugin Runtime (wasm_runtime.rs):
+        * Status: 🚧 STUBBED
+        * Finding: The runtime initializes the Wasmtime engine but the call_function method returns mock JSON responses 
+          (// In a real implementation...) instead of actually executing the guest code. Plugins currently do nothing.  
+    * Authentication (auth.rs):
        * Status: ⚠️ WEAK
        * Finding: Uses SHA-256 for password hashing (fast, vulnerable to GPU cracking). Modern standards require       
          Argon2id or Bcrypt. The user store is in-memory and hardcoded with an "admin" user.
