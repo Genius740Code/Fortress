@@ -109,8 +109,8 @@ pub trait SecretsEngine: Send + Sync {
     async fn status(&self) -> Result<EngineStatus>;
 }
 
-/// Secrets engine types
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Secrets engine type
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum EngineType {
     /// Key-Value store
     Kv,
@@ -129,7 +129,7 @@ pub enum EngineType {
 }
 
 /// Cloud providers
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CloudProvider {
     /// Amazon Web Services
     Aws,

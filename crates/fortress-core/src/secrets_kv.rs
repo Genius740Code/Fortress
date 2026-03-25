@@ -32,10 +32,16 @@
 
 use crate::error::{FortressError, Result};
 use crate::secrets::{EngineStatus, EngineStats, EngineType, LeaseInfo, Secret, SecretMetadata, SecretsEngine};
+use crate::storage::{StorageBackend, InMemoryStorage, FileSystemStorage};
+#[cfg(feature = "cloud-storage")]
+use crate::storage::S3Storage;
+use crate::encryption::{EncryptionAlgorithm, Aegis256};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use base64::Engine;
+use std::fmt;
 
 /// KV secrets engine configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -48,6 +54,12 @@ pub struct KvConfig {
     pub case_sensitive: bool,
     /// Enable automatic cleanup of expired versions
     pub auto_cleanup: bool,
+    /// Encryption-at-rest enabled
+    pub encryption_at_rest: bool,
+    /// Storage backend for persistence
+    pub storage_backend: Option<String>,
+    /// Master key for encryption (in production, should come from KMS/HSM)
+    pub master_key: Option<String>,
 }
 
 impl Default for KvConfig {
@@ -57,6 +69,9 @@ impl Default for KvConfig {
             default_ttl: None,
             case_sensitive: false,
             auto_cleanup: true,
+            encryption_at_rest: true, // Enable by default for security
+            storage_backend: Some("memory".to_string()), // Default to memory for compatibility
+            master_key: None, // Will generate if not provided
         }
     }
 }
@@ -64,7 +79,7 @@ impl Default for KvConfig {
 /// Versioned secret data
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VersionedSecret {
-    /// Secret data
+    /// Encrypted secret data (or plaintext if encryption disabled)
     pub data: serde_json::Value,
     /// Version number
     pub version: u64,
@@ -74,6 +89,10 @@ pub struct VersionedSecret {
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
     /// Custom metadata
     pub custom_metadata: HashMap<String, String>,
+    /// Whether data is encrypted
+    pub is_encrypted: bool,
+    /// Encryption nonce (if encrypted)
+    pub encryption_nonce: Option<String>,
 }
 
 /// KV secrets engine implementation
@@ -81,16 +100,22 @@ pub struct VersionedSecret {
 pub struct KvEngine {
     /// Engine configuration
     config: Arc<RwLock<KvConfig>>,
-    /// Secret storage by path
+    /// Secret storage by path (in-memory cache)
     secrets: Arc<RwLock<HashMap<String, KvSecretEntry>>>,
     /// Lease management
     leases: Arc<RwLock<HashMap<String, LeaseInfo>>>,
     /// Statistics
     stats: Arc<RwLock<EngineStats>>,
+    /// Storage backend for persistence
+    storage: Arc<dyn StorageBackend>,
+    /// Encryption algorithm
+    encryption: Arc<Box<dyn EncryptionAlgorithm>>,
+    /// Master encryption key
+    master_key: Arc<RwLock<Vec<u8>>>,
 }
 
 /// KV secret entry with version history
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct KvSecretEntry {
     /// Path to the secret
     path: String,
@@ -110,6 +135,43 @@ impl KvEngine {
 
     /// Create KV engine with custom configuration
     pub fn with_config(config: KvConfig) -> Self {
+        // Initialize master key
+        let master_key = if let Some(key_str) = &config.master_key {
+            base64::engine::general_purpose::STANDARD.decode(key_str)
+                .unwrap_or_else(|_| {
+                    // Generate new key if decoding fails
+                    Self::generate_master_key()
+                })
+        } else {
+            Self::generate_master_key()
+        };
+
+        // Initialize storage backend
+        let storage: Arc<dyn StorageBackend> = match config.storage_backend.as_deref() {
+            Some("memory") => Arc::new(InMemoryStorage::new()),
+            Some("file") => {
+                match FileSystemStorage::new("data/secrets") {
+                    Ok(fs) => Arc::new(fs),
+                    Err(e) => {
+                        log::warn!("Failed to create file storage, falling back to memory: {}", e);
+                        Arc::new(InMemoryStorage::new())
+                    }
+                }
+            },
+            #[cfg(feature = "cloud-storage")]
+            Some("s3") => {
+                // For S3, we need to use a blocking approach since this is not async
+                log::warn!("S3 storage requires async initialization, falling back to memory");
+                Arc::new(InMemoryStorage::new())
+            },
+            #[cfg(not(feature = "cloud-storage"))]
+            Some("s3") => {
+                log::warn!("S3 storage requested but cloud-storage feature not enabled, falling back to memory");
+                Arc::new(InMemoryStorage::new())
+            },
+            _ => Arc::new(InMemoryStorage::new()),
+        };
+
         Self {
             config: Arc::new(RwLock::new(config)),
             secrets: Arc::new(RwLock::new(HashMap::new())),
@@ -120,12 +182,172 @@ impl KvEngine {
                 operations: HashMap::new(),
                 last_operation: None,
             })),
+            storage,
+            encryption: Arc::new(Box::new(Aegis256::new())),
+            master_key: Arc::new(RwLock::new(master_key)),
         }
+    }
+
+    /// Generate a secure master key
+    fn generate_master_key() -> Vec<u8> {
+        use rand::RngCore;
+        let mut key = vec![0u8; 32]; // 256-bit key for AEGIS-256
+        rand::thread_rng().fill_bytes(&mut key);
+        key
+    }
+
+    /// Encrypt secret data if encryption is enabled
+    async fn encrypt_secret_data(&self, data: &serde_json::Value) -> Result<(serde_json::Value, String)> {
+        let config = self.config.read().await;
+        
+        if !config.encryption_at_rest {
+            return Ok((data.clone(), String::new()));
+        }
+        
+        let master_key = self.master_key.read().await;
+        let data_bytes = serde_json::to_vec(data)
+            .map_err(|e| FortressError::secrets(format!("Failed to serialize secret data: {}", e)))?;
+        
+        // Generate nonce
+        let nonce = Self::generate_nonce();
+        let nonce_bytes = base64::engine::general_purpose::STANDARD.decode(&nonce)
+            .map_err(|e| FortressError::secrets(format!("Failed to decode nonce: {}", e)))?;
+        
+        // Encrypt data
+        let mut encrypted_data = self.encryption.encrypt(&data_bytes, &master_key)
+            .map_err(|e| FortressError::secrets(format!("Failed to encrypt secret data: {}", e)))?;
+        
+        // Add nonce to encrypted data
+        encrypted_data.extend_from_slice(&nonce_bytes);
+        
+        // Return as base64 JSON value
+        let encrypted_b64 = base64::engine::general_purpose::STANDARD.encode(&encrypted_data);
+        let encrypted_json = serde_json::json!({
+            "encrypted": true,
+            "data": encrypted_b64
+        });
+        
+        Ok((encrypted_json, nonce))
+    }
+
+    /// Decrypt secret data
+    async fn decrypt_secret_data(&self, encrypted_data: &serde_json::Value, nonce: &str) -> Result<serde_json::Value> {
+        let config = self.config.read().await;
+        
+        if !config.encryption_at_rest {
+            return Ok(encrypted_data.clone());
+        }
+        
+        let master_key = self.master_key.read().await;
+        
+        // Extract encrypted data
+        let encrypted_str = encrypted_data.get("data")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| FortressError::secrets("Invalid encrypted data format".to_string()))?;
+        
+        let mut encrypted_bytes = base64::engine::general_purpose::STANDARD.decode(encrypted_str)
+            .map_err(|e| FortressError::secrets(format!("Failed to decode encrypted data: {}", e)))?;
+        
+        // Extract nonce from end of encrypted data
+        let nonce_len = 12; // AEGIS-256 nonce length
+        if encrypted_bytes.len() < nonce_len {
+            return Err(FortressError::secrets("Invalid encrypted data length".to_string()));
+        }
+        
+        let data_with_nonce = encrypted_bytes.clone();
+        let _extracted_nonce = encrypted_bytes.split_off(encrypted_bytes.len() - nonce_len);
+        
+        // Decrypt data
+        let decrypted_bytes = self.encryption.decrypt(&encrypted_bytes, &master_key)
+            .map_err(|e| FortressError::secrets(format!("Failed to decrypt secret data: {}", e)))?;
+        
+        // Parse back to JSON
+        let decrypted_json: serde_json::Value = serde_json::from_slice(&decrypted_bytes)
+            .map_err(|e| FortressError::secrets(format!("Failed to deserialize decrypted data: {}", e)))?;
+        
+        Ok(decrypted_json)
+    }
+
+    /// Generate encryption nonce
+    fn generate_nonce() -> String {
+        use rand::RngCore;
+        let mut nonce = vec![0u8; 12]; // 96-bit nonce for AEGIS-256
+        rand::thread_rng().fill_bytes(&mut nonce);
+        base64::engine::general_purpose::STANDARD.encode(&nonce)
+    }
+
+    /// Persist secret to storage backend
+    async fn persist_secret(&self, path: &str, entry: &KvSecretEntry) -> Result<()> {
+        let serialized = serde_json::to_vec(entry)
+            .map_err(|e| FortressError::secrets(format!("Failed to serialize secret entry: {}", e)))?;
+        
+        let storage_key = format!("kv/secrets/{}", path);
+        self.storage.put(&storage_key, &serialized).await
+            .map_err(|e| FortressError::secrets(format!("Failed to persist secret: {}", e)))?;
+        
+        Ok(())
+    }
+
+    /// Load secret from storage backend
+    async fn load_secret(&self, path: &str) -> Result<Option<KvSecretEntry>> {
+        let storage_key = format!("kv/secrets/{}", path);
+        
+        if let Some(data) = self.storage.get(&storage_key).await
+            .map_err(|e| FortressError::secrets(format!("Failed to load secret: {}", e)))? {
+            let entry: KvSecretEntry = serde_json::from_slice(&data)
+                .map_err(|e| FortressError::secrets(format!("Failed to deserialize secret entry: {}", e)))?;
+            Ok(Some(entry))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Initialize secrets from storage on startup
+    pub async fn initialize_from_storage(&self) -> Result<()> {
+        let prefix = "kv/secrets/";
+        let keys = self.storage.list_prefix(prefix).await
+            .map_err(|e| FortressError::secrets(format!("Failed to list secrets from storage: {}", e)))?;
+        
+        let mut secrets = self.secrets.write().await;
+        let mut loaded_count = 0;
+        
+        for key in keys {
+            if let Some(data) = self.storage.get(&key).await
+                .map_err(|e| FortressError::secrets(format!("Failed to load secret {}: {}", key, e)))? {
+                if let Ok(entry) = serde_json::from_slice::<KvSecretEntry>(&data) {
+                    let path = key.strip_prefix(prefix).unwrap_or(&key);
+                    secrets.insert(path.to_string(), entry);
+                    loaded_count += 1;
+                }
+            }
+        }
+        
+        // Update stats
+        {
+            let mut stats = self.stats.write().await;
+            stats.total_secrets = secrets.len() as u64;
+        }
+        
+        if loaded_count > 0 {
+            log::info!("Loaded {} secrets from persistent storage", loaded_count);
+        }
+        
+        Ok(())
     }
 
     /// Read a specific version of a secret
     pub async fn read_version(&self, path: &str, version: u64) -> Result<Option<Secret>> {
         self.record_operation("read_version").await;
+        
+        // Try to load from storage if not in memory
+        let secrets = self.secrets.read().await;
+        if !secrets.contains_key(path) {
+            drop(secrets);
+            if let Ok(Some(entry)) = self.load_secret(path).await {
+                let mut secrets = self.secrets.write().await;
+                secrets.insert(path.to_string(), entry);
+            }
+        }
         
         let secrets = self.secrets.read().await;
         let leases = self.leases.read().await;
@@ -135,8 +357,17 @@ impl KvEngine {
                 let lease_id = format!("kv:{}:{}", path, version);
                 let lease = leases.get(&lease_id).cloned();
                 
+                // Decrypt data if needed
+                let decrypted_data = if versioned.is_encrypted {
+                    let nonce = versioned.encryption_nonce.as_ref()
+                        .ok_or_else(|| FortressError::secrets("Missing encryption nonce".to_string()))?;
+                    self.decrypt_secret_data(&versioned.data, nonce).await?
+                } else {
+                    versioned.data.clone()
+                };
+                
                 let secret = Secret {
-                    data: versioned.data.clone(),
+                    data: decrypted_data,
                     metadata: SecretMetadata {
                         version: versioned.version,
                         created_at: versioned.created_at,
@@ -294,12 +525,17 @@ impl SecretsEngine for KvEngine {
         entry.next_version += 1;
         entry.current_version = version;
         
+        // Encrypt data if needed
+        let (encrypted_data, nonce) = self.encrypt_secret_data(data).await?;
+        
         let versioned = VersionedSecret {
-            data: data.clone(),
+            data: encrypted_data,
             version,
             created_at: chrono::Utc::now(),
             deleted_at: None,
             custom_metadata: HashMap::new(),
+            is_encrypted: config.encryption_at_rest,
+            encryption_nonce: if config.encryption_at_rest { Some(nonce) } else { None },
         };
         
         entry.versions.insert(version, versioned);
@@ -307,6 +543,9 @@ impl SecretsEngine for KvEngine {
         // Cleanup old versions if needed
         drop(config);
         self.cleanup_old_versions(entry).await;
+        
+        // Persist to storage
+        self.persist_secret(path, entry).await?;
         
         // Update stats
         {
@@ -332,6 +571,16 @@ impl SecretsEngine for KvEngine {
     async fn read(&self, path: &str) -> Result<Option<Secret>> {
         self.record_operation("read").await;
         
+        // Try to load from storage if not in memory
+        let secrets = self.secrets.read().await;
+        if !secrets.contains_key(path) {
+            drop(secrets);
+            if let Ok(Some(entry)) = self.load_secret(path).await {
+                let mut secrets = self.secrets.write().await;
+                secrets.insert(path.to_string(), entry);
+            }
+        }
+        
         let secrets = self.secrets.read().await;
         
         if let Some(entry) = secrets.get(path) {
@@ -342,8 +591,17 @@ impl SecretsEngine for KvEngine {
                     leases.get(&lease_id).cloned()
                 };
                 
+                // Decrypt data if needed
+                let decrypted_data = if versioned.is_encrypted {
+                    let nonce = versioned.encryption_nonce.as_ref()
+                        .ok_or_else(|| FortressError::secrets("Missing encryption nonce".to_string()))?;
+                    self.decrypt_secret_data(&versioned.data, nonce).await?
+                } else {
+                    versioned.data.clone()
+                };
+                
                 Ok(Some(Secret {
-                    data: versioned.data.clone(),
+                    data: decrypted_data,
                     metadata: SecretMetadata {
                         version: versioned.version,
                         created_at: versioned.created_at,
@@ -376,8 +634,13 @@ impl SecretsEngine for KvEngine {
             leases.remove(&lease_id);
         }
         
-        // Remove the secret
+        // Remove the secret from memory
         secrets.remove(path);
+        
+        // Remove from persistent storage
+        let storage_key = format!("kv/secrets/{}", path);
+        self.storage.delete(&storage_key).await
+            .map_err(|e| FortressError::secrets(format!("Failed to delete secret from storage: {}", e)))?;
         
         // Update stats
         {
@@ -488,5 +751,226 @@ impl SecretsEngine for KvEngine {
 impl Default for KvEngine {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::storage::MemoryStorage;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn test_encryption_at_rest() {
+        let config = KvConfig {
+            encryption_at_rest: true,
+            storage_backend: Some("memory".to_string()),
+            ..Default::default()
+        };
+        
+        let engine = KvEngine::with_config(config);
+        
+        // Store a secret
+        let secret_data = json!({
+            "username": "admin",
+            "password": "super-secret-password"
+        });
+        
+        let secret = engine.write("test/secret", &secret_data).await.unwrap();
+        assert_eq!(secret.data, secret_data);
+        
+        // Read it back
+        let retrieved = engine.read("test/secret").await.unwrap();
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap().data, secret_data);
+        
+        // Verify data is encrypted in storage
+        let storage_key = "kv/secrets/test/secret";
+        let stored_data = engine.storage.get(storage_key).await.unwrap().unwrap();
+        let entry: KvSecretEntry = serde_json::from_slice(&stored_data).unwrap();
+        let versioned = &entry.versions[&1];
+        assert!(versioned.is_encrypted);
+        assert!(versioned.encryption_nonce.is_some());
+        assert!(versioned.data.get("encrypted").unwrap().as_bool().unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_persistence_across_restarts() {
+        let config = KvConfig {
+            encryption_at_rest: true,
+            storage_backend: Some("memory".to_string()),
+            ..Default::default()
+        };
+        
+        // Create first engine instance
+        let engine1 = KvEngine::with_config(config.clone());
+        
+        // Store a secret
+        let secret_data = json!({
+            "api_key": "sk-1234567890abcdef",
+            "token": "token_secret_value"
+        });
+        
+        engine1.write("persistent/secret", &secret_data).await.unwrap();
+        
+        // Create second engine instance (simulating restart)
+        let engine2 = KvEngine::with_config(config);
+        
+        // Initialize from storage
+        engine2.initialize_from_storage().await.unwrap();
+        
+        // Read the secret - should be available
+        let retrieved = engine2.read("persistent/secret").await.unwrap();
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap().data, secret_data);
+    }
+
+    #[tokio::test]
+    async fn test_no_encryption_mode() {
+        let config = KvConfig {
+            encryption_at_rest: false,
+            storage_backend: Some("memory".to_string()),
+            ..Default::default()
+        };
+        
+        let engine = KvEngine::with_config(config);
+        
+        // Store a secret
+        let secret_data = json!({
+            "plaintext": "this-is-not-encrypted"
+        });
+        
+        engine.write("plain/secret", &secret_data).await.unwrap();
+        
+        // Verify data is not encrypted in storage
+        let storage_key = "kv/secrets/plain/secret";
+        let stored_data = engine.storage.get(storage_key).await.unwrap().unwrap();
+        let entry: KvSecretEntry = serde_json::from_slice(&stored_data).unwrap();
+        let versioned = &entry.versions[&1];
+        assert!(!versioned.is_encrypted);
+        assert!(versioned.encryption_nonce.is_none());
+        assert_eq!(versioned.data, secret_data);
+    }
+
+    #[tokio::test]
+    async fn test_master_key_generation() {
+        let engine = KvEngine::new();
+        let master_key = engine.master_key.read().await;
+        assert_eq!(master_key.len(), 32); // 256-bit key
+        
+        // Verify key is different for another instance
+        let engine2 = KvEngine::new();
+        let master_key2 = engine2.master_key.read().await;
+        assert_ne!(*master_key, *master_key2);
+    }
+
+    #[tokio::test]
+    async fn test_encryption_decryption_roundtrip() {
+        let engine = KvEngine::new();
+        
+        let original_data = json!({
+            "sensitive_field": "highly_confidential_data",
+            "numbers": [1, 2, 3, 4, 5],
+            "nested": {
+                "inner": "secret_value"
+            }
+        });
+        
+        // Encrypt
+        let (encrypted, nonce) = engine.encrypt_secret_data(&original_data).await.unwrap();
+        assert_ne!(encrypted, original_data);
+        
+        // Decrypt
+        let decrypted = engine.decrypt_secret_data(&encrypted, &nonce).await.unwrap();
+        assert_eq!(decrypted, original_data);
+    }
+
+    #[tokio::test]
+    async fn test_kv_encryption_basic() {
+        println!("Testing KV secrets engine with encryption...");
+        
+        // Create engine with encryption enabled
+        let config = KvConfig {
+            max_versions: 10,
+            default_ttl: Some(3600),
+            case_sensitive: false,
+            auto_cleanup: true,
+            encryption_at_rest: true,
+            storage_backend: Some("memory".to_string()),
+            master_key: None,
+        };
+        
+        let engine = KvEngine::with_config(config);
+        
+        // Write a secret
+        let secret_data = json!({
+            "username": "admin",
+            "password": "super-secret"
+        });
+        
+        let result = engine.write("secret/app", &secret_data).await;
+        assert!(result.is_ok(), "Failed to write secret: {:?}", result.err());
+        println!("✅ Secret written successfully with encryption");
+        
+        // Read the secret back
+        let retrieved_secret = engine.read("secret/app").await;
+        assert!(retrieved_secret.is_ok(), "Failed to read secret: {:?}", retrieved_secret.err());
+        println!("✅ Secret retrieved successfully");
+        
+        // Verify data matches
+        if let Ok(Some(secret)) = retrieved_secret {
+            let data = secret.data.as_object().unwrap();
+            assert_eq!(data.get("username").unwrap().as_str().unwrap(), "admin");
+            assert_eq!(data.get("password").unwrap().as_str().unwrap(), "super-secret");
+            println!("✅ Secret data verified");
+        } else {
+            panic!("Expected to find secret but got None");
+        }
+        
+        // Check engine status
+        let status = engine.status().await;
+        assert!(status.is_ok(), "Failed to get status: {:?}", status.err());
+        
+        if let Ok(status) = status {
+            assert_eq!(status.engine_type, EngineType::Kv);
+            assert_eq!(status.stats.total_secrets, 1);
+            println!("✅ Engine status verified");
+        }
+        
+        println!("🎉 All encryption tests passed!");
+    }
+
+    #[tokio::test]
+    async fn test_kv_no_encryption() {
+        println!("Testing KV secrets engine without encryption...");
+        
+        // Create engine without encryption
+        let config = KvConfig {
+            max_versions: 5,
+            default_ttl: None,
+            case_sensitive: true,
+            auto_cleanup: true,
+            encryption_at_rest: false,
+            storage_backend: Some("memory".to_string()),
+            master_key: None,
+        };
+        
+        let engine = KvEngine::with_config(config);
+        
+        // Write a secret
+        let secret_data = json!({
+            "public": "data"
+        });
+        
+        let result = engine.write("public/data", &secret_data).await;
+        assert!(result.is_ok(), "Failed to write secret: {:?}", result.err());
+        
+        // Read the secret back
+        let retrieved_secret = engine.read("public/data").await;
+        assert!(retrieved_secret.is_ok(), "Failed to read secret: {:?}", retrieved_secret.err());
+        assert!(retrieved_secret.unwrap().is_some(), "Expected to find secret but got None");
+        
+        println!("✅ Non-encrypted mode works correctly");
+        println!("🎉 All non-encryption tests passed!");
     }
 }
