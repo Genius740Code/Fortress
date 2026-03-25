@@ -357,6 +357,14 @@ pub mod postgres_database;
 
 pub mod push_pull_operations;
 
+/// Key-Value Engine for high-performance storage operations
+
+pub mod kv_engine;
+
+/// Transit Engine - Encryption as a Service with AEGIS-256
+
+pub mod transit_engine;
+
 /// Image encryption and processing system
 
 pub mod image_encryption;

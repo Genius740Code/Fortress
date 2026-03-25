@@ -23,6 +23,9 @@ use argon2::{
     password_hash::{rand_core::OsRng, SaltString}
 };
 use uuid::Uuid;
+use base64;
+use urlencoding;
+use sha2;
 
 /// JWT claims structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -115,6 +118,415 @@ pub trait UserStore: Send + Sync {
     async fn revoke_refresh_token(&self, refresh_token: &str) -> ServerResult<()>;
 }
 
+/// OIDC/OAuth2 user store for modern enterprise authentication
+#[derive(Clone)]
+pub struct OidcUserStore {
+    /// OIDC provider configuration
+    provider_config: OidcProviderConfig,
+    /// HTTP client for OIDC requests
+    client: reqwest::Client,
+    /// In-memory cache for user information
+    user_cache: Arc<parking_lot::RwLock<HashMap<String, CachedUser>>>,
+    /// Refresh token storage
+    refresh_tokens: Arc<parking_lot::RwLock<HashMap<String, String>>>, // token -> user_id
+}
+
+/// OIDC provider configuration
+#[derive(Debug, Clone)]
+pub struct OidcProviderConfig {
+    /// OIDC issuer URL
+    pub issuer_url: String,
+    /// Client ID
+    pub client_id: String,
+    /// Client secret
+    pub client_secret: String,
+    /// Redirect URI
+    pub redirect_uri: String,
+    /// Scopes to request
+    pub scopes: Vec<String>,
+    /// Enable PKCE
+    pub enable_pkce: bool,
+    /// Token endpoint (auto-discovered if not set)
+    pub token_endpoint: Option<String>,
+    /// Authorization endpoint (auto-discovered if not set)
+    pub authorization_endpoint: Option<String>,
+    /// UserInfo endpoint (auto-discovered if not set)
+    pub userinfo_endpoint: Option<String>,
+    /// JWKS URI (auto-discovered if not set)
+    pub jwks_uri: Option<String>,
+}
+
+/// Cached user information with expiration
+#[derive(Clone)]
+struct CachedUser {
+    user_info: UserInfo,
+    expires_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// OIDC token response
+#[derive(Debug, Deserialize)]
+struct OidcTokenResponse {
+    pub access_token: String,
+    pub token_type: String,
+    pub expires_in: Option<u64>,
+    pub refresh_token: Option<String>,
+    pub id_token: Option<String>,
+    pub scope: Option<String>,
+}
+
+/// OIDC user info response
+#[derive(Debug, Deserialize)]
+struct OidcUserInfo {
+    pub sub: String,
+    pub name: Option<String>,
+    pub email: Option<String>,
+    pub preferred_username: Option<String>,
+    pub groups: Option<Vec<String>>,
+    pub roles: Option<Vec<String>>,
+}
+
+/// OIDC provider discovery document
+#[derive(Debug, Deserialize)]
+struct OidcDiscoveryDocument {
+    pub issuer: String,
+    pub authorization_endpoint: String,
+    pub token_endpoint: String,
+    pub userinfo_endpoint: Option<String>,
+    pub jwks_uri: String,
+    pub scopes_supported: Option<Vec<String>>,
+    pub response_types_supported: Option<Vec<String>>,
+    pub grant_types_supported: Option<Vec<String>>,
+    pub token_endpoint_auth_methods_supported: Option<Vec<String>>,
+}
+
+/// OIDC authentication request
+#[derive(Debug, Clone)]
+pub struct OidcAuthRequest {
+    /// Authorization code from callback
+    pub code: String,
+    /// Code verifier for PKCE (if enabled)
+    pub code_verifier: Option<String>,
+    /// Session state for security
+    pub state: String,
+    /// Redirect URI used in the request
+    pub redirect_uri: String,
+}
+
+/// OIDC authentication result
+#[derive(Debug, Clone)]
+pub struct OidcAuthResult {
+    pub user_info: UserInfo,
+    pub access_token: String,
+    pub refresh_token: Option<String>,
+    pub expires_in: Option<u64>,
+    pub id_token: Option<String>,
+}
+
+impl OidcUserStore {
+    /// Create a new OIDC user store
+    pub fn new(config: OidcProviderConfig) -> Self {
+        Self {
+            provider_config: config.clone(),
+            client: reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .expect("Failed to create HTTP client"),
+            user_cache: Arc::new(parking_lot::RwLock::new(HashMap::new())),
+            refresh_tokens: Arc::new(parking_lot::RwLock::new(HashMap::new())),
+        }
+    }
+
+    /// Discover OIDC provider endpoints
+    pub async fn discover_endpoints(&self) -> ServerResult<OidcDiscoveryDocument> {
+        let discovery_url = format!("{}/.well-known/openid_configuration", self.provider_config.issuer_url);
+        
+        let response = self.client
+            .get(&discovery_url)
+            .send()
+            .await
+            .map_err(|e| ServerError::external(format!("Failed to fetch discovery document: {}", e)))?;
+
+        if !response.status().is_success() {
+            return Err(ServerError::external(format!(
+                "Discovery request failed with status: {}",
+                response.status()
+            )));
+        }
+
+        let discovery: OidcDiscoveryDocument = response
+            .json()
+            .await
+            .map_err(|e| ServerError::external(format!("Failed to parse discovery document: {}", e)))?;
+
+        tracing::info!("Discovered OIDC endpoints for issuer: {}", discovery.issuer);
+        Ok(discovery)
+    }
+
+    /// Get authorization URL for OIDC flow
+    pub fn get_authorization_url(&self, state: &str, code_verifier: Option<&str>) -> ServerResult<String> {
+        let auth_endpoint = self.provider_config.authorization_endpoint.as_ref()
+            .ok_or_else(|| ServerError::external("Authorization endpoint not configured"))?;
+
+        let mut params = std::collections::HashMap::new();
+        params.insert("response_type", "code");
+        params.insert("client_id", &self.provider_config.client_id);
+        params.insert("redirect_uri", &self.provider_config.redirect_uri);
+        params.insert("scope", &self.provider_config.scopes.join(" "));
+        params.insert("state", state);
+
+        // Add PKCE challenge if enabled
+        if let Some(verifier) = code_verifier {
+            if self.provider_config.enable_pkce {
+                let challenge = base64::encode_config(
+                    sha2::Sha256::digest(verifier.as_bytes()),
+                    base64::URL_SAFE_NO_PAD,
+                );
+                params.insert("code_challenge", &challenge);
+                params.insert("code_challenge_method", "S256");
+            }
+        }
+
+        let query_string = params.iter()
+            .map(|(k, v)| format!("{}={}", urlencoding::encode(k), urlencoding::encode(v)))
+            .collect::<Vec<_>>()
+            .join("&");
+
+        Ok(format!("{}?{}", auth_endpoint, query_string))
+    }
+
+    /// Exchange authorization code for tokens
+    pub async fn exchange_code_for_tokens(&self, request: OidcAuthRequest) -> ServerResult<OidcTokenResponse> {
+        let token_endpoint = self.provider_config.token_endpoint.as_ref()
+            .ok_or_else(|| ServerError::external("Token endpoint not configured"))?;
+
+        let mut params = std::collections::HashMap::new();
+        params.insert("grant_type", "authorization_code");
+        params.insert("code", &request.code);
+        params.insert("redirect_uri", &request.redirect_uri);
+        params.insert("client_id", &self.provider_config.client_id);
+        params.insert("client_secret", &self.provider_config.client_secret);
+
+        // Add code verifier for PKCE
+        if let Some(verifier) = request.code_verifier {
+            params.insert("code_verifier", &verifier);
+        }
+
+        let response = self.client
+            .post(token_endpoint)
+            .form(&params)
+            .send()
+            .await
+            .map_err(|e| ServerError::external(format!("Failed to exchange code for tokens: {}", e)))?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(ServerError::external(format!(
+                "Token exchange failed: {} - {}",
+                response.status(),
+                error_text
+            )));
+        }
+
+        let token_response: OidcTokenResponse = response
+            .json()
+            .await
+            .map_err(|e| ServerError::external(format!("Failed to parse token response: {}", e)))?;
+
+        Ok(token_response)
+    }
+
+    /// Get user information from OIDC provider
+    pub async fn get_user_info(&self, access_token: &str) -> ServerResult<OidcUserInfo> {
+        // Check cache first
+        let cache_key = format!("userinfo:{}", access_token);
+        {
+            let cache = self.user_cache.read();
+            if let Some(cached) = cache.get(&cache_key) {
+                if cached.expires_at > chrono::Utc::now() {
+                    return Ok(OidcUserInfo {
+                        sub: cached.user_info.id.clone(),
+                        name: Some(cached.user_info.username.clone()),
+                        email: cached.user_info.email.clone(),
+                        preferred_username: Some(cached.user_info.username.clone()),
+                        groups: None,
+                        roles: Some(cached.user_info.roles.clone()),
+                    });
+                }
+            }
+        }
+
+        let userinfo_endpoint = self.provider_config.userinfo_endpoint.as_ref()
+            .ok_or_else(|| ServerError::external("UserInfo endpoint not configured"))?;
+
+        let response = self.client
+            .get(userinfo_endpoint)
+            .header("Authorization", format!("Bearer {}", access_token))
+            .send()
+            .await
+            .map_err(|e| ServerError::external(format!("Failed to fetch user info: {}", e)))?;
+
+        if !response.status().is_success() {
+            return Err(ServerError::external(format!(
+                "User info request failed: {}",
+                response.status()
+            )));
+        }
+
+        let user_info: OidcUserInfo = response
+            .json()
+            .await
+            .map_err(|e| ServerError::external(format!("Failed to parse user info: {}", e)))?;
+
+        // Cache the user info
+        let expires_at = chrono::Utc::now() + chrono::Duration::minutes(15);
+        let cached_user = CachedUser {
+            user_info: UserInfo {
+                id: user_info.sub.clone(),
+                username: user_info.preferred_username.clone().unwrap_or_else(|| user_info.sub.clone()),
+                email: user_info.email.clone(),
+                roles: user_info.roles.clone().unwrap_or_default(),
+                tenant_id: None,
+            },
+            expires_at,
+        };
+
+        {
+            let mut cache = self.user_cache.write();
+            cache.insert(cache_key, cached_user);
+        }
+
+        Ok(user_info)
+    }
+
+    /// Validate ID token signature and claims
+    pub fn validate_id_token(&self, id_token: &str) -> ServerResult<TokenClaims> {
+        // In a real implementation, this would:
+        // 1. Parse the JWT token
+        // 2. Fetch the JWKS from the provider
+        // 3. Validate the signature using the public keys
+        // 4. Validate the claims (issuer, audience, expiration, etc.)
+        
+        // For now, we'll do a simplified validation
+        let parts: Vec<&str> = id_token.split('.').collect();
+        if parts.len() != 3 {
+            return Err(ServerError::auth("Invalid ID token format"));
+        }
+
+        // Decode payload (simplified - in production, use proper JWT library)
+        let payload = base64::decode_config(parts[1], base64::URL_SAFE_NO_PAD)
+            .map_err(|_| ServerError::auth("Failed to decode ID token payload"))?;
+
+        let claims: serde_json::Value = serde_json::from_slice(&payload)
+            .map_err(|_| ServerError::auth("Failed to parse ID token claims"))?;
+
+        // Extract basic claims
+        let sub = claims.get("sub")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| ServerError::auth("Missing subject claim"))?;
+
+        let exp = claims.get("exp")
+            .and_then(|v| v.as_i64())
+            .ok_or_else(|| ServerError::auth("Missing expiration claim"))?;
+
+        let iat = claims.get("iat")
+            .and_then(|v| v.as_i64())
+            .ok_or_else(|| ServerError::auth("Missing issued at claim"))?;
+
+        // Check expiration
+        let now = chrono::Utc::now().timestamp();
+        if exp <= now {
+            return Err(ServerError::auth("ID token has expired"));
+        }
+
+        // Create TokenClaims (simplified)
+        Ok(TokenClaims {
+            sub: sub.to_string(),
+            username: sub.to_string(),
+            email: claims.get("email").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            roles: claims.get("roles")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                .unwrap_or_default(),
+            tenant_id: None,
+            iat,
+            exp,
+            jti: uuid::Uuid::new_v4().to_string(),
+        })
+    }
+
+    /// Authenticate with OIDC authorization code
+    pub async fn authenticate_with_code(&self, request: OidcAuthRequest) -> ServerResult<OidcAuthResult> {
+        // Exchange code for tokens
+        let token_response = self.exchange_code_for_tokens(request.clone()).await?;
+
+        // Get user info
+        let user_info = self.get_user_info(&token_response.access_token).await?;
+
+        // Convert to UserInfo format
+        let user = UserInfo {
+            id: user_info.sub.clone(),
+            username: user_info.preferred_username.clone().unwrap_or_else(|| user_info.sub.clone()),
+            email: user_info.email.clone(),
+            roles: user_info.roles.clone().unwrap_or_default(),
+            tenant_id: None,
+        };
+
+        // Store refresh token if provided
+        if let Some(refresh_token) = &token_response.refresh_token {
+            self.store_refresh_token(&user.id, refresh_token).await?;
+        }
+
+        Ok(OidcAuthResult {
+            user_info: user,
+            access_token: token_response.access_token,
+            refresh_token: token_response.refresh_token,
+            expires_in: token_response.expires_in,
+            id_token: token_response.id_token,
+        })
+    }
+
+    /// Refresh access token
+    pub async fn refresh_access_token(&self, refresh_token: &str) -> ServerResult<OidcTokenResponse> {
+        let token_endpoint = self.provider_config.token_endpoint.as_ref()
+            .ok_or_else(|| ServerError::external("Token endpoint not configured"))?;
+
+        let mut params = std::collections::HashMap::new();
+        params.insert("grant_type", "refresh_token");
+        params.insert("refresh_token", refresh_token);
+        params.insert("client_id", &self.provider_config.client_id);
+        params.insert("client_secret", &self.provider_config.client_secret);
+
+        let response = self.client
+            .post(token_endpoint)
+            .form(&params)
+            .send()
+            .await
+            .map_err(|e| ServerError::external(format!("Failed to refresh token: {}", e)))?;
+
+        if !response.status().is_success() {
+            return Err(ServerError::external(format!(
+                "Token refresh failed: {}",
+                response.status()
+            )));
+        }
+
+        let token_response: OidcTokenResponse = response
+            .json()
+            .await
+            .map_err(|e| ServerError::external(format!("Failed to parse refresh response: {}", e)))?;
+
+        Ok(token_response)
+    }
+
+    /// Revoke token
+    pub async fn revoke_token(&self, token: &str) -> ServerResult<()> {
+        // In a real implementation, this would call the provider's revocation endpoint
+        // For now, we'll just remove it from our local storage
+        self.refresh_tokens.write().remove(token);
+        Ok(())
+    }
+}
+
 /// In-memory user store for development/testing
 pub struct InMemoryUserStore {
     users: Arc<parking_lot::RwLock<HashMap<String, UserRecord>>>,
@@ -132,6 +544,65 @@ pub struct UserRecord {
     tenant_id: Option<String>,
     failed_login_attempts: u32,
     locked_until: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+#[async_trait::async_trait]
+impl UserStore for OidcUserStore {
+    async fn authenticate(&self, request: AuthRequest) -> ServerResult<UserInfo> {
+        // OIDC doesn't use username/password authentication
+        Err(ServerError::auth("OIDC user store doesn't support username/password authentication"))
+    }
+    
+    async fn get_user(&self, user_id: &str) -> ServerResult<Option<UserInfo>> {
+        // Check cache first
+        let cache_key = format!("user:{}", user_id);
+        {
+            let cache = self.user_cache.read();
+            if let Some(cached) = cache.get(&cache_key) {
+                if cached.expires_at > chrono::Utc::now() {
+                    return Ok(Some(cached.user_info.clone()));
+                }
+            }
+        }
+        
+        // For OIDC, we would need to fetch from the provider or return None
+        // In a real implementation, you might use the access token to fetch fresh user info
+        Ok(None)
+    }
+    
+    async fn validate_refresh_token(&self, refresh_token: &str) -> ServerResult<UserInfo> {
+        let user_id = {
+            let refresh_tokens = self.refresh_tokens.read();
+            refresh_tokens.get(refresh_token)
+                .ok_or_else(|| ServerError::auth("Invalid refresh token"))?
+                .clone()
+        };
+        
+        // Refresh the access token and get fresh user info
+        let token_response = self.refresh_access_token(refresh_token).await?;
+        let user_info = self.get_user_info(&token_response.access_token).await?;
+        
+        // Convert to UserInfo format
+        Ok(UserInfo {
+            id: user_info.sub.clone(),
+            username: user_info.preferred_username.clone().unwrap_or_else(|| user_info.sub.clone()),
+            email: user_info.email.clone(),
+            roles: user_info.roles.clone().unwrap_or_default(),
+            tenant_id: None,
+        })
+    }
+    
+    async fn store_refresh_token(&self, user_id: &str, refresh_token: &str) -> ServerResult<()> {
+        let mut refresh_tokens = self.refresh_tokens.write();
+        refresh_tokens.insert(refresh_token.to_string(), user_id.to_string());
+        Ok(())
+    }
+    
+    async fn revoke_refresh_token(&self, refresh_token: &str) -> ServerResult<()> {
+        let mut refresh_tokens = self.refresh_tokens.write();
+        refresh_tokens.remove(refresh_token);
+        Ok(())
+    }
 }
 
 impl AuthManager {
