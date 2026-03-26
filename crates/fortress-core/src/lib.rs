@@ -345,6 +345,18 @@ pub mod secrets;
 
 pub mod secrets_kv;
 
+/// Dynamic Database secrets engine implementation
+
+pub mod database_secrets;
+
+/// Kubernetes authentication module with TokenReview support
+
+pub mod kubernetes_auth;
+
+/// Secure audit logging system with tamper protection
+
+pub mod secure_audit;
+
 /// MongoDB database backend for Fortress
 
 pub mod mongodb_database;
@@ -382,8 +394,6 @@ mod policy_test;
 /// Re-export commonly used types
 
 pub mod prelude {
-
-    pub use crate::error::{FortressError, Result};
 
     pub use crate::encryption::{
 
@@ -581,6 +591,20 @@ pub mod prelude {
 
     pub use crate::secrets_kv::{
         KvEngine, KvConfig, VersionedSecret,
+    };
+
+    pub use crate::database_secrets::{
+        DatabaseEngine, DatabaseConfig, DatabaseType, DatabaseCredential,
+    };
+
+    pub use crate::kubernetes_auth::{
+        KubernetesAuth, KubernetesAuthConfig, TokenReviewRequest, TokenReviewResponse,
+        PodAuthResult, TokenUserInfo,
+    };
+
+    pub use crate::secure_audit::{
+        SecureAuditLogger, AuditConfig, AuditEntry, AuditEventType, AuditOutcome,
+        AuditOutput, RotationStrategy, AuditStats,
     };
 
     pub use crate::mongodb_database::{

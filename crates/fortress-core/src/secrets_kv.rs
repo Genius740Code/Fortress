@@ -36,12 +36,12 @@ use crate::storage::{StorageBackend, InMemoryStorage, FileSystemStorage};
 #[cfg(feature = "cloud-storage")]
 use crate::storage::S3Storage;
 use crate::encryption::{EncryptionAlgorithm, Aegis256};
+use crate::secure_audit::SecureAuditLogger;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use base64::Engine;
-use std::fmt;
 
 /// KV secrets engine configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -114,6 +114,8 @@ pub struct KvEngine {
     master_key: Arc<RwLock<Vec<u8>>>,
     /// Simple cache for frequently accessed encrypted data
     barrier_cache: Arc<RwLock<HashMap<String, Vec<u8>>>>,
+    /// Secure audit logger
+    audit_logger: Arc<SecureAuditLogger>,
 }
 
 /// Lightweight metadata for secrets (stored in memory, full data encrypted at rest)
@@ -207,6 +209,7 @@ impl KvEngine {
             encryption: Arc::new(Box::new(Aegis256::new())),
             master_key: Arc::new(RwLock::new(master_key)),
             barrier_cache: Arc::new(RwLock::new(HashMap::new())), // Simple HashMap cache
+            audit_logger: Arc::new(SecureAuditLogger::new()),
         }
     }
 
@@ -666,7 +669,18 @@ impl SecretsEngine for KvEngine {
         self.cleanup_old_versions(&mut entry).await;
         
         // Store using Barrier (encrypts and serializes)
-        self.barrier_store_secret(path, &entry).await?;
+        let store_result = self.barrier_store_secret(path, &entry).await;
+        
+        // Log write operation with enhanced metadata
+        let principal = "system"; // In a real implementation, this would be authenticated user
+        
+        let outcome = if store_result.is_ok() { "success" } else { "failure" };
+        if let Err(e) = self.audit_logger.log_secret_write(principal, path, version, outcome).await {
+            log::warn!("Failed to log audit entry: {}", e);
+        }
+        
+        // Propagate storage error if any
+        store_result?;
         
         // Update metadata cache
         {
@@ -711,7 +725,19 @@ impl SecretsEngine for KvEngine {
         self.record_operation("read").await;
         
         // Load full secret entry using Barrier
-        match self.barrier_load_secret(path).await? {
+        let result = self.barrier_load_secret(path).await;
+        
+        // Log read operation with enhanced metadata
+        let principal = "system"; // In a real implementation, this would be authenticated user
+        
+        let outcome = if result.is_ok() { "success" } else { "failure" };
+        if let Err(e) = self.audit_logger.log_access(principal, path, "read", outcome).await {
+            log::warn!("Failed to log audit entry: {}", e);
+        }
+        
+        let entry = result?;
+        
+        match entry {
             Some(entry) => {
                 let leases = self.leases.read().await;
                 
@@ -738,10 +764,11 @@ impl SecretsEngine for KvEngine {
             },
             None => Ok(None)
         }
-    }
-
     async fn delete(&self, path: &str) -> Result<()> {
         self.record_operation("delete").await;
+        
+        // Log the delete operation
+        let principal = "system"; // In a real implementation, this would be authenticated user
         
         let mut leases = self.leases.write().await;
         
@@ -751,14 +778,24 @@ impl SecretsEngine for KvEngine {
             .cloned()
             .collect();
         
-        for lease_id in lease_ids {
+        for lease_id in lease_ids.clone() {
             leases.remove(&lease_id);
         }
         
         // Remove from encrypted storage
         let storage_key = format!("kv/secrets/{}", path);
-        self.storage.delete(&storage_key).await
-            .map_err(|e| FortressError::secrets(format!("Failed to delete secret from storage: {}", e)))?;
+        let storage_result = self.storage.delete(&storage_key).await;
+        
+        // Log delete operation
+        let principal = "system"; // In a real implementation, this would be authenticated user
+        
+        let outcome = if storage_result.is_ok() { "success" } else { "failure" };
+        if let Err(e) = self.audit_logger.log_secret_delete(principal, path, outcome).await {
+            log::warn!("Failed to log audit entry: {}", e);
+        }
+        
+        // Propagate storage error if any
+        storage_result?;
         
         // Remove from cache
         {
@@ -806,6 +843,14 @@ impl SecretsEngine for KvEngine {
             if normalized_path.starts_with(&normalized_search) {
                 results.push(secret_path.clone());
             }
+        }
+        
+        // Log list operation with enhanced metadata
+        let principal = "system"; // In a real implementation, this would be authenticated user
+        
+        let outcome = "success";
+        if let Err(e) = self.audit_logger.log_access(principal, path, "list", outcome).await {
+            log::warn!("Failed to log audit entry: {}", e);
         }
         
         results.sort();
