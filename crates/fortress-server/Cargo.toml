@@ -83,6 +83,9 @@ futures-util = "0.3"
 # Base64 encoding
 base64 = "0.21"
 
+# URL encoding
+percent-encoding = "2.3"
+
 # Hex encoding
 hex = "0.4"
 

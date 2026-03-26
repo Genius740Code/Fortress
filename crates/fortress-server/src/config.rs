@@ -275,6 +275,28 @@ pub struct TlsConfig {
     pub ca_path: Option<PathBuf>,
 }
 
+/// OIDC configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OidcConfig {
+    /// OIDC issuer URL
+    pub issuer_url: String,
+    
+    /// Client ID
+    pub client_id: String,
+    
+    /// Client secret
+    pub client_secret: String,
+    
+    /// Redirect URI
+    pub redirect_uri: String,
+    
+    /// Scopes to request
+    pub scopes: Vec<String>,
+    
+    /// Enable PKCE
+    pub enable_pkce: bool,
+}
+
 /// Feature flags
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FeatureFlags {
@@ -295,6 +317,12 @@ pub struct FeatureFlags {
     
     /// Enable field-level encryption
     pub field_encryption: bool,
+    
+    /// Enable OIDC/OAuth2 authentication
+    pub oidc_enabled: bool,
+    
+    /// OIDC provider configuration
+    pub oidc_config: Option<OidcConfig>,
 }
 
 impl Default for FeatureFlags {
@@ -306,6 +334,8 @@ impl Default for FeatureFlags {
             health_enabled: true,
             multi_tenant: true,
             field_encryption: true,
+            oidc_enabled: false,
+            oidc_config: None,
         }
     }
 }

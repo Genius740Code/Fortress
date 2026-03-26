@@ -524,7 +524,7 @@ impl TransitEngine {
             associated_data: None,
         };
         
-        let encrypt_response = engine.encrypt(encrypt_request).await.unwrap();
+        let encrypt_response = self.encrypt(encrypt_request).await.unwrap();
         
         // Clone values to avoid move issues
         let ciphertext = encrypt_response.ciphertext.clone();
@@ -539,7 +539,7 @@ impl TransitEngine {
             associated_data: None,
         };
         
-        let decrypt_response = engine.decrypt(decrypt_request).await.unwrap();
+        let decrypt_response = self.decrypt(decrypt_request).await.unwrap();
         
         Ok(decrypt_response.plaintext == test_data)
     }

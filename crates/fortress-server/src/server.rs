@@ -3,7 +3,7 @@
 //! This module contains the core server implementation that ties together
 //! all the components and provides the HTTP API.
 
-use crate::auth::{AuthManager, InMemoryUserStore};
+use crate::auth::{AuthManager, InMemoryUserStore, OidcUserStore, OidcProviderConfig};
 use crate::config::ServerConfig;
 use crate::error::{ServerError, ServerResult};
 use crate::handlers::AppState;
@@ -225,7 +225,29 @@ impl FortressServer {
 
     /// Create authentication manager
     fn create_auth_manager(config: &ServerConfig) -> ServerResult<Arc<AuthManager>> {
-        let user_store = Arc::new(InMemoryUserStore::new());
+        let user_store: Arc<dyn crate::auth::UserStore> = if config.features.oidc_enabled {
+            if let Some(oidc_config) = &config.features.oidc_config {
+                let provider_config = OidcProviderConfig {
+                    issuer_url: oidc_config.issuer_url.clone(),
+                    client_id: oidc_config.client_id.clone(),
+                    client_secret: oidc_config.client_secret.clone(),
+                    redirect_uri: oidc_config.redirect_uri.clone(),
+                    scopes: oidc_config.scopes.clone(),
+                    enable_pkce: oidc_config.enable_pkce,
+                    token_endpoint: None,
+                    authorization_endpoint: None,
+                    userinfo_endpoint: None,
+                    jwks_uri: None,
+                };
+                let oidc_store = OidcUserStore::new(provider_config);
+                Arc::new(oidc_store)
+            } else {
+                return Err(ServerError::internal("OIDC enabled but no configuration provided"));
+            }
+        } else {
+            Arc::new(InMemoryUserStore::new())
+        };
+        
         let auth_manager = AuthManager::new(
             &config.security.jwt_secret,
             chrono::Duration::seconds(config.security.token_expiration as i64),

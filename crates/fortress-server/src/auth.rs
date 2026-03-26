@@ -5,6 +5,7 @@
 
 use crate::error::{ServerError, ServerResult};
 use crate::models::{AuthRequest, AuthResponse, RefreshTokenRequest, RefreshTokenResponse, UserInfo};
+use sha2::Digest;
 use axum::{
     extract::{Request, State, FromRequestParts},
     http::{header, StatusCode, request::Parts},
@@ -23,8 +24,8 @@ use argon2::{
     password_hash::{rand_core::OsRng, SaltString}
 };
 use uuid::Uuid;
-use base64;
-use urlencoding;
+use base64::{Engine as _, engine::general_purpose};
+use percent_encoding;
 use sha2;
 
 /// JWT claims structure
@@ -244,10 +245,10 @@ impl OidcUserStore {
             .get(&discovery_url)
             .send()
             .await
-            .map_err(|e| ServerError::external(format!("Failed to fetch discovery document: {}", e)))?;
+            .map_err(|e| ServerError::internal(format!("Failed to fetch discovery document: {}", e)))?;
 
         if !response.status().is_success() {
-            return Err(ServerError::external(format!(
+            return Err(ServerError::internal(format!(
                 "Discovery request failed with status: {}",
                 response.status()
             )));
@@ -256,38 +257,34 @@ impl OidcUserStore {
         let discovery: OidcDiscoveryDocument = response
             .json()
             .await
-            .map_err(|e| ServerError::external(format!("Failed to parse discovery document: {}", e)))?;
+            .map_err(|e| ServerError::internal(format!("Failed to parse discovery document: {}", e)))?;
 
         tracing::info!("Discovered OIDC endpoints for issuer: {}", discovery.issuer);
         Ok(discovery)
     }
 
     /// Get authorization URL for OIDC flow
-    pub fn get_authorization_url(&self, state: &str, code_verifier: Option<&str>) -> ServerResult<String> {
+    pub fn get_authorization_url(&self, _state: &str, code_verifier: Option<&str>) -> ServerResult<String> {
         let auth_endpoint = self.provider_config.authorization_endpoint.as_ref()
-            .ok_or_else(|| ServerError::external("Authorization endpoint not configured"))?;
+            .ok_or_else(|| ServerError::internal("Authorization endpoint not configured"))?;
 
-        let mut params = std::collections::HashMap::new();
-        params.insert("response_type", "code");
-        params.insert("client_id", &self.provider_config.client_id);
-        params.insert("redirect_uri", &self.provider_config.redirect_uri);
-        params.insert("scope", &self.provider_config.scopes.join(" "));
-        params.insert("state", state);
+        let mut params: HashMap<String, String> = std::collections::HashMap::new();
+        params.insert("response_type".to_string(), "code".to_string());
+        params.insert("client_id".to_string(), self.provider_config.client_id.clone());
+        params.insert("redirect_uri".to_string(), self.provider_config.redirect_uri.clone());
 
         // Add PKCE challenge if enabled
         if let Some(verifier) = code_verifier {
             if self.provider_config.enable_pkce {
-                let challenge = base64::encode_config(
-                    sha2::Sha256::digest(verifier.as_bytes()),
-                    base64::URL_SAFE_NO_PAD,
-                );
-                params.insert("code_challenge", &challenge);
-                params.insert("code_challenge_method", "S256");
+                let challenge_bytes = sha2::Sha256::digest(verifier.as_bytes());
+                let challenge = general_purpose::STANDARD.encode(challenge_bytes);
+                params.insert("code_challenge".to_string(), challenge);
+                params.insert("code_challenge_method".to_string(), "S256".to_string());
             }
         }
 
         let query_string = params.iter()
-            .map(|(k, v)| format!("{}={}", urlencoding::encode(k), urlencoding::encode(v)))
+            .map(|(k, v)| format!("{}={}", percent_encoding::utf8_percent_encode(k, &percent_encoding::NON_ALPHANUMERIC), percent_encoding::utf8_percent_encode(v, &percent_encoding::NON_ALPHANUMERIC)))
             .collect::<Vec<_>>()
             .join("&");
 
@@ -297,7 +294,7 @@ impl OidcUserStore {
     /// Exchange authorization code for tokens
     pub async fn exchange_code_for_tokens(&self, request: OidcAuthRequest) -> ServerResult<OidcTokenResponse> {
         let token_endpoint = self.provider_config.token_endpoint.as_ref()
-            .ok_or_else(|| ServerError::external("Token endpoint not configured"))?;
+            .ok_or_else(|| ServerError::internal("Token endpoint not configured"))?;
 
         let mut params = std::collections::HashMap::new();
         params.insert("grant_type", "authorization_code");
@@ -307,8 +304,8 @@ impl OidcUserStore {
         params.insert("client_secret", &self.provider_config.client_secret);
 
         // Add code verifier for PKCE
-        if let Some(verifier) = request.code_verifier {
-            params.insert("code_verifier", &verifier);
+        if let Some(verifier) = &request.code_verifier {
+            params.insert("code_verifier", verifier);
         }
 
         let response = self.client
@@ -316,13 +313,14 @@ impl OidcUserStore {
             .form(&params)
             .send()
             .await
-            .map_err(|e| ServerError::external(format!("Failed to exchange code for tokens: {}", e)))?;
+            .map_err(|e| ServerError::internal(format!("Failed to exchange code for tokens: {}", e)))?;
 
         if !response.status().is_success() {
+            let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
-            return Err(ServerError::external(format!(
+            return Err(ServerError::internal(format!(
                 "Token exchange failed: {} - {}",
-                response.status(),
+                status,
                 error_text
             )));
         }
@@ -330,7 +328,7 @@ impl OidcUserStore {
         let token_response: OidcTokenResponse = response
             .json()
             .await
-            .map_err(|e| ServerError::external(format!("Failed to parse token response: {}", e)))?;
+            .map_err(|e| ServerError::internal(format!("Failed to parse token response: {}", e)))?;
 
         Ok(token_response)
     }
@@ -356,17 +354,17 @@ impl OidcUserStore {
         }
 
         let userinfo_endpoint = self.provider_config.userinfo_endpoint.as_ref()
-            .ok_or_else(|| ServerError::external("UserInfo endpoint not configured"))?;
+            .ok_or_else(|| ServerError::internal("UserInfo endpoint not configured"))?;
 
         let response = self.client
             .get(userinfo_endpoint)
             .header("Authorization", format!("Bearer {}", access_token))
             .send()
             .await
-            .map_err(|e| ServerError::external(format!("Failed to fetch user info: {}", e)))?;
+            .map_err(|e| ServerError::internal(format!("Failed to fetch user info: {}", e)))?;
 
         if !response.status().is_success() {
-            return Err(ServerError::external(format!(
+            return Err(ServerError::internal(format!(
                 "User info request failed: {}",
                 response.status()
             )));
@@ -375,7 +373,7 @@ impl OidcUserStore {
         let user_info: OidcUserInfo = response
             .json()
             .await
-            .map_err(|e| ServerError::external(format!("Failed to parse user info: {}", e)))?;
+            .map_err(|e| ServerError::internal(format!("Failed to parse user info: {}", e)))?;
 
         // Cache the user info
         let expires_at = chrono::Utc::now() + chrono::Duration::minutes(15);
@@ -413,7 +411,7 @@ impl OidcUserStore {
         }
 
         // Decode payload (simplified - in production, use proper JWT library)
-        let payload = base64::decode_config(parts[1], base64::URL_SAFE_NO_PAD)
+        let payload = general_purpose::STANDARD.decode(parts[1])
             .map_err(|_| ServerError::auth("Failed to decode ID token payload"))?;
 
         let claims: serde_json::Value = serde_json::from_slice(&payload)
@@ -488,7 +486,7 @@ impl OidcUserStore {
     /// Refresh access token
     pub async fn refresh_access_token(&self, refresh_token: &str) -> ServerResult<OidcTokenResponse> {
         let token_endpoint = self.provider_config.token_endpoint.as_ref()
-            .ok_or_else(|| ServerError::external("Token endpoint not configured"))?;
+            .ok_or_else(|| ServerError::internal("Token endpoint not configured"))?;
 
         let mut params = std::collections::HashMap::new();
         params.insert("grant_type", "refresh_token");
@@ -501,10 +499,10 @@ impl OidcUserStore {
             .form(&params)
             .send()
             .await
-            .map_err(|e| ServerError::external(format!("Failed to refresh token: {}", e)))?;
+            .map_err(|e| ServerError::internal(format!("Failed to refresh token: {}", e)))?;
 
         if !response.status().is_success() {
-            return Err(ServerError::external(format!(
+            return Err(ServerError::internal(format!(
                 "Token refresh failed: {}",
                 response.status()
             )));
@@ -513,7 +511,7 @@ impl OidcUserStore {
         let token_response: OidcTokenResponse = response
             .json()
             .await
-            .map_err(|e| ServerError::external(format!("Failed to parse refresh response: {}", e)))?;
+            .map_err(|e| ServerError::internal(format!("Failed to parse refresh response: {}", e)))?;
 
         Ok(token_response)
     }
@@ -548,7 +546,7 @@ pub struct UserRecord {
 
 #[async_trait::async_trait]
 impl UserStore for OidcUserStore {
-    async fn authenticate(&self, request: AuthRequest) -> ServerResult<UserInfo> {
+    async fn authenticate(&self, _request: AuthRequest) -> ServerResult<UserInfo> {
         // OIDC doesn't use username/password authentication
         Err(ServerError::auth("OIDC user store doesn't support username/password authentication"))
     }
@@ -571,7 +569,7 @@ impl UserStore for OidcUserStore {
     }
     
     async fn validate_refresh_token(&self, refresh_token: &str) -> ServerResult<UserInfo> {
-        let user_id = {
+        let _user_id = {
             let refresh_tokens = self.refresh_tokens.read();
             refresh_tokens.get(refresh_token)
                 .ok_or_else(|| ServerError::auth("Invalid refresh token"))?
@@ -733,7 +731,7 @@ impl InMemoryUserStore {
     /// Create a new in-memory user store with default admin user
     /// WARNING: Only for development/testing - change default password in production!
     pub fn with_default_admin() -> Self {
-        let mut store = Self::new();
+        let store = Self::new();
         
         // Create default admin user with secure password hashing
         let admin_password = "admin123"; // Change this in production!
