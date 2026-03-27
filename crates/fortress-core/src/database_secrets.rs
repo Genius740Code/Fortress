@@ -98,6 +98,10 @@ pub struct DatabaseCredential {
     pub expires_at: DateTime<Utc>,
     /// Lease ID
     pub lease_id: String,
+    /// TTL for the credential
+    pub ttl: u64,
+    /// Creation time
+    pub created_at: DateTime<Utc>,
 }
 
 /// Dynamic database secrets engine
@@ -220,6 +224,7 @@ impl DatabaseEngine {
             }
             Ok(())
         }
+    }
 
     /// Create database user (MySQL implementation)
     async fn create_mysql_user(
@@ -311,6 +316,7 @@ impl DatabaseEngine {
             }
             Ok(())
         }
+    }
 
     /// Create database user (SQL Server implementation)
     async fn create_sqlserver_user(
@@ -404,6 +410,7 @@ impl DatabaseEngine {
             }
             Ok(())
         }
+    }
 
     /// Drop database user
     async fn drop_database_user(
@@ -600,6 +607,8 @@ impl DatabaseEngine {
             permissions: permissions.clone(),
             expires_at,
             lease_id: lease_id.clone(),
+            ttl,
+            created_at: Utc::now(),
         };
 
         // Store credential
@@ -838,25 +847,31 @@ impl SecretsEngine for DatabaseEngine {
         let config = config.as_ref()
             .ok_or_else(|| FortressError::secrets("Database not configured".to_string()))?;
 
-        let mut credentials = self.credentials.write().await;
+        let credentials = self.credentials.read().await;
         
-        if let Some(credential) = credentials.get_mut(lease_id) {
-            let increment = increment.unwrap_or(config.default_ttl);
-            let new_ttl = (credential.expires_at - Utc::now()).num_seconds() as u64 + increment;
+        if let Some(credential) = credentials.get(lease_id) {
+            let new_ttl = increment.unwrap_or(0) + credential.ttl;
+            let max_ttl = config.max_ttl;
             
-            if new_ttl > config.max_ttl {
-                return Err(FortressError::secrets("Lease TTL exceeds maximum".to_string()));
+            if new_ttl > max_ttl {
+                return Err(FortressError::secrets("TTL exceeds maximum".to_string()));
             }
 
-            credential.expires_at = Utc::now() + Duration::seconds(new_ttl as i64);
-
-            let lease = LeaseInfo {
+            let updated_lease = LeaseInfo {
                 lease_id: lease_id.to_string(),
                 ttl: new_ttl,
-                created_at: Utc::now(),
+                created_at: credential.created_at,
                 renewable: true,
-                max_ttl: Some(config.max_ttl),
+                max_ttl: Some(max_ttl),
             };
+
+            // Update credential expiration
+            {
+                let mut credentials = self.credentials.write().await;
+                if let Some(cred) = credentials.get_mut(lease_id) {
+                    cred.expires_at = Utc::now() + Duration::seconds(new_ttl as i64);
+                }
+            }
 
             // Update stats
             {
@@ -865,7 +880,7 @@ impl SecretsEngine for DatabaseEngine {
                 stats.last_operation = Some(Utc::now());
             }
 
-            Ok(lease)
+            Ok(updated_lease)
         } else {
             Err(FortressError::secrets("Lease not found".to_string()))
         }
@@ -881,6 +896,8 @@ impl SecretsEngine for DatabaseEngine {
         if let Some(credential) = credentials.remove(lease_id) {
             // Drop user from database
             self.drop_database_user(config, &credential.username).await?;
+
+            log::info!("Revoked database credential: {}", lease_id);
 
             // Update stats
             {
@@ -898,31 +915,82 @@ impl SecretsEngine for DatabaseEngine {
     }
 
     async fn configure(&mut self, config: serde_json::Value) -> Result<()> {
-        let db_config: DatabaseConfig = serde_json::from_value(config)
-            .map_err(|e| FortressError::secrets(format!("Invalid database configuration: {}", e)))?;
-        
-        let mut self_config = self.config.write().await;
-        *self_config = Some(db_config);
-        
+        let database_type = config.get("database_type")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| FortressError::secrets("database_type is required".to_string()))?;
+
+        let database_url = config.get("database_url")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| FortressError::secrets("database_url is required".to_string()))?;
+
+        let admin_username = config.get("admin_username")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| FortressError::secrets("admin_username is required".to_string()))?;
+
+        let admin_password = config.get("admin_password")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| FortressError::secrets("admin_password is required".to_string()))?;
+
+        let default_ttl = config.get("default_ttl")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(3600);
+
+        let max_ttl = config.get("max_ttl")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(86400);
+
+        let pool_size = config.get("pool_size")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(10) as u32;
+
+        let username_prefix = config.get("username_prefix")
+            .and_then(|v| v.as_str())
+            .unwrap_or("fortress")
+            .to_string();
+
+        let db_type = match database_type {
+            "postgresql" => DatabaseType::PostgreSQL,
+            "mysql" => DatabaseType::MySQL,
+            "sqlserver" => DatabaseType::SQLServer,
+            _ => return Err(FortressError::secrets(format!("Unsupported database type: {}", database_type))),
+        };
+
+        let new_config = DatabaseConfig {
+            database_type: db_type.clone(),
+            database_url: database_url.to_string(),
+            admin_username: admin_username.to_string(),
+            admin_password: admin_password.to_string(),
+            default_ttl,
+            max_ttl,
+            pool_size,
+            username_prefix,
+        };
+
+        {
+            let mut config_guard = self.config.write().await;
+            *config_guard = Some(new_config);
+        }
+
+        log::info!("Database engine configured for: {:?}", db_type);
         Ok(())
     }
 
     async fn status(&self) -> Result<EngineStatus> {
         let config = self.config.read().await;
-        let _credentials = self.credentials.read().await;
+        let credentials = self.credentials.read().await;
         let stats = self.stats.read().await;
-        
-        let config_value = match config.as_ref() {
-            Some(c) => serde_json::to_value(c).unwrap_or_default(),
-            None => serde_json::Value::Null,
-        };
         
         Ok(EngineStatus {
             name: self.name().to_string(),
             engine_type: self.engine_type(),
             initialized: config.is_some(),
-            config: config_value,
-            stats: stats.clone(),
+            config: serde_json::to_value(&*config).unwrap_or_else(|_| serde_json::Value::Null),
+            stats: EngineStats {
+                total_secrets: credentials.len() as u64,
+                active_leases: credentials.len() as u64,
+                operations: stats.operations.clone(),
+                last_operation: stats.last_operation,
+            },
         })
     }
 }

@@ -296,6 +296,7 @@ impl KubernetesAuth {
                 Err(FortressError::secrets(format!("TokenReview failed: {}", error_text)))
             }
         }
+    }
 
     /// Extract pod information from token
     fn extract_pod_info(&self, user_info: &TokenUserInfo) -> Result<(String, String, String)> {
@@ -375,7 +376,7 @@ impl KubernetesAuth {
         pod_name: &str,
         service_account_token: &str,
     ) -> Result<PodAuthResult> {
-        log::info!("Authenticating pod {}/{} in namespace {}", namespace, pod_name);
+        log::info!("Authenticating pod {} in namespace {}", pod_name, namespace);
         
         // Perform TokenReview
         let token_response = self.token_review(service_account_token).await?;
@@ -403,7 +404,7 @@ impl KubernetesAuth {
 
         // Verify namespace and pod match
         if token_namespace != namespace || token_pod_name != pod_name {
-            log::warn!("Namespace or pod name mismatch: expected {}/{}, got {}/{}}",
+            log::warn!("Namespace or pod name mismatch: expected {}/{}, got {}/{}",
                 namespace, pod_name, token_namespace, token_pod_name);
             
             return Ok(PodAuthResult {

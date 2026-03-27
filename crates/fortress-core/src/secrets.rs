@@ -116,6 +116,8 @@ pub enum EngineType {
     Kv,
     /// Database credential generator
     Database,
+    /// Dynamic secrets generator
+    Dynamic,
     /// Cloud provider secrets
     Cloud(CloudProvider),
     /// PKI certificates

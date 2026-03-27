@@ -349,6 +349,10 @@ pub mod secrets_kv;
 
 pub mod database_secrets;
 
+/// Dynamic Secrets Engine for cloud services and databases
+
+pub mod dynamic_secrets;
+
 /// Kubernetes authentication module with TokenReview support
 
 pub mod kubernetes_auth;
@@ -595,6 +599,10 @@ pub mod prelude {
 
     pub use crate::database_secrets::{
         DatabaseEngine, DatabaseConfig, DatabaseType, DatabaseCredential,
+    };
+
+    pub use crate::dynamic_secrets::{
+        DynamicSecretsEngine, DynamicSecretsConfig, AwsConfig, AwsIamCredential,
     };
 
     pub use crate::kubernetes_auth::{

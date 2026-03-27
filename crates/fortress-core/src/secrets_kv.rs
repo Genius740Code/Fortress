@@ -764,6 +764,8 @@ impl SecretsEngine for KvEngine {
             },
             None => Ok(None)
         }
+    }
+
     async fn delete(&self, path: &str) -> Result<()> {
         self.record_operation("delete").await;
         

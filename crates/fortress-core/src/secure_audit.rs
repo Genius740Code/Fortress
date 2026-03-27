@@ -89,6 +89,8 @@ pub enum AuditEventType {
     SecretAccess,
     /// Secret creation/modification
     SecretWrite,
+    /// Secret generation
+    SecretGeneration,
     /// Secret deletion
     SecretDelete,
     /// Secret listing
@@ -110,6 +112,7 @@ impl std::fmt::Display for AuditEventType {
         match self {
             AuditEventType::SecretAccess => write!(f, "SecretAccess"),
             AuditEventType::SecretWrite => write!(f, "SecretWrite"),
+            AuditEventType::SecretGeneration => write!(f, "SecretGeneration"),
             AuditEventType::SecretDelete => write!(f, "SecretDelete"),
             AuditEventType::SecretList => write!(f, "SecretList"),
             AuditEventType::Authentication => write!(f, "Authentication"),
@@ -261,7 +264,7 @@ impl SecureAuditLogger {
         let mut hasher = Sha256::new();
         
         // Hash all fields except hmac and current_hash
-        let hash_data = format!("{}|{}|{}|{}|{}|{}|{:?}|{}|{}|{}|{}|{}|",
+        let hash_data = format!("{}|{}|{}|{}|{}|{}|{:?}|{}|{}|{}|{}|{}|{}",
             entry.entry_id,
             entry.timestamp.to_rfc3339(),
             entry.event_type,
@@ -518,6 +521,40 @@ impl SecureAuditLogger {
             *stats.entries_by_outcome.entry(outcome_enum).or_insert(0) += 1;
             stats.last_log_time = Some(Utc::now());
         }
+
+        // Write to outputs
+        self.write_to_file(&entry).await?;
+        self.write_to_stdout(&entry).await?;
+
+        Ok(())
+    }
+
+    /// Log secret generation
+    pub async fn log_secret_generation(
+        &self,
+        principal: &str,
+        resource: &str,
+        secret_type: &str,
+        outcome: &str,
+    ) -> Result<()> {
+        let outcome_enum = match outcome {
+            "success" => AuditOutcome::Success,
+            "failure" => AuditOutcome::Failure,
+            "denied" => AuditOutcome::Denied,
+            _ => AuditOutcome::Error,
+        };
+
+        let mut metadata = HashMap::new();
+        metadata.insert("secret_type".to_string(), serde_json::Value::String(secret_type.to_string()));
+        
+        let entry = self.create_entry(
+            AuditEventType::SecretGeneration,
+            principal,
+            resource,
+            "generate",
+            outcome_enum,
+            metadata,
+        ).await?;
 
         // Write to outputs
         self.write_to_file(&entry).await?;
