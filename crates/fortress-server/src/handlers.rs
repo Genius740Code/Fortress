@@ -18,6 +18,7 @@ use fortress_core::{
     storage::StorageBackend,
     field_encryption::FieldEncryptionManager,
     tenant::{TenantManager, InMemoryTenantManager, CreateTenantRequest, TenantResourceLimits},
+    dynamic_secrets::DynamicSecretsEngine,
 };
 use crate::health::HealthChecker;
 use serde::{Deserialize, Serialize};
@@ -101,6 +102,8 @@ pub struct AppState {
     pub health_checker: Arc<HealthChecker>,
     /// Tenant manager
     pub tenant_manager: Arc<InMemoryTenantManager>,
+    /// Dynamic secrets engine
+    pub dynamic_secrets: Arc<DynamicSecretsEngine>,
 }
 
 /// Store data handler

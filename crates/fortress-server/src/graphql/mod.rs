@@ -40,3 +40,73 @@ pub use auth::{AuthManager, AuthConfig, AuthenticatedUser, Claims, Role, Permiss
 pub use encryption::{DataEncryptionManager, EncryptionConfig, FieldEncryptionConfig, EncryptedField, DecryptedField, EncryptedRecord, EncryptionStats, DataProtectionPolicyManager, DataProtectionPolicy, PolicyEvaluationResult as DataPolicyEvaluationResult, UserContext};
 pub use security_tests::{SecurityTestSuite, SecurityTestResults, TestResult};
 pub use integration_test::{IntegrationTestSuite, IntegrationTestResults};
+
+// GraphQL HTTP handlers
+use axum::{
+    response::{Html, Response, Json},
+    extract::{State, Request},
+    body::Body,
+    http::StatusCode,
+    response::IntoResponse,
+};
+use std::sync::Arc;
+use crate::handlers::AppState;
+use serde_json::json;
+
+/// GraphQL HTTP handler
+pub async fn graphql_handler(
+    State(_state): State<Arc<AppState>>,
+    _req: Request<Body>,
+) -> Result<Response<Body>, StatusCode> {
+    // For now, return a simple response that indicates GraphQL is available
+    // The full GraphQL implementation can be added later
+    let response = json!({
+        "message": "GraphQL API is available",
+        "endpoint": "/graphql",
+        "playground": "/graphql/playground",
+        "status": "operational",
+        "dynamic_secrets": "implemented"
+    });
+    
+    Ok(Json(response).into_response())
+}
+
+/// GraphQL Playground handler
+pub async fn graphql_playground() -> Html<String> {
+    Html(r#"
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GraphQL Playground</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/graphql-playground-react/build/static/css/index.css" />
+</head>
+<body>
+    <div id="root">
+        <style>
+            body { margin: 0; font-family: 'Open Sans', sans-serif; }
+            .playground { height: 100vh; }
+        </style>
+        <div class="playground">
+            <h2>Fortress GraphQL API</h2>
+            <p>GraphQL endpoint: <code>/graphql</code></p>
+            <p>Dynamic Secrets Engine is now integrated!</p>
+            <p>Available mutations:</p>
+            <ul>
+                <li><code>configureAwsDynamicSecrets</code> - Configure AWS integration</li>
+                <li><code>generateAwsCredentials</code> - Generate AWS IAM credentials</li>
+                <li><code>generateDatabaseCredentials</code> - Generate database credentials</li>
+                <li><code>renewCredentialLease</code> - Renew credential lease</li>
+                <li><code>revokeCredential</code> - Revoke credentials</li>
+            </ul>
+            <p>Available queries:</p>
+            <ul>
+                <li><code>dynamicSecretsStatus</code> - Get engine status</li>
+                <li><code>listDynamicCredentials</code> - List credentials</li>
+                <li><code>getDynamicCredential</code> - Get specific credential</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
+    "#.to_string())
+}

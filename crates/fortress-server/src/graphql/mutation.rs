@@ -13,6 +13,7 @@ use chrono::Utc;
 use fortress_core::{
     key::KeyManager,
     field_encryption::FieldIdentifier,
+    secrets::SecretsEngine, // Add this import
 };
 use serde_json;
 use uuid::Uuid;
@@ -986,6 +987,218 @@ impl Mutation {
         Ok(ApiResponse {
             success: true,
             data: Some(rotation_status),
+            error_message: None,
+            error_code: None,
+        })
+    }
+
+    // ==================== Dynamic Secrets Mutations ====================
+
+    /// Configure AWS integration for dynamic secrets
+    async fn configure_aws_dynamic_secrets(&self, ctx: &Context<'_>, input: ConfigureAwsInput) -> Result<ApiResponse<bool>> {
+        let graphql_ctx = from_context(ctx)?;
+        
+        // Check permissions - require admin role
+        graphql_ctx.require_role("admin")?;
+
+        let dynamic_secrets = &graphql_ctx.app_state.dynamic_secrets;
+        
+        let aws_config = serde_json::json!({
+            "access_key_id": input.access_key_id,
+            "secret_access_key": input.secret_access_key,
+            "region": input.region.unwrap_or_else(|| "us-east-1".to_string()),
+            "default_role": input.default_role
+        });
+
+        dynamic_secrets.configure_aws(aws_config).await
+            .map_err(|e| async_graphql::Error::new(format!("Failed to configure AWS: {}", e)))?;
+
+        Ok(ApiResponse {
+            success: true,
+            data: Some(true),
+            error_message: None,
+            error_code: None,
+        })
+    }
+
+    /// Generate AWS IAM credentials
+    async fn generate_aws_credentials(&self, ctx: &Context<'_>, input: GenerateAwsCredentialInput) -> Result<ApiResponse<AwsCredential>> {
+        let graphql_ctx = from_context(ctx)?;
+        
+        // Check permissions - require at least user role
+        graphql_ctx.require_role("user")?;
+
+        let dynamic_secrets = &graphql_ctx.app_state.dynamic_secrets;
+        
+        let params = serde_json::json!({
+            "type": "aws",
+            "policy": input.policy,
+            "role": input.role,
+            "ttl": input.ttl
+        });
+
+        let credential = dynamic_secrets.generate_aws_credentials(&input.path, params).await
+            .map_err(|e| async_graphql::Error::new(format!("Failed to generate AWS credentials: {}", e)))?;
+
+        // Mask the secret access key for security
+        let masked_secret = if credential.secret_access_key.len() > 8 {
+            format!("{}****{}", 
+                &credential.secret_access_key[..4], 
+                &credential.secret_access_key[credential.secret_access_key.len()-4..]
+            )
+        } else {
+            "****".to_string()
+        };
+
+        let aws_credential = AwsCredential {
+            access_key_id: credential.access_key_id,
+            secret_access_key: masked_secret,
+            session_token: credential.session_token,
+            expires_at: credential.expires_at,
+            policy: credential.policy,
+            role: credential.role,
+            lease_id: credential.lease_id,
+            ttl: (credential.expires_at - Utc::now()).num_seconds() as u64,
+        };
+
+        Ok(ApiResponse {
+            success: true,
+            data: Some(aws_credential),
+            error_message: None,
+            error_code: None,
+        })
+    }
+
+    /// Generate database credentials
+    async fn generate_database_credentials(&self, ctx: &Context<'_>, input: GenerateDatabaseCredentialInput) -> Result<ApiResponse<DatabaseCredential>> {
+        let graphql_ctx = from_context(ctx)?;
+        
+        // Check permissions - require at least user role
+        graphql_ctx.require_role("user")?;
+
+        let dynamic_secrets = &graphql_ctx.app_state.dynamic_secrets;
+        
+        let db_type_str = match input.database_type {
+            crate::graphql::types::DynamicDatabaseType::Postgresql => "postgresql",
+            crate::graphql::types::DynamicDatabaseType::Mysql => "mysql",
+            crate::graphql::types::DynamicDatabaseType::Sqlserver => "sqlserver",
+        };
+
+        let params = serde_json::json!({
+            "type": db_type_str,
+            "database_url": input.database_url,
+            "permissions": input.permissions,
+            "ttl": input.ttl
+        });
+
+        let credential = dynamic_secrets.generate_database_credentials(&input.path, params).await
+            .map_err(|e| async_graphql::Error::new(format!("Failed to generate database credentials: {}", e)))?;
+
+        // Mask the password for security
+        let masked_password = if credential.password.len() > 8 {
+            format!("{}****{}", 
+                &credential.password[..4], 
+                &credential.password[credential.password.len()-4..]
+            )
+        } else {
+            "****".to_string()
+        };
+
+        // Mask password in connection string
+        let masked_connection_string = credential.connection_string
+            .split(':')
+            .enumerate()
+            .map(|(i, part)| {
+                if i == 3 && part.contains('@') {
+                    // This is the password part
+                    let password_part = part.split('@').next().unwrap_or("");
+                    let host_part = part.split('@').nth(1).unwrap_or("");
+                    if password_part.len() > 8 {
+                        format!("{}****@{}", 
+                            &password_part[..4], 
+                            host_part
+                        )
+                    } else {
+                        format!("****@{}", host_part)
+                    }
+                } else {
+                    part.to_string()
+                }
+            })
+            .collect::<Vec<String>>()
+            .join(":");
+
+        let database_type = match credential.database_type.as_str() {
+            "postgresql" => crate::graphql::types::DynamicDatabaseType::Postgresql,
+            "mysql" => crate::graphql::types::DynamicDatabaseType::Mysql,
+            "sqlserver" => crate::graphql::types::DynamicDatabaseType::Sqlserver,
+            _ => crate::graphql::types::DynamicDatabaseType::Postgresql, // Default
+        };
+
+        let db_credential = DatabaseCredential {
+            username: credential.username,
+            password: masked_password,
+            database_type,
+            database: credential.database,
+            connection_string: masked_connection_string,
+            permissions: credential.permissions,
+            expires_at: credential.expires_at,
+            lease_id: credential.lease_id,
+            ttl: (credential.expires_at - Utc::now()).num_seconds() as u64,
+            metadata: credential.metadata,
+        };
+
+        Ok(ApiResponse {
+            success: true,
+            data: Some(db_credential),
+            error_message: None,
+            error_code: None,
+        })
+    }
+
+    /// Renew a credential lease
+    async fn renew_credential_lease(&self, ctx: &Context<'_>, input: RenewLeaseInput) -> Result<ApiResponse<LeaseInfo>> {
+        let graphql_ctx = from_context(ctx)?;
+        
+        // Check permissions - require at least user role
+        graphql_ctx.require_role("user")?;
+
+        let dynamic_secrets = &graphql_ctx.app_state.dynamic_secrets;
+        
+        let lease_info = dynamic_secrets.renew(&input.lease_id, input.increment).await
+            .map_err(|e| async_graphql::Error::new(format!("Failed to renew lease: {}", e)))?;
+
+        let api_lease_info = crate::graphql::types::LeaseInfo {
+            lease_id: lease_info.lease_id,
+            ttl: lease_info.ttl,
+            created_at: lease_info.created_at,
+            renewable: lease_info.renewable,
+            max_ttl: lease_info.max_ttl,
+        };
+
+        Ok(ApiResponse {
+            success: true,
+            data: Some(api_lease_info),
+            error_message: None,
+            error_code: None,
+        })
+    }
+
+    /// Revoke a credential
+    async fn revoke_credential(&self, ctx: &Context<'_>, lease_id: String) -> Result<ApiResponse<bool>> {
+        let graphql_ctx = from_context(ctx)?;
+        
+        // Check permissions - require at least user role
+        graphql_ctx.require_role("user")?;
+
+        let dynamic_secrets = &graphql_ctx.app_state.dynamic_secrets;
+        
+        dynamic_secrets.revoke(&lease_id).await
+            .map_err(|e| async_graphql::Error::new(format!("Failed to revoke credential: {}", e)))?;
+
+        Ok(ApiResponse {
+            success: true,
+            data: Some(true),
             error_message: None,
             error_code: None,
         })

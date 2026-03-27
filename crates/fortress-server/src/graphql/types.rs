@@ -441,3 +441,165 @@ pub struct ServiceHealth {
     /// Additional details
     pub details: HashMap<String, String>,
 }
+
+// ==================== Dynamic Secrets Types ====================
+
+/// Database type for dynamic credentials
+#[derive(Enum, Clone, Debug, Copy, PartialEq, Eq)]
+pub enum DynamicDatabaseType {
+    /// PostgreSQL
+    Postgresql,
+    /// MySQL
+    Mysql,
+    /// SQL Server
+    Sqlserver,
+}
+
+/// AWS IAM credential response
+#[derive(SimpleObject, Clone, Debug)]
+pub struct AwsCredential {
+    /// Access key ID
+    pub access_key_id: String,
+    /// Secret access key (masked)
+    pub secret_access_key: String,
+    /// Session token (if any)
+    pub session_token: Option<String>,
+    /// Expiration time
+    pub expires_at: DateTime<Utc>,
+    /// IAM policy applied
+    pub policy: serde_json::Value,
+    /// Role assumed (if any)
+    pub role: Option<String>,
+    /// Lease ID for renewal/revocation
+    pub lease_id: String,
+    /// Time to live in seconds
+    pub ttl: u64,
+}
+
+/// Database credential response
+#[derive(SimpleObject, Clone, Debug)]
+pub struct DatabaseCredential {
+    /// Generated username
+    pub username: String,
+    /// Generated password (masked)
+    pub password: String,
+    /// Database type
+    pub database_type: DynamicDatabaseType,
+    /// Database name
+    pub database: String,
+    /// Connection string (password masked)
+    pub connection_string: String,
+    /// Granted permissions
+    pub permissions: Vec<String>,
+    /// Expiration time
+    pub expires_at: DateTime<Utc>,
+    /// Lease ID for renewal/revocation
+    pub lease_id: String,
+    /// Time to live in seconds
+    pub ttl: u64,
+    /// Database-specific metadata
+    pub metadata: HashMap<String, String>,
+}
+
+/// Input for generating AWS IAM credentials
+#[derive(InputObject)]
+pub struct GenerateAwsCredentialInput {
+    /// Path for the credential
+    pub path: String,
+    /// IAM policy document
+    pub policy: serde_json::Value,
+    /// Role to assume (optional)
+    pub role: Option<String>,
+    /// Time to live in seconds
+    pub ttl: Option<u64>,
+}
+
+/// Input for generating database credentials
+#[derive(InputObject)]
+pub struct GenerateDatabaseCredentialInput {
+    /// Path for the credential
+    pub path: String,
+    /// Database type
+    pub database_type: DynamicDatabaseType,
+    /// Database connection URL (admin)
+    pub database_url: String,
+    /// Permissions to grant
+    pub permissions: Vec<String>,
+    /// Time to live in seconds
+    pub ttl: Option<u64>,
+}
+
+/// Input for configuring AWS integration
+#[derive(InputObject)]
+pub struct ConfigureAwsInput {
+    /// AWS access key ID
+    pub access_key_id: String,
+    /// AWS secret access key
+    pub secret_access_key: String,
+    /// AWS region
+    pub region: Option<String>,
+    /// Default IAM role
+    pub default_role: Option<String>,
+}
+
+/// Input for renewing a credential lease
+#[derive(InputObject)]
+pub struct RenewLeaseInput {
+    /// Lease ID to renew
+    pub lease_id: String,
+    /// TTL increment in seconds
+    pub increment: Option<u64>,
+}
+
+/// Dynamic secrets engine status
+#[derive(SimpleObject, Clone, Debug)]
+pub struct DynamicSecretsStatus {
+    /// Engine name
+    pub name: String,
+    /// Whether the engine is initialized
+    pub initialized: bool,
+    /// Total active secrets
+    pub total_secrets: u64,
+    /// Active leases
+    pub active_leases: u64,
+    /// AWS configuration status
+    pub aws_configured: bool,
+    /// Supported database types
+    pub supported_databases: Vec<DynamicDatabaseType>,
+    /// Default TTL
+    pub default_ttl: u64,
+    /// Maximum TTL
+    pub max_ttl: u64,
+    /// Auto cleanup enabled
+    pub auto_cleanup: bool,
+}
+
+/// Secret data response
+#[derive(SimpleObject, Clone, Debug)]
+pub struct SecretData {
+    /// Secret data
+    pub data: serde_json::Value,
+    /// Creation timestamp
+    pub created_at: DateTime<Utc>,
+    /// Last update timestamp
+    pub updated_at: Option<DateTime<Utc>>,
+    /// Secret version
+    pub version: i32,
+    /// Lease information (if applicable)
+    pub lease: Option<LeaseInfo>,
+}
+
+/// Lease information
+#[derive(SimpleObject, Clone, Debug)]
+pub struct LeaseInfo {
+    /// Lease ID
+    pub lease_id: String,
+    /// Time to live in seconds
+    pub ttl: u64,
+    /// Creation timestamp
+    pub created_at: DateTime<Utc>,
+    /// Whether the lease is renewable
+    pub renewable: bool,
+    /// Maximum TTL
+    pub max_ttl: Option<u64>,
+}

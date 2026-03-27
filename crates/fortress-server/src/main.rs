@@ -42,6 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// Create an application router with all endpoints
 async fn create_router(_openapi: utoipa::openapi::OpenApi) -> Result<Router, Box<dyn std::error::Error>> {
     use fortress_server::handlers::*;
+    use fortress_server::graphql::{graphql_handler, graphql_playground};
     
     // Create application state
     let state = create_app_state().await?;
@@ -51,6 +52,10 @@ async fn create_router(_openapi: utoipa::openapi::OpenApi) -> Result<Router, Box
         // Health and API documentation
         .route("/health", get(health_check))
         .route("/openapi.json", get(openapi_handler))
+        
+        // GraphQL API
+        .route("/graphql", get(graphql_handler).post(graphql_handler))
+        .route("/graphql/playground", get(graphql_playground))
         
         // Data operations
         .route("/api/v1/data", post(store_data))
@@ -122,6 +127,9 @@ async fn create_app_state() -> Result<Arc<fortress_server::handlers::AppState>, 
     };
     let tenant_manager = Arc::new(InMemoryTenantManager::with_global_limits(global_limits));
 
+    // Initialize dynamic secrets engine
+    let dynamic_secrets = Arc::new(fortress_core::dynamic_secrets::DynamicSecretsEngine::new());
+
     let state = AppState {
         auth_manager,
         metrics,
@@ -130,6 +138,7 @@ async fn create_app_state() -> Result<Arc<fortress_server::handlers::AppState>, 
         storage,
         health_checker,
         tenant_manager,
+        dynamic_secrets,
     };
 
     Ok(Arc::new(state))

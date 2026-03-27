@@ -89,6 +89,9 @@ impl FortressServer {
         };
         let tenant_manager = Arc::new(InMemoryTenantManager::with_global_limits(global_limits));
 
+        // Initialize dynamic secrets engine
+        let dynamic_secrets = Arc::new(fortress_core::dynamic_secrets::DynamicSecretsEngine::new());
+
         // Create application state
         let app_state = Arc::new(AppState {
             auth_manager,
@@ -98,6 +101,7 @@ impl FortressServer {
             storage,
             health_checker: health_checker.clone(),
             tenant_manager,
+            dynamic_secrets,
         });
 
         Ok(Self {

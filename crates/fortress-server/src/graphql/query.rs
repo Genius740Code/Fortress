@@ -13,6 +13,8 @@ use chrono::Utc;
 use std::collections::HashMap;
 use fortress_core::{
     key::KeyManager,
+    field_encryption::FieldIdentifier,
+    secrets::SecretsEngine,
 };
 use serde_json;
 use uuid::Uuid;
@@ -544,5 +546,89 @@ impl Query {
     async fn me(&self, ctx: &Context<'_>) -> Result<Option<AuthenticatedUser>> {
         let graphql_ctx = from_context(ctx)?;
         Ok(graphql_ctx.user.clone())
+    }
+
+    // ==================== Dynamic Secrets Queries ====================
+
+    /// Get dynamic secrets engine status
+    async fn dynamic_secrets_status(&self, ctx: &Context<'_>) -> Result<DynamicSecretsStatus> {
+        let graphql_ctx = from_context(ctx)?;
+        
+        // Check permissions - require at least user role
+        graphql_ctx.require_role("user")?;
+
+        let dynamic_secrets = &graphql_ctx.app_state.dynamic_secrets;
+        let engine_status = dynamic_secrets.status().await
+            .map_err(|e| async_graphql::Error::new(format!("Failed to get dynamic secrets status: {}", e)))?;
+
+        let supported_databases = vec![
+            crate::graphql::types::DynamicDatabaseType::Postgresql,
+            crate::graphql::types::DynamicDatabaseType::Mysql,
+            crate::graphql::types::DynamicDatabaseType::Sqlserver,
+        ];
+
+        Ok(DynamicSecretsStatus {
+            name: engine_status.name,
+            initialized: engine_status.initialized,
+            total_secrets: engine_status.stats.total_secrets,
+            active_leases: engine_status.stats.active_leases,
+            aws_configured: engine_status.config.get("aws").is_some(),
+            supported_databases,
+            default_ttl: engine_status.config.get("default_ttl")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(3600),
+            max_ttl: engine_status.config.get("max_ttl")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(86400),
+            auto_cleanup: engine_status.config.get("auto_cleanup")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true),
+        })
+    }
+
+    /// List dynamic credentials
+    async fn list_dynamic_credentials(&self, ctx: &Context<'_>, path: Option<String>) -> Result<Vec<String>> {
+        let graphql_ctx = from_context(ctx)?;
+        
+        // Check permissions - require at least user role
+        graphql_ctx.require_role("user")?;
+
+        let dynamic_secrets = &graphql_ctx.app_state.dynamic_secrets;
+        let search_path = path.unwrap_or_else(|| "".to_string());
+        
+        dynamic_secrets.list(&search_path).await
+            .map_err(|e| async_graphql::Error::new(format!("Failed to list dynamic credentials: {}", e)))
+    }
+
+    /// Get a specific dynamic credential
+    async fn get_dynamic_credential(&self, ctx: &Context<'_>, lease_id: String) -> Result<Option<SecretData>> {
+        let graphql_ctx = from_context(ctx)?;
+        
+        // Check permissions - require at least user role
+        graphql_ctx.require_role("user")?;
+
+        let dynamic_secrets = &graphql_ctx.app_state.dynamic_secrets;
+        let secret = dynamic_secrets.read(&lease_id).await
+            .map_err(|e| async_graphql::Error::new(format!("Failed to get dynamic credential: {}", e)))?;
+
+        match secret {
+            Some(secret) => {
+                let secret_data = SecretData {
+                    data: secret.data,
+                    created_at: secret.metadata.created_at,
+                    updated_at: secret.metadata.updated_at,
+                    version: secret.metadata.version as i32, // Cast u64 to i32
+                    lease: secret.metadata.lease.map(|lease| crate::graphql::types::LeaseInfo {
+                        lease_id: lease.lease_id,
+                        ttl: lease.ttl,
+                        created_at: lease.created_at,
+                        renewable: lease.renewable,
+                        max_ttl: lease.max_ttl,
+                    }),
+                };
+                Ok(Some(secret_data))
+            },
+            None => Ok(None),
+        }
     }
 }
