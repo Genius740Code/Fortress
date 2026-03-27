@@ -770,7 +770,7 @@ impl SecretsEngine for KvEngine {
         self.record_operation("delete").await;
         
         // Log the delete operation
-        let principal = "system"; // In a real implementation, this would be authenticated user
+        let _principal = "system"; // In a real implementation, this would be authenticated user
         
         let mut leases = self.leases.write().await;
         

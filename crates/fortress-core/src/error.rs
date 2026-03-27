@@ -149,6 +149,15 @@ pub enum FortressError {
         plugin_id: Option<String>,
     },
 
+    /// TEE-related errors
+    #[error("TEE error: {message}")]
+    Tee {
+        /// Error message
+        message: String,
+        /// Function where error occurred
+        function: String,
+    },
+
     /// Compliance-related errors
     #[error("Compliance error: {message}")]
     Compliance {
@@ -1019,6 +1028,14 @@ impl FortressError {
         }
     }
 
+    /// Create a new TEE error
+    pub fn tee<S: Into<String>>(message: S, function: S) -> Self {
+        Self::Tee {
+            message: message.into(),
+            function: function.into(),
+        }
+    }
+
     /// Create a new plugin error with plugin ID
     pub fn plugin_with_id<S: Into<String>>(message: S, plugin_id: S) -> Self {
         Self::Plugin {
@@ -1213,6 +1230,7 @@ impl FortressError {
             Self::Backup { .. } => "backup",
             Self::Streaming { .. } => "streaming",
             Self::Audit { .. } => "audit",
+            Self::Tee { .. } => "tee",
         }
     }
 }

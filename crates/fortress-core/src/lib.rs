@@ -385,6 +385,36 @@ pub mod transit_engine;
 
 pub mod image_encryption;
 
+/// Trusted Execution Environments (TEE) integration
+
+pub mod tee;
+
+/// AWS Nitro Enclaves provider
+
+pub mod tee_aws_nitro;
+
+/// Intel SGX provider
+
+pub mod tee_intel_sgx;
+
+/// Secure enclave communication protocols
+
+pub mod tee_communication;
+
+/// TEE attestation verification
+
+pub mod tee_attestation;
+
+/// TEE-aware key management
+
+pub mod tee_key_management;
+
+/// TEE integration tests
+
+#[cfg(test)]
+
+pub mod tee_integration_tests;
+
 
 
 #[cfg(test)]
@@ -571,6 +601,35 @@ pub mod prelude {
         HealthChecker, HealthConfig, HealthStatus,
         AlertManager, AlertConfig, AlertRule,
         DashboardManager, DashboardConfig, Widget,
+    };
+
+    pub use crate::tee::{
+        TeeManager, TeeProvider, TeeType, EnclaveConfig, EnclaveStatus, AttestationResult,
+        SecureChannel, TeeCapabilities, SecurityPolicy, EnclaveInfo, TeeAwareKeyManager,
+    };
+
+    pub use crate::tee_aws_nitro::{
+        AwsNitroProvider, NitroCliResponse, NitroEnclaveDescription, NitroMeasurements,
+    };
+
+    pub use crate::tee_intel_sgx::{
+        IntelSgxProvider, SgxQuote, SgxSignatureData, SgxReportBody, SgxAttributes, SgxMeasurement,
+    };
+
+    pub use crate::tee_communication::{
+        SecureProtocolHandler, SecureMessage, SecureMessageHeader, EncryptedPayload,
+        SecureMessageType, KeyExchangeData, AuthData, ProtocolConfig, ChannelState,
+    };
+
+    pub use crate::tee_attestation::{
+        AttestationVerifier, TrustedDataStore, VerificationConfig, VerificationDetails,
+        NitroAttestationDocument, TrustedDataStore as TrustedDataStoreType,
+    };
+
+    pub use crate::tee_key_management::{
+        EnclaveKeyInfo, KeyStatus, KeyPolicy, KeyUsageMetrics, KeyGenerationRequest,
+        KeyGenerationResponse, CryptographicOperationRequest, CryptographicOperationResponse,
+        KeyRotationRequest, KeyRotationResponse,
     };
 
     pub use crate::compliance::{
