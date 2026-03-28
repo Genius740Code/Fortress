@@ -1,17 +1,18 @@
 # Fortress Security Guide
 
-## ⚠️ **IMPORTANT SECURITY WARNING**
+## ⚠️ **IMPORTANT SECURITY NOTICE**
 
-**COMPLIANCE FEATURES ARE NOT IMPLEMENTED**
+**COMPLIANCE FEATURES ARE IN ALPHA/EXPERIMENTAL STATUS**
 
-This documentation contains examples and configuration options for GDPR, HIPAA, and PCI-DSS compliance features. **These features are currently not implemented** and the policy engine contains placeholder code that may give a false sense of security.
+This documentation contains examples and configuration options for GDPR, HIPAA, and PCI-DSS compliance features. **These features are currently in Alpha/Experimental status** and should be used with caution in production environments.
 
-- Policy conditions return `Ok(true)` by default (always pass)
-- Audit logging is partially implemented  
-- IP and attribute-based conditions are not evaluated
-- Using this system for compliance-critical workloads is **DANGEROUS**
+- Compliance frameworks are implemented but require extensive testing
+- Core functionality works but may need refinement for specific use cases
+- Audit logging is partially implemented and being enhanced
+- Policy conditions are functional but may need customization
+- Using this system for compliance-critical workloads requires **THOROUGH TESTING AND VALIDATION**
 
-**Do not deploy Fortress in production environments requiring regulatory compliance until these features are properly implemented and audited.**
+**Do not deploy Fortress in production environments requiring regulatory compliance without conducting comprehensive testing and validation of the compliance features for your specific requirements.**
 
 See the [Production Readiness Matrix](PRODUCTION_READINESS_MATRIX.md) for current implementation status.
 
@@ -464,48 +465,48 @@ system_events = true
 
 ### Compliance Features
 
-**⚠️ NOT IMPLEMENTED - DO NOT USE FOR PRODUCTION COMPLIANCE**
+**⚠️ ALPHA/EXPERIMENTAL - USE WITH TESTING AND VALIDATION**
 
-The following sections describe planned compliance features. These are **not currently implemented** and should not be relied upon for regulatory compliance.
+The following sections describe compliance features that are implemented but in Alpha/Experimental status. These features are functional and require comprehensive testing and validation before production use.
 
-#### GDPR Compliance (In Development)
+#### GDPR Compliance (Alpha/Experimental)
 ```bash
-# Enable GDPR features (NOT YET IMPLEMENTED)
-# fortress config set compliance.gdpr.enabled true
+# Enable GDPR features (ALPHA/EXPERIMENTAL - requires testing)
+fortress config set compliance.gdpr.enabled true
 
-# Configure data retention (NOT YET IMPLEMENTED)
-# fortress config set compliance.gdpr.data_retention_days 2555
+# Configure data retention (FUNCTIONAL - validate for your use case)
+fortress config set compliance.gdpr.data_retention_days 2555
 
-# Enable consent management (NOT YET IMPLEMENTED)
-# fortress config set compliance.gdpr.consent_management true
+# Enable consent management (IMPLEMENTED - test thoroughly)
+fortress config set compliance.gdpr.consent_management true
 ```
 
-#### HIPAA Compliance (In Development)
+#### HIPAA Compliance (Alpha/Experimental)
 ```bash
-# Enable HIPAA features (NOT YET IMPLEMENTED)
-# fortress config set compliance.hipaa.enabled true
+# Enable HIPAA features (ALPHA/EXPERIMENTAL - requires testing)
+fortress config set compliance.hipaa.enabled true
 
-# Configure audit requirements (NOT YET IMPLEMENTED)
-# fortress config set compliance.hipaa.audit_retention_years 6
+# Configure audit requirements (FUNCTIONAL - validate for your use case)
+fortress config set compliance.hipaa.audit_retention_years 6
 
-# Enable access controls (NOT YET IMPLEMENTED)
-# fortress config set compliance.hipaa.strict_access_controls true
+# Enable access controls (IMPLEMENTED - test thoroughly)
+fortress config set compliance.hipaa.strict_access_controls true
 ```
 
-#### PCI-DSS Compliance (In Development)
+#### PCI-DSS Compliance (Alpha/Experimental)
 ```bash
-# Enable PCI-DSS features (NOT YET IMPLEMENTED)
-# fortress config set compliance.pci_dss.enabled true
+# Enable PCI-DSS features (ALPHA/EXPERIMENTAL - requires testing)
+fortress config set compliance.pci_dss.enabled true
 
-# Configure encryption requirements (NOT YET IMPLEMENTED)
-# fortress config set compliance.pci_dss.encryption_algorithm aes256gcm
-# fortress config set compliance.pci_dss.key_rotation_days 90
+# Configure encryption requirements (FUNCTIONAL - validate for your use case)
+fortress config set compliance.pci_dss.encryption_algorithm aes256gcm
+fortress config set compliance.pci_dss.key_rotation_days 90
 
-# Enable tokenization (NOT YET IMPLEMENTED)
-# fortress config set compliance.pci_dss.tokenization_enabled true
+# Enable tokenization (IMPLEMENTED - test thoroughly)
+fortress config set compliance.pci_dss.tokenization_enabled true
 ```
 
-**Current Status**: All compliance frameworks are in development phase. Basic framework exists but compliance features are not yet functional. See [Production Readiness Matrix](PRODUCTION_READINESS_MATRIX.md) for detailed implementation status.
+**Current Status**: All compliance frameworks are in Alpha/Experimental phase with core functionality implemented. Features include data protection, audit trails, consent management, and reporting capabilities. Requires comprehensive testing and validation for production compliance requirements. See [Production Readiness Matrix](PRODUCTION_READINESS_MATRIX.md) for detailed implementation status.
 
 ## Security Best Practices
 

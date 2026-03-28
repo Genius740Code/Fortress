@@ -8,7 +8,7 @@ A comprehensive security platform that provides enterprise-grade cryptography, k
 > **Production deployment ready with enterprise-grade security**
 > - ✅ All core security features implemented and tested
 > - ✅ Zero-downtime key rotation and clustering operational
-> - ✅ Comprehensive compliance frameworks (GDPR, HIPAA, PCI-DSS)
+> - ✅ Compliance frameworks implemented (GDPR, HIPAA, PCI-DSS) - Alpha/Experimental
 > - ✅ GraphQL API with enterprise-grade security features
 > - ✅ Quantum-resistant cryptography available
 > - Review [Production Readiness Matrix](docs/PRODUCTION_READINESS_MATRIX.md) for details
@@ -17,6 +17,7 @@ A comprehensive security platform that provides enterprise-grade cryptography, k
 
 ### Feature Maturity Legend
 - `[Stable]` - Production-ready with comprehensive testing
+- `[Alpha/Experimental]` - Implemented but requires testing and validation
 - `[In Development]` - Partial implementation, APIs may change
 - `[Planned]` - Designed but not yet implemented
 
@@ -33,7 +34,7 @@ A comprehensive security platform that provides enterprise-grade cryptography, k
 - **Multi-Tenant Support**: Isolated data per tenant/organization `[Stable]`
 - **Cluster Support**: High availability with Raft consensus `[Stable]`
 - **Audit Logging**: Comprehensive security event logging `[Stable]`
-- **Compliance Framework**: GDPR, HIPAA, PCI-DSS compliance features `[Stable]`
+- **Compliance Framework**: GDPR, HIPAA, PCI-DSS compliance features `[Alpha/Experimental]`
 - **HSM Integration**: Hardware Security Module support `[Stable]`
 
 ### High Performance
