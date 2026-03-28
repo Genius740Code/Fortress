@@ -98,6 +98,10 @@ derive_more = { version = "0.99", features = ["from", "into", "display"] }
 # Regular expressions
 regex = "1.10"
 
+# OPA/Rego policy engine support
+rego = "0.1"
+wasmtime = "19.0"
+
 # IP network support
 ipnetwork = "0.20"
 
@@ -137,11 +141,12 @@ sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "chrono"
 # HTTP client for plugin marketplace
 reqwest = { version = "0.12", features = ["json"] }
 
-# WebAssembly runtime for plugin execution
-wasmtime = { version = "19.0", features = ["cranelift"] }
-
-# Archive handling for plugin packages
+# Archive support
 tar = "0.4"
+
+# JWT support
+jsonwebtoken = "9.2"
+
 dashmap = { version = "5.5", optional = true }
 crossbeam = { version = "0.8", optional = true }
 atomic = { version = "0.6", optional = true }

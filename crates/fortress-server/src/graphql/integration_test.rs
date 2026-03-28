@@ -27,6 +27,7 @@ pub struct IntegrationTestSuite {
 }
 
 impl IntegrationTestSuite {
+    /// Create a new integration test suite
     pub fn new() -> Self {
         // Initialize security components
         let security_config = SecurityConfig::default();
@@ -253,7 +254,7 @@ impl IntegrationTestSuite {
 
         // Get slow operations
         let slow_ops = self.performance_monitor.get_slow_operations(5).await;
-        let slow_ops_available = slow_ops.len() >= 0;
+        let slow_ops_available = !slow_ops.is_empty();
 
         TestResult {
             passed: stats_available && slow_ops_available,

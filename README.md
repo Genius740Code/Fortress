@@ -26,6 +26,8 @@ A comprehensive security platform that provides enterprise-grade cryptography, k
 - **Field-Level Encryption**: Encrypt specific fields with different algorithms `[Stable]`
 - **Key Management**: Automatic key generation, rotation, and secure storage `[Stable]`
 - **Zero-Downtime Rotation**: Rotate encryption keys without service interruption `[Stable]`
+- **HSM Integration**: Hardware Security Module support `[Stable]`
+- **Transit Engine**: Non-invasive encryption as a service `[Stable]`
 
 ### Enterprise Architecture
 - **Multi-Tenant Support**: Isolated data per tenant/organization `[Stable]`

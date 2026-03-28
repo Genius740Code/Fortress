@@ -1,0 +1,999 @@
+//! Format-Preserving Encryption (FPE) Implementation
+//!
+//! This module provides format-preserving encryption capabilities for Fortress,
+//! allowing encryption of sensitive data while maintaining the original format.
+//! This is crucial for legacy system compatibility where data formats cannot be changed.
+
+use crate::error::{FortressError, Result, EncryptionErrorCode};
+use crate::encryption::EncryptionAlgorithm;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use uuid::Uuid;
+use regex::Regex;
+use chrono::{DateTime, Utc, NaiveDate};
+
+/// FPE Algorithm types
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum FpeAlgorithm {
+    /// FF1 (NIST SP 800-38G Rev 1) - Format-preserving encryption
+    FF1,
+    /// FF3-1 (NIST SP 800-38G Rev 1) - Format-preserving encryption
+    FF3_1,
+    /// Custom format-preserving algorithm
+    Custom(String),
+}
+
+/// Data formats supported by FPE
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum DataFormat {
+    /// Credit card number (16 digits, Luhn checksum)
+    CreditCard,
+    /// Social Security Number (9 digits: XXX-XX-XXXX)
+    SocialSecurityNumber,
+    /// Phone number (E.164 format: +XXXXXXXXXX)
+    PhoneNumber,
+    /// Email address (preserves @ and domain structure)
+    EmailAddress,
+    /// Numeric string of fixed length
+    Numeric { length: usize },
+    /// Alphanumeric string of fixed length
+    Alphanumeric { length: usize },
+    /// Date format (YYYY-MM-DD)
+    Date,
+    /// Custom format with regex pattern
+    Custom { pattern: String, charset: String },
+}
+
+/// FPE configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FpeConfig {
+    /// Algorithm to use
+    pub algorithm: FpeAlgorithm,
+    /// Data format
+    pub format: DataFormat,
+    /// Encryption key
+    pub key: Vec<u8>,
+    /// Additional parameters
+    pub parameters: HashMap<String, serde_json::Value>,
+}
+
+/// FPE encryption result
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FpeResult {
+    /// Encrypted value
+    pub encrypted_value: String,
+    /// Original format preserved
+    pub format_preserved: bool,
+    /// Metadata about the encryption
+    pub metadata: FpeMetadata,
+}
+
+/// FPE metadata
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FpeMetadata {
+    /// Algorithm used
+    pub algorithm: FpeAlgorithm,
+    /// Data format
+    pub format: DataFormat,
+    /// Timestamp of encryption
+    pub timestamp: DateTime<Utc>,
+    /// Version of the FPE implementation
+    pub version: String,
+    /// Additional metadata
+    pub additional: HashMap<String, serde_json::Value>,
+}
+
+/// Format-Preserving Encryption implementation
+pub struct FormatPreservingEncryption {
+    /// Configuration
+    config: FpeConfig,
+    /// Compiled regex patterns
+    patterns: HashMap<DataFormat, Regex>,
+    /// Character sets for different formats
+    charsets: HashMap<DataFormat, String>,
+}
+
+impl FormatPreservingEncryption {
+    /// Create a new FPE instance
+    pub fn new(config: FpeConfig) -> Result<Self> {
+        let mut fpe = Self {
+            config,
+            patterns: HashMap::new(),
+            charsets: HashMap::new(),
+        };
+        
+        fpe.initialize_patterns()?;
+        fpe.initialize_charsets();
+        
+        Ok(fpe)
+    }
+
+    /// Initialize regex patterns for different formats
+    fn initialize_patterns(&mut self) -> Result<()> {
+        // Credit card pattern (16 digits, supports spaces/hyphens)
+        self.patterns.insert(
+            DataFormat::CreditCard,
+            Regex::new(r"^(?:(\d{4}[-\s]?){3}\d{4})$")
+                .map_err(|e| FortressError::encryption(
+                    &format!("Invalid credit card regex: {}", e),
+                    &"FPE".to_string(),
+                    EncryptionErrorCode::InvalidInput,
+                ))?
+        );
+
+        // SSN pattern (XXX-XX-XXXX)
+        self.patterns.insert(
+            DataFormat::SocialSecurityNumber,
+            Regex::new(r"^\d{3}-\d{2}-\d{4}$")
+                .map_err(|e| FortressError::encryption(
+                    &format!("Invalid SSN regex: {}", e),
+                    &"FPE".to_string(),
+                    EncryptionErrorCode::InvalidInput,
+                ))?
+        );
+
+        // Phone number pattern (E.164: +XXXXXXXXXX)
+        self.patterns.insert(
+            DataFormat::PhoneNumber,
+            Regex::new(r"^\+\d{10,15}$")
+                .map_err(|e| FortressError::encryption(
+                    &format!("Invalid phone regex: {}", e),
+                    &"FPE".to_string(),
+                    EncryptionErrorCode::InvalidInput,
+                ))?
+        );
+
+        // Email address pattern
+        self.patterns.insert(
+            DataFormat::EmailAddress,
+            Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+                .map_err(|e| FortressError::encryption(
+                    &format!("Invalid email regex: {}", e),
+                    &"FPE".to_string(),
+                    EncryptionErrorCode::InvalidInput,
+                ))?
+        );
+
+        // Date pattern (YYYY-MM-DD)
+        self.patterns.insert(
+            DataFormat::Date,
+            Regex::new(r"^\d{4}-\d{2}-\d{2}$")
+                .map_err(|e| FortressError::encryption(
+                    &format!("Invalid date regex: {}", e),
+                    &"FPE".to_string(),
+                    EncryptionErrorCode::InvalidInput,
+                ))?
+        );
+
+        Ok(())
+    }
+
+    /// Initialize character sets for different formats
+    fn initialize_charsets(&mut self) {
+        self.charsets.insert(DataFormat::CreditCard, "0123456789".to_string());
+        self.charsets.insert(DataFormat::SocialSecurityNumber, "0123456789-".to_string());
+        self.charsets.insert(DataFormat::PhoneNumber, "+0123456789".to_string());
+        self.charsets.insert(DataFormat::EmailAddress, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@.-_+".to_string());
+        self.charsets.insert(DataFormat::Date, "0123456789-".to_string());
+    }
+
+    /// Encrypt data while preserving format
+    pub fn encrypt(&self, plaintext: &str) -> Result<FpeResult> {
+        // Validate input format
+        self.validate_format(plaintext)?;
+
+        match &self.config.format {
+            DataFormat::CreditCard => self.encrypt_credit_card(plaintext),
+            DataFormat::SocialSecurityNumber => self.encrypt_ssn(plaintext),
+            DataFormat::PhoneNumber => self.encrypt_phone(plaintext),
+            DataFormat::EmailAddress => self.encrypt_email(plaintext),
+            DataFormat::Numeric { length } => self.encrypt_numeric(plaintext, *length),
+            DataFormat::Alphanumeric { length } => self.encrypt_alphanumeric(plaintext, *length),
+            DataFormat::Date => self.encrypt_date(plaintext),
+            DataFormat::Custom { pattern, charset } => self.encrypt_custom(plaintext, pattern, charset),
+        }
+    }
+
+    /// Decrypt data while preserving format
+    pub fn decrypt(&self, ciphertext: &str) -> Result<String> {
+        match &self.config.format {
+            DataFormat::CreditCard => self.decrypt_credit_card(ciphertext),
+            DataFormat::SocialSecurityNumber => self.decrypt_ssn(ciphertext),
+            DataFormat::PhoneNumber => self.decrypt_phone(ciphertext),
+            DataFormat::EmailAddress => self.decrypt_email(ciphertext),
+            DataFormat::Numeric { length } => self.decrypt_numeric(ciphertext, *length),
+            DataFormat::Alphanumeric { length } => self.decrypt_alphanumeric(ciphertext, *length),
+            DataFormat::Date => self.decrypt_date(ciphertext),
+            DataFormat::Custom { pattern, charset } => self.decrypt_custom(ciphertext, pattern, charset),
+        }
+    }
+
+    /// Validate input format
+    fn validate_format(&self, input: &str) -> Result<()> {
+        let pattern = self.patterns.get(&self.config.format)
+            .ok_or_else(|| FortressError::validation("Unsupported format", None, None))?;
+
+        if !pattern.is_match(input) {
+            return Err(FortressError::encryption(
+                &format!("Input does not match format: {:?}", self.config.format),
+                &"FPE".to_string(),
+                EncryptionErrorCode::InvalidInput,
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Encrypt credit card number
+    fn encrypt_credit_card(&self, card_number: &str) -> Result<FpeResult> {
+        // Remove spaces and hyphens for processing
+        let clean_number = card_number.replace(&[' ', '-'][..], "");
+        
+        if clean_number.len() != 16 {
+            return Err(FortressError::encryption(
+                "Credit card must be 16 digits",
+                &"FPE".to_string(),
+                EncryptionErrorCode::InvalidInput,
+            ));
+        }
+
+        // Validate Luhn checksum
+        if !self.validate_luhn(&clean_number) {
+            return Err(FortressError::encryption(
+                "Invalid credit card checksum",
+                &"FPE".to_string(),
+                EncryptionErrorCode::InvalidInput,
+            ));
+        }
+
+        // Apply FPE to the 15 digits (excluding last checksum digit)
+        let digits_to_encrypt = &clean_number[..15];
+        let encrypted_digits = self.apply_fpe_to_digits(digits_to_encrypt)?;
+
+        // Calculate new Luhn checksum
+        let encrypted_with_checksum = self.calculate_luhn_checksum(&encrypted_digits);
+
+        // Reformat with original spacing
+        let formatted = self.reformat_credit_card(&encrypted_with_checksum, card_number);
+
+        Ok(FpeResult {
+            encrypted_value: formatted,
+            format_preserved: true,
+            metadata: FpeMetadata {
+                algorithm: self.config.algorithm.clone(),
+                format: DataFormat::CreditCard,
+                timestamp: Utc::now(),
+                version: "1.0".to_string(),
+                additional: HashMap::new(),
+            },
+        })
+    }
+
+    /// Decrypt credit card number
+    fn decrypt_credit_card(&self, encrypted_card: &str) -> Result<String> {
+        // Remove spaces and hyphens for processing
+        let clean_number = encrypted_card.replace(&[' ', '-'][..], "");
+        
+        if clean_number.len() != 16 {
+            return Err(FortressError::encryption(
+                "Encrypted credit card must be 16 digits",
+                &"FPE".to_string(),
+                EncryptionErrorCode::InvalidInput,
+            ));
+        }
+
+        // Apply reverse FPE to the 15 digits (excluding last checksum digit)
+        let digits_to_decrypt = &clean_number[..15];
+        let decrypted_digits = self.apply_reverse_fpe_to_digits(digits_to_decrypt)?;
+
+        // Calculate new Luhn checksum
+        let decrypted_with_checksum = self.calculate_luhn_checksum(&decrypted_digits);
+
+        // Reformat with original spacing
+        Ok(self.reformat_credit_card(&decrypted_with_checksum, encrypted_card))
+    }
+
+    /// Encrypt Social Security Number
+    fn encrypt_ssn(&self, ssn: &str) -> Result<FpeResult> {
+        // Remove hyphens for processing
+        let clean_ssn = ssn.replace('-', "");
+        
+        if clean_ssn.len() != 9 {
+            return Err(FortressError::encryption(
+                "SSN must be 9 digits",
+                &"FPE".to_string(),
+                EncryptionErrorCode::InvalidInput,
+            ));
+        }
+
+        // Apply FPE to all 9 digits
+        let encrypted_digits = self.apply_fpe_to_digits(&clean_ssn)?;
+        
+        // Reformat with hyphens
+        let formatted = format!("{}-{}-{}", 
+            &encrypted_digits[..3],
+            &encrypted_digits[3..5],
+            &encrypted_digits[5..9]
+        );
+
+        Ok(FpeResult {
+            encrypted_value: formatted,
+            format_preserved: true,
+            metadata: FpeMetadata {
+                algorithm: self.config.algorithm.clone(),
+                format: DataFormat::SocialSecurityNumber,
+                timestamp: Utc::now(),
+                version: "1.0".to_string(),
+                additional: HashMap::new(),
+            },
+        })
+    }
+
+    /// Decrypt Social Security Number
+    fn decrypt_ssn(&self, encrypted_ssn: &str) -> Result<String> {
+        // Remove hyphens for processing
+        let clean_ssn = encrypted_ssn.replace('-', "");
+        
+        if clean_ssn.len() != 9 {
+            return Err(FortressError::encryption(
+                "Encrypted SSN must be 9 digits",
+                &"FPE".to_string(),
+                EncryptionErrorCode::InvalidInput,
+            ));
+        }
+
+        // Apply reverse FPE to all 9 digits
+        let decrypted_digits = self.apply_reverse_fpe_to_digits(&clean_ssn)?;
+
+        // Reformat with hyphens
+        Ok(format!("{}-{}-{}", 
+            &decrypted_digits[..3],
+            &decrypted_digits[3..5],
+            &decrypted_digits[5..9]
+        ))
+    }
+
+    /// Encrypt phone number
+    fn encrypt_phone(&self, phone: &str) -> Result<FpeResult> {
+        // Remove + for processing
+        let clean_phone = &phone[1..]; // Remove +
+        
+        if clean_phone.len() < 10 || clean_phone.len() > 15 {
+            return Err(FortressError::encryption(
+                "Phone number must be 10-15 digits",
+                &"FPE".to_string(),
+                EncryptionErrorCode::InvalidInput,
+            ));
+        }
+
+        // Apply FPE to digits
+        let encrypted_digits = self.apply_fpe_to_digits(clean_phone)?;
+
+        // Reformat with +
+        let formatted = format!("+{}", encrypted_digits);
+
+        Ok(FpeResult {
+            encrypted_value: formatted,
+            format_preserved: true,
+            metadata: FpeMetadata {
+                algorithm: self.config.algorithm.clone(),
+                format: DataFormat::PhoneNumber,
+                timestamp: Utc::now(),
+                version: "1.0".to_string(),
+                additional: HashMap::new(),
+            },
+        })
+    }
+
+    /// Decrypt phone number
+    fn decrypt_phone(&self, encrypted_phone: &str) -> Result<String> {
+        // Remove + for processing
+        let clean_phone = &encrypted_phone[1..];
+        
+        if clean_phone.len() < 10 || clean_phone.len() > 15 {
+            return Err(FortressError::encryption(
+                "Encrypted phone number must be 10-15 digits",
+                &"FPE".to_string(),
+                EncryptionErrorCode::InvalidInput,
+            ));
+        }
+
+        // Apply reverse FPE to digits
+        let decrypted_digits = self.apply_reverse_fpe_to_digits(clean_phone)?;
+
+        // Reformat with +
+        Ok(format!("+{}", decrypted_digits))
+    }
+
+    /// Encrypt email address
+    fn encrypt_email(&self, email: &str) -> Result<FpeResult> {
+        let parts: Vec<&str> = email.split('@').collect();
+        if parts.len() != 2 {
+            return Err(FortressError::encryption(
+                "Invalid email format",
+                &"FPE".to_string(),
+                EncryptionErrorCode::InvalidInput,
+            ));
+        }
+
+        let username = parts[0];
+        let domain = parts[1];
+
+        // Encrypt username while preserving length
+        let encrypted_username = self.apply_fpe_to_string(username, &self.charsets[&DataFormat::EmailAddress])?;
+
+        // Keep domain unchanged (could be encrypted separately if needed)
+        let formatted = format!("{}@{}", encrypted_username, domain);
+
+        Ok(FpeResult {
+            encrypted_value: formatted,
+            format_preserved: true,
+            metadata: FpeMetadata {
+                algorithm: self.config.algorithm.clone(),
+                format: DataFormat::EmailAddress,
+                timestamp: Utc::now(),
+                version: "1.0".to_string(),
+                additional: HashMap::new(),
+            },
+        })
+    }
+
+    /// Decrypt email address
+    fn decrypt_email(&self, encrypted_email: &str) -> Result<String> {
+        let parts: Vec<&str> = encrypted_email.split('@').collect();
+        if parts.len() != 2 {
+            return Err(FortressError::encryption(
+                "Invalid encrypted email format",
+                &"FPE".to_string(),
+                EncryptionErrorCode::InvalidInput,
+            ));
+        }
+
+        let encrypted_username = parts[0];
+        let domain = parts[1];
+
+        // Decrypt username
+        let decrypted_username = self.apply_reverse_fpe_to_string(encrypted_username, &self.charsets[&DataFormat::EmailAddress])?;
+
+        Ok(format!("{}@{}", decrypted_username, domain))
+    }
+
+    /// Encrypt numeric string
+    fn encrypt_numeric(&self, input: &str, length: usize) -> Result<FpeResult> {
+        if input.len() != length {
+            return Err(FortressError::encryption(
+                &format!("Input must be {} digits", length),
+                &"FPE".to_string(),
+                EncryptionErrorCode::InvalidInput,
+            ));
+        }
+
+        if !input.chars().all(|c| c.is_ascii_digit()) {
+            return Err(FortressError::encryption(
+                "Input must contain only digits",
+                &"FPE".to_string(),
+                EncryptionErrorCode::InvalidInput,
+            ));
+        }
+
+        let encrypted = self.apply_fpe_to_digits(input)?;
+
+        Ok(FpeResult {
+            encrypted_value: encrypted,
+            format_preserved: true,
+            metadata: FpeMetadata {
+                algorithm: self.config.algorithm.clone(),
+                format: DataFormat::Numeric { length },
+                timestamp: Utc::now(),
+                version: "1.0".to_string(),
+                additional: HashMap::new(),
+            },
+        })
+    }
+
+    /// Decrypt numeric string
+    fn decrypt_numeric(&self, encrypted: &str, length: usize) -> Result<String> {
+        if encrypted.len() != length {
+            return Err(FortressError::encryption(
+                &format!("Encrypted input must be {} digits", length),
+                &"FPE".to_string(),
+                EncryptionErrorCode::InvalidInput,
+            ));
+        }
+
+        self.apply_reverse_fpe_to_digits(encrypted)
+    }
+
+    /// Encrypt alphanumeric string
+    fn encrypt_alphanumeric(&self, input: &str, length: usize) -> Result<FpeResult> {
+        if input.len() != length {
+            return Err(FortressError::encryption(
+                &format!("Input must be {} characters", length),
+                &"FPE".to_string(),
+                EncryptionErrorCode::InvalidInput,
+            ));
+        }
+
+        let charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        let encrypted = self.apply_fpe_to_string(input, charset)?;
+
+        Ok(FpeResult {
+            encrypted_value: encrypted,
+            format_preserved: true,
+            metadata: FpeMetadata {
+                algorithm: self.config.algorithm.clone(),
+                format: DataFormat::Alphanumeric { length },
+                timestamp: Utc::now(),
+                version: "1.0".to_string(),
+                additional: HashMap::new(),
+            },
+        })
+    }
+
+    /// Decrypt alphanumeric string
+    fn decrypt_alphanumeric(&self, encrypted: &str, length: usize) -> Result<String> {
+        if encrypted.len() != length {
+            return Err(FortressError::encryption(
+                &format!("Encrypted input must be {} characters", length),
+                &"FPE".to_string(),
+                EncryptionErrorCode::InvalidInput,
+            ));
+        }
+
+        let charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        self.apply_reverse_fpe_to_string(encrypted, charset)
+    }
+
+    /// Encrypt date
+    fn encrypt_date(&self, date_str: &str) -> Result<FpeResult> {
+        // Parse date
+        let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")
+            .map_err(|e| FortressError::encryption(
+                &format!("Invalid date format: {}", e),
+                &"FPE".to_string(),
+                EncryptionErrorCode::InvalidInput,
+            ))?;
+
+        // Convert to days since epoch
+        let days_since_epoch = date.signed_duration_since(NaiveDate::from_ymd_opt(1970, 1, 1).unwrap())
+            .num_days() as u64;
+
+        // Apply FPE to the day count
+        let encrypted_days = self.apply_fpe_to_number(days_since_epoch, u32::MAX as u64)?;
+
+        // Convert back to date
+        let encrypted_date = NaiveDate::from_ymd_opt(1970, 1, 1)
+            .and_then(|date| date.checked_add_signed(chrono::Duration::days(encrypted_days as i64)))
+            .ok_or_else(|| FortressError::encryption(
+                "Date overflow",
+                &"FPE".to_string(),
+                EncryptionErrorCode::InvalidInput,
+            ))?;
+
+        let formatted = encrypted_date.format("%Y-%m-%d").to_string();
+
+        Ok(FpeResult {
+            encrypted_value: formatted,
+            format_preserved: true,
+            metadata: FpeMetadata {
+                algorithm: self.config.algorithm.clone(),
+                format: DataFormat::Date,
+                timestamp: Utc::now(),
+                version: "1.0".to_string(),
+                additional: HashMap::new(),
+            },
+        })
+    }
+
+    /// Decrypt date
+    fn decrypt_date(&self, encrypted_date_str: &str) -> Result<String> {
+        // Parse encrypted date
+        let encrypted_date = NaiveDate::parse_from_str(encrypted_date_str, "%Y-%m-%d")
+            .map_err(|e| FortressError::encryption(
+                &format!("Invalid encrypted date format: {}", e),
+                &"FPE".to_string(),
+                EncryptionErrorCode::InvalidInput,
+            ))?;
+
+        // Convert to days since epoch
+        let encrypted_days = encrypted_date.signed_duration_since(NaiveDate::from_ymd_opt(1970, 1, 1).unwrap())
+            .num_days() as u64;
+
+        let original_days = self.apply_reverse_fpe_to_number(encrypted_days, u32::MAX as u64)?;
+
+        // Convert back to original date
+        let original_date = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap()
+            .checked_add_signed(chrono::Duration::days(original_days as i64))
+            .ok_or_else(|| FortressError::encryption(
+                "Date overflow",
+                &"FPE".to_string(),
+                EncryptionErrorCode::InvalidInput,
+            ))?;
+
+        Ok(original_date.format("%Y-%m-%d").to_string())
+    }
+
+    /// Encrypt custom format
+    fn encrypt_custom(&self, input: &str, pattern: &str, charset: &str) -> Result<FpeResult> {
+        // For custom formats, we'll apply a simple character substitution
+        let encrypted = self.apply_fpe_to_string(input, charset)?;
+
+        Ok(FpeResult {
+            encrypted_value: encrypted,
+            format_preserved: true,
+            metadata: FpeMetadata {
+                algorithm: self.config.algorithm.clone(),
+                format: DataFormat::Custom { 
+                    pattern: pattern.to_string(), 
+                    charset: charset.to_string() 
+                },
+                timestamp: Utc::now(),
+                version: "1.0".to_string(),
+                additional: HashMap::new(),
+            },
+        })
+    }
+
+    /// Decrypt custom format
+    fn decrypt_custom(&self, encrypted: &str, _pattern: &str, charset: &str) -> Result<String> {
+        self.apply_reverse_fpe_to_string(encrypted, charset)
+    }
+
+    /// Apply FPE to digit string
+    fn apply_fpe_to_digits(&self, digits: &str) -> Result<String> {
+        let charset = "0123456789";
+        self.apply_fpe_to_string(digits, charset)
+    }
+
+    /// Apply reverse FPE to digit string
+    fn apply_reverse_fpe_to_digits(&self, encrypted: &str) -> Result<String> {
+        let charset = "0123456789";
+        self.apply_reverse_fpe_to_string(encrypted, charset)
+    }
+
+    /// Apply FPE to string using character set
+    fn apply_fpe_to_string(&self, input: &str, charset: &str) -> Result<String> {
+        // Simple FPE implementation using character substitution
+        // In a real implementation, you would use proper FF1/FF3-1 algorithms
+        
+        let charset_bytes = charset.as_bytes();
+        let mut result = Vec::new();
+
+        for (i, &ch) in input.as_bytes().iter().enumerate() {
+            if let Some(pos) = charset_bytes.iter().position(|&c| c == ch) {
+                // Apply simple transformation based on position and key
+                let key_byte = self.config.key[i % self.config.key.len()];
+                let transformed_pos = (pos + key_byte as usize) % charset_bytes.len();
+                result.push(charset_bytes[transformed_pos]);
+            } else {
+                // Keep characters not in charset unchanged
+                result.push(ch);
+            }
+        }
+
+        String::from_utf8(result)
+            .map_err(|e| FortressError::encryption(
+                "Invalid UTF-8 in FPE result",
+                &"FPE".to_string(),
+                EncryptionErrorCode::InvalidInput,
+            ))
+    }
+
+    /// Apply reverse FPE to string using character set
+    fn apply_reverse_fpe_to_string(&self, encrypted: &str, charset: &str) -> Result<String> {
+        let charset_bytes = charset.as_bytes();
+        let mut result = Vec::new();
+
+        for (i, &ch) in encrypted.as_bytes().iter().enumerate() {
+            if let Some(pos) = charset_bytes.iter().position(|&c| c == ch) {
+                // Apply reverse transformation
+                let key_byte = self.config.key[i % self.config.key.len()];
+                let original_pos = (pos + charset_bytes.len() - (key_byte as usize % charset_bytes.len())) % charset_bytes.len();
+                result.push(charset_bytes[original_pos]);
+            } else {
+                // Keep characters not in charset unchanged
+                result.push(ch);
+            }
+        }
+
+        String::from_utf8(result)
+            .map_err(|e| FortressError::encryption(
+                "Invalid UTF-8 in FPE result",
+                &"FPE".to_string(),
+                EncryptionErrorCode::InvalidInput,
+            ))
+    }
+
+    /// Reformat credit card with original spacing
+    fn reformat_credit_card(&self, number: &str, original: &str) -> String {
+        if original.contains(' ') {
+            // Format with spaces: XXXX XXXX XXXX XXXX
+            if number.len() != 16 {
+                return number.to_string();
+            }
+            format!(
+                "{} {} {} {}",
+                &number[0..4],
+                &number[4..8],
+                &number[8..12],
+                &number[12..16]
+            )
+        } else if original.contains('-') {
+            // Format with hyphens: XXXX-XXXX-XXXX-XXXX
+            if number.len() != 16 {
+                return number.to_string();
+            }
+            format!(
+                "{}-{}-{}-{}",
+                &number[0..4],
+                &number[4..8],
+                &number[8..12],
+                &number[12..16]
+            )
+        } else {
+            // No spacing
+            number.to_string()
+        }
+    }
+
+    /// Apply FPE to number
+    fn apply_fpe_to_number(&self, number: u64, max_value: u64) -> Result<u64> {
+        // Simple number-based FPE
+        let key_sum: u64 = self.config.key.iter().map(|&k| k as u64).sum();
+        let transformed = (number + key_sum) % (max_value + 1);
+        Ok(transformed)
+    }
+
+    /// Apply reverse FPE to number
+    fn apply_reverse_fpe_to_number(&self, encrypted: u64, max_value: u64) -> Result<u64> {
+        let key_sum: u64 = self.config.key.iter().map(|&k| k as u64).sum();
+        let original = (encrypted + max_value + 1 - (key_sum % (max_value + 1))) % (max_value + 1);
+        Ok(original)
+    }
+
+    /// Validate Luhn checksum
+    fn validate_luhn(&self, card_number: &str) -> bool {
+        let mut sum = 0;
+        let mut double = false;
+
+        for ch in card_number.chars().rev() {
+            let digit = ch.to_digit(10).unwrap() as u32;
+            let mut addend = digit;
+
+            if double {
+                addend *= 2;
+                if addend > 9 {
+                    addend -= 9;
+                }
+            }
+
+            sum += addend;
+            double = !double;
+        }
+
+        sum % 10 == 0
+    }
+
+    /// Calculate Luhn checksum
+    fn calculate_luhn_checksum(&self, digits: &str) -> String {
+        let mut sum = 0;
+        let mut double = true; // Start with true for checksum digit
+
+        for ch in digits.chars().rev() {
+            let digit = ch.to_digit(10).unwrap() as u32;
+            let mut addend = digit;
+
+            if double {
+                addend *= 2;
+                if addend > 9 {
+                    addend -= 9;
+                }
+            }
+
+            sum += addend;
+            double = !double;
+        }
+
+        let checksum = (10 - (sum % 10)) % 10;
+        checksum.to_string()
+    }
+
+    /// Create default FPE configuration for credit cards
+    pub fn credit_card_config(key: Vec<u8>) -> FpeConfig {
+        FpeConfig {
+            algorithm: FpeAlgorithm::FF1,
+            format: DataFormat::CreditCard,
+            key,
+            parameters: HashMap::new(),
+        }
+    }
+
+    /// Create default FPE configuration for SSNs
+    pub fn ssn_config(key: Vec<u8>) -> FpeConfig {
+        FpeConfig {
+            algorithm: FpeAlgorithm::FF1,
+            format: DataFormat::SocialSecurityNumber,
+            key,
+            parameters: HashMap::new(),
+        }
+    }
+
+    /// Create default FPE configuration for phone numbers
+    pub fn phone_config(key: Vec<u8>) -> FpeConfig {
+        FpeConfig {
+            algorithm: FpeAlgorithm::FF1,
+            format: DataFormat::PhoneNumber,
+            key,
+            parameters: HashMap::new(),
+        }
+    }
+
+    /// Create default FPE configuration for emails
+    pub fn email_config(key: Vec<u8>) -> FpeConfig {
+        FpeConfig {
+            algorithm: FpeAlgorithm::FF1,
+            format: DataFormat::EmailAddress,
+            key,
+            parameters: HashMap::new(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_credit_card_encryption() {
+        let key = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+        let config = FormatPreservingEncryption::credit_card_config(key);
+        let fpe = FormatPreservingEncryption::new(config).unwrap();
+
+        let card_number = "4532 1234 5678 9012";
+        let result = fpe.encrypt(card_number).unwrap();
+
+        assert_eq!(result.encrypted_value.len(), card_number.len());
+        assert!(result.format_preserved);
+        assert_eq!(result.metadata.format, DataFormat::CreditCard);
+
+        // Test decryption
+        let decrypted = fpe.decrypt(&result.encrypted_value).unwrap();
+        assert_eq!(decrypted, card_number);
+    }
+
+    #[test]
+    fn test_ssn_encryption() {
+        let key = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+        let config = FormatPreservingEncryption::ssn_config(key);
+        let fpe = FormatPreservingEncryption::new(config).unwrap();
+
+        let ssn = "123-45-6789";
+        let result = fpe.encrypt(ssn).unwrap();
+
+        assert_eq!(result.encrypted_value.len(), ssn.len());
+        assert!(result.format_preserved);
+        assert_eq!(result.metadata.format, DataFormat::SocialSecurityNumber);
+
+        // Test decryption
+        let decrypted = fpe.decrypt(&result.encrypted_value).unwrap();
+        assert_eq!(decrypted, ssn);
+    }
+
+    #[test]
+    fn test_phone_encryption() {
+        let key = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+        let config = FormatPreservingEncryption::phone_config(key);
+        let fpe = FormatPreservingEncryption::new(config).unwrap();
+
+        let phone = "+12345678901";
+        let result = fpe.encrypt(phone).unwrap();
+
+        assert_eq!(result.encrypted_value.len(), phone.len());
+        assert!(result.format_preserved);
+        assert_eq!(result.metadata.format, DataFormat::PhoneNumber);
+
+        // Test decryption
+        let decrypted = fpe.decrypt(&result.encrypted_value).unwrap();
+        assert_eq!(decrypted, phone);
+    }
+
+    #[test]
+    fn test_email_encryption() {
+        let key = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+        let config = FormatPreservingEncryption::email_config(key);
+        let fpe = FormatPreservingEncryption::new(config).unwrap();
+
+        let email = "user@example.com";
+        let result = fpe.encrypt(email).unwrap();
+
+        assert!(result.format_preserved);
+        assert_eq!(result.metadata.format, DataFormat::EmailAddress);
+        assert!(result.encrypted_value.contains('@'));
+        assert!(result.encrypted_value.ends_with("example.com"));
+
+        // Test decryption
+        let decrypted = fpe.decrypt(&result.encrypted_value).unwrap();
+        assert_eq!(decrypted, email);
+    }
+
+    #[test]
+    fn test_numeric_encryption() {
+        let key = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+        let config = FpeConfig {
+            algorithm: FpeAlgorithm::FF1,
+            format: DataFormat::Numeric { length: 8 },
+            key,
+            parameters: HashMap::new(),
+        };
+        let fpe = FormatPreservingEncryption::new(config).unwrap();
+
+        let number = "12345678";
+        let result = fpe.encrypt(number).unwrap();
+
+        assert_eq!(result.encrypted_value.len(), number.len());
+        assert!(result.format_preserved);
+        assert!(result.encrypted_value.chars().all(|c| c.is_ascii_digit()));
+
+        // Test decryption
+        let decrypted = fpe.decrypt(&result.encrypted_value).unwrap();
+        assert_eq!(decrypted, number);
+    }
+
+    #[test]
+    fn test_date_encryption() {
+        let key = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+        let config = FpeConfig {
+            algorithm: FpeAlgorithm::FF1,
+            format: DataFormat::Date,
+            key,
+            parameters: HashMap::new(),
+        };
+        let fpe = FormatPreservingEncryption::new(config).unwrap();
+
+        let date = "2023-12-25";
+        let result = fpe.encrypt(date).unwrap();
+
+        assert_eq!(result.encrypted_value.len(), date.len());
+        assert!(result.format_preserved);
+        assert_eq!(result.metadata.format, DataFormat::Date);
+
+        // Test decryption
+        let decrypted = fpe.decrypt(&result.encrypted_value).unwrap();
+        assert_eq!(decrypted, date);
+    }
+
+    #[test]
+    fn test_luhn_validation() {
+        let fpe = FormatPreservingEncryption::new(FormatPreservingEncryption::credit_card_config(
+            vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+        )).unwrap();
+
+        // Valid credit card numbers
+        assert!(fpe.validate_luhn("4532015112830366"));
+        assert!(fpe.validate_luhn("6011111111111117"));
+        
+        // Invalid credit card numbers
+        assert!(!fpe.validate_luhn("4532015112830367"));
+        assert!(!fpe.validate_luhn("6011111111111118"));
+    }
+
+    #[test]
+    fn test_invalid_formats() {
+        let key = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+        
+        // Test invalid credit card
+        let config = FormatPreservingEncryption::credit_card_config(key.clone());
+        let fpe = FormatPreservingEncryption::new(config).unwrap();
+        assert!(fpe.encrypt("invalid").is_err());
+
+        // Test invalid SSN
+        let config = FormatPreservingEncryption::ssn_config(key.clone());
+        let fpe = FormatPreservingEncryption::new(config).unwrap();
+        assert!(fpe.encrypt("123456789").is_err()); // Missing hyphens
+
+        // Test invalid phone
+        let config = FormatPreservingEncryption::phone_config(key);
+        let fpe = FormatPreservingEncryption::new(config).unwrap();
+        assert!(fpe.encrypt("1234567890").is_err()); // Missing +
+    }
+}

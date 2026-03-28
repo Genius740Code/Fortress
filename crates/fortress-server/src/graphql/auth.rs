@@ -585,13 +585,20 @@ impl AuthManager {
 /// Authentication result
 #[derive(Debug, Clone)]
 pub enum AuthResult {
+    /// Authentication succeeded with user information and token
     Success {
+        /// Authenticated user information
         user: AuthenticatedUser,
+        /// JWT access token
         token: String,
+        /// Session identifier
         session_id: String,
+        /// Token expiration time in seconds
         expires_in: u64,
     },
+    /// Authentication failed with reason
     Failed {
+        /// Reason for authentication failure
         reason: String,
     },
 }
@@ -599,37 +606,56 @@ pub enum AuthResult {
 /// Token verification result
 #[derive(Debug, Clone)]
 pub enum TokenVerificationResult {
+    /// Token is valid and contains valid user information
     Valid {
+        /// Authenticated user information
         user: AuthenticatedUser,
+        /// JWT claims extracted from token
         claims: Claims,
+        /// Session information
         session: Session,
     },
+    /// Token has expired
     Expired,
+    /// Session associated with token has expired
     SessionExpired,
+    /// Device fingerprint mismatch
     DeviceMismatch,
+    /// User not found in system
     UserNotFound,
+    /// Token is invalid or malformed
     Invalid,
 }
 
 /// Token refresh result
 #[derive(Debug, Clone)]
 pub enum TokenRefreshResult {
+    /// Token refresh succeeded
     Success {
+        /// New JWT access token
         token: String,
+        /// New token expiration time in seconds
         expires_in: u64,
     },
+    /// Token refresh failed
     Failed {
+        /// Reason for refresh failure
         reason: String,
     },
+    /// Session is too old to be refreshed
     SessionTooOld,
 }
 
 /// Session statistics
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionStats {
+    /// Total number of sessions
     pub total_sessions: usize,
+    /// Currently active sessions
     pub active_sessions: usize,
+    /// Expired sessions
     pub expired_sessions: usize,
+    /// Maximum allowed sessions per user
     pub max_sessions_per_user: usize,
 }
 
@@ -656,58 +682,96 @@ pub struct SecurityPolicy {
     policies: Arc<RwLock<Vec<SecurityPolicyRule>>>,
 }
 
+/// Security policy rule definition
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecurityPolicyRule {
+    /// Unique identifier for the policy rule
     pub id: String,
+    /// Human-readable name for the policy
     pub name: String,
+    /// Detailed description of what the policy does
     pub description: String,
+    /// Conditions that must be met for this policy to apply
     pub conditions: Vec<PolicyCondition>,
+    /// Actions to take when policy conditions are met
     pub actions: Vec<PolicyAction>,
+    /// Priority of this rule (higher numbers have higher priority)
     pub priority: u32,
+    /// Whether this policy rule is currently enabled
     pub enabled: bool,
 }
 
+/// Policy condition types for security rules
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PolicyCondition {
+    /// Condition based on user role
     UserRole {
+        /// Role name to check against
         role: String,
+        /// Comparison operator for the role check
         operator: ComparisonOperator,
     },
+    /// Condition based on resource access
     Resource {
+        /// Resource pattern or identifier
         resource: String,
+        /// Comparison operator for resource matching
         operator: ComparisonOperator,
     },
+    /// Time-based access restriction
     TimeRestriction {
+        /// Start hour (24-hour format)
         start_hour: u32,
+        /// End hour (24-hour format)
         end_hour: u32,
+        /// Days of week when restriction applies (0=Sunday, 6=Saturday)
         days_of_week: Vec<u8>,
     },
+    /// IP address whitelist
     IpWhitelist {
+        /// List of allowed IP addresses
         ips: Vec<String>,
     },
+    /// IP address blacklist
     IpBlacklist {
+        /// List of blocked IP addresses
         ips: Vec<String>,
     },
 }
 
+/// Comparison operators for policy conditions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ComparisonOperator {
+    /// Exact equality match
     Equals,
+    /// Not equal match
     NotEquals,
+    /// Contains substring
     Contains,
+    /// Does not contain substring
     NotContains,
+    /// Starts with pattern
     StartsWith,
+    /// Ends with pattern
     EndsWith,
+    /// Value is in a set of allowed values
     In,
+    /// Value is not in a set of prohibited values
     NotIn,
 }
 
+/// Policy actions that can be taken
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PolicyAction {
+    /// Allow the requested action
     Allow,
+    /// Deny the requested action
     Deny,
+    /// Require multi-factor authentication
     RequireMFA,
+    /// Log an alert but allow the action
     LogAlert,
+    /// Require approval before allowing the action
     RequireApproval,
 }
 
@@ -853,21 +917,34 @@ impl SecurityPolicy {
 /// Policy evaluation result
 #[derive(Debug, Clone)]
 pub enum PolicyEvaluationResult {
+    /// Access is allowed
     Allow,
+    /// Access is denied
     Deny {
+        /// Reason for denial
         reason: String,
+        /// ID of the policy that caused the denial
         policy_id: String,
     },
+    /// Multi-factor authentication is required
     RequireMFA {
+        /// Reason MFA is required
         reason: String,
+        /// ID of the policy requiring MFA
         policy_id: String,
     },
+    /// Log an alert but allow access
     LogAlert {
+        /// Reason for the alert
         reason: String,
+        /// ID of the policy triggering the alert
         policy_id: String,
     },
+    /// Approval is required before access
     RequireApproval {
+        /// Reason approval is required
         reason: String,
+        /// ID of the policy requiring approval
         policy_id: String,
     },
 }
@@ -875,9 +952,9 @@ pub enum PolicyEvaluationResult {
 /// Security context for policy evaluation
 #[derive(Debug, Clone)]
 pub struct SecurityContext {
-    /// Timestamp when the security context was created (Unix timestamp in seconds)
+    /// Timestamp when security context was created (Unix timestamp in seconds)
     pub timestamp: u64,
-    /// IP address of the client making the request
+    /// IP address of client making the request
     pub ip_address: String,
     /// User agent string from the client's request headers
     pub user_agent: String,
@@ -891,6 +968,7 @@ pub struct SecurityContext {
 mod tests {
     use super::*;
 
+    /// Test authentication functionality
     #[tokio::test]
     async fn test_authentication() {
         let config = AuthConfig::default();

@@ -26,6 +26,7 @@ pub struct SecurityTestSuite {
 }
 
 impl SecurityTestSuite {
+    /// Create a new security test suite
     pub fn new(
         security_manager: Arc<SecurityManager>,
         auth_manager: Arc<AuthManager>,
@@ -559,7 +560,7 @@ impl SecurityTestSuite {
         // Test session statistics
         let session_stats = self.auth_manager.get_session_stats().await;
         results.session_statistics = TestResult {
-            passed: session_stats.total_sessions >= 0,
+            passed: !session_stats.total_sessions == 0,
             details: format!("Session stats: total={}, active={}", session_stats.total_sessions, session_stats.active_sessions),
         };
 

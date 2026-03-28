@@ -357,6 +357,14 @@ pub mod dynamic_secrets;
 
 pub mod kubernetes_auth;
 
+/// OIDC Provider for internal services
+
+pub mod oidc_provider;
+
+/// Format-Preserving Encryption (FPE) module
+
+pub mod format_preserving_encryption;
+
 /// Secure audit logging system with tamper protection
 
 pub mod secure_audit;
@@ -691,6 +699,17 @@ pub mod prelude {
     pub use crate::kubernetes_auth::{
         KubernetesAuth, KubernetesAuthConfig, TokenReviewRequest, TokenReviewResponse,
         PodAuthResult, TokenUserInfo,
+    };
+
+    pub use crate::oidc_provider::{
+        OidcProvider, OidcConfig, OidcAuthRequest, OidcTokenRequest, OidcTokenResponse,
+        OidcUserInfo, OidcClient, RegoPolicyEngine, RegoConfig, TokenExpiration,
+        JwksConfig, JsonWebKey, JsonWebKeySet,
+    };
+
+    pub use crate::format_preserving_encryption::{
+        FormatPreservingEncryption, FpeConfig, FpeAlgorithm, DataFormat, FpeResult,
+        FpeMetadata,
     };
 
     pub use crate::secure_audit::{

@@ -110,6 +110,8 @@ pub struct TokenClaims {
     pub roles: Vec<String>,
     /// User permissions
     pub permissions: Vec<String>,
+    /// OAuth scope
+    pub scope: String,
 }
 
 /// Login request
@@ -597,6 +599,11 @@ impl AuthManager {
     /// Check if a user exists
     pub fn user_exists(&self, user_id: &UserId) -> bool {
         self.users.contains_key(user_id)
+    }
+
+    /// Get a role by ID
+    pub fn get_role(&self, role_id: &RoleId) -> Option<&Role> {
+        self.roles.get(role_id)
     }
 
     /// Get a user by ID

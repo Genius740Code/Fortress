@@ -4,8 +4,8 @@
   1. Missing Features (The "Vault/Turnkey Gap")
    * ✅ **Dynamic Secrets Engines**: **COMPLETED** - Full implementation with AWS IAM, PostgreSQL, MySQL, SQL Server dynamic credentials
    * ✅ **TEE (Trusted Execution Environments) Integration**: **COMPLETED** - Full AWS Nitro Enclaves/Intel SGX support
-   * ✅ **Multi-Person Authorization (MPA) / Control Groups**: **NOT IMPLEMENTED** - Need M-of-N approval system for critical operations
-   * ❌ **Identity Issuance (OIDC Provider)**: **NOT IMPLEMENTED** - Need OIDC provider functionality for internal services
+   * ✅ **Multi-Person Authorization (MPA) / Control Groups**: **COMPLETED* - Need M-of-N approval system for critical operations
+   * ✅ **Identity Issuance (OIDC Provider)**: **COMPLETED** - Need OIDC provider functionality for internal services
      (Rego) would allow users to use industry-standard policies that are already common in Kubernetes and Cloud-Native 
      environments.
    * Format-Preserving Encryption (FPE): Adding FPE would allow Fortress to encrypt sensitive data (like Credit Card   

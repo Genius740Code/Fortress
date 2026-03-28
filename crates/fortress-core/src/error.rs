@@ -266,6 +266,10 @@ pub enum EncryptionErrorCode {
     /// Decryption operation failed
     #[error("Decryption failed")]
     DecryptionFailed,
+    
+    /// Invalid input data
+    #[error("Invalid input")]
+    InvalidInput,
 }
 
 /// Key management error codes
@@ -442,6 +446,14 @@ pub enum ConfigurationErrorCode {
     /// Invalid value for field
     #[error("Invalid value")]
     InvalidValue,
+    
+    /// File system error
+    #[error("File system error")]
+    FileSystem,
+    
+    /// Policy compilation failed
+    #[error("Policy compilation failed")]
+    PolicyCompilationFailed,
     
     /// Configuration file not found
     #[error("Configuration file not found")]

@@ -1,12 +1,64 @@
-//! Transit Engine - Encryption as a Service
+//! # Fortress Transit Engine
 //!
-//! This module provides a Vault-like transit secrets engine that performs
-//! encryption and decryption on demand without ever storing the plaintext.
-//! Uses the high-performance AEGIS-256 encryption algorithm.
+//! A non-invasive security sidecar that provides encryption/decryption as a service.
+//! This follows Vault's Transit Engine pattern where apps send data to be encrypted/decrypted
+//! but manage their own storage.
+//!
+//! ## Architecture
+//!
+//! ```
+//! ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+//! │   Application   │───▶│  Transit Engine  │───▶│   Database     │
+//! │                │    │                  │    │                │
+//! │ - Own storage │    │ - Encrypt data   │    │ - App manages  │
+//! │ - Own schema   │    │ - Manage keys    │    │   own data     │
+//! │ - Own drivers  │    │ - Field-level    │    │ - Standard DB   │
+//! └─────────────────┘    └──────────────────┘    └─────────────────┘
+//! ```
+//!
+//! ## Features
+//!
+//! - **Non-Invasive**: Applications keep their existing databases and drivers
+//! - **Field-Level Encryption**: Encrypt individual fields without schema changes
+//! - **Key Management**: Automatic key rotation and lifecycle management
+//! - **Multiple Algorithms**: Support for AES-256-GCM, ChaCha20-Poly1305, AEGIS-256
+//! - **API Access**: HTTP and gRPC endpoints for easy integration
+//! - **Performance Optimized**: Connection pooling and caching for high throughput
+//!
+//! ## Usage
+//!
+//! ```rust,no_run
+//! use fortress_core::transit_engine::{TransitEngine, EncryptRequest, DecryptRequest};
+//! use serde_json::json;
+//!
+//! let engine = TransitEngine::new().await?;
+//!
+//! // Encrypt data
+//! let encrypt_request = EncryptRequest {
+//!     plaintext: "sensitive-data".to_string(),
+//!     key_name: "my-app-key".to_string(),
+//!     algorithm: "aes256-gcm".to_string(),
+//!     context: Some(json!({"user_id": 12345})),
+//! };
+//!
+//! let encrypt_response = engine.encrypt(encrypt_request).await?;
+//! println!("Encrypted: {}", encrypt_response.ciphertext);
+//!
+//! // Decrypt data
+//! let decrypt_request = DecryptRequest {
+//!     ciphertext: encrypt_response.ciphertext,
+//!     key_name: "my-app-key".to_string(),
+//!     context: Some(json!({"user_id": 12345})),
+//! };
+//!
+//! let decrypt_response = engine.decrypt(decrypt_request).await?;
+//! println!("Decrypted: {}", decrypt_response.plaintext);
+//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! ```
 
 use crate::error::{FortressError, Result, EncryptionErrorCode};
-use crate::encryption::{Aegis256, EncryptionAlgorithm};
-use crate::key::{SecureKey, KeyManager};
+use crate::encryption::{Aegis256, EncryptionAlgorithm, ChaCha20Poly1305, Aes256Gcm};
+use crate::key::{SecureKey, KeyManager, KeyId, KeyMetadata};
 use async_trait::async_trait;
 use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
@@ -14,6 +66,7 @@ use std::sync::Arc;
 use std::fmt::Debug;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
+use base64::Engine;
 
 /// Trait combining KeyManager and Debug for trait objects
 pub trait DebugKeyManager: KeyManager + Debug {}
