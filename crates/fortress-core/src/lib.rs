@@ -385,6 +385,30 @@ pub mod transit_engine;
 
 pub mod image_encryption;
 
+/// Authentication and authorization system
+
+pub mod auth;
+
+/// Multi-Person Authorization (MPA) system
+
+pub mod multi_person_auth;
+
+/// MPA service layer
+
+pub mod mpa_service;
+
+/// MPA integration tests
+
+#[cfg(test)]
+
+pub mod mpa_integration_tests;
+
+/// Simple MPA tests
+
+#[cfg(test)]
+
+pub mod mpa_simple_tests;
+
 /// Trusted Execution Environments (TEE) integration
 
 pub mod tee;
@@ -702,6 +726,21 @@ pub mod prelude {
         SearchCriteria, ImageFilter, ImageSearchResult, ImageInfo, ColorSpace,
         CompressionInfo, ImageEncryptionError, MetadataProcessor, FormatProcessor,
         ImageFormatDetector, ThumbnailOptions, StreamingImageDecryptor,
+    };
+
+    pub use crate::auth::{
+        AuthManager, User, UserId, Role, Permission, AuthToken, AuthConfig,
+        LoginRequest, LoginResponse, TokenClaims, SessionManager,
+    };
+
+    pub use crate::multi_person_auth::{
+        MultiPersonAuthManager, ControlGroup, ControlGroupId, ApprovalRequest,
+        ApprovalRequestId, OperationType, ControlGroupRole, ApprovalStatus, Decision,
+        ControlGroupMember, ApprovalDecision,
+    };
+
+    pub use crate::mpa_service::{
+        MpaService,
     };
 
 }
