@@ -66,7 +66,7 @@ use std::sync::Arc;
 use std::fmt::Debug;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
-use base64::Engine;
+use base64::prelude::*;
 
 /// Trait combining KeyManager and Debug for trait objects
 pub trait DebugKeyManager: KeyManager + Debug {}
@@ -505,7 +505,7 @@ impl TransitEngine {
         
         let ciphertext_len = request.ciphertext.len() - 32;
         let ciphertext = &request.ciphertext[..ciphertext_len];
-        let nonce = &request.ciphertext[ciphertext_len..];
+        let _nonce = &request.ciphertext[ciphertext_len..];
         
         // Prepare associated data
         let aad = if let Some(aad) = &request.associated_data {
@@ -516,7 +516,7 @@ impl TransitEngine {
         
         // Decrypt using AEGIS-256
         let secure_key = SecureKey::from_bytes(&[0u8; 32]); // In real implementation, get from key manager
-        let mut plaintext_with_aad = self.cipher.decrypt(ciphertext, secure_key.as_bytes())?;
+        let plaintext_with_aad = self.cipher.decrypt(ciphertext, secure_key.as_bytes())?;
         
         // Remove associated data
         if plaintext_with_aad.len() < aad.len() {

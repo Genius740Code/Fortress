@@ -240,6 +240,7 @@ pub mod database_key_manager;
 
 /// Plugin system with WebAssembly support
 pub mod plugin;
+pub mod wasm_runtime;
 
 /// Plugin marketplace and distribution system
 
@@ -390,15 +391,17 @@ pub mod kv_engine;
 pub mod transit_engine;
 
 /// Image encryption and processing system
-
 pub mod image_encryption;
 
 /// Authentication and authorization system
-
 pub mod auth;
+pub mod auth_plugin;
+pub mod auth_plugin_manager;
+pub mod auth_plugin_integration;
+pub mod auth_service;
+pub mod auth_api;
 
 /// Multi-Person Authorization (MPA) system
-
 pub mod multi_person_auth;
 
 /// MPA service layer
@@ -549,6 +552,25 @@ pub mod prelude {
         DatabaseKeyManager, DatabaseKeyManagerConfig, KeyManagerMetrics,
         DatabaseKeyManagerStats
     };
+
+    pub use crate::auth_plugin::{
+        AuthPlugin, AuthPluginMetadata, AuthPluginCapabilities, AuthMethod,
+        AuthRequest, AuthCredentials, AuthContext, AuthResult, AuthUserInfo,
+    };
+
+    pub use crate::auth_plugin_manager::{
+        HotSwappableAuthPluginManager, AuthPluginManagerConfig, PluginRegistryEntry,
+        PluginDeployment, DeploymentStrategy,
+    };
+
+    pub use crate::auth_plugin_integration::{
+        AuthPluginIntegrationService, IntegrationConfig, AuthMethodMetrics,
+        PluginDeployment as IntegrationDeployment, DeploymentType, DeploymentStatus,
+    };
+
+    pub use crate::auth_service::{AuthService, AuthServiceConfig, ServiceContext};
+
+    pub use crate::auth_api::{AuthApiManager, AuthApiConfig, PluginDeployment};
 
     pub use crate::plugin::{
         Plugin, PluginRegistry, PluginManager, PluginMetadata, PluginCapability,

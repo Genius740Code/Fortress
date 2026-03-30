@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
+use base64::Engine;
 
 /// TEE-aware key manager for enclave-protected keys
 pub struct TeeAwareKeyManager {
@@ -464,12 +465,12 @@ impl TeeAwareKeyManager {
         
         // Return result
         if let Some(result_data) = response.result {
-            base64::decode(&result_data).map_err(|e| FortressError::tee(
+            base64::engine::general_purpose::STANDARD.decode(&result_data).map_err(|e| FortressError::tee(
                 format!("Failed to decode operation result: {}", e),
                 "TeeAwareKeyManager::perform_operation".to_string()
             ))
         } else if let Some(signature) = response.signature {
-            base64::decode(&signature).map_err(|e| FortressError::tee(
+            base64::engine::general_purpose::STANDARD.decode(&signature).map_err(|e| FortressError::tee(
                 format!("Failed to decode signature: {}", e),
                 "TeeAwareKeyManager::perform_operation".to_string()
             ))

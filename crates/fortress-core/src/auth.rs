@@ -542,7 +542,7 @@ impl AuthManager {
         let user = self.users.get_mut(user_id)
             .ok_or_else(|| FortressError::validation("User not found", None, None))?;
 
-        let role = self.roles.get(&role_id)
+        let _role = self.roles.get(&role_id)
             .ok_or_else(|| FortressError::validation("Role not found", None, None))?;
 
         if !user.roles.contains(&role_id) {
@@ -640,7 +640,7 @@ impl AuthManager {
 
     /// Logout a user (invalidate token and session)
     pub fn logout(&mut self, token: &str) -> Result<(), FortressError> {
-        let auth_token = self.tokens.remove(token)
+        let _auth_token = self.tokens.remove(token)
             .ok_or_else(|| FortressError::authentication("Invalid token", None))?;
 
         // Invalidate session (would need session_id from token in real implementation)

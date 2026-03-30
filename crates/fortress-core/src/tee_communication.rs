@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
+use base64::Engine;
 
 /// Secure message types for enclave communication
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -345,19 +346,19 @@ impl SecureProtocolHandler {
         header: &SecureMessageHeader,
     ) -> Result<Vec<u8>> {
         // Decode base64 data
-        let encrypted_data = base64::decode(&payload.encrypted_data)
+        let encrypted_data = base64::engine::general_purpose::STANDARD.decode(&payload.encrypted_data)
             .map_err(|e| FortressError::tee(
                 format!("Failed to decode encrypted data: {}", e),
                 "SecureProtocolHandler::decrypt_payload".to_string()
             ))?;
         
-        let auth_tag = base64::decode(&payload.auth_tag)
+        let auth_tag = base64::engine::general_purpose::STANDARD.decode(&payload.auth_tag)
             .map_err(|e| FortressError::tee(
                 format!("Failed to decode auth tag: {}", e),
                 "SecureProtocolHandler::decrypt_payload".to_string()
             ))?;
         
-        let nonce_bytes = base64::decode(&payload.nonce)
+        let nonce_bytes = base64::engine::general_purpose::STANDARD.decode(&payload.nonce)
             .map_err(|e| FortressError::tee(
                 format!("Failed to decode nonce: {}", e),
                 "SecureProtocolHandler::decrypt_payload".to_string()

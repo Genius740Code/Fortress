@@ -49,6 +49,9 @@ lz4 = "1.24"
 
 # Hashing
 sha2 = "0.10"
+
+# Web framework
+warp = "0.3"
 sha3 = "0.10"
 hmac = "0.12"
 pbkdf2 = "0.12"
@@ -177,7 +180,6 @@ tokio-test = "0.4"
 [features]
 default = ["std"]
 std = []
-cloud-storage = ["aws-sdk-s3", "azure_storage", "azure_storage_blobs", "azure_identity", "google-cloud-storage", "google-cloud-auth"]
 postgres = ["sqlx/postgres"]
 simd = []
 hardware-acceleration = ["ring/std"]
