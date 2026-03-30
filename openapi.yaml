@@ -13,6 +13,20 @@ info:
     - **Compliance Ready**: GDPR, HIPAA, PCI-DSS compliant out of the box
     - **High Performance**: Sub-100ms response times with intelligent caching
     - **Enterprise Security**: Role-based access control, audit logging, and HSM integration
+    - **Advanced Cryptography**: Quantum-resistant algorithms and homomorphic encryption
+    - **Zero Trust Architecture**: Never trust, always verify security model
+    - **Hardware Security**: TEE integration and HSM support
+    - **Policy Engine**: OPA/Rego integration for fine-grained access control
+    
+    ## Security Features
+    - **Rate Limiting**: Intelligent rate limiting with burst protection
+    - **Input Validation**: Comprehensive protection against injection attacks
+    - **Query Complexity Analysis**: Real-time query depth and complexity controls
+    - **Audit Logging**: Complete audit trail with tamper-evident logging
+    - **Multi-Factor Authentication**: Optional MFA with TOTP support
+    - **Device Fingerprinting**: Advanced device tracking and trust scoring
+    - **IP-Based Access Control**: Dynamic whitelisting/blacklisting
+    - **Session Management**: Secure session lifecycle management
     
     ## Authentication
     API requests are authenticated using JWT tokens. Include token in Authorization header:
@@ -31,22 +45,464 @@ info:
     - ✅ Zero-downtime deployment supported
     - ✅ Comprehensive monitoring and metrics
     - ✅ Full compliance with industry standards
+    - ✅ Quantum-resistant cryptography available
+    - ✅ Hardware security module integration
+    - ✅ Advanced policy engine with OPA support
     
-    ## Getting Started
-    1. Authenticate to obtain a JWT token
-    2. Use the token in Authorization header for subsequent requests
-    3. Store data using the `/api/v1/data` endpoint
-    4. Retrieve data using `/api/v1/data/{id}` endpoint
+    ## Developer Experience
     
-    For detailed examples and advanced usage, see the endpoint documentation below.
-  version: 1.0.0
+    ### Quick Start
+    ```bash
+    # Install CLI tool
+    curl -sSL https://install.fortress-db.com | sh
+    
+    # Initialize client
+    fortress-client init --server https://api.fortress-db.com
+    
+    # Store encrypted data
+    fortress-client store --data '{"email":"user@example.com"}' --algorithm aes256
+    
+    # Retrieve data
+    fortress-client get <data-id>
+    ```
+    
+    ### SDK Examples
+    
+    #### Python
+    ```python
+    from fortress_client import FortressClient
+    
+    client = FortressClient(
+        server_url="https://api.fortress-db.com",
+        api_key="your-api-key"
+    )
+    
+    # Store data
+    result = client.store(
+        data={"email": "user@example.com", "ssn": "123-45-6789"},
+        field_encryption={
+            "ssn": {"algorithm": "aes256", "sensitivity": "high"}
+        }
+    )
+    
+    # Retrieve data
+    data = client.retrieve(result.id)
+    ```
+    
+    #### JavaScript/TypeScript
+    ```typescript
+    import { FortressClient } from '@fortress/client';
+    
+    const client = new FortressClient({
+        serverUrl: 'https://api.fortress-db.com',
+        apiKey: 'your-api-key'
+    });
+    
+    // Store data
+    const result = await client.store({
+        data: { email: 'user@example.com', ssn: '123-45-6789' },
+        fieldEncryption: {
+            ssn: { algorithm: 'aes256', sensitivity: 'high' }
+        }
+    });
+    
+    // Retrieve data
+    const data = await client.retrieve(result.id);
+    ```
+    
+    #### Rust
+    ```rust
+    use fortress_client::FortressClient;
+    use serde_json::json;
+    
+    #[tokio::main]
+    async fn main() -> Result<(), Box<dyn std::error::Error>> {
+        let client = FortressClient::builder()
+            .server_url("https://api.fortress-db.com")
+            .api_key("your-api-key")
+            .build()?;
+        
+        // Store data
+        let result = client.store(
+            json!({"email": "user@example.com", "ssn": "123-45-6789"}),
+            Some(json!({
+                "field_encryption": {
+                    "ssn": {"algorithm": "aes256", "sensitivity": "high"}
+                }
+            }))
+        ).await?;
+        
+        // Retrieve data
+        let data = client.retrieve(&result.id).await?;
+        println!("Retrieved data: {}", data);
+        Ok(())
+    }
+    ```
+    
+    ### Integration Guides
+    - **Web Applications**: See `/examples/web-integration`
+    - **Mobile Apps**: See `/examples/mobile-integration`
+    - **Microservices**: See `/examples/microservices-integration`
+    - **Batch Processing**: See `/examples/batch-processing`
+    
+    ## SDKs and Libraries
+    - **Rust**: `fortress-client` crate on [crates.io](https://crates.io/crates/fortress-client)
+    - **Python**: `fortress-python` on [PyPI](https://pypi.org/project/fortress-python/)
+    - **JavaScript/TypeScript**: `@fortress/client` on [npm](https://www.npmjs.com/package/@fortress/client)
+    - **Go**: `fortress-go` module on [Go Modules](https://pkg.go.dev/github.com/fortress-security/fortress-go)
+    - **Java**: `fortress-java` on [Maven Central](https://search.maven.org/artifact/com.fortress/fortress-java)
+    - **C#**: `Fortress.Client` on [NuGet](https://www.nuget.org/packages/Fortress.Client)
+    - **PHP**: `fortress-php` on [Packagist](https://packagist.org/packages/fortress/fortress-php)
+    
+    ## Tools and Utilities
+    - **CLI Tool**: `fortress-cli` - Command-line interface for data operations
+    - **Migration Tool**: `fortress-migrate` - Data migration utilities
+    - **Backup Tool**: `fortress-backup` - Automated backup solutions
+    - **Monitoring**: `fortress-monitor` - Prometheus exporter and Grafana dashboards
+    
+    ## Examples
+    - **Basic Usage**: `/examples/basic/quickstart.py`
+    - **Field-Level Encryption**: `/examples/encryption/field-level.js`
+    - **Multi-Tenant**: `/examples/tenancy/multi-tenant.go`
+    - **Batch Operations**: `/examples/batch/bulk-store.rs`
+    - **Compliance Reports**: `/examples/compliance/gdpr-report.java`
+    
+    ## Security Best Practices
+    
+    ### Authentication & Authorization
+    - **JWT Tokens**: Use short-lived tokens (15-60 minutes) with proper refresh mechanisms
+    - **API Keys**: For server-to-server communication, use rotating API keys with least privilege
+    - **Multi-Factor Authentication**: Enable MFA for all administrative operations
+    - **Role-Based Access**: Implement principle of least privilege with granular roles
+    
+    ### Data Protection
+    - **Field-Level Encryption**: Encrypt sensitive fields individually with strong algorithms
+    - **Key Rotation**: Implement regular key rotation (every 90 days for production data)
+    - **Data Classification**: Classify data by sensitivity level and apply appropriate controls
+    - **Audit Logging**: Enable comprehensive audit trails for all data operations
+    
+    ### Network Security
+    - **TLS 1.3**: Always use HTTPS with TLS 1.3 for all API communications
+    - **IP Whitelisting**: Restrict API access to known IP ranges when possible
+    - **Rate Limiting**: Implement client-specific rate limits to prevent abuse
+    - **Input Validation**: Validate all input data against strict schemas
+    
+    ### Operational Security
+    - **Environment Isolation**: Use separate environments for dev, staging, and production
+    - **Secret Management**: Store all secrets in secure vaults (AWS Secrets Manager, HashiCorp Vault)
+    - **Monitoring**: Set up security monitoring for unusual patterns and failed attempts
+    - **Backup Security**: Encrypt all backups and store them in separate geographic regions
+    
+    ## Deployment Guide
+    
+    ### Production Deployment Checklist
+    - [ ] **Security Configuration**
+      - [ ] Enable TLS 1.3 with valid certificates
+      - [ ] Configure rate limiting and DDoS protection
+      - [ ] Set up monitoring and alerting
+      - [ ] Enable audit logging
+      - [ ] Configure backup and disaster recovery
+    
+    - [ ] **Performance Optimization**
+      - [ ] Configure appropriate caching strategies
+      - [ ] Set up connection pooling
+      - [ ] Optimize database queries and indexes
+      - [ ] Configure horizontal scaling
+      - [ ] Set up CDN for static assets
+    
+    - [ ] **Compliance & Governance**
+      - [ ] Configure data retention policies
+      - [ ] Set up compliance reporting
+      - [ ] Implement data classification
+      - [ ] Configure privacy controls
+      - [ ] Set up regular security audits
+    
+    ### Docker Deployment
+    ```dockerfile
+    FROM rust:1.70 as builder
+    WORKDIR /app
+    COPY . .
+    RUN cargo build --release
+    
+    FROM debian:bookworm-slim
+    RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+    COPY --from=builder /app/target/release/fortress-server /usr/local/bin/
+    EXPOSE 3000
+    CMD ["fortress-server"]
+    ```
+    
+    ### Kubernetes Deployment
+    ```yaml
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: fortress-api
+    spec:
+      replicas: 3
+      selector:
+        matchLabels:
+          app: fortress-api
+      template:
+        metadata:
+          labels:
+            app: fortress-api
+        spec:
+          containers:
+          - name: fortress-api
+            image: fortress-db/api:1.2.0
+            ports:
+            - containerPort: 3000
+            env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: fortress-secrets
+                  key: database-url
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: fortress-secrets
+                  key: jwt-secret
+            resources:
+              requests:
+                memory: "256Mi"
+                cpu: "250m"
+              limits:
+                memory: "512Mi"
+                cpu: "500m"
+    ```
+    
+    ### Environment Variables
+    ```bash
+    # Database Configuration
+    DATABASE_URL=postgresql://user:pass@localhost:5432/fortress
+    DATABASE_POOL_SIZE=10
+    
+    # Security Configuration
+    JWT_SECRET=your-super-secret-jwt-key
+    ENCRYPTION_KEY_ID=production-key-123
+    
+    # Performance Configuration
+    CACHE_SIZE=10000
+    CACHE_TTL=3600
+    MAX_CONNECTIONS=1000
+    
+    # Monitoring Configuration
+    PROMETHEUS_ENABLED=true
+    LOG_LEVEL=info
+    ```
+    
+    ## Monitoring & Observability
+    
+    ### Prometheus Metrics
+    The Fortress API exposes metrics at `/metrics` in Prometheus format:
+    
+    Key metrics to monitor:
+    - `fortress_requests_total` - Total API requests
+    - `fortress_request_duration_seconds` - Request latency
+    - `fortress_cache_hit_rate` - Cache performance
+    - `fortress_encryption_operations_total` - Cryptographic operations
+    - `fortress_authentication_attempts_total` - Authentication events
+    - `fortress_data_storage_bytes` - Data storage volume
+    
+    ### Grafana Dashboard
+    Recommended panels:
+    - Request rate and error rate
+    - Response time percentiles (P50, P95, P99)
+    - Cache hit rate and memory usage
+    - Database connection pool status
+    - Authentication success/failure rates
+    - Data storage by tenant and algorithm
+    
+    ### Alerting Rules
+    ```yaml
+    groups:
+    - name: fortress-alerts
+      rules:
+      - alert: HighErrorRate
+        expr: rate(fortress_requests_total{status="error"}[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value }} errors per second"
+      
+      - alert: HighLatency
+        expr: histogram_quantile(0.95, rate(fortress_request_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High latency detected"
+          description: "95th percentile latency is {{ $value }} seconds"
+    ```
+    
+    ## Troubleshooting Guide
+    
+    ### Common Issues
+    
+    #### Authentication Failures
+    **Symptoms**: 401 Unauthorized responses
+    **Causes**: 
+    - Expired JWT tokens
+    - Invalid API keys
+    - Network connectivity issues
+    **Solutions**:
+    - Refresh JWT tokens before expiration
+    - Verify API key configuration
+    - Check network connectivity to authentication service
+    
+    #### Performance Issues
+    **Symptoms**: Slow response times, high CPU usage
+    **Causes**:
+    - Database connection pool exhaustion
+    - Inefficient queries
+    - Memory leaks
+    **Solutions**:
+    - Increase connection pool size
+    - Optimize database queries and indexes
+    - Monitor memory usage and restart services if needed
+    
+    #### Storage Issues
+    **Symptoms**: Data storage failures, disk space errors
+    **Causes**:
+    - Insufficient disk space
+    - Database connection issues
+    - Encryption key rotation failures
+    **Solutions**:
+    - Monitor disk usage and clean up old data
+    - Verify database connectivity
+    - Check key rotation logs and retry if necessary
+    
+    ### Debug Mode
+    Enable debug mode for detailed logging:
+    ```bash
+    export LOG_LEVEL=debug
+    export RUST_LOG=debug
+    ```
+    
+    ### Health Checks
+    Monitor the `/health` endpoint for system status:
+    ```bash
+    curl -s https://api.fortress-db.com/health | jq .
+    ```
+    
+    ## Error Codes Reference
+    
+    ### Authentication Errors (401)
+    - **AUTH_001**: Invalid JWT token
+    - **AUTH_002**: Expired JWT token
+    - **AUTH_003**: Missing authentication header
+    - **AUTH_004**: Invalid API key
+    - **AUTH_005**: Account suspended
+    - **AUTH_006**: MFA required
+    - **AUTH_007**: Invalid MFA code
+    
+    ### Authorization Errors (403)
+    - **PERM_001**: Insufficient permissions
+    - **PERM_002**: Resource access denied
+    - **PERM_003**: Tenant access denied
+    - **PERM_004**: Admin privileges required
+    - **PERM_005**: Rate limit exceeded
+    
+    ### Request Errors (400)
+    - **REQ_001**: Invalid request format
+    - **REQ_002**: Missing required field
+    - **REQ_003**: Invalid field value
+    - **REQ_004**: Field validation failed
+    - **REQ_005**: Request too large
+    - **REQ_006**: Invalid JSON format
+    - **REQ_007**: Invalid UUID format
+    - **REQ_008**: Invalid date format
+    
+    ### Resource Errors (404)
+    - **RES_001**: Resource not found
+    - **RES_002**: Data item not found
+    - **RES_003**: Key not found
+    - **RES_004**: Tenant not found
+    - **RES_005**: Webhook not found
+    - **RES_006**: Backup not found
+    
+    ### Conflict Errors (409)
+    - **CONF_001**: Resource already exists
+    - **CONF_002**: Duplicate key
+    - **CONF_003**: Operation in progress
+    - **CONF_004**: Data conflict
+    - **CONF_005**: Version conflict
+    
+    ### Rate Limiting Errors (429)
+    - **RATE_001**: Rate limit exceeded (minute)
+    - **RATE_002**: Rate limit exceeded (hour)
+    - **RATE_003**: Rate limit exceeded (day)
+    - **RATE_004**: Concurrent request limit exceeded
+    - **RATE_005**: Data upload limit exceeded
+    
+    ### Server Errors (500)
+    - **SRV_001**: Internal server error
+    - **SRV_002**: Database connection failed
+    - **SRV_003**: Encryption service unavailable
+    - **SRV_004**: Key management service error
+    - **SRV_005**: External service unavailable
+    
+    ### Service Unavailable (503)
+    - **SVC_001**: Service maintenance
+    - **SVC_002**: Service overloaded
+    - **SVC_003**: Database unavailable
+    - **SVC_004**: Cache service unavailable
+    
+    ## API Versioning Strategy
+    
+    Fortress API follows semantic versioning (MAJOR.MINOR.PATCH):
+    
+    ### Version Changes
+    - **MAJOR**: Breaking changes, requires migration
+    - **MINOR**: New features, backward compatible
+    - **PATCH**: Bug fixes, fully backward compatible
+    
+    ### Supported Versions
+    - **1.2.x**: Current stable version
+    - **1.1.x**: Previous stable (supported until 2024-06-01)
+    - **1.0.x**: Deprecated (unsupported after 2024-03-01)
+    
+    ### Migration Guides
+    - [1.0 to 1.1](https://docs.fortress-db.com/migration/1.0-to-1.1)
+    - [1.1 to 1.2](https://docs.fortress-db.com/migration/1.1-to-1.2)
+    
+    ## Support and Community
+    - **Documentation**: https://docs.fortress-db.com
+    - **API Reference**: https://api.fortress-db.com/docs
+    - **GitHub Discussions**: https://github.com/fortress-security/fortress/discussions
+    - **Discord Community**: https://discord.gg/fortress-security
+    - **Support Email**: support@fortress-db.com
+  version: 1.2.0
   contact:
     name: Fortress Team
     email: team@fortress-db.com
     url: https://fortress-db.com
+    x-twitter: @fortressdb
+    x-github: fortress-security
   license:
     name: Apache-2.0
     url: https://www.apache.org/licenses/LICENSE-2.0
+  x-logo:
+    url: https://fortress-db.com/logo.png
+    backgroundColor: #ffffff
+    altText: Fortress Security Platform
+  x-apisguru-categories:
+    - security
+    - database
+    - encryption
+  x-origin:
+    - url: https://fortress-db.com/openapi.yaml
+      format: OpenAPI
+      version: "3.0.3"
+    - url: https://github.com/fortress-security/fortress
+      format: Git
+      version: main
+  x-provider-name: Fortress Security
+  x-service-name: Fortress API
+  x-preferred: true
 
 servers:
   - url: http://localhost:3000
@@ -55,6 +511,10 @@ servers:
     description: Production server
   - url: https://staging-api.fortress-db.com
     description: Staging server
+  - url: https://eu-api.fortress-db.com
+    description: Europe production server
+  - url: https://asia-api.fortress-db.com
+    description: Asia Pacific production server
 
 paths:
   /health:
@@ -77,6 +537,54 @@ paths:
                 $ref: '#/components/schemas/HealthResponse'
         '503':
           description: Service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /version:
+    get:
+      summary: API version information
+      description: |
+        Returns detailed version information including:
+        - API version and build number
+        - Supported features and capabilities
+        - Compatibility information
+        - Deprecation notices
+      tags:
+        - Documentation
+      responses:
+        '200':
+          description: Version information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionResponse'
+
+  /api/v1/rate-limits:
+    get:
+      summary: Get rate limit status
+      description: |
+        Returns current rate limit status for the authenticated client.
+        
+        Information includes:
+        - Remaining requests in current window
+        - Rate limit quotas and limits
+        - Window reset time
+        - Rate limit tier information
+      tags:
+        - Authentication
+      security:
+        - jwt_auth: []
+      responses:
+        '200':
+          description: Rate limit information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitStatusResponse'
+        '401':
+          description: Unauthorized
           content:
             application/json:
               schema:
@@ -216,6 +724,113 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/data/bulk:
+    post:
+      summary: Bulk store encrypted data
+      description: |
+        Store multiple data items in a single request for improved efficiency.
+        
+        Features:
+        - **Batch Processing**: Store up to 1000 items in one request
+        - **Parallel Encryption**: Items are encrypted in parallel for performance
+        - **Atomic Operations**: All items succeed or fail together
+        - **Progress Tracking**: Real-time progress updates for large batches
+        - **Error Isolation**: Individual item failures don't affect others
+      tags:
+        - Data Storage
+      security:
+        - jwt_auth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkStoreRequest'
+      responses:
+        '200':
+          description: Bulk data stored successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkStoreResponse'
+        '400':
+          description: Invalid request or batch size exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          description: Request entity too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/data/bulk/{id}:
+    get:
+      summary: Bulk retrieve encrypted data
+      description: |
+        Retrieve multiple data items in a single request.
+        
+        Features:
+        - **Batch Retrieval**: Retrieve up to 1000 items in one request
+        - **Parallel Decryption**: Items are decrypted in parallel for performance
+        - **Selective Fields**: Request only specific fields to reduce bandwidth
+        - **Compression**: Automatic response compression for large datasets
+      tags:
+        - Data Storage
+      security:
+        - jwt_auth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Comma-separated list of data IDs to retrieve
+          schema:
+            type: string
+            example: "id1,id2,id3"
+        - name: fields
+          in: query
+          description: Comma-separated list of fields to retrieve (optional)
+          schema:
+            type: string
+            example: "email,name"
+      responses:
+        '200':
+          description: Bulk data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkRetrieveResponse'
+        '400':
+          description: Invalid request or too many IDs requested
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: One or more data items not found
           content:
             application/json:
               schema:
@@ -712,6 +1327,1186 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
           description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/policy/evaluate:
+    post:
+      summary: Evaluate policy
+      description: |
+        Evaluate a policy decision using OPA/Rego policies.
+        
+        Features:
+        - **Policy Evaluation**: Evaluate access requests against policies
+        - **OPA Integration**: Use industry-standard OPA policies
+        - **Custom Policies**: Support for custom Rego policies
+        - **Decision Logging**: All policy decisions are logged
+        - **Performance**: Sub-millisecond policy evaluation
+      tags:
+        - Policy Engine
+      security:
+        - jwt_auth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyEvaluationRequest'
+      responses:
+        '200':
+          description: Policy evaluation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyEvaluationResponse'
+        '400':
+          description: Invalid policy or request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/policy/policies:
+    get:
+      summary: List policies
+      description: |
+        Retrieve list of available policies.
+        
+        Returns all policies that can be used for evaluation
+        including their metadata and status.
+      tags:
+        - Policy Engine
+      security:
+        - jwt_auth: []
+      responses:
+        '200':
+          description: Policies retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyListResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      summary: Create policy
+      description: |
+        Create a new policy for evaluation.
+        
+        Features:
+        - **Rego Policies**: Support for OPA Rego language
+        - **Policy Validation**: Validate policy syntax and logic
+        - **Version Control**: Policy versioning and history
+        - **Testing**: Policy testing before deployment
+      tags:
+        - Policy Engine
+      security:
+        - jwt_auth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePolicyRequest'
+      responses:
+        '201':
+          description: Policy created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyResponse'
+        '400':
+          description: Invalid policy syntax
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/policy/policies/{policy_id}:
+    get:
+      summary: Get policy
+      description: |
+        Retrieve a specific policy by ID.
+        
+        Returns the complete policy definition including
+        the Rego code and metadata.
+      tags:
+        - Policy Engine
+      security:
+        - jwt_auth: []
+      parameters:
+        - name: policy_id
+          in: path
+          required: true
+          description: Policy ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Policy retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyResponse'
+        '404':
+          description: Policy not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      summary: Update policy
+      description: |
+        Update an existing policy.
+        
+        Creates a new version of the policy while preserving
+        the previous versions for rollback capability.
+      tags:
+        - Policy Engine
+      security:
+        - jwt_auth: []
+      parameters:
+        - name: policy_id
+          in: path
+          required: true
+          description: Policy ID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePolicyRequest'
+      responses:
+        '200':
+          description: Policy updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyResponse'
+        '404':
+          description: Policy not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '400':
+          description: Invalid policy syntax
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      summary: Delete policy
+      description: |
+        Delete a policy.
+        
+        Marks the policy as deleted but preserves it in
+        the audit trail for compliance requirements.
+      tags:
+        - Policy Engine
+      security:
+        - jwt_auth: []
+      parameters:
+        - name: policy_id
+          in: path
+          required: true
+          description: Policy ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Policy deleted successfully
+        '404':
+          description: Policy not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/crypto/transit/encrypt:
+    post:
+      summary: Transit encryption
+      description: |
+        Encrypt data without storing it (transit engine).
+        
+        Features:
+        - **Transit Engine**: Encrypt data without storage
+        - **Multiple Algorithms**: Support for various encryption algorithms
+        - **Key Management**: Use existing keys or generate new ones
+        - **Batch Processing**: Encrypt multiple data items in one request
+        - **Performance**: Optimized for high-throughput operations
+      tags:
+        - Cryptography
+      security:
+        - jwt_auth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransitEncryptRequest'
+      responses:
+        '200':
+          description: Data encrypted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransitEncryptResponse'
+        '400':
+          description: Invalid request or data format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/crypto/transit/decrypt:
+    post:
+      summary: Transit decryption
+      description: |
+        Decrypt data that was encrypted using the transit engine.
+        
+        Features:
+        - **Transit Engine**: Decrypt data without storage requirements
+        - **Automatic Detection**: Automatically detect encryption algorithm
+        - **Batch Processing**: Decrypt multiple data items in one request
+        - **Audit Logging**: All decryption operations are logged
+        - **Performance**: Optimized for high-throughput operations
+      tags:
+        - Cryptography
+      security:
+        - jwt_auth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransitDecryptRequest'
+      responses:
+        '200':
+          description: Data decrypted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransitDecryptResponse'
+        '400':
+          description: Invalid request or corrupted data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/crypto/hsm/status:
+    get:
+      summary: HSM status
+      description: |
+        Retrieve the status of all configured HSM providers.
+        
+        Returns health status, connection information, and
+        performance metrics for each HSM provider.
+      tags:
+        - Hardware Security
+      security:
+        - jwt_auth: []
+      responses:
+        '200':
+          description: HSM status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HSMStatusResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/crypto/quantum/encrypt:
+    post:
+      summary: Quantum-resistant encryption
+      description: |
+        Encrypt data using quantum-resistant algorithms.
+        
+        Features:
+        - **Kyber KEM**: NIST PQC Round 3 winner
+        - **Multiple Security Levels**: Kyber-512, Kyber-768, Kyber-1024
+        - **Future-Proof**: Resistant to classical and quantum attacks
+        - **Performance**: Optimized for practical usage
+        - **Compliance**: Meets emerging quantum security standards
+      tags:
+        - Quantum Cryptography
+      security:
+        - jwt_auth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuantumEncryptRequest'
+      responses:
+        '200':
+          description: Data encrypted with quantum-resistant algorithm
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuantumEncryptResponse'
+        '400':
+          description: Invalid request or parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/audit/logs:
+    get:
+      summary: Get audit logs
+      description: |
+        Retrieve tamper-evident audit logs.
+        
+        Features:
+        - **Cryptographically Signed**: Logs are signed to prevent tampering
+        - **Merkle Tree**: Efficient verification of log integrity
+        - **Comprehensive**: All security events are logged
+        - **Searchable**: Filter by time, user, event type
+        - **Compliance**: Meets audit requirements for standards
+      tags:
+        - Audit & Compliance
+      security:
+        - jwt_auth: []
+      parameters:
+        - name: from_time
+          in: query
+          description: Start time for log retrieval
+          schema:
+            type: string
+            format: date-time
+        - name: to_time
+          in: query
+          description: End time for log retrieval
+          schema:
+            type: string
+            format: date-time
+        - name: user_id
+          in: query
+          description: Filter by user ID
+          schema:
+            type: string
+            format: uuid
+        - name: event_type
+          in: query
+          description: Filter by event type
+          schema:
+            type: string
+            enum: [auth, data_access, key_operation, policy_eval, admin_action]
+        - name: page
+          in: query
+          description: Page number (1-based)
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: page_size
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+      responses:
+        '200':
+          description: Audit logs retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogsResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/compliance/status:
+    get:
+      summary: Get compliance status
+      description: |
+        Retrieve comprehensive compliance status.
+        
+        Returns compliance status for multiple frameworks:
+        - **GDPR**: Data protection and privacy compliance
+        - **HIPAA**: Healthcare information compliance
+        - **PCI-DSS**: Payment card industry compliance
+        - **SOC2**: Service organization controls
+        - **ISO27001**: Information security management
+      tags:
+        - Audit & Compliance
+      security:
+        - jwt_auth: []
+      parameters:
+        - name: framework
+          in: query
+          description: Filter by compliance framework
+          schema:
+            type: string
+            enum: [gdpr, hipaa, pci_dss, soc2, iso27001]
+        - name: tenant_id
+          in: query
+          description: Filter by tenant ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Compliance status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplianceStatusResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/auth/mfa/setup:
+    post:
+      summary: Setup multi-factor authentication
+      description: |
+        Setup multi-factor authentication for a user account.
+        
+        Features:
+        - **TOTP Support**: Time-based one-time passwords
+        - **QR Code Generation**: Easy setup with authenticator apps
+        - **Backup Codes**: Recovery codes for lost devices
+        - **Security**: Encrypted storage of MFA secrets
+      tags:
+        - Authentication
+      security:
+        - jwt_auth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MFASetupRequest'
+      responses:
+        '200':
+          description: MFA setup initiated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MFASetupResponse'
+        '400':
+          description: Invalid request or MFA already enabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/keys/{key_id}/rotate:
+    post:
+      summary: Rotate encryption key
+      description: |
+        Rotate an encryption key with automatic re-encryption of data.
+        
+        Features:
+        - **Automatic Re-encryption**: All data encrypted with old key is re-encrypted
+        - **Zero Downtime**: Data remains accessible during rotation
+        - **Backup Creation**: Automatic backup of old key
+        - **Audit Trail**: Complete audit of key rotation process
+        - **Rollback Support**: Ability to rollback if issues occur
+      tags:
+        - Key Management
+      security:
+        - jwt_auth: []
+      parameters:
+        - name: key_id
+          in: path
+          required: true
+          description: Key ID to rotate
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KeyRotateRequest'
+      responses:
+        '200':
+          description: Key rotation initiated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KeyRotateResponse'
+        '404':
+          description: Key not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/cluster/status:
+    get:
+      summary: Get cluster status
+      description: |
+        Retrieve comprehensive cluster status and health information.
+        
+        Returns information about:
+        - **Node Status**: Health and connectivity of all cluster nodes
+        - **Raft Status**: Consensus algorithm state and leadership
+        - **Replication**: Data replication status and lag
+        - **Performance**: Cluster-wide performance metrics
+        - **Configuration**: Current cluster configuration
+      tags:
+        - Cluster Management
+      security:
+        - jwt_auth: []
+      responses:
+        '200':
+          description: Cluster status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClusterStatusResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/webhooks:
+    get:
+      summary: List webhooks
+      description: |
+        Retrieve list of configured webhooks for real-time event notifications.
+        
+        Features:
+        - **Event Types**: Filter by specific event types
+        - **Status Filter**: Show active/inactive webhooks
+        - **Delivery History**: Recent delivery attempts and success rates
+      tags:
+        - Webhooks
+      security:
+        - jwt_auth: []
+      parameters:
+        - name: event_type
+          in: query
+          description: Filter by event type
+          schema:
+            type: string
+            enum: [data_created, data_updated, data_deleted, key_rotated, user_login, policy_violation]
+        - name: status
+          in: query
+          description: Filter by webhook status
+          schema:
+            type: string
+            enum: [active, inactive, failed]
+      responses:
+        '200':
+          description: Webhooks retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookListResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      summary: Create webhook
+      description: |
+        Create a new webhook for real-time event notifications.
+        
+        Features:
+        - **Event Filtering**: Subscribe to specific event types
+        - **Custom Headers**: Add custom headers to webhook requests
+        - **Retry Policy**: Configure retry attempts and backoff
+        - **Payload Templates**: Customize webhook payload format
+      tags:
+        - Webhooks
+      security:
+        - jwt_auth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWebhookRequest'
+      responses:
+        '201':
+          description: Webhook created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResponse'
+        '400':
+          description: Invalid webhook configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/webhooks/{webhook_id}:
+    get:
+      summary: Get webhook
+      description: |
+        Retrieve detailed information about a specific webhook.
+        
+        Returns configuration, delivery history, and performance metrics.
+      tags:
+        - Webhooks
+      security:
+        - jwt_auth: []
+      parameters:
+        - name: webhook_id
+          in: path
+          required: true
+          description: Webhook ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Webhook retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResponse'
+        '404':
+          description: Webhook not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      summary: Update webhook
+      description: |
+        Update webhook configuration and settings.
+      tags:
+        - Webhooks
+      security:
+        - jwt_auth: []
+      parameters:
+        - name: webhook_id
+          in: path
+          required: true
+          description: Webhook ID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateWebhookRequest'
+      responses:
+        '200':
+          description: Webhook updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResponse'
+        '400':
+          description: Invalid webhook configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Webhook not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      summary: Delete webhook
+      description: |
+        Delete a webhook and stop event notifications.
+      tags:
+        - Webhooks
+      security:
+        - jwt_auth: []
+      parameters:
+        - name: webhook_id
+          in: path
+          required: true
+          description: Webhook ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Webhook deleted successfully
+        '404':
+          description: Webhook not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/backup:
+    post:
+      summary: Create backup
+      description: |
+        Create a comprehensive backup of all data and metadata.
+        
+        Features:
+        - **Incremental Backups**: Only backup changed data since last backup
+        - **Compression**: Automatic compression to reduce storage requirements
+        - **Encryption**: Backup files are encrypted with specified key
+        - **Verification**: Backup integrity verification after creation
+        - **Scheduling**: Support for scheduled automatic backups
+      tags:
+        - Backup & Restore
+      security:
+        - jwt_auth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBackupRequest'
+      responses:
+        '200':
+          description: Backup initiated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupResponse'
+        '400':
+          description: Invalid backup configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Backup already in progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      summary: List backups
+      description: |
+        Retrieve list of available backups with status and metadata.
+      tags:
+        - Backup & Restore
+      security:
+        - jwt_auth: []
+      parameters:
+        - name: status
+          in: query
+          description: Filter by backup status
+          schema:
+            type: string
+            enum: [completed, in_progress, failed, expired]
+        - name: date_from
+          in: query
+          description: Filter by creation date (start)
+          schema:
+            type: string
+            format: date-time
+        - name: date_to
+          in: query
+          description: Filter by creation date (end)
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Backups retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupListResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/backup/{backup_id}:
+    get:
+      summary: Get backup
+      description: |
+        Retrieve detailed information about a specific backup.
+      tags:
+        - Backup & Restore
+      security:
+        - jwt_auth: []
+      parameters:
+        - name: backup_id
+          in: path
+          required: true
+          description: Backup ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Backup retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupResponse'
+        '404':
+          description: Backup not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      summary: Restore from backup
+      description: |
+        Restore data and metadata from a backup.
+        
+        Features:
+        - **Selective Restore**: Restore specific data items or tenants
+        - **Dry Run**: Preview restore changes without executing
+        - **Conflict Resolution**: Handle conflicts with existing data
+        - **Progress Tracking**: Real-time restore progress updates
+        - **Rollback Support**: Ability to rollback failed restores
+      tags:
+        - Backup & Restore
+      security:
+        - jwt_auth: []
+      parameters:
+        - name: backup_id
+          in: path
+          required: true
+          description: Backup ID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestoreRequest'
+      responses:
+        '200':
+          description: Restore initiated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestoreResponse'
+        '400':
+          description: Invalid restore configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Backup not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Restore already in progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      summary: Delete backup
+      description: |
+        Delete a backup to free up storage space.
+      tags:
+        - Backup & Restore
+      security:
+        - jwt_auth: []
+      parameters:
+        - name: backup_id
+          in: path
+          required: true
+          description: Backup ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Backup deleted successfully
+        '404':
+          description: Backup not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/wasm/plugins:
+    get:
+      summary: List WASM plugins
+      description: |
+        Retrieve list of all loaded WASM plugins.
+        
+        Returns plugin information including:
+        - Plugin name and version
+        - Plugin type and capabilities
+        - Resource usage and performance
+        - Health status and error counts
+        - Configuration and metadata
+      tags:
+        - WASM Runtime
+      security:
+        - jwt_auth: []
+      responses:
+        '200':
+          description: WASM plugins retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WASMPluginsResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      summary: Load WASM plugin
+      description: |
+        Load a new WASM plugin into the runtime.
+        
+        Features:
+        - **Plugin Validation**: Validates WASM bytecode before loading
+        - **Capability Control**: Restricts plugin capabilities based on configuration
+        - **Resource Limits**: Enforces memory and CPU limits
+        - **Hot Loading**: Load plugins without service restart
+        - **Version Management**: Support for multiple plugin versions
+      tags:
+        - WASM Runtime
+      security:
+        - jwt_auth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                plugin:
+                  type: string
+                  format: binary
+                  description: WASM plugin file
+                config:
+                  type: string
+                  description: Plugin configuration (JSON)
+                capabilities:
+                  type: array
+                  items:
+                    type: string
+                  description: Plugin capabilities
+              required:
+                - plugin
+      responses:
+        '201':
+          description: Plugin loaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WASMPluginResponse'
+        '400':
+          description: Invalid plugin file or configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Insufficient permissions
           content:
             application/json:
               schema:
@@ -1318,6 +3113,1093 @@ components:
         - page_size
         - total_pages
 
+    # Bulk Operations Schemas
+    BulkStoreRequest:
+      type: object
+      description: Bulk data storage request
+      properties:
+        items:
+          type: array
+          description: Array of data items to store
+          items:
+            $ref: '#/components/schemas/StoreRequest'
+          maxItems: 1000
+          example:
+            - data:
+                name: "John Doe"
+                email: "john@example.com"
+              metadata:
+                source: "user_registration"
+            - data:
+                name: "Jane Smith"
+                email: "jane@example.com"
+              metadata:
+                source: "user_registration"
+        options:
+          type: object
+          description: Bulk operation options
+          nullable: true
+          properties:
+            parallel_processing:
+              type: boolean
+              description: Enable parallel processing of items
+              default: true
+            batch_size:
+              type: integer
+              format: int32
+              description: Number of items to process in each batch
+              default: 100
+            continue_on_error:
+              type: boolean
+              description: Continue processing even if some items fail
+              default: false
+      required:
+        - items
+
+    BulkStoreResponse:
+      type: object
+      description: Bulk data storage response
+      properties:
+        operation_id:
+          type: string
+          description: Bulk operation identifier
+          example: "bulk_op_123456"
+        total_items:
+          type: integer
+          format: int32
+          description: Total number of items processed
+          example: 100
+        successful_items:
+          type: integer
+          format: int32
+          description: Number of successfully stored items
+          example: 98
+        failed_items:
+          type: integer
+          format: int32
+          description: Number of failed items
+          example: 2
+        results:
+          type: array
+          description: Individual item results
+          items:
+            type: object
+            properties:
+              index:
+                type: integer
+                format: int32
+                description: Item index in the original request
+                example: 0
+              success:
+                type: boolean
+                description: Whether the item was stored successfully
+                example: true
+              data_id:
+                type: string
+                format: uuid
+                description: ID of the stored data (if successful)
+                nullable: true
+                example: "550e8400-e29b-41d4-a716-446655440000"
+              error:
+                type: object
+                description: Error details (if failed)
+                nullable: true
+                properties:
+                  code:
+                    type: string
+                    example: "VALIDATION_ERROR"
+                  message:
+                    type: string
+                    example: "Invalid data format"
+        processing_time_ms:
+          type: number
+          format: float
+          description: Total processing time in milliseconds
+          example: 1250.5
+      required:
+        - operation_id
+        - total_items
+        - successful_items
+        - failed_items
+        - results
+        - processing_time_ms
+
+    BulkRetrieveResponse:
+      type: object
+      description: Bulk data retrieval response
+      properties:
+        total_requested:
+          type: integer
+          format: int32
+          description: Total number of items requested
+          example: 50
+        successful_retrievals:
+          type: integer
+          format: int32
+          description: Number of successfully retrieved items
+          example: 48
+        failed_retrievals:
+          type: integer
+          format: int32
+          description: Number of failed retrievals
+          example: 2
+        items:
+          type: array
+          description: Retrieved data items
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+                description: Data ID
+                example: "550e8400-e29b-41d4-a716-446655440000"
+              success:
+                type: boolean
+                description: Whether the item was retrieved successfully
+                example: true
+              data:
+                type: object
+                description: Decrypted data (if successful)
+                nullable: true
+                example:
+                  name: "John Doe"
+                  email: "john@example.com"
+              error:
+                type: object
+                description: Error details (if failed)
+                nullable: true
+                properties:
+                  code:
+                    type: string
+                    example: "NOT_FOUND"
+                  message:
+                    type: string
+                    example: "Data item not found"
+        processing_time_ms:
+          type: number
+          format: float
+          description: Total processing time in milliseconds
+          example: 890.2
+      required:
+        - total_requested
+        - successful_retrievals
+        - failed_retrievals
+        - items
+        - processing_time_ms
+
+    # Webhook Schemas
+    CreateWebhookRequest:
+      type: object
+      description: Create webhook request
+      properties:
+        name:
+          type: string
+          description: Webhook name
+          example: "user_registration_events"
+        url:
+          type: string
+          format: uri
+          description: Webhook endpoint URL
+          example: "https://api.example.com/webhooks/fortress"
+        event_types:
+          type: array
+          description: Event types to subscribe to
+          items:
+            type: string
+            enum: [data_created, data_updated, data_deleted, key_rotated, user_login, user_logout, policy_violation, system_alert]
+          example: ["data_created", "data_updated"]
+        secret:
+          type: string
+          format: password
+          description: Webhook secret for signature verification
+          example: "webhook_secret_123"
+        headers:
+          type: object
+          description: Custom headers to include in webhook requests
+          additionalProperties:
+            type: string
+          example:
+            X-Custom-Header: "custom-value"
+            Authorization: "Bearer api_key_123"
+        retry_policy:
+          type: object
+          description: Retry policy configuration
+          properties:
+            max_attempts:
+              type: integer
+              format: int32
+              description: Maximum number of retry attempts
+              default: 3
+              example: 5
+            backoff_strategy:
+              type: string
+              enum: [exponential, linear, fixed]
+              description: Backoff strategy for retries
+              default: exponential
+              example: exponential
+            initial_delay_ms:
+              type: integer
+              format: int64
+              description: Initial delay between retries in milliseconds
+              default: 1000
+              example: 2000
+        payload_template:
+          type: string
+          description: Custom payload template (JSON with placeholders)
+          nullable: true
+          example: |
+            {
+              "event": "{{event_type}}",
+              "timestamp": "{{timestamp}}",
+              "data": "{{data}}",
+              "custom_field": "{{custom_value}}"
+            }
+        active:
+          type: boolean
+          description: Whether the webhook is initially active
+          default: true
+          example: true
+      required:
+        - name
+        - url
+        - event_types
+
+    UpdateWebhookRequest:
+      type: object
+      description: Update webhook request
+      properties:
+        name:
+          type: string
+          description: Webhook name
+          nullable: true
+        url:
+          type: string
+          format: uri
+          description: Webhook endpoint URL
+          nullable: true
+        event_types:
+          type: array
+          description: Event types to subscribe to
+          items:
+            type: string
+            enum: [data_created, data_updated, data_deleted, key_rotated, user_login, user_logout, policy_violation, system_alert]
+          nullable: true
+        secret:
+          type: string
+          format: password
+          description: Webhook secret for signature verification
+          nullable: true
+        headers:
+          type: object
+          description: Custom headers to include in webhook requests
+          additionalProperties:
+            type: string
+          nullable: true
+        retry_policy:
+          type: object
+          description: Retry policy configuration
+          nullable: true
+          properties:
+            max_attempts:
+              type: integer
+              format: int32
+              description: Maximum number of retry attempts
+            backoff_strategy:
+              type: string
+              enum: [exponential, linear, fixed]
+              description: Backoff strategy for retries
+            initial_delay_ms:
+              type: integer
+              format: int64
+              description: Initial delay between retries in milliseconds
+        payload_template:
+          type: string
+          description: Custom payload template (JSON with placeholders)
+          nullable: true
+        active:
+          type: boolean
+          description: Whether the webhook is active
+          nullable: true
+      required: []
+
+    WebhookResponse:
+      type: object
+      description: Webhook response
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Webhook ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        name:
+          type: string
+          description: Webhook name
+          example: "user_registration_events"
+        url:
+          type: string
+          format: uri
+          description: Webhook endpoint URL
+          example: "https://api.example.com/webhooks/fortress"
+        event_types:
+          type: array
+          description: Event types subscribed to
+          items:
+            type: string
+          example: ["data_created", "data_updated"]
+        active:
+          type: boolean
+          description: Whether the webhook is active
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          description: Webhook creation timestamp
+          example: "2024-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+          nullable: true
+          example: "2024-01-16T14:20:00Z"
+        delivery_stats:
+          type: object
+          description: Delivery statistics
+          properties:
+            total_deliveries:
+              type: integer
+              format: int64
+              description: Total number of delivery attempts
+              example: 1250
+            successful_deliveries:
+              type: integer
+              format: int64
+              description: Number of successful deliveries
+              example: 1198
+            failed_deliveries:
+              type: integer
+              format: int64
+              description: Number of failed deliveries
+              example: 52
+            success_rate:
+              type: number
+              format: float
+              description: Success rate as percentage
+              example: 95.84
+            average_delivery_time_ms:
+              type: number
+              format: float
+              description: Average delivery time in milliseconds
+              example: 245.5
+        last_delivery:
+          type: object
+          description: Last delivery attempt
+          nullable: true
+          properties:
+            timestamp:
+              type: string
+              format: date-time
+              example: "2024-01-16T15:45:00Z"
+            success:
+              type: boolean
+              example: true
+            response_code:
+              type: integer
+              format: int32
+              example: 200
+            delivery_time_ms:
+              type: number
+              format: float
+              example: 189.2
+      required:
+        - id
+        - name
+        - url
+        - event_types
+        - active
+        - created_at
+        - delivery_stats
+
+    WebhookListResponse:
+      type: object
+      description: Webhook list response
+      properties:
+        webhooks:
+          type: array
+          description: List of webhooks
+          items:
+            $ref: '#/components/schemas/WebhookResponse'
+        total_count:
+          type: integer
+          format: int64
+          description: Total number of webhooks
+          example: 15
+        active_count:
+          type: integer
+          format: int64
+          description: Number of active webhooks
+          example: 12
+        inactive_count:
+          type: integer
+          format: int64
+          description: Number of inactive webhooks
+          example: 3
+      required:
+        - webhooks
+        - total_count
+        - active_count
+        - inactive_count
+
+    # Backup & Restore Schemas
+    CreateBackupRequest:
+      type: object
+      description: Create backup request
+      properties:
+        name:
+          type: string
+          description: Backup name
+          example: "daily_backup_2024_01_15"
+        type:
+          type: string
+          description: Backup type
+          enum: [full, incremental, differential]
+          default: full
+          example: "full"
+        compression:
+          type: string
+          description: Compression algorithm
+          enum: [gzip, lz4, none]
+          default: gzip
+          example: "gzip"
+        encryption:
+          type: object
+          description: Backup encryption settings
+          nullable: true
+          properties:
+            algorithm:
+              type: string
+              enum: [aes256, chacha20]
+              default: aes256
+              example: "aes256"
+            key_id:
+              type: string
+              description: Key ID for encryption (generates new key if not specified)
+              nullable: true
+              example: "backup_key_123"
+        scope:
+          type: object
+          description: Backup scope configuration
+          properties:
+            tenant_ids:
+              type: array
+              description: Specific tenant IDs to backup (all tenants if not specified)
+              items:
+                type: string
+                format: uuid
+              nullable: true
+            data_filters:
+              type: object
+              description: Data filtering criteria
+              nullable: true
+              properties:
+                date_from:
+                  type: string
+                  format: date-time
+                  description: Backup data from this date
+                date_to:
+                  type: string
+                  format: date-time
+                  description: Backup data until this date
+                algorithms:
+                  type: array
+                  description: Specific encryption algorithms to backup
+                  items:
+                    type: string
+                  example: ["aes256", "chacha20"]
+        retention_days:
+          type: integer
+          format: int32
+          description: Number of days to retain this backup
+          default: 30
+          example: 90
+        schedule:
+          type: object
+          description: Backup schedule (for recurring backups)
+          nullable: true
+          properties:
+            frequency:
+              type: string
+              enum: [hourly, daily, weekly, monthly]
+              description: Backup frequency
+              example: "daily"
+            cron_expression:
+              type: string
+              description: Cron expression for custom scheduling
+              example: "0 2 * * *"
+      required:
+        - name
+
+    BackupResponse:
+      type: object
+      description: Backup response
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Backup ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        name:
+          type: string
+          description: Backup name
+          example: "daily_backup_2024_01_15"
+        type:
+          type: string
+          description: Backup type
+          enum: [full, incremental, differential]
+          example: "full"
+        status:
+          type: string
+          description: Backup status
+          enum: [initiated, in_progress, completed, failed, cancelled]
+          example: "in_progress"
+        created_at:
+          type: string
+          format: date-time
+          description: Backup creation timestamp
+          example: "2024-01-15T10:30:00Z"
+        completed_at:
+          type: string
+          format: date-time
+          description: Backup completion timestamp
+          nullable: true
+          example: "2024-01-15T11:45:00Z"
+        size_bytes:
+          type: integer
+          format: int64
+          description: Backup size in bytes
+          nullable: true
+          example: 1073741824
+        compressed_size_bytes:
+          type: integer
+          format: int64
+          description: Compressed backup size in bytes
+          nullable: true
+          example: 536870912
+        item_count:
+          type: integer
+          format: int64
+          description: Number of items in backup
+          nullable: true
+          example: 50000
+        progress:
+          type: object
+          description: Backup progress information
+          nullable: true
+          properties:
+            percentage:
+              type: number
+              format: float
+              description: Completion percentage
+              example: 75.5
+            items_processed:
+              type: integer
+              format: int64
+              description: Number of items processed
+              example: 37750
+            items_total:
+              type: integer
+              format: int64
+              description: Total number of items to process
+              example: 50000
+            estimated_completion:
+              type: string
+              format: date-time
+              description: Estimated completion time
+              nullable: true
+              example: "2024-01-15T12:00:00Z"
+        checksum:
+          type: string
+          description: Backup integrity checksum
+          nullable: true
+          example: "sha256:abc123def456..."
+        encryption_info:
+          type: object
+          description: Backup encryption information
+          nullable: true
+          properties:
+            algorithm:
+              type: string
+              example: "aes256"
+            key_id:
+              type: string
+              example: "backup_key_123"
+        retention_expires_at:
+          type: string
+          format: date-time
+          description: When this backup expires
+          nullable: true
+          example: "2024-04-15T10:30:00Z"
+      required:
+        - id
+        - name
+        - type
+        - status
+        - created_at
+
+    BackupListResponse:
+      type: object
+      description: Backup list response
+      properties:
+        backups:
+          type: array
+          description: List of backups
+          items:
+            $ref: '#/components/schemas/BackupResponse'
+        total_count:
+          type: integer
+          format: int64
+          description: Total number of backups
+          example: 25
+        total_size_bytes:
+          type: integer
+          format: int64
+          description: Total size of all backups in bytes
+          example: 10737418240
+      required:
+        - backups
+        - total_count
+        - total_size_bytes
+
+    RestoreRequest:
+      type: object
+      description: Restore request
+      properties:
+        name:
+          type: string
+          description: Restore name
+          example: "restore_daily_backup_2024_01_15"
+        scope:
+          type: object
+          description: Restore scope configuration
+          properties:
+            tenant_ids:
+              type: array
+              description: Specific tenant IDs to restore (all tenants if not specified)
+              items:
+                type: string
+                format: uuid
+              nullable: true
+            data_filters:
+              type: object
+              description: Data filtering criteria
+              nullable: true
+              properties:
+                date_from:
+                  type: string
+                  format: date-time
+                  description: Restore data from this date
+                date_to:
+                  type: string
+                  format: date-time
+                  description: Restore data until this date
+                algorithms:
+                  type: array
+                  description: Specific encryption algorithms to restore
+                  items:
+                    type: string
+                  example: ["aes256"]
+                data_ids:
+                  type: array
+                  description: Specific data IDs to restore
+                  items:
+                    type: string
+                    format: uuid
+                  example: ["550e8400-e29b-41d4-a716-446655440000"]
+        conflict_resolution:
+          type: string
+          description: How to handle conflicts with existing data
+          enum: [skip, overwrite, merge, fail]
+          default: fail
+          example: "skip"
+        dry_run:
+          type: boolean
+          description: Preview restore without executing
+          default: false
+          example: true
+        options:
+          type: object
+          description: Additional restore options
+          nullable: true
+          properties:
+            parallel_processing:
+              type: boolean
+              description: Enable parallel processing
+              default: true
+            batch_size:
+              type: integer
+              format: int32
+              description: Number of items to process in each batch
+              default: 1000
+            verify_integrity:
+              type: boolean
+              description: Verify data integrity during restore
+              default: true
+      required:
+        - name
+
+    RestoreResponse:
+      type: object
+      description: Restore response
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Restore operation ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        name:
+          type: string
+          description: Restore name
+          example: "restore_daily_backup_2024_01_15"
+        backup_id:
+          type: string
+          format: uuid
+          description: Source backup ID
+          example: "backup_123456789"
+        status:
+          type: string
+          description: Restore status
+          enum: [initiated, in_progress, completed, failed, cancelled, rolled_back]
+          example: "in_progress"
+        created_at:
+          type: string
+          format: date-time
+          description: Restore creation timestamp
+          example: "2024-01-15T14:30:00Z"
+        completed_at:
+          type: string
+          format: date-time
+          description: Restore completion timestamp
+          nullable: true
+          example: "2024-01-15T16:45:00Z"
+        progress:
+          type: object
+          description: Restore progress information
+          nullable: true
+          properties:
+            percentage:
+              type: number
+              format: float
+              description: Completion percentage
+              example: 45.2
+            items_processed:
+              type: integer
+              format: int64
+              description: Number of items processed
+              example: 22600
+            items_total:
+              type: integer
+              format: int64
+              description: Total number of items to restore
+              example: 50000
+            estimated_completion:
+              type: string
+              format: date-time
+              description: Estimated completion time
+              nullable: true
+              example: "2024-01-15T17:30:00Z"
+        results:
+          type: object
+          description: Restore results
+          nullable: true
+          properties:
+            total_items:
+              type: integer
+              format: int64
+              description: Total items to restore
+              example: 50000
+            successful_restores:
+              type: integer
+              format: int64
+              description: Successfully restored items
+              example: 49500
+            failed_restores:
+              type: integer
+              format: int64
+              description: Failed to restore items
+              example: 500
+            skipped_items:
+              type: integer
+              format: int64
+              description: Skipped items (due to conflicts)
+              example: 0
+            conflicts_resolved:
+              type: integer
+              format: int64
+              description: Number of conflicts resolved
+              example: 250
+        dry_run_results:
+          type: object
+          description: Dry run results (if dry_run was requested)
+          nullable: true
+          properties:
+            items_to_restore:
+              type: integer
+              format: int64
+              description: Number of items that would be restored
+              example: 50000
+            potential_conflicts:
+              type: integer
+              format: int64
+              description: Number of potential conflicts
+              example: 150
+            estimated_time_minutes:
+              type: integer
+              format: int32
+              description: Estimated restore time in minutes
+              example: 120
+        rollback_info:
+          type: object
+          description: Rollback information
+          nullable: true
+          properties:
+            rollback_available:
+              type: boolean
+              description: Whether rollback is available
+              example: true
+            rollback_deadline:
+              type: string
+              format: date-time
+              description: Deadline for initiating rollback
+              example: "2024-01-15T18:45:00Z"
+      required:
+        - id
+        - name
+        - backup_id
+        - status
+        - created_at
+
+    # Version and Rate Limit Schemas
+    VersionResponse:
+      type: object
+      description: API version information response
+      properties:
+        version:
+          type: string
+          description: API version
+          example: "1.2.0"
+        build_number:
+          type: string
+          description: Build number
+          example: "20240115-1234567"
+        build_date:
+          type: string
+          format: date-time
+          description: Build timestamp
+          example: "2024-01-15T10:30:00Z"
+        git_commit:
+          type: string
+          description: Git commit hash
+          example: "abc123def456789"
+        features:
+          type: array
+          description: Available features
+          items:
+            type: string
+          example: ["field_encryption", "multi_tenant", "webhooks", "backup_restore"]
+        capabilities:
+          type: object
+          description: API capabilities
+          properties:
+            max_data_size_mb:
+              type: integer
+              format: int32
+              description: Maximum data size per request in MB
+              example: 100
+            max_batch_size:
+              type: integer
+              format: int32
+              description: Maximum batch size for bulk operations
+              example: 1000
+            supported_algorithms:
+              type: array
+              description: Supported encryption algorithms
+              items:
+                type: string
+              example: ["aes256", "chacha20", "aegis256"]
+            max_webhooks:
+              type: integer
+              format: int32
+              description: Maximum number of webhooks per tenant
+              example: 50
+        compatibility:
+          type: object
+          description: Compatibility information
+          properties:
+            min_client_version:
+              type: string
+              description: Minimum supported client version
+              example: "1.0.0"
+            deprecated_versions:
+              type: array
+              description: Deprecated versions with removal dates
+              items:
+                type: object
+                properties:
+                  version:
+                    type: string
+                    example: "1.0.0"
+                  deprecated_date:
+                    type: string
+                    format: date-time
+                    example: "2024-03-01T00:00:00Z"
+                  removal_date:
+                    type: string
+                    format: date-time
+                    example: "2024-06-01T00:00:00Z"
+                  migration_guide:
+                    type: string
+                    description: URL to migration guide
+                    example: "https://docs.fortress-db.com/migration/1.0-to-1.1"
+        environment:
+          type: string
+          description: Deployment environment
+          enum: [development, staging, production]
+          example: "production"
+        region:
+          type: string
+          description: Deployment region
+          example: "us-east-1"
+      required:
+        - version
+        - build_number
+        - build_date
+        - features
+        - capabilities
+        - environment
+
+    RateLimitStatusResponse:
+      type: object
+      description: Rate limit status response
+      properties:
+        tier:
+          type: string
+          description: Rate limit tier
+          enum: [free, starter, professional, enterprise]
+          example: "professional"
+        limits:
+          type: object
+          description: Rate limit configuration
+          properties:
+            requests_per_minute:
+              type: integer
+              format: int32
+              description: Requests allowed per minute
+              example: 1000
+            requests_per_hour:
+              type: integer
+              format: int32
+              description: Requests allowed per hour
+              example: 50000
+            requests_per_day:
+              type: integer
+              format: int32
+              description: Requests allowed per day
+              example: 1000000
+            concurrent_requests:
+              type: integer
+              format: int32
+              description: Maximum concurrent requests
+              example: 100
+            data_upload_mb_per_hour:
+              type: integer
+              format: int32
+              description: Data upload limit per hour in MB
+              example: 1000
+        current:
+          type: object
+          description: Current usage status
+          properties:
+            requests_remaining_minute:
+              type: integer
+              format: int32
+              description: Requests remaining in current minute
+              example: 850
+            requests_remaining_hour:
+              type: integer
+              format: int32
+              description: Requests remaining in current hour
+              example: 45000
+            requests_remaining_day:
+              type: integer
+              format: int32
+              description: Requests remaining in current day
+              example: 950000
+            reset_time_minute:
+              type: string
+              format: date-time
+              description: When minute window resets
+              example: "2024-01-15T10:31:00Z"
+            reset_time_hour:
+              type: string
+              format: date-time
+              description: When hour window resets
+              example: "2024-01-15T11:00:00Z"
+            reset_time_day:
+              type: string
+              format: date-time
+              description: When day window resets
+              example: "2024-01-16T00:00:00Z"
+        usage_stats:
+          type: object
+          description: Usage statistics
+          properties:
+            requests_today:
+              type: integer
+              format: int64
+              description: Total requests made today
+              example: 15000
+            requests_this_hour:
+              type: integer
+              format: int64
+              description: Total requests made this hour
+              example: 750
+            requests_this_minute:
+              type: integer
+              format: int64
+              description: Total requests made this minute
+              example: 15
+            data_uploaded_mb_today:
+              type: number
+              format: float
+              description: Total data uploaded today in MB
+              example: 250.5
+        upgrade_info:
+          type: object
+          description: Upgrade information
+          nullable: true
+          properties:
+            next_tier:
+              type: string
+              description: Next available tier
+              enum: [starter, professional, enterprise]
+              example: "enterprise"
+            upgrade_url:
+              type: string
+              format: uri
+              description: URL to upgrade account
+              example: "https://fortress-db.com/upgrade"
+            benefits:
+              type: array
+              description: Benefits of upgrading
+              items:
+                type: string
+              example: ["Higher rate limits", "Priority support", "Advanced features"]
+      required:
+        - tier
+        - limits
+        - current
+        - usage_stats
+
     # Key Management Schemas
     KeyRequest:
       type: object
@@ -1553,6 +4435,1600 @@ components:
         - total_count
         - tenant_breakdown
 
+    # Policy Engine Schemas
+    PolicyEvaluationRequest:
+      type: object
+      description: Policy evaluation request
+      properties:
+        policy_id:
+          type: string
+          format: uuid
+          description: Policy ID to evaluate (optional, evaluates all if not specified)
+          nullable: true
+        input:
+          type: object
+          description: Input data for policy evaluation
+          example:
+            user:
+              id: "user-123"
+              roles: ["admin", "user"]
+            resource:
+              type: "data"
+              id: "data-456"
+            action: "read"
+        options:
+          type: object
+          description: Evaluation options
+          nullable: true
+          properties:
+            explain:
+              type: boolean
+              description: Include explanation in response
+              default: false
+            trace:
+              type: boolean
+              description: Include evaluation trace
+              default: false
+      required:
+        - input
+
+    PolicyEvaluationResponse:
+      type: object
+      description: Policy evaluation response
+      properties:
+        decision:
+          type: string
+          description: Policy decision
+          enum: [allow, deny]
+          example: "allow"
+        reason:
+          type: string
+          description: Reason for the decision
+          nullable: true
+          example: "User has admin role and access to resource"
+        explanation:
+          type: object
+          description: Detailed explanation of the decision
+          nullable: true
+          properties:
+            rules:
+              type: array
+              items:
+                type: object
+                properties:
+                  rule_id:
+                    type: string
+                  decision:
+                    type: string
+                  reason:
+                    type: string
+            trace:
+              type: array
+              items:
+                type: object
+        evaluated_at:
+          type: string
+          format: date-time
+          description: Evaluation timestamp
+          example: "2024-01-15T10:30:00Z"
+        duration_ms:
+          type: number
+          format: float
+          description: Evaluation duration in milliseconds
+          example: 0.85
+      required:
+        - decision
+        - evaluated_at
+        - duration_ms
+
+    CreatePolicyRequest:
+      type: object
+      description: Create policy request
+      properties:
+        name:
+          type: string
+          description: Policy name
+          example: "data_access_policy"
+        description:
+          type: string
+          description: Policy description
+          nullable: true
+          example: "Controls access to sensitive data"
+        rego_code:
+          type: string
+          description: Rego policy code
+          example: "package fortress.auth\n\nallow {\n    input.user.roles[_] == \"admin\"\n}\n\nallow {\n    input.action == \"read\"\n    input.resource.type == \"public\"\n}"
+        metadata:
+          type: object
+          description: Policy metadata
+          nullable: true
+          example:
+            category: "access_control"
+            severity: "high"
+            tags: ["data", "access", "security"]
+        test_cases:
+          type: array
+          description: Test cases for the policy
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              input:
+                type: object
+              expected_decision:
+                type: string
+                enum: [allow, deny]
+          nullable: true
+      required:
+        - name
+        - rego_code
+
+    UpdatePolicyRequest:
+      type: object
+      description: Update policy request
+      properties:
+        name:
+          type: string
+          description: Policy name
+          nullable: true
+        description:
+          type: string
+          description: Policy description
+          nullable: true
+        rego_code:
+          type: string
+          description: Rego policy code
+          nullable: true
+        metadata:
+          type: object
+          description: Policy metadata
+          nullable: true
+        test_cases:
+          type: array
+          description: Test cases for the policy
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              input:
+                type: object
+              expected_decision:
+                type: string
+                enum: [allow, deny]
+          nullable: true
+      required: []
+
+    PolicyResponse:
+      type: object
+      description: Policy response
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Policy ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        name:
+          type: string
+          description: Policy name
+          example: "data_access_policy"
+        description:
+          type: string
+          description: Policy description
+          nullable: true
+          example: "Controls access to sensitive data"
+        rego_code:
+          type: string
+          description: Rego policy code
+          example: "package fortress.auth\n\nallow {\n    input.user.roles[_] == \"admin\"\n}"
+        version:
+          type: integer
+          format: int32
+          description: Policy version
+          example: 1
+        status:
+          type: string
+          description: Policy status
+          enum: [active, inactive, deprecated]
+          example: "active"
+        metadata:
+          type: object
+          description: Policy metadata
+          nullable: true
+          example:
+            category: "access_control"
+            severity: "high"
+        created_at:
+          type: string
+          format: date-time
+          description: Policy creation timestamp
+          example: "2024-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+          nullable: true
+          example: "2024-01-16T14:20:00Z"
+        test_results:
+          type: object
+          description: Latest test results
+          nullable: true
+          properties:
+            passed:
+              type: integer
+              format: int32
+              example: 5
+            failed:
+              type: integer
+              format: int32
+              example: 0
+            total:
+              type: integer
+              format: int32
+              example: 5
+      required:
+        - id
+        - name
+        - rego_code
+        - version
+        - status
+        - created_at
+
+    PolicyListResponse:
+      type: object
+      description: Policy list response
+      properties:
+        policies:
+          type: array
+          items:
+            $ref: '#/components/schemas/PolicyResponse'
+          description: List of policies
+        total_count:
+          type: integer
+          format: int64
+          description: Total number of policies
+          example: 25
+      required:
+        - policies
+        - total_count
+
+    # Cryptography Schemas
+    TransitEncryptRequest:
+      type: object
+      description: Transit encryption request
+      properties:
+        plaintext:
+          type: string
+          description: Base64-encoded plaintext to encrypt
+          example: "SGVsbG8gV29ybGQ="
+        algorithm:
+          type: string
+          description: Encryption algorithm
+          enum: [aegis256, aes256, chacha20]
+          default: "aes256"
+          nullable: true
+        key_id:
+          type: string
+          description: Key ID for encryption (optional, generates new key if not specified)
+          nullable: true
+        context:
+          type: string
+          description: Additional context for encryption (AAD)
+          nullable: true
+        batch:
+          type: array
+          description: Batch encryption requests
+          items:
+            type: object
+            properties:
+              plaintext:
+                type: string
+              context:
+                type: string
+                nullable: true
+          nullable: true
+        tenant_id:
+          type: string
+          format: uuid
+          description: Tenant ID for multi-tenant setups
+          nullable: true
+      required:
+        - plaintext
+
+    TransitEncryptResponse:
+      type: object
+      description: Transit encryption response
+      properties:
+        ciphertext:
+          type: string
+          description: Base64-encoded ciphertext
+          example: "encrypted_data_here"
+        key_id:
+          type: string
+          description: Key ID used for encryption
+          example: "key_123456"
+        algorithm:
+          type: string
+          description: Encryption algorithm used
+          example: "aes256"
+        encrypted_at:
+          type: string
+          format: date-time
+          description: Encryption timestamp
+          example: "2024-01-15T10:30:00Z"
+        batch_results:
+          type: array
+          description: Batch encryption results
+          items:
+            type: object
+            properties:
+              ciphertext:
+                type: string
+              key_id:
+                type: string
+          nullable: true
+      required:
+        - ciphertext
+        - key_id
+        - algorithm
+        - encrypted_at
+
+    TransitDecryptRequest:
+      type: object
+      description: Transit decryption request
+      properties:
+        ciphertext:
+          type: string
+          description: Base64-encoded ciphertext to decrypt
+          example: "encrypted_data_here"
+        key_id:
+          type: string
+          description: Key ID used for encryption
+          example: "key_123456"
+        context:
+          type: string
+          description: Additional context used during encryption (AAD)
+          nullable: true
+        batch:
+          type: array
+          description: Batch decryption requests
+          items:
+            type: object
+            properties:
+              ciphertext:
+                type: string
+              key_id:
+                type: string
+              context:
+                type: string
+                nullable: true
+          nullable: true
+      required:
+        - ciphertext
+        - key_id
+
+    TransitDecryptResponse:
+      type: object
+      description: Transit decryption response
+      properties:
+        plaintext:
+          type: string
+          description: Base64-encoded plaintext
+          example: "SGVsbG8gV29ybGQ="
+        algorithm:
+          type: string
+          description: Encryption algorithm used
+          example: "aes256"
+        decrypted_at:
+          type: string
+          format: date-time
+          description: Decryption timestamp
+          example: "2024-01-15T10:30:00Z"
+        batch_results:
+          type: array
+          description: Batch decryption results
+          items:
+            type: object
+            properties:
+              plaintext:
+                type: string
+              algorithm:
+                type: string
+          nullable: true
+      required:
+        - plaintext
+        - algorithm
+        - decrypted_at
+
+    HSMStatusResponse:
+      type: object
+      description: HSM status response
+      properties:
+        providers:
+          type: array
+          description: HSM provider statuses
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                description: Provider name
+                example: "aws_cloudhsm"
+              status:
+                type: string
+                description: Provider status
+                enum: [healthy, degraded, unhealthy, disconnected]
+                example: "healthy"
+              version:
+                type: string
+                description: Provider version
+                nullable: true
+                example: "1.0.0"
+              connection_info:
+                type: object
+                description: Connection information
+                nullable: true
+                properties:
+                  endpoint:
+                    type: string
+                  connected_since:
+                    type: string
+                    format: date-time
+                  last_heartbeat:
+                    type: string
+                    format: date-time
+              metrics:
+                type: object
+                description: Performance metrics
+                nullable: true
+                properties:
+                  operations_per_second:
+                    type: number
+                    format: float
+                    example: 150.5
+                  average_latency_ms:
+                    type: number
+                    format: float
+                    example: 2.3
+                  error_rate:
+                    type: number
+                    format: float
+                    example: 0.001
+              capabilities:
+                type: array
+                description: Provider capabilities
+                items:
+                  type: string
+                example: ["key_generation", "signing", "encryption"]
+        overall_status:
+          type: string
+          description: Overall HSM system status
+          enum: [healthy, degraded, unhealthy]
+          example: "healthy"
+        timestamp:
+          type: string
+          format: date-time
+          description: Status collection timestamp
+          example: "2024-01-15T10:30:00Z"
+      required:
+        - providers
+        - overall_status
+        - timestamp
+
+    QuantumEncryptRequest:
+      type: object
+      description: Quantum-resistant encryption request
+      properties:
+        plaintext:
+          type: string
+          description: Base64-encoded plaintext to encrypt
+          example: "SGVsbG8gV29ybGQ="
+        algorithm:
+          type: string
+          description: Quantum-resistant algorithm
+          enum: [kyber512, kyber768, kyber1024]
+          default: "kyber768"
+          nullable: true
+        key_id:
+          type: string
+          description: Key ID for encryption (optional, generates new key if not specified)
+          nullable: true
+        context:
+          type: string
+          description: Additional context for encryption (AAD)
+          nullable: true
+        tenant_id:
+          type: string
+          format: uuid
+          description: Tenant ID for multi-tenant setups
+          nullable: true
+      required:
+        - plaintext
+
+    QuantumEncryptResponse:
+      type: object
+      description: Quantum-resistant encryption response
+      properties:
+        ciphertext:
+          type: string
+          description: Base64-encoded ciphertext
+          example: "quantum_encrypted_data_here"
+        encapsulated_key:
+          type: string
+          description: Base64-encoded encapsulated key
+          example: "encapsulated_key_here"
+        key_id:
+          type: string
+          description: Key ID used for encryption
+          example: "quantum_key_123456"
+        algorithm:
+          type: string
+          description: Quantum-resistant algorithm used
+          example: "kyber768"
+        security_level:
+          type: integer
+          format: int32
+          description: Security level in bits
+          example: 128
+        encrypted_at:
+          type: string
+          format: date-time
+          description: Encryption timestamp
+          example: "2024-01-15T10:30:00Z"
+      required:
+        - ciphertext
+        - encapsulated_key
+        - key_id
+        - algorithm
+        - security_level
+        - encrypted_at
+
+    # Audit & Compliance Schemas
+    AuditLogsResponse:
+      type: object
+      description: Audit logs response
+      properties:
+        logs:
+          type: array
+          description: Audit log entries
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+                description: Log entry ID
+                example: "550e8400-e29b-41d4-a716-446655440000"
+              timestamp:
+                type: string
+                format: date-time
+                description: Event timestamp
+                example: "2024-01-15T10:30:00Z"
+              event_type:
+                type: string
+                description: Event type
+                enum: [auth, data_access, key_operation, policy_eval, admin_action]
+                example: "data_access"
+              user_id:
+                type: string
+                format: uuid
+                description: User ID who performed the action
+                nullable: true
+                example: "550e8400-e29b-41d4-a716-446655440000"
+              tenant_id:
+                type: string
+                format: uuid
+                description: Tenant ID
+                nullable: true
+                example: "550e8400-e29b-41d4-a716-446655440000"
+              action:
+                type: string
+                description: Action performed
+                example: "data_retrieve"
+              resource_id:
+                type: string
+                description: Resource ID affected
+                nullable: true
+                example: "data_123456"
+              ip_address:
+                type: string
+                description: Source IP address
+                nullable: true
+                example: "192.168.1.100"
+              user_agent:
+                type: string
+                description: User agent string
+                nullable: true
+                example: "FortressClient/1.0.0"
+              result:
+                type: string
+                description: Action result
+                enum: [success, failure, error]
+                example: "success"
+              details:
+                type: object
+                description: Additional event details
+                nullable: true
+                example:
+                  data_id: "data_123456"
+                  algorithm: "aes256"
+              signature:
+                type: string
+                description: Cryptographic signature for integrity
+                example: "signature_hash_here"
+              merkle_proof:
+                type: object
+                description: Merkle tree proof for verification
+                nullable: true
+                properties:
+                  leaf_index:
+                    type: integer
+                    format: int64
+                  proof:
+                    type: array
+                    items:
+                      type: string
+                  root_hash:
+                    type: string
+        total_count:
+          type: integer
+          format: int64
+          description: Total number of log entries
+          example: 10000
+        page:
+          type: integer
+          format: int32
+          description: Current page number
+          example: 1
+        page_size:
+          type: integer
+          format: int32
+          description: Page size
+          example: 100
+        total_pages:
+          type: integer
+          format: int32
+          description: Total pages
+          example: 100
+        integrity_verified:
+          type: boolean
+          description: Whether log integrity was verified
+          example: true
+        verification_hash:
+          type: string
+          description: Hash of the log batch for verification
+          example: "sha256:abc123..."
+      required:
+        - logs
+        - total_count
+        - page
+        - page_size
+        - total_pages
+        - integrity_verified
+
+    ComplianceStatusResponse:
+      type: object
+      description: Compliance status response
+      properties:
+        frameworks:
+          type: array
+          description: Compliance framework statuses
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                description: Framework name
+                enum: [gdpr, hipaa, pci_dss, soc2, iso27001]
+                example: "gdpr"
+              status:
+                type: string
+                description: Compliance status
+                enum: [compliant, non_compliant, partial, unknown]
+                example: "compliant"
+              score:
+                type: number
+                format: float
+                description: Compliance score (0-100)
+                example: 95.5
+              last_assessment:
+                type: string
+                format: date-time
+                description: Last assessment date
+                example: "2024-01-15T10:30:00Z"
+              next_assessment:
+                type: string
+                format: date-time
+                description: Next scheduled assessment
+                example: "2024-04-15T10:30:00Z"
+              requirements:
+                type: array
+                description: Individual requirement statuses
+                items:
+                  type: object
+                  properties:
+                    requirement_id:
+                      type: string
+                      example: "ART_32"
+                    title:
+                      type: string
+                      example: "Security of processing"
+                    status:
+                      type: string
+                      enum: [compliant, non_compliant, not_applicable]
+                      example: "compliant"
+                    evidence:
+                      type: array
+                      items:
+                        type: string
+                      example: ["encryption_at_rest", "access_controls"]
+                    last_verified:
+                      type: string
+                      format: date-time
+                      example: "2024-01-15T10:30:00Z"
+              gaps:
+                type: array
+                description: Identified compliance gaps
+                items:
+                  type: object
+                  properties:
+                    severity:
+                      type: string
+                      enum: [high, medium, low]
+                      example: "medium"
+                    description:
+                      type: string
+                      example: "Missing data retention policy documentation"
+                    recommendation:
+                      type: string
+                      example: "Implement and document data retention procedures"
+                    due_date:
+                      type: string
+                      format: date-time
+                      nullable: true
+                      example: "2024-02-15T10:30:00Z"
+        overall_score:
+          type: number
+          format: float
+          description: Overall compliance score across all frameworks
+          example: 93.2
+        tenant_id:
+          type: string
+          format: uuid
+          description: Tenant ID (if filtered by tenant)
+          nullable: true
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        timestamp:
+          type: string
+          format: date-time
+          description: Status collection timestamp
+          example: "2024-01-15T10:30:00Z"
+      required:
+        - frameworks
+        - overall_score
+        - timestamp
+
+    # MFA Schemas
+    MFASetupRequest:
+      type: object
+      description: MFA setup request
+      properties:
+        password:
+          type: string
+          format: password
+          description: User password for verification
+          example: "securePassword123"
+        label:
+          type: string
+          description: Label for the authenticator app
+          example: "Fortress Security"
+      required:
+        - password
+
+    MFASetupResponse:
+      type: object
+      description: MFA setup response
+      properties:
+        secret:
+          type: string
+          description: TOTP secret key (base32 encoded)
+          example: "JBSWY3DPEHPK3PXP"
+        qr_code:
+          type: string
+          description: QR code for authenticator app (base64 encoded)
+          example: "iVBORw0KGgoAAAANSUhEUgAA..."
+        backup_codes:
+          type: array
+          description: Backup recovery codes
+          items:
+            type: string
+          example: ["12345678", "87654321"]
+        setup_id:
+          type: string
+          description: Setup session ID
+          example: "setup_abc123"
+        expires_at:
+          type: string
+          format: date-time
+          description: Setup session expiration
+          example: "2024-01-15T11:30:00Z"
+      required:
+        - secret
+        - qr_code
+        - backup_codes
+        - setup_id
+        - expires_at
+
+    MFAVerifyRequest:
+      type: object
+      description: MFA verification request
+      properties:
+        setup_id:
+          type: string
+          description: Setup session ID
+          example: "setup_abc123"
+        code:
+          type: string
+          description: TOTP code from authenticator app
+          example: "123456"
+      required:
+        - setup_id
+        - code
+
+    MFAVerifyResponse:
+      type: object
+      description: MFA verification response
+      properties:
+        enabled:
+          type: boolean
+          description: MFA is now enabled
+          example: true
+        backup_codes_remaining:
+          type: integer
+          format: int32
+          description: Number of unused backup codes
+          example: 10
+      required:
+        - enabled
+        - backup_codes_remaining
+
+    MFADisableRequest:
+      type: object
+      description: MFA disable request
+      properties:
+        password:
+          type: string
+          format: password
+          description: User password for verification
+          example: "securePassword123"
+        totp_code:
+          type: string
+          description: Current TOTP code (if MFA is enabled)
+          nullable: true
+          example: "123456"
+        backup_code:
+          type: string
+          description: Backup code (alternative to TOTP)
+          nullable: true
+          example: "12345678"
+      required:
+        - password
+
+    MFADisableResponse:
+      type: object
+      description: MFA disable response
+      properties:
+        disabled:
+          type: boolean
+          description: MFA is now disabled
+          example: true
+        disabled_at:
+          type: string
+          format: date-time
+          description: When MFA was disabled
+          example: "2024-01-15T10:30:00Z"
+      required:
+        - disabled
+        - disabled_at
+
+    # Key Management Schemas
+    KeyRotateRequest:
+      type: object
+      description: Key rotation request
+      properties:
+        algorithm:
+          type: string
+          description: New encryption algorithm
+          enum: [aegis256, aes256, chacha20]
+          nullable: true
+          example: "aes256"
+        key_size:
+          type: integer
+          format: int32
+          description: New key size in bits
+          nullable: true
+          example: 256
+        metadata:
+          type: object
+          description: New key metadata
+          nullable: true
+          example:
+            purpose: "data_encryption_v2"
+            rotation_reason: "scheduled_rotation"
+        options:
+          type: object
+          description: Rotation options
+          nullable: true
+          properties:
+            dry_run:
+              type: boolean
+              description: Simulate rotation without executing
+              default: false
+            batch_size:
+              type: integer
+              format: int32
+              description: Number of records to process per batch
+              default: 1000
+            timeout_minutes:
+              type: integer
+              format: int32
+              description: Rotation timeout in minutes
+              default: 60
+      required: []
+
+    KeyRotateResponse:
+      type: object
+      description: Key rotation response
+      properties:
+        rotation_id:
+          type: string
+          description: Rotation operation ID
+          example: "rotation_abc123"
+        new_key_id:
+          type: string
+          description: New key ID
+          example: "key_new_456789"
+        old_key_id:
+          type: string
+          description: Old key ID
+          example: "key_old_123456"
+        status:
+          type: string
+          description: Rotation status
+          enum: [initiated, in_progress, completed, failed]
+          example: "initiated"
+        estimated_completion:
+          type: string
+          format: date-time
+          description: Estimated completion time
+          nullable: true
+          example: "2024-01-15T11:30:00Z"
+        records_to_rotate:
+          type: integer
+          format: int64
+          description: Number of records to rotate
+          example: 10000
+        progress:
+          type: object
+          description: Rotation progress
+          nullable: true
+          properties:
+            completed:
+              type: integer
+              format: int64
+              example: 0
+            failed:
+              type: integer
+              format: int64
+              example: 0
+            percentage:
+              type: number
+              format: float
+              example: 0.0
+      required:
+        - rotation_id
+        - new_key_id
+        - old_key_id
+        - status
+        - records_to_rotate
+
+    KeyRollbackRequest:
+      type: object
+      description: Key rollback request
+      properties:
+        backup_key_id:
+          type: string
+          description: Backup key ID to rollback to
+          example: "key_backup_123456"
+        reason:
+          type: string
+          description: Reason for rollback
+          example: "Performance degradation detected"
+        options:
+          type: object
+          description: Rollback options
+          nullable: true
+          properties:
+            verify_integrity:
+              type: boolean
+              description: Verify data integrity after rollback
+              default: true
+            batch_size:
+              type: integer
+              format: int32
+              description: Number of records to process per batch
+              default: 1000
+      required:
+        - backup_key_id
+        - reason
+
+    KeyRollbackResponse:
+      type: object
+      description: Key rollback response
+      properties:
+        rollback_id:
+          type: string
+          description: Rollback operation ID
+          example: "rollback_xyz789"
+        from_key_id:
+          type: string
+          description: Key being rolled back from
+          example: "key_new_456789"
+        to_key_id:
+          type: string
+          description: Key being rolled back to
+          example: "key_backup_123456"
+        status:
+          type: string
+          description: Rollback status
+          enum: [initiated, in_progress, completed, failed]
+          example: "initiated"
+        records_to_rollback:
+          type: integer
+          format: int64
+          description: Number of records to rollback
+          example: 10000
+        estimated_completion:
+          type: string
+          format: date-time
+          description: Estimated completion time
+          nullable: true
+          example: "2024-01-15T11:45:00Z"
+      required:
+        - rollback_id
+        - from_key_id
+        - to_key_id
+        - status
+        - records_to_rollback
+
+    # Cluster Management Schemas
+    ClusterStatusResponse:
+      type: object
+      description: Cluster status response
+      properties:
+        cluster_id:
+          type: string
+          description: Cluster identifier
+          example: "cluster_main"
+        status:
+          type: string
+          description: Overall cluster status
+          enum: [healthy, degraded, unhealthy]
+          example: "healthy"
+        leader:
+          type: object
+          description: Current leader information
+          properties:
+            node_id:
+              type: string
+              example: "node_1"
+            address:
+              type: string
+              example: "192.168.1.10:8080"
+            term:
+              type: integer
+              format: int64
+              example: 15
+            elected_at:
+              type: string
+              format: date-time
+              example: "2024-01-15T09:00:00Z"
+        nodes:
+          type: array
+          description: Cluster nodes status
+          items:
+            type: object
+            properties:
+              node_id:
+                type: string
+                example: "node_1"
+              address:
+                type: string
+                example: "192.168.1.10:8080"
+              status:
+                type: string
+                enum: [leader, follower, candidate, offline]
+                example: "leader"
+              last_heartbeat:
+                type: string
+                format: date-time
+                example: "2024-01-15T10:30:00Z"
+              latency_ms:
+                type: number
+                format: float
+                nullable: true
+                example: 2.5
+        raft:
+          type: object
+          description: Raft consensus status
+          properties:
+            term:
+              type: integer
+              format: int64
+              example: 15
+            commit_index:
+              type: integer
+              format: int64
+              example: 12345
+            last_applied:
+              type: integer
+              format: int64
+              example: 12345
+            state:
+              type: string
+              enum: [leader, follower, candidate]
+              example: "leader"
+        replication:
+          type: object
+          description: Replication status
+          properties:
+            lag_bytes:
+              type: integer
+              format: int64
+              example: 1024
+            lag_entries:
+              type: integer
+              format: int64
+              example: 5
+            replication_factor:
+              type: integer
+              format: int32
+              example: 3
+            healthy_replicas:
+              type: integer
+              format: int32
+              example: 3
+        performance:
+          type: object
+          description: Cluster performance metrics
+          properties:
+            ops_per_second:
+              type: number
+              format: float
+              example: 1500.5
+            average_latency_ms:
+              type: number
+              format: float
+              example: 5.2
+            error_rate:
+              type: number
+              format: float
+              example: 0.001
+        timestamp:
+          type: string
+          format: date-time
+          description: Status collection timestamp
+          example: "2024-01-15T10:30:00Z"
+      required:
+        - cluster_id
+        - status
+        - leader
+        - nodes
+        - raft
+        - replication
+        - timestamp
+
+    ClusterNodesResponse:
+      type: object
+      description: Cluster nodes response
+      properties:
+        nodes:
+          type: array
+          description: List of cluster nodes
+          items:
+            type: object
+            properties:
+              node_id:
+                type: string
+                example: "node_1"
+              address:
+                type: string
+                example: "192.168.1.10:8080"
+              status:
+                type: string
+                enum: [leader, follower, candidate, offline]
+                example: "leader"
+              role:
+                type: string
+                description: Node role in cluster
+                example: "voter"
+              version:
+                type: string
+                description: Node software version
+                example: "1.2.0"
+              uptime_seconds:
+                type: integer
+                format: int64
+                example: 86400
+              resources:
+                type: object
+                description: Resource usage
+                properties:
+                  cpu_usage_percent:
+                    type: number
+                    format: float
+                    example: 15.5
+                  memory_usage_mb:
+                    type: integer
+                    format: int64
+                    example: 512
+                  disk_usage_gb:
+                    type: number
+                    format: float
+                    example: 10.5
+                  network_io_mbps:
+                    type: number
+                    format: float
+                    example: 25.3
+              connectivity:
+                type: object
+                description: Network connectivity status
+                properties:
+                  reachable_nodes:
+                    type: integer
+                    format: int32
+                    example: 2
+                  total_nodes:
+                    type: integer
+                    format: int32
+                    example: 3
+                  last_ping_ms:
+                    type: number
+                    format: float
+                    nullable: true
+                    example: 1.2
+              last_heartbeat:
+                type: string
+                format: date-time
+                example: "2024-01-15T10:30:00Z"
+        total_nodes:
+          type: integer
+          format: int32
+          description: Total number of nodes
+          example: 3
+        healthy_nodes:
+          type: integer
+          format: int32
+          description: Number of healthy nodes
+          example: 3
+      required:
+        - nodes
+        - total_nodes
+        - healthy_nodes
+
+    NodePromoteResponse:
+      type: object
+      description: Node promotion response
+      properties:
+        promotion_id:
+          type: string
+          description: Promotion operation ID
+          example: "promote_abc123"
+        node_id:
+          type: string
+          description: Node being promoted
+          example: "node_2"
+        from_role:
+          type: string
+          description: Previous role
+          example: "follower"
+        to_role:
+          type: string
+          description: New role
+          example: "leader"
+        status:
+          type: string
+          description: Promotion status
+          enum: [initiated, in_progress, completed, failed]
+          example: "initiated"
+        estimated_duration_minutes:
+          type: integer
+          format: int32
+          description: Estimated promotion duration
+          nullable: true
+          example: 5
+      required:
+        - promotion_id
+        - node_id
+        - from_role
+        - to_role
+        - status
+
+    # WASM Runtime Schemas
+    WASMPluginsResponse:
+      type: object
+      description: WASM plugins response
+      properties:
+        plugins:
+          type: array
+          description: List of loaded plugins
+          items:
+            type: object
+            properties:
+              plugin_id:
+                type: string
+                example: "plugin_auth_123"
+              name:
+                type: string
+                example: "auth-provider"
+              version:
+                type: string
+                example: "1.0.0"
+              type:
+                type: string
+                enum: [auth, storage, crypto, policy, custom]
+                example: "auth"
+              status:
+                type: string
+                enum: [active, inactive, error]
+                example: "active"
+              capabilities:
+                type: array
+                items:
+                  type: string
+                example: ["user_auth", "token_validation"]
+              resource_usage:
+                type: object
+                properties:
+                  memory_mb:
+                    type: number
+                    format: float
+                    example: 25.5
+                  cpu_percent:
+                    type: number
+                    format: float
+                    example: 2.1
+              metrics:
+                type: object
+                properties:
+                  calls_total:
+                    type: integer
+                    format: int64
+                    example: 10000
+                  calls_per_second:
+                    type: number
+                    format: float
+                    example: 50.5
+                  average_duration_ms:
+                    type: number
+                    format: float
+                    example: 2.3
+                  error_rate:
+                    type: number
+                    format: float
+                    example: 0.001
+              loaded_at:
+                type: string
+                format: date-time
+                example: "2024-01-15T09:00:00Z"
+              last_call:
+                type: string
+                format: date-time
+                nullable: true
+                example: "2024-01-15T10:30:00Z"
+        total_plugins:
+          type: integer
+          format: int32
+          description: Total number of plugins
+          example: 5
+        active_plugins:
+          type: integer
+          format: int32
+          description: Number of active plugins
+          example: 4
+      required:
+        - plugins
+        - total_plugins
+        - active_plugins
+
+    WASMPluginResponse:
+      type: object
+      description: WASM plugin response
+      properties:
+        plugin_id:
+          type: string
+          example: "plugin_auth_123"
+        name:
+          type: string
+          example: "auth-provider"
+        version:
+          type: string
+          example: "1.0.0"
+        type:
+          type: string
+          enum: [auth, storage, crypto, policy, custom]
+          example: "auth"
+        status:
+          type: string
+          enum: [active, inactive, error]
+          example: "active"
+        capabilities:
+          type: array
+          items:
+            type: string
+          example: ["user_auth", "token_validation"]
+        configuration:
+          type: object
+          description: Plugin configuration
+          nullable: true
+          example:
+            provider: "oidc"
+            issuer_url: "https://auth.example.com"
+        functions:
+          type: array
+          description: Available functions
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                example: "authenticate_user"
+              description:
+                type: string
+                example: "Authenticates a user with credentials"
+              parameters:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    type:
+                      type: string
+                    required:
+                      type: boolean
+              return_type:
+                type: string
+                example: "auth_result"
+        resource_limits:
+          type: object
+          description: Resource limits
+          properties:
+            max_memory_mb:
+              type: number
+              format: float
+              example: 128.0
+            max_cpu_percent:
+              type: number
+              format: float
+              example: 10.0
+            max_execution_time_ms:
+              type: integer
+              format: int64
+              example: 5000
+        loaded_at:
+          type: string
+          format: date-time
+          example: "2024-01-15T09:00:00Z"
+        checksum:
+          type: string
+          description: WASM module checksum
+          example: "sha256:abc123..."
+      required:
+        - plugin_id
+        - name
+        - version
+        - type
+        - status
+        - capabilities
+        - functions
+        - loaded_at
+
+    WASMFunctionCallRequest:
+      type: object
+      description: WASM function call request
+      properties:
+        function:
+          type: string
+          description: Function name to call
+          example: "authenticate_user"
+        parameters:
+          type: object
+          description: Function parameters
+          example:
+            username: "john.doe"
+            password: "securePassword123"
+            tenant_id: "tenant_123"
+        options:
+          type: object
+          description: Call options
+          nullable: true
+          properties:
+            timeout_ms:
+              type: integer
+              format: int64
+              description: Function execution timeout
+              default: 5000
+              example: 10000
+            trace:
+              type: boolean
+              description: Enable execution tracing
+              default: false
+      required:
+        - function
+        - parameters
+
+    WASMFunctionCallResponse:
+      type: object
+      description: WASM function call response
+      properties:
+        success:
+          type: boolean
+          description: Whether the function call was successful
+          example: true
+        result:
+          type: object
+          description: Function return value
+          nullable: true
+          example:
+            user_id: "user_123"
+            roles: ["user", "admin"]
+            token: "jwt_token_here"
+        execution_time_ms:
+          type: number
+          format: float
+          description: Function execution time in milliseconds
+          example: 15.5
+        memory_used_mb:
+          type: number
+          format: float
+          description: Memory used during execution
+          example: 5.2
+        trace:
+          type: array
+          description: Execution trace (if enabled)
+          items:
+            type: object
+            properties:
+              timestamp:
+                type: string
+                format: date-time
+              event:
+                type: string
+              details:
+                type: object
+          nullable: true
+        error:
+          type: object
+          description: Error details (if failed)
+          nullable: true
+          properties:
+            code:
+              type: string
+              example: "TIMEOUT"
+            message:
+              type: string
+              example: "Function execution timed out"
+            stack_trace:
+              type: array
+              items:
+                type: string
+      required:
+        - success
+        - execution_time_ms
+        - memory_used_mb
+
 tags:
   - name: Health
     description: Health check and monitoring endpoints
@@ -1570,3 +6046,21 @@ tags:
     description: Administrative and cross-tenant operations
   - name: Tenant Management
     description: Multi-tenant management endpoints
+  - name: Policy Engine
+    description: OPA/Rego policy evaluation and management endpoints
+  - name: Cryptography
+    description: Transit encryption and cryptographic operations endpoints
+  - name: Hardware Security
+    description: HSM status and management endpoints
+  - name: Quantum Cryptography
+    description: Quantum-resistant encryption endpoints
+  - name: Audit & Compliance
+    description: Audit logs and compliance monitoring endpoints
+  - name: Cluster Management
+    description: Distributed cluster management endpoints
+  - name: WASM Runtime
+    description: WebAssembly plugin runtime endpoints
+  - name: Webhooks
+    description: Real-time event notification endpoints
+  - name: Backup & Restore
+    description: Data backup and recovery endpoints
