@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 use tokio::sync::RwLock;
+use tracing::{info, error, warn, debug, trace};
 
 /// Consent expiry alert for automated monitoring
 #[derive(Debug, Clone, Serialize, Deserialize)]

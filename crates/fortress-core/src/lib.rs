@@ -149,19 +149,21 @@ pub mod tenant;
 
 
 /// Audit logging system
-
 pub mod audit;
 
+/// Cryptographically secure audit logging with Merkle trees
+pub mod secure_audit_merkle;
 
+/// Zero-knowledge proof system for audit verification
+pub mod audit_zk_proofs;
+
+/// Comprehensive tamper detection and alerting system
+pub mod audit_tamper_detection;
 
 /// Audit log analysis tools
-
 pub mod audit_analysis;
 
-
-
 /// Audit log rotation and retention
-
 pub mod audit_rotation;
 
 

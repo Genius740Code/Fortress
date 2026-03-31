@@ -11,6 +11,7 @@ use chrono::{DateTime, Utc, Duration};
 use std::collections::HashMap;
 use uuid::Uuid;
 use serde::{Deserialize, Serialize};
+use tracing::{info, error, warn, debug, trace};
 
 /// Breach assessment result for intelligent analysis
 #[derive(Debug, Clone, Serialize, Deserialize)]

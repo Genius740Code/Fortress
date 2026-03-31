@@ -906,6 +906,10 @@ pub enum AuditErrorCode {
     /// Audit configuration error
     #[error("Audit configuration error")]
     ConfigurationError,
+    
+    /// Audit verification failed
+    #[error("Audit verification failed")]
+    VerificationFailed,
 }
 
 impl FortressError {

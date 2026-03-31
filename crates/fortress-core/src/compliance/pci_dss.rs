@@ -11,6 +11,7 @@ use chrono::{DateTime, Utc, Duration};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
+use tracing::{info, error, warn, debug, trace};
 
 /// Risk levels for PCI-DSS compliance assessment
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

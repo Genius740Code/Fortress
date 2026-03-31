@@ -43,6 +43,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use chrono::{DateTime, Utc, Duration};
 use rand::RngCore;
+use tracing::{info, error, warn, debug, trace};
 
 // Database-specific imports for actual connections
 #[cfg(feature = "postgres")]

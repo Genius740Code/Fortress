@@ -3,17 +3,16 @@
 //! This module provides REST API endpoints for managing authentication plugins,
 //! including deployment, configuration, monitoring, and hot-swapping.
 
-use crate::auth_plugin::*;
-use crate::auth_plugin_manager::*;
-use crate::auth_service::*;
-use crate::error::{FortressError, Result};
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use crate::auth_plugin_manager::{HotSwappableAuthPluginManager, PluginDeployment, PluginReloadRequest, DeploymentStrategy, PluginRegistryEntry, PluginManagerStats};
+use crate::auth_service::{PluginAuthService, AuthServiceConfig, ServiceContext, AuthServiceStats};
+use crate::auth_plugin::{AuthMethod, AuthRequest, AuthPluginMetadata};
+use crate::error::Result;
 use std::sync::Arc;
+use std::collections::HashMap;
 use tokio::sync::RwLock;
-use tracing::{info, warn, error};
 use uuid::Uuid;
 use warp::{Filter, Rejection, Reply};
+use serde::{Serialize, Deserialize};
 
 /// API response wrapper
 #[derive(Debug, Serialize)]
@@ -50,6 +49,8 @@ pub struct AuthApiManager {
     auth_service: Arc<PluginAuthService>,
     /// API configuration
     config: AuthApiConfig,
+    /// Plugin registry
+    plugins: Arc<RwLock<HashMap<String, String>>>,
 }
 
 /// API configuration
@@ -63,6 +64,34 @@ pub struct AuthApiConfig {
     pub allowed_origins: Vec<String>,
     /// Rate limiting
     pub rate_limiting: ApiRateLimitConfig,
+}
+
+/// Token validation request
+#[derive(Debug, Deserialize)]
+struct TokenValidationRequest {
+    token: String,
+    request_id: Option<String>,
+}
+
+/// Token refresh request
+#[derive(Debug, Deserialize)]
+struct TokenRefreshRequest {
+    refresh_token: String,
+    request_id: Option<String>,
+}
+
+/// Logout request
+#[derive(Debug, Deserialize)]
+struct LogoutRequest {
+    token: String,
+    request_id: Option<String>,
+}
+
+/// Reload plugin request
+#[derive(Debug, Deserialize)]
+struct ReloadPluginRequest {
+    plugin_name: String,
+    force: bool,
 }
 
 /// API rate limiting configuration
@@ -94,6 +123,7 @@ impl AuthApiManager {
         Self {
             auth_service,
             config,
+            plugins: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -126,6 +156,7 @@ impl AuthApiManager {
             plugin_name: plugin_name.to_string(),
             force,
             reason: "API request".to_string(),
+            strategy: DeploymentStrategy::Immediate,
         };
 
         self.auth_service.reload_plugin(request).await
@@ -219,11 +250,10 @@ pub fn create_auth_api_routes(
     // Reload plugin endpoint
     let reload_plugin = warp::path("plugins")
         .and(warp::path("reload"))
-        .and(warp::path::param::<String>())
         .and(warp::post())
         .and(warp::body::json::<ReloadPluginRequest>())
         .and(with_auth_api_manager(api_manager_clone.clone()))
-        .and_then(|plugin_name: String, request: ReloadPluginRequest, manager: Arc<AuthApiManager>| async move {
+        .and_then(|request: ReloadPluginRequest, manager: Arc<AuthApiManager>| async move {
             match manager.reload_plugin(&request.plugin_name, request.force).await {
                 Ok(()) => Ok::<_, warp::Rejection>(warp::reply::json(&ApiResponse::success("Plugin reloaded successfully"))),
                 Err(e) => Ok::<_, warp::Rejection>(warp::reply::json(&ApiResponse::<serde_json::Value>::error(&e.to_string()))),
@@ -445,34 +475,6 @@ pub fn create_cors_config(config: &AuthApiConfig) -> warp::cors::Builder {
         .allow_credentials(true);
     
     cors
-}
-
-/// Token validation request
-#[derive(Debug, Deserialize)]
-struct TokenValidationRequest {
-    token: String,
-    request_id: Option<String>,
-}
-
-/// Token refresh request
-#[derive(Debug, Deserialize)]
-struct TokenRefreshRequest {
-    refresh_token: String,
-    request_id: Option<String>,
-}
-
-/// Logout request
-#[derive(Debug, Deserialize)]
-struct LogoutRequest {
-    token: String,
-    request_id: Option<String>,
-}
-
-/// Reload plugin request
-#[derive(Debug, Deserialize)]
-struct ReloadPluginRequest {
-    plugin_name: String,
-    force: bool,
 }
 
 /// API documentation structure

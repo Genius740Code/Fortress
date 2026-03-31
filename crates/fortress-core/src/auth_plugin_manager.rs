@@ -96,6 +96,8 @@ pub struct PluginReloadRequest {
     pub force: bool,
     /// Reload reason
     pub reason: String,
+    /// Deployment strategy
+    pub strategy: DeploymentStrategy,
 }
 
 /// Plugin deployment configuration
@@ -587,6 +589,12 @@ impl HotSwappableAuthPluginManager {
     pub async fn list_loaded_plugins(&self) -> Vec<String> {
         let plugins = self.plugins.read().await;
         plugins.keys().cloned().collect()
+    }
+
+    /// Get all supported authentication methods
+    pub async fn list_supported_methods(&self) -> Vec<AuthMethod> {
+        let method_to_plugin = self.method_to_plugin.read().await;
+        method_to_plugin.keys().cloned().collect()
     }
 
     /// Get all registered plugins

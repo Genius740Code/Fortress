@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tracing::{info, error, warn, debug, trace};
 
 // Mock PKCS#11 types for compilation
 mod pkcs11 {

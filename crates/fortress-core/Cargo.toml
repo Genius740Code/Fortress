@@ -79,6 +79,18 @@ base64 = "0.21"
 # Hex encoding
 hex = "0.4"
 
+# Ed25519 digital signatures
+ed25519-dalek = { version = "2.0", features = ["std"] }
+
+# Curve25519 for elliptic curve cryptography
+curve25519-dalek = "4.1"
+
+# Bulletproofs for zero-knowledge proofs
+bulletproofs = "4.0"
+
+# Merlin for transcript protocols
+merlin = "3.0"
+
 # Zeroize for secure memory handling
 zeroize = { version = "1.7", features = ["zeroize_derive"] }
 

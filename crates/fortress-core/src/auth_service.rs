@@ -129,6 +129,22 @@ pub struct ServiceContext {
     pub metadata: HashMap<String, serde_json::Value>,
 }
 
+impl Default for ServiceContext {
+    fn default() -> Self {
+        Self {
+            ip_address: None,
+            user_agent: None,
+            device_fingerprint: None,
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+            request_id: uuid::Uuid::new_v4().to_string(),
+            metadata: HashMap::new(),
+        }
+    }
+}
+
 impl Default for AuthServiceConfig {
     fn default() -> Self {
         Self {

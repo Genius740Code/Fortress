@@ -405,7 +405,7 @@ impl TeeAwareKeyManager {
         let request = CryptographicOperationRequest {
             operation: operation.to_string(),
             key_id: key_id.to_string(),
-            data: base64::encode(data),
+            data: base64::engine::general_purpose::STANDARD.encode(data),
             parameters: parameters.unwrap_or_default(),
         };
         
