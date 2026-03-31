@@ -64,6 +64,10 @@ tower-http = { version = "0.5", features = ["cors", "trace"] }
 # Cryptography for checksums
 sha2 = "0.10"
 
+# Hex and Base64 encoding
+hex = "0.4"
+base64 = "0.21"
+
 # Version parsing
 semver = "1.0"
 

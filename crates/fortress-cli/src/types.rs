@@ -156,7 +156,19 @@ pub enum Commands {
 #[derive(Subcommand)]
 pub enum KeyAction {
     /// Generate new encryption key
-    Generate,
+    Generate {
+        /// Algorithm to use (aegis256, aes256, chacha20, hex64)
+        #[arg(long, default_value = "aegis256")]
+        algorithm: String,
+        
+        /// Key length in bytes (for hex64 algorithm)
+        #[arg(long, default_value = "64")]
+        length: usize,
+        
+        /// Output format (raw, hex, base64)
+        #[arg(long, default_value = "hex")]
+        format: String,
+    },
     /// List all keys
     List,
     /// Rotate encryption key

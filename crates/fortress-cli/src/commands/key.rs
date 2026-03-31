@@ -15,27 +15,33 @@ use std::collections::HashMap;
 
 pub async fn handle_key_action(action: KeyAction) -> Result<()> {
     match action {
-        KeyAction::Generate => {
-            println!("{}", style("Key Generation").bold().cyan());
+        KeyAction::Generate { algorithm, length, format } => {
+            println!("{}", style("Enhanced Key Generation").bold().cyan());
+            println!("Algorithm: {}", style(&algorithm).bold());
+            println!("Length: {} bytes", style(length).bold());
+            println!("Format: {}", style(&format).bold());
             println!();
             
-            match generate_new_key().await {
-                Ok(key_id) => {
-                    let key_id_display = key_id.clone();
+            match generate_enhanced_key(&algorithm, length, &format).await {
+                Ok(key_output) => {
                     println!("{}", style("✓ Key generated successfully").bold().green());
-                    println!("Key ID: {}", style(key_id_display).bold());
-                    println!("Algorithm: {}", style("Aegis256"));
+                    println!("Algorithm: {}", style(&algorithm).bold());
+                    println!("Output: {}", style(&key_output).bold().yellow());
                     println!("Created: {}", style(Utc::now().format("%Y-%m-%d %H:%M:%S UTC")).dim());
                     
                     // Log audit event
                     if let Err(e) = log_event_with_metadata(
                         AuditEventType::KeyManagement,
                         SecurityLevel::High,
-                        Some(key_id.clone()),
-                        Some(key_id.clone()),
+                        None,
+                        None,
                         "key_generated".to_string(),
                         EventOutcome::Success,
-                        HashMap::from([("algorithm".to_string(), "aegis256".to_string())])
+                        HashMap::from([
+                            ("algorithm".to_string(), algorithm.clone()),
+                            ("length".to_string(), length.to_string()),
+                            ("format".to_string(), format.clone())
+                        ])
                     ) {
                         warn!("Failed to log audit event: {}", e);
                     }
@@ -398,7 +404,7 @@ async fn generate_new_key() -> Result<String> {
     let key_manager = InMemoryKeyManager::new();
     let algorithm = Aegis256 {};
     
-    // Generate the key
+    // Generate key
     let key = key_manager.generate_key(&algorithm).await
         .map_err(|e| color_eyre::eyre::eyre!("Failed to generate key: {}", e))?;
     
@@ -418,11 +424,101 @@ async fn generate_new_key() -> Result<String> {
         ]),
     };
     
-    // Store the key
+    // Store key
     key_manager.store_key(&key_id, &key, &metadata).await
         .map_err(|e| color_eyre::eyre::eyre!("Failed to store key: {}", e))?;
     
     Ok(key_id)
+}
+
+/// Generate enhanced key with multiple algorithms and formats
+async fn generate_enhanced_key(algorithm: &str, length: usize, format: &str) -> Result<String> {
+    use fortress_core::trng::global_trng;
+    use base64::Engine;
+    
+    match algorithm.to_lowercase().as_str() {
+        "hex64" => {
+            // Generate random bytes and convert to hex
+            let mut bytes = vec![0u8; length];
+            let mut trng = global_trng()
+                .map_err(|e| color_eyre::eyre::eyre!("Failed to initialize TRNG: {}", e))?;
+            
+            trng.fill_bytes(&mut bytes)
+                .map_err(|e| color_eyre::eyre::eyre!("Failed to generate random bytes: {}", e))?;
+            
+            let hex_string = hex::encode(&bytes);
+            
+            // Format output
+            match format.to_lowercase().as_str() {
+                "hex" => Ok(hex_string),
+                "base64" => Ok(base64::engine::general_purpose::STANDARD.encode(&bytes)),
+                "raw" => Ok(String::from_utf8_lossy(&bytes).to_string()),
+                _ => Ok(hex_string), // Default to hex
+            }
+        }
+        
+        "aegis256" => {
+            // Generate Aegis256 key
+            let key_manager = InMemoryKeyManager::new();
+            let algorithm = Aegis256 {};
+            
+            let key = key_manager.generate_key(&algorithm).await
+                .map_err(|e| color_eyre::eyre::eyre!("Failed to generate key: {}", e))?;
+            
+            let key_bytes = key.as_bytes();
+            
+            // Format output
+            match format.to_lowercase().as_str() {
+                "hex" => Ok(hex::encode(key_bytes)),
+                "base64" => Ok(base64::engine::general_purpose::STANDARD.encode(key_bytes)),
+                "raw" => Ok(format!("{:?}", key_bytes)),
+                _ => Ok(hex::encode(key_bytes)),
+            }
+        }
+        
+        "aes256" => {
+            // Generate AES-256 key
+            let mut bytes = [0u8; 32];
+            let mut trng = global_trng()
+                .map_err(|e| color_eyre::eyre::eyre!("Failed to initialize TRNG: {}", e))?;
+            
+            trng.fill_bytes(&mut bytes)
+                .map_err(|e| color_eyre::eyre::eyre!("Failed to generate random bytes: {}", e))?;
+            
+            // Format output
+            match format.to_lowercase().as_str() {
+                "hex" => Ok(hex::encode(&bytes)),
+                "base64" => Ok(base64::engine::general_purpose::STANDARD.encode(&bytes)),
+                "raw" => Ok(format!("{:?}", bytes)),
+                _ => Ok(hex::encode(&bytes)),
+            }
+        }
+        
+        "chacha20" => {
+            // Generate ChaCha20 key
+            let mut bytes = [0u8; 32]; // ChaCha20 uses 256-bit key
+            let mut trng = global_trng()
+                .map_err(|e| color_eyre::eyre::eyre!("Failed to initialize TRNG: {}", e))?;
+            
+            trng.fill_bytes(&mut bytes)
+                .map_err(|e| color_eyre::eyre::eyre!("Failed to generate random bytes: {}", e))?;
+            
+            // Format output
+            match format.to_lowercase().as_str() {
+                "hex" => Ok(hex::encode(&bytes)),
+                "base64" => Ok(base64::engine::general_purpose::STANDARD.encode(&bytes)),
+                "raw" => Ok(format!("{:?}", bytes)),
+                _ => Ok(hex::encode(&bytes)),
+            }
+        }
+        
+        _ => {
+            Err(color_eyre::eyre::eyre!(
+                "Unsupported algorithm: {}. Supported: aegis256, aes256, chacha20, hex64",
+                algorithm
+            ))
+        }
+    }
 }
 
 /// List all keys
