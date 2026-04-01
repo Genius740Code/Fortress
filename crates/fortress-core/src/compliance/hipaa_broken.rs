@@ -304,7 +304,7 @@ impl HipaaComplianceManager {
             description: format!("Covered entity {} registered", entity.name),
             affected_resources: vec![entity.id.clone()],
             actor: "system".to_string(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: HashMap::new(),
         };
         
@@ -329,7 +329,7 @@ impl HipaaComplianceManager {
             description: format!("Business associate {} registered", associate.name),
             affected_resources: vec![associate.id.clone()],
             actor: "system".to_string(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: HashMap::new(),
         };
         
@@ -354,7 +354,7 @@ impl HipaaComplianceManager {
             description: format!("PHI record {} registered for patient {}", phi.id, phi.patient_id),
             affected_resources: vec![phi.id.clone()],
             actor: "system".to_string(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: HashMap::new(),
         };
         
@@ -383,7 +383,7 @@ impl HipaaComplianceManager {
                 description: format!("Breach notification required for security incident: {}", incident.id),
                 affected_resources: vec![incident.id.to_string()],
                 actor: "system".to_string(),
-                outcome: EventOutcome::Success,
+                outcome: ComplianceEventOutcome::Success,
                 metadata: HashMap::new(),
             };
             
@@ -405,7 +405,7 @@ impl HipaaComplianceManager {
             description: format!("Security incident recorded: {}", incident.description),
             affected_resources: incident.phi_affected.clone(),
             actor: incident.reporter.clone(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: HashMap::new(),
         };
         

@@ -3,8 +3,9 @@
 //! Provides the foundational structure for compliance management across different
 //! regulatory frameworks with unified interfaces and common functionality.
 
-use crate::error::{FortressError, Result};
+use crate::audit::{AuditEntry, AuditEventType, SecurityLevel, EventOutcome};
 use crate::key::KeyId;
+use crate::error::{FortressError, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use chrono::{DateTime, Utc};
@@ -244,7 +245,7 @@ pub struct ComplianceEvent {
     /// User or system responsible
     pub actor: String,
     /// Event outcome
-    pub outcome: EventOutcome,
+    pub outcome: ComplianceEventOutcome,
     /// Additional metadata
     pub metadata: HashMap<String, String>,
 }
@@ -275,24 +276,24 @@ impl std::fmt::Display for EventSeverity {
 
 /// Event outcome
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
-pub enum EventOutcome {
+pub enum ComplianceEventOutcome {
     /// Event completed successfully
     Success,
     /// Event failed
     Failure,
-    /// Event was blocked/prevented
+    /// Event was blocked by security policy
     Blocked,
-    /// Event is pending completion
-    Pending,
+    /// Event requires additional review
+    RequiresReview,
 }
 
-impl std::fmt::Display for EventOutcome {
+impl std::fmt::Display for ComplianceEventOutcome {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            EventOutcome::Success => write!(f, "Success"),
-            EventOutcome::Failure => write!(f, "Failure"),
-            EventOutcome::Blocked => write!(f, "Blocked"),
-            EventOutcome::Pending => write!(f, "Pending"),
+            ComplianceEventOutcome::Success => write!(f, "Success"),
+            ComplianceEventOutcome::Failure => write!(f, "Failure"),
+            ComplianceEventOutcome::Blocked => write!(f, "Blocked"),
+            ComplianceEventOutcome::RequiresReview => write!(f, "RequiresReview"),
         }
     }
 }
@@ -376,7 +377,7 @@ pub struct ComplianceConfig {
     /// Data breach notification settings
     pub breach_notification: BreachNotificationConfig,
     /// Audit logging settings
-    pub audit_logging: AuditConfig,
+    pub audit_logging: ComplianceAuditConfig,
     /// Encryption requirements
     pub encryption: EncryptionConfig,
     /// Access control settings
@@ -398,7 +399,7 @@ pub struct BreachNotificationConfig {
 
 /// Audit logging configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AuditConfig {
+pub struct ComplianceAuditConfig {
     /// Whether to enable detailed audit logging
     pub enabled: bool,
     /// Retention period for audit logs
@@ -684,7 +685,7 @@ impl ComplianceManager for DefaultComplianceManager {
             description: format!("Data subject {} registered", subject.id),
             affected_resources: vec![subject.id.clone()],
             actor: "system".to_string(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: HashMap::new(),
         };
         
@@ -712,7 +713,7 @@ impl ComplianceManager for DefaultComplianceManager {
             description: format!("Consent {} recorded for subject {}", consent.id, subject_id),
             affected_resources: vec![subject_id.to_string()],
             actor: "system".to_string(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: HashMap::new(),
         };
         
@@ -733,7 +734,7 @@ impl ComplianceManager for DefaultComplianceManager {
             description: format!("Rights request {} processed", request.id),
             affected_resources: vec![],
             actor: "system".to_string(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: HashMap::new(),
         };
         

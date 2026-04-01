@@ -319,7 +319,7 @@ pub struct HipaaComplianceManager {
     base_manager: Box<dyn ComplianceManager>,
     covered_entities: std::sync::Arc<tokio::sync::RwLock<HashMap<String, CoveredEntity>>>,
     business_associates: std::sync::Arc<tokio::sync::RwLock<HashMap<String, BusinessAssociate>>>,
-    security_incidents: std::sync::Arc<tokio::sync::RwLock<Vec<SecurityIncident>>>,
+    security_incidents: std::sync::Arc<tokio::sync::RwLock<Vec<HipaaSecurityIncident>>>,
     phi_registry: std::sync::Arc<tokio::sync::RwLock<HashMap<String, ProtectedHealthInfo>>>,
     security_policies: std::sync::Arc<tokio::sync::RwLock<HashMap<String, SecurityPolicy>>>,
     breach_assessments: std::sync::Arc<tokio::sync::RwLock<Vec<BreachAssessment>>>,
@@ -371,7 +371,7 @@ pub struct BusinessAssociate {
 
 /// Security incident
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct SecurityIncident {
+pub struct HipaaSecurityIncident {
     /// Unique identifier for the incident
     pub id: String,
     /// Incident type
@@ -426,7 +426,7 @@ impl HipaaComplianceManager {
             description: "Covered entity registered".to_string(),
             affected_resources: vec![],
             actor: "system".to_string(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: HashMap::new(),
         };
         
@@ -448,7 +448,7 @@ impl HipaaComplianceManager {
             description: "Business associate registered".to_string(),
             affected_resources: vec![],
             actor: "system".to_string(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: HashMap::new(),
         };
         
@@ -457,7 +457,7 @@ impl HipaaComplianceManager {
     }
     
     /// Report a security incident
-    pub async fn report_security_incident(&self, incident: SecurityIncident) -> Result<()> {
+    pub async fn report_security_incident(&self, incident: HipaaSecurityIncident) -> Result<()> {
         let mut incidents = self.security_incidents.write().await;
         incidents.push(incident.clone());
         
@@ -475,7 +475,7 @@ impl HipaaComplianceManager {
             description: format!("Security incident reported: {}", incident.incident_type),
             affected_resources: incident.affected_phi_types.clone(),
             actor: "system".to_string(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: HashMap::new(),
         };
         
@@ -497,7 +497,7 @@ impl HipaaComplianceManager {
     }
 
     /// Intelligent breach detection with automated analysis and severity classification
-    pub async fn detect_breach(&self, incident: &SecurityIncident) -> Result<BreachAssessment> {
+    pub async fn detect_breach(&self, incident: &HipaaSecurityIncident) -> Result<BreachAssessment> {
         log::info!("Starting intelligent breach analysis for incident: {}", incident.id);
         
         let now = Utc::now();
@@ -562,7 +562,7 @@ impl HipaaComplianceManager {
                              format!("{:?}", assessment.severity)),
             affected_resources: vec![incident.id.clone()],
             actor: "automated_system".to_string(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: {
                 let mut meta = HashMap::new();
                 meta.insert("incident_id".to_string(), incident.id.clone());
@@ -580,7 +580,7 @@ impl HipaaComplianceManager {
     }
 
     /// Analyze incident against HIPAA breach criteria
-    async fn analyze_breach_criteria(&self, incident: &SecurityIncident) -> Result<(bool, u8)> {
+    async fn analyze_breach_criteria(&self, incident: &HipaaSecurityIncident) -> Result<(bool, u8)> {
         let mut is_breach = false;
         let mut confidence_score = 50u8; // Base confidence
         
@@ -646,7 +646,7 @@ impl HipaaComplianceManager {
     }
 
     /// Classify breach severity based on incident characteristics
-    async fn classify_breach_severity(&self, incident: &SecurityIncident) -> Result<BreachSeverity> {
+    async fn classify_breach_severity(&self, incident: &HipaaSecurityIncident) -> Result<BreachSeverity> {
         let severity = match incident.individuals_affected {
             0 => BreachSeverity::Minimal,
             1..=50 => {
@@ -674,7 +674,7 @@ impl HipaaComplianceManager {
     }
 
     /// Calculate notification requirements based on breach severity
-    async fn calculate_notification_requirements(&self, severity: &BreachSeverity, _incident: &SecurityIncident) -> Result<NotificationRequirements> {
+    async fn calculate_notification_requirements(&self, severity: &BreachSeverity, _incident: &HipaaSecurityIncident) -> Result<NotificationRequirements> {
         let (individual_deadline, hhs_deadline, media_required) = match severity {
             BreachSeverity::Minimal | BreachSeverity::Moderate => {
                 // Less than 500 individuals: 60 days for HHS, no media requirement
@@ -707,7 +707,7 @@ impl HipaaComplianceManager {
     }
 
     /// Identify risk factors for the breach
-    async fn identify_risk_factors(&self, incident: &SecurityIncident) -> Result<Vec<String>> {
+    async fn identify_risk_factors(&self, incident: &HipaaSecurityIncident) -> Result<Vec<String>> {
         let mut risk_factors = Vec::new();
         
         // Analyze incident type for risk factors
@@ -869,7 +869,7 @@ impl HipaaComplianceManager {
                              media_results.len()),
             affected_resources: vec![breach.incident_id.clone()],
             actor: "automated_system".to_string(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: {
                 let mut meta = HashMap::new();
                 meta.insert("breach_assessment_id".to_string(), breach.id.to_string());

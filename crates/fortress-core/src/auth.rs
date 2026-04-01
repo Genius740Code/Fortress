@@ -61,7 +61,7 @@ pub struct Role {
 
 /// Permission definition
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Hash)]
-pub struct Permission {
+pub struct AuthPermission {
     /// Unique identifier for the permission
     pub id: PermissionId,
     /// Permission name
@@ -336,7 +336,7 @@ pub struct AuthManager {
     /// Role storage
     roles: HashMap<RoleId, Role>,
     /// Permission storage
-    permissions: HashMap<PermissionId, Permission>,
+    permissions: HashMap<PermissionId, AuthPermission>,
     /// Active tokens
     tokens: HashMap<String, AuthToken>,
     /// Session manager
@@ -514,7 +514,7 @@ impl AuthManager {
     }
 
     /// Get all permissions for a user
-    pub fn get_user_permissions(&self, user_id: &UserId) -> Vec<&Permission> {
+    pub fn get_user_permissions(&self, user_id: &UserId) -> Vec<&AuthPermission> {
         let user = match self.users.get(user_id) {
             Some(u) => u,
             None => return Vec::new(),
@@ -582,7 +582,7 @@ impl AuthManager {
         action: String,
     ) -> Result<PermissionId, FortressError> {
         let permission_id = Uuid::new_v4().to_string();
-        let permission = Permission {
+        let permission = AuthPermission {
             id: permission_id.clone(),
             name,
             description,

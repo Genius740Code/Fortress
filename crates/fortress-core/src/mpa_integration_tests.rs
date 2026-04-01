@@ -43,8 +43,8 @@ async fn test_complete_mpa_workflow() {
         2, // Require 2 approvals
         vec![
             OperationType::KeyGeneration,
-            OperationType::KeyDeletion,
-            OperationType::HsmOperation,
+            OperationType::KeyStorage,
+            OperationType::DatabaseQuery,
         ],
         3600, // 1 hour timeout
         admin_id.clone(),
@@ -147,7 +147,7 @@ async fn test_rejection_workflow() {
         "Security Operations".to_string(),
         "Group for security-critical operations".to_string(),
         2, // Require 2 approvals
-        vec![OperationType::KeyDeletion],
+        vec![OperationType::KeyStorage],
         3600,
         admin_id.clone(),
     ).await.unwrap();
@@ -165,7 +165,7 @@ async fn test_rejection_workflow() {
     // Create approval request
     let request_id = mpa_service.create_approval_request(
         group_id.clone(),
-        OperationType::KeyDeletion,
+        OperationType::KeyStorage,
         "Delete old encryption key".to_string(),
         serde_json::json!({"key_id": "old_key_123"}).to_string(),
         requester_id.clone(),
@@ -213,7 +213,7 @@ async fn test_request_cancellation() {
         "Test Group".to_string(),
         "Test group for cancellation".to_string(),
         2,
-        vec![OperationType::SystemConfiguration],
+        vec![OperationType::SystemOperation],
         3600,
         admin_id.clone(),
     ).await.unwrap();
@@ -229,7 +229,7 @@ async fn test_request_cancellation() {
     // Create approval request
     let request_id = mpa_service.create_approval_request(
         group_id.clone(),
-        OperationType::SystemConfiguration,
+        OperationType::SystemOperation,
         "Update system configuration".to_string(),
         "{}".to_string(),
         requester_id.clone(),
@@ -381,7 +381,7 @@ async fn test_permission_validation() {
     // Try to create request for unauthorized operation type
     let result = mpa_service.create_approval_request(
         group_id.clone(),
-        OperationType::KeyDeletion, // Not authorized
+        OperationType::KeyStorage, // Not authorized
         "Delete key".to_string(),
         "{}".to_string(),
         requester_id.clone(),

@@ -14,6 +14,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use wasmtime::*;
+// use wasmtime_wasi::{WasiCtx, WasiCtxBuilder};
 
 /// WebAssembly plugin instance
 pub struct WasmPlugin {
@@ -156,15 +157,311 @@ impl WasmPlugin {
     
     /// Add host functions to linker
     fn add_host_functions(&self, linker: &mut Linker<WasmContext>) -> Result<()> {
+        // Add basic host functions
+        self.add_basic_host_functions(linker)?;
         
-        // Add authentication-specific host functions
+        // Add policy evaluation host functions
+        self.add_policy_host_functions(linker)?;
+        
+        // Add authentication host functions
         self.add_auth_host_functions(linker)?;
+        
+        Ok(())
+    }
+    
+    /// Add basic host functions
+    fn add_basic_host_functions(&self, linker: &mut Linker<WasmContext>) -> Result<()> {
+        // Log function
+        linker.func_wrap(
+            "fortress",
+            "log",
+            |mut caller: Caller<'_, WasmContext>, ptr: i32, len: i32| -> Result<(), Trap> {
+                let memory = match caller.get_export("memory") {
+                    Some(Extern::Memory(mem)) => mem,
+                    _ => return Err(wasmtime::Trap::new(anyhow::anyhow!("failed to find host memory"))),
+                };
+                
+                match Self::read_memory(&memory, ptr, len) {
+                    Ok(data) => {
+                        let message = String::from_utf8_lossy(&data);
+                        tracing::info!("WASM Plugin: {}", message.trim_end_matches('\0'));
+                        Ok(())
+                    }
+                    Err(_) => Err(wasmtime::Trap::new(anyhow::anyhow!("failed to read log message"))),
+                }
+            },
+        ).map_err(|e| FortressError::plugin(format!("Failed to wrap log function: {}", e)))?;
+        
+        // Get config function
+        linker.func_wrap(
+            "fortress",
+            "get_config",
+            |mut caller: Caller<'_, WasmContext>, key_ptr: i32, key_len: i32, 
+             value_ptr: i32, value_len: i32| -> Result<i32, Trap> {
+                let memory = match caller.get_export("memory") {
+                    Some(Extern::Memory(mem)) => mem,
+                    _ => return Err(wasmtime::Trap::new(anyhow::anyhow!("failed to find host memory"))),
+                };
+                
+                // Read key from WASM memory
+                let key_data = Self::read_memory(&memory, key_ptr, key_len)
+                    .map_err(|_| wasmtime::Trap::new(format!("Failed to read key: {}", e)))?;
+                let key = String::from_utf8_lossy(&key_data);
+                
+                // Get value from context
+                let ctx = caller.data();
+                if let Some(value) = ctx.config.get(key.trim_end_matches('\0')) {
+                    let value_str = serde_json::to_string(value)
+                        .map_err(|_| wasmtime::Trap::new(anyhow::anyhow!("failed to serialize value")))?;
+                    let value_bytes = value_str.as_bytes();
+                    
+                    // Write value back to WASM memory
+                    let write_len = std::cmp::min(value_bytes.len() as i32, value_len);
+                    if let Err(e) = Self::write_memory(&memory, value_ptr, &value_bytes[..write_len as usize]) {
+                        return Err(wasmtime::Trap::new(anyhow::anyhow!("failed to write value")));
+                    }
+                    
+                    Ok(write_len)
+                } else {
+                    Ok(-1) // Key not found
+                }
+            },
+        ).map_err(|e| FortressError::plugin(format!("Failed to wrap get_config function: {}", e)))?;
+        
+        // Get timestamp function
+        linker.func_wrap(
+            "fortress",
+            "get_timestamp",
+            |_caller: Caller<'_, WasmContext>| -> Result<i64, Trap> {
+                Ok(chrono::Utc::now().timestamp_millis())
+            },
+        ).map_err(|e| FortressError::plugin(format!("Failed to wrap get_timestamp function: {}", e)))?;
+        
+        Ok(())
+    }
+    
+    /// Add policy evaluation host functions
+    fn add_policy_host_functions(&self, linker: &mut Linker<WasmContext>) -> Result<()> {
+        // Policy evaluation function
+        linker.func_wrap(
+            "fortress_policy",
+            "evaluate_user_role",
+            |mut caller: Caller<'_, WasmContext>, user_ptr: i32, user_len: i32,
+             role_ptr: i32, role_len: i32| -> Result<i32, Trap> {
+                let memory = match caller.get_export("memory") {
+                    Some(Extern::Memory(mem)) => mem,
+                    _ => return Err(wasmtime::Trap::new(anyhow::anyhow!("failed to find host memory"))),
+                };
+                
+                // Read username
+                let user_data = Self::read_memory(&memory, user_ptr, user_len)
+                    .map_err(|_| wasmtime::Trap::new(format!("Failed to read username: {}", e)))?;
+                let username = String::from_utf8_lossy(&user_data);
+                
+                // Read role
+                let role_data = Self::read_memory(&memory, role_ptr, role_len)
+                    .map_err(|_| wasmtime::Trap::new(format!("Failed to read role: {}", e)))?;
+                let role = String::from_utf8_lossy(&role_data);
+                
+                // Basic role check (in production, this would query a user database)
+                let has_role = match (username.trim_end_matches('\0'), role.trim_end_matches('\0')) {
+                    ("admin", _) => true, // Admin has all roles
+                    ("user", "user") => true,
+                    ("user", "readonly") => true,
+                    ("guest", "readonly") => true,
+                    _ => false,
+                };
+                
+                Ok(if has_role { 1 } else { 0 })
+            },
+        ).map_err(|e| FortressError::plugin(format!("Failed to wrap evaluate_user_role function: {}", e)))?;
+        
+        // Resource access check function
+        linker.func_wrap(
+            "fortress_policy",
+            "check_resource_access",
+            |mut caller: Caller<'_, WasmContext>, user_ptr: i32, user_len: i32,
+             resource_ptr: i32, resource_len: i32, action_ptr: i32, action_len: i32| -> Result<i32, Trap> {
+                let memory = match caller.get_export("memory") {
+                    Some(Extern::Memory(mem)) => mem,
+                    _ => return Err(wasmtime::Trap::new(anyhow::anyhow!("failed to find host memory"))),
+                };
+                
+                // Read parameters
+                let user_data = Self::read_memory(&memory, user_ptr, user_len)
+                    .map_err(|_| wasmtime::Trap::new(anyhow::anyhow!("failed to read user")))?;
+                let user = String::from_utf8_lossy(&user_data);
+                
+                let resource_data = Self::read_memory(&memory, resource_ptr, resource_len)
+                    .map_err(|_| wasmtime::Trap::new(anyhow::anyhow!("failed to read resource")))?;
+                let resource = String::from_utf8_lossy(&resource_data);
+                
+                let action_data = Self::read_memory(&memory, action_ptr, action_len)
+                    .map_err(|_| wasmtime::Trap::new(anyhow::anyhow!("failed to read action")))?;
+                let action = String::from_utf8_lossy(&action_data);
+                
+                // Basic resource access check
+                let allowed = match (user.trim_end_matches('\0'), resource.trim_end_matches('\0'), action.trim_end_matches('\0')) {
+                    ("admin", _, _) => true, // Admin can access everything
+                    ("user", "user_data", "read") => true,
+                    ("user", "user_data", "write") => true,
+                    ("user", "public_data", "read") => true,
+                    ("guest", "public_data", "read") => true,
+                    _ => false,
+                };
+                
+                Ok(if allowed { 1 } else { 0 })
+            },
+        ).map_err(|e| FortressError::plugin(format!("Failed to wrap check_resource_access function: {}", e)))?;
+        
+        // Time-based access check function
+        linker.func_wrap(
+            "fortress_policy",
+            "check_time_based_access",
+            |mut caller: Caller<'_, WasmContext>, start_hour: i32, end_hour: i32| -> Result<i32, Trap> {
+                let current_hour = chrono::Utc::now().hour();
+                let allowed = if start_hour <= end_hour {
+                    current_hour >= start_hour && current_hour <= end_hour
+                } else {
+                    current_hour >= start_hour || current_hour <= end_hour
+                };
+                
+                Ok(if allowed { 1 } else { 0 })
+            },
+        ).map_err(|e| FortressError::plugin(format!("Failed to wrap check_time_based_access function: {}", e)))?;
+        
+        // Geolocation check function
+        linker.func_wrap(
+            "fortress_policy",
+            "check_geolocation_access",
+            |mut caller: Caller<'_, WasmContext>, country_ptr: i32, country_len: i32| -> Result<i32, Trap> {
+                let memory = match caller.get_export("memory") {
+                    Some(Extern::Memory(mem)) => mem,
+                    _ => return Err(wasmtime::Trap::new(anyhow::anyhow!("failed to find host memory"))),
+                };
+                
+                let country_data = Self::read_memory(&memory, country_ptr, country_len)
+                    .map_err(|_| wasmtime::Trap::new(anyhow::anyhow!("failed to read country")))?;
+                let country = String::from_utf8_lossy(&country_data);
+                
+                // Allowed countries (in production, this would be configurable)
+                let allowed_countries = vec!["US", "CA", "GB", "DE", "FR"];
+                let allowed = allowed_countries.contains(&country.trim_end_matches('\0'));
+                
+                Ok(if allowed { 1 } else { 0 })
+            },
+        ).map_err(|e| FortressError::plugin(format!("Failed to wrap check_geolocation_access function: {}", e)))?;
         
         Ok(())
     }
     
     /// Add authentication-specific host functions
     fn add_auth_host_functions(&self, linker: &mut Linker<WasmContext>) -> Result<()> {
+        // Password verification function
+        linker.func_wrap(
+            "fortress_auth",
+            "verify_password",
+            |mut caller: Caller<'_, WasmContext>, username_ptr: i32, username_len: i32,
+             password_ptr: i32, password_len: i32| -> Result<i32, Trap> {
+                let memory = match caller.get_export("memory") {
+                    Some(Extern::Memory(mem)) => mem,
+                    _ => return Err(wasmtime::Trap::new(anyhow::anyhow!("failed to find host memory"))),
+                };
+                
+                // Read username
+                let username_data = Self::read_memory(&memory, username_ptr, username_len)
+                    .map_err(|_| wasmtime::Trap::new(anyhow::anyhow!("failed to read username")))?;
+                let username = String::from_utf8_lossy(&username_data);
+                
+                // Read password
+                let password_data = Self::read_memory(&memory, password_ptr, password_len)
+                    .map_err(|_| wasmtime::Trap::new(anyhow::anyhow!("failed to read password")))?;
+                let password = String::from_utf8_lossy(&password_data);
+                
+                // Basic password verification (in production, this would use secure password hashing)
+                let valid = match (username.trim_end_matches('\0'), password.trim_end_matches('\0')) {
+                    ("admin", "admin123") => true,
+                    ("user", "password123") => true,
+                    ("guest", "guest123") => true,
+                    _ => false,
+                };
+                
+                Ok(if valid { 1 } else { 0 })
+            },
+        ).map_err(|e| FortressError::plugin(format!("Failed to wrap verify_password function: {}", e)))?;
+        
+        // Token validation function
+        linker.func_wrap(
+            "fortress_auth",
+            "validate_token",
+            |mut caller: Caller<'_, WasmContext>, token_ptr: i32, token_len: i32| -> Result<i32, Trap> {
+                let memory = match caller.get_export("memory") {
+                    Some(Extern::Memory(mem)) => mem,
+                    _ => return Err(wasmtime::Trap::new(anyhow::anyhow!("failed to find host memory"))),
+                };
+                
+                let token_data = Self::read_memory(&memory, token_ptr, token_len)
+                    .map_err(|_| wasmtime::Trap::new(anyhow::anyhow!("failed to read token")))?;
+                let token = String::from_utf8_lossy(&token_data);
+                
+                // Basic token validation (in production, this would validate JWT signature and expiration)
+                let valid = token.trim_end_matches('\0').starts_with("valid_token_");
+                
+                Ok(if valid { 1 } else { 0 })
+            },
+        ).map_err(|e| FortressError::plugin(format!("Failed to wrap validate_token function: {}", e)))?;
+        
+        // Session creation function
+        linker.func_wrap(
+            "fortress_auth",
+            "create_session",
+            |mut caller: Caller<'_, WasmContext>, user_ptr: i32, user_len: i32,
+             session_ptr: i32, session_len: i32| -> Result<i32, Trap> {
+                let memory = match caller.get_export("memory") {
+                    Some(Extern::Memory(mem)) => mem,
+                    _ => return Err(wasmtime::Trap::new(anyhow::anyhow!("failed to find host memory"))),
+                };
+                
+                let user_data = Self::read_memory(&memory, user_ptr, user_len)
+                    .map_err(|_| wasmtime::Trap::new(anyhow::anyhow!("failed to read user")))?;
+                let user = String::from_utf8_lossy(&user_data);
+                
+                // Create session token (in production, this would be cryptographically secure)
+                let session_token = format!("session_{}_{}", 
+                    user.trim_end_matches('\0'), 
+                    chrono::Utc::now().timestamp());
+                
+                let session_bytes = session_token.as_bytes();
+                let write_len = std::cmp::min(session_bytes.len() as i32, session_len);
+                
+                if let Err(e) = Self::write_memory(&memory, session_ptr, &session_bytes[..write_len as usize]) {
+                    return Err(wasmtime::Trap::new(anyhow::anyhow!("failed to write session")));
+                }
+                
+                Ok(write_len)
+            },
+        ).map_err(|e| FortressError::plugin(format!("Failed to wrap create_session function: {}", e)))?;
+        
+        // MFA verification function
+        linker.func_wrap(
+            "fortress_auth",
+            "verify_mfa",
+            |mut caller: Caller<'_, WasmContext>, code_ptr: i32, code_len: i32| -> Result<i32, Trap> {
+                let memory = match caller.get_export("memory") {
+                    Some(Extern::Memory(mem)) => mem,
+                    _ => return Err(wasmtime::Trap::new(anyhow::anyhow!("failed to find host memory"))),
+                };
+                
+                let code_data = Self::read_memory(&memory, code_ptr, code_len)
+                    .map_err(|_| wasmtime::Trap::new(anyhow::anyhow!("failed to read MFA code")))?;
+                let code = String::from_utf8_lossy(&code_data);
+                
+                // Basic MFA verification (in production, this would use TOTP algorithm)
+                let valid = code.trim_end_matches('\0') == "123456"; // Demo code
+                
+                Ok(if valid { 1 } else { 0 })
+            },
+        ).map_err(|e| FortressError::plugin(format!("Failed to wrap verify_mfa function: {}", e)))?;
         
         Ok(())
     }

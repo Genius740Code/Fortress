@@ -45,7 +45,7 @@ use chrono_tz::Tz;
 /// Policy engine for managing roles and permissions
 #[derive(Debug)]
 pub struct PolicyEngine {
-    roles: RwLock<HashMap<String, Role>>,
+    roles: RwLock<HashMap<String, PolicyRole>>,
     user_roles: RwLock<HashMap<String, HashSet<String>>>,
     /// Policy storage
     #[allow(dead_code)]
@@ -79,7 +79,7 @@ struct CacheEntry {
 
 /// Role definition with permissions and metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Role {
+pub struct PolicyRole {
     /// Role name
     pub name: String,
     /// Role description
@@ -341,7 +341,7 @@ impl PolicyEngine {
     }
 
     /// Add a new role to the system
-    pub async fn add_role(&self, role: Role) -> Result<()> {
+    pub async fn add_role(&self, role: PolicyRole) -> Result<()> {
         let mut roles = self.roles.write().await;
         roles.insert(role.name.clone(), role);
         self.clear_cache().await;
@@ -1080,14 +1080,13 @@ impl PolicyEngine {
     }
 }
 
-impl Role {
-    /// Create a new role
+    impl PolicyRole {
+    /// Create a new role with the given name
     pub fn new(name: &str) -> Self {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap_or_else(|_| Duration::from_secs(0))
+            .unwrap_or_default()
             .as_secs();
-
         Self {
             name: name.to_string(),
             description: None,

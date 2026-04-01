@@ -52,7 +52,7 @@ struct NitroEnclaveInfo {
 
 /// Nitro CLI command response
 #[derive(Debug, Deserialize)]
-struct NitroCliResponse {
+pub struct NitroCliResponse {
     #[serde(rename = "EnclaveID")]
     enclave_id: Option<String>,
     #[serde(rename = "ProcessID")]
@@ -69,7 +69,7 @@ struct NitroCliResponse {
 
 /// Nitro enclave description from EIF file
 #[derive(Debug, Deserialize)]
-struct NitroEnclaveDescription {
+pub struct NitroEnclaveDescription {
     #[serde(rename = "Measurements")]
     measurements: NitroMeasurements,
     #[serde(rename = "HashAlgorithm")]
@@ -80,7 +80,7 @@ struct NitroEnclaveDescription {
 
 /// Nitro enclave measurements
 #[derive(Debug, Deserialize)]
-struct NitroMeasurements {
+pub struct NitroMeasurements {
     #[serde(rename = "PCR0")]
     pcr0: Option<String>,
     #[serde(rename = "PCR1")]

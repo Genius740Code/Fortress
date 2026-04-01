@@ -604,7 +604,7 @@ mod tests {
             description: "Test audit event".to_string(),
             affected_resources: vec!["test_resource".to_string()],
             actor: "test_user".to_string(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: std::collections::HashMap::new(),
         };
         
@@ -637,7 +637,7 @@ mod tests {
                 description: format!("Test audit event {}", i),
                 affected_resources: vec![format!("test_resource_{}", i)],
                 actor: "test_user".to_string(),
-                outcome: EventOutcome::Success,
+                outcome: ComplianceEventOutcome::Success,
                 metadata: std::collections::HashMap::new(),
             };
             audit_logger.log_event(&event).await.unwrap();
@@ -682,7 +682,7 @@ mod tests {
             description: "Test for integrity verification".to_string(),
             affected_resources: vec!["test_resource".to_string()],
             actor: "test_user".to_string(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: std::collections::HashMap::new(),
         };
         audit_logger.log_event(&event).await.unwrap();

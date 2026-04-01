@@ -3,9 +3,9 @@
 //! Provides a unified interface for managing multiple compliance frameworks
 //! with centralized reporting and risk assessment.
 use crate::compliance::framework::ComplianceManager;
-use crate::compliance::framework::{ComplianceFramework, ComplianceEvent, EventSeverity, EventOutcome};
+use crate::compliance::framework::{ComplianceFramework, ComplianceEvent, EventSeverity, ComplianceEventOutcome};
 use crate::compliance::framework::{ComplianceFinding, FindingStatus, ComplianceIssue, ComplianceStatus, ComplianceDeadline};
-use crate::compliance::framework::{ComplianceConfig, BreachNotificationConfig, AuditConfig, EncryptionConfig, AccessControlConfig, ComplianceMetrics, ComplianceReport, DataSubject, ConsentRecord, RightsRequest};
+use crate::compliance::framework::{ComplianceConfig, BreachNotificationConfig, ComplianceAuditConfig, EncryptionConfig, AccessControlConfig, ComplianceMetrics, ComplianceReport, DataSubject, ConsentRecord, RightsRequest};
 use crate::compliance::gdpr::GdprComplianceManager;
 use crate::compliance::hipaa::HipaaComplianceManager;
 use crate::compliance::pci_dss::PciDssComplianceManager;
@@ -563,7 +563,7 @@ impl AnomalyDetector {
         }
 
         // Check for unusual outcome patterns
-        if matches!(event.outcome, EventOutcome::Failure) {
+        if matches!(event.outcome, ComplianceEventOutcome::Failure) {
             anomaly_score += 0.3;
             if anomaly_type == "normal" {
                 anomaly_type = "failure_event".to_string();
@@ -672,7 +672,7 @@ impl RealtimeMonitor {
             description: anomaly_result.description.clone(),
             affected_resources: event.affected_resources.clone(),
             actor: "anomaly_detector".to_string(),
-            outcome: EventOutcome::Failure,
+            outcome: ComplianceEventOutcome::Failure,
             metadata: {
                 let mut meta = HashMap::new();
                 meta.insert("anomaly_type".to_string(), anomaly_result.anomaly_type.clone());
@@ -694,7 +694,7 @@ impl RealtimeMonitor {
             description: format!("Event '{}' exceeded frequency threshold", event.event_type),
             affected_resources: event.affected_resources.clone(),
             actor: "threshold_monitor".to_string(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: {
                 let mut meta = HashMap::new();
                 meta.insert("event_type".to_string(), event.event_type.clone());
@@ -1008,7 +1008,7 @@ impl UnifiedComplianceManager {
                              stakeholder.name, format.format),
             affected_resources: vec![stakeholder.email.clone()],
             actor: "automated_system".to_string(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: {
                 let mut meta = HashMap::new();
                 meta.insert("stakeholder_id".to_string(), stakeholder.id.to_string());

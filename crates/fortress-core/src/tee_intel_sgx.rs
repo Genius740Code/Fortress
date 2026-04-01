@@ -129,7 +129,7 @@ pub struct SgxReportBody {
 
 /// SGX attributes
 #[derive(Debug, Deserialize, Serialize)]
-struct SgxAttributes {
+pub struct SgxAttributes {
     /// Flags
     flags: u64,
     /// XFRM
@@ -138,7 +138,7 @@ struct SgxAttributes {
 
 /// SGX measurement data
 #[derive(Debug, Deserialize)]
-struct SgxMeasurement {
+pub struct SgxMeasurement {
     /// MRENCLAVE
     mr_enclave: String,
     /// MRSIGNER

@@ -50,7 +50,7 @@ use tracing::{info, error, warn, debug, trace};
 use postgres::{Client, NoTls};
 #[cfg(feature = "mysql")]
 use mysql::{Pool, PooledConn};
-#[cfg(feature = "sqlserver")]
+#[cfg(feature = "mssql")]
 use tiberius::{Client as SqlClient, AuthMethod};
 
 /// Database configuration
@@ -329,7 +329,7 @@ impl DatabaseEngine {
     ) -> Result<()> {
         log::info!("Creating SQL Server user: {}", username);
         
-        #[cfg(feature = "sqlserver")]
+        #[cfg(feature = "mssql")]
         {
             // Parse database URL to get server and database name
             let url_parts: Vec<&str> = config.database_url.split('@').collect();
@@ -398,9 +398,9 @@ impl DatabaseEngine {
             }
         }
         
-        #[cfg(not(feature = "sqlserver"))]
+        #[cfg(not(feature = "mssql"))]
         {
-            // Fallback to simulation when sqlserver feature is not enabled
+            // Fallback to simulation when mssql feature is not enabled
             log::warn!("SQL Server feature not enabled, simulating user creation");
             log::info!("Simulating SQL execution:");
             log::info!("CREATE LOGIN [{}] WITH PASSWORD = '***'", username);
@@ -486,7 +486,7 @@ impl DatabaseEngine {
                 }
             },
             DatabaseType::SQLServer => {
-                #[cfg(feature = "sqlserver")]
+                #[cfg(feature = "mssql")]
                 {
                     let url_parts: Vec<&str> = config.database_url.split('@').collect();
                     if url_parts.len() >= 2 {
@@ -524,7 +524,7 @@ impl DatabaseEngine {
                         }
                     }
                 }
-                #[cfg(not(feature = "sqlserver"))]
+                #[cfg(not(feature = "mssql"))]
                 {
                     log::info!("Simulating: DROP LOGIN IF EXISTS [{}]", username);
                     log::info!("Simulating: USE [database]");

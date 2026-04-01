@@ -121,7 +121,7 @@ mod tests {
             "Test Group".to_string(),
             "Test group for rejection".to_string(),
             2,
-            vec![OperationType::KeyDeletion],
+            vec![OperationType::KeyStorage],
             3600,
             admin_id.clone(),
         ).await.unwrap();
@@ -137,7 +137,7 @@ mod tests {
         // Create request
         let request_id = mpa_service.create_approval_request(
             group_id.clone(),
-            OperationType::KeyDeletion,
+            OperationType::KeyStorage,
             "Delete old key".to_string(),
             "{}".to_string(),
             requester_id.clone(),
@@ -170,7 +170,7 @@ mod tests {
             "Test Group".to_string(),
             "Test group for cancellation".to_string(),
             2,
-            vec![OperationType::SystemConfiguration],
+            vec![OperationType::SystemOperation],
             3600,
             admin_id.clone(),
         ).await.unwrap();
@@ -178,7 +178,7 @@ mod tests {
         // Create request
         let request_id = mpa_service.create_approval_request(
             group_id.clone(),
-            OperationType::SystemConfiguration,
+            OperationType::SystemOperation,
             "Update system config".to_string(),
             "{}".to_string(),
             requester_id.clone(),

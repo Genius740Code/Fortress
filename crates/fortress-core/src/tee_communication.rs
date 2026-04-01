@@ -115,7 +115,7 @@ pub struct SecureProtocolHandler {
 
 /// Channel state for secure communication
 #[derive(Debug, Clone)]
-struct ChannelState {
+pub struct ChannelState {
     /// Channel information
     channel: SecureChannel,
     /// Current sequence number

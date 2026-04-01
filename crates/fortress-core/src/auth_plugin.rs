@@ -6,7 +6,7 @@
 
 use crate::error::{FortressError, Result};
 use crate::plugin::{PluginInput, PluginResult};
-use crate::wasm_runtime::{WasmPlugin, WasmPluginConfig, WasmContext};
+// use crate::wasm_runtime::{WasmPlugin, WasmPluginConfig, WasmContext}; // Temporarily disabled
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -200,7 +200,7 @@ pub struct AuthPluginCapabilities {
 /// WebAssembly-based authentication plugin
 pub struct WasmAuthPlugin {
     /// WebAssembly plugin instance
-    wasm_plugin: TokioRwLock<WasmPlugin>,
+    // wasm_plugin: TokioRwLock<WasmPlugin>, // Temporarily disabled
     /// Plugin metadata
     metadata: AuthPluginMetadata,
     /// Plugin configuration
@@ -227,26 +227,27 @@ impl WasmAuthPlugin {
         metadata: AuthPluginMetadata,
         config: serde_json::Value,
     ) -> Result<Self> {
-        let wasm_config = WasmPluginConfig {
-            max_memory_bytes: Some(64 * 1024 * 1024), // 64MB
-            max_execution_time_ms: Some(5000), // 5 seconds
-            allowed_host_functions: vec![
-                "log".to_string(),
-                "get_config".to_string(),
-                "get_timestamp".to_string(),
-                "auth_log".to_string(),
-                "auth_store_session".to_string(),
-                "auth_get_session".to_string(),
-                "auth_delete_session".to_string(),
-                "auth_cache_token".to_string(),
-                "auth_get_cached_token".to_string(),
-                "auth_generate_token".to_string(),
-                "auth_validate_token".to_string(),
-                "auth_hash_password".to_string(),
-                "auth_verify_password".to_string(),
-                "auth_make_http_request".to_string(),
-            ],
-        };
+        // TODO: Re-enable when wasm_runtime is fixed
+        // let wasm_config = WasmPluginConfig {
+        //     max_memory_bytes: Some(64 * 1024 * 1024), // 64MB
+        //     max_execution_time_ms: Some(5000), // 5 seconds
+        //     allowed_host_functions: vec![
+        //         "log".to_string(),
+                //         "get_config".to_string(),
+        //         "get_timestamp".to_string(),
+        //         "auth_log".to_string(),
+        //         "auth_store_session".to_string(),
+        //         "auth_get_session".to_string(),
+        //         "auth_delete_session".to_string(),
+        //         "auth_cache_token".to_string(),
+        //         "auth_get_cached_token".to_string(),
+        //         "auth_generate_token".to_string(),
+        //         "auth_validate_token".to_string(),
+        //         "auth_hash_password".to_string(),
+        //         "auth_verify_password".to_string(),
+        //         "auth_make_http_request".to_string(),
+        //     ],
+        // };
 
         let plugin_metadata = crate::plugin::PluginMetadata {
             id: Uuid::new_v4().to_string(),
@@ -258,14 +259,17 @@ impl WasmAuthPlugin {
             config_schema: None,
         };
 
-        let wasm_plugin = WasmPlugin::new(wasm_bytes, plugin_metadata, wasm_config)?;
+        // TODO: Re-enable when wasm_runtime is fixed
+        // let wasm_plugin = WasmPlugin::new(wasm_bytes, plugin_metadata, wasm_config)?;
 
-        Ok(Self {
-            wasm_plugin: TokioRwLock::new(wasm_plugin),
-            metadata,
-            config,
-            state: Arc::new(TokioRwLock::new(WasmAuthPluginState::default())),
-        })
+        // Ok(Self {
+        //     wasm_plugin: TokioRwLock::new(wasm_plugin),
+        //     metadata,
+        //     config,
+        //     state: Arc::new(TokioRwLock::new(WasmAuthPluginState::default())),
+        // })
+        
+        Err(FortressError::plugin("WASM runtime temporarily disabled"))
     }
 
     /// Call a WebAssembly function with authentication context
@@ -281,17 +285,19 @@ impl WasmAuthPlugin {
             parameters: HashMap::new(),
         };
 
-        // Call WASM function
-        let mut wasm_plugin = self.wasm_plugin.write().await;
-        let plugin_result = wasm_plugin.call_function(function_name, &plugin_input)?;
-        drop(wasm_plugin);
+        // TODO: Re-enable when wasm_runtime is fixed
+        // let mut wasm_plugin = self.wasm_plugin.write().await;
+        // let plugin_result = wasm_plugin.call_function(function_name, &plugin_input)?;
+        // drop(wasm_plugin);
+        
+        Err(FortressError::plugin("WASM runtime temporarily disabled"))
         
         // Get context after the call
-        let _context = self.state.read().await;
+        // let _context = self.state.read().await;
         
         // Convert PluginResult to serde_json::Value
-        let result = serde_json::from_slice(plugin_result.data.as_ref().unwrap_or(&serde_json::Value::Null).to_string().as_bytes())?;
-        Ok(result)
+        // let result = serde_json::from_slice(plugin_result.data.as_ref().unwrap_or(&serde_json::Value::Null).to_string().as_bytes())?;
+        // Ok(result)
     }
 }
 

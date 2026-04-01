@@ -234,7 +234,7 @@ impl ConfigValidator for GdprConfigValidator {
                 regulatory_bodies: vec!["ICO".to_string()],
                 notification_template: "GDPR breach notification template".to_string(),
             },
-            audit_logging: AuditConfig {
+            audit_logging: ComplianceAuditConfig {
                 enabled: true,
                 retention_period: Duration::days(365 * 7), // 7 years
                 logged_events: vec![
@@ -243,8 +243,9 @@ impl ConfigValidator for GdprConfigValidator {
                     "consent_changes".to_string(),
                     "rights_requests".to_string(),
                     "data_breaches".to_string(),
+                    "audit_trail_access".to_string(),
                 ],
-                storage_location: "secure_audit_storage".to_string(),
+                storage_location: "gdpr_audit_storage".to_string(),
             },
             encryption: EncryptionConfig {
                 required_algorithms: vec!["AES-256-GCM".to_string(), "ChaCha20-Poly1305".to_string()],
@@ -278,7 +279,7 @@ impl ConfigValidator for GdprConfigValidator {
                 regulatory_bodies: override_config.breach_notification.regulatory_bodies.clone(),
                 notification_template: override_config.breach_notification.notification_template.clone(),
             },
-            audit_logging: AuditConfig {
+            audit_logging: ComplianceAuditConfig {
                 enabled: override_config.audit_logging.enabled,
                 retention_period: override_config.audit_logging.retention_period,
                 logged_events: override_config.audit_logging.logged_events.clone(),
@@ -375,7 +376,7 @@ impl ConfigValidator for HipaaConfigValidator {
                 regulatory_bodies: vec!["HHS".to_string()],
                 notification_template: "HIPAA breach notification template".to_string(),
             },
-            audit_logging: AuditConfig {
+            audit_logging: ComplianceAuditConfig {
                 enabled: true,
                 retention_period: Duration::days(365 * 6), // 6 years
                 logged_events: vec![
@@ -482,7 +483,7 @@ impl ConfigValidator for PciDssConfigValidator {
                 regulatory_bodies: vec!["PCI_SSC".to_string()],
                 notification_template: "PCI-DSS breach notification template".to_string(),
             },
-            audit_logging: AuditConfig {
+            audit_logging: ComplianceAuditConfig {
                 enabled: true,
                 retention_period: Duration::days(365 * 3), // 3 years
                 logged_events: vec![

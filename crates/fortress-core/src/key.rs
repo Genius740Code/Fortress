@@ -9,7 +9,8 @@
 use crate::error::{FortressError, Result, KeyErrorCode};
 
 use crate::encryption::{EncryptionAlgorithm, PerformanceProfile};
-use crate::audit::{AuditEventType, SecurityLevel, EventOutcome, log_event_with_metadata};
+use crate::audit::{AuditEventType, SecurityLevel, log_event_with_metadata, EventOutcome};
+use crate::storage::AuditEventOutcome;
 
 use async_trait::async_trait;
 

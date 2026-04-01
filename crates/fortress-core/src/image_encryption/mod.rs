@@ -17,6 +17,7 @@ pub mod api;
 
 use crate::error::{FortressError, Result};
 use crate::encryption::EncryptedData;
+use crate::compliance::framework::DataClassification;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use chrono::{DateTime, Utc};
@@ -163,7 +164,7 @@ impl Default for EncryptionStats {
 
 /// Data classification for images
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum DataClassification {
+pub enum ImageDataClassification {
     /// Public data
     Public,
     /// Internal company data
@@ -183,8 +184,7 @@ impl DataClassification {
             Self::Public => 1,
             Self::Internal => 2,
             Self::Confidential => 3,
-            Self::Secret => 4,
-            Self::TopSecret => 5,
+            Self::Restricted => 4,
         }
     }
 }
@@ -193,7 +193,7 @@ impl DataClassification {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccessPermissions {
     /// Data classification
-    pub classification: DataClassification,
+    pub classification: ImageDataClassification,
     /// Who can view the image
     pub viewers: Vec<String>,
     /// Who can edit the image
@@ -211,7 +211,7 @@ pub struct AccessPermissions {
 impl Default for AccessPermissions {
     fn default() -> Self {
         Self {
-            classification: DataClassification::Internal,
+            classification: ImageDataClassification::Internal,
             viewers: vec!["owner".to_string()],
             editors: vec!["owner".to_string()],
             sharers: vec!["owner".to_string()],
@@ -295,7 +295,7 @@ pub struct ImageInfo {
     /// Last modified timestamp
     pub modified_at: DateTime<Utc>,
     /// Data classification
-    pub classification: DataClassification,
+    pub classification: ImageDataClassification,
     /// Tags
     pub tags: Vec<String>,
     /// Owner

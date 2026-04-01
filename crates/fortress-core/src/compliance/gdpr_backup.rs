@@ -240,7 +240,7 @@ impl GdprComplianceManager {
             description: format!("Data processor {} registered", processor.name),
             affected_resources: vec![processor.id.clone()],
             actor: "system".to_string(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: HashMap::new(),
         };
         
@@ -265,7 +265,7 @@ impl GdprComplianceManager {
             description: format!("DPIA created for activity: {}", dpia.activity_name),
             affected_resources: vec![dpia.id.clone()],
             actor: dpia.assessor.clone(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: HashMap::new(),
         };
         
@@ -297,7 +297,7 @@ impl GdprComplianceManager {
                 description: format!("72-hour breach notification deadline missed for breach: {}", breach.id),
                 affected_resources: vec![breach.id.to_string()],
                 actor: "system".to_string(),
-                outcome: EventOutcome::Failure,
+                outcome: ComplianceEventOutcome::Failure,
                 metadata: HashMap::new(),
             };
             
@@ -319,7 +319,7 @@ impl GdprComplianceManager {
             description: format!("Data breach recorded: {}", breach.description),
             affected_resources: vec![breach.id.to_string()],
             actor: "system".to_string(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: HashMap::new(),
         };
         

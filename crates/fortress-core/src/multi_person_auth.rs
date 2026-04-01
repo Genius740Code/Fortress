@@ -33,7 +33,7 @@ pub struct ControlGroup {
     /// Required number of approvals (M in M-of-N)
     pub required_approvals: usize,
     /// Types of operations this group can approve
-    pub authorized_operations: Vec<OperationType>,
+    pub authorized_operations: Vec<MultiPersonOperationType>,
     /// Time window for approvals (in seconds, 0 = no limit)
     pub approval_timeout: u64,
     /// Whether the group is currently active
@@ -76,7 +76,7 @@ pub enum ControlGroupRole {
 
 /// Types of operations that require MPA approval
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Hash)]
-pub enum OperationType {
+pub enum MultiPersonOperationType {
     /// Key generation operations
     KeyGeneration,
     /// Key deletion operations
@@ -105,7 +105,7 @@ pub struct ApprovalRequest {
     /// Control group that must approve this request
     pub control_group_id: ControlGroupId,
     /// Type of operation requiring approval
-    pub operation_type: OperationType,
+    pub operation_type: MultiPersonOperationType,
     /// Description of the operation
     pub operation_description: String,
     /// Context data for the operation (JSON)
@@ -197,7 +197,7 @@ impl MultiPersonAuthManager {
         name: String,
         description: String,
         required_approvals: usize,
-        authorized_operations: Vec<OperationType>,
+        authorized_operations: Vec<MultiPersonOperationType>,
         approval_timeout: u64,
         creator_id: UserId,
     ) -> Result<ControlGroupId, FortressError> {
@@ -298,7 +298,7 @@ impl MultiPersonAuthManager {
     pub fn create_approval_request(
         &mut self,
         control_group_id: ControlGroupId,
-        operation_type: OperationType,
+        operation_type: MultiPersonOperationType,
         operation_description: String,
         operation_context: String,
         requester_id: UserId,

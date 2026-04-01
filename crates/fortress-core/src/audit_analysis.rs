@@ -8,8 +8,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use chrono::Timelike;
 
-use crate::audit::{AuditEntry, AuditEventType, SecurityLevel, EventOutcome, AuditQuery};
-use crate::error::Result;
+use crate::audit::{AuditEntry, AuditEventType, SecurityLevel, AuditQuery, EventOutcome};
+use crate::error::{FortressError, Result};
 
 /// Analysis engine for audit logs
 pub struct AuditAnalyzer {

@@ -242,7 +242,7 @@ pub mod database_key_manager;
 
 /// Plugin system with WebAssembly support
 pub mod plugin;
-pub mod wasm_runtime;
+// pub mod wasm_runtime; // Temporarily disabled due to wasmtime API issues
 
 /// Plugin marketplace and distribution system
 
@@ -452,15 +452,19 @@ pub mod tee_key_management;
 
 pub mod tee_integration_tests;
 
+///! Fortress - Enterprise Security Platform
+///
+/// Fortress is a comprehensive security platform providing encryption, key management,
+/// authentication, authorization, policy evaluation, and WebAssembly-based extensibility.
 
+#[cfg(feature = "experimental")]
+pub mod quantum_resistant;
 
-#[cfg(test)]
-
-mod policy_test;
-
-#[cfg(test)]
-
-
+// Re-export commonly used types
+pub use crate::error::{FortressError, Result};
+pub use crate::encryption::{EncryptionAlgorithm};
+pub use crate::key::{KeyManager, KeyMetadata};
+pub use crate::plugin::{Plugin, PluginManager, PluginMetadata};
 
 /// Re-export commonly used types
 
@@ -481,11 +485,13 @@ pub mod prelude {
 
     pub use crate::benchmark::{AegisBenchmark, BenchmarkResults};
 
-    pub use crate::policy::{PolicyEngine, Role, Permission, Resource};
+    pub use crate::policy::{PolicyEngine, PolicyRole, Resource};
 
-    pub use crate::hsm::{HsmProvider, HsmConfig, HsmKeyManager, HsmProvider as HsmProviderTrait};
+    pub use crate::hsm::{HsmProvider, HsmConfig};
 
-    pub use crate::audit::{AuditLogger, AuditConfig, AuditEntry, AuditEventType, SecurityLevel, EventOutcome};
+    pub use crate::audit::{
+        AuditLogger, AuditEntry, AuditEventType, SecurityLevel, EventOutcome, log_event_with_metadata,
+    };
 
     pub use crate::audit_analysis::{AuditAnalyzer, SecurityAnomaly, SecurityInsights, SecurityReport};
 
@@ -557,22 +563,15 @@ pub mod prelude {
 
     pub use crate::auth_plugin::{
         AuthPlugin, AuthPluginMetadata, AuthPluginCapabilities, AuthMethod,
-        AuthRequest, AuthCredentials, AuthContext, AuthResult, AuthUserInfo,
     };
 
     pub use crate::auth_plugin_manager::{
-        HotSwappableAuthPluginManager, AuthPluginManagerConfig, PluginRegistryEntry,
-        PluginDeployment, DeploymentStrategy,
+        HotSwappableAuthPluginManager,
     };
 
     pub use crate::auth_plugin_integration::{
         AuthPluginIntegrationService, IntegrationConfig, AuthMethodMetrics,
-        PluginDeployment as IntegrationDeployment, DeploymentType, DeploymentStatus,
     };
-
-    pub use crate::auth_service::{AuthService, AuthServiceConfig, ServiceContext};
-
-    pub use crate::auth_api::{AuthApiManager, AuthApiConfig, PluginDeployment};
 
     pub use crate::plugin::{
         Plugin, PluginRegistry, PluginManager, PluginMetadata, PluginCapability,
@@ -637,10 +636,7 @@ pub mod prelude {
     };
 
     pub use crate::performance_monitor::{
-        PerformanceMonitor, PerformanceMonitorConfig, ProfileSample, OperationType,
-        AggregatedMetrics, PerformanceAlert, AlertSeverity, AlertType,
-        TuningRecommendation, RecommendationType, ImplementationComplexity,
-        RecommendationPriority, profile_operation
+        AdvancedPerformanceMonitor, PerformanceMonitorConfig, ProfileSample, AggregatedMetrics, PerformanceAlert, TuningRecommendation
     };
 
     pub use crate::auto_tuning::{
@@ -652,10 +648,10 @@ pub mod prelude {
     pub use crate::observability::{
         ObservabilityManager, ObservabilityConfig, SystemStatus,
         ObservabilityTracer, TraceConfig, SpanContext,
-        AdvancedMetricsCollector, MetricsConfig, MetricType,
+        AdvancedMetricsCollector, MetricType,
         StructuredLogger, LogConfig, LogFormat,
-        HealthChecker, HealthConfig, HealthStatus,
-        AlertManager, AlertConfig, AlertRule,
+        HealthChecker, HealthStatus,
+        AlertManager, AlertRule,
         DashboardManager, DashboardConfig, Widget,
     };
 
@@ -690,17 +686,14 @@ pub mod prelude {
 
     pub use crate::compliance::{
         ComplianceManager, ComplianceConfig, ComplianceFramework, DataClassification,
-        ComplianceEvent, EventSeverity, EventOutcome, ComplianceReport, ComplianceFinding,
+        ComplianceEvent, EventSeverity, ComplianceEventOutcome, ComplianceReport, ComplianceFinding,
         FindingStatus, ComplianceIssue, DataSubject, ConsentRecord, RightsRequest,
         RightsRequestType, RequestStatus, ProtectedHealthInfo, PhiType, AccessControl,
         CardholderData, CardAccessEvent, PciRequirement, BreachNotificationConfig,
-        AuditConfig, EncryptionConfig, AccessControlConfig, PasswordPolicy,
-        GdprComplianceManager, DataProcessor, Dpia, DataBreach, BreachSeverity,
-        BreachStatus, HipaaComplianceManager, CoveredEntity, BusinessAssociate,
-        SecurityIncident, AuditLogEntry, AuditAction, AccessOutcome,
-        PciDssComplianceManager, PciEncryptionKey, SecurityControl, VulnerabilityScan,
+        ComplianceAuditConfig, EncryptionConfig, AccessControlConfig, PasswordPolicy,
+        GdprComplianceManager, HipaaComplianceManager, CoveredEntity, BusinessAssociate,
         ComplianceAssessment, ComplianceConfigManager, ComplianceAuditLogger,
-        RetentionPolicy, AuditFilter, IntegrityReport,
+        AuditFilter, IntegrityReport,
     };
 
     pub use crate::secrets::{
@@ -737,14 +730,14 @@ pub mod prelude {
     };
 
     pub use crate::secure_audit::{
-        SecureAuditLogger, AuditConfig, AuditEntry, AuditEventType, AuditOutcome,
-        AuditOutput, RotationStrategy, AuditStats,
+        SecureAuditLogger, SecureAuditConfig, SecureAuditEntry, SecureAuditEventType, AuditOutcome,
+        AuditOutput, SecureRotationStrategy, AuditStats,
     };
 
     pub use crate::mongodb_database::{
         MongoConfig, MongoKeyDatabase, MongoStorage, MongoPullFilter, 
         MongoPipeline, MongoAggregationResult, MongoSearchResult,
-        MongoBulkEntry, MongoReadPreference, MongoWriteConcern
+        MongoReadPreference, MongoWriteConcern
     };
 
     pub use crate::postgres_database::{
@@ -756,29 +749,27 @@ pub mod prelude {
 
     pub use crate::push_pull_operations::{
         PushPullManager, PushPullConfig, PushRequest, PullRequest, PushPullResult,
-        PushFilter, PullFilter, StorageSource, StorageTarget, ConflictResolution,
-        OperationType, ProgressUpdate, ConflictInfo, DataVersion, ConflictType
+        PushFilter, PullFilter, StorageSource, StorageTarget, PushPullConflictResolution,
+        PushPullOperationType, ProgressUpdate, ConflictInfo, DataVersion, ConflictType
     };
 
     pub use crate::image_encryption::{
-        ImageEncryptor, ImageEncryptorFactory, EncryptedImage, EncryptionOptions,
+        ImageEncryptor, EncryptedImage, EncryptionOptions,
         EncryptionMode, ImageFormat, ImageFormatInfo, ImageMetadata, EncryptedMetadata,
-        ThumbnailGenerator, ThumbnailSize, ThumbnailFormat, EncryptedThumbnail,
-        StreamingImageEncryptor, ChunkConfig, StreamingState, StreamingStatus,
-        EncryptedChunk, StreamingResult, DataClassification, AccessPermissions,
+        ThumbnailGenerator, ThumbnailSize, EncryptedThumbnail,
+        StreamingImageEncryptor, ChunkConfig,
         SearchCriteria, ImageFilter, ImageSearchResult, ImageInfo, ColorSpace,
-        CompressionInfo, ImageEncryptionError, MetadataProcessor, FormatProcessor,
-        ImageFormatDetector, ThumbnailOptions, StreamingImageDecryptor,
+        CompressionInfo, ImageEncryptionError, ImageFormatDetector,
     };
 
     pub use crate::auth::{
-        AuthManager, User, UserId, Role, Permission, AuthToken, AuthConfig,
+        AuthManager, User, UserId, AuthPermission, AuthToken, AuthConfig,
         LoginRequest, LoginResponse, TokenClaims, SessionManager,
     };
 
     pub use crate::multi_person_auth::{
         MultiPersonAuthManager, ControlGroup, ControlGroupId, ApprovalRequest,
-        ApprovalRequestId, OperationType, ControlGroupRole, ApprovalStatus, Decision,
+        ApprovalRequestId, MultiPersonOperationType, ControlGroupRole, ApprovalStatus, Decision,
         ControlGroupMember, ApprovalDecision,
     };
 

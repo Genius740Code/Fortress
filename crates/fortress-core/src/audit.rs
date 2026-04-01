@@ -88,10 +88,10 @@ pub enum EventOutcome {
     Success,
     /// Operation failed
     Failure,
-    /// Operation was denied
-    Denied,
-    /// Operation resulted in error
-    Error,
+    /// Operation was blocked
+    Blocked,
+    /// Operation requires review
+    RequiresReview,
 }
 
 impl std::fmt::Display for EventOutcome {
@@ -99,8 +99,8 @@ impl std::fmt::Display for EventOutcome {
         match self {
             EventOutcome::Success => write!(f, "Success"),
             EventOutcome::Failure => write!(f, "Failure"),
-            EventOutcome::Denied => write!(f, "Denied"),
-            EventOutcome::Error => write!(f, "Error"),
+            EventOutcome::Blocked => write!(f, "Blocked"),
+            EventOutcome::RequiresReview => write!(f, "RequiresReview"),
         }
     }
 }

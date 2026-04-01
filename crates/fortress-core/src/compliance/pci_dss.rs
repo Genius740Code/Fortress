@@ -549,7 +549,7 @@ impl PciDssComplianceManager {
             description: format!("Cardholder data {} registered and encrypted", data.id),
             affected_resources: vec![data.id.clone()],
             actor: "system".to_string(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: HashMap::new(),
         };
         
@@ -577,7 +577,7 @@ impl PciDssComplianceManager {
             description: format!("PCI encryption key {:?} registered", key.key_id),
             affected_resources: vec![format!("{:?}", key.key_id)],
             actor: "system".to_string(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: HashMap::new(),
         };
         
@@ -602,7 +602,7 @@ impl PciDssComplianceManager {
             description: format!("Security control {} registered", control.name),
             affected_resources: vec![control.id.clone()],
             actor: control.owner.clone(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: HashMap::new(),
         };
         
@@ -635,7 +635,7 @@ impl PciDssComplianceManager {
                 description: format!("{} critical vulnerabilities found in scan {}", critical_vulns, scan.id),
                 affected_resources: scan.systems_scanned.clone(),
                 actor: "system".to_string(),
-                outcome: EventOutcome::Success,
+                outcome: ComplianceEventOutcome::Success,
                 metadata: HashMap::new(),
             };
             
@@ -652,7 +652,7 @@ impl PciDssComplianceManager {
             description: format!("Vulnerability scan {} recorded with {} total vulnerabilities", scan.id, scan.total_vulnerabilities),
             affected_resources: scan.systems_scanned.clone(),
             actor: scan.scanning_tool.clone(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: HashMap::new(),
         };
         
@@ -682,7 +682,7 @@ impl PciDssComplianceManager {
             description: format!("PCI-DSS compliance assessment {} completed with status: {:?}", assessment.id, assessment.compliance_status),
             affected_resources: vec![],
             actor: assessment.assessor.clone(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: HashMap::new(),
         };
         
@@ -1247,7 +1247,7 @@ impl PciDssComplianceManager {
                              analysis.urgent_remediation_count, analysis.average_cvss_score),
             affected_resources: scan_results.systems_scanned.clone(),
             actor: "automated_system".to_string(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: {
                 let mut meta = HashMap::new();
                 meta.insert("scan_id".to_string(), scan_results.id.to_string());
@@ -1311,7 +1311,7 @@ impl PciDssComplianceManager {
             description: format!("Remediation status for vulnerability {}: {:?}", vulnerability.id, remediation_status),
             affected_resources: vec![vulnerability.affected_system.clone()],
             actor: "automated_system".to_string(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: {
                 let mut meta = HashMap::new();
                 meta.insert("vulnerability_id".to_string(), vulnerability.id.clone());

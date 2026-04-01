@@ -4,9 +4,10 @@
 //! integrating with the authentication and authorization systems.
 
 use crate::error::FortressError;
+use crate::performance_monitor::OperationType;
 use crate::multi_person_auth::{
     MultiPersonAuthManager, ControlGroup, ControlGroupId, ApprovalRequest,
-    ApprovalRequestId, OperationType, ControlGroupRole, ApprovalStatus, Decision
+    ApprovalRequestId, MultiPersonOperationType, ControlGroupRole, ApprovalStatus, Decision
 };
 use crate::auth::{UserId, AuthManager};
 use std::sync::{Arc, RwLock};
@@ -65,7 +66,18 @@ impl MpaService {
             name,
             description,
             required_approvals,
-            authorized_operations,
+            authorized_operations.into_iter().map(|op| match op {
+                crate::performance_monitor::OperationType::KeyGeneration => crate::multi_person_auth::MultiPersonOperationType::KeyGeneration,
+                crate::performance_monitor::OperationType::KeyStorage => crate::multi_person_auth::MultiPersonOperationType::KeyDeletion,
+                crate::performance_monitor::OperationType::KeyRetrieval => crate::multi_person_auth::MultiPersonOperationType::AccessControlModification,
+                crate::performance_monitor::OperationType::Encryption => crate::multi_person_auth::MultiPersonOperationType::SystemConfiguration,
+                crate::performance_monitor::OperationType::Decryption => crate::multi_person_auth::MultiPersonOperationType::CertificateSigning,
+                crate::performance_monitor::OperationType::DatabaseQuery => crate::multi_person_auth::MultiPersonOperationType::HsmOperation,
+                crate::performance_monitor::OperationType::CacheOperation => crate::multi_person_auth::MultiPersonOperationType::AuditLogModification,
+                crate::performance_monitor::OperationType::NetworkRequest => crate::multi_person_auth::MultiPersonOperationType::UserManagement,
+                crate::performance_monitor::OperationType::BackgroundTask => crate::multi_person_auth::MultiPersonOperationType::Custom("BackgroundTask".to_string()),
+                crate::performance_monitor::OperationType::SystemOperation => crate::multi_person_auth::MultiPersonOperationType::Custom("SystemOperation".to_string()),
+            }).collect(),
             approval_timeout,
             creator_id,
         )
@@ -128,7 +140,7 @@ impl MpaService {
     pub async fn create_approval_request(
         &self,
         control_group_id: ControlGroupId,
-        operation_type: OperationType,
+        operation_type: MultiPersonOperationType,
         operation_description: String,
         operation_context: String,
         requester_id: UserId,

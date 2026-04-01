@@ -3,7 +3,7 @@
 //! Provides a unified interface for managing multiple compliance frameworks
 //! with centralized reporting and risk assessment.
 use crate::compliance::framework::ComplianceManager;
-use crate::compliance::framework::{ComplianceFramework, ComplianceEvent, EventSeverity, EventOutcome};
+use crate::compliance::framework::{ComplianceFramework, ComplianceEvent, EventSeverity, ComplianceEventOutcome};
 use crate::compliance::framework::{ComplianceFinding, FindingStatus, ComplianceIssue, ComplianceStatus, ComplianceDeadline};
 use crate::compliance::framework::{ComplianceConfig, BreachNotificationConfig, AuditConfig, EncryptionConfig, AccessControlConfig, ComplianceMetrics, ComplianceReport, DataSubject, ConsentRecord, RightsRequest};
 use crate::compliance::gdpr::GdprComplianceManager;
@@ -1133,7 +1133,7 @@ impl UnifiedComplianceManager {
                              stakeholder.name, format.format),
             affected_resources: vec![stakeholder.email.clone()],
             actor: "automated_system".to_string(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: {
                 let mut meta = HashMap::new();
                 meta.insert("stakeholder_id".to_string(), stakeholder.id.to_string());
@@ -1186,7 +1186,7 @@ impl UnifiedComplianceManager {
                              anomaly_result.description),
             affected_resources: event.affected_resources.clone(),
             actor: "anomaly_detector".to_string(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: {
                 let mut meta = HashMap::new();
                 meta.insert("anomaly_type".to_string(), anomaly_result.anomaly_type.clone());
@@ -1229,7 +1229,7 @@ impl UnifiedComplianceManager {
             description: format!("Event '{}' exceeded frequency threshold", event.event_type),
             affected_resources: event.affected_resources.clone(),
             actor: "threshold_monitor".to_string(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: {
                 let mut meta = HashMap::new();
                 meta.insert("event_type".to_string(), event.event_type.clone());
@@ -1248,7 +1248,7 @@ impl UnifiedComplianceManager {
             description: format!("Threshold alert triggered for event type: {}", event.event_type),
             affected_resources: event.affected_resources.clone(),
             actor: "threshold_monitor".to_string(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: {
                 let mut meta = HashMap::new();
                 meta.insert("event_type".to_string(), event.event_type.clone());
@@ -2270,7 +2270,7 @@ impl ComplianceManager for UnifiedComplianceManager {
                              stakeholder.name, format.format),
             affected_resources: vec![stakeholder.email.clone()],
             actor: "automated_system".to_string(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: {
                 let mut meta = HashMap::new();
                 meta.insert("stakeholder_id".to_string(), stakeholder.id.to_string());
@@ -2314,7 +2314,7 @@ impl ComplianceManager for UnifiedComplianceManager {
                              scheduled_report.next_run_time.format("%Y-%m-%d %H:%M:%S UTC")),
             affected_resources: vec![],
             actor: "automated_system".to_string(),
-            outcome: EventOutcome::Success,
+            outcome: ComplianceEventOutcome::Success,
             metadata: {
                 let mut meta = HashMap::new();
                 meta.insert("schedule_id".to_string(), scheduled_report.id.to_string());

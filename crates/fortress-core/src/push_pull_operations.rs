@@ -5,6 +5,7 @@
 //! incremental updates, and performance optimization.
 
 use crate::error::{FortressError, Result, StorageErrorCode};
+use crate::performance_monitor::OperationType;
 use crate::mongodb_database::{MongoKeyDatabase, MongoPullFilter};
 use crate::postgres_database::{PostgresKeyDatabase, PostgresQuery, PostgresBulkEntry};
 use chrono::{DateTime, Utc, Duration};
@@ -54,7 +55,7 @@ pub struct PushPullConfig {
     /// Enable compression for transfer
     pub enable_compression: bool,
     /// Conflict resolution strategy
-    pub conflict_resolution: ConflictResolution,
+    pub conflict_resolution: PushPullConflictResolution,
     /// Enable incremental sync
     pub enable_incremental: bool,
     /// Checksum verification
@@ -70,7 +71,7 @@ impl Default for PushPullConfig {
             max_concurrent_ops: 10,
             timeout_seconds: 300, // 5 minutes
             enable_compression: true,
-            conflict_resolution: ConflictResolution::Timestamp,
+            conflict_resolution: PushPullConflictResolution::Timestamp,
             enable_incremental: true,
             verify_checksums: true,
             enable_progress: true,
@@ -80,7 +81,7 @@ impl Default for PushPullConfig {
 
 /// Conflict resolution strategies
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ConflictResolution {
+pub enum PushPullConflictResolution {
     /// Use timestamp (newer wins)
     Timestamp,
     /// Use source wins
@@ -270,7 +271,7 @@ pub struct PushPullResult {
     /// Operation ID
     pub operation_id: String,
     /// Operation type
-    pub operation_type: OperationType,
+    pub operation_type: PushPullOperationType,
     /// Success status
     pub success: bool,
     /// Items processed
@@ -297,7 +298,7 @@ pub struct PushPullResult {
 
 /// Operation type
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum OperationType {
+pub enum PushPullOperationType {
     /// Push operation
     Push,
     /// Pull operation
@@ -335,7 +336,7 @@ pub struct ConflictInfo {
     /// Conflict type
     pub conflict_type: ConflictType,
     /// Resolution applied
-    pub resolution: Option<ConflictResolution>,
+    pub resolution: Option<PushPullConflictResolution>,
 }
 
 /// Data version information
@@ -477,7 +478,7 @@ impl PushPullManager {
         let start_time = Utc::now();
         let mut result = PushPullResult {
             operation_id: request.operation_id.clone(),
-            operation_type: OperationType::Push,
+            operation_type: PushPullOperationType::Push,
             success: false,
             items_processed: 0,
             items_succeeded: 0,
@@ -530,7 +531,7 @@ impl PushPullManager {
         let start_time = Utc::now();
         let mut result = PushPullResult {
             operation_id: request.operation_id.clone(),
-            operation_type: OperationType::Pull,
+            operation_type: PushPullOperationType::Pull,
             success: false,
             items_processed: 0,
             items_succeeded: 0,

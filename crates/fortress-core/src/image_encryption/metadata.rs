@@ -382,7 +382,7 @@ pub struct SecurityMetadata {
     /// Digital signature
     pub digital_signature: Option<DigitalSignature>,
     /// Audit trail
-    pub audit_trail: Vec<AuditEntry>,
+    pub audit_trail: Vec<ImageAuditEntry>,
 }
 
 /// Watermark information
@@ -417,7 +417,7 @@ pub struct DigitalSignature {
 
 /// Audit entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AuditEntry {
+pub struct ImageAuditEntry {
     /// Entry ID
     pub id: String,
     /// Action performed

@@ -5,7 +5,7 @@
 //! privacy by design principles.
 
 use crate::compliance::framework::*;
-use crate::error::Result;
+use crate::error::{FortressError, Result};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc, Duration};
 use serde::{Deserialize, Serialize};
@@ -394,7 +394,7 @@ impl GdprComplianceManager {
                                  alert.consent_id, alert.days_until_expiry),
                 affected_resources: vec![alert.subject_id.clone()],
                 actor: "automated_system".to_string(),
-                outcome: EventOutcome::Success,
+                outcome: ComplianceEventOutcome::Success,
                 metadata: {
                     let mut meta = HashMap::new();
                     meta.insert("consent_id".to_string(), alert.consent_id.to_string());
@@ -475,7 +475,7 @@ impl GdprComplianceManager {
                              if granted { "granted" } else { "denied" }, user_id, data_id, purpose),
             affected_resources: vec![data_id.to_string(), user_id.to_string()],
             actor: user_id.to_string(),
-            outcome: if granted { EventOutcome::Success } else { EventOutcome::Blocked },
+            outcome: if granted { ComplianceEventOutcome::Success } else { ComplianceEventOutcome::Blocked },
             metadata: {
                 let mut meta = HashMap::new();
                 meta.insert("purpose".to_string(), purpose.to_string());
@@ -560,7 +560,7 @@ impl GdprComplianceManager {
                              consent.id, result.subject_id),
             affected_resources: vec![result.subject_id.clone()],
             actor: "data_subject".to_string(),
-            outcome: EventOutcome::Pending,
+            outcome: ComplianceEventOutcome::RequiresReview,
             metadata: {
                 let mut meta = HashMap::new();
                 meta.insert("consent_id".to_string(), consent.id.to_string());
@@ -646,9 +646,9 @@ impl GdprComplianceManager {
             affected_resources: vec![result.subject_id.clone()],
             actor: "automated_system".to_string(),
             outcome: match result.status {
-                ProcessingStatus::Completed => EventOutcome::Success,
-                ProcessingStatus::Failed => EventOutcome::Failure,
-                _ => EventOutcome::Pending,
+                ProcessingStatus::Completed => ComplianceEventOutcome::Success,
+                ProcessingStatus::Failed => ComplianceEventOutcome::Failure,
+                _ => ComplianceEventOutcome::RequiresReview,
             },
             metadata: {
                 let mut meta = HashMap::new();

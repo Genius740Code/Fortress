@@ -3,8 +3,9 @@
 //! Provides comprehensive audit logging capabilities for compliance frameworks
 //! with structured logging, retention policies, and audit trail integrity.
 
-use crate::error::Result;
+use crate::audit::{AuditEntry, AuditEventType, SecurityLevel, EventOutcome};
 use crate::compliance::framework::*;
+use crate::error::{FortressError, Result};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc, Duration};
 use serde::{Deserialize, Serialize};
@@ -32,7 +33,7 @@ pub struct ComplianceAuditLogger {
     /// Storage backend for audit events
     storage: Box<dyn AuditStorage>,
     /// Retention policy for audit events
-    retention_policy: RetentionPolicy,
+    retention_policy: ComplianceRetentionPolicy,
     /// Integrity checker for audit log verification
     integrity_checker: Box<dyn IntegrityChecker>,
 }
@@ -77,7 +78,7 @@ pub trait IntegrityChecker: Send + Sync {
 
 /// Retention policy for audit events
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RetentionPolicy {
+pub struct ComplianceRetentionPolicy {
     /// Default number of days to retain events
     pub default_retention_days: u32,
     /// Framework-specific retention periods
@@ -194,7 +195,7 @@ impl ComplianceAuditLogger {
     /// * `integrity_checker` - Checker for verifying event integrity
     pub fn new(
         storage: Box<dyn AuditStorage>,
-        retention_policy: RetentionPolicy,
+        retention_policy: ComplianceRetentionPolicy,
         integrity_checker: Box<dyn IntegrityChecker>,
     ) -> Self {
         Self {
@@ -239,7 +240,12 @@ impl ComplianceAuditLogger {
             action: "compliance_event".to_string(),
             resource_type: "compliance".to_string(),
             resource_id: Some(event.affected_resources.first().cloned().unwrap_or_default()),
-            outcome: event.outcome.clone(),
+            outcome: match event.outcome {
+                crate::compliance::framework::ComplianceEventOutcome::Success => crate::audit::EventOutcome::Success,
+                crate::compliance::framework::ComplianceEventOutcome::Failure => crate::audit::EventOutcome::Failure,
+                crate::compliance::framework::ComplianceEventOutcome::Blocked => crate::audit::EventOutcome::Failure,
+                crate::compliance::framework::ComplianceEventOutcome::RequiresReview => crate::audit::EventOutcome::RequiresReview,
+            },
             description: event.description.clone(),
             details: event.metadata.clone(),
             affected_data_subjects: vec![],
@@ -331,7 +337,7 @@ impl ComplianceAuditLogger {
                 description: "Audit trail integrity check failed".to_string(),
                 affected_resources: vec![],
                 actor: "system".to_string(),
-                outcome: EventOutcome::Failure,
+                outcome: ComplianceEventOutcome::Failure,
                 metadata: HashMap::new(),
             };
             
