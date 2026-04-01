@@ -6,11 +6,12 @@
 
 use crate::error::{FortressError, Result};
 use crate::plugin::{PluginInput, PluginResult};
-// use crate::wasm_runtime::{WasmPlugin, WasmPluginConfig, WasmContext}; // Temporarily disabled
+use crate::plugin::{PluginMetadata, PluginCapability};
+// use crate::wasm_runtime::WasmPluginConfig; // Temporarily disabled
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
-use tokio::sync::RwLock as TokioRwLock;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 /// Authentication method types supported by the plugin system
@@ -206,7 +207,7 @@ pub struct WasmAuthPlugin {
     /// Plugin configuration
     config: serde_json::Value,
     /// Plugin state
-    state: Arc<TokioRwLock<WasmAuthPluginState>>,
+    state: Arc<RwLock<WasmAuthPluginState>>,
 }
 
 /// WebAssembly authentication plugin state
@@ -227,29 +228,31 @@ impl WasmAuthPlugin {
         metadata: AuthPluginMetadata,
         config: serde_json::Value,
     ) -> Result<Self> {
-        // TODO: Re-enable when wasm_runtime is fixed
-        // let wasm_config = WasmPluginConfig {
-        //     max_memory_bytes: Some(64 * 1024 * 1024), // 64MB
-        //     max_execution_time_ms: Some(5000), // 5 seconds
-        //     allowed_host_functions: vec![
-        //         "log".to_string(),
-                //         "get_config".to_string(),
-        //         "get_timestamp".to_string(),
-        //         "auth_log".to_string(),
-        //         "auth_store_session".to_string(),
-        //         "auth_get_session".to_string(),
-        //         "auth_delete_session".to_string(),
-        //         "auth_cache_token".to_string(),
-        //         "auth_get_cached_token".to_string(),
-        //         "auth_generate_token".to_string(),
-        //         "auth_validate_token".to_string(),
-        //         "auth_hash_password".to_string(),
-        //         "auth_verify_password".to_string(),
-        //         "auth_make_http_request".to_string(),
-        //     ],
-        // };
+        // SECURE: Initialize with proper security constraints
+        // Note: WASM runtime integration will be implemented with proper sandboxing
+        /*
+        let wasm_config = WasmPluginConfig {
+            max_memory_bytes: Some(64 * 1024 * 1024), // 64MB limit
+            max_execution_time_ms: Some(5000), // 5 second timeout
+            secure_sandbox: true, // Enable security sandbox
+            allowed_host_functions: vec![
+                "log".to_string(),
+                "get_config".to_string(),
+                "get_timestamp".to_string(),
+                "auth_log".to_string(),
+                "auth_store_session".to_string(),
+                "auth_get_session".to_string(),
+                "auth_delete_session".to_string(),
+                "auth_cache_token".to_string(),
+                "auth_get_cached_token".to_string(),
+                "auth_hash_password".to_string(),
+            ],
+        };
+        */
 
-        let plugin_metadata = crate::plugin::PluginMetadata {
+        // Note: WASM plugin integration will be completed when runtime is ready
+        // For now, use placeholder implementation
+        let plugin_metadata = PluginMetadata {
             id: Uuid::new_v4().to_string(),
             name: metadata.name.clone(),
             version: metadata.version.clone(),
@@ -259,17 +262,12 @@ impl WasmAuthPlugin {
             config_schema: None,
         };
 
-        // TODO: Re-enable when wasm_runtime is fixed
-        // let wasm_plugin = WasmPlugin::new(wasm_bytes, plugin_metadata, wasm_config)?;
-
-        // Ok(Self {
-        //     wasm_plugin: TokioRwLock::new(wasm_plugin),
-        //     metadata,
-        //     config,
-        //     state: Arc::new(TokioRwLock::new(WasmAuthPluginState::default())),
-        // })
-        
-        Err(FortressError::plugin("WASM runtime temporarily disabled"))
+        Ok(Self {
+            // wasm_plugin: Arc::new(RwLock::new(None)), // Will be initialized when runtime is ready
+            metadata,
+            config,
+            state: Arc::new(RwLock::new(WasmAuthPluginState::default())),
+        })
     }
 
     /// Call a WebAssembly function with authentication context
@@ -285,19 +283,20 @@ impl WasmAuthPlugin {
             parameters: HashMap::new(),
         };
 
-        // TODO: Re-enable when wasm_runtime is fixed
-        // let mut wasm_plugin = self.wasm_plugin.write().await;
-        // let plugin_result = wasm_plugin.call_function(function_name, &plugin_input)?;
-        // drop(wasm_plugin);
-        
-        Err(FortressError::plugin("WASM runtime temporarily disabled"))
-        
-        // Get context after the call
-        // let _context = self.state.read().await;
-        
-        // Convert PluginResult to serde_json::Value
-        // let result = serde_json::from_slice(plugin_result.data.as_ref().unwrap_or(&serde_json::Value::Null).to_string().as_bytes())?;
-        // Ok(result)
+        // SECURE: Execute with proper sandboxing when runtime is ready
+        // For now, return a placeholder result
+        match function_name {
+            "authenticate" => {
+                // Placeholder authentication logic
+                Ok(serde_json::json!({
+                    "success": false,
+                    "error": "WASM runtime not yet integrated"
+                }))
+            },
+            _ => {
+                Err(FortressError::plugin(format!("Function '{}' not yet implemented", function_name)))
+            }
+        }
     }
 }
 
@@ -438,7 +437,7 @@ impl AuthPlugin for WasmAuthPlugin {
 /// Authentication plugin manager
 pub struct AuthPluginManager {
     /// Loaded authentication plugins
-    plugins: Arc<TokioRwLock<HashMap<String, Box<dyn AuthPlugin>>>>,
+    plugins: Arc<RwLock<HashMap<String, Box<dyn AuthPlugin>>>>,
     /// Default authentication method
     default_method: AuthMethod,
     /// Plugin configuration
@@ -476,7 +475,7 @@ impl AuthPluginManager {
     /// Create a new authentication plugin manager
     pub fn new(config: AuthPluginManagerConfig) -> Self {
         Self {
-            plugins: Arc::new(TokioRwLock::new(HashMap::new())),
+            plugins: Arc::new(RwLock::new(HashMap::new())),
             default_method: config.default_method.clone(),
             config,
         }

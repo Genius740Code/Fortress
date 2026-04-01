@@ -42,7 +42,7 @@ use tokio::sync::RwLock;
 use chrono::{Utc, TimeZone, Datelike, Timelike};
 use chrono_tz::Tz;
 
-/// Policy engine for managing roles and permissions
+/// Policy engine for managing roles and permissions (memory-optimized)
 #[derive(Debug)]
 pub struct PolicyEngine {
     roles: RwLock<HashMap<String, PolicyRole>>,
@@ -50,8 +50,10 @@ pub struct PolicyEngine {
     /// Policy storage
     #[allow(dead_code)]
     policies: RwLock<HashMap<String, Policy>>,
-    /// Optimized cache with TTL
+    /// Optimized cache with TTL and memory management
     cache: RwLock<HashMap<CacheKey, CacheEntry>>,
+    /// Cache size limit to prevent memory leaks
+    max_cache_size: usize,
     /// User attribute store for attribute-based conditions
     user_attributes: RwLock<HashMap<String, HashMap<String, String>>>,
     /// User IP context for IP-based conditions
@@ -322,18 +324,24 @@ pub struct PolicyAuditEntry {
 }
 
 impl PolicyEngine {
-    /// Create a new policy engine
+    /// Create a new policy engine with memory optimization
     pub fn new() -> Self {
-        Self::with_cache_ttl(300) // 5 minutes default
+        Self::with_cache_ttl_and_limit(300, 10000) // 5 minutes default, 10K max entries
     }
 
-    /// Create a new policy engine with custom cache TTL
+    /// Create a new policy engine with custom cache TTL and memory limit
     pub fn with_cache_ttl(ttl_secs: u64) -> Self {
+        Self::with_cache_ttl_and_limit(ttl_secs, 10000)
+    }
+
+    /// Create a new policy engine with custom cache TTL and memory limit
+    pub fn with_cache_ttl_and_limit(ttl_secs: u64, max_cache_size: usize) -> Self {
         Self {
             roles: RwLock::new(HashMap::new()),
             user_roles: RwLock::new(HashMap::new()),
             policies: RwLock::new(HashMap::new()),
             cache: RwLock::new(HashMap::new()),
+            max_cache_size,
             user_attributes: RwLock::new(HashMap::new()),
             user_ip_context: RwLock::new(HashMap::new()),
             cache_ttl_secs: ttl_secs,
@@ -597,7 +605,7 @@ impl PolicyEngine {
         Ok(())
     }
 
-    /// Clear expired cache entries (optimized cleanup)
+    /// Clean up expired cache entries with memory management (optimized)
     async fn clear_cache(&self) {
         let mut cache = self.cache.write().await;
         let now = SystemTime::now()
@@ -607,6 +615,26 @@ impl PolicyEngine {
         
         // Remove expired entries
         cache.retain(|_, entry| entry.expires_at > now);
+        
+        // Prevent memory leaks by enforcing cache size limit
+        if cache.len() > self.max_cache_size {
+            // Remove oldest entries (simple LRU approximation)
+            let cache_size = cache.len();
+            let mut entries: Vec<_> = cache.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+            entries.sort_by_key(|(_, entry)| entry.expires_at);
+            
+            let remove_count = cache_size - self.max_cache_size;
+            let keys_to_remove: Vec<_> = entries.iter()
+                .take(remove_count)
+                .map(|(key, _)| key.clone())
+                .collect();
+            
+            drop(entries); // Release the borrow
+            
+            for key in keys_to_remove {
+                cache.remove(&key);
+            }
+        }
     }
 
     /// Clean up expired cache entries (call periodically)
