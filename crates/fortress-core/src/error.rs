@@ -213,6 +213,17 @@ pub enum FortressError {
         code: BackupErrorCode,
     },
 
+    /// WebSocket-related errors
+    #[error("WebSocket error: {message}")]
+    WebSocket {
+        /// Error message
+        message: String,
+        /// Connection ID if applicable
+        connection_id: Option<String>,
+        /// Error code for programmatic handling
+        code: String,
+    },
+
     /// Streaming errors
     #[error("Streaming error: {message}")]
     Streaming {
@@ -1068,6 +1079,24 @@ impl FortressError {
         }
     }
 
+    /// Create a new WebSocket error
+    pub fn websocket<S: Into<String>>(message: S) -> Self {
+        Self::WebSocket {
+            message: message.into(),
+            connection_id: None,
+            code: "WEBSOCKET_ERROR".to_string(),
+        }
+    }
+
+    /// Create a new WebSocket error with connection ID
+    pub fn websocket_with_connection<S: Into<String>>(message: S, connection_id: String) -> Self {
+        Self::WebSocket {
+            message: message.into(),
+            connection_id: Some(connection_id),
+            code: "WEBSOCKET_ERROR".to_string(),
+        }
+    }
+
     /// Create a new compliance error
     pub fn compliance<S: Into<String>>(message: S) -> Self {
         Self::Compliance {
@@ -1195,6 +1224,7 @@ impl FortressError {
             Self::RateLimit { .. } => true,
             Self::Io { .. } => true,
             Self::Cluster { .. } => true,
+            Self::WebSocket { .. } => true,
             Self::Plugin { .. } => true,
             Self::Transaction { code: TransactionErrorCode::TransactionTimeout, .. } => true,
             Self::Transaction { code: TransactionErrorCode::DeadlockDetected, .. } => true,
@@ -1247,6 +1277,7 @@ impl FortressError {
             Self::Streaming { .. } => "streaming",
             Self::Audit { .. } => "audit",
             Self::Tee { .. } => "tee",
+            Self::WebSocket { .. } => "websocket",
         }
     }
 }

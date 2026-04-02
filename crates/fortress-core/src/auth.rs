@@ -194,6 +194,7 @@ pub struct PasswordPolicy {
 }
 
 /// Session manager for handling user sessions
+#[derive(Debug)]
 pub struct SessionManager {
     /// Active sessions
     sessions: HashMap<String, Session>,
@@ -330,6 +331,7 @@ impl SessionManager {
 }
 
 /// Authentication and authorization manager
+#[derive(Debug)]
 pub struct AuthManager {
     /// User storage
     users: HashMap<UserId, User>,

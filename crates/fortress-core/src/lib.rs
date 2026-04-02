@@ -332,6 +332,9 @@ pub mod auto_tuning;
 
 pub mod observability;
 
+/// WebSocket (WSS) API implementation
+pub mod websocket;
+
 /// Comprehensive compliance framework
 
 pub mod compliance;

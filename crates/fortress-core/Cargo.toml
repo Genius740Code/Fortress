@@ -57,6 +57,14 @@ hmac = "0.12"
 pbkdf2 = "0.12"
 scrypt = "0.11"
 
+# WebSocket support
+tokio-tungstenite = "0.21"
+tungstenite = "0.21"
+futures-util = "0.3"
+tokio-rustls = "0.24"
+rustls = "0.21"
+webpki-roots = "0.25"
+
 # Error handling
 thiserror = "1.0"
 anyhow = "1.0"

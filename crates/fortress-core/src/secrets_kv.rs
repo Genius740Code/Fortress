@@ -187,7 +187,6 @@ impl KvEngine {
                 log::warn!("S3 storage requires async initialization, falling back to memory");
                 Arc::new(InMemoryStorage::new())
             },
-            #[cfg(not(feature = "cloud-storage"))]
             Some("s3") => {
                 log::warn!("S3 storage requested but cloud-storage feature not enabled, falling back to memory");
                 Arc::new(InMemoryStorage::new())
