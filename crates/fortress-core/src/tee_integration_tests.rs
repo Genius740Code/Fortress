@@ -606,7 +606,7 @@ mod tests {
         let config = TestConfig::default();
         let test_suite = TeeIntegrationTests::new(config);
         
-        let results = test_suite.run_all_tests().await;
+        let mut results = test_suite.run_all_tests().await;
         results.complete();
         
         println!("{}", results.generate_summary());

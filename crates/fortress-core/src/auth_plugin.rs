@@ -543,11 +543,13 @@ impl AuthPluginManager {
         
         // Note: This is a simplified implementation
         // In a real implementation, we'd need proper plugin reference handling
+        // For now, return None since we can't clone the plugin trait object
+        // In practice, you'd use Arc<dyn AuthPlugin> for shared ownership
         plugins.get(name).map(|_| {
-            // This is a placeholder - we can't actually clone the plugin
-            // In practice, you'd use Arc<dyn AuthPlugin> or similar
-            panic!("Plugin cloning not implemented - use Arc<dyn AuthPlugin> instead")
-        })
+            // Plugin cloning not supported - this is a known limitation
+            // Use Arc<dyn AuthPlugin> for shared plugin instances
+            None
+        }).flatten()
     }
 
     /// List all loaded plugins

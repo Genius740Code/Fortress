@@ -448,14 +448,22 @@ impl AuthManager {
         )?;
 
         // Create token
-        let user_for_token = self.users.get(&user_id).unwrap();
+        let user_for_token = self.users.get(&user_id)
+            .ok_or_else(|| FortressError::authentication(
+                "User not found after successful authentication",
+                Some("race_condition_detected".to_string()),
+            ))?;
         let token = self.create_token(user_for_token)?;
 
         // Store token
         self.tokens.insert(token.token.clone(), token.clone());
 
         // Get user for response
-        let user_for_response = self.users.get(&user_id).unwrap();
+        let user_for_response = self.users.get(&user_id)
+            .ok_or_else(|| FortressError::authentication(
+                "User not found after token creation",
+                Some("race_condition_detected".to_string()),
+            ))?;
 
         Ok(LoginResponse {
             token: token.token,
@@ -723,10 +731,10 @@ mod tests {
         let role_id = auth.create_role(
             "data_reader".to_string(),
             "Can read data".to_string(),
-            vec![permission_id],
+            vec![permission_id.clone()],
         ).unwrap();
         
-        auth.assign_role(&user_id, role_id).unwrap();
+        auth.assign_role(&user_id, role_id.clone()).unwrap();
         
         let user = auth.get_user(&user_id).unwrap();
         assert!(user.roles.contains(&role_id));

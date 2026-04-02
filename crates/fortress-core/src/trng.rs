@@ -236,7 +236,12 @@ impl TrueRandomGenerator {
         ] {
             match self.collect_entropy(source) {
                 Ok((data, bits)) => {
-                    let mut pool = self.entropy_pool.lock().unwrap();
+                    let mut pool = self.entropy_pool.lock().map_err(|_| {
+                        FortressError::internal(
+                            "Failed to acquire entropy pool lock",
+                            "trng_lock",
+                        )
+                    })?;
                     pool.add_entropy(&data, bits);
                     total_entropy += bits;
                 }
@@ -477,17 +482,32 @@ impl TrueRandomGenerator {
 
     /// Perform health check on the TRNG system
     pub fn health_check(&self) -> Result<()> {
-        let mut last_check = self.last_health_check.lock().unwrap();
+        let mut last_check = self.last_health_check.lock().map_err(|_| {
+            FortressError::internal(
+                "Failed to acquire health check lock",
+                "trng_health_lock",
+            )
+        })?;
         
         if last_check.elapsed() < self.config.health_check_interval {
             return Ok(());
         }
 
-        let pool = self.entropy_pool.lock().unwrap();
+        let pool = self.entropy_pool.lock().map_err(|_| {
+            FortressError::internal(
+                "Failed to acquire entropy pool lock for health check",
+                "trng_health_pool_lock",
+            )
+        })?;
         let entropy_available = pool.entropy_available();
         drop(pool);
 
-        let mut health = self.health_status.lock().unwrap();
+        let mut health = self.health_status.lock().map_err(|_| {
+            FortressError::internal(
+                "Failed to acquire health status lock",
+                "trng_health_status_lock",
+            )
+        })?;
         
         if entropy_available < self.config.min_entropy_bits / 4 {
             *health = TrngHealth::Failed;
@@ -508,13 +528,24 @@ impl TrueRandomGenerator {
 
     /// Get current health status
     pub fn health_status(&self) -> TrngHealth {
-        self.health_status.lock().unwrap().clone()
+        match self.health_status.lock() {
+            Ok(health) => health.clone(),
+            Err(_) => {
+                tracing::error!("Failed to acquire health status lock, returning default");
+                TrngHealth::Failed
+            }
+        }
     }
 
     /// Get entropy pool statistics
     pub fn entropy_stats(&self) -> (usize, usize) {
-        let pool = self.entropy_pool.lock().unwrap();
-        (pool.entropy_available(), pool.buffer.len())
+        match self.entropy_pool.lock() {
+            Ok(pool) => (pool.entropy_available(), pool.buffer.len()),
+            Err(_) => {
+                tracing::error!("Failed to acquire entropy pool lock for stats, returning defaults");
+                (0, 0) // Return defaults if lock fails
+            }
+        }
     }
 
     /// Fallback to cryptographically secure pseudo-random generator
@@ -528,10 +559,15 @@ impl TrueRandomGenerator {
         Ok(bytes)
     }
 
-    /// Force reinitialization of the TRNG
+    /// Force reinitialization of TRNG
     pub fn reinitialize(&self) -> Result<()> {
         {
-            let mut pool = self.entropy_pool.lock().unwrap();
+            let mut pool = self.entropy_pool.lock().map_err(|_| {
+                FortressError::internal(
+                    "Failed to acquire entropy pool lock for reinitialization",
+                    "trng_reinit_lock",
+                )
+            })?;
             *pool = EntropyPool::new();
         }
         self.initialize_entropy_pool()

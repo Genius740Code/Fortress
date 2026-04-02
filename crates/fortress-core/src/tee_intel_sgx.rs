@@ -633,7 +633,7 @@ mod tests {
     async fn test_measurement_verification() {
         let provider = IntelSgxProvider::new();
         
-        let measurements = SgxMeasurement {
+        let mut measurements = SgxMeasurement {
             mr_enclave: "test_mr_enclave".to_string(),
             mr_signer: "test_mr_signer".to_string(),
             isv_prod_id: 1,
