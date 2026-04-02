@@ -472,7 +472,7 @@ pub extern "C" fn initialize() -> i32 {
 }
 
 #[no_mangle]
-pub extern "C" fn authenticate(
+pub extern "C" fn saml_authenticate(
     request_ptr: *const u8,
     request_len: usize,
     response_ptr: *mut u8,
@@ -730,7 +730,7 @@ pub extern "C" fn health_check() -> i32 {
 }
 
 #[no_mangle]
-pub extern "C" fn cleanup() -> i32 {
+pub extern "C" fn saml_cleanup() -> i32 {
     log_message(2, "Cleaning up SAML authentication plugin");
     
     unsafe {

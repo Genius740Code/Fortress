@@ -14,6 +14,9 @@ base64 = "0.22"
 sha2 = "0.10"
 rand = "0.8"
 chrono = { version = "0.4", features = ["serde"] }
+tokio = { version = "1.0", features = ["full"] }
+uuid = { version = "1.0", features = ["v4"] }
+thiserror = "1.0"
 
 [lib]
 name = "fortress_auth_plugins"
@@ -31,14 +34,12 @@ path = "src/oauth_plugin.rs"
 name = "saml_plugin"
 path = "src/saml_plugin.rs"
 
-[profile.release]
-opt-level = 3
-lto = true
-codegen-units = 1
-panic = "abort"
-
 [features]
 default = ["jwt", "oauth", "saml"]
 jwt = []
 oauth = []
 saml = []
+
+[[test]]
+name = "integration_tests"
+path = "tests/integration_tests.rs"

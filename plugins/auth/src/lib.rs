@@ -1,94 +1,35 @@
-//! Fortress Authentication Plugins
-//!
-//! This crate provides WebAssembly-based authentication plugins for the Fortress
-//! secure database system. Each plugin implements a specific authentication
-//! method that can be hot-swapped and updated independently.
+//! Fortress Authentication Plugins - WebAssembly-based authentication system
 
+pub mod hot_reload;
 pub mod jwt_plugin;
 pub mod oauth_plugin;
 pub mod saml_plugin;
 
-// Re-export plugin registry for easy access
-pub struct PluginRegistry {
-    plugins: std::collections::HashMap<String, PluginMetadata>,
+pub use hot_reload::{HotReloadConfig, HotReloadManager, ReloadStatus};
+
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+/// Authentication context for plugin requests
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthContext {
+    pub method: String,
+    pub credentials: serde_json::Value,
+    pub request_id: String,
 }
 
-impl PluginRegistry {
-    pub fn new() -> Self {
-        let mut registry = Self {
-            plugins: std::collections::HashMap::new(),
-        };
-        
-        // Register all available plugins
-        let jwt_meta = jwt_plugin::get_metadata();
-        registry.register_plugin("jwt", PluginMetadata {
-            name: jwt_meta.name,
-            version: jwt_meta.version,
-            description: jwt_meta.description,
-            author: jwt_meta.author,
-            supported_methods: jwt_meta.supported_methods,
-            required_config: jwt_meta.required_config,
-            capabilities: PluginCapabilities {
-                can_generate_tokens: jwt_meta.capabilities.can_generate_tokens,
-                can_validate_tokens: jwt_meta.capabilities.can_validate_tokens,
-                can_refresh_tokens: jwt_meta.capabilities.can_refresh_tokens,
-                supports_mfa: jwt_meta.capabilities.supports_mfa,
-                supports_rbac: jwt_meta.capabilities.supports_rbac,
-            },
-        });
-        
-        let oauth_meta = oauth_plugin::get_metadata();
-        registry.register_plugin("oauth", PluginMetadata {
-            name: oauth_meta.name,
-            version: oauth_meta.version,
-            description: oauth_meta.description,
-            author: oauth_meta.author,
-            supported_methods: oauth_meta.supported_methods,
-            required_config: oauth_meta.required_config,
-            capabilities: PluginCapabilities {
-                can_generate_tokens: oauth_meta.capabilities.can_generate_tokens,
-                can_validate_tokens: oauth_meta.capabilities.can_validate_tokens,
-                can_refresh_tokens: oauth_meta.capabilities.can_refresh_tokens,
-                supports_mfa: oauth_meta.capabilities.supports_mfa,
-                supports_rbac: oauth_meta.capabilities.supports_rbac,
-            },
-        });
-        
-        let saml_meta = saml_plugin::get_metadata();
-        registry.register_plugin("saml", PluginMetadata {
-            name: saml_meta.name,
-            version: saml_meta.version,
-            description: saml_meta.description,
-            author: saml_meta.author,
-            supported_methods: saml_meta.supported_methods,
-            required_config: saml_meta.required_config,
-            capabilities: PluginCapabilities {
-                can_generate_tokens: saml_meta.capabilities.can_generate_tokens,
-                can_validate_tokens: saml_meta.capabilities.can_validate_tokens,
-                can_refresh_tokens: saml_meta.capabilities.can_refresh_tokens,
-                supports_mfa: saml_meta.capabilities.supports_mfa,
-                supports_rbac: saml_meta.capabilities.supports_rbac,
-            },
-        });
-        
-        registry
-    }
-    
-    fn register_plugin(&mut self, name: &str, metadata: PluginMetadata) {
-        self.plugins.insert(name.to_string(), metadata);
-    }
-    
-    pub fn get_plugin(&self, name: &str) -> Option<&PluginMetadata> {
-        self.plugins.get(name)
-    }
-    
-    pub fn list_plugins(&self) -> Vec<&str> {
-        self.plugins.keys().map(|s| s.as_str()).collect()
-    }
+/// Authentication result from plugins
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthResult {
+    pub success: bool,
+    pub user_id: String,
+    pub error_message: String,
+    pub response_data: String,
+    pub expires_at: Option<u64>,
 }
 
-/// Common plugin metadata structure
-#[derive(Debug, Clone)]
+/// Plugin metadata information
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginMetadata {
     pub name: String,
     pub version: String,
@@ -99,7 +40,8 @@ pub struct PluginMetadata {
     pub capabilities: PluginCapabilities,
 }
 
-#[derive(Debug, Clone)]
+/// Plugin capabilities
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginCapabilities {
     pub can_generate_tokens: bool,
     pub can_validate_tokens: bool,
@@ -108,24 +50,269 @@ pub struct PluginCapabilities {
     pub supports_rbac: bool,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    
-    #[test]
-    fn test_plugin_registry() {
-        let registry = PluginRegistry::new();
-        
-        // Test that all plugins are registered
-        assert!(registry.get_plugin("jwt").is_some());
-        assert!(registry.get_plugin("oauth").is_some());
-        assert!(registry.get_plugin("saml").is_some());
-        
-        // Test plugin listing
-        let plugins = registry.list_plugins();
-        assert_eq!(plugins.len(), 3);
-        assert!(plugins.contains(&"jwt"));
-        assert!(plugins.contains(&"oauth"));
-        assert!(plugins.contains(&"saml"));
+/// Plugin health status
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginHealth {
+    pub is_healthy: bool,
+    pub version: String,
+    pub uptime_seconds: u64,
+    pub last_error: Option<String>,
+    pub memory_usage_mb: f64,
+}
+
+/// Plugin registry for managing authentication plugins
+pub struct PluginRegistry {
+    plugins: HashMap<String, PluginMetadata>,
+    hot_reload_manager: Option<HotReloadManager>,
+}
+
+impl std::fmt::Debug for PluginRegistry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PluginRegistry")
+            .field("plugins", &self.plugins)
+            .field("hot_reload_manager", &"HotReloadManager")
+            .finish()
     }
+}
+
+impl PluginRegistry {
+    /// Create a new plugin registry
+    pub fn new() -> Self {
+        Self {
+            plugins: HashMap::new(),
+            hot_reload_manager: None,
+        }
+    }
+
+    /// Initialize the plugin registry
+    pub async fn initialize(&mut self) -> Result<(), PluginError> {
+        // Register built-in plugins
+        self.register_builtin_plugins().await?;
+        
+        Ok(())
+    }
+
+    /// Initialize with hot-reload support
+    pub async fn initialize_with_hot_reload(
+        &mut self, 
+        hot_reload_config: HotReloadConfig
+    ) -> Result<(), PluginError> {
+        // Initialize regular plugins first
+        self.initialize().await?;
+        
+        // Set up hot-reload manager
+        let registry = std::sync::Arc::new(tokio::sync::RwLock::new(self.clone()));
+        let hot_reload_manager = HotReloadManager::new(hot_reload_config, registry);
+        
+        // Start hot-reload service
+        hot_reload_manager.start().await?;
+        
+        // Store the hot-reload manager
+        self.hot_reload_manager = Some(hot_reload_manager);
+        
+        Ok(())
+    }
+
+    /// Register built-in plugins
+    async fn register_builtin_plugins(&mut self) -> Result<(), PluginError> {
+        // Register JWT plugin
+        self.plugins.insert("jwt_auth".to_string(), PluginMetadata {
+            name: "JWT Authentication".to_string(),
+            version: "1.0.0".to_string(),
+            description: "JWT token validation and basic authentication".to_string(),
+            author: "Fortress Team".to_string(),
+            supported_methods: vec!["JWT".to_string(), "Basic".to_string()],
+            required_config: vec![
+                "jwt_secret".to_string(),
+                "token_expiration".to_string(),
+            ],
+            capabilities: PluginCapabilities {
+                can_generate_tokens: true,
+                can_validate_tokens: true,
+                can_refresh_tokens: true,
+                supports_mfa: false,
+                supports_rbac: true,
+            },
+        });
+
+        // Register OAuth plugin
+        self.plugins.insert("oauth_auth".to_string(), PluginMetadata {
+            name: "OAuth 2.0 Authentication".to_string(),
+            version: "1.0.0".to_string(),
+            description: "OAuth 2.0 and OpenID Connect authentication".to_string(),
+            author: "Fortress Team".to_string(),
+            supported_methods: vec!["OAuth".to_string()],
+            required_config: vec![
+                "client_id".to_string(),
+                "client_secret".to_string(),
+                "authorization_endpoint".to_string(),
+                "token_endpoint".to_string(),
+            ],
+            capabilities: PluginCapabilities {
+                can_generate_tokens: true,
+                can_validate_tokens: true,
+                can_refresh_tokens: true,
+                supports_mfa: true,
+                supports_rbac: true,
+            },
+        });
+
+        // Register SAML plugin
+        self.plugins.insert("saml_auth".to_string(), PluginMetadata {
+            name: "SAML 2.0 Authentication".to_string(),
+            version: "1.0.0".to_string(),
+            description: "SAML 2.0 assertion validation".to_string(),
+            author: "Fortress Team".to_string(),
+            supported_methods: vec!["SAML".to_string()],
+            required_config: vec![
+                "entity_id".to_string(),
+                "sso_url".to_string(),
+                "certificate".to_string(),
+            ],
+            capabilities: PluginCapabilities {
+                can_generate_tokens: false,
+                can_validate_tokens: true,
+                can_refresh_tokens: false,
+                supports_mfa: true,
+                supports_rbac: true,
+            },
+        });
+
+        Ok(())
+    }
+
+    /// Authenticate using a specific plugin
+    pub async fn authenticate(&self, plugin_name: &str, _context: AuthContext) -> Result<AuthResult, PluginError> {
+        let _plugin = self.plugins.get(plugin_name)
+            .ok_or_else(|| PluginError::PluginNotFound(plugin_name.to_string()))?;
+
+        // For now, return a mock result
+        // In a real implementation, this would load and execute the WASM plugin
+        Ok(AuthResult {
+            success: true,
+            user_id: "test-user".to_string(),
+            error_message: "".to_string(),
+            response_data: "".to_string(),
+            expires_at: None,
+        })
+    }
+
+    /// Get plugin metadata
+    pub fn get_plugin_metadata(&self, plugin_name: &str) -> Option<&PluginMetadata> {
+        self.plugins.get(plugin_name)
+    }
+
+    /// List all registered plugins
+    pub fn list_plugins(&self) -> Vec<&PluginMetadata> {
+        self.plugins.values().collect()
+    }
+
+    /// Check plugin health
+    pub async fn check_health(&self, plugin_name: &str) -> Result<PluginHealth, PluginError> {
+        let _plugin = self.plugins.get(plugin_name)
+            .ok_or_else(|| PluginError::PluginNotFound(plugin_name.to_string()))?;
+
+        // For now, return a mock health status
+        // In a real implementation, this would check the actual plugin health
+        Ok(PluginHealth {
+            is_healthy: true,
+            version: "1.0.0".to_string(),
+            uptime_seconds: 3600,
+            last_error: None,
+            memory_usage_mb: 5.2,
+        })
+    }
+
+    /// Get plugin capabilities
+    pub async fn get_capabilities(&self, plugin_name: &str) -> Result<PluginCapabilities, PluginError> {
+        let plugin = self.plugins.get(plugin_name)
+            .ok_or_else(|| PluginError::PluginNotFound(plugin_name.to_string()))?;
+
+        Ok(plugin.capabilities.clone())
+    }
+
+    /// Validate plugin configuration
+    pub async fn validate_config(&self, plugin_name: &str, config: serde_json::Value) -> Result<(), PluginError> {
+        let plugin = self.plugins.get(plugin_name)
+            .ok_or_else(|| PluginError::PluginNotFound(plugin_name.to_string()))?;
+
+        // Basic validation - check if required config fields are present
+        for required_field in &plugin.required_config {
+            if config.get(required_field).is_none() {
+                return Err(PluginError::InvalidConfig(format!(
+                    "Missing required field: {}", required_field
+                )));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Load plugin from WASM bytes
+    pub async fn load_plugin_from_bytes(&mut self, plugin_name: &str, wasm_bytes: &[u8]) -> Result<(), PluginError> {
+        // In a real implementation, this would:
+        // 1. Validate the WASM module
+        // 2. Load it into a WebAssembly runtime
+        // 3. Register the plugin functions
+        // 4. Update the plugin registry
+        
+        println!("Loading plugin {} from {} bytes", plugin_name, wasm_bytes.len());
+        Ok(())
+    }
+
+    /// Unload a plugin
+    pub async fn unload_plugin(&mut self, plugin_name: &str) -> Result<(), PluginError> {
+        // In a real implementation, this would:
+        // 1. Stop any active plugin instances
+        // 2. Clean up resources
+        // 3. Remove from the runtime
+        
+        println!("Unloading plugin: {}", plugin_name);
+        Ok(())
+    }
+
+    /// Get hot-reload status
+    pub fn get_hot_reload_status(&self) -> Option<&HotReloadManager> {
+        self.hot_reload_manager.as_ref()
+    }
+}
+
+impl From<hot_reload::PluginError> for PluginError {
+    fn from(err: hot_reload::PluginError) -> Self {
+        PluginError::LoadError(err.to_string())
+    }
+}
+
+impl Clone for PluginRegistry {
+    fn clone(&self) -> Self {
+        Self {
+            plugins: self.plugins.clone(),
+            hot_reload_manager: self.hot_reload_manager.clone(),
+        }
+    }
+}
+
+/// Plugin errors
+#[derive(Debug, thiserror::Error)]
+pub enum PluginError {
+    #[error("Plugin not found: {0}")]
+    PluginNotFound(String),
+    
+    #[error("Invalid configuration: {0}")]
+    InvalidConfig(String),
+    
+    #[error("WASM compilation error: {0}")]
+    WasmCompilationError(String),
+    
+    #[error("Plugin execution error: {0}")]
+    ExecutionError(String),
+    
+    #[error("IO error: {0}")]
+    IoError(String),
+    
+    #[error("Serialization error: {0}")]
+    SerializationError(String),
+    
+    #[error("Plugin loading error: {0}")]
+    LoadError(String),
 }

@@ -23,6 +23,12 @@ members = [
     # "crates/fortress-js",
 ]
 
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+
 [dependencies]
 # Async runtime
 tokio = { version = "1.35", features = ["full"] }
@@ -177,13 +183,6 @@ dev = ["tracing-subscriber/env-filter"]
 
 # Note: fortress-core, fortress-cli, and fortress-server will be available as separate crates
 # once they are published to crates.io
-
-[profile.release]
-opt-level = 3
-lto = true
-codegen-units = 1
-panic = "abort"
-strip = true
 
 [profile.bench]
 opt-level = 3
