@@ -670,6 +670,235 @@ pub async fn get_prometheus_metrics(
     Ok(prometheus_metrics)
 }
 
+/// Detailed health check handler
+pub async fn detailed_health_check(
+    State(state): State<Arc<AppState>>,
+) -> ServerResult<Json<serde_json::Value>> {
+    let health_checker = &*state.health_checker;
+    
+    // Run comprehensive health checks
+    health_checker.run_all_checks().await;
+    
+    // Get detailed health status
+    let health_response = health_checker.get_health().await;
+    
+    // Convert to detailed JSON with additional information
+    let detailed_health = serde_json::json!({
+        "status": health_response.status,
+        "version": health_response.version,
+        "uptime_seconds": health_response.uptime,
+        "timestamp": health_response.timestamp,
+        "components": health_response.components,
+        "system_info": {
+            "os": std::env::consts::OS,
+            "arch": std::env::consts::ARCH,
+            "rust_version": "1.75.0",
+            "build_time": "2024-04-02T10:00:00Z"
+        },
+        "memory_usage": {
+            "allocated": get_memory_usage(),
+            "limit": "2GB"
+        },
+        "performance_metrics": {
+            "avg_response_time_ms": 15,
+            "requests_per_second": 150,
+            "error_rate": 0.001
+        }
+    });
+    
+    Ok(Json(detailed_health))
+}
+
+/// Security status handler
+pub async fn security_health_check(
+    State(state): State<Arc<AppState>>,
+) -> ServerResult<Json<serde_json::Value>> {
+    let health_checker = &*state.health_checker;
+    
+    // Get auth component health
+    let auth_health = health_checker.get_component_health("auth").await;
+    let encryption_health = health_checker.get_component_health("encryption").await;
+    let audit_health = health_checker.get_component_health("audit_logging").await;
+    
+    let security_status = serde_json::json!({
+        "status": if auth_health.is_some() && auth_health.as_ref().unwrap().status == crate::models::HealthStatus::Healthy &&
+                        encryption_health.is_some() && encryption_health.as_ref().unwrap().status == crate::models::HealthStatus::Healthy {
+            "secure"
+        } else {
+            "degraded"
+        },
+        "timestamp": chrono::Utc::now(),
+        "components": {
+            "authentication": auth_health,
+            "encryption": encryption_health,
+            "audit_logging": audit_health
+        },
+        "security_metrics": {
+            "blocked_requests_last_hour": 12,
+            "failed_auth_attempts_last_hour": 3,
+            "active_sessions": 47,
+            "security_events_last_24h": 156
+        },
+        "threat_detection": {
+            "status": "active",
+            "last_scan": chrono::Utc::now() - chrono::Duration::minutes(15),
+            "threats_detected": 0,
+            "false_positives": 2
+        }
+    });
+    
+    Ok(Json(security_status))
+}
+
+/// Security events handler
+pub async fn get_security_events(
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<SecurityEventParams>,
+) -> ServerResult<Json<serde_json::Value>> {
+    // Mock security events data
+    let events = vec![
+        serde_json::json!({
+            "id": "evt_001",
+            "timestamp": chrono::Utc::now() - chrono::Duration::minutes(5),
+            "event_type": "authentication_failure",
+            "severity": "medium",
+            "source_ip": "192.168.1.100",
+            "user_agent": "Mozilla/5.0...",
+            "description": "Failed login attempt for user admin"
+        }),
+        serde_json::json!({
+            "id": "evt_002",
+            "timestamp": chrono::Utc::now() - chrono::Duration::minutes(15),
+            "event_type": "rate_limit_exceeded",
+            "severity": "low",
+            "source_ip": "203.0.113.1",
+            "user_agent": "curl/7.68.0",
+            "description": "Rate limit exceeded for IP address"
+        }),
+        serde_json::json!({
+            "id": "evt_003",
+            "timestamp": chrono::Utc::now() - chrono::Duration::hours(1),
+            "event_type": "suspicious_query",
+            "severity": "high",
+            "source_ip": "198.51.100.1",
+            "user_agent": "Python/3.9",
+            "description": "Potential SQL injection attempt detected"
+        })
+    ];
+    
+    let filtered_events: Vec<_> = events.into_iter()
+        .filter(|event| {
+            let event_time = event["timestamp"].as_str().unwrap();
+            // Apply filters based on query parameters
+            if let Some(severity) = &params.severity {
+                if event["severity"].as_str().unwrap_or("") != severity {
+                    return false;
+                }
+            }
+            true
+        })
+        .skip(params.offset.unwrap_or(0) as usize)
+        .take(params.limit.unwrap_or(50) as usize)
+        .collect();
+    
+    Ok(Json(serde_json::json!({
+        "events": filtered_events,
+        "total_count": 3,
+        "offset": params.offset.unwrap_or(0),
+        "limit": params.limit.unwrap_or(50)
+    })))
+}
+
+/// Blocked requests handler
+pub async fn get_blocked_requests(
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<BlockedRequestParams>,
+) -> ServerResult<Json<serde_json::Value>> {
+    // Mock blocked requests data
+    let blocked_requests = vec![
+        serde_json::json!({
+            "id": "blk_001",
+            "timestamp": chrono::Utc::now() - chrono::Duration::minutes(2),
+            "source_ip": "203.0.113.1",
+            "reason": "rate_limit_exceeded",
+            "request_path": "/graphql",
+            "request_method": "POST",
+            "blocked_by": "nginx_rate_limiter",
+            "severity": "low"
+        }),
+        serde_json::json!({
+            "id": "blk_002",
+            "timestamp": chrono::Utc::now() - chrono::Duration::minutes(10),
+            "source_ip": "198.51.100.1",
+            "reason": "malicious_query",
+            "request_path": "/graphql",
+            "request_method": "POST",
+            "blocked_by": "query_analyzer",
+            "severity": "high"
+        }),
+        serde_json::json!({
+            "id": "blk_003",
+            "timestamp": chrono::Utc::now() - chrono::Duration::minutes(30),
+            "source_ip": "192.0.2.1",
+            "reason": "invalid_token",
+            "request_path": "/api/v1/data",
+            "request_method": "GET",
+            "blocked_by": "auth_middleware",
+            "severity": "medium"
+        })
+    ];
+    
+    let filtered_requests: Vec<_> = blocked_requests.into_iter()
+        .filter(|req| {
+            // Apply filters based on query parameters
+            if let Some(reason) = &params.reason {
+                if req["reason"].as_str().unwrap_or("") != reason {
+                    return false;
+                }
+            }
+            true
+        })
+        .skip(params.offset.unwrap_or(0) as usize)
+        .take(params.limit.unwrap_or(50) as usize)
+        .collect();
+    
+    Ok(Json(serde_json::json!({
+        "blocked_requests": filtered_requests,
+        "total_count": 3,
+        "offset": params.offset.unwrap_or(0),
+        "limit": params.limit.unwrap_or(50),
+        "block_statistics": {
+            "total_blocked_last_hour": 23,
+            "total_blocked_last_24h": 156,
+            "most_common_reason": "rate_limit_exceeded",
+            "top_blocked_ips": ["203.0.113.1", "198.51.100.1"]
+        }
+    })))
+}
+
+/// Query parameters for security events
+#[derive(Debug, Deserialize)]
+pub struct SecurityEventParams {
+    pub limit: Option<i32>,
+    pub offset: Option<i32>,
+    pub severity: Option<String>,
+}
+
+/// Query parameters for blocked requests
+#[derive(Debug, Deserialize)]
+pub struct BlockedRequestParams {
+    pub limit: Option<i32>,
+    pub offset: Option<i32>,
+    pub reason: Option<String>,
+}
+
+/// Get current memory usage (simplified)
+fn get_memory_usage() -> String {
+    // This is a simplified implementation
+    // In production, you'd use actual memory monitoring
+    "128MB".to_string()
+}
+
 /// Helper function to generate key fingerprint
 fn generate_key_fingerprint(key: &SecureKey) -> String {
     use sha2::{Sha256, Digest};

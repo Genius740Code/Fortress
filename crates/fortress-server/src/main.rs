@@ -51,7 +51,16 @@ async fn create_router(_openapi: utoipa::openapi::OpenApi) -> Result<Router, Box
     let app = Router::new()
         // Health and API documentation
         .route("/health", get(health_check))
+        .route("/health/detailed", get(detailed_health_check))
+        .route("/health/security", get(security_health_check))
         .route("/openapi.json", get(openapi_handler))
+        
+        // Metrics and monitoring
+        .route("/metrics", get(get_prometheus_metrics))
+        
+        // Security endpoints
+        .route("/security/events", get(get_security_events))
+        .route("/security/blocked-requests", get(get_blocked_requests))
         
         // GraphQL API
         .route("/graphql", get(graphql_handler).post(graphql_handler))

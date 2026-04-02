@@ -10,7 +10,6 @@ use crate::graphql::{
 use async_graphql::{Context, Result, Subscription, ErrorExtensions};
 use futures::{stream, Stream};
 use chrono::Utc;
-use std::collections::HashMap;
 
 /// GraphQL subscription root
 pub struct Subscription;
