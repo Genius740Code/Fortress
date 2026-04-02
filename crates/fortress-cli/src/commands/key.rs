@@ -399,6 +399,7 @@ async fn _simulate_key_rollback(version: &Option<String>) -> Result<()> {
 
 // Helper functions for key management
 
+#[allow(dead_code)]
 /// Generate a new encryption key
 async fn generate_new_key() -> Result<String> {
     let key_manager = InMemoryKeyManager::new();
@@ -440,7 +441,7 @@ async fn generate_enhanced_key(algorithm: &str, length: usize, format: &str) -> 
         "hex64" => {
             // Generate random bytes and convert to hex
             let mut bytes = vec![0u8; length];
-            let mut trng = global_trng()
+            let trng = global_trng()
                 .map_err(|e| color_eyre::eyre::eyre!("Failed to initialize TRNG: {}", e))?;
             
             trng.fill_bytes(&mut bytes)
@@ -479,7 +480,7 @@ async fn generate_enhanced_key(algorithm: &str, length: usize, format: &str) -> 
         "aes256" => {
             // Generate AES-256 key
             let mut bytes = [0u8; 32];
-            let mut trng = global_trng()
+            let trng = global_trng()
                 .map_err(|e| color_eyre::eyre::eyre!("Failed to initialize TRNG: {}", e))?;
             
             trng.fill_bytes(&mut bytes)
@@ -497,7 +498,7 @@ async fn generate_enhanced_key(algorithm: &str, length: usize, format: &str) -> 
         "chacha20" => {
             // Generate ChaCha20 key
             let mut bytes = [0u8; 32]; // ChaCha20 uses 256-bit key
-            let mut trng = global_trng()
+            let trng = global_trng()
                 .map_err(|e| color_eyre::eyre::eyre!("Failed to initialize TRNG: {}", e))?;
             
             trng.fill_bytes(&mut bytes)

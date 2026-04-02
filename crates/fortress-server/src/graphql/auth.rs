@@ -103,14 +103,22 @@ pub struct AuthConfig {
     pub blocked_ips: Vec<String>,
 }
 
+/// Password policy for authentication
 #[derive(Debug, Clone)]
 pub struct PasswordPolicy {
+    /// Minimum password length
     pub min_length: usize,
+    /// Require uppercase letters
     pub require_uppercase: bool,
+    /// Require lowercase letters
     pub require_lowercase: bool,
+    /// Require numbers
     pub require_numbers: bool,
+    /// Require special symbols
     pub require_symbols: bool,
+    /// Forbidden password patterns
     pub forbidden_patterns: Vec<String>,
+    /// Maximum password age in days
     pub max_age_days: usize,
 }
 
@@ -153,6 +161,7 @@ pub struct AuthManager {
 }
 
 impl AuthManager {
+    /// Create a new authentication manager
     pub fn new(config: AuthConfig) -> Result<Self> {
         let encoding_key = EncodingKey::from_secret(config.jwt_secret.as_bytes());
         let decoding_key = DecodingKey::from_secret(config.jwt_secret.as_bytes());
@@ -776,6 +785,7 @@ pub enum PolicyAction {
 }
 
 impl SecurityPolicy {
+    /// Create a new security policy instance
     pub fn new(auth_manager: Arc<AuthManager>) -> Self {
         Self {
             auth_manager,
