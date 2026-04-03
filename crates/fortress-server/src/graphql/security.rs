@@ -783,11 +783,11 @@ mod tests {
             "test_client".to_string(),
             Some("test_user".to_string()),
             "127.0.0.1".to_string(),
-        ).with_query("{ user { id name } }");
+        ).with_query("{ user { id name } }".to_string());
 
         // Valid request should be allowed
         let result = security_manager.validate_request(&request).await;
-        assert!(matches!(result, SecurityValidationResult::Allowed));
+        assert!(matches!(result, Ok(SecurityValidationResult::Allowed)));
 
         // Test IP blocking
         security_manager.block_ip("127.0.0.1").await;
@@ -797,6 +797,6 @@ mod tests {
             "127.0.0.1".to_string(),
         );
         let result = security_manager.validate_request(&blocked_request).await;
-        assert!(matches!(result, SecurityValidationResult::Blocked { .. }));
+        assert!(matches!(result, Ok(SecurityValidationResult::Blocked { .. })));
     }
 }

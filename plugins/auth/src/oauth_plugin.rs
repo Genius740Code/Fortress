@@ -695,12 +695,12 @@ pub extern "C" fn oauth_cleanup() -> i32 {
 
 // Plugin metadata exports
 #[no_mangle]
-pub extern "C" fn get_plugin_name() -> *const u8 {
+pub extern "C" fn get_oauth_plugin_name() -> *const u8 {
     PLUGIN_NAME.as_ptr()
 }
 
 #[no_mangle]
-pub extern "C" fn get_plugin_name_len() -> usize {
+pub extern "C" fn get_oauth_plugin_name_len() -> usize {
     PLUGIN_NAME.len()
 }
 

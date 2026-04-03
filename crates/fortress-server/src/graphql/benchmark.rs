@@ -540,7 +540,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(5)).await; // Simulate I/O delay
         
         // Simulate data validation
-        let validation_data = vec![0u8; config.data_size];
+        let validation_data = vec![0u8; config.data_size_per_request];
         let _checksum = self.calculate_checksum(&validation_data);
         
         // Simulate encryption
@@ -558,7 +558,7 @@ mod tests {
         
         // Simulate batch validation
         let batch_size = 10;
-        let validation_data = vec![0u8; config.data_size * batch_size];
+        let validation_data = vec![0u8; config.data_size_per_request * batch_size];
         let _checksum = self.calculate_checksum(&validation_data);
         
         // Simulate parallel encryption
@@ -579,7 +579,7 @@ mod tests {
 
     /// Calculate mutation throughput in MB/s
     fn calculate_mutation_throughput(&self, config: &BenchmarkConfig, duration: Duration) -> f64 {
-        let total_bytes = (config.num_operations * config.data_size) as f64;
+        let total_bytes = (config.num_operations * config.data_size_per_request) as f64;
         let duration_seconds = duration.as_secs_f64();
         if duration_seconds > 0.0 {
             total_bytes / (1024.0 * 1024.0) / duration_seconds

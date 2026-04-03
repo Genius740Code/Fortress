@@ -1017,7 +1017,7 @@ mod tests {
         ];
 
         for (input, masking_type, expected) in test_cases {
-            let masked = encryption_manager.mask_data(input, masking_type);
+            let masked = encryption_manager.mask_data(input, &masking_type);
             assert_eq!(masked, expected);
         }
     }

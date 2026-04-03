@@ -1005,7 +1005,7 @@ mod tests {
 
         // Test authentication
         let result = auth_manager.authenticate("testuser", "password123", "127.0.0.1", "Mozilla/5.0").await;
-        assert!(matches!(result, AuthResult::Success { .. }));
+        assert!(matches!(result, Ok(AuthResult::Success { .. })));
     }
 
     #[tokio::test]
@@ -1037,7 +1037,7 @@ mod tests {
 
         // Test token verification
         let verification = auth_manager.verify_token(&token, "127.0.0.1", "Mozilla/5.0").await;
-        assert!(matches!(verification, TokenVerificationResult::Valid { .. }));
+        assert!(matches!(verification, Ok(TokenVerificationResult::Valid { .. })));
     }
 
     #[tokio::test]
@@ -1129,7 +1129,7 @@ mod tests {
             tenant_id: None,
             session_id: "user_session".to_string(),
             last_login: None,
-            user_agent: None,
+            device_id: None,
             metadata: serde_json::json!({}),
         };
 

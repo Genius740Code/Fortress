@@ -491,7 +491,7 @@ impl AttestationVerifier {
     }
     
     /// Verify attestation timestamp
-    async fn verify_timestamp(&self, timestamp: &DateTime<Utc>) -> Result<bool> {
+    pub async fn verify_timestamp(&self, timestamp: &DateTime<Utc>) -> Result<bool> {
         let now = Utc::now();
         let age = (now - *timestamp).num_seconds();
         
@@ -687,21 +687,21 @@ mod tests {
                 attestation_key: vec![0u8; 384],
             },
             report_body: SgxReportBody {
-                cpu_svn: [0u8; 16],
-                misc_select: [0u8; 4],
-                reserved1: [0u8; 28],
-                isv_ext_prod_id: [0u8; 16],
-                isv_ext_svn: [0u8; 16],
+                cpu_svn: [0u8; 16].to_vec(),
+                misc_select: [0u8; 4].to_vec(),
+                reserved1: [0u8; 28].to_vec(),
+                isv_ext_prod_id: [0u8; 16].to_vec(),
+                isv_ext_svn: [0u8; 16].to_vec(),
                 attributes: SgxAttributes { flags: 1, xfrm: 0 },
                 attributes_mask: SgxAttributes { flags: 0, xfrm: 0 },
-                mr_enclave: [0u8; 32],
-                reserved2: [0u8; 32],
-                mr_signer: [0u8; 32],
-                reserved3: [0u8; 96],
+                mr_enclave: [0u8; 32].to_vec(),
+                reserved2: [0u8; 32].to_vec(),
+                mr_signer: [0u8; 32].to_vec(),
+                reserved3: [0u8; 96].to_vec(),
                 isv_prod_id: 1,
                 isv_svn: 1,
-                reserved4: [0u8; 60],
-                report_data: [0u8; 64],
+                reserved4: [0u8; 60].to_vec(),
+                report_data: [0u8; 64].to_vec(),
             },
         };
         
