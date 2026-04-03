@@ -16,7 +16,7 @@
 //! use fortress_core::kubernetes_auth::KubernetesAuth;
 //! use serde_json::json;
 //!
-//! let auth = KubernetesAuth::new();
+//! let mut auth = KubernetesAuth::new();
 //!
 //! // Configure Kubernetes connection
 //! auth.configure(json!({
@@ -864,7 +864,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_kubernetes_auth_creation() {
-        let auth = KubernetesAuth::new();
+        let mut auth = KubernetesAuth::new();
         assert_eq!(auth.name(), "kubernetes-auth");
         assert!(matches!(auth.engine_type(), EngineType::Custom(_)));
     }
@@ -895,7 +895,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_pod_info_extraction() {
-        let auth = KubernetesAuth::new();
+        let mut auth = KubernetesAuth::new();
         
         let user_info = TokenUserInfo {
             username: "system:serviceaccount:default:my-service".to_string(),
@@ -936,7 +936,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_session_token_generation() {
-        let auth = KubernetesAuth::new();
+        let mut auth = KubernetesAuth::new();
         
         let token1 = auth.generate_session_token("default", "my-pod").unwrap();
         let token2 = auth.generate_session_token("default", "my-pod").unwrap();
@@ -948,7 +948,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_session_validation() {
-        let auth = KubernetesAuth::new();
+        let mut auth = KubernetesAuth::new();
         
         // Configure auth
         let config = json!({

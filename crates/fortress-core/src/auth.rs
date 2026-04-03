@@ -436,7 +436,7 @@ impl AuthManager {
 
         // Update last login
         let user_id_clone = user_id.clone();
-        drop(user);
+        let _ = user;
         
         if let Some(user) = self.users.get_mut(&user_id_clone) {
             user.last_login = Some(current_timestamp());

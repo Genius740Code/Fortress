@@ -224,7 +224,7 @@ pub struct WasmAuthPluginState {
 impl WasmAuthPlugin {
     /// Create a new WebAssembly authentication plugin
     pub fn new(
-        wasm_bytes: &[u8],
+        _wasm_bytes: &[u8],
         metadata: AuthPluginMetadata,
         config: serde_json::Value,
     ) -> Result<Self> {
@@ -252,7 +252,7 @@ impl WasmAuthPlugin {
 
         // Note: WASM plugin integration will be completed when runtime is ready
         // For now, use placeholder implementation
-        let plugin_metadata = PluginMetadata {
+        let _plugin_metadata = PluginMetadata {
             id: Uuid::new_v4().to_string(),
             name: metadata.name.clone(),
             version: metadata.version.clone(),

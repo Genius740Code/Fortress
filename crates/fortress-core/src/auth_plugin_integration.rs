@@ -295,7 +295,7 @@ impl AuthPluginIntegrationService {
 
     /// Rolling deployment strategy
     async fn rolling_deployment(&self, plugin_name: &str, wasm_file_path: &str) -> Result<()> {
-        info!("Performing rolling deployment for plugin: {}", plugin_name);
+        info!("Performing canary deployment for plugin: {}", plugin_name);
 
         let _wasm_path = PathBuf::from(wasm_file_path);
         
@@ -310,7 +310,7 @@ impl AuthPluginIntegrationService {
     async fn blue_green_deployment(&self, plugin_name: &str, wasm_file_path: &str) -> Result<()> {
         info!("Performing blue-green deployment for plugin: {}", plugin_name);
 
-        let wasm_path = PathBuf::from(wasm_file_path);
+        let _wasm_path = PathBuf::from(wasm_file_path);
         
         // Load new plugin (green)
         self.plugin_manager.load_plugin(plugin_name).await?;
@@ -323,7 +323,7 @@ impl AuthPluginIntegrationService {
     async fn canary_deployment(&self, plugin_name: &str, wasm_file_path: &str, percentage: u32) -> Result<()> {
         info!("Performing canary deployment for plugin: {} with {}% traffic", plugin_name, percentage);
 
-        let wasm_path = PathBuf::from(wasm_file_path);
+        let _wasm_path = PathBuf::from(wasm_file_path);
         
         // For simplicity, implement as immediate deployment
         // In production, you'd route percentage of traffic to new plugin
@@ -337,7 +337,7 @@ impl AuthPluginIntegrationService {
     async fn immediate_deployment(&self, plugin_name: &str, wasm_file_path: &str) -> Result<()> {
         info!("Performing immediate deployment for plugin: {}", plugin_name);
 
-        let wasm_path = PathBuf::from(wasm_file_path);
+        let _wasm_path = PathBuf::from(wasm_file_path);
         self.plugin_manager.load_plugin(plugin_name).await?;
         
         info!("Immediate deployment completed for plugin: {}", plugin_name);
@@ -362,7 +362,7 @@ impl AuthPluginIntegrationService {
     }
 
     /// Get plugin version
-    async fn get_plugin_version(&self, plugin_name: &str) -> Option<String> {
+    async fn get_plugin_version(&self, _plugin_name: &str) -> Option<String> {
         // This would extract version from plugin metadata
         // For now, return a placeholder
         Some("1.0.0".to_string())

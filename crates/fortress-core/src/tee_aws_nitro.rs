@@ -208,7 +208,7 @@ impl AwsNitroProvider {
     
     /// Generate enclave attestation document
     async fn generate_attestation_document(&self, enclave_id: &str) -> Result<Vec<u8>> {
-        let output = self.execute_nitro_cli(&["run-enclave", "--enclave-id", enclave_id, "--debug-mode"]).await?;
+        let _output = self.execute_nitro_cli(&["run-enclave", "--enclave-id", enclave_id, "--debug-mode"]).await?;
         
         // In a real implementation, this would extract the attestation document
         // from the enclave's attestation endpoint or from the Nitro CLI response

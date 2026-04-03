@@ -238,7 +238,7 @@ impl PluginAuthService {
             
             if result.is_ok() {
                 stats.successful_auths += 1;
-                if let Some(ref user_info) = result.as_ref().ok().unwrap().user_info {
+                if let Some(_user_info) = &result.as_ref().ok().unwrap().user_info {
                     stats.active_sessions += 1;
                 }
                 
@@ -282,7 +282,7 @@ impl PluginAuthService {
 
         for method in methods {
             if let Ok(plugin) = self.plugin_manager.get_plugin_for_method(&method).await {
-                let auth_request = AuthRequest {
+                let _auth_request = AuthRequest {
                     method: method.clone(),
                     credentials: AuthCredentials {
                         username: None,

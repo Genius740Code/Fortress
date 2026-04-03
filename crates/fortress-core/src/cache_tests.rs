@@ -277,13 +277,13 @@ mod tests {
             let manager = CacheInvalidationManager::new(config);
 
             // Add dependencies: key1 -> key2 -> key3
-            manager.add_dependency("key1", "key2").await.unwrap();
-            manager.add_dependency("key2", "key3").await.unwrap();
+            manager.add_dependency("key1", "key2").unwrap();
+            manager.add_dependency("key2", "key3").unwrap();
 
             // Invalidate key3 should cascade to key1 and key2
             manager.invalidate_key("key3", InvalidationReason::Manual).await.unwrap();
 
-            let stats = manager.get_invalidation_stats().await.unwrap();
+            let stats = manager.get_invalidation_stats().unwrap();
             assert!(stats.cascaded_invalidations > 0);
         }
 
@@ -346,7 +346,7 @@ mod tests {
             manager.invalidate_key("key2", InvalidationReason::TTLExpired).await.unwrap();
             manager.invalidate_key("key3", InvalidationReason::KeyRotation).await.unwrap();
 
-            let stats = manager.get_invalidation_stats().await.unwrap();
+            let stats = manager.get_invalidation_stats().unwrap();
             assert_eq!(stats.total_invalidations, 3);
             assert!(stats.invalidations_by_reason.contains_key("Manual"));
             assert!(stats.invalidations_by_reason.contains_key("TTLExpired"));

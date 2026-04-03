@@ -432,9 +432,9 @@ impl MultiPersonAuthManager {
         let group_id = request.control_group_id.clone();
         let approvals_needed = request.decisions.iter().filter(|d| d.decision == Decision::Approve).count();
         let rejections = request.decisions.iter().filter(|d| d.decision == Decision::Reject).count();
-        drop(request);
+        let _ = request;
         
-        let mut request = self.approval_requests.get_mut(request_id).unwrap();
+        let request = self.approval_requests.get_mut(request_id).unwrap();
         
         // Get the control group to check requirements
         let group = match self.control_groups.get(&group_id) {

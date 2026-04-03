@@ -7,7 +7,6 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{RwLock, mpsc};
 use tokio_tungstenite::{tungstenite::Message, WebSocketStream};
-use futures_util::StreamExt;
 use uuid::Uuid;
 
 /// Connection information

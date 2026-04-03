@@ -457,7 +457,7 @@ fn with_auth_api_manager(
 }
 
 /// Create CORS configuration for API
-pub fn create_cors_config(config: &AuthApiConfig) -> warp::cors::Builder {
+pub fn create_cors_config(_config: &AuthApiConfig) -> warp::cors::Builder {
     let cors = warp::cors()
         .allow_any_origin()
         .allow_methods(vec![

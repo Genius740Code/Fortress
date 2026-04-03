@@ -228,7 +228,7 @@ impl IntelSgxProvider {
     }
     
     /// Get SGX measurements from enclave binary
-    async fn get_enclave_measurements(&self, enclave_path: &str) -> Result<SgxMeasurement> {
+    async fn get_enclave_measurements(&self, _enclave_path: &str) -> Result<SgxMeasurement> {
         // In a real implementation, this would use sgx_sign to get measurements
         // For now, we'll simulate the measurement extraction
         
@@ -280,7 +280,7 @@ impl IntelSgxProvider {
     }
     
     /// Generate SGX quote for attestation
-    async fn generate_quote(&self, enclave_id: u32) -> Result<Vec<u8>> {
+    async fn generate_quote(&self, _enclave_id: u32) -> Result<Vec<u8>> {
         // In a real implementation, this would call the SGX quoting service
         // For now, we'll simulate quote generation
         
@@ -323,7 +323,7 @@ impl IntelSgxProvider {
     }
     
     /// Verify SGX quote signature
-    async fn verify_quote_signature(&self, quote: &[u8]) -> Result<bool> {
+    async fn verify_quote_signature(&self, _quote: &[u8]) -> Result<bool> {
         // In a real implementation, this would verify the quote signature
         // against Intel's attestation service
         // For now, we'll simulate verification
@@ -495,8 +495,8 @@ impl TeeProvider for IntelSgxProvider {
         // Verify quote signature
         let signature_valid = self.verify_quote_signature(&quote).await?;
         
-        let mut is_valid = signature_valid;
-        let mut security_issues = Vec::new();
+        let is_valid = signature_valid;
+        let security_issues = Vec::new();
         let mut details: HashMap<String, String> = HashMap::new();
         
         details.insert("enclave_id".to_string(), enclave_id.to_string());
@@ -539,7 +539,7 @@ impl TeeProvider for IntelSgxProvider {
     
     async fn send_message(&self, enclave_id: &str, message: &[u8]) -> Result<Vec<u8>> {
         let state = self.state.read().await;
-        let enclave_info = state.active_enclaves.get(enclave_id)
+        let _enclave_info = state.active_enclaves.get(enclave_id)
             .ok_or_else(|| FortressError::tee(
                 format!("Enclave not found: {}", enclave_id),
                 "IntelSgxProvider::send_message".to_string()

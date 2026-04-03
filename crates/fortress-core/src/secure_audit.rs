@@ -827,7 +827,7 @@ mod tests {
     async fn test_hmac_calculation() {
         let logger = SecureAuditLogger::new();
         
-        let mut entry = SecureAuditEntry {
+        let entry = SecureAuditEntry {
             entry_id: "test_123".to_string(),
             timestamp: Utc::now(),
             event_type: SecureAuditEventType::SecretAccess,

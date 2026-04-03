@@ -2495,7 +2495,7 @@ mod tests {
 
             .version(1)
 
-            .expires_at(Utc::now() - Duration::hours(1)) // Expired
+            .expires_at(Utc::now() - ChronoDuration::hours(1)) // Expired
 
             .purpose("test".to_string())
 
@@ -2686,7 +2686,7 @@ mod tests {
 
     async fn test_zero_downtime_rotation_functionality() {
         let manager = InMemoryKeyManager::new();
-        let algorithm = crate::encryption::aegis::Aegis256::new();
+        let algorithm = crate::encryption::Aegis256::new();
         
         // Create a key
         let key_id = "zero-downtime-test".to_string();
@@ -2696,8 +2696,8 @@ mod tests {
             key_id.clone(),
             algorithm.name().to_string(),
             1,
-            Utc::now() - Duration::hours(25), // Created 25 hours ago
-            Utc::now() - Duration::hours(1),  // Expired 1 hour ago
+            Utc::now() - ChronoDuration::hours(25), // Created 25 hours ago
+            Utc::now() - ChronoDuration::hours(1),  // Expired 1 hour ago
             "test".to_string(),
             crate::encryption::PerformanceProfile::Balanced,
         );
@@ -2734,7 +2734,7 @@ mod tests {
 
         // Set rotation interval for test purpose
 
-        scheduler.set_rotation_interval("test".to_string(), RotationInterval::Custom(Duration::hours(24)));
+        scheduler.set_rotation_interval("test".to_string(), RotationInterval::Custom(ChronoDuration::hours(24)));
 
         
 
@@ -2754,7 +2754,7 @@ mod tests {
 
             .version(1)
 
-            .expires_at(Utc::now() - Duration::hours(25)) // Expired 25 hours ago
+            .expires_at(Utc::now() - ChronoDuration::hours(25)) // Expired 25 hours ago
 
             .purpose("test".to_string())
 

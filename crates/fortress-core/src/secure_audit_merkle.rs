@@ -21,7 +21,7 @@ use chrono::{DateTime, Utc};
 use std::fs::{File, OpenOptions};
 use std::path::Path;
 use sha2::{Sha256, Digest};
-use hmac::{Hmac, Mac};
+use hmac::Hmac;
 use base64::Engine as _;
 use ed25519_dalek::{Signature, Verifier, Signer, SigningKey, VerifyingKey};
 use rand::rngs::OsRng;
@@ -497,7 +497,7 @@ impl AuditMerkleTree {
 
         let mut siblings = Vec::new();
         let mut current_hash = leaf_hash.to_string();
-        let mut level = 0;
+        let mut _level = 0;
 
         while let Some(node) = self.nodes.get(&current_hash) {
             if node.is_leaf {
@@ -509,7 +509,7 @@ impl AuditMerkleTree {
             } else {
                 break;
             }
-            level += 1;
+            _level += 1;
         }
 
         // Find siblings at each level

@@ -75,10 +75,14 @@ pub struct DatabaseConfig {
 }
 
 /// Supported database types
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// Database types supported by the secrets engine
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DatabaseType {
+    /// PostgreSQL database
     PostgreSQL,
+    /// MySQL database
     MySQL,
+    /// Microsoft SQL Server
     SQLServer,
 }
 

@@ -66,7 +66,6 @@ use std::sync::Arc;
 use std::fmt::Debug;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
-use base64::prelude::*;
 
 /// Trait combining KeyManager and Debug for trait objects
 pub trait DebugKeyManager: KeyManager + Debug {}

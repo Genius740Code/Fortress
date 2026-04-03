@@ -155,7 +155,7 @@ impl HotSwappableAuthPluginManager {
     /// Start health monitoring for all plugins
     async fn start_health_monitoring(&self) -> Result<()> {
         let plugins = self.plugins.clone();
-        let method_to_plugin = self.method_to_plugin.clone();
+        let _method_to_plugin = self.method_to_plugin.clone();
         let stats = self.stats.clone();
         let health_check_interval = Duration::from_secs(self.config.health_check_interval);
 
@@ -377,7 +377,7 @@ impl HotSwappableAuthPluginManager {
             plugins.get(plugin_name).cloned()
         };
 
-        if let Some(plugin) = plugin {
+        if let Some(_plugin) = plugin {
             // Cleanup plugin resources using proper resource management
             // Note: Plugin cleanup is handled through Drop trait implementation
             // to ensure proper resource deallocation without requiring mutable access
@@ -677,7 +677,7 @@ impl HotSwappableAuthPluginManager {
             plugins_read.clone()
         };
 
-        for (name, plugin) in plugins.iter() {
+        for (name, _plugin) in plugins.iter() {
             // Note: We can't call cleanup on Arc<dyn AuthPlugin> directly
             // In production, this would need a different approach
             // For now, we'll just log the cleanup attempt

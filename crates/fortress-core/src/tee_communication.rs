@@ -291,7 +291,7 @@ impl SecureProtocolHandler {
         header: &SecureMessageHeader,
     ) -> Result<EncryptedPayload> {
         // Apply compression if enabled
-        let processed_data = if self.config.enable_compression {
+        let _processed_data = if self.config.enable_compression {
             self.compress_data(data).await?
         } else {
             data.to_vec()

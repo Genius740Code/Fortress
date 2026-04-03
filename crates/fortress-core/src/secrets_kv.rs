@@ -933,7 +933,7 @@ impl Default for KvEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::MemoryStorage;
+    use crate::storage::InMemoryStorage;
     use serde_json::json;
 
     #[tokio::test]

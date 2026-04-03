@@ -35,13 +35,27 @@ pub enum DataFormat {
     /// Email address (preserves @ and domain structure)
     EmailAddress,
     /// Numeric string of fixed length
-    Numeric { length: usize },
+    /// Numeric string of fixed length
+    Numeric { 
+        /// Length of the numeric string
+        length: usize 
+    },
     /// Alphanumeric string of fixed length
-    Alphanumeric { length: usize },
+    /// Alphanumeric string of fixed length
+    Alphanumeric { 
+        /// Length of alphanumeric string
+        length: usize 
+    },
     /// Date format (YYYY-MM-DD)
     Date,
     /// Custom format with regex pattern
-    Custom { pattern: String, charset: String },
+    /// Custom format with regex pattern
+    Custom { 
+        /// Regex pattern for format validation
+        pattern: String,
+        /// Character set for encryption
+        charset: String 
+    },
 }
 
 /// FPE configuration
@@ -114,8 +128,8 @@ impl FormatPreservingEncryption {
         self.patterns.insert(
             DataFormat::CreditCard,
             Regex::new(r"^(?:(\d{4}[-\s]?){3}\d{4})$")
-                .map_err(|e| FortressError::encryption(
-                    &format!("Invalid credit card regex: {}", e),
+                .map_err(|_e| FortressError::encryption(
+                    &format!("Invalid credit card regex: {}", _e),
                     &"FPE".to_string(),
                     EncryptionErrorCode::InvalidInput,
                 ))?
@@ -125,8 +139,8 @@ impl FormatPreservingEncryption {
         self.patterns.insert(
             DataFormat::SocialSecurityNumber,
             Regex::new(r"^\d{3}-\d{2}-\d{4}$")
-                .map_err(|e| FortressError::encryption(
-                    &format!("Invalid SSN regex: {}", e),
+                .map_err(|_e| FortressError::encryption(
+                    &format!("Invalid SSN regex: {}", _e),
                     &"FPE".to_string(),
                     EncryptionErrorCode::InvalidInput,
                 ))?
@@ -136,8 +150,8 @@ impl FormatPreservingEncryption {
         self.patterns.insert(
             DataFormat::PhoneNumber,
             Regex::new(r"^\+\d{10,15}$")
-                .map_err(|e| FortressError::encryption(
-                    &format!("Invalid phone regex: {}", e),
+                .map_err(|_e| FortressError::encryption(
+                    &format!("Invalid phone regex: {}", _e),
                     &"FPE".to_string(),
                     EncryptionErrorCode::InvalidInput,
                 ))?
@@ -147,8 +161,8 @@ impl FormatPreservingEncryption {
         self.patterns.insert(
             DataFormat::EmailAddress,
             Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
-                .map_err(|e| FortressError::encryption(
-                    &format!("Invalid email regex: {}", e),
+                .map_err(|_e| FortressError::encryption(
+                    &format!("Invalid email regex: {}", _e),
                     &"FPE".to_string(),
                     EncryptionErrorCode::InvalidInput,
                 ))?
@@ -158,8 +172,8 @@ impl FormatPreservingEncryption {
         self.patterns.insert(
             DataFormat::Date,
             Regex::new(r"^\d{4}-\d{2}-\d{2}$")
-                .map_err(|e| FortressError::encryption(
-                    &format!("Invalid date regex: {}", e),
+                .map_err(|_e| FortressError::encryption(
+                    &format!("Invalid date regex: {}", _e),
                     &"FPE".to_string(),
                     EncryptionErrorCode::InvalidInput,
                 ))?
@@ -548,8 +562,8 @@ impl FormatPreservingEncryption {
     fn encrypt_date(&self, date_str: &str) -> Result<FpeResult> {
         // Parse date
         let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")
-            .map_err(|e| FortressError::encryption(
-                &format!("Invalid date format: {}", e),
+            .map_err(|_e| FortressError::encryption(
+                &format!("Invalid date format: {}", _e),
                 &"FPE".to_string(),
                 EncryptionErrorCode::InvalidInput,
             ))?;
@@ -589,8 +603,8 @@ impl FormatPreservingEncryption {
     fn decrypt_date(&self, encrypted_date_str: &str) -> Result<String> {
         // Parse encrypted date
         let encrypted_date = NaiveDate::parse_from_str(encrypted_date_str, "%Y-%m-%d")
-            .map_err(|e| FortressError::encryption(
-                &format!("Invalid encrypted date format: {}", e),
+            .map_err(|_e| FortressError::encryption(
+                &format!("Invalid encrypted date format: {}", _e),
                 &"FPE".to_string(),
                 EncryptionErrorCode::InvalidInput,
             ))?;
@@ -672,7 +686,7 @@ impl FormatPreservingEncryption {
         }
 
         String::from_utf8(result)
-            .map_err(|e| FortressError::encryption(
+            .map_err(|_e| FortressError::encryption(
                 "Invalid UTF-8 in FPE result",
                 &"FPE".to_string(),
                 EncryptionErrorCode::InvalidInput,
@@ -697,7 +711,7 @@ impl FormatPreservingEncryption {
         }
 
         String::from_utf8(result)
-            .map_err(|e| FortressError::encryption(
+            .map_err(|_e| FortressError::encryption(
                 "Invalid UTF-8 in FPE result",
                 &"FPE".to_string(),
                 EncryptionErrorCode::InvalidInput,

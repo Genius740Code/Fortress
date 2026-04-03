@@ -1062,11 +1062,11 @@ impl ThreatResponseSystem for DefaultThreatResponseSystem {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::audit::InMemoryAuditLogger;
+    use crate::audit::DefaultAuditLogger;
 
     #[tokio::test]
     async fn test_threat_detection_engine() {
-        let audit_logger = Arc::new(InMemoryAuditLogger::new());
+        let audit_logger = Arc::new(DefaultAuditLogger::new(Default::default()));
         let engine = DefaultThreatDetectionEngine::new(audit_logger);
 
         // Create a detection rule
@@ -1111,7 +1111,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_threat_response_system() {
-        let audit_logger = Arc::new(InMemoryAuditLogger::new());
+        let audit_logger = Arc::new(DefaultAuditLogger::new(Default::default()));
         let response_system = DefaultThreatResponseSystem::new(audit_logger);
 
         // Create a threat detection

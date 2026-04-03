@@ -284,18 +284,26 @@ pub struct HhsContactInfo {
 /// Entity contact information
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EntityContactInfo {
+    /// Privacy officer contact
     pub privacy_officer: String,
+    /// Security officer contact
     pub security_officer: String,
+    /// Phone number contact
     pub phone: String,
+    /// Email address contact
     pub email: String,
 }
 
 /// HHS submission result
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HhsSubmissionResult {
+    /// Submission status
     pub status: SubmissionStatus,
+    /// Confirmation number
     pub confirmation_number: Option<String>,
+    /// Processing time in milliseconds
     pub processing_time_ms: u64,
+    /// Response code
     pub response_code: Option<u16>,
 }
 

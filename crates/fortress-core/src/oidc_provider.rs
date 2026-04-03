@@ -623,10 +623,10 @@ impl OidcProvider {
 
         let header = Header::new(Algorithm::RS256);
         let key = EncodingKey::from_rsa_pem(b"-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...\n-----END PUBLIC KEY-----")
-            .map_err(|e| FortressError::encryption("Failed to create encoding key", "RS256", EncryptionErrorCode::AlgorithmNotSupported))?;
+            .map_err(|_e| FortressError::encryption("Failed to create encoding key", "RS256", EncryptionErrorCode::AlgorithmNotSupported))?;
 
         encode(&header, &claims, &key)
-            .map_err(|e| FortressError::encryption("Failed to encode token", "RS256", EncryptionErrorCode::AlgorithmNotSupported))
+            .map_err(|_e| FortressError::encryption("Failed to encode token", "RS256", EncryptionErrorCode::AlgorithmNotSupported))
     }
 
     /// Generate refresh token
@@ -671,10 +671,10 @@ impl OidcProvider {
 
         let header = Header::new(Algorithm::RS256);
         let key = EncodingKey::from_rsa_pem(b"-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...\n-----END PUBLIC KEY-----")
-            .map_err(|e| FortressError::encryption("Failed to create encoding key", "RS256", EncryptionErrorCode::AlgorithmNotSupported))?;
+            .map_err(|_e| FortressError::encryption("Failed to create encoding key", "RS256", EncryptionErrorCode::AlgorithmNotSupported))?;
 
         encode(&header, &claims, &key)
-            .map_err(|e| FortressError::encryption("Failed to encode ID token", "RS256", EncryptionErrorCode::AlgorithmNotSupported))
+            .map_err(|_e| FortressError::encryption("Failed to encode ID token", "RS256", EncryptionErrorCode::AlgorithmNotSupported))
     }
 
     /// Generate access token from refresh token
@@ -698,10 +698,10 @@ impl OidcProvider {
 
         let header = Header::new(Algorithm::RS256);
         let key = EncodingKey::from_rsa_pem(b"-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...\n-----END PUBLIC KEY-----")
-            .map_err(|e| FortressError::encryption("Failed to create encoding key", "RS256", EncryptionErrorCode::AlgorithmNotSupported))?;
+            .map_err(|_e| FortressError::encryption("Failed to create encoding key", "RS256", EncryptionErrorCode::AlgorithmNotSupported))?;
 
         encode(&header, &claims, &key)
-            .map_err(|e| FortressError::encryption("Failed to encode access token", "RS256", EncryptionErrorCode::AlgorithmNotSupported))
+            .map_err(|_e| FortressError::encryption("Failed to encode access token", "RS256", EncryptionErrorCode::AlgorithmNotSupported))
     }
 
     /// Decode access token
@@ -710,7 +710,7 @@ impl OidcProvider {
         validation.set_issuer(&[&self.config.issuer]);
 
         let key = DecodingKey::from_rsa_pem(b"-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...\n-----END PUBLIC KEY-----")
-            .map_err(|e| FortressError::encryption("Failed to create decoding key", "RS256", EncryptionErrorCode::AlgorithmNotSupported))?;
+            .map_err(|_e| FortressError::encryption("Failed to create decoding key", "RS256", EncryptionErrorCode::AlgorithmNotSupported))?;
 
         let token_data = decode::<TokenClaims>(token, &key, &validation)
             .map_err(|e| FortressError::authentication("Invalid token", Some(e.to_string())))?;
@@ -734,7 +734,7 @@ impl OidcProvider {
     }
 
     /// Generate JWKS
-    fn generate_jwks(config: &JwksConfig) -> Result<JsonWebKeySet, FortressError> {
+    fn generate_jwks(_config: &JwksConfig) -> Result<JsonWebKeySet, FortressError> {
         // For this example, we'll generate a static key set
         // In a real implementation, you would generate proper RSA/ECDSA keys
         let key = JsonWebKey {
@@ -779,7 +779,7 @@ impl RegoPolicyEngine {
     }
 
     /// Load Rego policy from string
-    pub fn load_policy(&mut self, name: &str, policy: &str) -> Result<(), FortressError> {
+    pub fn load_policy(&mut self, name: &str, _policy: &str) -> Result<(), FortressError> {
         // For now, just store the policy string
         // In a real implementation, this would compile and validate Rego policy
         tracing::info!("Loaded policy '{}'", name);
