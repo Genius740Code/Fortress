@@ -27,38 +27,75 @@ class FortressClient:
     def __init__(self, base_url=BASE_URL):
         self.base_url = base_url
         self.session = requests.Session()
+        self.token = None
+    
+    def login(self, username, password):
+        """Authenticate and get JWT token"""
+        response = self.session.post(
+            f"{self.base_url}/api/v1/auth/login",
+            json={"username": username, "password": password}
+        )
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("success"):
+                self.token = data["data"]["access_token"]
+                self.session.headers.update({
+                    "Authorization": f"Bearer {self.token}"
+                })
+                return True
+        return False
     
     def store_data(self, data, metadata=None):
         """Store encrypted data"""
+        if not self.token:
+            raise Exception("Not authenticated - call login() first")
+            
         payload = {
             "data": data,
             "metadata": metadata or {}
         }
         
         response = self.session.post(
-            f"{self.base_url}/data",
+            f"{self.base_url}/api/v1/data",
             json=payload
         )
         return response.json()
     
     def retrieve_data(self, data_id):
         """Retrieve and decrypt data"""
-        response = self.session.get(f"{self.base_url}/data/{data_id}")
+        if not self.token:
+            raise Exception("Not authenticated - call login() first")
+            
+        response = self.session.get(f"{self.base_url}/api/v1/data/{data_id}")
         return response.json()
     
     def delete_data(self, data_id):
         """Delete data"""
-        response = self.session.delete(f"{self.base_url}/data/{data_id}")
+        if not self.token:
+            raise Exception("Not authenticated - call login() first")
+            
+        response = self.session.delete(f"{self.base_url}/api/v1/data/{data_id}")
         return response.json()
     
     def list_data(self):
         """List all stored data"""
-        response = self.session.get(f"{self.base_url}/data")
+        if not self.token:
+            raise Exception("Not authenticated - call login() first")
+            
+        response = self.session.get(f"{self.base_url}/api/v1/data")
         return response.json()
 
 # Usage example
 def main():
     client = FortressClient()
+    
+    # Authenticate first
+    print("Authenticating...")
+    if not client.login("admin", "your-secure-password"):
+        print("Authentication failed")
+        return
+    
+    print("✅ Authentication successful")
     
     # Store user profile
     user_data = {
@@ -79,7 +116,7 @@ def main():
     
     if store_result["success"]:
         data_id = store_result["data"]["id"]
-        print(f"Data stored with ID: {data_id}")
+        print(f"✅ Data stored with ID: {data_id}")
         
         # Retrieve the data
         print("Retrieving data...")
@@ -87,14 +124,14 @@ def main():
         
         if retrieve_result["success"]:
             retrieved_data = retrieve_result["data"]["data"]
-            print(f"Retrieved user: {retrieved_data['name']}")
-            print(f"Email: {retrieved_data['email']}")
+            print(f"✅ Retrieved user: {retrieved_data['name']}")
+            print(f"✅ Email: {retrieved_data['email']}")
         
         # List all data
         print("Listing all data...")
         list_result = client.list_data()
         if list_result["success"]:
-            print(f"Total items: {len(list_result['data'])}")
+            print(f"✅ Total items: {len(list_result['data'])}")
 
 if __name__ == "__main__":
     main()

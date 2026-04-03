@@ -49,8 +49,8 @@ This document provides an honest assessment of Fortress's current production rea
 |---------|--------|---------------|------------------|-------|
 | **REST API** | ✅ Stable | 90% | **Yes** | Complete API with comprehensive endpoints |
 | **CLI Tool** | ✅ Stable | 85% | **Yes** | Full-featured CLI with all operations |
-| **WebSocket API** | ✅ Stable | 80% | **Yes** | Real-time updates and streaming |
-| **GraphQL API** | ✅ Stable | 95% | **Yes** | Enterprise-grade GraphQL with security |
+| **WebSocket API** | 🔄 In Development | 70% | **No** | Basic implementation exists, production features in progress |
+| **GraphQL API** | 🔄 In Development | 60% | **No** | Planned for v1.1 release with full feature parity |
 | **SDKs** | ✅ Stable | 85% | **Yes** | Multiple language SDKs available |
 
 ### 🐳 Deployment & Operations

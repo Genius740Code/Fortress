@@ -8,9 +8,9 @@ Fortress provides comprehensive APIs for secure data storage with automatic encr
 
 ## Available APIs
 
-- **REST API**: Traditional HTTP-based API with JSON payloads `[Stable]`
-- **GraphQL API**: Flexible query language with real-time subscriptions `[In Development]`
-- **gRPC API**: High-performance RPC interface `[Stable]`
+- **REST API**: Traditional HTTP-based API with JSON payloads `[Production Ready]`
+- **GraphQL API**: Flexible query language with real-time subscriptions `[Coming Soon - v1.1]`
+- **gRPC API**: High-performance RPC interface `[In Development]`
 - **WebSocket API**: Real-time updates and streaming `[In Development]`
 
 ### REST API Base URL
@@ -29,9 +29,70 @@ http://localhost:8080/graphql/playground
 ```
 
 ### Authentication Methods
-- JWT Bearer Tokens
-- API Keys
+- JWT Bearer Tokens (recommended for production)
+- API Keys (for server-to-server communication)
 - Basic Authentication (development only)
+
+### JWT Authentication Flow
+
+#### 1. Login to Get Token
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "admin",
+    "password": "your-secure-password"
+  }'
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "expires_in": 3600,
+    "token_type": "Bearer"
+  },
+  "success": true,
+  "timestamp": "2024-01-15T10:30:00Z"
+}
+```
+
+#### 2. Use Token in API Requests
+```bash
+curl -X GET http://localhost:8080/api/v1/databases \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+```
+
+#### 3. Refresh Token
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{
+    "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  }'
+```
+
+### API Key Authentication
+
+#### Create API Key
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/api-keys \
+  -H "Authorization: Bearer <jwt-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "production-api-key",
+    "permissions": ["read", "write"],
+    "expires_at": "2024-12-31T23:59:59Z"
+  }'
+```
+
+#### Use API Key
+```bash
+curl -X GET http://localhost:8080/api/v1/databases \
+  -H "X-API-Key: your-api-key-here"
+```
 
 ### Response Format
 All API responses follow a consistent format:
@@ -50,9 +111,22 @@ All API responses follow a consistent format:
 
 ## GraphQL API
 
-> **⚠️ Status: In Development**
+> **⚠️ Status: Coming Soon (v1.1)**
 
-The GraphQL API is currently under development. Basic structure exists but advanced features are not yet complete. Please use the REST API for production use cases.
+The GraphQL API is currently planned for v1.1 release. Basic structure exists but production features are not yet complete. Please use the REST API for production use cases.
+
+### Roadmap
+- **v1.1 Alpha**: Basic GraphQL queries and mutations
+- **v1.1 Beta**: Subscriptions and real-time updates  
+- **v1.1 Stable**: Full feature parity with REST API
+
+### Current Development Status
+- ✅ Schema definition complete
+- ✅ Basic query parsing implemented
+- 🔄 Authentication integration in progress
+- ⏳ Field-level security controls
+- ⏳ Real-time subscriptions
+- ⏳ Performance optimization
 
 ### Overview
 
@@ -68,11 +142,11 @@ Authorization: Bearer YOUR_JWT_TOKEN
 
 ### Basic Queries
 
-> **Note**: The following GraphQL examples are for the development version. These queries may not work until the GraphQL API is fully implemented.
+> **Note**: The following GraphQL examples are planned for v1.1 release. These queries are not yet functional.
 
 #### Get All Databases
 ```graphql
-# This query is planned but not yet functional
+# Planned for v1.1 release
 query {
   databases {
     id
@@ -88,7 +162,7 @@ query {
 
 #### Get Specific Database
 ```graphql
-# This query is planned but not yet functional
+# Planned for v1.1 release
 query {
   database(name: "my_database") {
     id
@@ -104,7 +178,7 @@ query {
 
 #### Query Data from Table
 ```graphql
-# This query is planned but not yet functional
+# Planned for v1.1 release
 query {
   queryData(input: {
     database: "my_database"

@@ -19,13 +19,38 @@ class FortressClient:
         self.base_url = base_url.rstrip('/')
         self.api_key = api_key
         self.session = requests.Session()
+        self.token = None
         
         if api_key:
             self.session.headers.update({"X-API-Key": api_key})
     
+    def login(self, username: str, password: str) -> bool:
+        """Authenticate and get JWT token"""
+        try:
+            response = self.session.post(
+                f"{self.base_url}/api/v1/auth/login",
+                json={"username": username, "password": password}
+            )
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    self.token = data["data"]["access_token"]
+                    self.session.headers.update({
+                        "Authorization": f"Bearer {self.token}"
+                    })
+                    return True
+        except Exception as e:
+            print(f"Login error: {e}")
+        return False
+    
     def _request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
         """Make HTTP request to the API"""
         url = f"{self.base_url}{endpoint}"
+        
+        # Check if we need authentication
+        if not self.api_key and not self.token and endpoint != "/api/v1/auth/login":
+            raise Exception("Not authenticated - call login() first or provide api_key")
+            
         response = self.session.request(method, url, **kwargs)
         response.raise_for_status()
         return response.json()
@@ -151,6 +176,15 @@ def main():
     print("=" * 50)
     
     try:
+        # Authenticate first
+        print("\n🔐 Authenticating...")
+        if not client.login("admin", "your-secure-password"):
+            print("❌ Authentication failed")
+            print("💡 Make sure the server is running and credentials are correct")
+            return
+        
+        print("✅ Authentication successful")
+        
         # Check health
         print("\n📊 Checking API health...")
         health = client.health_check()

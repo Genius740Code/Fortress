@@ -39,15 +39,18 @@ info:
     in response headers and the `rate_limit` field of response metadata.
     
     ## Status
-    **Production Ready - Enterprise Grade**
+    **Production Ready - Enterprise Grade (v1.0)**
     
-    - ✅ All security features implemented and tested
+    - ✅ All REST API features implemented and tested
     - ✅ Zero-downtime deployment supported
     - ✅ Comprehensive monitoring and metrics
     - ✅ Full compliance with industry standards
     - ✅ Quantum-resistant cryptography available
     - ✅ Hardware security module integration
     - ✅ Advanced policy engine with OPA support
+    - 🔄 GraphQL API planned for v1.1
+    - 🔄 WebSocket API in development
+    - 🔄 gRPC API in development
     
     ## Developer Experience
     
