@@ -2,9 +2,9 @@
 
 [![Crates.io](https://img.shields.io/crates/v/fortress-core.svg)](https://crates.io/crates/fortress-core)
 [![Documentation](https://docs.rs/fortress-core/badge.svg)](https://docs.rs/fortress-core)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![License: Fortress Sustainable Use License 1.0](https://img.shields.io/badge/License-Fortress%20Sustainable%20Use%20License%201.0-blue.svg)](../../LICENSE)
 
-The core library for Fortress secure database system - providing high-performance encryption, key management, and secure storage capabilities.
+🛡️ **Fortress Core** - The heart of Fortress secure database system. Enterprise-grade encryption, key management, and security primitives.
 
 ## Features
 
@@ -105,7 +105,7 @@ Fortress Core is optimized for high-performance encryption:
 
 ## License
 
-This project is licensed under the Apache License 2.0 - see the [LICENSE](../../LICENSE) file for details.
+This project is licensed under the **Fortress Sustainable Use License 1.0** - see the [LICENSE](../../LICENSE) file for details.
 
 ## Documentation
 

@@ -140,7 +140,124 @@ Flexible storage backends for different use cases:
 
 ## Plugin System
 
-### Architecture
+### Data Flow Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Client Application                      │
+└─────────────────────┬───────────────────────────────────────────┘
+                      │ Request (JSON/GraphQL/WebSocket)
+                      ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    API Gateway Layer                           │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐           │
+│  │   REST API  │ │  WebSocket  │ │   GraphQL   │           │
+│  │             │ │             │ │             │           │
+│  │ • CRUD     │ │ • Real-time │ │ • Queries   │           │
+│  │ • Auth      │ │ • Events    │ │ • Mutations │           │
+│  │ • Validation│ │ • Streaming │ │ • Subscriptions│         │
+│  └─────────────┘ └─────────────┘ └─────────────┘           │
+└─────────────────────┬───────────────────────────────────────────┘
+                      │ Validated Request
+                      ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   Security Layer                                │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐           │
+│  │   Auth/Z    │ │ Rate Limit  │ │    Audit    │           │
+│  │             │ │             │ │             │           │
+│  │ • JWT Auth  │ │ • IP Limits │ │ • Events    │           │
+│  │ • RBAC      │ │ • Burst     │ │ • Logs      │           │
+│  │ • MFA       │ │ • Throttle  │ │ • Alerts    │           │
+│  └─────────────┘ └─────────────┘ └─────────────┘           │
+└─────────────────────┬───────────────────────────────────────────┘
+                      │ Authorized Request
+                      ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                 Encryption Layer                                │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐           │
+│  │ Field Level │ │ Key Manager │ │   Rotation  │           │
+│  │             │ │             │ │             │           │
+│  │ • Encrypt   │ │ • Generate  │ │ • Schedule  │           │
+│  │ • Decrypt   │ │ • Store     │ │ • Rotate    │           │
+│  │ • Validate  │ │ • Version   │ │ • Backup    │           │
+│  └─────────────┘ └─────────────┘ └─────────────┘           │
+└─────────────────────┬───────────────────────────────────────────┘
+                      │ Encrypted Data
+                      ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                  Storage Layer                                  │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐           │
+│  │   Memory    │ │    Disk     │ │    Cloud    │           │
+│  │             │ │             │ │             │           │
+│  │ • Cache     │ │ • SSD/HDD   │ │ • S3        │           │
+│  │ • Temp      │ │ • Backup    │ │ • Azure     │           │
+│  │ • Session   │ │ • Archive   │ │ • GCS       │           │
+│  └─────────────┘ └─────────────┘ └─────────────┘           │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Cluster Communication Flow
+
+```
+┌─────────────────┐    Raft Protocol    ┌─────────────────┐
+│   Leader Node   │◄──────────────────►│   Follower 1    │
+│                 │                   │                 │
+│ • AppendEntries │                   │ • Log Replication│
+│ • Heartbeats    │                   │ • Votes         │
+│ • Client Requests│                   │ • Snapshots     │
+└─────────────────┘                   └─────────────────┘
+         │                                     │
+         │                                     │
+         ▼                                     ▼
+┌─────────────────┐    Raft Protocol    ┌─────────────────┐
+│   Follower 2    │◄──────────────────►│   Follower 3    │
+│                 │                   │                 │
+│ • Log Replication│                   │ • Log Replication│
+│ • Votes         │                   │ • Votes         │
+│ • Snapshots     │                   │ • Snapshots     │
+└─────────────────┘                   └─────────────────┘
+```
+
+## Security Architecture Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Security Layers                            │
+├─────────────────────────────────────────────────────────────────┤
+│  Network Security                                             │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐           │
+│  │    TLS 1.3  │ │   IP Allow  │ │  DDoS Prot. │           │
+│  │             │ │    List     │ │             │           │
+│  │ • ECDHE     │ │ • Whitelist │ │ • Rate Limit│           │
+│  │ • AES-256   │ │ • Blacklist │ │ • Challenge │           │
+│  │ • Forward   │ │ • Geo-Fence │ │ • Block     │           │
+│  │   Secrecy   │ │             │ │             │           │
+│  └─────────────┘ └─────────────┘ └─────────────┘           │
+├─────────────────────────────────────────────────────────────────┤
+│  Application Security                                        │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐           │
+│  │   Auth/Z    │ │ Input Valid │ │  Audit Log  │           │
+│  │             │ │             │ │             │           │
+│  │ • JWT       │ │ • Sanitize  │ │ • Events    │           │
+│  │ • RBAC      │ │ • Validate  │ │ • Tamper    │           │
+│  │ • MFA       │ │ • Rate Limit│ │ • Evidence  │           │
+│  └─────────────┘ └─────────────┘ └─────────────┘           │
+├─────────────────────────────────────────────────────────────────┤
+│  Data Security                                               │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐           │
+│  │Encryption at│ │Encryption in│ │   Key Mgmt  │           │
+│  │    Rest     │ │   Transit   │ │             │           │
+│  │             │ │             │ │             │           │
+│  │ • AES-256   │ │ • TLS 1.3   │ │ • Rotation  │           │
+│  │ • Field Lev.│ │ • End-to-End│ │ • HSM       │           │
+│  │ • Backup    │ │ • Perfect   │ │ • Backup    │           │
+│  │             │ │   Forward   │ │             │           │
+│  │             │ │   Secrecy   │ │             │           │
+│  └─────────────┘ └─────────────┘ └─────────────┘           │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Existing Architecture
 - **WebAssembly**: Secure plugin sandboxing
 - **Plugin Marketplace**: Centralized plugin distribution
 - **Hot Loading**: Runtime plugin installation

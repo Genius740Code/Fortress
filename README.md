@@ -74,6 +74,15 @@ See `crates/fortress-core/src/homomorphic_encryption.rs` for detailed warnings a
 
 ### Installation
 
+#### Choose Your Installation Method
+
+| Method | Best For | Time to Start |
+|--------|-----------|---------------|
+| [Pre-built Binaries](#pre-built-binaries-recommended) | Quick start, production | 2-5 minutes |
+| [Package Managers](#package-managers) | Development, CI/CD | 1-3 minutes |
+| [Docker](#docker) | Containers, microservices | 1-2 minutes |
+| [Source Build](#development-setup) | Development, customization | 5-10 minutes |
+
 #### Pre-built Binaries (Recommended)
 
 **Download from GitHub Releases**
@@ -98,14 +107,16 @@ sudo mv fortress /usr/local/bin/
 npm install -g fortress-cli
 
 # Install as dependency in your project
-npm install fortress-cli
-npm install fortress-db
+npm install fortress-cli fortress-db
 ```
 
 **PyPI (Python)**
 ```bash
 # Install from PyPI
 pip install fortress-db
+
+# With development dependencies
+pip install fortress-db[dev]
 ```
 
 **Cargo (Rust)**
@@ -118,6 +129,12 @@ cargo install fortress-server
 git clone https://github.com/fortress-security/fortress.git
 cd fortress
 cargo install --path crates/fortress-cli
+```
+
+**Go**
+```bash
+# Install CLI tool
+go install github.com/fortress-security/fortress/fortress-go/cmd/fortress-cli@latest
 ```
 
 #### Docker
@@ -137,152 +154,137 @@ docker run -p 8080:8080 \
 
 ### Basic Usage
 
-#### Initialize Fortress
+#### Choose Your Language
+
+| Language | Quick Start | Full Guide |
+|----------|-------------|------------|
+| **Rust** | [5-minute Rust start](docs/QUICK_START_GUIDE.md#rust-quick-start) | [Rust Ecosystem Guide](docs/ECOSYSTEM_GUIDES.md#rust-ecosystem) |
+| **Python** | [5-minute Python start](docs/QUICK_START_GUIDE.md#python-quick-start) | [Python Ecosystem Guide](docs/ECOSYSTEM_GUIDES.md#python-ecosystem) |
+| **Node.js** | [5-minute Node.js start](docs/QUICK_START_GUIDE.md#nodejs-quick-start) | [Node.js Ecosystem Guide](docs/ECOSYSTEM_GUIDES.md#nodejsjavascript-ecosystem) |
+| **Go** | [5-minute Go start](docs/QUICK_START_GUIDE.md#go-quick-start) | [Go Ecosystem Guide](docs/ECOSYSTEM_GUIDES.md#go-ecosystem) |
+| **Docker** | [2-minute Docker start](docs/QUICK_START_GUIDE.md#docker-quick-start) | [Installation Guide](docs/INSTALLATION_GUIDE.md#docker-installation) |
+
+#### Quick CLI Example
 
 ```bash
-# Create initial configuration
+# Initialize Fortress
 fortress init
 
 # Start the server
 fortress server start
 
-# Check status
-fortress status
-```
-
-#### Key Management
-
-```bash
-# Generate a new encryption key
+# Create an encryption key
 fortress key create --name my-key --algorithm aes256-gcm
 
-# List all keys
-fortress key list
-
-# Rotate a key
-fortress key rotate --key-id my-key
-```
-
-#### Encryption Operations
-
-```bash
 # Encrypt data
 echo "secret data" | fortress encrypt --key-id my-key > encrypted.dat
 
 # Decrypt data
 fortress decrypt --key-id my-key --input encrypted.dat
-
-# Sign data
-echo "important message" | fortress sign --key-id signing-key > signature.dat
-
-# Verify signature
-fortress verify --key-id signing-key --data "important message" --signature signature.dat
 ```
 
-#### API Usage
+#### Quick API Example
 
-```bash
-# Get authentication token
-TOKEN=$(fortress auth login --username admin --password your-password)
+**Rust:**
+```rust
+use fortress_core::prelude::*;
 
-# List keys via API
-curl -H "Authorization: Bearer $TOKEN" \
-  http://localhost:8080/api/v1/keys
-
-# Encrypt via API
-curl -X POST http://localhost:8080/api/v1/encrypt \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"key_id": "my-key", "plaintext": "secret data"}'
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let fortress = Fortress::builder().build().await?;
+    let db = fortress.create_database("myapp").await?;
+    
+    let user = db.insert("users", &serde_json::json!({
+        "name": "Alice Johnson",
+        "email": "alice@example.com",
+        "ssn": "123-45-6789"  // Automatically encrypted
+    })).await?;
+    
+    println!("User created: {}", user["name"]);
+    Ok(())
+}
 ```
 
-# Install with development features
-pip install fortress-db[dev]
-```
-
-**Cargo (Rust)**
-```bash
-# Add fortress-core as dependency
-cargo add fortress-core
-
-# Install from crates.io (when published)
-cargo install fortress-core
-cargo install fortress-cli
-
-# Install from git repository
-cargo install --git https://github.com/Genius740Code/Fortress fortress-core
-```
-
-**Go**
-```bash
-# Add fortress-go as dependency
-go get github.com/Genius740Code/Fortress/fortress-go
-
-# Install from git repository
-go install github.com/Genius740Code/Fortress/fortress-go@latest
-```
-
-**Standalone Binaries**
-```bash
-# Download from GitHub Releases
-curl -L "https://github.com/Genius740Code/Fortress/releases/latest/download/fortress-cli-$(uname -s)-$(uname -m).tar.gz" | tar -xz
-sudo mv fortress /usr/local/bin/
-```
-
-#### Docker Installation
-
-```bash
-# Pull the latest image
-docker pull fortressdb/fortress:latest
-
-# Run with default settings
-docker run -p 8080:8080 -v fortress_data:/var/lib/fortress fortressdb/fortress
-
-# Run with custom configuration
-docker run -p 8080:8080 \
-  -v $(pwd)/config.toml:/etc/fortress/config.toml \
-  -v fortress_data:/var/lib/fortress \
-  fortressdb/fortress --config /etc/fortress/config.toml
-```
-
-### Basic Usage
-
-```bash
-# Create a new database
-fortress create --name myapp --template enterprise
-
-# Start the server
-fortress start --port 8080
-
-# Check status
-fortress status --detailed
-```
-
-### API Quick Start
-
+**Python:**
 ```python
-from fortress_db import FortressClient
+from fortress import Fortress
+import asyncio
 
-client = FortressClient('http://localhost:8080')
+async def main():
+    fortress = Fortress("http://localhost:8080")
+    db = await fortress.create_database("myapp")
+    
+    user = await db.insert("users", {
+        "name": "Alice Johnson",
+        "email": "alice@example.com",
+        "ssn": "123-45-6789"  # Automatically encrypted
+    })
+    
+    print(f"User created: {user['name']}")
 
-# Create database
-db = client.create_database('myapp_db', algorithm='aegis256')
+asyncio.run(main())
+```
 
-# Create table with encrypted fields
-table = client.create_table('myapp_db', 'users', [
-    {'name': 'id', 'type': 'uuid', 'primary_key': True},
-    {'name': 'name', 'type': 'text'},
-    {'name': 'email', 'type': 'text', 'unique': True},
-    {'name': 'password', 'type': 'encrypted', 'sensitivity': 'high'}
-])
+**Node.js:**
+```javascript
+const { Fortress } = require('fortress-db');
 
-# Insert data (automatically encrypted)
-user = client.insert_data('myapp_db', 'users', {
-    'id': '550e8400-e29b-41d4-a716-446655440000',
-    'name': 'Alice Johnson',
-    'email': 'alice@example.com',
-    'password': 'secure-password'
-})
+async function main() {
+    const fortress = new Fortress({
+        serverUrl: 'http://localhost:8080'
+    });
+    
+    const db = await fortress.createDatabase('myapp');
+    const user = await db.insert('users', {
+        name: 'Alice Johnson',
+        email: 'alice@example.com',
+        ssn: '123-45-6789'  // Automatically encrypted
+    });
+    
+    console.log(`User created: ${user.name}`);
+}
+
+main().catch(console.error);
+```
+
+**Go:**
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+    
+    "github.com/fortress-security/fortress/fortress-go"
+)
+
+func main() {
+    client, err := fortress.NewClient(&fortress.Config{
+        ServerURL: "http://localhost:8080",
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    ctx := context.Background()
+    db, err := client.CreateDatabase(ctx, "myapp")
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    user := map[string]interface{}{
+        "name":  "Alice Johnson",
+        "email": "alice@example.com",
+        "ssn":   "123-45-6789", // Automatically encrypted
+    }
+
+    result, err := db.Insert(ctx, "users", user)
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("User created: %v\n", result["name"])
+}
 ```
 
 ## Performance
@@ -339,11 +341,15 @@ curl http://localhost:8080/metrics/performance
 ## Documentation
 
 ### **Start Here**
+- **[Quick Start Guide](docs/QUICK_START_GUIDE.md)** - Get started in 5 minutes with your preferred language
+- **[Installation Guide](docs/INSTALLATION_GUIDE.md)** - Comprehensive installation for all platforms
+- **[Ecosystem Guides](docs/ECOSYSTEM_GUIDES.md)** - Language-specific guides and examples
 - **[Documentation Index](docs/DOCUMENTATION_INDEX.md)** - Complete navigation and quick start paths
-- **[Production Readiness Matrix](docs/PRODUCTION_READINESS_MATRIX.md)** - **Critical**: Current implementation status
+- **[FAQ](docs/FAQ.md)** - Frequently asked questions and troubleshooting
 
 ### Getting Started
-- [Installation Guide](docs/DEPLOYMENT_GUIDE.md) - Complete installation instructions
+- [Installation Guide](docs/INSTALLATION_GUIDE.md) - Complete installation instructions
+- [Quick Start Guide](docs/QUICK_START_GUIDE.md) - Language-specific quick starts
 - [API Reference](docs/API_REFERENCE.md) - Complete REST API documentation
 - [Architecture Guide](docs/ARCHITECTURE.md) - System architecture and design
 

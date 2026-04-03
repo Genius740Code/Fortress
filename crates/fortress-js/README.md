@@ -1,8 +1,9 @@
 # Fortress JavaScript/TypeScript SDK
 
-[![npm version](https://badge.fury.io/js/fortress.svg)](https://badge.fury.io/js/fortress)
+[![npm version](https://badge.fury.io/js/fortress-db.svg)](https://badge.fury.io/js/fortress-db)
+[![License: Fortress Sustainable Use License 1.0](https://img.shields.io/badge/License-Fortress%20Sustainable%20Use%20License%201.0-blue.svg)](../../LICENSE)
 
-A modern JavaScript/TypeScript interface to the Fortress secure database system, providing enterprise-grade encryption, key management, and multi-tenant isolation.
+🛡️ **Fortress** - Turnkey Simplicity + Enterprise Security. JavaScript/TypeScript SDK for Fortress secure database system with multi-layer encryption.
 
 ## Features
 
@@ -18,10 +19,34 @@ A modern JavaScript/TypeScript interface to the Fortress secure database system,
 
 ## Installation
 
-### From NPM (Recommended)
+### NPM (Recommended)
 
 ```bash
-npm install fortress
+# Install the SDK
+npm install fortress-db
+
+# Install CLI tool globally
+npm install -g fortress-cli
+```
+
+### Yarn
+
+```bash
+# Install the SDK
+yarn add fortress-db
+
+# Install CLI tool globally
+yarn global add fortress-cli
+```
+
+### PNPM
+
+```bash
+# Install the SDK
+pnpm add fortress-db
+
+# Install CLI tool globally
+pnpm add -g fortress-cli
 ```
 
 ### From Source
@@ -40,25 +65,45 @@ npm run build
 
 ## Quick Start
 
+### Basic Usage
+
 ```typescript
-import { Fortress, EncryptionAlgorithm } from 'fortress';
+import { Fortress } from 'fortress-db';
 
-// Initialize Fortress
-const fortress = new Fortress();
+// Initialize Fortress client
+const fortress = new Fortress({
+  serverUrl: 'http://localhost:8080',
+  apiKey: process.env.FORTRESS_API_KEY
+});
 
-// Create encryption algorithm
-const algorithm = fortress.createAlgorithm('aegis256');
+async function main() {
+  try {
+    // Create a database
+    const db = await fortress.createDatabase('myapp');
+    
+    // Insert encrypted data
+    const user = await db.insert('users', {
+      name: 'Alice Johnson',
+      email: 'alice@example.com',
+      ssn: '123-45-6789', // Automatically encrypted
+      creditCard: '4111-1111-1111-1111' // Automatically encrypted
+    });
+    
+    console.log('User created:', user.name);
+    
+    // Query data (decrypted automatically)
+    const users = await db.find('users', { 
+      where: { email: 'alice@example.com' } 
+    });
+    
+    console.log('Found users:', users.length);
+    
+  } catch (error) {
+    console.error('Error:', error);
+  }
+}
 
-// Generate key
-const key = fortress.generateKey('aegis256');
-
-// Encrypt data
-const plaintext = new TextEncoder().encode('Hello, Fortress!');
-const ciphertext = await algorithm.encrypt(plaintext, key);
-
-// Decrypt data
-const decrypted = await algorithm.decrypt(ciphertext, key);
-console.log(new TextDecoder().decode(decrypted)); // "Hello, Fortress!"
+main();
 ```
 
 ## Configuration
@@ -259,7 +304,7 @@ Fortress is designed with security as the primary concern:
 
 ## License
 
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **Fortress Sustainable Use License 1.0** - see the [LICENSE](../../LICENSE) file for details.
 
 ## Support
 

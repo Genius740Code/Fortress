@@ -37,7 +37,9 @@ This index provides organized access to all Fortress documentation. Choose your 
 
 ## 📚 Complete Documentation Library
 
-### 🏗️ **Core Documentation**
+### 📚 **Complete Documentation Library**
+
+#### **🏗️ Core Documentation**
 
 | Document | Purpose | Audience | Status |
 |----------|---------|----------|--------|
@@ -45,6 +47,11 @@ This index provides organized access to all Fortress documentation. Choose your 
 | [Architecture.md](ARCHITECTURE.md) | System architecture and design | Technical | ✅ Current |
 | [API Reference](API_REFERENCE.md) | Complete API documentation | Developers | ✅ Current |
 | [Production Readiness Matrix](PRODUCTION_READINESS_MATRIX.md) | Honest implementation status | Evaluators | ✅ Current |
+| [Advanced Topics Guide](ADVANCED_TOPICS_GUIDE.md) | Advanced configuration and optimization | Experts | ✅ New |
+| [Deployment Case Studies](DEPLOYMENT_CASE_STUDIES.md) | Real-world deployment examples | All | ✅ New |
+| [Third-Party Integrations](THIRD_PARTY_INTEGRATIONS.md) | Integration with external services | Developers | ✅ New |
+| [Performance Benchmarking](PERFORMANCE_BENCHMARKING.md) | Performance testing and optimization | Operators | ✅ New |
+| [Cost Optimization Guide](COST_OPTIMIZATION_GUIDE.md) | Cost reduction strategies | Management | ✅ New |
 
 ### 🔒 **Security & Compliance**
 
@@ -261,39 +268,6 @@ Before proceeding:
 - Configuration problems
 - Performance degradation
 - Integration difficulties
-
----
-
-## � **Search Guide**
-
-### Looking for something specific?
-
-#### **Installation & Setup**
-- "How to install" → [Installation Guide](README.md#installation)
-- "Docker setup" → [Docker Installation](README.md#docker-installation)
-- "Configuration" → [Configuration](README.md#configuration)
-
-#### **API Usage**
-- "REST API" → [API Reference](API_REFERENCE.md#rest-api)
-- "GraphQL" → [API Reference](API_REFERENCE.md#graphql-api)
-- "Authentication" → [API Reference](API_REFERENCE.md#authentication-methods)
-
-#### **Security**
-- "Encryption" → [Security Guide](SECURITY.md#encryption)
-- "Key management" → [Key Rotation Guide](KEY_ROTATION.md)
-- "Compliance" → [Security Guide](SECURITY.md#compliance-features)
-
-#### **Troubleshooting**
-- "Service down" → [Troubleshooting Guide](TROUBLESHOOTING_GUIDE.md#service-completely-down)
-- "Performance issues" → [Troubleshooting Guide](TROUBLESHOOTING_GUIDE.md#performance-problems)
-- "Database errors" → [Troubleshooting Guide](TROUBLESHOOTING_GUIDE.md#database-connection-issues)
-- "Migration problems" → [Migration Guide](MIGRATION_GUIDE.md#common-issues)
-- "Performance degradation" → [Performance Tuning Guide](PERFORMANCE_TUNING_GUIDE.md#troubleshooting-performance-issues)
-
-#### **Deployment**
-- "Kubernetes" → [Kubernetes Guide](KUBERNETES_DEPLOYMENT_GUIDE.md)
-- "Production deployment" → [Production Readiness](PRODUCTION_READINESS_MATRIX.md)
-- "Migration" → [Migration Guide](MIGRATION_GUIDE.md)
 
 ---
 

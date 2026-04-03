@@ -1,6 +1,9 @@
 # Fortress Server
 
-A high-performance REST API server for the Fortress secure database system that provides automatic encryption and decryption of data with enterprise-grade security features.
+[![Crates.io](https://img.shields.io/crates/v/fortress-server.svg)](https://crates.io/crates/fortress-server)
+[![License: Fortress Sustainable Use License 1.0](https://img.shields.io/badge/License-Fortress%20Sustainable%20Use%20License%201.0-blue.svg)](../../LICENSE)
+
+🛡️ **Fortress Server** - High-performance secure database server with enterprise-grade encryption, clustering, and REST/GraphQL APIs.
 
 ## Features
 
@@ -352,7 +355,7 @@ For production, ensure you:
 
 ## License
 
-This project is licensed under the Apache License 2.0 - see the [LICENSE](../../LICENSE) file for details.
+This project is licensed under the **Fortress Sustainable Use License 1.0** - see the [LICENSE](../../LICENSE) file for details.
 
 ## Contributing
 
