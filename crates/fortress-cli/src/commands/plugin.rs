@@ -146,17 +146,17 @@ pub async fn execute_plugin_command(action: PluginAction) -> Result<()> {
 
 /// Handle plugin search
 async fn handle_search(query: String, limit: usize) -> Result<()> {
-    println!("🔍 Searching for plugins: '{}'", query);
+    println!("Searching for plugins: '{}'", query);
     
     let marketplace = create_marketplace()?;
     let results = marketplace.search(&query, Some(limit)).await?;
     
     if results.is_empty() {
-        println!("❌ No plugins found matching '{}'", query);
+        println!("✗ No plugins found matching '{}'", query);
         return Ok(());
     }
     
-    println!("✅ Found {} plugins:", results.len());
+    println!("✓ Found {} plugins:", results.len());
     println!();
     
     for (i, plugin) in results.iter().enumerate() {
@@ -164,7 +164,7 @@ async fn handle_search(query: String, limit: usize) -> Result<()> {
         println!();
     }
     
-    println!("💡 Use 'fortress plugin install <plugin-id>' to install a plugin");
+    println!("Use 'fortress plugin install <plugin-id>' to install a plugin");
     Ok(())
 }
 
@@ -175,7 +175,7 @@ async fn handle_install(
     repo: Option<String>,
     yes: bool
 ) -> Result<()> {
-    println!("📦 Installing plugin: '{}'", plugin_id);
+    println!("Installing plugin: '{}'", plugin_id);
     
     let marketplace = create_marketplace_with_repo(repo)?;
     
@@ -189,7 +189,7 @@ async fn handle_install(
     // Confirm installation
     if !yes {
         if !confirm_installation(&plugin_info)? {
-            println!("❌ Installation cancelled");
+            println!("✗ Installation cancelled");
             return Ok(());
         }
     }
@@ -214,13 +214,13 @@ async fn handle_install(
     marketplace.install(&plugin_id, config_map).await
         .map_err(|e| color_eyre::eyre::eyre!("Installation failed: {}", e))?;
     
-    println!("🎉 Plugin '{}' installed successfully!", plugin_id);
+    println!("✓ Plugin '{}' installed successfully", plugin_id);
     Ok(())
 }
 
 /// Handle plugin uninstallation
 async fn handle_uninstall(plugin_id: String, yes: bool) -> Result<()> {
-    println!("🗑️  Uninstalling plugin: '{}'", plugin_id);
+    println!("Uninstalling plugin: '{}'", plugin_id);
     
     let marketplace = create_marketplace()?;
     
@@ -229,7 +229,7 @@ async fn handle_uninstall(plugin_id: String, yes: bool) -> Result<()> {
     let plugin = installed.iter().find(|p| p.metadata.id == plugin_id);
     
     if plugin.is_none() {
-        println!("❌ Plugin '{}' is not installed", plugin_id);
+        println!("✗ Plugin '{}' is not installed", plugin_id);
         return Ok(());
     }
     
@@ -241,7 +241,7 @@ async fn handle_uninstall(plugin_id: String, yes: bool) -> Result<()> {
     // Confirm uninstallation
     if !yes {
         if !confirm_uninstallation(plugin)? {
-            println!("❌ Uninstallation cancelled");
+            println!("✗ Uninstallation cancelled");
             return Ok(());
         }
     }
@@ -250,19 +250,19 @@ async fn handle_uninstall(plugin_id: String, yes: bool) -> Result<()> {
     marketplace.uninstall(&plugin_id).await
         .map_err(|e| color_eyre::eyre::eyre!("Uninstallation failed: {}", e))?;
     
-    println!("🎉 Plugin '{}' uninstalled successfully!", plugin_id);
+    println!("✓ Plugin '{}' uninstalled successfully", plugin_id);
     Ok(())
 }
 
 /// Handle listing installed plugins
 async fn handle_list(detailed: bool, category: Option<String>) -> Result<()> {
-    println!("📋 Installed plugins:");
+    println!("Installed plugins:");
     
     let marketplace = create_marketplace()?;
     let installed = marketplace.list_installed().await?;
     
     if installed.is_empty() {
-        println!("❌ No plugins installed");
+        println!("✗ No plugins installed");
         return Ok(());
     }
     
@@ -276,23 +276,23 @@ async fn handle_list(detailed: bool, category: Option<String>) -> Result<()> {
     };
     
     if filtered.is_empty() {
-        println!("❌ No plugins found in category '{}'", category.as_ref().unwrap_or(&"all".to_string()));
+        println!("✗ No plugins found in category '{}'", category.as_ref().unwrap_or(&"all".to_string()));
         return Ok(());
     }
     
-    println!("✅ {} plugins installed:", filtered.len());
+    println!("✓ {} plugins installed:", filtered.len());
     println!();
     
     for (i, plugin) in filtered.iter().enumerate() {
         if detailed {
             print_plugin_details(&plugin.metadata);
             if let Some(config) = &plugin.config {
-                println!("📝 Configuration:");
+                println!("Configuration:");
                 for (key, value) in config {
                     println!("   {}: {}", key, value);
                 }
             }
-            println!("📅 Installed: {}", plugin.installed_at.format("%Y-%m-%d %H:%M:%S UTC"));
+            println!("Installed: {}", plugin.installed_at.format("%Y-%m-%d %H:%M:%S UTC"));
         } else {
             print_plugin_summary(i + 1, &plugin.metadata);
         }
@@ -304,7 +304,7 @@ async fn handle_list(detailed: bool, category: Option<String>) -> Result<()> {
 
 /// Handle showing plugin information
 async fn handle_show(plugin_id: String) -> Result<()> {
-    println!("📖 Plugin information: '{}'", plugin_id);
+    println!("Plugin information: '{}'", plugin_id);
     
     let marketplace = create_marketplace()?;
     
@@ -312,10 +312,10 @@ async fn handle_show(plugin_id: String) -> Result<()> {
     let installed = marketplace.list_installed().await?;
     if let Some(plugin) = installed.iter().find(|p| p.metadata.id == plugin_id) {
         print_plugin_details(&plugin.metadata);
-        println!("📅 Installed: {}", plugin.installed_at.format("%Y-%m-%d %H:%M:%S UTC"));
+        println!("Installed: {}", plugin.installed_at.format("%Y-%m-%d %H:%M:%S UTC"));
         
         if let Some(config) = &plugin.config {
-            println!("📝 Configuration:");
+            println!("Configuration:");
             for (key, value) in config {
                 println!("   {}: {}", key, value);
             }
@@ -328,7 +328,7 @@ async fn handle_show(plugin_id: String) -> Result<()> {
         .map_err(|e| color_eyre::eyre::eyre!("Plugin not found: {}", e))?;
     
     print_plugin_details(&plugin);
-    println!("❌ Not installed");
+    println!("✗ Not installed");
     
     Ok(())
 }
@@ -339,16 +339,16 @@ async fn handle_update(plugin_id: Option<String>, _yes: bool) -> Result<()> {
     
     match plugin_id {
         Some(id) => {
-            println!("🔄 Updating plugin: '{}'", id);
+            println!("Updating plugin: '{}'", id);
             marketplace.update(&id).await
                 .map_err(|e| color_eyre::eyre::eyre!("Update failed: {}", e))?;
         }
         None => {
-            println!("🔄 Checking for updates to all plugins...");
+            println!("Checking for updates to all plugins...");
             let installed = marketplace.list_installed().await?;
             
             if installed.is_empty() {
-                println!("❌ No plugins installed");
+                println!("✗ No plugins installed");
                 return Ok(());
             }
             
@@ -361,23 +361,23 @@ async fn handle_update(plugin_id: Option<String>, _yes: bool) -> Result<()> {
         }
     }
     
-    println!("🎉 Update completed!");
+    println!("✓ Update completed");
     Ok(())
 }
 
 /// Handle listing popular plugins
 async fn handle_popular(limit: usize) -> Result<()> {
-    println!("🌟 Popular plugins:");
+    println!("Popular plugins:");
     
     let marketplace = create_marketplace()?;
     let plugins = marketplace.list_popular(Some(limit)).await?;
     
     if plugins.is_empty() {
-        println!("❌ No popular plugins found");
+        println!("✗ No popular plugins found");
         return Ok(());
     }
     
-    println!("✅ Top {} popular plugins:", plugins.len());
+    println!("✓ Top {} popular plugins:", plugins.len());
     println!();
     
     for (i, plugin) in plugins.iter().enumerate() {
@@ -390,17 +390,17 @@ async fn handle_popular(limit: usize) -> Result<()> {
 
 /// Handle listing plugins by category
 async fn handle_category(category: String, limit: usize) -> Result<()> {
-    println!("📂 Plugins in category: '{}'", category);
+    println!("Plugins in category: '{}'", category);
     
     let marketplace = create_marketplace()?;
     let plugins = marketplace.list_by_category(&category, Some(limit)).await?;
     
     if plugins.is_empty() {
-        println!("❌ No plugins found in category '{}'", category);
+        println!("✗ No plugins found in category '{}'", category);
         return Ok(());
     }
     
-    println!("✅ Found {} plugins in category '{}':", plugins.len(), category);
+    println!("✓ Found {} plugins in category '{}':", plugins.len(), category);
     println!();
     
     for (i, plugin) in plugins.iter().enumerate() {
@@ -413,7 +413,7 @@ async fn handle_category(category: String, limit: usize) -> Result<()> {
 
 /// Handle plugin validation
 async fn handle_validate(plugin_id: Option<String>) -> Result<()> {
-    println!("🔍 Validating plugins...");
+    println!("Validating plugins...");
     
     let marketplace = create_marketplace()?;
     
@@ -435,7 +435,7 @@ async fn handle_validate(plugin_id: Option<String>) -> Result<()> {
                         validate_repository_plugin(&plugin_info, &marketplace).await?;
                     }
                     Err(e) => {
-                        println!("❌ Plugin '{}' not found: {}", id, e);
+                        println!("✗ Plugin '{}' not found: {}", id, e);
                         return Err(color_eyre::eyre::eyre!("Plugin '{}' not found: {}", id, e));
                     }
                 }
@@ -445,7 +445,7 @@ async fn handle_validate(plugin_id: Option<String>) -> Result<()> {
             let installed = marketplace.list_installed().await?;
             
             if installed.is_empty() {
-                println!("❌ No plugins installed");
+                println!("✗ No plugins installed");
                 return Ok(());
             }
             
@@ -463,20 +463,20 @@ async fn handle_validate(plugin_id: Option<String>) -> Result<()> {
                         }
                     }
                     Err(e) => {
-                        println!("❌ Failed to validate '{}': {}", plugin.metadata.id, e);
+                        println!("✗ Failed to validate '{}': {}", plugin.metadata.id, e);
                         failed_validations += 1;
                     }
                 }
             }
             
             println!();
-            println!("📊 Validation Summary:");
+            println!("Validation Summary:");
             println!("  Total plugins: {}", style(installed.len()).bold());
-            println!("  ✅ Valid: {}", style(installed.len() - failed_validations).green().bold());
-            println!("  ❌ Invalid: {}", style(failed_validations).red().bold());
+            println!("  ✓ Valid: {}", style(installed.len() - failed_validations).green().bold());
+            println!("  ✗ Invalid: {}", style(failed_validations).red().bold());
             
             if failed_validations > 0 {
-                println!("\n🔍 Failed Validations:");
+                println!("\nFailed Validations:");
                 for (id, result) in validation_results.iter().filter(|(_, r)| !r.is_valid) {
                     println!("  - {}: {}", id, style(&result.error_message).red());
                 }
@@ -485,7 +485,7 @@ async fn handle_validate(plugin_id: Option<String>) -> Result<()> {
         }
     }
     
-    println!("🎉 Validation completed!");
+    println!("✓ Validation completed");
     Ok(())
 }
 
@@ -512,7 +512,7 @@ async fn validate_single_plugin(
 ) -> Result<ValidationResult> {
     let mut result = ValidationResult::default();
     
-    println!("🔍 Validating: {} v{}", plugin.metadata.id, plugin.metadata.version);
+    println!("Validating: {} v{}", plugin.metadata.id, plugin.metadata.version);
     
     // 1. Check plugin file integrity
     if let Err(e) = validate_plugin_integrity(plugin).await {
@@ -560,9 +560,9 @@ async fn validate_single_plugin(
     let security_warnings = validate_security_compliance(plugin).await?;
     result.warnings.extend(security_warnings);
     
-    println!("✅ Plugin '{}' is valid", plugin.metadata.id);
+    println!("✓ Plugin '{}' is valid", plugin.metadata.id);
     if !result.warnings.is_empty() {
-        println!("⚠️  Warnings:");
+        println!("⚠ Warnings:");
         for warning in &result.warnings {
             println!("  - {}", warning);
         }
@@ -577,7 +577,7 @@ async fn validate_repository_plugin(
 ) -> Result<ValidationResult> {
     let mut result = ValidationResult::default();
     
-    println!("🔍 Validating repository plugin: {} v{}", plugin.id, plugin.version);
+    println!("Validating repository plugin: {} v{}", plugin.id, plugin.version);
     
     // 1. Validate plugin metadata
     if let Err(e) = validate_plugin_metadata(plugin).await {
@@ -609,9 +609,9 @@ async fn validate_repository_plugin(
         result.warnings.push("Plugin has few downloads (< 100)".to_string());
     }
     
-    println!("✅ Repository plugin '{}' is valid", plugin.id);
+    println!("✓ Repository plugin '{}' is valid", plugin.id);
     if !result.warnings.is_empty() {
-        println!("⚠️  Warnings:");
+        println!("⚠ Warnings:");
         for warning in &result.warnings {
             println!("  - {}", warning);
         }
@@ -927,30 +927,30 @@ fn get_plugins_directory() -> Result<PathBuf> {
 /// Print plugin summary
 fn print_plugin_summary(index: usize, plugin: &PluginPackage) {
     println!("{}. {} v{}", index, plugin.name, plugin.version);
-    println!("   📝 {}", plugin.description);
-    println!("   🏷️  Tags: {}", plugin.tags.join(", "));
-    println!("   ⭐ Rating: {:.1}/5 ({} downloads)", plugin.rating, plugin.download_count);
-    println!("   🔧 Capabilities: {}", format_capabilities(&plugin.capabilities));
+    println!("   {}", plugin.description);
+    println!("   Tags: {}", plugin.tags.join(", "));
+    println!("   Rating: {:.1}/5 ({} downloads)", plugin.rating, plugin.download_count);
+    println!("   Capabilities: {}", format_capabilities(&plugin.capabilities));
 }
 
 /// Print detailed plugin information
 fn print_plugin_details(plugin: &PluginPackage) {
-    println!("📦 {} v{}", plugin.name, plugin.version);
-    println!("🆔 ID: {}", plugin.id);
-    println!("👤 Author: {}", plugin.author);
-    println!("📝 Description: {}", plugin.description);
-    println!("🏷️  Tags: {}", plugin.tags.join(", "));
-    println!("⭐ Rating: {:.1}/5 ({} downloads)", plugin.rating, plugin.download_count);
-    println!("🔧 Capabilities: {}", format_capabilities(&plugin.capabilities));
-    println!("📦 Size: {} bytes", plugin.size_bytes);
-    println!("📅 Last updated: {}", plugin.last_updated.format("%Y-%m-%d %H:%M:%S UTC"));
+    println!("{} v{}", plugin.name, plugin.version);
+    println!("ID: {}", plugin.id);
+    println!("Author: {}", plugin.author);
+    println!("Description: {}", plugin.description);
+    println!("Tags: {}", plugin.tags.join(", "));
+    println!("Rating: {:.1}/5 ({} downloads)", plugin.rating, plugin.download_count);
+    println!("Capabilities: {}", format_capabilities(&plugin.capabilities));
+    println!("Size: {} bytes", plugin.size_bytes);
+    println!("Last updated: {}", plugin.last_updated.format("%Y-%m-%d %H:%M:%S UTC"));
     
     if !plugin.dependencies.is_empty() {
-        println!("🔗 Dependencies: {}", plugin.dependencies.join(", "));
+        println!("Dependencies: {}", plugin.dependencies.join(", "));
     }
     
     if let Some(_schema) = &plugin.config_schema {
-        println!("⚙️  Configuration schema available");
+        println!("Configuration schema available");
     }
 }
 
@@ -975,9 +975,9 @@ fn format_capabilities(capabilities: &[fortress_core::plugin::PluginCapability])
 
 /// Confirm plugin installation
 fn confirm_installation(plugin: &PluginPackage) -> Result<bool> {
-    println!("\n⚠️  This will install '{}' v{} ({})", 
+    println!("\nWarning: This will install '{}' v{} ({})", 
         plugin.name, plugin.version, plugin.size_bytes);
-    println!("📝 Description: {}", plugin.description);
+    println!("Description: {}", plugin.description);
     
     println!("\nDo you want to continue? [y/N]");
     let mut input = String::new();
@@ -988,9 +988,9 @@ fn confirm_installation(plugin: &PluginPackage) -> Result<bool> {
 
 /// Confirm plugin uninstallation
 fn confirm_uninstallation(plugin: &InstalledPlugin) -> Result<bool> {
-    println!("\n⚠️  This will uninstall '{}' v{}", 
+    println!("\nWarning: This will uninstall '{}' v{}", 
         plugin.metadata.name, plugin.metadata.version);
-    println!("📅 Installed: {}", plugin.installed_at.format("%Y-%m-%d %H:%M:%S UTC"));
+    println!("Installed: {}", plugin.installed_at.format("%Y-%m-%d %H:%M:%S UTC"));
     
     println!("\nDo you want to continue? [y/N]");
     let mut input = String::new();

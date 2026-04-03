@@ -693,7 +693,7 @@ impl RealTimeDashboard {
         </div>
         
         <div class="widget">
-            <div class="widget-title">📊 Recent Alerts</div>
+            <div class="widget-title">Recent Alerts</div>
             <div id="alerts-container">
                 <p style="color: #666; font-style: italic;">No recent alerts</p>
             </div>

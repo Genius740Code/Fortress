@@ -117,7 +117,7 @@ async fn create_tenant(
     max_storage: Option<u64>,
     max_connections: Option<u32>,
 ) -> Result<()> {
-    println!("🏢 Creating new tenant...");
+    println!("Creating new tenant...");
     
     let resource_limits = if max_databases.is_some() || max_storage.is_some() || max_connections.is_some() {
         Some(TenantResourceLimits {
@@ -140,22 +140,22 @@ async fn create_tenant(
     
     match manager.create_tenant(request).await {
         Ok(tenant) => {
-            println!("✅ Tenant created successfully!");
-            println!("📋 Tenant ID: {}", tenant.id);
-            println!("📝 Name: {}", tenant.name);
+            println!("✓ Tenant created successfully");
+            println!("Tenant ID: {}", tenant.id);
+            println!("Name: {}", tenant.name);
             if let Some(desc) = tenant.description {
-                println!("📄 Description: {}", desc);
+                println!("Description: {}", desc);
             }
             if let Some(limits) = tenant.resource_limits.max_databases {
-                println!("🗄️  Max databases: {}", limits);
+                println!("Max databases: {}", limits);
             }
             if let Some(storage) = tenant.resource_limits.max_storage_size {
-                println!("💾 Max storage: {} bytes", storage);
+                println!("Max storage: {} bytes", storage);
             }
             if let Some(connections) = tenant.resource_limits.max_connections {
-                println!("🔗 Max connections: {}", connections);
+                println!("Max connections: {}", connections);
             }
-            println!("📅 Created: {}", tenant.created_at.format("%Y-%m-%d %H:%M:%S UTC"));
+            println!("Created: {}", tenant.created_at.format("%Y-%m-%d %H:%M:%S UTC"));
         }
         Err(e) => {
             return Err(color_eyre::eyre::eyre!("Failed to create tenant: {}", e));
@@ -172,34 +172,34 @@ async fn list_tenants(
     _status: Option<String>,
     _limit: Option<usize>,
 ) -> Result<()> {
-    println!("🏢 Fortress Tenants");
+    println!("Fortress Tenants");
     println!("==================");
     
     match manager.list_tenants().await {
         Ok(tenants) => {
             if tenants.is_empty() {
-                println!("📭 No tenants found.");
+                println!("No tenants found");
                 return Ok(());
             }
             
-            println!("📊 Total tenants: {}\n", tenants.len());
+            println!("Total tenants: {}\n", tenants.len());
             
             for tenant in tenants {
-                println!("🏢 {}", tenant.name);
-                println!("   📋 ID: {}", tenant.id);
+                println!("{}", tenant.name);
+                println!("   ID: {}", tenant.id);
                 if let Some(desc) = tenant.description {
-                    println!("   📄 Description: {}", desc);
+                    println!("   Description: {}", desc);
                 }
-                println!("   ✅ Status: {}", if tenant.active { "Active" } else { "Inactive" });
-                println!("   📅 Created: {}", tenant.created_at.format("%Y-%m-%d %H:%M:%S UTC"));
+                println!("   Status: {}", if tenant.active { "Active" } else { "Inactive" });
+                println!("   Created: {}", tenant.created_at.format("%Y-%m-%d %H:%M:%S UTC"));
                 
                 if detailed {
-                    println!("   📊 Resource Limits:");
+                    println!("   Resource Limits:");
                     if let Some(max_dbs) = tenant.resource_limits.max_databases {
-                        println!("     🗄️  Max databases: {}", max_dbs);
+                        println!("     Max databases: {}", max_dbs);
                     }
                     if let Some(max_storage) = tenant.resource_limits.max_storage_size {
-                        println!("     💾 Max storage: {} bytes", max_storage);
+                        println!("     Max storage: {} bytes", max_storage);
                     }
                     if let Some(max_conns) = tenant.resource_limits.max_connections {
                         println!("     🔗 Max connections: {}", max_conns);
@@ -225,41 +225,41 @@ async fn show_tenant(manager: &InMemoryTenantManager, tenant_id_str: &str) -> Re
         }
     };
     
-    println!("🏢 Tenant Details");
+    println!("Tenant Details");
     println!("=================");
     
     match manager.get_tenant(&tenant_id).await {
         Ok(Some(tenant)) => {
-            println!("📋 ID: {}", tenant.id);
-            println!("📝 Name: {}", tenant.name);
+            println!("ID: {}", tenant.id);
+            println!("Name: {}", tenant.name);
             if let Some(desc) = tenant.description {
-                println!("📄 Description: {}", desc);
+                println!("Description: {}", desc);
             }
-            println!("✅ Status: {}", if tenant.active { "Active" } else { "Inactive" });
+            println!("✓ Status: {}", if tenant.active { "Active" } else { "Inactive" });
             
-            println!("\n📊 Resource Limits:");
+            println!("\nResource Limits:");
             if let Some(max_dbs) = tenant.resource_limits.max_databases {
-                println!("   🗄️  Max databases: {}", max_dbs);
+                println!("   Max databases: {}", max_dbs);
             }
             if let Some(max_storage) = tenant.resource_limits.max_storage_size {
-                println!("   💾 Max storage: {} bytes", max_storage);
+                println!("   Max storage: {} bytes", max_storage);
             }
             if let Some(max_conns) = tenant.resource_limits.max_connections {
-                println!("   🔗 Max connections: {}", max_conns);
+                println!("   Max connections: {}", max_conns);
             }
             if let Some(cpu_quota) = tenant.resource_limits.cpu_quota {
-                println!("   🖥️  CPU quota: {}%", cpu_quota);
+                println!("   CPU quota: {}%", cpu_quota);
             }
             if let Some(mem_quota) = tenant.resource_limits.memory_quota {
-                println!("   🧠 Memory quota: {}%", mem_quota);
+                println!("   Memory quota: {}%", mem_quota);
             }
             
-            println!("\n📅 Timestamps:");
-            println!("   🕐 Created: {}", tenant.created_at.format("%Y-%m-%d %H:%M:%S UTC"));
-            println!("   🔄 Modified: {}", tenant.modified_at.format("%Y-%m-%d %H:%M:%S UTC"));
+            println!("\nTimestamps:");
+            println!("   Created: {}", tenant.created_at.format("%Y-%m-%d %H:%M:%S UTC"));
+            println!("   Modified: {}", tenant.modified_at.format("%Y-%m-%d %H:%M:%S UTC"));
         }
         Ok(None) => {
-            println!("❌ Tenant not found");
+            println!("✗ Tenant not found");
         }
         Err(e) => {
             return Err(color_eyre::eyre::eyre!("Failed to get tenant: {}", e));
@@ -278,26 +278,26 @@ async fn show_tenant_stats(manager: &InMemoryTenantManager, tenant_id_str: &str)
         }
     };
     
-    println!("📊 Tenant Statistics");
+    println!("Tenant Statistics");
     println!("====================");
     
     match manager.get_tenant_stats(&tenant_id).await {
         Ok(stats) => {
-            println!("🗄️  Databases: {}", stats.database_count);
-            println!("💾 Storage used: {} bytes", stats.storage_used);
-            println!("🔗 Active connections: {}", stats.active_connections);
-            println!("🖥️  CPU usage: {:.2}%", stats.cpu_usage);
-            println!("🧠 Memory usage: {:.2}%", stats.memory_usage);
+            println!("Databases: {}", stats.database_count);
+            println!("Storage used: {} bytes", stats.storage_used);
+            println!("Active connections: {}", stats.active_connections);
+            println!("CPU usage: {:.2}%", stats.cpu_usage);
+            println!("Memory usage: {:.2}%", stats.memory_usage);
             
             // Also show resource usage from isolation manager
             if let Ok(Some(usage)) = manager.resource_isolation().get_tenant_usage(&tenant_id).await {
-                println!("\n📈 Resource Usage Details:");
-                println!("   🗄️  Database count: {}", usage.database_count);
-                println!("   💾 Storage allocated: {} bytes", usage.storage_used);
-                println!("   🔗 Active connections: {}", usage.active_connections);
-                println!("   🖥️  CPU usage: {:.2}%", usage.cpu_usage);
-                println!("   🧠 Memory usage: {:.2}%", usage.memory_usage);
-                println!("   🕐 Last updated: {}", usage.last_updated.format("%Y-%m-%d %H:%M:%S UTC"));
+                println!("\nResource Usage Details:");
+                println!("   Database count: {}", usage.database_count);
+                println!("   Storage allocated: {} bytes", usage.storage_used);
+                println!("   Active connections: {}", usage.active_connections);
+                println!("   CPU usage: {:.2}%", usage.cpu_usage);
+                println!("   Memory usage: {:.2}%", usage.memory_usage);
+                println!("   Last updated: {}", usage.last_updated.format("%Y-%m-%d %H:%M:%S UTC"));
             }
         }
         Err(e) => {
@@ -319,35 +319,35 @@ async fn delete_tenant(manager: &InMemoryTenantManager, tenant_id_str: &str, for
     
     // First, show tenant details
     if let Ok(Some(tenant)) = manager.get_tenant(&tenant_id).await {
-        println!("🏢 Tenant to delete:");
-        println!("   📋 ID: {}", tenant.id);
-        println!("   📝 Name: {}", tenant.name);
+        println!("Tenant to delete:");
+        println!("   ID: {}", tenant.id);
+        println!("   Name: {}", tenant.name);
         if let Some(desc) = tenant.description {
-            println!("   📄 Description: {}", desc);
+            println!("   Description: {}", desc);
         }
         println!();
     } else {
-        println!("❌ Tenant not found");
+        println!("✗ Tenant not found");
         return Ok(());
     }
     
     // Confirm deletion unless forced
     if !force {
         if !Confirm::new()
-            .with_prompt("⚠️  Are you sure you want to delete this tenant? This action cannot be undone.")
+            .with_prompt("Warning: Are you sure you want to delete this tenant? This action cannot be undone.")
             .default(false)
             .interact()? 
         {
-            println!("❌ Tenant deletion cancelled.");
+            println!("✗ Tenant deletion cancelled.");
             return Ok(());
         }
     }
     
-    println!("🗑️  Deleting tenant...");
+    println!("Deleting tenant...");
     
     match manager.delete_tenant(&tenant_id).await {
         Ok(_) => {
-            println!("✅ Tenant deleted successfully!");
+            println!("✓ Tenant deleted successfully");
         }
         Err(e) => {
             return Err(color_eyre::eyre::eyre!("Failed to delete tenant: {}", e));

@@ -361,9 +361,9 @@ let hot_swap_id = service.hot_swap_plugin(
 // Monitor deployment status
 let status = service.get_deployment_status(&hot_swap_id).await?;
 match status.status {
-    DeploymentStatus::Completed => println!("✅ Plugin hot-swapped successfully"),
-    DeploymentStatus::Failed => println!("❌ Hot-swap failed: {:?}", status.error),
-    _ => println!("⏳ Hot-swap in progress..."),
+    DeploymentStatus::Completed => println!("Plugin hot-swapped successfully"),
+    DeploymentStatus::Failed => println!("Hot-swap failed: {:?}", status.error),
+    _ => println!("Hot-swap in progress..."),
 }
 ```
 
@@ -416,7 +416,7 @@ let result = service.test_authentication("saml", saml_credentials).await?;
 // Returns user information from SAML assertion
 ```
 
-## 📊 Deployment Strategies
+## Deployment Strategies
 
 ### Rolling Update (Zero Downtime)
 ```rust
@@ -502,14 +502,14 @@ name = "custom_plugin"
 path = "src/custom_plugin.rs"
 ```
 
-## 📈 Performance and Monitoring
+## Performance and Monitoring
 
 ### Health Checks
 ```rust
 // Individual plugin health
 let health_results = service.plugin_manager.health_check_all().await;
 for (plugin, healthy) in health_results {
-    println!("Plugin {}: {}", plugin, if healthy { "✅ Healthy" } else { "❌ Unhealthy" });
+    println!("Plugin {}: {}", plugin, if healthy { "Healthy" } else { "Unhealthy" });
 }
 ```
 
@@ -522,11 +522,11 @@ for metric in metrics {
     println!("  Success Rate: {:.2}%", 
              (metric.successful_requests as f64 / metric.total_requests as f64) * 100.0);
     println!("  Avg Response Time: {:.2}ms", metric.avg_response_time_ms);
-    println!("  Plugin Health: {}", if metric.plugin_healthy { "✅" } else { "❌" });
+    println!("  Plugin Health: {}", if metric.plugin_healthy { "✓" } else { "✗" });
 }
 ```
 
-## 🔒 Security Features
+## Security Features
 
 ### WebAssembly Sandbox
 - **Memory Isolation**: Each plugin runs in isolated memory space
@@ -540,7 +540,7 @@ for metric in metrics {
 - **Audit Logging**: Complete audit trail for all authentication attempts
 - **Token Security**: Secure token generation and validation
 
-## 🚨 Production Deployment
+## Production Deployment
 
 ### Configuration
 ```rust

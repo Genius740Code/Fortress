@@ -21,7 +21,7 @@ pub async fn handle_stop() -> Result<()> {
         }
     };
     
-    println!("📋 Server Information:");
+    println!("Server Information:");
     println!("  PID: {}", style(server_info.pid).bold());
     println!("  Address: {}", style(server_info.address).bold());
     println!("  Uptime: {}", style(format_duration(server_info.uptime)).bold());
@@ -29,32 +29,32 @@ pub async fn handle_stop() -> Result<()> {
     println!();
     
     // Attempt graceful shutdown first
-    println!("🔄 Attempting graceful shutdown...");
+    println!("Attempting graceful shutdown...");
     
     match graceful_shutdown(&server_info).await {
         Ok(()) => {
-            println!("✅ Fortress Server stopped gracefully!");
+            println!("✓ Fortress Server stopped gracefully");
             info!("Fortress server stopped gracefully (PID: {})", server_info.pid);
             return Ok(());
         }
         Err(e) => {
             warn!("Graceful shutdown failed: {}", e);
-            println!("⚠️  Graceful shutdown failed: {}", e);
+            println!("⚠ Graceful shutdown failed: {}", e);
         }
     }
     
     // If graceful shutdown fails, try force shutdown
-    println!("🔨 Attempting force shutdown...");
+    println!("Attempting force shutdown...");
     
     match force_shutdown(&server_info).await {
         Ok(()) => {
-            println!("✅ Fortress Server stopped forcefully!");
+            println!("✓ Fortress Server stopped forcefully");
             info!("Fortress server stopped forcefully (PID: {})", server_info.pid);
         }
         Err(e) => {
             error!("Force shutdown failed: {}", e);
-            println!("❌ Force shutdown failed: {}", e);
-            println!("\n💡 You may need to manually kill the process:");
+            println!("✗ Force shutdown failed: {}", e);
+            println!("\nYou may need to manually kill the process:");
             println!("   kill -9 {}", server_info.pid);
             return Err(e);
         }

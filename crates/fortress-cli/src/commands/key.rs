@@ -237,7 +237,7 @@ pub async fn handle_key_action(action: KeyAction) -> Result<()> {
 }
 
 async fn perform_safety_checks() -> Result<()> {
-    println!("🔍 Performing safety checks...");
+    println!("Performing safety checks...");
     
     // Check 1: Ensure no active operations
     println!("  Checking for active operations...");
@@ -246,11 +246,11 @@ async fn perform_safety_checks() -> Result<()> {
             if has_active {
                 return Err(color_eyre::eyre::eyre!("Active operations detected. Please wait for operations to complete."));
             }
-            println!("  ✅ No active operations found");
+            println!("  ✓ No active operations found");
         }
         Err(e) => {
             warn!("Could not check active operations: {}", e);
-            println!("  ⚠️  Could not verify active operations (proceeding with caution)");
+            println!("  ⚠ Could not verify active operations (proceeding with caution)");
         }
     }
     
@@ -261,11 +261,11 @@ async fn perform_safety_checks() -> Result<()> {
             if !backup_available {
                 return Err(color_eyre::eyre::eyre!("No recent backup available. Please create a backup before proceeding."));
             }
-            println!("  ✅ Recent backup found (2 hours old)");
+            println!("  ✓ Recent backup found (2 hours old)");
         }
         Err(e) => {
             warn!("Could not check backup availability: {}", e);
-            println!("  ⚠️  Could not verify backup availability (proceeding with caution)");
+            println!("  ⚠ Could not verify backup availability (proceeding with caution)");
         }
     }
     
@@ -280,7 +280,7 @@ async fn perform_safety_checks() -> Result<()> {
         }
         Err(e) => {
             warn!("Could not check system resources: {}", e);
-            println!("  ⚠️  Could not verify system resources (proceeding with caution)");
+            println!("  ⚠ Could not verify system resources (proceeding with caution)");
         }
     }
     
@@ -295,7 +295,7 @@ async fn perform_safety_checks() -> Result<()> {
         }
         Err(e) => {
             warn!("Could not check rotation interval: {}", e);
-            println!("  ⚠️  Could not verify rotation schedule (proceeding with caution)");
+            println!("  ⚠ Could not verify rotation schedule (proceeding with caution)");
         }
     }
     
@@ -317,14 +317,14 @@ async fn _simulate_key_rotation() -> Result<()> {
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
     
-    println!("✅ Key rotation simulation completed successfully!");
+    println!("✔ Key rotation simulation completed successfully!");
     info!("Key rotation simulation completed");
     
     Ok(())
 }
 
 async fn validate_rollback(version: &Option<String>) -> Result<()> {
-    println!("🔍 Validating rollback parameters...");
+    println!("Validating rollback parameters...");
     
     // Check if target version exists
     if let Some(v) = version {
@@ -338,7 +338,7 @@ async fn validate_rollback(version: &Option<String>) -> Result<()> {
             }
             Err(e) => {
                 warn!("Could not verify version availability: {}", e);
-                println!("  ⚠️  Could not verify version {} (proceeding with caution)", v);
+                println!("  ⚠ Could not verify version {} (proceeding with caution)", v);
             }
         }
     } else {
@@ -349,7 +349,7 @@ async fn validate_rollback(version: &Option<String>) -> Result<()> {
             }
             Err(e) => {
                 warn!("Could not get latest backup version: {}", e);
-                println!("  ⚠️  Could not verify latest backup (proceeding with caution)");
+                println!("  ⚠ Could not verify latest backup (proceeding with caution)");
             }
         }
     }
@@ -365,7 +365,7 @@ async fn validate_rollback(version: &Option<String>) -> Result<()> {
         }
         Err(e) => {
             warn!("Could not verify rollback safety: {}", e);
-            println!("  ⚠️  Could not verify rollback safety (proceeding with caution)");
+            println!("  ⚠ Could not verify rollback safety (proceeding with caution)");
         }
     }
     
@@ -391,7 +391,7 @@ async fn _simulate_key_rollback(version: &Option<String>) -> Result<()> {
         tokio::time::sleep(Duration::from_millis(400)).await;
     }
     
-    println!("✅ Key rollback simulation completed successfully!");
+    println!("✔ Key rollback simulation completed successfully!");
     info!("Key rollback to version {} completed", target_version);
     
     Ok(())
@@ -623,11 +623,11 @@ async fn perform_key_rollback(version: &Option<String>) -> Result<RollbackInfo> 
     println!("  Target version: {}", style(target_version).bold());
     
     // Step 1: Create backup of current key
-    println!("  📋 Creating backup of current key...");
+    println!("  Creating backup of current key...");
     create_key_backup(&key_id, &metadata).await?;
     
     // Step 2: Verify rollback target exists in backups
-    println!("  🔍 Verifying rollback target...");
+    println!("  Verifying rollback target...");
     verify_rollback_target(&key_id, target_version).await?;
     
     // Step 3: Perform the actual rollback
@@ -639,10 +639,10 @@ async fn perform_key_rollback(version: &Option<String>) -> Result<RollbackInfo> 
     verify_rollback_integrity(&key_id, target_version).await?;
     
     // Step 5: Update key metadata
-    println!("  📝 Updating key metadata...");
+    println!("  Updating key metadata...");
     update_key_metadata_after_rollback(&key_id, target_version).await?;
     
-    println!("✅ Key rollback completed successfully!");
+    println!("✔ Key rollback completed successfully!");
     
     Ok(RollbackInfo {
         key_id,
@@ -674,7 +674,7 @@ async fn create_key_backup(key_id: &str, metadata: &fortress_core::key::KeyMetad
     tokio::fs::write(&backup_path, backup_data.to_string()).await
         .map_err(|e| color_eyre::eyre::eyre!("Failed to write backup file: {}", e))?;
     
-    println!("    📁 Backup created: {}", style(backup_path.display()).dim());
+    println!("    Backup created: {}", style(backup_path.display()).dim());
     
     Ok(())
 }
@@ -784,7 +784,7 @@ async fn execute_rollback(key_id: &str, target_version: u32) -> Result<()> {
     let _key_manager = InMemoryKeyManager::new();
     
     // Store the rolled back metadata - Note: Since store_key_metadata doesn't exist, we'll simulate
-    println!("    📝 Storing rolled back metadata (simulated)");
+    println!("    Storing rolled back metadata (simulated)");
     
     println!("    ✅ Rollback executed successfully");
     Ok(())
@@ -842,7 +842,7 @@ async fn update_key_metadata_after_rollback(key_id: &str, target_version: u32) -
         chrono::Utc::now().to_rfc3339());
     
     // Store updated metadata - Note: Since store_key_metadata doesn't exist, we'll simulate
-    println!("    📝 Storing updated metadata (simulated)");
+    println!("    Storing updated metadata (simulated)");
     Ok(())
 }
 

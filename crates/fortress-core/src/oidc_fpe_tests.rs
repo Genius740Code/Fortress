@@ -730,11 +730,11 @@ impl TestResults {
         for result in &self.results {
             match result.status {
                 TestStatus::Passed => {
-                    println!("✅ {}: PASSED", result.name);
+                    println!("✓ {}: PASSED", result.name);
                     passed += 1;
                 }
                 TestStatus::Failed => {
-                    println!("❌ {}: FAILED", result.name);
+                    println!("✗ {}: FAILED", result.name);
                     if let Some(error) = &result.error {
                         println!("   Error: {}", error);
                     }
@@ -750,9 +750,9 @@ impl TestResults {
         println!("Success Rate: {:.1}%", (passed as f64 / self.results.len() as f64) * 100.0);
 
         if failed == 0 {
-            println!("\n🎉 All tests passed! OIDC and FPE functionality is working correctly.");
+            println!("\nAll tests passed! OIDC and FPE functionality is working correctly.");
         } else {
-            println!("\n⚠️  Some tests failed. Please review the errors above.");
+            println!("\nSome tests failed. Please review the errors above.");
         }
     }
 

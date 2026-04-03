@@ -21,23 +21,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let test_number = "12345678";
             match fpe.encrypt(test_number) {
                 Ok(encrypted) => {
-                    println!("✅ Encrypted: {}", encrypted.encrypted_value);
+                    println!("✓ Encrypted: {}", encrypted.encrypted_value);
                     match fpe.decrypt(&encrypted.encrypted_value) {
                         Ok(decrypted) => {
-                            println!("✅ Decrypted: {}", decrypted);
+                            println!("✓ Decrypted: {}", decrypted);
                             if decrypted == test_number {
-                                println!("✅ Round-trip successful!");
+                                println!("✓ Round-trip successful!");
                             } else {
-                                println!("❌ Round-trip failed!");
+                                println!("✗ Round-trip failed!");
                             }
                         }
-                        Err(e) => println!("❌ Decryption error: {}", e),
+                        Err(e) => println!("✗ Decryption error: {}", e),
                     }
                 }
-                Err(e) => println!("❌ Encryption error: {}", e),
+                Err(e) => println!("✗ Encryption error: {}", e),
             }
         }
-        Err(e) => println!("❌ FPE creation error: {}", e),
+        Err(e) => println!("✗ FPE creation error: {}", e),
     }
     
     println!("Test completed!");

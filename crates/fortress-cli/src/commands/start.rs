@@ -139,18 +139,18 @@ pub async fn handle_start(
         shutdown_rx
     ).await?;
     
-    println!("✅ Fortress Server started successfully!");
-    println!("🌐 Server URL: http://{}", addr);
-    println!("📁 Data directory: {}", style(db_path.display()).bold());
-    println!("🔧 Worker threads: {}", style(config_settings.server.workers).bold());
-    println!("📊 Health check: http://{}/health", addr);
+    println!("✓ Fortress Server started successfully");
+    println!("Server URL: http://{}", addr);
+    println!("Data directory: {}", style(db_path.display()).bold());
+    println!("Worker threads: {}", style(config_settings.server.workers).bold());
+    println!("Health check: http://{}/health", addr);
     println!();
     println!("Press Ctrl+C to stop the server");
     
     // Wait for shutdown signal
     match signal::ctrl_c().await {
         Ok(()) => {
-            println!("\n{}", style("🛑 Shutting down Fortress Server...").bold().yellow());
+            println!("\n{}", style("Shutting down Fortress Server...").bold().yellow());
             
             // Send shutdown signal
             let _ = shutdown_tx.send(());
@@ -158,7 +158,7 @@ pub async fn handle_start(
             // Wait for server to shutdown with timeout
             match tokio::time::timeout(Duration::from_secs(30), server_handle).await {
                 Ok(Ok(())) => {
-                    println!("✅ Fortress Server stopped gracefully");
+                    println!("✓ Fortress Server stopped gracefully");
                 }
                 Ok(Err(e)) => {
                     warn!("Server shutdown with error: {}", e);

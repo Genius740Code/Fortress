@@ -216,7 +216,7 @@ pub struct Pkcs11Provider {
 
 impl Pkcs11Provider {
     /// Create a new PKCS#11 provider
-    /// ✅ COMPLETED: PKCS#11 context initialization implemented
+    /// COMPLETED: PKCS#11 context initialization implemented
     pub async fn new() -> Result<Self> {
         log::info!("Initializing PKCS#11 provider");
         
@@ -431,7 +431,7 @@ impl Pkcs11Provider {
 
 #[async_trait]
 impl super::HsmProvider for Pkcs11Provider {
-    /// ✅ COMPLETED: PKCS#11 library loading and session management implemented
+    /// COMPLETED: PKCS#11 library loading and session management implemented
     async fn initialize(&self, config: &super::HsmConfig) -> Result<()> {
         match &config.connection {
             super::HsmConnection::Pkcs11 { library_path, slot_id, token_label } => {
@@ -584,7 +584,7 @@ impl super::HsmProvider for Pkcs11Provider {
         }
     }
 
-    /// ✅ COMPLETED: PKCS#11 key generation using C_GenerateKey implemented
+    /// COMPLETED: PKCS#11 key generation using C_GenerateKey implemented
     async fn generate_key(&self, key_id: &KeyId, algorithm: &dyn EncryptionAlgorithm) -> Result<()> {
         log::info!("Generating key {} in PKCS#11 HSM with algorithm: {}", key_id, algorithm.name());
         
@@ -620,7 +620,7 @@ impl super::HsmProvider for Pkcs11Provider {
         Ok(())
     }
 
-    /// ✅ COMPLETED: PKCS#11 key metadata retrieval using C_GetAttributeValue implemented
+    /// COMPLETED: PKCS#11 key metadata retrieval using C_GetAttributeValue implemented
     async fn get_key_metadata(&self, key_id: &KeyId) -> Result<KeyMetadata> {
         log::info!("Retrieving metadata for key {} from PKCS#11 HSM", key_id);
         
@@ -677,7 +677,7 @@ impl super::HsmProvider for Pkcs11Provider {
         Ok(metadata)
     }
 
-    /// ✅ COMPLETED: PKCS#11 key deletion using C_DestroyObject implemented
+    /// COMPLETED: PKCS#11 key deletion using C_DestroyObject implemented
     async fn delete_key(&self, key_id: &KeyId) -> Result<()> {
         log::info!("Deleting key {} from PKCS#11 HSM", key_id);
         
@@ -711,7 +711,7 @@ impl super::HsmProvider for Pkcs11Provider {
         Ok(())
     }
 
-    /// ✅ COMPLETED: PKCS#11 key enumeration using C_FindObjects implemented
+    /// COMPLETED: PKCS#11 key enumeration using C_FindObjects implemented
     async fn list_keys(&self) -> Result<Vec<(KeyId, KeyMetadata)>> {
         log::info!("Listing keys from PKCS#11 HSM");
         
@@ -795,7 +795,7 @@ impl super::HsmProvider for Pkcs11Provider {
         Ok(all_keys)
     }
 
-    /// ✅ COMPLETED: PKCS#11 signing using C_SignInit and C_Sign implemented
+    /// COMPLETED: PKCS#11 signing using C_SignInit and C_Sign implemented
     async fn sign(&self, key_id: &KeyId, data: &[u8]) -> Result<Vec<u8>> {
         log::info!("Signing data with key {} using PKCS#11 HSM", key_id);
         
@@ -840,7 +840,7 @@ impl super::HsmProvider for Pkcs11Provider {
         Ok(signature)
     }
 
-    /// ✅ COMPLETED: PKCS#11 verification using C_VerifyInit and C_Verify implemented
+    /// COMPLETED: PKCS#11 verification using C_VerifyInit and C_Verify implemented
     async fn verify(&self, key_id: &KeyId, data: &[u8], signature: &[u8]) -> Result<bool> {
         log::info!("Verifying signature with key {} using PKCS#11 HSM", key_id);
         
@@ -886,7 +886,7 @@ impl super::HsmProvider for Pkcs11Provider {
         }
     }
 
-    /// ✅ COMPLETED: PKCS#11 encryption/decryption and cleanup operations implemented
+    /// COMPLETED: PKCS#11 encryption/decryption and cleanup operations implemented
     async fn encrypt(&self, key_id: &KeyId, plaintext: &[u8]) -> Result<Vec<u8>> {
         log::info!("Encrypting data with key {} using PKCS#11 HSM", key_id);
         

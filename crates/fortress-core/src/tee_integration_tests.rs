@@ -576,7 +576,7 @@ impl TestResults {
         summary.push_str("## Test Results\n\n");
         
         for (test_name, result) in &self.results {
-            let status = if result.passed { "✅ PASS" } else { "❌ FAIL" };
+            let status = if result.passed { "✓ PASS" } else { "✗ FAIL" };
             summary.push_str(&format!("**{}**: {} ({:?})\n", test_name, status, result.duration));
             
             if let Some(ref error) = result.error_message {

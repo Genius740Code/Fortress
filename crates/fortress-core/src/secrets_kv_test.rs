@@ -30,19 +30,19 @@ mod tests {
         
         let result = engine.write("secret/app", secret_data.clone(), None).await;
         assert!(result.is_ok(), "Failed to write secret: {:?}", result.err());
-        println!("✅ Secret written successfully with encryption");
+        println!("✓ Secret written successfully with encryption");
         
         // Read the secret back
         let retrieved_secret = engine.read("secret/app").await;
         assert!(retrieved_secret.is_ok(), "Failed to read secret: {:?}", retrieved_secret.err());
-        println!("✅ Secret retrieved successfully");
+        println!("✓ Secret retrieved successfully");
         
         // Verify the data matches
         if let Ok(Some(secret)) = retrieved_secret {
             let data = secret.data.as_object().unwrap();
             assert_eq!(data.get("username").unwrap().as_str().unwrap(), "admin");
             assert_eq!(data.get("password").unwrap().as_str().unwrap(), "super-secret");
-            println!("✅ Secret data verified");
+            println!("✓ Secret data verified");
         } else {
             panic!("Expected to find secret but got None");
         }
@@ -54,10 +54,10 @@ mod tests {
         if let Ok(status) = status {
             assert_eq!(status.engine_type, EngineType::Kv);
             assert_eq!(status.total_secrets, 1);
-            println!("✅ Engine status verified");
+            println!("✓ Engine status verified");
         }
         
-        println!("🎉 All encryption tests passed!");
+        println!("All encryption tests passed!");
     }
 
     #[tokio::test]
@@ -88,7 +88,7 @@ mod tests {
         assert!(retrieved_secret.is_ok(), "Failed to read secret: {:?}", retrieved_secret.err());
         assert!(retrieved_secret.unwrap().is_some(), "Expected to find secret but got None");
         
-        println!("✅ Non-encrypted mode works correctly");
-        println!("🎉 All non-encryption tests passed!");
+        println!("✓ Non-encrypted mode works correctly");
+        println!("All non-encryption tests passed!");
     }
 }

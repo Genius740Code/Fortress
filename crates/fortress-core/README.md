@@ -8,11 +8,11 @@ The core library for Fortress secure database system - providing high-performanc
 
 ## Features
 
-- **🔐 Multiple Encryption Algorithms**: AEGIS-256, ChaCha20-Poly1305, AES-256-GCM, and more
-- **🔑 Advanced Key Management**: Automatic generation, rotation, and secure storage
-- **⚡ High Performance**: Optimized for speed with hardware acceleration
-- **🛡️ Memory Safe**: Built with Rust for zero vulnerabilities
-- **🔧 Developer Friendly**: Simple API with comprehensive error handling
+- **Multiple Encryption Algorithms**: AEGIS-256, ChaCha20-Poly1305, AES-256-GCM, and more
+- **Advanced Key Management**: Automatic generation, rotation, and secure storage
+- **High Performance**: Optimized for speed with hardware acceleration
+- **Memory Safe**: Built with Rust for zero vulnerabilities
+- **Developer Friendly**: Simple API with comprehensive error handling
 
 ## Quick Start
 
@@ -49,7 +49,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let decrypted = algorithm.decrypt(&ciphertext, &key)?;
     
     assert_eq!(plaintext, decrypted);
-    println!("✅ Encryption successful!");
+    println!("Encryption successful!");
     
     Ok(())
 }

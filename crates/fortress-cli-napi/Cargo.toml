@@ -15,7 +15,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 # Fortress core CLI - use as binary dependency
-fortress-cli = { path = "../fortress-cli", version = "1.0.2-alpha", default-features = false, optional = true }
+fortress-cli = { path = "../fortress-cli", version = "1.0.0", default-features = false, optional = true }
 
 # NAPI bindings
 napi = { version = "2.0", default-features = false, features = ["napi4"] }

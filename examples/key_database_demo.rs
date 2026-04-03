@@ -13,7 +13,7 @@ async fn main() -> Result<()> {
     // Initialize logging
     tracing_subscriber::fmt::init();
 
-    println!("🔐 Fortress Key Database & Preloading Demo");
+    println!("Fortress Key Database & Preloading Demo");
     println!("==========================================");
 
     // Create configuration for the database key manager
@@ -65,19 +65,19 @@ async fn main() -> Result<()> {
         enable_performance_monitoring: true,
     };
 
-    println!("📋 Configuration created");
+    println!("Configuration created");
     println!("   - Database: SQLite with encryption at rest");
     println!("   - Preloading: Enabled with intelligent strategies");
     println!("   - Cache: 1000 keys, 100MB memory limit");
     println!("   - Monitoring: Performance tracking enabled");
 
     // Create the database key manager
-    println!("\n🚀 Initializing Database Key Manager...");
+    println!("\nInitializing Database Key Manager...");
     let key_manager = DatabaseKeyManager::new(config).await?;
-    println!("✅ Key manager initialized successfully");
+    println!("✓ Key manager initialized successfully");
 
     // Demonstrate key generation and storage
-    println!("\n🔑 Generating and storing keys...");
+    println!("\nGenerating and storing keys...");
     let algorithm = Aegis256::new();
     
     for i in 1..=10 {
@@ -95,60 +95,60 @@ async fn main() -> Result<()> {
         );
         
         key_manager.store_key(&key_id, &key, &metadata).await?;
-        println!("   ✅ Stored key: {}", key_id);
+        println!("   ✓ Stored key: {}", key_id);
     }
 
     // Demonstrate key retrieval with caching
-    println!("\n🔍 Testing key retrieval with caching...");
+    println!("\nTesting key retrieval with caching...");
     let start_time = std::time::Instant::now();
     
     // First access (should hit database)
     let _ = key_manager.retrieve_key(&"demo_key_1".to_string()).await?;
     let first_access_time = start_time.elapsed();
-    println!("   📊 First access (database): {:?}", first_access_time);
+    println!("   First access (database): {:?}", first_access_time);
     
     // Second access (should hit cache)
     let start_time = std::time::Instant::now();
     let _ = key_manager.retrieve_key(&"demo_key_1".to_string()).await?;
     let second_access_time = start_time.elapsed();
-    println!("   📊 Second access (cache): {:?}", second_access_time);
+    println!("   Second access (cache): {:?}", second_access_time);
     
     let speedup = first_access_time.as_nanos() as f64 / second_access_time.as_nanos() as f64;
-    println!("   🚀 Cache speedup: {:.2}x faster", speedup);
+    println!("   Cache speedup: {:.2}x faster", speedup);
 
     // Demonstrate preloading
-    println!("\n⚡ Testing key preloading...");
+    println!("\nTesting key preloading...");
     let preload_result = key_manager.force_preload_key(&"demo_key_5".to_string()).await?;
-    println!("   ✅ Force preloaded demo_key_5: {}", preload_result);
+    println!("   ✓ Force preloaded demo_key_5: {}", preload_result);
     
     // Access preloaded key
     let start_time = std::time::Instant::now();
     let _ = key_manager.retrieve_key(&"demo_key_5".to_string()).await?;
     let preload_access_time = start_time.elapsed();
-    println!("   📊 Preloaded key access: {:?}", preload_access_time);
+    println!("   Preloaded key access: {:?}", preload_access_time);
 
     // Get comprehensive statistics
-    println!("\n📈 Performance Statistics:");
+    println!("\nPerformance Statistics:");
     let stats = key_manager.get_detailed_stats().await?;
     
-    println!("   🗄️  Database:");
+    println!("   Database:");
     println!("     - Total keys: {}", stats.database.total_keys);
     println!("     - Database size: {} bytes", stats.database.database_size_bytes);
     println!("     - Active connections: {}", stats.database.active_connections);
     
-    println!("   💾 Cache:");
+    println!("   Cache:");
     println!("     - Cache hits: {}", stats.cache.hits);
     println!("     - Cache misses: {}", stats.cache.misses);
     println!("     - Hit ratio: {:.2}%", stats.cache.hit_ratio * 100.0);
     println!("     - Current keys: {}", stats.cache.current_keys);
     println!("     - Memory usage: {} bytes", stats.cache.current_memory_bytes);
     
-    println!("   ⚡ Preloader:");
+    println!("   Preloader:");
     println!("     - Preloaded keys: {}", stats.preloader.total_preloaded_keys);
     println!("     - Memory usage: {} bytes", stats.preloader.total_memory_usage_bytes);
     println!("     - Success rate: {:.2}%", stats.preloader.preload_success_rate * 100.0);
     
-    println!("   🎯 Overall:");
+    println!("   Overall:");
     println!("     - Total operations: {}", stats.metrics.total_operations);
     println!("     - Success rate: {:.2}%", 
         (stats.metrics.successful_operations as f64 / stats.metrics.total_operations as f64) * 100.0);
@@ -157,10 +157,10 @@ async fn main() -> Result<()> {
     println!("     - Memory usage: {} bytes", stats.metrics.memory_usage_bytes);
 
     // Get performance recommendations
-    println!("\n💡 Performance Recommendations:");
+    println!("\nPerformance Recommendations:");
     let recommendations = key_manager.get_performance_recommendations().await;
     if recommendations.is_empty() {
-        println!("   ✅ No recommendations - system is performing optimally!");
+        println!("   ✓ No recommendations - system is performing optimally!");
     } else {
         for (i, rec) in recommendations.iter().enumerate() {
             println!("   {}. {}", i + 1, rec);
@@ -168,16 +168,16 @@ async fn main() -> Result<()> {
     }
 
     // Demonstrate cache eviction
-    println!("\n🧹 Testing cache eviction...");
+    println!("\nTesting cache eviction...");
     let evicted = key_manager.evict_from_cache(&"demo_key_2".to_string()).await?;
-    println!("   ✅ Evicted demo_key_2 from cache: {}", evicted);
+    println!("   ✓ Evicted demo_key_2 from cache: {}", evicted);
     
     // Verify eviction
     let cache_stats = key_manager.get_metrics().await;
-    println!("   📊 Cache hit ratio after eviction: {:.2}%", cache_stats.cache_hit_ratio * 100.0);
+    println!("   Cache hit ratio after eviction: {:.2}%", cache_stats.cache_hit_ratio * 100.0);
 
     // List all keys
-    println!("\n📋 All stored keys:");
+    println!("\nAll stored keys:");
     let all_keys = key_manager.list_keys().await?;
     for (key_id, metadata) in all_keys {
         println!("   - {} ({}): v{}, purpose: {}", 
@@ -189,19 +189,19 @@ async fn main() -> Result<()> {
     }
 
     // Cleanup
-    println!("\n🧹 Cleaning up...");
+    println!("\nCleaning up...");
     key_manager.clear_caches().await?;
     key_manager.shutdown().await?;
-    println!("   ✅ Shutdown completed");
+    println!("   Shutdown completed");
 
-    println!("\n🎉 Demo completed successfully!");
-    println!("📚 Key features demonstrated:");
-    println!("   ✅ Persistent key storage with SQLite");
-    println!("   ✅ Intelligent key preloading");
-    println!("   ✅ High-performance LRU caching");
-    println!("   ✅ Performance monitoring and recommendations");
-    println!("   ✅ Cache eviction and management");
-    println!("   ✅ Comprehensive statistics");
+    println!("\nFortress Key Database Demo completed successfully!");
+    println!("Key features demonstrated:");
+    println!("   Persistent key storage with SQLite");
+    println!("   Intelligent key preloading");
+    println!("   High-performance LRU caching");
+    println!("   Performance monitoring and recommendations");
+    println!("   Cache eviction and management");
+    println!("   Comprehensive statistics");
 
     Ok(())
 }

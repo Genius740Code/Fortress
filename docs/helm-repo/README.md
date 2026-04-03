@@ -2,7 +2,7 @@
 
 This repository hosts the official Helm charts for Fortress secure database system.
 
-## 🚀 Quick Start
+## Quick Start
 
 Add the Fortress Helm repository:
 
