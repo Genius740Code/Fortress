@@ -38,7 +38,7 @@ import (
 
 // Version information
 const (
-	Version     = "0.1.0"
+	Version     = "1.0.0"
 	APIVersion  = "1.0.0"
 	BuildTime   = "unknown"
 	GitCommit   = "unknown"
