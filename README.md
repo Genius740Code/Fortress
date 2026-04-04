@@ -17,7 +17,7 @@ A comprehensive security platform that provides enterprise-grade cryptography, k
 
 ### Feature Maturity Legend
 - `[Stable]` - Production-ready with comprehensive testing
-- `[Alpha/Experimental]` - Implemented but requires testing and validation
+- `[Beta]` - Feature-complete, needs production validation
 - `[In Development]` - Partial implementation, APIs may change
 - `[Planned]` - Designed but not yet implemented
 
@@ -34,7 +34,7 @@ A comprehensive security platform that provides enterprise-grade cryptography, k
 - **Multi-Tenant Support**: Isolated data per tenant/organization `[Stable]`
 - **Cluster Support**: High availability with Raft consensus `[Stable]`
 - **Audit Logging**: Comprehensive security event logging `[Stable]`
-- **Compliance Framework**: GDPR, HIPAA, PCI-DSS compliance features `[Alpha/Experimental]`
+- **Compliance Framework**: GDPR, HIPAA, PCI-DSS compliance features `[Beta]`
 - **HSM Integration**: Hardware Security Module support `[Stable]`
 
 ### High Performance
