@@ -18,13 +18,21 @@ use tower_http::{
 };
 use tracing::info;
 
+// Import from fortress_api_server instead of fortress_server
+use fortress_api_server::handlers::{
+    get_tenant_stats, admin_list_data, create_openapi, AppState
+};
+use fortress_api_server::auth::{AuthManager, InMemoryUserStore};
+use fortress_api_server::metrics::MetricsCollector;
+use fortress_api_server::health::HealthChecker;
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize tracing
     info!("Fortress server starting");
 
     // Create OpenAPI specification
-    let openapi = fortress_server::handlers::create_openapi();
+    let openapi = create_openapi();
 
     // Create router with OpenAPI endpoints
     let app = create_router(openapi).await?;
@@ -97,20 +105,20 @@ async fn create_router(_openapi: utoipa::openapi::OpenApi) -> Result<Router, Box
 }
 
 /// Create application state
-async fn create_app_state() -> Result<Arc<fortress_server::handlers::AppState>, Box<dyn std::error::Error>> {
-    use fortress_server::handlers::AppState;
+async fn create_app_state() -> Result<Arc<AppState>, Box<dyn std::error::Error>> {
+    use fortress_api_server::handlers::AppState;
     use fortress_core::tenant::{InMemoryTenantManager, GlobalResourceLimits};
-    use fortress_server::config::FeatureFlags;
+    use fortress_api_server::config::FeatureFlags;
     use fortress_core::field_encryption_manager::DefaultFieldEncryptionManager;
     use chrono::Duration;
     
     // Initialize components
-    let auth_manager = Arc::new(fortress_server::auth::AuthManager::new(
+    let auth_manager = Arc::new(AuthManager::new(
         "demo-jwt-secret", 
         Duration::seconds(3600), 
-        Arc::new(fortress_server::auth::InMemoryUserStore::new())
+        Arc::new(InMemoryUserStore::new())
     ));
-    let metrics = Arc::new(fortress_server::metrics::MetricsCollector::new());
+    let metrics = Arc::new(MetricsCollector::new());
     let key_manager = Arc::new(fortress_core::key::InMemoryKeyManager::new());
     
     // Initialize storage (using filesystem for now)
@@ -122,7 +130,7 @@ async fn create_app_state() -> Result<Arc<fortress_server::handlers::AppState>, 
     );
     
     // Initialize health checker
-    let health_checker = Arc::new(fortress_server::health::HealthChecker::new(
+    let health_checker = Arc::new(HealthChecker::new(
         FeatureFlags::default()
     ));
 
@@ -164,5 +172,5 @@ async fn _health_check() -> Json<serde_json::Value> {
 
 /// Create OpenAPI specification with all documented endpoints
 async fn openapi_handler() -> Json<utoipa::openapi::OpenApi> {
-    Json(fortress_server::handlers::create_openapi())
+    Json(create_openapi())
 }
