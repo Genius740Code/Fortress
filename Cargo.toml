@@ -16,7 +16,7 @@ rust-version = "1.70"
 members = [
     "crates/fortress-core",
     "crates/fortress-cli",
-    "crates/fortress-server",
+    "crates/fortress-api-server",
     "crates/fortress-cli-napi",
     "plugins/auth",
     # "crates/fortress-python",

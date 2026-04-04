@@ -1,5 +1,5 @@
 [package]
-name = "fortress-server"
+name = "fortress-api-server"
 version = "1.0.0"
 edition = "2021"
 authors = ["Fortress Team <team@fortressdb.io>"]
@@ -13,7 +13,7 @@ categories = ["database", "web-programming", "cryptography"]
 rust-version = "1.70"
 
 [[bin]]
-name = "fortress-server"
+name = "fortress-api-server"
 path = "src/main.rs"
 
 [dependencies]

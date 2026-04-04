@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "fortress-db"
-version = "1.0.2-alpha"
+version = "1.0.0"
 description = "🛡️ Fortress - Turnkey Simplicity + Enterprise Security. Python SDK for Fortress secure database system with multi-layer encryption."
 readme = "README.md"
 license = {text = "Fortress Sustainable Use License 1.0"}
@@ -21,7 +21,7 @@ keywords = [
     "audit", "rbac", "rust"
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "License :: Other/Proprietary License",
     "Operating System :: OS Independent",
