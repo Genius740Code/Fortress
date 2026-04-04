@@ -21,7 +21,7 @@ use tracing::info;
 // Import from fortress_api_server instead of fortress_server
 use fortress_api_server::handlers::{
     get_tenant_stats, admin_list_data, create_openapi, AppState,
-    health_check, detailed_health_check, security_health_check,
+    detailed_health_check, security_health_check,
     get_prometheus_metrics, get_security_events, get_blocked_requests,
     store_data, retrieve_data, update_data, delete_data, list_data,
     generate_key, create_tenant, list_tenants
