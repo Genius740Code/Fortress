@@ -1,6 +1,6 @@
 [package]
 name = "fortress-cli-napi"
-version = "1.0.2-alpha"
+version = "1.0.0"
 edition = "2021"
 authors = ["Fortress Team <team@fortressdb.io>"]
 license-file = "../../LICENSE"
