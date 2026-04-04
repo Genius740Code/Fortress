@@ -20,11 +20,16 @@ use tracing::info;
 
 // Import from fortress_api_server instead of fortress_server
 use fortress_api_server::handlers::{
-    get_tenant_stats, admin_list_data, create_openapi, AppState
+    get_tenant_stats, admin_list_data, create_openapi, AppState,
+    health_check, detailed_health_check, security_health_check,
+    get_prometheus_metrics, get_security_events, get_blocked_requests,
+    store_data, retrieve_data, update_data, delete_data, list_data,
+    generate_key, create_tenant, list_tenants
 };
 use fortress_api_server::auth::{AuthManager, InMemoryUserStore};
 use fortress_api_server::metrics::MetricsCollector;
 use fortress_api_server::health::HealthChecker;
+use fortress_api_server::graphql::{graphql_handler, graphql_playground};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -49,8 +54,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Create an application router with all endpoints
 async fn create_router(_openapi: utoipa::openapi::OpenApi) -> Result<Router, Box<dyn std::error::Error>> {
-    use fortress_server::handlers::*;
-    use fortress_server::graphql::{graphql_handler, graphql_playground};
     
     // Create application state
     let state = create_app_state().await?;
@@ -162,7 +165,7 @@ async fn create_app_state() -> Result<Arc<AppState>, Box<dyn std::error::Error>>
 }
 
 /// Simple health check for testing
-async fn _health_check() -> Json<serde_json::Value> {
+async fn health_check() -> Json<serde_json::Value> {
     Json(serde_json::json!({
         "status": "healthy",
         "timestamp": chrono::Utc::now(),
