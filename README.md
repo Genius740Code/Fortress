@@ -1,5 +1,9 @@
 # Fortress
 
+![CI](https://github.com/Genius740Code/Fortress/workflows/CI/badge.svg)
+![Security Audit](https://github.com/Genius740Code/Fortress/workflows/Security%20Audit/badge.svg)
+![Documentation](https://github.com/Genius740Code/Fortress/workflows/Documentation/badge.svg)
+
 **Fortress** - Enterprise Security Platform
 
 A comprehensive security platform that provides enterprise-grade cryptography, key management, distributed caching, clustering, and compliance features with simplicity of modern APIs.

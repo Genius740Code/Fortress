@@ -1,23 +1,21 @@
 # Fortress Helm Repository
 
+> **Note**: This is a local Helm repository. For production deployment, see the [Helm chart installation guide](../README.md#kubernetes-installation).
+
 This repository hosts the official Helm charts for Fortress secure database system.
 
 ## Quick Start
 
-Add the Fortress Helm repository:
+For local development and testing:
 
 ```bash
-helm repo add fortress https://helm.fortress-db.com/charts
-helm repo update
-```
-
-Install Fortress:
-
-```bash
-helm install my-fortress fortress/fortress \
+# Install from local chart
+helm install my-fortress ./helm/fortress \
   --namespace fortress \
   --create-namespace
 ```
+
+For production deployment, see the main README for Kubernetes installation instructions.
 
 ## 📦 Available Charts
 
