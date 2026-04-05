@@ -69,11 +69,10 @@
 
 
 #![warn(missing_docs)]
-
 #![warn(rust_2018_idioms)]
-
-#![warn(clippy::all)]
-
+#![deny(unsafe_code)]
+#![deny(clippy::all)]
+#![warn(clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
 
 

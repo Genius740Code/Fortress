@@ -9,6 +9,12 @@
 //! - Cluster operations
 //! - Health monitoring
 
+#![warn(missing_docs)]
+#![warn(rust_2018_idioms)]
+#![deny(unsafe_code)]
+#![deny(clippy::all)]
+#![warn(clippy::pedantic)]
+
 pub mod commands;
 pub mod config_manager;
 pub mod utils;

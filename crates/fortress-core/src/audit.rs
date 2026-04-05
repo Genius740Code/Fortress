@@ -12,7 +12,7 @@ use sha2::{Sha256, Digest};
 use ring::hmac;
 use zeroize::Zeroize;
 use tracing::debug;
-use crate::error::{FortressError, Result};
+use crate::error::{FortressError, Result, AuditErrorCode};
 
 /// Audit log entry with tamper-evident protection
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -903,49 +903,35 @@ impl Drop for DefaultAuditLogger {
     }
 }
 
-/// Global audit logger instance
-#[allow(static_mut_refs)]
-static mut AUDIT_LOGGER: Option<Arc<std::sync::Mutex<DefaultAuditLogger>>> = None;
-static AUDIT_LOGGER_INIT: std::sync::Once = std::sync::Once::new();
+/// Global audit logger instance using safe initialization
+static AUDIT_LOGGER: std::sync::OnceLock<Arc<std::sync::Mutex<DefaultAuditLogger>>> = std::sync::OnceLock::new();
 
 /// Initialize the global audit logger
 pub fn init_audit_logger(config: AuditConfig) -> Result<()> {
-    AUDIT_LOGGER_INIT.call_once(|| {
-        match DefaultAuditLogger::new(config) {
-            Ok(logger) => {
-                unsafe {
-                    AUDIT_LOGGER = Some(Arc::new(std::sync::Mutex::new(logger)));
-                }
-            }
-            Err(e) => {
-                eprintln!("Failed to initialize audit logger: {}", e);
-            }
-        }
-    });
+    let logger = DefaultAuditLogger::new(config)?;
+    AUDIT_LOGGER.set(Arc::new(std::sync::Mutex::new(logger)))
+        .map_err(|_| FortressError::audit("Audit logger already initialized", None, AuditErrorCode::ConfigurationError))?;
     Ok(())
 }
 
 /// Get the global audit logger safely
-fn get_audit_logger() -> Option<Arc<dyn AuditLogger>> {
-    // For now, return None since the complex unsafe code is causing issues
-    // In a real implementation, you'd want to properly handle the static Mutex
-    None
+fn get_audit_logger() -> Option<Arc<std::sync::Mutex<DefaultAuditLogger>>> {
+    AUDIT_LOGGER.get().map(|logger| logger.clone())
 }
 
 /// Convenience function to log audit events
 pub fn log_event(
-    _event_type: AuditEventType,
-    _security_level: SecurityLevel,
-    _principal: Option<String>,
-    _resource: Option<String>,
-    _action: String,
-    _outcome: EventOutcome,
+    event_type: AuditEventType,
+    security_level: SecurityLevel,
+    principal: Option<String>,
+    resource: Option<String>,
+    action: String,
+    outcome: EventOutcome,
 ) -> Result<()> {
-    if let Some(_logger_arc) = get_audit_logger() {
-        // For now, we'll skip logging since the type system is complex
-        // In a real implementation, you'd handle this properly
-        debug!("Audit logging not yet implemented for dynamic logger types");
-        Ok(())
+    if let Some(logger_arc) = get_audit_logger() {
+        let mut logger = logger_arc.lock().map_err(|_| FortressError::audit("Failed to lock audit logger", None, AuditErrorCode::LogRetrievalFailed))?;
+        let entry = logger.create_entry(event_type, security_level, principal, resource, action, outcome, HashMap::new())?;
+        logger.log(entry)
     } else {
         debug!("No audit logger available");
         Ok(())
@@ -954,19 +940,18 @@ pub fn log_event(
 
 /// Convenience function to log audit events with metadata
 pub fn log_event_with_metadata(
-    _event_type: AuditEventType,
-    _security_level: SecurityLevel,
-    _principal: Option<String>,
-    _resource: Option<String>,
-    _action: String,
-    _outcome: EventOutcome,
-    _metadata: HashMap<String, String>,
+    event_type: AuditEventType,
+    security_level: SecurityLevel,
+    principal: Option<String>,
+    resource: Option<String>,
+    action: String,
+    outcome: EventOutcome,
+    metadata: HashMap<String, String>,
 ) -> Result<()> {
-    if let Some(_logger_arc) = get_audit_logger() {
-        // For now, we'll skip logging since the type system is complex
-        // In a real implementation, you'd handle this properly
-        debug!("Audit logging with metadata not yet implemented for dynamic logger types");
-        Ok(())
+    if let Some(logger_arc) = get_audit_logger() {
+        let mut logger = logger_arc.lock().map_err(|_| FortressError::audit("Failed to lock audit logger", None, AuditErrorCode::LogRetrievalFailed))?;
+        let entry = logger.create_entry(event_type, security_level, principal, resource, action, outcome, metadata)?;
+        logger.log(entry)
     } else {
         debug!("No audit logger available");
         Ok(())
