@@ -1,9 +1,9 @@
 [package]
 name = "fortress-db"
-version = "1.0.2-alpha"
+version = "1.0.0"
 edition = "2021"
 authors = ["Fortress Team <team@fortressdb.io>"]
-license-file = "../../LICENSE"
+license = "Proprietary"
 description = "Python bindings for Fortress secure database system"
 homepage = "https://fortressdb.io"
 repository = "https://github.com/Genius740Code/Fortress"
@@ -21,7 +21,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 # Fortress core
-fortress-core = { path = "../fortress-core", version = "1.0.2-alpha" }
+fortress-core = { path = "../fortress-core", version = "1.0.0" }
 
 # Python bindings
 pyo3 = { version = "0.20", features = ["extension-module", "abi3-py38"] }

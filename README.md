@@ -46,16 +46,24 @@ A comprehensive security platform that provides enterprise-grade cryptography, k
 
 ### Developer Friendly
 - **REST API**: Standard HTTP methods with JSON payloads `[Stable]`
-- **Multiple SDKs**: Python, JavaScript, Rust, Go, and more `[Stable]`
-- **gRPC API**: High-performance RPC interface `[Stable]`
-- **WebSocket API**: Real-time updates and streaming `[Stable]`
+- **Multiple SDKs**: 
+  - Rust: ✅ Stable (crates.io/crates/fortress)
+  - Python: 🚧 In Development (Coming Q2 2024)
+  - JavaScript: 📋 Planned (Coming Q3 2024)
+  - Go: 📋 Planned (Coming Q4 2024)
+- **gRPC API**: High-performance RPC interface `[In Development]`
+- **WebSocket API**: Real-time updates and streaming `[In Development]`
 - **GraphQL API**: Flexible query language with real-time subscriptions `[Stable]`
 - **Plugin System**: Extensible WASM-based functionality `[Stable]`
 
 ### Modern Deployment
-- **Docker Support**: Container-ready with official images `[Stable]`
+- **Docker Support**: 
+  - Build from source: `docker build -t fortress .` ✅
+  - Official registry: 🚧 Coming Soon
 - **Kubernetes**: Production-ready K8s manifests `[In Development]`
-- **Helm Charts**: Easy deployment and management `[In Development]`
+- **Helm Charts**: 
+  - Local install: `helm install ./helm/fortress` ✅
+  - Official repo: 📋 Planned
 - **Cloud Integration**: AWS, Azure, Google Cloud support `[Not Implemented]`
 
 ### Privacy-Preserving ML & Homomorphic Encryption
@@ -69,6 +77,77 @@ A comprehensive security platform that provides enterprise-grade cryptography, k
 **Important Notice**: The homomorphic encryption module contains research implementations only. The mathematical operations are **not cryptographically secure** and should never be used for real security purposes. For production use, either implement proper cryptographic schemes or remove the module entirely.
 
 See `crates/fortress-core/src/homomorphic_encryption.rs` for detailed warnings and current implementation status.
+
+## Prerequisites
+
+### System Requirements
+- **RAM**: Minimum 2GB, Recommended 4GB+
+- **Storage**: Minimum 1GB free space
+- **CPU**: 64-bit processor (x86_64 or ARM64)
+
+### Platform-Specific Dependencies
+
+#### Ubuntu/Debian
+```bash
+# Install required system dependencies
+sudo apt update
+sudo apt install -y build-essential pkg-config libssl-dev
+
+# Verify OpenSSL installation
+openssl version
+```
+
+#### macOS
+```bash
+# Install OpenSSL and pkg-config via Homebrew
+brew install openssl pkg-config
+
+# Set environment variables for Rust to find OpenSSL
+export PKG_CONFIG_PATH="/usr/local/opt/openssl/lib/pkgconfig:$PKG_CONFIG_PATH"
+export LDFLAGS="-L/usr/local/opt/openssl/lib"
+export CPPFLAGS="-I/usr/local/opt/openssl/include"
+
+# Add to shell profile for persistence
+echo 'export PKG_CONFIG_PATH="/usr/local/opt/openssl/lib/pkgconfig:$PKG_CONFIG_PATH"' >> ~/.zshrc
+echo 'export LDFLAGS="-L/usr/local/opt/openssl/lib"' >> ~/.zshrc
+echo 'export CPPFLAGS="-I/usr/local/opt/openssl/include"' >> ~/.zshrc
+```
+
+#### Windows
+```bash
+# Using vcpkg (recommended)
+vcpkg install openssl:x64-windows
+vcpkg integrate install
+
+# Or using Chocolatey
+choco install openssl
+
+# Or using Scoop
+scoop install openssl
+```
+
+#### Fedora/CentOS/RHEL
+```bash
+# Fedora
+sudo dnf install -y gcc gcc-c++ pkg-config openssl-devel
+
+# CentOS/RHEL
+sudo yum install -y gcc gcc-c++ pkg-config openssl-devel
+```
+
+#### Arch Linux
+```bash
+sudo pacman -S --needed base-devel pkg-config openssl
+```
+
+### Verify Installation
+```bash
+# Test OpenSSL installation
+openssl version
+
+# Test pkg-config (should show OpenSSL paths)
+pkg-config --modversion openssl
+```
 
 ## Quick Start
 
@@ -139,18 +218,23 @@ go install github.com/fortress-security/fortress/fortress-go/cmd/fortress-cli@la
 
 #### Docker
 
+**Build from Source (Recommended)**
 ```bash
-# Pull official image
-docker pull fortress-security/fortress:latest
+# Clone and build
+git clone https://github.com/fortress-security/fortress.git
+cd fortress
+docker build -t fortress .
 
 # Run with default configuration
-docker run -p 8080:8080 -p 9090:9090 fortress-security/fortress:latest
+docker run -p 8080:8080 -p 9090:9090 fortress
 
 # Or with custom configuration
 docker run -p 8080:8080 \
   -v /path/to/config:/etc/fortress \
-  fortress-security/fortress:latest
+  fortress
 ```
+
+**Note**: Official Docker images will be available in Q2 2024. Until then, please build from source.
 
 ### Basic Usage
 
@@ -354,6 +438,11 @@ curl http://localhost:8080/metrics/performance
 - [Architecture Guide](docs/ARCHITECTURE.md) - System architecture and design
 
 ### Security & Compliance
+- [🔒 Security Policy](SECURITY.md) - Security features, vulnerability disclosure, and best practices
+- [🏥 HIPAA Compliance](COMPLIANCE.md#hipaa-compliance) - Technical safeguards and organizational requirements
+- [💳 PCI-DSS Implementation](COMPLIANCE.md#pci-dss-compliance) - Cardholder data protection and security controls
+- [🇪🇺 GDPR Compliance](COMPLIANCE.md#gdpr-compliance) - Data protection and privacy controls
+- [🔐 HSM Integration Status](HSM.md) - Honest assessment of HSM implementation
 - [Security Guide](docs/SECURITY.md) - Security features and best practices
 - [Key Rotation Guide](docs/KEY_ROTATION.md) - Key management and rotation
 - [Production Readiness Matrix](docs/PRODUCTION_READINESS_MATRIX.md) - Honest assessment of production readiness
@@ -410,7 +499,7 @@ export FORTRESS_LOG_LEVEL=info
 version: '3.8'
 services:
   fortress:
-    image: fortressdb/fortress:latest
+    build: .
     ports:
       - "8080:8080"
     volumes:
@@ -425,17 +514,20 @@ volumes:
 
 ### Kubernetes
 
+**Local Installation (Recommended)**
 ```bash
-# Install using Helm
-helm install my-fortress fortress/fortress \
-  --namespace fortress \
-  --create-namespace
-
-# Or using kubectl
+# Install from local manifests
 kubectl apply -f k8s/namespace.yaml
 kubectl apply -f k8s/deployment.yaml
 kubectl apply -f k8s/service.yaml
+
+# Or using local Helm chart
+helm install my-fortress ./helm/fortress \
+  --namespace fortress \
+  --create-namespace
 ```
+
+**Note**: Official Helm repository will be available in Q2 2024. Until then, please install from local source.
 
 ## Cloud Integration
 
