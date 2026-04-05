@@ -1,0 +1,102 @@
+---
+name: Feature Request
+description: Suggest an idea for Fortress
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a new feature! Please fill out the form below to help us understand your request.
+
+  - type: textarea
+    id: feature-description
+    attributes:
+      label: Feature Description
+      description: A clear and concise description of the feature you'd like to see
+      placeholder: Describe the feature in detail
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem-statement
+    attributes:
+      label: Problem Statement
+      description: What problem does this feature solve?
+      placeholder: What problem would this feature solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed Solution
+      description: How do you envision this feature working?
+      placeholder: Describe how you think this feature should work
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives-considered
+    attributes:
+      label: Alternatives Considered
+      description: What other approaches or solutions have you considered?
+      placeholder: Describe any alternative solutions you've considered
+
+  - type: textarea
+    id: use-cases
+    attributes:
+      label: Use Cases
+      description: How would you use this feature? What are the specific use cases?
+      placeholder: |
+        - Use case 1: ...
+        - Use case 2: ...
+        - Use case 3: ...
+
+  - type: dropdown
+    id: feature-type
+    attributes:
+      label: Feature Type
+      description: What type of feature is this?
+      options:
+        - New functionality
+        - Enhancement to existing feature
+        - Performance improvement
+        - Developer experience improvement
+        - Documentation improvement
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this feature to you?
+      options:
+        - Critical - blocking my work
+        - High - significantly improves my workflow
+        - Medium - nice to have
+        - Low - minor improvement
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any other relevant information about the feature request
+      placeholder: Add any other context, mockups, or examples here
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Confirmation
+      description: Please confirm the following
+      options:
+        - label: I have searched existing issues for this feature
+          required: true
+        - label: I have provided enough detail to understand the request
+          required: true
+        - label: This feature aligns with Fortress's goals and architecture
+          required: true
