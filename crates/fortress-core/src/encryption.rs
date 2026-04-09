@@ -1741,12 +1741,14 @@ impl EncryptionAlgorithm for Argon2idEncrypt {
                 EncryptionErrorCode::EncryptionFailed,
             ))?;
 
-        // Extract hash as bytes for encryption key
+        // SECURE: Extract hash string directly for encryption key
         let hash_str = password_hash.hash.ok_or_else(|| FortressError::encryption(
             "Password hash failed to generate".to_string(),
             self.name().to_string(),
             EncryptionErrorCode::EncryptionFailed,
-        ))?.to_string();
+        ))?;
+        
+        // SECURE: Use hash string directly for key derivation
         let derived_key = hash_str.as_bytes();
         
         // Use first 32 bytes of derived hash as encryption key
@@ -1834,12 +1836,14 @@ impl EncryptionAlgorithm for Argon2idEncrypt {
                 EncryptionErrorCode::DecryptionFailed,
             ))?;
 
-        // Extract hash as bytes for encryption key
+        // SECURE: Extract hash string directly for encryption key
         let hash_str = password_hash.hash.ok_or_else(|| FortressError::encryption(
             "Password hash failed to generate".to_string(),
             self.name().to_string(),
             EncryptionErrorCode::EncryptionFailed,
-        ))?.to_string();
+        ))?;
+        
+        // SECURE: Use hash string directly for key derivation
         let derived_key = hash_str.as_bytes();
         
         // Use first 32 bytes of derived hash as encryption key

@@ -986,7 +986,18 @@ impl WasmAuthProvider {
             return Err(FortressError::authentication("Invalid credentials format"));
         }
         
+        // ENHANCED: Comprehensive character validation
         if !username.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-' || c == '.') {
+            return Err(FortressError::authentication("Invalid credentials format"));
+        }
+        
+        // ENHANCED: Prevent control characters and dangerous patterns
+        if username.contains("..") || username.contains("//") || username.contains("\\") {
+            return Err(FortressError::authentication("Invalid credentials format"));
+        }
+        
+        // ENHANCED: Check for null bytes and other injection patterns
+        if username.contains('\0') || username.to_lowercase().contains("script") {
             return Err(FortressError::authentication("Invalid credentials format"));
         }
         
@@ -1005,12 +1016,30 @@ impl WasmAuthProvider {
             return Err(FortressError::authentication("Invalid credentials format"));
         }
         
-        // Check for injection patterns without revealing what was found
-        let dangerous_patterns = ["'", "\"", ";", "--", "/*", "*/", "xp_", "sp_", "<script", "</script", "javascript:", "data:"];
+        // ENHANCED: Check for null bytes and control characters
+        if password.contains('\0') || password.chars().any(|c| c.is_control()) {
+            return Err(FortressError::authentication("Invalid credentials format"));
+        }
+        
+        // ENHANCED: Comprehensive injection pattern detection
+        let dangerous_patterns = [
+            "'", "\"", ";", "--", "/*", "*/", "xp_", "sp_", 
+            "<script", "</script", "javascript:", "data:", "vbscript:",
+            "onload=", "onerror=", "onclick=", "eval(", "alert(",
+            "document.", "window.", "location.", "cookie.",
+            "../", "..\\", "%2e%2e", "%3c", "%3e", "%27", "%22"
+        ];
+        
+        let password_lower = password.to_lowercase();
         for pattern in &dangerous_patterns {
-            if password.to_lowercase().contains(pattern) {
+            if password_lower.contains(pattern) {
                 return Err(FortressError::authentication("Invalid credentials format"));
             }
+        }
+        
+        // ENHANCED: Check for excessive repetition (common in weak passwords)
+        if password.chars().collect::<Vec<char>>().windows(3).any(|w| w[0] == w[1] && w[1] == w[2]) {
+            return Err(FortressError::authentication("Invalid credentials format"));
         }
         
         Ok(password.to_string())
@@ -1042,10 +1071,9 @@ impl WasmAuthProvider {
     /// SECURE: Generate cryptographically secure session token
     async fn generate_secure_session_token(&self, username: &str) -> Result<String> {
         use sha2::{Sha256, Digest};
-        use rand::Rng;
         
-        let mut rng = rand::thread_rng();
-        let random_bytes: Vec<u8> = (0..32).map(|_| rng.gen()).collect();
+        // SECURE: Use cryptographically secure random number generation
+        let random_bytes = crate::trng::random_bytes(32)?;
         
         let mut hasher = Sha256::new();
         hasher.update(username.as_bytes());

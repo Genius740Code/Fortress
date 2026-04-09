@@ -97,6 +97,24 @@ pub use key::{
     SecureKey, KeyManager, KeyMetadata
 };
 
+/// Security fixes and enhancements
+pub mod security_fixes;
+pub use security_fixes::{
+    SecureSessionGenerator, SecurityHeaders, CsrfProtection, InputValidator
+};
+
+/// Security integration tests
+#[cfg(test)]
+pub mod security_integration_tests;
+
+/// Security regression tests
+#[cfg(test)]
+pub mod security_regression_tests;
+
+/// Security performance tests
+#[cfg(test)]
+pub mod security_performance_tests;
+
 pub mod key_rotation_optimized;
 pub use key_rotation_optimized::{
     OptimizedKeyRotationManager, RotationMetrics, OptimizedRotationConfig, RotationContext

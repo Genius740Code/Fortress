@@ -454,10 +454,11 @@ mod tests {
     async fn test_create_control_group_service() {
         let service = create_test_service();
         
-        // First create a user in the auth system
+        // First create a user in the auth system with secure credentials
         {
             let mut auth = service.auth_manager.write().unwrap();
-            auth.create_user("admin".to_string(), "password".to_string()).await.unwrap();
+            let secure_password = crate::utils::generate_password(16);
+            auth.create_user("admin".to_string(), secure_password).await.unwrap();
         }
 
         let group_id = service.create_control_group(
@@ -478,13 +479,13 @@ mod tests {
     async fn test_approval_workflow_service() {
         let service = create_test_service();
         
-        // Create users
+        // Create users with secure credentials
         {
             let mut auth = service.auth_manager.write().unwrap();
-            auth.create_user("admin".to_string(), "password".to_string()).await.unwrap();
-            auth.create_user("user1".to_string(), "password".to_string()).await.unwrap();
-            auth.create_user("user2".to_string(), "password".to_string()).await.unwrap();
-            auth.create_user("requester".to_string(), "password".to_string()).await.unwrap();
+            auth.create_user("admin".to_string(), crate::utils::generate_password(16)).await.unwrap();
+            auth.create_user("user1".to_string(), crate::utils::generate_password(16)).await.unwrap();
+            auth.create_user("user2".to_string(), crate::utils::generate_password(16)).await.unwrap();
+            auth.create_user("requester".to_string(), crate::utils::generate_password(16)).await.unwrap();
         }
 
         // Create control group
@@ -549,12 +550,12 @@ mod tests {
     async fn test_get_pending_requests() {
         let service = create_test_service();
         
-        // Create users
+        // Create users with secure credentials
         {
             let mut auth = service.auth_manager.write().unwrap();
-            auth.create_user("admin".to_string(), "password".to_string()).await.unwrap();
-            auth.create_user("user1".to_string(), "password".to_string()).await.unwrap();
-            auth.create_user("requester".to_string(), "password".to_string()).await.unwrap();
+            auth.create_user("admin".to_string(), crate::utils::generate_password(16)).await.unwrap();
+            auth.create_user("user1".to_string(), crate::utils::generate_password(16)).await.unwrap();
+            auth.create_user("requester".to_string(), crate::utils::generate_password(16)).await.unwrap();
         }
 
         // Create control group
