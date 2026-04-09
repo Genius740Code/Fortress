@@ -6,14 +6,13 @@
 use crate::graphql::{
     context::from_context,
     types::*,
-    cache::{GraphQLCacheManager, QueryHasher, DatabaseCacheEntry, TableCacheEntry},
+    cache::{GraphQLCacheManager, QueryHasher, DatabaseCacheEntry},
 };
-use async_graphql::{Result, Object, Context};
+use async_graphql::{Result, Context};
 use chrono::Utc;
 use std::sync::Arc;
 use futures::stream::{self, Stream, StreamExt, TryStreamExt};
 use serde_json;
-use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 use tokio::time::Instant;
 use fortress_core::storage::StorageBackend;

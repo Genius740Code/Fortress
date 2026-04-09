@@ -2,15 +2,25 @@ use color_eyre::eyre::Result;
 use std::path::PathBuf;
 use fortress_core::config::Config;
 
+/// Configuration file manager for Fortress CLI
 pub struct ConfigManager {
+    /// Path to the configuration file
     config_path: PathBuf,
 }
 
 impl ConfigManager {
+    /// Create a new configuration manager
+    /// 
+    /// # Arguments
+    /// * `config_path` - Path to the configuration file
     pub fn new(config_path: PathBuf) -> Self {
         Self { config_path }
     }
     
+    /// Load configuration from file
+    /// 
+    /// # Returns
+    /// * `Result<Config>` - Loaded configuration or error
     pub async fn load(&self) -> Result<Config> {
         if !self.config_path.exists() {
             return Err(color_eyre::Report::msg(format!("Configuration file not found: {}", self.config_path.display())));
@@ -26,6 +36,13 @@ impl ConfigManager {
         Ok(config)
     }
     
+    /// Save configuration to file
+    /// 
+    /// # Arguments
+    /// * `config` - Configuration to save
+    /// 
+    /// # Returns
+    /// * `Result<()>` - Success or error
     pub async fn save(&self, config: &Config) -> Result<()> {
         let config_toml = toml::to_string_pretty(config)
             .map_err(|e| color_eyre::Report::msg(format!("Failed to serialize configuration: {}", e)))?;
@@ -43,6 +60,10 @@ impl ConfigManager {
         Ok(())
     }
     
+    /// Get the configuration file path
+    /// 
+    /// # Returns
+    /// * `&PathBuf` - Reference to the configuration path
     pub fn path(&self) -> &PathBuf {
         &self.config_path
     }

@@ -7,32 +7,72 @@ use tracing::debug;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Simple configuration structure for Fortress database
+///
+/// Contains the basic configuration needed to set up a Fortress database
+/// with database, encryption, and storage settings.
 pub struct SimpleConfig {
+    /// Database configuration settings
     pub database: DatabaseConfig,
+    /// Encryption configuration settings
     pub encryption: EncryptionConfig,
+    /// Storage configuration settings
     pub storage: StorageConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Database configuration settings
+///
+/// Defines the database connection parameters including name, path,
+/// size limits, and connection pool settings.
 pub struct DatabaseConfig {
+    /// Database name identifier
     pub name: String,
+    /// File system path for the database
     pub path: String,
+    /// Maximum database size in bytes (None for unlimited)
     pub max_size: Option<u64>,
+    /// Number of connections in the database pool
     pub pool_size: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Encryption configuration settings
+///
+/// Defines the encryption algorithm and key rotation policy
+/// for database encryption.
 pub struct EncryptionConfig {
+    /// Encryption algorithm name (e.g., "aegis256", "aes256gcm")
     pub algorithm: String,
+    /// Key rotation interval in hours
     pub key_rotation_interval_hours: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Storage configuration settings
+///
+/// Defines the storage backend and path for data storage.
 pub struct StorageConfig {
+    /// Storage backend type (e.g., "filesystem", "s3")
     pub backend: String,
+    /// Base path for storage
     pub path: String,
 }
 
+/// Handle the create simple command
+///
+/// Creates a new Fortress database with simple configuration using
+/// either interactive mode or provided parameters.
+///
+/// # Arguments
+/// * `name` - Optional database name
+/// * `template` - Configuration template to use
+/// * `data_dir` - Optional data directory path
+/// * `interactive` - Whether to run in interactive mode
+/// * `_dry_run` - Whether to perform a dry run (unused)
+///
+/// # Returns
+/// Result indicating success or failure
 pub async fn handle_create_simple(
     name: Option<String>,
     template: String,

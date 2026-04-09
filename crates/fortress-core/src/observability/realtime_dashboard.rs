@@ -3,7 +3,7 @@
 //! Provides WebSocket-based real-time dashboard capabilities with
 //! live system metrics, performance data, and interactive visualizations.
 
-use crate::error::{FortressError, Result};
+use crate::error::Result;
 use crate::observability::{
     SystemResourceMonitor, EnhancedPerformanceMonitor, 
     AdvancedMetricsCollector, SystemSnapshot

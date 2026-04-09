@@ -8,40 +8,62 @@ use tracing::info;
 use crate::ConfigAction;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Complete configuration settings for Fortress
 pub struct ConfigSettings {
+    /// Server configuration
     pub server: ServerConfig,
+    /// Database configuration
     pub database: DatabaseConfig,
+    /// Security configuration
     pub security: SecurityConfig,
+    /// Logging configuration
     pub logging: LoggingConfig,
+    /// Custom configuration values
     #[serde(flatten)]
     pub custom: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Server configuration settings
 pub struct ServerConfig {
+    /// Server host address
     pub host: String,
+    /// Server port number
     pub port: u16,
+    /// Number of worker threads
     pub workers: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Database configuration settings
 pub struct DatabaseConfig {
+    /// Path to the database file or directory
     pub path: String,
+    /// Maximum number of concurrent connections
     pub max_connections: usize,
+    /// Connection timeout in seconds
     pub connection_timeout: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Security configuration settings
 pub struct SecurityConfig {
+    /// Encryption algorithm to use (e.g., "aegis256", "aes256")
     pub encryption_algorithm: String,
+    /// Key rotation interval in seconds
     pub key_rotation_interval: u64,
+    /// Whether audit logging is enabled
     pub audit_enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Logging configuration settings
 pub struct LoggingConfig {
+    /// Log level (e.g., "info", "debug", "warn")
     pub level: String,
+    /// Optional path to log file
     pub file_path: Option<String>,
+    /// Maximum log file size in bytes
     pub max_file_size: u64,
 }
 
@@ -73,6 +95,13 @@ impl Default for ConfigSettings {
     }
 }
 
+/// Handle configuration actions
+/// 
+/// # Arguments
+/// * `action` - The configuration action to perform
+///
+/// # Returns
+/// * `Result<()>` - Ok if successful, Err otherwise
 pub async fn handle_config_action(action: ConfigAction) -> Result<()> {
     match action {
         ConfigAction::Show => {
@@ -190,12 +219,23 @@ async fn handle_config_validate() -> Result<()> {
     Ok(())
 }
 
+/// Get the path to the Fortress configuration file
+/// 
+/// # Returns
+/// * `Result<PathBuf>` - Path to the fortress.toml configuration file
 pub fn get_config_path() -> Result<PathBuf> {
     let home_dir = dirs::home_dir().ok_or_else(|| color_eyre::eyre::eyre!("Could not find home directory"))?;
     let fortress_dir = home_dir.join(".fortress");
     Ok(fortress_dir.join("config").join("fortress.toml"))
 }
 
+/// Load existing configuration or create default configuration
+/// 
+/// # Arguments
+/// * `config_path` - Path to the configuration file
+///
+/// # Returns
+/// * `Result<ConfigSettings>` - Loaded or created configuration
 pub async fn load_or_create_config(config_path: &PathBuf) -> Result<ConfigSettings> {
     if config_path.exists() {
         let config_content = fs::read_to_string(config_path).await

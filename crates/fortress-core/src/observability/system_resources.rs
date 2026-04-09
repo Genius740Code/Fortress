@@ -391,7 +391,7 @@ impl SystemResourceMonitor {
         
         // Get load averages (Unix-like systems only)
         let load_averages = cfg!(unix).then(|| {
-            let mut loadavg = [0.0; 3];
+            let loadavg = [0.0; 3];
             // Note: This would need platform-specific implementation
             // For now, return placeholder values
             Some((0.5, 0.3, 0.1))

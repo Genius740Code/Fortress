@@ -5,7 +5,6 @@
 //! enclaves, providing the highest level of protection for sensitive keys.
 
 use crate::error::{FortressError, Result};
-use crate::key::SecureKey;
 use crate::tee::{TeeManager, TeeType, EnclaveConfig, SecurityPolicy};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

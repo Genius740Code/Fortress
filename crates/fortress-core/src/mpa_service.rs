@@ -7,11 +7,11 @@ use crate::error::FortressError;
 use crate::performance_monitor::OperationType;
 use crate::multi_person_auth::{
     MultiPersonAuthManager, ControlGroup, ControlGroupId, ApprovalRequest,
-    ApprovalRequestId, MultiPersonOperationType, ControlGroupRole, ApprovalStatus, Decision
+    ApprovalRequestId, MultiPersonOperationType, ControlGroupRole, Decision
 };
 use crate::auth::{UserId, AuthManager};
 use std::sync::{Arc, RwLock};
-use tokio::time::{sleep, Duration};
+use tokio::time::Duration;
 
 /// MPA Service that handles multi-person authorization workflows
 pub struct MpaService {

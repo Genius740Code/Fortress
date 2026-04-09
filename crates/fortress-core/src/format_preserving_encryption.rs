@@ -5,10 +5,8 @@
 //! This is crucial for legacy system compatibility where data formats cannot be changed.
 
 use crate::error::{FortressError, Result, EncryptionErrorCode};
-use crate::encryption::EncryptionAlgorithm;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use uuid::Uuid;
 use regex::Regex;
 use chrono::{DateTime, Utc, NaiveDate};
 

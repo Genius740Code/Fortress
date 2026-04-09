@@ -3,15 +3,15 @@
 //! This module provides REST API endpoints for managing authentication plugins,
 //! including deployment, configuration, monitoring, and hot-swapping.
 
-use crate::auth_plugin_manager::{HotSwappableAuthPluginManager, PluginDeployment, PluginReloadRequest, DeploymentStrategy, PluginRegistryEntry, PluginManagerStats};
-use crate::auth_service::{PluginAuthService, AuthServiceConfig, ServiceContext, AuthServiceStats};
+use crate::auth_plugin_manager::{PluginDeployment, PluginReloadRequest, DeploymentStrategy, PluginRegistryEntry, PluginManagerStats};
+use crate::auth_service::{PluginAuthService, ServiceContext, AuthServiceStats};
 use crate::auth_plugin::{AuthMethod, AuthRequest, AuthPluginMetadata};
 use crate::error::Result;
 use std::sync::Arc;
 use std::collections::HashMap;
 use tokio::sync::RwLock;
 use uuid::Uuid;
-use warp::{Filter, Rejection, Reply};
+use warp::Filter;
 use serde::{Serialize, Deserialize};
 
 /// API response wrapper

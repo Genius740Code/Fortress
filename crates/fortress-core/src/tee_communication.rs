@@ -5,8 +5,7 @@
 
 use crate::error::{FortressError, Result};
 use crate::key::SecureKey;
-use crate::tee::{SecureChannel, TeeType};
-use chrono::Timelike;
+use crate::tee::SecureChannel;
 use rand::RngCore;
 use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
 use aes_gcm::aead::{Aead, OsRng};
@@ -15,7 +14,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
-use base64::Engine;
+use base64::{Engine as _, engine::general_purpose};
 
 /// Secure message types for enclave communication
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -331,10 +330,10 @@ impl SecureProtocolHandler {
         let auth_tag = ciphertext[tag_start..].to_vec();
         
         Ok(EncryptedPayload {
-            encrypted_data: base64::encode(&encrypted_data),
-            auth_tag: base64::encode(&auth_tag),
-            nonce: base64::encode(&nonce_bytes),
-            aad: Some(base64::encode(&aad)),
+            encrypted_data: general_purpose::STANDARD.encode(&encrypted_data),
+            auth_tag: general_purpose::STANDARD.encode(&auth_tag),
+            nonce: general_purpose::STANDARD.encode(&nonce_bytes),
+            aad: Some(general_purpose::STANDARD.encode(&aad)),
         })
     }
     
@@ -370,7 +369,7 @@ impl SecureProtocolHandler {
         
         // Get AAD
         let aad_result = if let Some(ref aad_str) = payload.aad {
-            base64::decode(aad_str)
+            general_purpose::STANDARD.decode(aad_str)
                 .map_err(|e| FortressError::tee(
                     format!("Failed to decode AAD: {}", e),
                     "SecureProtocolHandler::decrypt_payload".to_string()
@@ -440,7 +439,7 @@ impl SecureProtocolHandler {
         Ok(SecureMessage {
             header: message.header.clone(),
             payload: message.payload.clone(),
-            signature: base64::encode(&signature),
+            signature: general_purpose::STANDARD.encode(&signature),
         })
     }
     
@@ -451,7 +450,7 @@ impl SecureProtocolHandler {
         }
         
         // Decode signature
-        let signature = base64::decode(&message.signature)
+        let signature = general_purpose::STANDARD.decode(&message.signature)
             .map_err(|e| FortressError::tee(
                 format!("Failed to decode message signature: {}", e),
                 "SecureProtocolHandler::verify_message_signature".to_string()
@@ -543,7 +542,7 @@ impl SecureProtocolHandler {
         
         // Create key exchange data
         let key_exchange = KeyExchangeData {
-            public_key: base64::encode(new_key.as_bytes()),
+            public_key: general_purpose::STANDARD.encode(new_key.as_bytes()),
             algorithm: "AES-256-GCM".to_string(),
             parameters: HashMap::new(),
             nonce: Uuid::new_v4().to_string(),

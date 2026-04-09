@@ -4,7 +4,7 @@
 //! dependency tracking, event-driven invalidation, and distributed invalidation.
 
 use crate::error::Result;
-use chrono::{DateTime, Utc, Duration};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -369,7 +369,7 @@ impl CacheInvalidation for CacheInvalidationManager {
         // Update performance stats
         let elapsed_us = start_time.elapsed().as_micros() as f64;
         // For sync implementation, skip stats update
-        drop(elapsed_us);
+        let _ = elapsed_us;
 
         Ok(())
     }
@@ -420,24 +420,24 @@ impl CacheInvalidation for CacheInvalidationManager {
     /// Remove dependency
     fn remove_dependency(&self, key: &str, depends_on: &str) -> Result<()> {
         // For sync implementation, skip dependency removal
-        drop(key);
-        drop(depends_on);
+        let _ = key;
+        let _ = depends_on;
         Ok(())
     }
 
     /// Add tags to key
     fn add_tags(&self, key: &str, tags: &[String]) -> Result<()> {
         // For sync implementation, skip tag management
-        drop(key);
-        drop(tags);
+        let _ = key;
+        let _ = tags;
         Ok(())
     }
 
     /// Remove tags from key
     fn remove_tags(&self, key: &str, tags: &[String]) -> Result<()> {
         // For sync implementation, skip tag removal
-        drop(key);
-        drop(tags);
+        let _ = key;
+        let _ = tags;
         Ok(())
     }
 

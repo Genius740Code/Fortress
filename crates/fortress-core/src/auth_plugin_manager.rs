@@ -12,7 +12,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::time::{interval, Duration};
 use tracing::{info, warn, error, debug};
-use uuid::Uuid;
+use base64::{Engine as _, engine::general_purpose};
 
 /// Hot-swappable authentication plugin manager with comprehensive lifecycle management
 pub struct HotSwappableAuthPluginManager {
@@ -468,7 +468,7 @@ impl HotSwappableAuthPluginManager {
     /// Immediate deployment strategy
     async fn deploy_immediate(&self, deployment: PluginDeployment) -> Result<()> {
         // Decode and write plugin file
-        let plugin_bytes = base64::decode(&deployment.file_data)
+        let plugin_bytes = general_purpose::STANDARD.decode(&deployment.file_data)
             .map_err(|e| FortressError::plugin(format!("Failed to decode plugin data: {}", e)))?;
 
         let plugin_path = Path::new(&self.config.plugin_directory)

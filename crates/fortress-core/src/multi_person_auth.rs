@@ -4,9 +4,9 @@
 //! requiring multiple authorized users to approve sensitive actions before execution.
 
 use crate::error::FortressError;
-use crate::auth::{UserId, Role};
+use crate::auth::UserId;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 

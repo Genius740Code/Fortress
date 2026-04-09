@@ -81,6 +81,17 @@ impl FortressServer {
     }
 }
 
+/// Handle the start command
+///
+/// Starts the Fortress server with the specified configuration.
+///
+/// # Arguments
+/// * `data_dir` - Optional data directory path
+/// * `port` - Port number for the server
+/// * `host` - Host address for the server
+///
+/// # Returns
+/// Result indicating success or failure
 pub async fn handle_start(
     data_dir: Option<String>,
     port: u16,

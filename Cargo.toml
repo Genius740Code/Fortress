@@ -133,6 +133,10 @@ derive_more = { version = "0.99", features = ["from", "into", "display"] }
 # HTTP client (for cloud storage)
 reqwest = { version = "0.12", features = ["json", "stream"] }
 
+# Kubernetes client (optional)
+k8s-openapi = { version = "0.20", optional = true }
+kube = { version = "0.88", optional = true }
+
 # AWS SDK (optional)
 aws-config = { version = "0.55", optional = true }
 aws-sdk-s3 = { version = "0.28", optional = true }
@@ -173,6 +177,15 @@ azure = ["azure_storage_blobs", "azure_identity"]
 # all-cloud = ["aws", "azure", "gcp"]
 all-cloud = ["aws", "azure"]
 cloud-storage = ["aws-config", "aws-sdk-s3", "aws-sdk-kms", "azure_storage_blobs", "azure_identity"]
+
+# Database features
+postgres = ["sqlx/postgres"]
+mysql = ["sqlx/mysql"]
+# mssql feature not available in sqlx 0.8
+all-databases = ["postgres", "mysql"]
+
+# Kubernetes features
+k8s = ["k8s-openapi", "kube"]
 
 # Security features
 hsm = ["fortress-core/hsm"]

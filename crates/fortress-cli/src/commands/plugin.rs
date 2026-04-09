@@ -14,11 +14,14 @@ use fortress_core::plugin_marketplace::{PluginMarketplace, PluginPackage, Instal
 #[derive(Parser)]
 #[command(name = "plugin")]
 #[command(about = "Manage Fortress plugins")]
+/// Plugin management commands
 pub struct PluginCommands {
+    /// The plugin action to perform
     #[command(subcommand)]
     pub action: PluginAction,
 }
 
+/// Plugin management actions
 #[derive(Subcommand)]
 pub enum PluginAction {
     /// Search for available plugins

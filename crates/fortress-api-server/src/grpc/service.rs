@@ -1,12 +1,11 @@
 use crate::grpc::types::*;
 use crate::error::ServerError;
 use fortress_core::encryption::{Aegis256, EncryptionAlgorithm};
-use fortress_core::key::{SecureKey, KeyManager};
-use fortress_core::error::FortressError;
+use fortress_core::key::KeyManager;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{info, error, debug, warn};
+use tracing::{info, error, debug};
 use hex;
 
 /// gRPC service implementation for Fortress

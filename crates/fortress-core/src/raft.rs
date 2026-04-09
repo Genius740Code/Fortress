@@ -427,9 +427,9 @@ impl RaftEngine {
         if let Some(ref mut leader_state) = leader_state.as_mut() {
             if response.term > persistent_state.current_term {
                 // Step down as leader
-                drop(leader_state);
-                drop(persistent_state);
-                drop(volatile_state);
+                let _ = leader_state;
+                let _ = persistent_state;
+                let _ = volatile_state;
                 self.step_down().await?;
                 return Ok(());
             }
@@ -506,7 +506,7 @@ impl RaftEngine {
                         
                         // Start election
                         drop(current_state);
-                        drop(heartbeat_time);
+                        let _ = heartbeat_time;
                         drop(members);
                         
                         if let Err(e) = Self::start_election(
@@ -604,7 +604,7 @@ impl RaftEngine {
             // Note: This is simplified - in a real implementation, we'd need
             // to handle the case where another node becomes leader during the election
             drop(members);
-            drop(persistent_state);
+            let _ = persistent_state;
             
             // This would need to be called on the actual RaftEngine instance
             // For now, we'll just log the result

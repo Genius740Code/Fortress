@@ -7,7 +7,6 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{RwLock, mpsc};
 use uuid::Uuid;
-use serde::{Serialize, Deserialize};
 
 /// Subscription manager
 #[derive(Debug)]

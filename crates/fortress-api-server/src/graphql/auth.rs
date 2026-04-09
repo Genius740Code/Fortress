@@ -11,8 +11,6 @@ use serde::{Serialize, Deserialize};
 use async_graphql::{Result, Error, ErrorExtensions};
 use jsonwebtoken::{encode, decode, Validation, Algorithm, Header, DecodingKey, EncodingKey};
 use uuid::Uuid;
-use regex::Regex;
-use once_cell::sync::Lazy;
 use argon2::{
     Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
     password_hash::{rand_core::OsRng, SaltString}
@@ -21,85 +19,140 @@ use argon2::{
 /// JWT token claims structure
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims {
-    pub sub: String,        // Subject (user ID)
-    pub exp: usize,        // Expiration time
-    pub iat: usize,        // Issued at
-    pub iss: String,        // Issuer
-    pub aud: String,        // Audience
-    pub jti: String,        // JWT ID
-    pub roles: Vec<String>, // User roles
-    pub permissions: Vec<String>, // Specific permissions
-    pub tenant_id: Option<String>, // Multi-tenant support
-    pub session_id: String, // Session identifier
-    pub device_id: Option<String>, // Device fingerprint
-    pub ip_address: String, // Client IP address
-    pub user_agent: String,  // Client user agent
+    /// Subject (user ID)
+    pub sub: String,
+    /// Expiration time
+    pub exp: usize,
+    /// Issued at
+    pub iat: usize,
+    /// Issuer
+    pub iss: String,
+    /// Audience
+    pub aud: String,
+    /// JWT ID
+    pub jti: String,
+    /// User roles
+    pub roles: Vec<String>,
+    /// Specific permissions
+    pub permissions: Vec<String>,
+    /// Multi-tenant support
+    pub tenant_id: Option<String>,
+    /// Session identifier
+    pub session_id: String,
+    /// Device fingerprint
+    pub device_id: Option<String>,
+    /// Client IP address
+    pub ip_address: String,
+    /// Client user agent
+    pub user_agent: String,
 }
 
 /// User information for GraphQL context
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthenticatedUser {
+    /// Unique user identifier
     pub id: String,
+    /// Username for authentication
     pub username: String,
+    /// Email address
     pub email: String,
+    /// Assigned user roles
     pub roles: Vec<String>,
+    /// User permissions
     pub permissions: Vec<String>,
+    /// Multi-tenant identifier
     pub tenant_id: Option<String>,
+    /// Current session identifier
     pub session_id: String,
+    /// Last login timestamp
     pub last_login: Option<usize>,
+    /// Device fingerprint
     pub device_id: Option<String>,
+    /// Additional user metadata
     pub metadata: serde_json::Value,
 }
 
 /// Role definition with permissions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Role {
+    /// Unique role identifier
     pub id: String,
+    /// Role name
     pub name: String,
+    /// Role description
     pub description: String,
+    /// Role permissions
     pub permissions: Vec<String>,
+    /// Whether this is a system role
     pub is_system_role: bool,
+    /// Tenant identifier
     pub tenant_id: Option<String>,
 }
 
 /// Permission definition
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Permission {
+    /// Unique permission identifier
     pub id: String,
+    /// Permission name
     pub name: String,
+    /// Permission description
     pub description: String,
+    /// Resource this permission applies to
     pub resource: String,
+    /// Action this permission allows
     pub action: String,
+    /// Whether this is a system permission
     pub is_system_permission: bool,
 }
 
 /// Session information
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
+    /// Unique session identifier
     pub id: String,
+    /// User ID for this session
     pub user_id: String,
+    /// Session creation timestamp
     pub created_at: usize,
+    /// Session expiration timestamp
     pub expires_at: usize,
+    /// Last activity timestamp
     pub last_activity: usize,
+    /// Client IP address
     pub ip_address: String,
+    /// Client user agent
     pub user_agent: String,
+    /// Device fingerprint
     pub device_fingerprint: String,
+    /// Whether session is active
     pub is_active: bool,
+    /// Session metadata
     pub metadata: serde_json::Value,
 }
 
 /// Authentication configuration
 #[derive(Debug, Clone)]
 pub struct AuthConfig {
+    /// JWT secret key
     pub jwt_secret: String,
+    /// JWT token expiration duration
     pub jwt_expiration: Duration,
+    /// Session timeout duration
     pub session_timeout: Duration,
+    /// Maximum sessions per user
     pub max_sessions_per_user: usize,
+    /// Password policy configuration
     pub password_policy: PasswordPolicy,
+    /// Enable multi-factor authentication
     pub enable_multi_factor_auth: bool,
+    /// Enable device tracking
     pub enable_device_tracking: bool,
+    /// Enable IP whitelist
     pub enable_ip_whitelist: bool,
+    /// Allowed CORS origins
     pub allowed_origins: Vec<String>,
+    /// Blocked IP addresses
     pub blocked_ips: Vec<String>,
 }
 
@@ -903,7 +956,7 @@ impl SecurityPolicy {
     }
 
     fn evaluate_time_restriction(&self, start_hour: u32, end_hour: u32, days_of_week: &[u8], timestamp: u64) -> bool {
-        use chrono::{DateTime, Utc, Datelike, Timelike};
+        use chrono::{Datelike, Timelike};
         
         let datetime = chrono::DateTime::from_timestamp(timestamp as i64, 0);
         let weekday = datetime.map(|dt| dt.weekday().num_days_from_monday() as u8).unwrap_or(0);

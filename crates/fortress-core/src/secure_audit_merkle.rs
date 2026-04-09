@@ -18,14 +18,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use chrono::{DateTime, Utc};
-use std::fs::{File, OpenOptions};
-use std::path::Path;
 use sha2::{Sha256, Digest};
 use hmac::Hmac;
 use base64::Engine as _;
 use ed25519_dalek::{Signature, Verifier, Signer, SigningKey, VerifyingKey};
 use rand::rngs::OsRng;
-use uuid::Uuid;
 
 type HmacSha256 = Hmac<Sha256>;
 

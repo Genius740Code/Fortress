@@ -7,13 +7,11 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
 use serde_json;
-use uuid::Uuid;
 use chrono::Utc;
 use crate::graphql::{
     OptimizedQuery, OptimizedMutation,
     cache::{GraphQLCacheManager, CacheConfig},
     performance::{PerformanceMonitor, QueryAnalyzer},
-    types::*,
 };
 
 /// Performance benchmark configuration

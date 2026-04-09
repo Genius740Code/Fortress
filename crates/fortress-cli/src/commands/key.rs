@@ -13,6 +13,16 @@ use uuid::Uuid;
 use serde_json;
 use std::collections::HashMap;
 
+/// Handle the key action command
+///
+/// Provides comprehensive key management operations including generation,
+/// rotation, rollback, and lifecycle management of cryptographic keys.
+///
+/// # Arguments
+/// * `action` - The key action to perform
+///
+/// # Returns
+/// Result indicating success or failure
 pub async fn handle_key_action(action: KeyAction) -> Result<()> {
     match action {
         KeyAction::Generate { algorithm, length, format } => {

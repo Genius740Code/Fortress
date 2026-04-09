@@ -2,7 +2,7 @@
 
 use crate::error::{FortressError, Result};
 use crate::auth::{AuthManager, TokenClaims};
-use crate::websocket::message::{WebSocketMessage, MessageType, MessagePayload, AuthPayload, AuthMethod};
+use crate::websocket::message::{WebSocketMessage, MessagePayload, AuthMethod};
 use jsonwebtoken::{decode, Validation, DecodingKey};
 use std::collections::HashMap;
 use std::sync::Arc;

@@ -11,7 +11,6 @@ use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
 use std::time::Duration;
 use chrono::{DateTime, Utc};
-use uuid::Uuid;
 
 /// Key-Value Engine trait for high-level storage operations
 #[async_trait]

@@ -1,7 +1,7 @@
 //! WebSocket connection management
 
 use crate::error::{FortressError, Result};
-use crate::websocket::message::{WebSocketMessage, MessageType, MessagePayload};
+use crate::websocket::message::{WebSocketMessage, MessageType};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};

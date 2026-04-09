@@ -8,8 +8,6 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use serde::{Serialize, Deserialize};
-use async_graphql::Result;
-use uuid::Uuid;
 
 /// Cache entry with TTL support
 #[derive(Clone, Debug)]

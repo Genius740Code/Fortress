@@ -4,12 +4,7 @@
 //! for clustering, connection pooling, and advanced Redis features.
 
 use crate::error::{FortressError, Result};
-use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use tokio::sync::RwLock;
-use chrono::{DateTime, Utc};
-use std::time::Duration;
 
 #[cfg(feature = "redis")]
 use redis::{Client, Connection, AsyncCommands, RedisResult, RedisError};

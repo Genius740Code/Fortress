@@ -6,9 +6,9 @@
 use crate::graphql::{
     context::from_context,
     types::*,
-    cache::{GraphQLCacheManager, QueryHasher},
+    cache::GraphQLCacheManager,
 };
-use async_graphql::{Result, Object, Context};
+use async_graphql::{Result, Context};
 use chrono::Utc;
 use std::sync::Arc;
 use futures::stream::{self, StreamExt};

@@ -166,7 +166,7 @@ struct CachedUser {
 
 /// OIDC token response
 #[derive(Debug, Deserialize)]
-struct OidcTokenResponse {
+pub struct OidcTokenResponse {
     pub access_token: String,
     pub token_type: String,
     pub expires_in: Option<u64>,
@@ -177,7 +177,7 @@ struct OidcTokenResponse {
 
 /// OIDC user info response
 #[derive(Debug, Deserialize)]
-struct OidcUserInfo {
+pub struct OidcUserInfo {
     pub sub: String,
     pub name: Option<String>,
     pub email: Option<String>,
@@ -188,7 +188,7 @@ struct OidcUserInfo {
 
 /// OIDC provider discovery document
 #[derive(Debug, Deserialize)]
-struct OidcDiscoveryDocument {
+pub struct OidcDiscoveryDocument {
     pub issuer: String,
     pub authorization_endpoint: String,
     pub token_endpoint: String,
@@ -888,11 +888,13 @@ fn hash_password_legacy(password: &str) -> String {
 /// Legacy password verification for migration purposes (DEPRECATED)
 /// Only used for verifying old SHA-256 hashes during migration
 #[deprecated(note = "Use verify_password_secure instead")]
+#[allow(deprecated)]
 fn verify_password_legacy(password: &str, hash: &str) -> bool {
     hash_password_legacy(password) == hash
 }
 
 #[deprecated(note = "Use hash_password_secure instead")]
+#[allow(deprecated)]
 fn hash_password_legacy_test(password: &str) -> String {
     hash_password_legacy(password)
 }

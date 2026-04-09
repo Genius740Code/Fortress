@@ -5,14 +5,12 @@
 //! privacy by design principles.
 
 use crate::compliance::framework::*;
-use crate::error::{FortressError, Result};
-use async_trait::async_trait;
-use chrono::{DateTime, Utc, Duration};
+use crate::error::Result;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 use tokio::sync::RwLock;
-use tracing::{info, error, warn, debug, trace};
 
 /// Consent expiry alert for automated monitoring
 #[derive(Debug, Clone, Serialize, Deserialize)]

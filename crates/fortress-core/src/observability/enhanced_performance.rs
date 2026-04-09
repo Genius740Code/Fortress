@@ -3,7 +3,7 @@
 //! This module provides comprehensive performance monitoring that combines
 //! application-level metrics with system resource monitoring.
 
-use crate::error::{FortressError, Result};
+use crate::error::Result;
 use crate::observability::system_resources::{SystemResourceMonitor, SystemSnapshot};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

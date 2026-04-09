@@ -6,7 +6,7 @@
 use fortress_core::{
     field_encryption::*,
     field_encryption_manager::*,
-    key::{InMemoryKeyManager, KeyManager},
+    key::InMemoryKeyManager,
     encryption::{EncryptionAlgorithm, PerformanceProfile},
 };
 use std::collections::HashMap;

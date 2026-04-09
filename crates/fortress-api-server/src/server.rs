@@ -17,10 +17,7 @@ use crate::prelude::*;
 use axum::{
     Router,
     routing::{get, post, put, delete},
-    response::Json,
-    http::StatusCode,
 };
-use tower_http::trace::TraceLayer;
 use tracing::info;
 use fortress_core::storage::StorageBackend;
 use std::net::SocketAddr;

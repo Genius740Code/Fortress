@@ -175,7 +175,7 @@ impl BackupScheduler {
         };
 
         // Execute backup with retry logic
-        let mut last_error = None;
+        let mut _last_error = None;
         for attempt in 0..=schedule.max_retries {
             if attempt > 0 {
                 tokio::time::sleep(tokio::time::Duration::from_secs(
@@ -193,7 +193,7 @@ impl BackupScheduler {
                 }
                 Err(e) => {
                     let error_msg = format!("Attempt {} failed: {}", attempt + 1, e);
-                    last_error = Some(error_msg.clone());
+                    _last_error = Some(error_msg.clone());
                     if attempt == schedule.max_retries {
                         run_result.error_message = Some(error_msg);
                     }

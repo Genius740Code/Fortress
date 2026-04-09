@@ -2,7 +2,7 @@
 
 use crate::error::{FortressError, Result};
 use crate::websocket::{
-    connection::{ConnectionManager, ConnectionInfo},
+    connection::ConnectionManager,
     auth::{WebSocketAuthenticator, AuthConfig},
     message::{WebSocketMessage, MessageType, MessagePayload},
 };
@@ -13,10 +13,8 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::RwLock;
 use tokio_tungstenite::{
     accept_async,
-    tungstenite::Message,
     WebSocketStream,
 };
-use futures_util::StreamExt;
 
 /// WebSocket server configuration
 #[derive(Debug, Clone)]

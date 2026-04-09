@@ -11,6 +11,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
+use base64::{Engine as _, engine::general_purpose};
 
 /// Authentication request context
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -528,8 +529,8 @@ impl WasmAuthProvider {
         }
         
         // Verify header and payload are valid base64
-        base64::decode(parts[0]).ok_or_else(|| FortressError::authentication("Invalid JWT header"))?;
-        base64::decode_config(parts[1], base64::URL_SAFE_NO_PAD)
+        general_purpose::STANDARD.decode(parts[0]).ok_or_else(|| FortressError::authentication("Invalid JWT header"))?;
+        general_purpose::URL_SAFE_NO_PAD.decode(parts[1])
             .ok_or_else(|| FortressError::authentication("Invalid JWT payload"))?;
         
         // In production, verify signature with proper key
@@ -572,7 +573,7 @@ impl WasmAuthProvider {
     async fn verify_saml_token(&self, token: &str) -> Result<bool> {
         // In production, verify SAML signature and validate with IdP
         // For now, check if it looks like base64 encoded XML
-        base64::decode(token).is_ok()
+        general_purpose::STANDARD.decode(token).is_ok()
     }
 
     /// SECURE: Verify custom token

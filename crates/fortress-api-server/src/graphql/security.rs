@@ -253,11 +253,16 @@ pub struct QueryComplexityAnalyzer {
     complexity_weights: ComplexityWeights,
 }
 
+/// Query complexity calculation weights
 #[derive(Debug, Clone)]
 pub struct ComplexityWeights {
+    /// Weight for each field
     pub field_weight: u32,
+    /// Weight for query depth
     pub depth_weight: u32,
+    /// Weight for nested objects
     pub nested_object_weight: u32,
+    /// Weight for list items
     pub list_weight: u32,
 }
 
@@ -273,6 +278,11 @@ impl Default for ComplexityWeights {
 }
 
 impl QueryComplexityAnalyzer {
+    /// Create a new query complexity analyzer
+    /// 
+    /// # Arguments
+    /// * `max_depth` - Maximum allowed query depth
+    /// * `max_complexity` - Maximum allowed complexity score
     pub fn new(max_depth: usize, max_complexity: usize) -> Self {
         Self {
             max_depth,
@@ -367,9 +377,13 @@ impl QueryComplexityAnalyzer {
 /// Query complexity analysis result
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComplexityAnalysis {
+    /// Query depth
     pub depth: usize,
+    /// Complexity score
     pub complexity: usize,
+    /// Whether query is safe to execute
     pub is_safe: bool,
+    /// Optimization recommendations
     pub recommendations: Vec<String>,
 }
 
@@ -380,34 +394,56 @@ pub struct SecurityAuditLogger {
     max_entries: usize,
 }
 
+/// Security audit log entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecurityAuditEntry {
+    /// Event timestamp
     pub timestamp: u64,
+    /// Type of security event
     pub event_type: SecurityEventType,
+    /// Client identifier
     pub client_id: String,
+    /// User identifier (if authenticated)
     pub user_id: Option<String>,
+    /// Operation being performed
     pub operation: String,
+    /// Event details
     pub details: serde_json::Value,
+    /// Event severity level
     pub severity: SecuritySeverity,
+    /// Whether the event was blocked
     pub blocked: bool,
 }
 
+/// Security event types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SecurityEventType {
+    /// Rate limit was exceeded
     RateLimitExceeded,
+    /// Input validation failed
     InputValidationFailed,
+    /// Query complexity exceeded limits
     QueryComplexityExceeded,
+    /// Authentication failed
     AuthenticationFailed,
+    /// Authorization failed
     AuthorizationFailed,
+    /// Suspicious activity detected
     SuspiciousActivity,
+    /// Security violation occurred
     SecurityViolation,
 }
 
+/// Security severity levels
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SecuritySeverity {
+    /// Low severity - Events that are unlikely to cause harm, but may indicate potential issues.
     Low,
+    /// Medium severity - Events that may cause moderate harm, but are not typically critical.
     Medium,
+    /// High severity - Events that may cause significant harm, but are not typically catastrophic.
     High,
+    /// Critical severity - Events that may cause catastrophic harm, such as data breaches or system compromise.
     Critical,
 }
 
@@ -493,18 +529,31 @@ impl SecurityAuditLogger {
 /// Security statistics
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SecurityStats {
+    /// Total number of security events
     pub total_events: usize,
+    /// Number of blocked events
     pub blocked_events: usize,
+    /// Low severity events count
     pub low_severity: usize,
+    /// Medium severity events count
     pub medium_severity: usize,
+    /// High severity events count
     pub high_severity: usize,
+    /// Critical severity events count
     pub critical_severity: usize,
+    /// Rate limit violations count
     pub rate_limit_violations: usize,
+    /// Input validation failures count
     pub validation_failures: usize,
+    /// Query complexity violations count
     pub complexity_violations: usize,
+    /// Authentication failures count
     pub auth_failures: usize,
+    /// Authorization failures count
     pub authz_failures: usize,
+    /// Suspicious activities count
     pub suspicious_activities: usize,
+    /// Total security violations count
     pub security_violations: usize,
 }
 
@@ -519,6 +568,10 @@ pub struct SecurityManager {
 }
 
 impl SecurityManager {
+    /// Create a new security manager
+    /// 
+    /// # Arguments
+    /// * `config` - Security configuration
     pub fn new(config: SecurityConfig) -> Self {
         let rate_limiter = RateLimiter::new(
             config.rate_limit_requests_per_minute,
@@ -673,8 +726,11 @@ impl SecurityManager {
 /// Security validation result
 #[derive(Debug, Clone)]
 pub enum SecurityValidationResult {
+    /// Request is allowed
     Allowed,
+    /// Request is blocked
     Blocked {
+        /// Reason for blocking
         reason: String,
     },
 }
@@ -682,16 +738,29 @@ pub enum SecurityValidationResult {
 /// Security request information
 #[derive(Debug, Clone)]
 pub struct SecurityRequest {
+    /// Client identifier
     pub client_id: String,
+    /// User identifier (if authenticated)
     pub user_id: Option<String>,
+    /// Client IP address
     pub ip_address: String,
+    /// Query string (if applicable)
     pub query: Option<String>,
+    /// Input parameters
     pub inputs: Vec<(String, String)>,
+    /// Request size in bytes
     pub request_size: usize,
+    /// Request timestamp
     pub timestamp: Instant,
 }
 
 impl SecurityRequest {
+    /// Create a new security request
+    /// 
+    /// # Arguments
+    /// * `client_id` - Client identifier
+    /// * `user_id` - User identifier (optional)
+    /// * `ip_address` - Client IP address
     pub fn new(client_id: String, user_id: Option<String>, ip_address: String) -> Self {
         Self {
             client_id,
@@ -704,16 +773,29 @@ impl SecurityRequest {
         }
     }
 
+    /// Set query string
+    /// 
+    /// # Arguments
+    /// * `query` - Query string
     pub fn with_query(mut self, query: String) -> Self {
         self.query = Some(query);
         self
     }
 
+    /// Add input parameter
+    /// 
+    /// # Arguments
+    /// * `field_name` - Field name
+    /// * `value` - Field value
     pub fn with_input(mut self, field_name: String, value: String) -> Self {
         self.inputs.push((field_name, value));
         self
     }
 
+    /// Set request size
+    /// 
+    /// # Arguments
+    /// * `size` - Request size in bytes
     pub fn with_size(mut self, size: usize) -> Self {
         self.request_size = size;
         self

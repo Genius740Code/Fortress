@@ -23,8 +23,6 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 // Add these imports for the Kyber implementation
-use rand::Rng;
-use hex;
 
 /// Identifier for quantum-resistant scheme
 pub type QuantumSchemeId = String;

@@ -6,6 +6,16 @@ use std::time::Duration;
 use tokio::time::timeout;
 use serde_json;
 
+/// Handle the status command
+///
+/// Displays the current status of Fortress services including health checks,
+/// performance metrics, and operational state.
+///
+/// # Arguments
+/// * `data_dir` - Optional data directory path
+///
+/// # Returns
+/// Result indicating success or failure
 pub async fn handle_status(data_dir: Option<String>) -> Result<()> {
     println!("{}", style("Fortress Database Status").bold().cyan());
     println!();

@@ -5,15 +5,12 @@
 //! incremental updates, and performance optimization.
 
 use crate::error::{FortressError, Result, StorageErrorCode};
-use crate::performance_monitor::OperationType;
 use crate::mongodb_database::{MongoKeyDatabase, MongoPullFilter};
 use crate::postgres_database::{PostgresKeyDatabase, PostgresQuery, PostgresBulkEntry};
 use chrono::{DateTime, Utc, Duration};
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
 use std::collections::HashMap;
-use uuid::Uuid;
-use tracing::{info, debug, warn, error};
 
 /// Universal record format for data transfer
 #[derive(Debug, Clone, Serialize, Deserialize)]

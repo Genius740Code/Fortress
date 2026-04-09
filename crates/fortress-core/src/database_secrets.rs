@@ -43,15 +43,15 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use chrono::{DateTime, Utc, Duration};
 use rand::RngCore;
-use tracing::{info, error, warn, debug, trace};
 
 // Database-specific imports for actual connections
 #[cfg(feature = "postgres")]
 use postgres::{Client, NoTls};
 #[cfg(feature = "mysql")]
 use mysql::{Pool, PooledConn};
-#[cfg(feature = "mssql")]
-use tiberius::{Client as SqlClient, AuthMethod};
+// mssql feature not available in sqlx 0.8
+// #[cfg(feature = "mssql")]
+// use tiberius::{Client as SqlClient, AuthMethod};
 
 /// Database configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -333,74 +333,73 @@ impl DatabaseEngine {
     ) -> Result<()> {
         log::info!("Creating SQL Server user: {}", username);
         
-        #[cfg(feature = "mssql")]
-        {
-            // Parse database URL to get server and database name
-            let url_parts: Vec<&str> = config.database_url.split('@').collect();
-            if url_parts.len() < 2 {
-                return Err(FortressError::secrets("Invalid database URL format".to_string()));
-            }
-            
-            let server_db = url_parts[1];
-            let server_parts: Vec<&str> = server_db.split('/').collect();
-            let server = server_parts.get(0).unwrap_or("localhost:1433");
-            let database = server_parts.get(1).unwrap_or("master");
-            
-            // Connect to SQL Server
-            let conn_str = format!("server={};database={};User ID={};Password={}",
-                server, database, config.admin_username, config.admin_password);
-            
-            match SqlClient::connect(&conn_str).await {
-                Ok(mut client) => {
-                    // Create login
-                    let create_login_query = format!("CREATE LOGIN [{}] WITH PASSWORD = '{}'", username, password);
-                    if let Err(e) = client.execute(&create_login_query, &[]).await {
-                        log::error!("Failed to create SQL Server login: {}", e);
-                        return Err(FortressError::secrets(format!("Failed to create login: {}", e)));
-                    }
-                    
-                    // Switch to target database and create user
-                    let use_db_query = format!("USE [{}]", database);
-                    if let Err(e) = client.execute(&use_db_query, &[]).await {
-                        log::error!("Failed to switch to database {}: {}", database, e);
-                        return Err(FortressError::secrets(format!("Failed to switch database: {}", e)));
-                    }
-                    
-                    let create_user_query = format!("CREATE USER [{}] FOR LOGIN [{}]", username, username);
-                    if let Err(e) = client.execute(&create_user_query, &[]).await {
-                        log::error!("Failed to create SQL Server user: {}", e);
-                        return Err(FortressError::secrets(format!("Failed to create user: {}", e)));
-                    }
-                    
-                    // Grant permissions
-                    for permission in permissions {
-                        let grant_query = match permission.to_uppercase().as_str() {
-                            "SELECT" => format!("GRANT SELECT TO [{}]", username),
-                            "INSERT" => format!("GRANT INSERT TO [{}]", username),
-                            "UPDATE" => format!("GRANT UPDATE TO [{}]", username),
-                            "DELETE" => format!("GRANT DELETE TO [{}]", username),
-                            "ALL" => format!("GRANT ALL TO [{}]", username),
-                            _ => {
-                                log::warn!("Unsupported SQL Server permission: {}", permission);
-                                continue;
-                            }
-                        };
-                        
-                        if let Err(e) = client.execute(&grant_query, &[]).await {
-                            log::error!("Failed to grant permission {} to user {}: {}", permission, username, e);
-                            // Continue with other permissions
-                        }
-                    }
-                    
-                    log::info!("Successfully created SQL Server user: {}", username);
-                    Ok(())
-                },
-                Err(e) => {
-                    log::error!("Failed to connect to SQL Server: {}", e);
-                    Err(FortressError::secrets(format!("Database connection failed: {}", e)))
-                }
-            }
-        }
+        // #[cfg(feature = "mssql")]
+        // {
+        //     // Parse database URL to get server and database name
+        //     let url_parts: Vec<&str> = config.database_url.split('@').collect();
+        //     if url_parts.len() < 2 {
+        //         return Err(FortressError::secrets("Invalid database URL format".to_string()));
+        //     }
+        //     
+        //     let server_db = url_parts[1];
+        //     let server_parts: Vec<&str> = server_db.split('/').collect();
+        //     let server = server_parts.get(0).unwrap_or("localhost:1433");
+        //     let database = server_parts.get(1).unwrap_or("master");
+        //     
+        //     // Connect to SQL Server
+        //     let conn_str = format!("server={};database={};User ID={};Password={}",
+        //         server, database, config.admin_username, config.admin_password);
+        //     
+        //     match SqlClient::connect(&conn_str).await {
+        //         Ok(mut client) => {
+        //             // Create login
+        //             let create_login_query = format!("CREATE LOGIN [{}] WITH PASSWORD = '{}'", username, password);
+        //             if let Err(e) = client.execute(&create_login_query, &[]).await {
+        //                 log::error!("Failed to create SQL Server login: {}", e);
+        //                 return Err(FortressError::secrets(format!("Failed to create login: {}", e)));
+        //             }
+        //             
+        //             // Switch to target database and create user
+        //             let use_db_query = format!("USE [{}]", database);
+        //             if let Err(e) = client.execute(&use_db_query, &[]).await {
+        //                 log::error!("Failed to switch to database {}: {}", database, e);
+        //                 return Err(FortressError::secrets(format!("Failed to switch database: {}", e)));
+        //             }
+        //             
+        //             let create_user_query = format!("CREATE USER [{}] FOR LOGIN [{}]", username, username);
+        //             if let Err(e) = client.execute(&create_user_query, &[]).await {
+        //                 log::error!("Failed to create SQL Server user: {}", e);
+        //                 return Err(FortressError::secrets(format!("Failed to create user: {}", e)));
+        //             }
+        //             
+        //             // Grant permissions
+        //             for permission in permissions {
+        //                 let grant_query = match permission.to_uppercase().as_str() {
+        //                     "SELECT" => format!("GRANT SELECT TO [{}]", username),
+        //                     "INSERT" => format!("GRANT INSERT TO [{}]", username),
+        //                     "UPDATE" => format!("GRANT UPDATE TO [{}]", username),
+        //                     "DELETE" => format!("GRANT DELETE TO [{}]", username),
+        //                     "ALL" => format!("GRANT ALL TO [{}]", username),
+        //                     _ => {
+        //                         log::warn!("Unsupported SQL Server permission: {}", permission);
+        //                         continue;
+        //                     }
+        //                 };
+        //                 
+        //                 if let Err(e) = client.execute(&grant_query, &[]).await {
+        //                     log::error!("Failed to grant permission {} to user {}: {}", permission, username, e);
+        //                     // Continue with other permissions
+        //                 }
+        //             }
+        //             
+        //             log::info!("Successfully created SQL Server user: {}", username);
+        //             Ok(())
+        //         },
+        //         Err(e) => {
+        //             log::error!("Failed to connect to SQL Server: {}", e);
+        //             Err(FortressError::secrets(format!("Database connection failed: {}", e)))
+        //         }
+        //     }
         
         #[cfg(not(feature = "mssql"))]
         {
@@ -418,7 +417,7 @@ impl DatabaseEngine {
     }
 
     /// Drop database user
-    async fn drop_database_user(
+    pub async fn drop_database_user(
         &self,
         config: &DatabaseConfig,
         username: &str,
@@ -490,44 +489,43 @@ impl DatabaseEngine {
                 }
             },
             DatabaseType::SQLServer => {
-                #[cfg(feature = "mssql")]
-                {
-                    let url_parts: Vec<&str> = config.database_url.split('@').collect();
-                    if url_parts.len() >= 2 {
-                        let server_db = url_parts[1];
-                        let server_parts: Vec<&str> = server_db.split('/').collect();
-                        let server = server_parts.get(0).unwrap_or("localhost:1433");
-                        let database = server_parts.get(1).unwrap_or("master");
-                        
-                        let conn_str = format!("server={};database={};User ID={};Password={}",
-                            server, database, config.admin_username, config.admin_password);
-                        
-                        if let Ok(mut client) = SqlClient::connect(&conn_str).await {
-                            // Drop login
-                            let drop_login_query = format!("DROP LOGIN IF EXISTS [{}]", username);
-                            if let Err(e) = client.execute(&drop_login_query, &[]).await {
-                                log::error!("Failed to drop SQL Server login {}: {}", username, e);
-                                return Err(FortressError::secrets(format!("Failed to drop login: {}", e)));
-                            }
-                            
-                            // Switch to database and drop user
-                            let use_db_query = format!("USE [{}]", database);
-                            if let Err(e) = client.execute(&use_db_query, &[]).await {
-                                log::warn!("Failed to switch to database {}: {}", database, e);
-                            }
-                            
-                            let drop_user_query = format!("DROP USER IF EXISTS [{}]", username);
-                            if let Err(e) = client.execute(&drop_user_query, &[]).await {
-                                log::error!("Failed to drop SQL Server user {}: {}", username, e);
-                                return Err(FortressError::secrets(format!("Failed to drop user: {}", e)));
-                            }
-                            
-                            log::info!("Successfully dropped SQL Server user: {}", username);
-                        } else {
-                            log::warn!("Failed to connect to SQL Server for user drop");
-                        }
-                    }
-                }
+                // #[cfg(feature = "mssql")]
+                // {
+                //     let url_parts: Vec<&str> = config.database_url.split('@').collect();
+                //     if url_parts.len() >= 2 {
+                //         let server_db = url_parts[1];
+                //         let server_parts: Vec<&str> = server_db.split('/').collect();
+                //         let server = server_parts.get(0).unwrap_or("localhost:1433");
+                //         let database = server_parts.get(1).unwrap_or("master");
+                //         
+                //         let conn_str = format!("server={};database={};User ID={};Password={}",
+                //             server, database, config.admin_username, config.admin_password);
+                //         
+                //         if let Ok(mut client) = SqlClient::connect(&conn_str).await {
+                //             // Drop login
+                //             let drop_login_query = format!("DROP LOGIN IF EXISTS [{}]", username);
+                //             if let Err(e) = client.execute(&drop_login_query, &[]).await {
+                //                 log::error!("Failed to drop SQL Server login {}: {}", username, e);
+                //                 return Err(FortressError::secrets(format!("Failed to drop login: {}", e)));
+                //             }
+                //             
+                //             // Switch to database and drop user
+                //             let use_db_query = format!("USE [{}]", database);
+                //             if let Err(e) = client.execute(&use_db_query, &[]).await {
+                //                 log::warn!("Failed to switch to database {}: {}", database, e);
+                //             }
+                //             
+                //             let drop_user_query = format!("DROP USER IF EXISTS [{}]", username);
+                //             if let Err(e) = client.execute(&drop_user_query, &[]).await {
+                //                 log::error!("Failed to drop SQL Server user {}: {}", username, e);
+                //                 return Err(FortressError::secrets(format!("Failed to drop user: {}", e)));
+                //             }
+                //             
+                //             log::info!("Successfully dropped SQL Server user: {}", username);
+                //         } else {
+                //             log::warn!("Failed to connect to SQL Server for user drop");
+                //         }
+                //     }
                 #[cfg(not(feature = "mssql"))]
                 {
                     log::info!("Simulating: DROP LOGIN IF EXISTS [{}]", username);
@@ -541,7 +539,7 @@ impl DatabaseEngine {
     }
 
     /// Create database credential
-    async fn create_credential(
+    pub async fn create_credential(
         &self,
         path: &str,
         username: Option<String>,

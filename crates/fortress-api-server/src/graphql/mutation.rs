@@ -6,7 +6,6 @@
 use crate::graphql::{
     context::from_context,
     types::*,
-    context::AuthenticatedUser,
 };
 use async_graphql::{Result, Object, Context};
 use chrono::Utc;
@@ -17,7 +16,7 @@ use fortress_core::{
 };
 use serde_json;
 use uuid::Uuid;
-use base64::{Engine as _, engine::general_purpose};
+use base64::Engine as _;
 
 /// GraphQL mutation root
 pub struct Mutation;

@@ -13,8 +13,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 use jsonwebtoken::{encode, decode, Header, Algorithm, Validation, EncodingKey, DecodingKey};
 use base64::{Engine as _, engine::general_purpose};
-use regex::Regex;
-use chrono::{DateTime, Utc, Duration as ChronoDuration};
 use sha2::Digest;
 
 /// OIDC Provider configuration

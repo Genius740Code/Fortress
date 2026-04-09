@@ -11,11 +11,7 @@ use crate::graphql::{
 use async_graphql::{Result, Object, Context};
 use chrono::Utc;
 use std::collections::HashMap;
-use fortress_core::{
-    key::KeyManager,
-    field_encryption::FieldIdentifier,
-    secrets::SecretsEngine,
-};
+use fortress_core::secrets::SecretsEngine;
 use serde_json;
 use uuid::Uuid;
 

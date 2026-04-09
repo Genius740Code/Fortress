@@ -13,7 +13,6 @@ use crate::graphql::{
     optimized_mutations::OptimizedMutation,
     cache::{GraphQLCacheManager, CacheConfig},
     performance::{PerformanceMonitor, QueryAnalyzer, ResourceMonitor},
-    types::PaginationInput,
 };
 
 /// Enhanced GraphQL schema with performance optimizations
@@ -35,7 +34,7 @@ impl EnhancedGraphQLSchema {
         // Start cache cleanup task
         let cache_manager_clone = cache_manager.clone();
         tokio::spawn(async move {
-            cache_manager_clone.start_cleanup_task().await;
+            let _ = cache_manager_clone.start_cleanup_task().await;
         });
 
         // Initialize performance monitor
@@ -47,7 +46,7 @@ impl EnhancedGraphQLSchema {
         // Start performance monitoring cleanup
         let perf_monitor_clone = performance_monitor.clone();
         tokio::spawn(async move {
-            perf_monitor_clone.start_cleanup_task().await;
+            let _ = perf_monitor_clone.start_cleanup_task().await;
         });
 
         // Initialize query analyzer

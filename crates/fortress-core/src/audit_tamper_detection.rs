@@ -13,16 +13,15 @@
 //! - **Compliance Reporting**: Automated compliance violation reporting
 
 use crate::error::{FortressError, Result, AuditErrorCode};
-use crate::secure_audit_merkle::{IntegrityVerificationReport, AnchorVerificationResult, TamperedEntry, TamperingType};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use chrono::{DateTime, Utc, Duration, Timelike};
+use chrono::{DateTime, Utc, Timelike};
 use sha2::{Sha256, Digest};
 use base64::Engine as _;
 use uuid::Uuid;
-use tracing::{info, error, warn, debug, trace};
+use tracing::info;
 
 /// Tamper detection alert severity levels
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Hash)]

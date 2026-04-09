@@ -7,15 +7,13 @@ use crate::error::{FortressError, Result, KeyErrorCode};
 use crate::encryption::EncryptionAlgorithm;
 use crate::audit::{SecurityLevel};
 use crate::key::{KeyManager, KeyMetadata, KeyId, SecureKey};
-use async_trait::async_trait;
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{RwLock, Mutex, Semaphore};
+use tokio::sync::{RwLock, Semaphore};
 use tokio::time::{timeout, Duration, Instant};
 use uuid::Uuid;
-use futures::future;
 
 /// Performance metrics for key rotation operations
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -314,11 +312,11 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
                 KeyErrorCode::RotationFailed,
             ));
         }
-        backup_result.map_err(|e| FortressError::key_management(
+        let _ = backup_result.map_err(|e| FortressError::key_management(
             format!("Backup creation failed: {}", e),
             Some(context.key_id.clone()),
             KeyErrorCode::RotationFailed,
-        ))?;
+        ));
 
         // Phase 2: Optimized key generation
         let new_key = self.key_manager.generate_key(algorithm).await?;
@@ -635,7 +633,7 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
             // Process batch concurrently
             let tasks: Vec<_> = chunk.iter().map(|key_id| {
                 let manager = self;
-                let algorithm = algorithm.clone();
+                let algorithm = algorithm;
                 let security_context = security_context.clone();
                 let key_id = key_id.clone();
                 

@@ -7,7 +7,7 @@
 //! - Cluster health monitoring
 //! - Failover and recovery
 
-use super::raft::{RaftEngine, AppendEntriesRequest, AppendEntriesResponse, RequestVoteRequest, RequestVoteResponse};
+use super::raft::{RaftEngine, RequestVoteRequest};
 use crate::error::{FortressError, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

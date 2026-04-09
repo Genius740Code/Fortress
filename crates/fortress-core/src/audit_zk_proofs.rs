@@ -17,11 +17,8 @@ use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use sha2::{Sha256, Digest};
 use base64::Engine as _;
-use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar, traits::Identity};
 use rand::rngs::OsRng;
-use bulletproofs::BulletproofGens;
 use merlin::Transcript;
-use uuid::Uuid;
 
 /// Zero-knowledge proof for audit verification
 #[derive(Debug, Clone, Serialize, Deserialize)]

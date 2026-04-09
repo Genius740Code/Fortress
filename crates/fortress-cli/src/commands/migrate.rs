@@ -8,6 +8,19 @@ use std::path::PathBuf;
 use tracing::{info, debug, warn};
 use std::process::Command;
 
+/// Handle data migration from external database to Fortress
+/// 
+/// # Arguments
+/// * `from` - Source database type (currently only "postgres")
+/// * `to` - Target database type (always "fortress")
+/// * `source` - Source database connection string
+/// * `data_dir` - Optional data directory for Fortress
+/// * `table` - Optional specific table to migrate
+/// * `batch_size` - Number of records to process per batch
+/// * `progress` - Whether to show progress indicators
+///
+/// # Returns
+/// * `Result<()>` - Ok if successful, Err otherwise
 pub async fn handle_migrate(
     from: String,
     to: String,

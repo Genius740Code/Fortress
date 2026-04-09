@@ -5,10 +5,9 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime};
 use tokio::sync::RwLock;
 use serde::{Serialize, Deserialize};
-use async_graphql::Result;
 use uuid::Uuid;
 
 /// Performance metrics for a single operation

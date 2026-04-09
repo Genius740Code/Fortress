@@ -6,7 +6,7 @@
 
 use crate::error::{FortressError, Result};
 use crate::auth_plugin_manager::{HotSwappableAuthPluginManager, PluginReloadRequest, DeploymentStrategy, PluginDeployment};
-use crate::auth_service::{PluginAuthService, AuthServiceConfig, ServiceContext};
+use crate::auth_service::{PluginAuthService, AuthServiceConfig};
 use crate::auth_plugin::{AuthMethod, AuthRequest, AuthCredentials, AuthContext, AuthPluginManagerConfig};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -14,7 +14,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use std::path::PathBuf;
 use uuid::Uuid;
-use tracing::{info, warn, error, debug, trace};
+use tracing::{info, warn, error};
 
 /// Authentication plugin integration service
 pub struct AuthPluginIntegrationService {

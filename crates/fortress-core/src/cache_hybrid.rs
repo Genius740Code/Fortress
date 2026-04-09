@@ -3,8 +3,8 @@
 //! This module provides a multi-tier caching system that combines local
 //! in-memory caching with distributed backends for optimal performance.
 
-use crate::error::{FortressError, Result};
-use crate::distributed_cache::{DistributedCache, DistributedCacheConfig, CacheBackend};
+use crate::error::Result;
+use crate::distributed_cache::{DistributedCache, CacheBackend};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};

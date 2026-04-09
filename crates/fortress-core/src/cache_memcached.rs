@@ -4,12 +4,7 @@
 //! for connection pooling, consistent hashing, and advanced Memcached features.
 
 use crate::error::{FortressError, Result};
-use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use tokio::sync::RwLock;
-use chrono::{DateTime, Utc};
-use std::time::Duration;
 
 #[cfg(feature = "memcached")]
 use memcache::{Client, ClientBuilder};

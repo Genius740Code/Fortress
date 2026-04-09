@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
+use base64::{Engine as _, engine::general_purpose};
 
 /// Supported TEE types
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -583,7 +584,7 @@ impl TeeAwareKeyManager {
         let request = CryptographicOperationRequest {
             operation: operation.to_string(),
             key_id: key_id.to_string(),
-            data: base64::encode(data),
+            data: general_purpose::STANDARD.encode(data),
         };
         
         let request_bytes = serde_json::to_vec(&request)
@@ -616,7 +617,7 @@ impl TeeAwareKeyManager {
             key_info.access_count += 1;
         }
         
-        base64::decode(&response.result.unwrap_or_default())
+        general_purpose::STANDARD.decode(&response.result.unwrap_or_default())
             .map_err(|e| FortressError::tee(
                 format!("Failed to decode operation result: {}", e),
                 "TeeAwareKeyManager::perform_operation".to_string()

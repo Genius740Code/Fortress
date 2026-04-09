@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use chrono::Timelike;
 
 use crate::audit::{AuditEntry, AuditEventType, SecurityLevel, AuditQuery, EventOutcome};
-use crate::error::{FortressError, Result};
+use crate::error::Result;
 
 /// Analysis engine for audit logs
 pub struct AuditAnalyzer {

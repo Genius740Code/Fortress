@@ -3,9 +3,9 @@
 //! Provides comprehensive audit logging capabilities for compliance frameworks
 //! with structured logging, retention policies, and audit trail integrity.
 
-use crate::audit::{AuditEntry, AuditEventType, SecurityLevel, EventOutcome};
+use crate::audit::EventOutcome;
 use crate::compliance::framework::*;
-use crate::error::{FortressError, Result};
+use crate::error::Result;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc, Duration};
 use serde::{Deserialize, Serialize};

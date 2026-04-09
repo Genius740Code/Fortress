@@ -4,16 +4,15 @@
 //! all caching components and provides intelligent caching strategies.
 
 use crate::error::{FortressError, Result};
-use crate::distributed_cache::{DistributedCache, DistributedCacheConfig, CacheBackend};
+use crate::distributed_cache::{DistributedCache, DistributedCacheConfig};
 use crate::cache_invalidation::{CacheInvalidation, CacheInvalidationManager, InvalidationConfig, InvalidationReason};
-use crate::cache_hybrid::{HybridCache, HybridCacheConfig, WriteStrategy, CoordinationStrategy};
+use crate::cache_hybrid::HybridCacheConfig;
 #[cfg(feature = "redis")]
 use crate::cache_redis::{RedisCache, RedisConfig};
 #[cfg(feature = "memcached")]
 use crate::cache_memcached::{MemcachedCache, MemcachedConfig};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use chrono::{DateTime, Utc};

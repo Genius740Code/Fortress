@@ -9,8 +9,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
 use serde::{Serialize, Deserialize};
 use async_graphql::{Result, Error, ErrorExtensions};
-use uuid::Uuid;
-use fortress_core::encryption::{EncryptionAlgorithm, SecureKey};
+use fortress_core::encryption::EncryptionAlgorithm;
 use fortress_core::key::KeyManager;
 
 /// Field-level encryption configuration

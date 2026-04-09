@@ -6,6 +6,8 @@ use clap::Subcommand;
 
 // Placeholder types to avoid circular dependencies
 // These will be replaced with actual implementations when the modules are properly structured
+
+/// Cluster management commands
 #[derive(Debug, Clone, Subcommand)]
 pub enum ClusterCommands {
     /// Initialize a new cluster
@@ -14,6 +16,7 @@ pub enum ClusterCommands {
     Status,
 }
 
+/// Tenant management commands
 #[derive(Debug, Clone, Subcommand)]
 pub enum TenantCommands {
     /// Create a new tenant
@@ -22,6 +25,7 @@ pub enum TenantCommands {
     List,
 }
 
+/// Plugin management actions
 #[derive(Debug, Subcommand)]
 pub enum PluginAction {
     /// List plugins
@@ -50,6 +54,7 @@ pub enum PluginAction {
     },
 }
 
+/// Main CLI commands
 #[derive(Subcommand)]
 pub enum Commands {
     /// Create a new Fortress database
@@ -128,31 +133,37 @@ pub enum Commands {
     },
     /// Manage encryption keys
     Key {
+        /// Key management action
         #[command(subcommand)]
         action: KeyAction,
     },
     /// Manage configuration
     Config {
+        /// Configuration management action
         #[command(subcommand)]
         action: ConfigAction,
     },
     /// Manage cluster operations
     Cluster {
+        /// Cluster management action
         #[command(subcommand)]
         action: ClusterCommands,
     },
     /// Manage tenant operations
     Tenant {
+        /// Tenant management action
         #[command(subcommand)]
         action: TenantCommands,
     },
     /// Manage plugins
     Plugin {
+        /// Plugin management action
         #[command(subcommand)]
         action: PluginAction,
     },
 }
 
+/// Key management actions
 #[derive(Subcommand)]
 pub enum KeyAction {
     /// Generate new encryption key
@@ -194,6 +205,7 @@ pub enum KeyAction {
     },
 }
 
+/// Configuration management actions
 #[derive(Subcommand)]
 pub enum ConfigAction {
     /// Show current configuration

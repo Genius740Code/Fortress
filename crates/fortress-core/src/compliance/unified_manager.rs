@@ -5,7 +5,7 @@
 use crate::compliance::framework::ComplianceManager;
 use crate::compliance::framework::{ComplianceFramework, ComplianceEvent, EventSeverity, ComplianceEventOutcome};
 use crate::compliance::framework::{ComplianceFinding, FindingStatus, ComplianceIssue, ComplianceStatus, ComplianceDeadline};
-use crate::compliance::framework::{ComplianceConfig, BreachNotificationConfig, ComplianceAuditConfig, EncryptionConfig, AccessControlConfig, ComplianceMetrics, ComplianceReport, DataSubject, ConsentRecord, RightsRequest};
+use crate::compliance::framework::{ComplianceConfig, ComplianceMetrics, ComplianceReport, DataSubject, ConsentRecord, RightsRequest};
 use crate::compliance::gdpr::GdprComplianceManager;
 use crate::compliance::hipaa::HipaaComplianceManager;
 use crate::compliance::pci_dss::PciDssComplianceManager;
@@ -15,7 +15,6 @@ use std::collections::HashMap;
 use uuid::Uuid;
 use tokio::sync::RwLock;
 use serde::{Deserialize, Serialize};
-use async_trait::async_trait;
 
 /// Comprehensive compliance dashboard with real-time metrics
 #[derive(Debug, Clone, Serialize, Deserialize)]

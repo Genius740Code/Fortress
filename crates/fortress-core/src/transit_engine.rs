@@ -57,9 +57,8 @@
 //! ```
 
 use crate::error::{FortressError, Result, EncryptionErrorCode};
-use crate::encryption::{Aegis256, EncryptionAlgorithm, ChaCha20Poly1305, Aes256Gcm};
-use crate::key::{SecureKey, KeyManager, KeyId, KeyMetadata};
-use async_trait::async_trait;
+use crate::encryption::{Aegis256, EncryptionAlgorithm};
+use crate::key::{SecureKey, KeyManager};
 use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
 use std::sync::Arc;

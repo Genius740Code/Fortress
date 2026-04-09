@@ -752,7 +752,7 @@ pub async fn security_health_check(
 
 /// Security events handler
 pub async fn get_security_events(
-    State(state): State<Arc<AppState>>,
+    State(_state): State<Arc<AppState>>,
     Query(params): Query<SecurityEventParams>,
 ) -> ServerResult<Json<serde_json::Value>> {
     // Mock security events data
@@ -788,7 +788,7 @@ pub async fn get_security_events(
     
     let filtered_events: Vec<_> = events.into_iter()
         .filter(|event| {
-            let event_time = event["timestamp"].as_str().unwrap();
+            let _event_time = event["timestamp"].as_str().unwrap();
             // Apply filters based on query parameters
             if let Some(severity) = &params.severity {
                 if event["severity"].as_str().unwrap_or("") != severity {
@@ -811,7 +811,7 @@ pub async fn get_security_events(
 
 /// Blocked requests handler
 pub async fn get_blocked_requests(
-    State(state): State<Arc<AppState>>,
+    State(_state): State<Arc<AppState>>,
     Query(params): Query<BlockedRequestParams>,
 ) -> ServerResult<Json<serde_json::Value>> {
     // Mock blocked requests data

@@ -3,7 +3,6 @@
 //! Provides the foundational structure for compliance management across different
 //! regulatory frameworks with unified interfaces and common functionality.
 
-use crate::audit::{AuditEntry, AuditEventType, SecurityLevel, EventOutcome};
 use crate::key::KeyId;
 use crate::error::{FortressError, Result};
 use serde::{Deserialize, Serialize};

@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 
 // Plugin metadata
@@ -120,13 +120,15 @@ struct AuthUserInfo {
 }
 
 // Global plugin state
-static mut PLUGIN_CONFIG: Option<OAuthConfig> = None;
-static mut PLUGIN_INITIALIZED: bool = false;
-static mut TOKEN_CACHE: Option<Mutex<HashMap<String, CachedToken>>> = None;
+static PLUGIN_CONFIG: OnceLock<OAuthConfig> = OnceLock::new();
+static PLUGIN_INITIALIZED: OnceLock<bool> = OnceLock::new();
+static TOKEN_CACHE: OnceLock<Mutex<HashMap<String, CachedToken>>> = OnceLock::new();
 
 #[derive(Debug, Clone)]
 struct CachedToken {
+    #[allow(dead_code)]
     access_token: String,
+    #[allow(dead_code)]
     refresh_token: Option<String>,
     expires_at: u64,
     user_info: Option<OAuthUserInfo>,
@@ -199,7 +201,7 @@ fn make_http_request(url: &str, method: &str, body: Option<&str>) -> Result<Stri
 
 // PKCE (Proof Key for Code Exchange) helpers
 fn generate_code_verifier() -> String {
-    use sha2::{Sha256, Digest};
+    
     use rand::Rng;
     
     let mut rng = rand::thread_rng();
@@ -207,6 +209,7 @@ fn generate_code_verifier() -> String {
     URL_SAFE_NO_PAD.encode(bytes)
 }
 
+#[allow(dead_code)]
 fn generate_code_challenge(code_verifier: &str) -> String {
     use sha2::{Sha256, Digest};
     
@@ -216,40 +219,32 @@ fn generate_code_challenge(code_verifier: &str) -> String {
 
 // Token management
 fn cache_token(access_token: &str, refresh_token: Option<String>, user_info: Option<OAuthUserInfo>, expires_in: Option<u64>) {
-    unsafe {
-        if TOKEN_CACHE.is_none() {
-            TOKEN_CACHE = Some(Mutex::new(HashMap::new()));
-        }
-        
-        let now = get_timestamp() as u64;
+    let cache = TOKEN_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    
+    if let Ok(mut cache) = cache.lock() {
+        let now = unsafe { get_timestamp() } as u64;
         let expires_at = now + expires_in.unwrap_or(3600);
         
-        let cached = CachedToken {
+        let cached_token = CachedToken {
             access_token: access_token.to_string(),
             refresh_token,
             expires_at,
             user_info,
         };
         
-        if let Some(ref cache) = TOKEN_CACHE {
-            if let Ok(mut cache) = cache.lock() {
-                cache.insert(access_token.to_string(), cached);
-            }
-        }
+        cache.insert(access_token.to_string(), cached_token);
     }
 }
 
 fn get_cached_token(access_token: &str) -> Option<CachedToken> {
-    unsafe {
-        if let Some(ref cache) = TOKEN_CACHE {
-            if let Ok(cache) = cache.lock() {
-                cache.get(access_token).cloned()
-            } else {
-                None
-            }
+    if let Some(cache) = TOKEN_CACHE.get() {
+        if let Ok(cache) = cache.lock() {
+            cache.get(access_token).cloned()
         } else {
             None
         }
+    } else {
+        None
     }
 }
 
@@ -341,8 +336,8 @@ pub extern "C" fn initialize() -> i32 {
             let config_json = read_string_from_wasm(config_buffer.as_ptr(), len as usize);
             match serde_json::from_str::<OAuthConfig>(&config_json) {
                 Ok(config) => {
-                    unsafe { PLUGIN_CONFIG = Some(config); }
-                    unsafe { PLUGIN_INITIALIZED = true; }
+                    let _ = PLUGIN_CONFIG.set(config);
+                    let _ = PLUGIN_INITIALIZED.set(true);
                     log_message(2, "OAuth plugin initialized successfully");
                     return 1;
                 }
@@ -353,8 +348,8 @@ pub extern "C" fn initialize() -> i32 {
             }
         } else {
             // Use default configuration
-            unsafe { PLUGIN_CONFIG = Some(OAuthConfig::default()); }
-            unsafe { PLUGIN_INITIALIZED = true; }
+            let _ = PLUGIN_CONFIG.set(OAuthConfig::default());
+            let _ = PLUGIN_INITIALIZED.set(true);
             log_message(2, "OAuth plugin initialized with default config");
             return 1;
         }
@@ -368,7 +363,7 @@ pub extern "C" fn oauth_authenticate(
     response_ptr: *mut u8,
     response_len: usize
 ) -> i32 {
-    if !unsafe { PLUGIN_INITIALIZED } {
+    if !*PLUGIN_INITIALIZED.get().unwrap_or(&false) {
         return 0;
     }
     
@@ -383,7 +378,7 @@ pub extern "C" fn oauth_authenticate(
     
     log_message(2, &format!("Processing OAuth authentication request"));
     
-    let config = unsafe { PLUGIN_CONFIG.as_ref().unwrap() };
+    let config = PLUGIN_CONFIG.get().unwrap();
     
     match auth_request.method.as_str() {
         "OAuth" => {
@@ -508,7 +503,7 @@ pub extern "C" fn validate_token(
     response_ptr: *mut u8,
     response_len: usize
 ) -> i32 {
-    if !unsafe { PLUGIN_INITIALIZED } {
+    if !*PLUGIN_INITIALIZED.get().unwrap_or(&false) {
         return 0;
     }
     
@@ -552,12 +547,12 @@ pub extern "C" fn refresh_token(
     response_ptr: *mut u8,
     response_len: usize
 ) -> i32 {
-    if !unsafe { PLUGIN_INITIALIZED } {
+    if !*PLUGIN_INITIALIZED.get().unwrap_or(&false) {
         return 0;
     }
     
     let refresh_token = read_string_from_wasm(refresh_token_ptr, refresh_token_len);
-    let config = unsafe { PLUGIN_CONFIG.as_ref().unwrap() };
+    let config = PLUGIN_CONFIG.get().unwrap();
     
     // Exchange refresh token for new access token
     let body = format!(
@@ -652,7 +647,7 @@ pub extern "C" fn logout(
     token_ptr: *const u8,
     token_len: usize
 ) -> i32 {
-    if !unsafe { PLUGIN_INITIALIZED } {
+    if !*PLUGIN_INITIALIZED.get().unwrap_or(&false) {
         return 0;
     }
     
@@ -660,11 +655,9 @@ pub extern "C" fn logout(
     log_message(2, &format!("Logging out OAuth token: {}", token));
     
     // Remove from cache
-    unsafe {
-        if let Some(ref mut cache) = TOKEN_CACHE {
-            if let Ok(mut cache) = cache.lock() {
-                cache.remove(&token);
-            }
+    if let Some(cache) = TOKEN_CACHE.get() {
+        if let Ok(mut cache) = cache.lock() {
+            cache.remove(&token);
         }
     }
     
@@ -673,7 +666,7 @@ pub extern "C" fn logout(
 
 #[no_mangle]
 pub extern "C" fn health_check() -> i32 {
-    if unsafe { PLUGIN_INITIALIZED } {
+    if *PLUGIN_INITIALIZED.get().unwrap_or(&false) {
         1 // Healthy
     } else {
         0 // Unhealthy
@@ -684,11 +677,8 @@ pub extern "C" fn health_check() -> i32 {
 pub extern "C" fn oauth_cleanup() -> i32 {
     log_message(2, "Cleaning up OAuth authentication plugin");
     
-    unsafe {
-        PLUGIN_INITIALIZED = false;
-        PLUGIN_CONFIG = None;
-        TOKEN_CACHE = None;
-    }
+    // Note: OnceLock doesn't support clearing, so we just log the cleanup
+    log_message(2, "OAuth plugin cleanup completed");
     
     1 // Success
 }

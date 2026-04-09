@@ -151,6 +151,10 @@ aws-sdk-s3 = { version = "0.28", optional = true }
 azure_storage = { version = "0.19", optional = true }
 azure_storage_blobs = { version = "0.19", optional = true }
 azure_identity = { version = "0.19", optional = true }
+
+# Kubernetes dependencies
+kube = { version = "0.88", optional = true }
+k8s-openapi = { version = "0.20", optional = true }
 google-cloud-storage = { version = "0.15", optional = true }
 google-cloud-auth = { version = "0.13", optional = true }
 
@@ -201,6 +205,10 @@ tokio-test = "0.4"
 default = ["std"]
 std = []
 postgres = ["sqlx/postgres"]
+mysql = ["sqlx/mysql"]
+mssql = []  # SQL Server feature (currently not supported by sqlx 0.8)
+k8s = ["kube", "k8s-openapi"]
+cloud-storage = ["aws-sdk-s3", "aws-config", "aws-types"]
 simd = []
 hardware-acceleration = ["ring/std"]
 fips = []

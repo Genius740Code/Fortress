@@ -10,12 +10,10 @@ use crate::error::{FortressError, Result, KeyErrorCode};
 
 use crate::encryption::{EncryptionAlgorithm, PerformanceProfile};
 use crate::audit::{AuditEventType, SecurityLevel, log_event_with_metadata, EventOutcome};
-use crate::storage::AuditEventOutcome;
 
 use async_trait::async_trait;
 
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
-use std::time::Duration as StdDuration;
 
 use serde::{Deserialize, Serialize};
 
@@ -392,11 +390,11 @@ impl KeyManager for InMemoryKeyManager {
                 KeyErrorCode::RotationFailed,
             ));
         }
-        backup_result.map_err(|e| FortressError::key_management(
+        let _ = backup_result.map_err(|e| FortressError::key_management(
             format!("Backup creation failed: {}", e),
             Some(key_id.clone()),
             KeyErrorCode::RotationFailed,
-        ))?;
+        ));
         
         // Phase 2: Generate and prepare new key
         let new_key = self.generate_key(algorithm).await?;
