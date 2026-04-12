@@ -433,6 +433,16 @@ pub mod auth_plugin_integration;
 pub mod auth_service;
 pub mod auth_api;
 
+/// Seal/Unseal mechanism with Shamir Secret Sharing
+pub mod seal;
+pub mod shamir;
+
+/// Advanced Token Management System
+pub mod token;
+
+/// HCL Policy Engine
+pub mod policy_hcl;
+
 /// Multi-Person Authorization (MPA) system
 pub mod multi_person_auth;
 
@@ -810,6 +820,27 @@ pub mod prelude {
 
     pub use crate::mpa_service::{
         MpaService,
+    };
+
+    pub use crate::seal::{
+        SealManager, SealConfig, SealState, MasterKey,
+    };
+
+    pub use crate::shamir::{
+        Share, Polynomial, multi_byte,
+    };
+
+    pub use crate::token::{
+        TokenManager, Token, TokenInfo, TokenMetadata, TokenType, TokenRole,
+        CreateTokenRequest, RenewTokenRequest, RevokeTokenRequest,
+        TokenValidationResult, TokenLookupResult,
+        RevocationList, RevocationEntry, RevocationReason,
+    };
+
+    pub use crate::policy_hcl::{
+        HclPolicyEngine, ParsedPolicy, PolicyContext, PolicyResult,
+        PolicyConstraint, ConstraintOperator, PolicyEvaluationResult,
+        RoleStore, InMemoryRoleStore, PolicyFunction,
     };
 
 }

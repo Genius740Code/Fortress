@@ -245,6 +245,35 @@ pub enum FortressError {
         /// Error code for programmatic handling
         code: AuditErrorCode,
     },
+
+    /// Seal/Unseal errors
+    #[error("Seal error: {message}")]
+    Seal {
+        /// Error message
+        message: String,
+        /// Error code for programmatic handling
+        code: SealErrorCode,
+    },
+
+    /// Token management errors
+    #[error("Token error: {message}")]
+    Token {
+        /// Error message
+        message: String,
+        /// Token ID if applicable
+        token_id: Option<String>,
+        /// Error code for programmatic handling
+        code: TokenErrorCode,
+    },
+
+    /// Policy-related errors
+    #[error("Policy error: {message}")]
+    Policy {
+        /// Error message
+        message: String,
+        /// Policy name if applicable
+        policy_name: Option<String>,
+    },
 }
 
 /// Encryption error codes
@@ -923,6 +952,82 @@ pub enum AuditErrorCode {
     VerificationFailed,
 }
 
+/// Seal error codes
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
+pub enum SealErrorCode {
+    /// Already sealed
+    #[error("Already sealed")]
+    AlreadySealed,
+    
+    /// Already unsealed
+    #[error("Already unsealed")]
+    AlreadyUnsealed,
+    
+    /// Insufficient shares
+    #[error("Insufficient shares")]
+    InsufficientShares,
+    
+    /// Invalid share
+    #[error("Invalid share")]
+    InvalidShare,
+    
+    /// Share reconstruction failed
+    #[error("Share reconstruction failed")]
+    ReconstructionFailed,
+    
+    /// Master key not found
+    #[error("Master key not found")]
+    MasterKeyNotFound,
+    
+    /// Seal initialization failed
+    #[error("Seal initialization failed")]
+    InitializationFailed,
+}
+
+/// Token error codes
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
+pub enum TokenErrorCode {
+    /// Token not found
+    #[error("Token not found")]
+    TokenNotFound,
+    
+    /// Token expired
+    #[error("Token expired")]
+    TokenExpired,
+    
+    /// Token revoked
+    #[error("Token revoked")]
+    TokenRevoked,
+    
+    /// Invalid token format
+    #[error("Invalid token format")]
+    InvalidFormat,
+    
+    /// Token creation failed
+    #[error("Token creation failed")]
+    CreationFailed,
+    
+    /// Token renewal failed
+    #[error("Token renewal failed")]
+    RenewalFailed,
+    
+    /// Token is not renewable
+    #[error("Token is not renewable")]
+    NotRenewable,
+    
+    /// Lease not found
+    #[error("Lease not found")]
+    LeaseNotFound,
+    
+    /// Lease expired
+    #[error("Lease expired")]
+    LeaseExpired,
+    
+    /// Lease renewal failed
+    #[error("Lease renewal failed")]
+    LeaseRenewalFailed,
+}
+
 impl FortressError {
     /// Create a new encryption error
     pub fn encryption<S: Into<String>>(
@@ -1215,6 +1320,63 @@ impl FortressError {
         }
     }
 
+    /// Create a new seal error
+    pub fn seal<S: Into<String>>(message: S) -> Self {
+        Self::Seal {
+            message: message.into(),
+            code: SealErrorCode::InitializationFailed,
+        }
+    }
+
+    /// Create a new seal error with code
+    pub fn seal_with_code<S: Into<String>>(message: S, code: SealErrorCode) -> Self {
+        Self::Seal {
+            message: message.into(),
+            code,
+        }
+    }
+
+    /// Create a new token error
+    pub fn token<S: Into<String>>(message: S) -> Self {
+        Self::Token {
+            message: message.into(),
+            token_id: None,
+            code: TokenErrorCode::TokenNotFound,
+        }
+    }
+
+    /// Create a new token error with token ID and code
+    pub fn token_with_id<S: Into<String>>(
+        message: S,
+        token_id: Option<String>,
+        code: TokenErrorCode,
+    ) -> Self {
+        Self::Token {
+            message: message.into(),
+            token_id,
+            code,
+        }
+    }
+
+    /// Create a new policy error
+    pub fn policy<S: Into<String>>(message: S) -> Self {
+        Self::Policy {
+            message: message.into(),
+            policy_name: None,
+        }
+    }
+
+    /// Create a new policy error with policy name
+    pub fn policy_with_name<S: Into<String>>(
+        message: S,
+        policy_name: Option<String>,
+    ) -> Self {
+        Self::Policy {
+            message: message.into(),
+            policy_name,
+        }
+    }
+
     /// Check if this error is retryable
     pub fn is_retryable(&self) -> bool {
         match self {
@@ -1276,6 +1438,9 @@ impl FortressError {
             Self::Backup { .. } => "backup",
             Self::Streaming { .. } => "streaming",
             Self::Audit { .. } => "audit",
+            Self::Seal { .. } => "seal",
+            Self::Token { .. } => "token",
+            Self::Policy { .. } => "policy",
             Self::Tee { .. } => "tee",
             Self::WebSocket { .. } => "websocket",
         }
