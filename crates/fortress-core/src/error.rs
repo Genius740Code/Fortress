@@ -58,6 +58,15 @@ pub enum FortressError {
         code: ConfigurationErrorCode,
     },
 
+    /// Engine-related errors
+    #[error("Engine error: {message}")]
+    Engine {
+        /// Error message
+        message: String,
+        /// Error code for programmatic handling
+        code: SecretsErrorCode,
+    },
+
     /// Query execution errors
     #[error("Query execution error: {message}")]
     QueryExecution {
@@ -622,6 +631,38 @@ pub enum SecretsErrorCode {
     /// Secret already exists
     #[error("Secret already exists")]
     SecretAlreadyExists,
+    
+    /// Role not found
+    #[error("Role not found")]
+    RoleNotFound,
+    
+    /// Invalid input
+    #[error("Invalid input")]
+    InvalidInput,
+    
+    /// Invalid operation
+    #[error("Invalid operation")]
+    InvalidOperation,
+    
+    /// Policy violation
+    #[error("Policy violation")]
+    PolicyViolation,
+    
+    /// Quota exceeded
+    #[error("Quota exceeded")]
+    QuotaExceeded,
+    
+    /// Invalid TTL
+    #[error("Invalid TTL")]
+    InvalidTtl,
+    
+    /// Invalid version
+    #[error("Invalid version")]
+    InvalidVersion,
+    
+    /// Operation not supported
+    #[error("Operation not supported")]
+    OperationNotSupported,
 }
 
 /// HSM error codes
@@ -1246,6 +1287,14 @@ impl FortressError {
         }
     }
 
+    /// Create a new engine error with message and code
+    pub fn engine<S: Into<String>>(message: S, code: SecretsErrorCode) -> Self {
+        Self::Engine {
+            message: message.into(),
+            code,
+        }
+    }
+
     /// Create a new HSM error
     pub fn hsm<S: Into<String>>(message: S) -> Self {
         Self::Hsm {
@@ -1433,6 +1482,7 @@ impl FortressError {
             Self::Plugin { .. } => "plugin",
             Self::Compliance { .. } => "compliance",
             Self::Secrets { .. } => "secrets",
+            Self::Engine { .. } => "engine",
             Self::Hsm { .. } => "hsm",
             Self::Transaction { .. } => "transaction",
             Self::Backup { .. } => "backup",

@@ -381,6 +381,10 @@ pub mod database_secrets;
 
 pub mod dynamic_secrets;
 
+/// Pluggable Secret Engine Framework
+
+pub mod engines;
+
 /// Kubernetes authentication module with TokenReview support
 
 pub mod kubernetes_auth;
@@ -750,6 +754,13 @@ pub mod prelude {
 
     pub use crate::dynamic_secrets::{
         DynamicSecretsEngine, DynamicSecretsConfig, AwsConfig, AwsIamCredential,
+    };
+
+    pub use crate::engines::{
+        SecretsEngine as EngineSecretsEngine, EngineManager, EngineRegistry, EngineConfig,
+        EngineCapabilities, Secret as EngineSecret, SecretMetadata as EngineSecretMetadata,
+        Context as EngineContext, LeaseInfo as EngineLeaseInfo, EngineHealth, EngineMetrics,
+        KvEngine as EngineKvEngine, PkiEngine, DatabaseEngine as EngineDatabaseEngine, AwsEngine,
     };
 
     pub use crate::kubernetes_auth::{
