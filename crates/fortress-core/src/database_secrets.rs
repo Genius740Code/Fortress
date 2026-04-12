@@ -48,7 +48,7 @@ use rand::RngCore;
 #[cfg(feature = "postgres")]
 use postgres::{Client, NoTls};
 #[cfg(feature = "mysql")]
-use mysql::{Pool, PooledConn};
+use sqlx::mysql::{MySqlPool, MySqlPoolOptions};
 // mssql feature not available in sqlx 0.8
 // #[cfg(feature = "mssql")]
 // use tiberius::{Client as SqlClient, AuthMethod};
@@ -252,56 +252,35 @@ impl DatabaseEngine {
             let host_db = url_parts[1];
             let host_parts: Vec<&str> = host_db.split('/').collect();
             let host = host_parts.get(0).unwrap_or(&"localhost:3306");
-            let database = host_parts.get(1).unwrap_or("mysql");
+            let database = host_parts.get(1).map_or("mysql", |v| *v);
             
             // Create connection URL
             let conn_url = format!("mysql://{}:{}@{}/{}",
                 config.admin_username, config.admin_password, host, database);
             
-            match Pool::new(conn_url.as_str()).await {
+            match MySqlPoolOptions::new().connect(&conn_url).await {
                 Ok(pool) => {
-                    match pool.get_conn().await {
-                        Ok(mut conn) => {
-                            // Create user
-                            let create_user_query = format!("CREATE USER '{}'@'%' IDENTIFIED BY '{}'", username, password);
-                            if let Err(e) = conn.query_drop(create_user_query).await {
-                                log::error!("Failed to create MySQL user: {}", e);
-                                return Err(FortressError::secrets(format!("Failed to create user: {}", e)));
-                            }
-                            
-                            // Grant permissions
-                            for permission in permissions {
-                                let grant_query = match permission.to_uppercase().as_str() {
-                                    "SELECT" => format!("GRANT SELECT ON {}.* TO '{}'@'%'", database, username),
-                                    "INSERT" => format!("GRANT INSERT ON {}.* TO '{}'@'%'", database, username),
-                                    "UPDATE" => format!("GRANT UPDATE ON {}.* TO '{}'@'%'", database, username),
-                                    "DELETE" => format!("GRANT DELETE ON {}.* TO '{}'@'%'", database, username),
-                                    "ALL" => format!("GRANT ALL PRIVILEGES ON {}.* TO '{}'@'%'", database, username),
-                                    _ => {
-                                        log::warn!("Unsupported MySQL permission: {}", permission);
-                                        continue;
-                                    }
-                                };
-                                
-                                if let Err(e) = conn.query_drop(grant_query).await {
-                                    log::error!("Failed to grant permission {} to user {}: {}", permission, username, e);
-                                    // Continue with other permissions
-                                }
-                            }
-                            
-                            // Flush privileges
-                            if let Err(e) = conn.query_drop("FLUSH PRIVILEGES").await {
-                                log::warn!("Failed to flush MySQL privileges: {}", e);
-                            }
-                            
-                            log::info!("Successfully created MySQL user: {}", username);
-                            Ok(())
-                        },
-                        Err(e) => {
-                            log::error!("Failed to get MySQL connection: {}", e);
-                            Err(FortressError::secrets(format!("Database connection failed: {}", e)))
-                        }
+                    // Create user
+                    let create_query = format!("CREATE USER '{}'@'%' IDENTIFIED BY '{}'", username, password);
+                    if let Err(e) = sqlx::raw_sql(&create_query).execute(&pool).await {
+                        log::error!("Failed to create MySQL user {}: {}", username, e);
+                        return Err(FortressError::secrets(format!("Failed to create user: {}", e)));
                     }
+                    
+                    // Grant permissions
+                    let grant_query = format!("GRANT {} ON {}.* TO '{}'@'%'", permissions.join(", "), database, username);
+                    if let Err(e) = sqlx::raw_sql(&grant_query).execute(&pool).await {
+                        log::error!("Failed to grant MySQL permissions to {}: {}", username, e);
+                        return Err(FortressError::secrets(format!("Failed to grant permissions: {}", e)));
+                    }
+                    
+                    // Flush privileges
+                    if let Err(e) = sqlx::raw_sql("FLUSH PRIVILEGES").execute(&pool).await {
+                        log::warn!("Failed to flush MySQL privileges: {}", e);
+                    }
+                    
+                    log::info!("Successfully created MySQL user: {}", username);
+                    Ok(())
                 },
                 Err(e) => {
                     log::error!("Failed to create MySQL connection pool: {}", e);
@@ -457,27 +436,23 @@ impl DatabaseEngine {
                         let host_db = url_parts[1];
                         let host_parts: Vec<&str> = host_db.split('/').collect();
                         let host = host_parts.get(0).unwrap_or(&"localhost:3306");
-                        let database = host_parts.get(1).unwrap_or("mysql");
+                        let database = host_parts.get(1).map_or("mysql", |v| *v);
                         
                         let conn_url = format!("mysql://{}:{}@{}/{}",
                             config.admin_username, config.admin_password, host, database);
                         
-                        if let Ok(pool) = Pool::new(conn_url.as_str()).await {
-                            if let Ok(mut conn) = pool.get_conn().await {
-                                let drop_query = format!("DROP USER IF EXISTS '{}'@'%'", username);
-                                if let Err(e) = conn.query_drop(drop_query).await {
-                                    log::error!("Failed to drop MySQL user {}: {}", username, e);
-                                    return Err(FortressError::secrets(format!("Failed to drop user: {}", e)));
-                                }
-                                
-                                if let Err(e) = conn.query_drop("FLUSH PRIVILEGES").await {
-                                    log::warn!("Failed to flush MySQL privileges: {}", e);
-                                }
-                                
-                                log::info!("Successfully dropped MySQL user: {}", username);
-                            } else {
-                                log::warn!("Failed to get MySQL connection for user drop");
+                        if let Ok(pool) = MySqlPoolOptions::new().connect(&conn_url).await {
+                            let drop_query = format!("DROP USER IF EXISTS '{}'@'%'", username);
+                            if let Err(e) = sqlx::raw_sql(&drop_query).execute(&pool).await {
+                                log::error!("Failed to drop MySQL user {}: {}", username, e);
+                                return Err(FortressError::secrets(format!("Failed to drop user: {}", e)));
                             }
+                            
+                            if let Err(e) = sqlx::raw_sql("FLUSH PRIVILEGES").execute(&pool).await {
+                                log::warn!("Failed to flush MySQL privileges: {}", e);
+                            }
+                            
+                            log::info!("Successfully dropped MySQL user: {}", username);
                         } else {
                             log::warn!("Failed to create MySQL connection pool for user drop");
                         }

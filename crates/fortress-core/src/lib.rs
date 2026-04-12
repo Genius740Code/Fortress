@@ -405,6 +405,11 @@ pub mod mongodb_database;
 
 pub mod postgres_database;
 
+/// Enhanced MySQL database backend for Fortress
+
+#[cfg(feature = "mysql")]
+pub mod mysql_database;
+
 /// Push/Pull operations for database synchronization
 
 pub mod push_pull_operations;
@@ -769,6 +774,12 @@ pub mod prelude {
         PostgresCursor, PostgresRow, PostgresSearchResult, PostgresBulkEntry,
         PostgresJsonbQuery, PostgresPartitioning, PostgresReplicationConfig,
         PostgresSyncMode
+    };
+
+    #[cfg(feature = "mysql")]
+    pub use crate::mysql_database::{
+        MySQLConfig, MySQLDatabase, MySQLStats, MySQLPartitioning, MySQLReplicationConfig,
+        MySQLPoolManager
     };
 
     pub use crate::push_pull_operations::{
