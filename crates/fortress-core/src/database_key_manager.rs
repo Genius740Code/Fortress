@@ -191,7 +191,7 @@ impl DatabaseKeyManager {
         let start_time = std::time::Instant::now();
         
         // Get all keys that need rotation
-        let all_keys = database.list_keys().await?;
+        let all_keys = database.list_keys(None, None).await?;
         let now = Utc::now();
         let mut rotated_keys = 0;
 
@@ -474,7 +474,7 @@ impl KeyManager for DatabaseKeyManager {
     async fn list_keys(&self) -> Result<Vec<(KeyId, KeyMetadata)>> {
         let start_time = std::time::Instant::now();
         
-        let result = self.database.list_keys().await?;
+        let result = self.database.list_keys(None, None).await?;
         
         // Update metrics
         if self.config.enable_performance_monitoring {

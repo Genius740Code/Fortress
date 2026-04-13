@@ -680,10 +680,18 @@ impl StorageBackend for MySQLDatabase {
         Ok(count > 0)
     }
 
-    async fn list_prefix(&self, prefix: &str) -> Result<Vec<String>> {
-        let prefix_query = format!("SELECT id FROM {} WHERE id LIKE ?", self.config.data_table);
+    async fn list_prefix(&self, prefix: &str, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<String>> {
+        let limit = limit.unwrap_or(1000); // Default limit
+        let offset = offset.unwrap_or(0);
+        
+        let prefix_query = format!(
+            "SELECT id FROM {} WHERE id LIKE ? LIMIT ? OFFSET ?", 
+            self.config.data_table
+        );
         let rows = sqlx::query(&prefix_query)
             .bind(format!("{}%", prefix))
+            .bind(limit)
+            .bind(offset)
             .fetch_all(&self.pool)
             .await
             .map_err(|e| FortressError::storage(

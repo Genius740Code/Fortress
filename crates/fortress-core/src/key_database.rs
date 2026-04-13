@@ -51,7 +51,7 @@ pub trait KeyDatabase: Send + Sync + std::fmt::Debug {
     async fn delete_key(&self, key_id: &KeyId) -> Result<()>;
 
     /// List all keys
-    async fn list_keys(&self) -> Result<Vec<(KeyId, KeyMetadata)>>;
+    async fn list_keys(&self, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<(KeyId, KeyMetadata)>>;
 
     /// Check if a key exists
     async fn key_exists(&self, key_id: &KeyId) -> Result<bool>;
@@ -283,11 +283,16 @@ impl KeyDatabase for SqliteKeyDatabase {
         Ok(())
     }
 
-    async fn list_keys(&self) -> Result<Vec<(KeyId, KeyMetadata)>> {
+    async fn list_keys(&self, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<(KeyId, KeyMetadata)>> {
+        let limit = limit.unwrap_or(1000); // Default limit
+        let offset = offset.unwrap_or(0);
+        
         let rows = sqlx::query(
-            "SELECT key_id, metadata FROM keys WHERE expires_at > ? ORDER BY created_at"
+            "SELECT key_id, metadata FROM keys WHERE expires_at > ? ORDER BY created_at LIMIT ? OFFSET ?"
         )
         .bind(Utc::now())
+        .bind(limit)
+        .bind(offset)
         .fetch_all(&self.pool)
         .await
         .map_err(|e| FortressError::key_management(

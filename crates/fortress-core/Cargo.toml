@@ -52,6 +52,8 @@ sha2 = "0.10"
 
 # Web framework
 warp = "0.3"
+axum = "0.7"
+tower-http = "0.5"
 sha3 = "0.10"
 hmac = "0.12"
 pbkdf2 = "0.12"
@@ -68,6 +70,9 @@ webpki-roots = "0.25"
 # Error handling
 thiserror = "1.0"
 anyhow = "1.0"
+
+# Lazy static initialization
+lazy_static = "1.4"
 
 # Time and date
 chrono = { version = "0.4", features = ["serde"] }

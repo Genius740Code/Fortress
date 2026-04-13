@@ -792,7 +792,7 @@ impl crate::key_database::KeyDatabase for PostgresKeyDatabase {
         Ok(())
     }
 
-    async fn list_keys(&self) -> Result<Vec<(KeyId, KeyMetadata)>> {
+    async fn list_keys(&self, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<(KeyId, KeyMetadata)>> {
         let keys_data = self.keys_data.read().await;
         
         let mut keys = Vec::new();

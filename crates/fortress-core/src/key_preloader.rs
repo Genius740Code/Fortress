@@ -273,7 +273,7 @@ impl KeyPreloader {
 
     /// Preload keys by their purpose
     async fn preload_keys_by_purpose(&self) -> Result<usize> {
-        let all_keys = self.database.list_keys().await?;
+        let all_keys = self.database.list_keys(None, None).await?;
         let mut preloaded_count = 0;
         let mut current_memory = 0;
 
@@ -306,7 +306,7 @@ impl KeyPreloader {
 
     /// Preload keys that will expire soon
     async fn preload_expiring_keys(&self) -> Result<usize> {
-        let all_keys = self.database.list_keys().await?;
+        let all_keys = self.database.list_keys(None, None).await?;
         let now = Utc::now();
         let mut preloaded_count = 0;
         let mut current_memory = 0;
@@ -463,7 +463,7 @@ impl KeyPreloader {
         // If we're under memory limits, preload more keys
         if current_memory < config.max_memory_usage_bytes {
             // Find keys that should be preloaded but aren't
-            let all_keys = database.list_keys().await?;
+            let all_keys = database.list_keys(None, None).await?;
             let preloaded_set: HashSet<_> = preloaded_keys.read().await.keys().cloned().collect();
             
             for (key_id, metadata) in all_keys {

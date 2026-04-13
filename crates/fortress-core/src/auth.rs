@@ -5,6 +5,8 @@
 //! and token-based authentication.
 
 use crate::error::FortressError;
+use argon2::{Argon2, PasswordHasher, PasswordVerifier};
+use argon2::password_hash::{PasswordHash, SaltString};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -394,8 +396,14 @@ impl AuthManager {
         // Validate password against policy
         self.validate_password(&password)?;
 
-        // Hash password (simplified for example)
-        let password_hash = format!("hash_{}", password); // In production, use proper hashing
+        // Hash password using Argon2
+        let salt = SaltString::generate(&mut rand::thread_rng());
+        let argon2 = Argon2::default();
+        let password_hash = argon2
+            .hash_password(password.as_bytes(), &salt)
+            .map_err(|_e| FortressError::encryption("Password hashing failed", "argon2", crate::error::EncryptionErrorCode::EncryptionFailed))?;
+
+        let password_hash = password_hash.to_string();
 
         let user_id = Uuid::new_v4().to_string();
         let user = User {
@@ -429,8 +437,12 @@ impl AuthManager {
         let user = self.users.get(&user_id)
             .ok_or_else(|| FortressError::authentication("Invalid credentials", None))?;
 
-        // Verify password (simplified)
-        if !user.password_hash.ends_with(&request.password) {
+        // Verify password using Argon2
+        let parsed_hash = PasswordHash::new(&user.password_hash)
+            .map_err(|_| FortressError::authentication("Invalid password hash format", None))?;
+        
+        let argon2 = Argon2::default();
+        if argon2.verify_password(request.password.as_bytes(), &parsed_hash).is_err() {
             return Err(FortressError::authentication("Invalid credentials", None));
         }
 

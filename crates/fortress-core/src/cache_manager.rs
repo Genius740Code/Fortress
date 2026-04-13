@@ -395,11 +395,11 @@ impl FortressCacheManager {
         }
 
         let mut sorted_times = response_times.clone();
-        sorted_times.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        sorted_times.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
         let avg_response_time = response_times.iter().sum::<f64>() / response_times.len() as f64;
-        let p95_index = (sorted_times.len() as f64 * 0.95) as usize;
-        let p99_index = (sorted_times.len() as f64 * 0.99) as usize;
+        let p95_index = std::cmp::min((sorted_times.len() as f64 * 0.95) as usize, sorted_times.len().saturating_sub(1));
+        let p99_index = std::cmp::min((sorted_times.len() as f64 * 0.99) as usize, sorted_times.len().saturating_sub(1));
         
         let p95_response_time = sorted_times.get(p95_index).unwrap_or(&avg_response_time);
         let p99_response_time = sorted_times.get(p99_index).unwrap_or(&avg_response_time);
