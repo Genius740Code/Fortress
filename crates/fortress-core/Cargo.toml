@@ -74,6 +74,9 @@ chrono = { version = "0.4", features = ["serde"] }
 chrono-tz = "0.8"
 time = "0.3"
 
+# Cron scheduling
+cron = "0.12"
+
 # UUID
 uuid = { version = "1.6", features = ["v4", "serde", "fast-rng"] }
 
@@ -153,14 +156,10 @@ azure_storage_blobs = { version = "0.19", optional = true }
 azure_identity = { version = "0.19", optional = true }
 
 # Kubernetes dependencies
-kube = { version = "0.88", optional = true }
-k8s-openapi = { version = "0.20", optional = true }
-google-cloud-storage = { version = "0.15", optional = true }
-google-cloud-auth = { version = "0.13", optional = true }
-
-# Additional dependencies for backup system
-tempfile = "3.8"
-cron = "0.12"
+kube = { version = "0.88", features = ["client", "runtime"], optional = true }
+k8s-openapi = { version = "0.21", features = ["v1_28"], optional = true }
+trust-dns-resolver = { version = "0.23", features = ["tokio-runtime"], optional = true }
+redis = { version = "0.24", features = ["tokio-comp", "connection-manager"], optional = true }
 
 # Database dependencies
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "chrono", "uuid", "json", "migrate"] }
@@ -187,7 +186,6 @@ num_cpus = "1.16"
 sysinfo = "0.30"
 
 # Distributed caching (optional features)
-redis = { version = "0.24", features = ["tokio-comp", "connection-manager"], optional = true }
 memcached = { version = "0.4.5-beta.2", optional = true }
 
 # Advanced profiling (optional)
@@ -220,6 +218,11 @@ monitoring = ["performance-optimization", "metrics-exporter-prometheus"]
 full-performance = ["performance-optimization", "distributed-cache", "advanced-profiling", "monitoring"]
 observability = ["tracing-subscriber", "opentelemetry", "opentelemetry_sdk", "tracing-opentelemetry", "gethostname"]
 experimental = []  # Experimental features including homomorphic encryption
+# Phase 3 features
+discovery = ["kube", "k8s-openapi", "trust-dns-resolver"]
+mesh = ["kube", "k8s-openapi"]
+rate-limiting = ["redis"]
+phase3 = ["discovery", "mesh", "rate-limiting"]
 
 [[bench]]
 name = "encryption_bench"

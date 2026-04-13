@@ -214,6 +214,16 @@ pub mod field_encryption;
 
 pub mod field_encryption_manager;
 
+/// Auto-Discovery and Service Mesh Integration (Phase 3)
+#[cfg(feature = "discovery")]
+pub mod discovery;
+#[cfg(feature = "mesh")]
+pub mod mesh;
+
+/// Advanced Rate Limiting System (Phase 3)
+#[cfg(feature = "rate-limiting")]
+pub mod rate_limit;
+
 /// Algorithm registry for easy management and discovery
 
 pub mod algorithm_registry;
@@ -579,6 +589,15 @@ pub mod prelude {
     pub use crate::cross_region_replication::{CrossRegionReplicationManager, ReplicationStats};
 
     pub use crate::simple_backup_manager::{SimpleBackupManager};
+
+    #[cfg(feature = "discovery")]
+    pub use crate::discovery::{DiscoveryManager, DiscoveryConfig, DiscoveredNode, NodeHealthStatus};
+
+    #[cfg(feature = "mesh")]
+    pub use crate::mesh::{MeshManager, MeshConfig, MeshNode, TrafficPolicy, SecurityPolicy, MeshMetrics};
+
+    #[cfg(feature = "rate-limiting")]
+    pub use crate::rate_limit::{RateLimitManager, RateLimitConfig, RateLimitRule, RateLimitContext, RateLimitResult};
 
     pub use crate::performance_profile::{
         PerformanceProfile, PerformanceProfileConfig, ProfileManager, ResourceLimits,
