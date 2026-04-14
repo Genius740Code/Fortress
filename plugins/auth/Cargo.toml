@@ -22,23 +22,21 @@ thiserror = "1.0"
 name = "fortress_auth_plugins"
 path = "src/lib.rs"
 
-[[bin]]
-name = "jwt_plugin"
-path = "src/jwt_plugin.rs"
-
-[[bin]]
-name = "oauth_plugin" 
-path = "src/oauth_plugin.rs"
-
-[[bin]]
-name = "saml_plugin"
-path = "src/saml_plugin.rs"
+# Binary targets disabled to avoid linking errors with undefined external functions
+# These are WASM plugins and should be compiled separately
+# Note: The bin/jwt_plugin.rs file exists but should not be compiled as a native binary
 
 [features]
 default = ["jwt", "oauth", "saml"]
 jwt = []
 oauth = []
 saml = []
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
 
 [[test]]
 name = "integration_tests"

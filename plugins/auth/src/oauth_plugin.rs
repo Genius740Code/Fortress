@@ -318,7 +318,7 @@ fn validate_id_token(id_token: &str) -> Result<OAuthUserInfo, String> {
 
 // Plugin entry points
 #[no_mangle]
-pub extern "C" fn initialize() -> i32 {
+pub extern "C" fn oauth_initialize() -> i32 {
     log_message(2, "Initializing OAuth authentication plugin");
     
     // Load configuration
@@ -497,7 +497,7 @@ pub extern "C" fn oauth_authenticate(
 }
 
 #[no_mangle]
-pub extern "C" fn validate_token(
+pub extern "C" fn oauth_validate_token(
     token_ptr: *const u8,
     token_len: usize,
     response_ptr: *mut u8,
@@ -541,7 +541,7 @@ pub extern "C" fn validate_token(
 }
 
 #[no_mangle]
-pub extern "C" fn refresh_token(
+pub extern "C" fn oauth_refresh_token(
     refresh_token_ptr: *const u8,
     refresh_token_len: usize,
     response_ptr: *mut u8,
@@ -643,7 +643,7 @@ pub extern "C" fn refresh_token(
 }
 
 #[no_mangle]
-pub extern "C" fn logout(
+pub extern "C" fn oauth_logout(
     token_ptr: *const u8,
     token_len: usize
 ) -> i32 {
@@ -665,7 +665,7 @@ pub extern "C" fn logout(
 }
 
 #[no_mangle]
-pub extern "C" fn health_check() -> i32 {
+pub extern "C" fn oauth_health_check() -> i32 {
     if *PLUGIN_INITIALIZED.get().unwrap_or(&false) {
         1 // Healthy
     } else {
@@ -695,23 +695,23 @@ pub extern "C" fn get_oauth_plugin_name_len() -> usize {
 }
 
 #[no_mangle]
-pub extern "C" fn get_plugin_version() -> *const u8 {
+pub extern "C" fn get_oauth_plugin_version() -> *const u8 {
     PLUGIN_VERSION.as_ptr()
 }
 
 #[no_mangle]
-pub extern "C" fn get_plugin_version_len() -> usize {
+pub extern "C" fn get_oauth_plugin_version_len() -> usize {
     PLUGIN_VERSION.len()
 }
 
 #[no_mangle]
-pub extern "C" fn get_supported_methods() -> *const u8 {
+pub extern "C" fn get_oauth_supported_methods() -> *const u8 {
     let methods = r#"["OAuth"]"#;
     methods.as_ptr()
 }
 
 #[no_mangle]
-pub extern "C" fn get_supported_methods_len() -> usize {
+pub extern "C" fn get_oauth_supported_methods_len() -> usize {
     let methods = r#"["OAuth"]"#;
     methods.len()
 }
@@ -756,8 +756,8 @@ pub struct PluginCapabilities {
     pub supports_rbac: bool,
 }
 
-// Main function for binary compilation
-fn main() {
-    println!("OAuth Authentication Plugin for Fortress");
-    println!("This is a WebAssembly plugin and should be loaded by the Fortress runtime.");
-}
+// Main function for binary compilation (disabled)
+// fn main() {
+//     println!("OAuth Authentication Plugin for Fortress");
+//     println!("This is a WebAssembly plugin and should be loaded by the Fortress runtime.");
+// }

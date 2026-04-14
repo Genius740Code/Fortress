@@ -183,6 +183,8 @@ crossbeam = { version = "0.8", optional = true }
 atomic = { version = "0.6", optional = true }
 metrics = { version = "0.21", optional = true }
 metrics-exporter-prometheus = { version = "0.12", optional = true }
+parking_lot = { version = "0.12", optional = true }
+rayon = { version = "1.8", optional = true }
 
 # CPU core count detection
 num_cpus = "1.16"
@@ -216,7 +218,7 @@ simd = []
 hardware-acceleration = ["ring/std"]
 fips = []
 hsm = ["aws-sdk-cloudhsmv2", "aws-config", "aws-types"]  # Removed pkcs11 dependency
-performance-optimization = ["dashmap", "crossbeam", "atomic", "metrics"]
+performance-optimization = ["dashmap", "crossbeam", "atomic", "metrics", "parking_lot", "rayon"]
 distributed-cache = ["performance-optimization", "redis", "memcached"]
 advanced-profiling = ["performance-optimization", "pprof", "tracing-subscriber"]
 monitoring = ["performance-optimization", "metrics-exporter-prometheus"]

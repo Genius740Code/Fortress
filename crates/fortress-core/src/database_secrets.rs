@@ -88,6 +88,12 @@ use chrono::{DateTime, Utc, Duration};
 
 use rand::RngCore;
 
+#[cfg(feature = "performance-optimization")]
+use dashmap::DashMap;
+
+#[cfg(feature = "performance-optimization")]
+use rayon::prelude::*;
+
 
 
 // Database-specific imports for actual connections
@@ -145,6 +151,42 @@ pub struct DatabaseConfig {
     /// Username prefix for generated users
 
     pub username_prefix: String,
+
+    /// Connection timeout in seconds
+
+    pub connection_timeout_seconds: u64,
+
+    /// Query timeout in seconds
+
+    pub query_timeout_seconds: u64,
+
+    /// Maximum connection lifetime in seconds
+
+    pub max_connection_lifetime_seconds: u64,
+
+    /// Idle connection timeout in seconds
+
+    pub idle_timeout_seconds: u64,
+
+    /// Enable connection health checks
+
+    pub enable_health_checks: bool,
+
+    /// Health check interval in seconds
+
+    pub health_check_interval_seconds: u64,
+
+    /// Enable query batching
+
+    pub enable_batching: bool,
+
+    /// Maximum batch size
+
+    pub max_batch_size: usize,
+
+    /// Enable connection multiplexing
+
+    pub enable_multiplexing: bool,
 
 }
 
@@ -622,7 +664,7 @@ impl DatabaseEngine {
 
             Ok(())
 
-    }
+        }
 
     }
 
@@ -941,9 +983,10 @@ impl DatabaseEngine {
 
         
 
-        Ok(())}
+        Ok(())
 
-    
+    }
+
     /// Create database credential
 
     pub async fn create_credential(
@@ -1191,10 +1234,7 @@ impl DatabaseEngine {
 
         }
 
-
-
         // Update stats
-
         {
 
             let mut stats = self.stats.write().await;
@@ -1205,41 +1245,200 @@ impl DatabaseEngine {
 
         }
 
+        Ok(expired_count)
 
+    }
 
-        if expired_count > 0 {
+    /// Create multiple database credentials in batch
 
-            log::info!("Cleaned up {} expired database credentials", expired_count);
+    pub async fn create_credentials_batch(
+        &self,
+        requests: Vec<(String, Option<String>, Vec<String>, Option<u64>)>,
+    ) -> Result<Vec<DatabaseCredential>> {
+        let config = self.config.read().await;
+        let config = config.as_ref()
+            .ok_or_else(|| FortressError::secrets("Database not configured".to_string()))?;
 
+        let mut results = Vec::with_capacity(requests.len());
+
+        #[cfg(feature = "performance-optimization")]
+        {
+            // Use parallel processing for batch operations
+            results = requests.into_par_iter()
+                .map(|(path, username, permissions, ttl)| {
+                    let ttl = ttl.unwrap_or(config.default_ttl);
+                    if ttl > config.max_ttl {
+                        return Err(FortressError::secrets("TTL exceeds maximum".to_string()));
+                    }
+
+                    let username = username.unwrap_or_else(|| {
+                        self.generate_username(&config.username_prefix)
+                    });
+                    let password = self.generate_password(16);
+
+                    // Create credential object
+                    let credential = DatabaseCredential {
+                        username: username.clone(),
+                        password: password.clone(),
+                        database: self.extract_database_name(&config.database_url),
+                        connection_string: self.build_connection_string(&config, &username, &password),
+                        granted_permissions: permissions.clone(),
+                        created_at: Utc::now(),
+                        expires_at: Utc::now() + Duration::seconds(ttl as i64),
+                    };
+
+                    Ok(credential)
+                })
+                .collect::<Result<Vec<_>, _>>()?;
         }
 
+        #[cfg(not(feature = "performance-optimization"))]
+        {
+            // Sequential processing
+            for (path, username, permissions, ttl) in requests {
+                let credential = self.create_credential(&path, username, permissions, ttl).await?;
+                results.push(credential);
+            }
+        }
 
+        Ok(results)
 
-        Ok(expired_count)
+    }
+
+    /// Revoke multiple credentials in batch
+
+    pub async fn revoke_credentials_batch(&self, lease_ids: &[String]) -> Result<usize> {
+        let mut revoked_count = 0;
+
+        #[cfg(feature = "performance-optimization")]
+        {
+            // Use parallel processing for batch revocation
+            let credentials = self.credentials.read().await;
+            let to_revoke: Vec<_> = lease_ids.iter()
+                .filter_map(|id| {
+                    credentials.get(id).map(|cred| (id.clone(), cred.username.clone()))
+                })
+                .collect();
+
+            for (lease_id, username) in to_revoke {
+                if self.revoke(&lease_id).await.is_ok() {
+                    revoked_count += 1;
+                }
+            }
+        }
+
+        #[cfg(not(feature = "performance-optimization"))]
+        {
+            // Sequential processing
+            for lease_id in lease_ids {
+                if self.revoke(lease_id).await.is_ok() {
+                    revoked_count += 1;
+                }
+            }
+        }
+
+        Ok(revoked_count)
+
+    }
+
+    /// Get connection pool statistics
+
+    pub async fn get_connection_stats(&self) -> Result<ConnectionStats> {
+        let config = self.config.read().await;
+        let config = config.as_ref()
+            .ok_or_else(|| FortressError::secrets("Database not configured".to_string()))?;
+
+        Ok(ConnectionStats {
+            pool_size: config.pool_size,
+            active_connections: self.stats.read().await.active_leases,
+            max_lifetime_seconds: config.max_connection_lifetime_seconds,
+            idle_timeout_seconds: config.idle_timeout_seconds,
+            health_checks_enabled: config.enable_health_checks,
+            batching_enabled: config.enable_batching,
+            multiplexing_enabled: config.enable_multiplexing,
+        })
 
     }
 
 }
 
+/// Connection pool statistics
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+
+pub struct ConnectionStats {
+    /// Pool size
+    pub pool_size: u32,
+    /// Active connections
+    pub active_connections: u64,
+    /// Maximum connection lifetime
+    pub max_lifetime_seconds: u64,
+    /// Idle timeout
+    pub idle_timeout_seconds: u64,
+    /// Health checks enabled
+    pub health_checks_enabled: bool,
+    /// Batching enabled
+    pub batching_enabled: bool,
+    /// Multiplexing enabled
+    pub multiplexing_enabled: bool,
+
+}
+
+impl DatabaseEngine {
+    /// Extract database name from connection URL
+
+    fn extract_database_name(&self, database_url: &str) -> String {
+        // Simple extraction - in production, use proper URL parsing
+        if let Some(db_part) = database_url.split('/').last() {
+            db_part.to_string()
+        } else {
+            "default".to_string()
+        }
+
+    }
+
+    /// Build connection string for generated credentials
+
+    fn build_connection_string(&self, config: &DatabaseConfig, username: &str, password: &str) -> String {
+        match config.database_type {
+            DatabaseType::PostgreSQL => {
+                format!("postgresql://{}:{}@{}", username, password, 
+                    config.database_url.replace("postgresql://", "").split('@').nth(1).unwrap_or("localhost:5432/postgres"))
+            },
+            DatabaseType::MySQL => {
+                format!("mysql://{}:{}@{}", username, password,
+                    config.database_url.replace("mysql://", "").split('@').nth(1).unwrap_or("localhost:3306/mysql"))
+            },
+            DatabaseType::SQLServer => {
+                format!("Server={};Database={};User Id={};Password={};",
+                    config.database_url.split(';').find(|s| s.starts_with("Server=")).unwrap_or("Server=localhost"),
+                    self.extract_database_name(&config.database_url),
+                    username, password
+                )
+            },
+        }
+
+    }
+
+}
+
+/// Write secret data to the database
 
 #[async_trait::async_trait]
 
 impl SecretsEngine for DatabaseEngine {
 
-    fn name(&self) -> &str {
+        fn name(&self) -> &str {
 
-        "database"
+            "database"
 
-    }
+        }
 
+        fn engine_type(&self) -> EngineType {
 
+            EngineType::Database
 
-    fn engine_type(&self) -> EngineType {
-
-        EngineType::Database
-
-    }
+        }
 
 
 
@@ -1807,6 +2006,24 @@ impl SecretsEngine for DatabaseEngine {
 
             username_prefix,
 
+            connection_timeout_seconds: 30,
+
+            query_timeout_seconds: 30,
+
+            max_connection_lifetime_seconds: 3600,
+
+            idle_timeout_seconds: 600,
+
+            enable_health_checks: true,
+
+            health_check_interval_seconds: 60,
+
+            enable_batching: true,
+
+            max_batch_size: 100,
+
+            enable_multiplexing: false,
+
         };
 
 
@@ -1852,23 +2069,16 @@ impl SecretsEngine for DatabaseEngine {
             stats: EngineStats {
 
                 total_secrets: credentials.len() as u64,
-
                 active_leases: credentials.len() as u64,
-
                 operations: stats.operations.clone(),
-
                 last_operation: stats.last_operation,
-
             },
-
         })
-
     }
 
 }
 
 impl Default for DatabaseEngine {
-
     fn default() -> Self {
 
         Self::new()

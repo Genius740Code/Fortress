@@ -631,7 +631,7 @@ impl ImageEncryptorFactory {
 
     /// Create an image encryptor with default algorithm
     pub fn create_default() -> Result<ImageEncryptor> {
-        Self::create_encryptor("chacha20poly1305")
+        Self::create_encryptor("kyber768")
     }
 }
 

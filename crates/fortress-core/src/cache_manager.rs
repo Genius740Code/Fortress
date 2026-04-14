@@ -17,6 +17,13 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use chrono::{DateTime, Utc};
 
+#[cfg(feature = "performance-optimization")]
+use dashmap::DashMap;
+#[cfg(feature = "performance-optimization")]
+use parking_lot::RwLock as ParkingLotRwLock;
+#[cfg(feature = "performance-optimization")]
+use rayon::prelude::*;
+
 /// Cache manager configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheManagerConfig {
@@ -42,6 +49,16 @@ pub struct CacheManagerConfig {
     pub health_check_interval_seconds: u64,
     /// Performance thresholds
     pub performance_thresholds: PerformanceThresholds,
+    /// Enable predictive cache warming
+    pub enable_predictive_warming: bool,
+    /// ML-based access pattern learning
+    pub enable_pattern_learning: bool,
+    /// Pattern learning window in hours
+    pub pattern_learning_window_hours: u32,
+    /// Minimum access frequency for prediction
+    pub min_access_frequency: u32,
+    /// Prediction confidence threshold
+    pub prediction_confidence_threshold: f64,
 }
 
 /// Cache types
@@ -99,6 +116,11 @@ impl Default for CacheManagerConfig {
             enable_monitoring: true,
             health_check_interval_seconds: 60,
             performance_thresholds: PerformanceThresholds::default(),
+            enable_predictive_warming: true,
+            enable_pattern_learning: true,
+            pattern_learning_window_hours: 24,
+            min_access_frequency: 5,
+            prediction_confidence_threshold: 0.8,
         }
     }
 }
@@ -200,6 +222,17 @@ pub trait CacheManager: Send + Sync + std::fmt::Debug {
     async fn get_performance_recommendations(&self) -> Result<Vec<String>>;
 }
 
+/// Access pattern for predictive warming
+#[derive(Debug, Clone)]
+struct AccessPattern {
+    key: String,
+    access_count: u32,
+    last_access: DateTime<Utc>,
+    access_times: Vec<DateTime<Utc>>,
+    predicted_next_access: Option<DateTime<Utc>>,
+    confidence_score: f64,
+}
+
 /// Advanced cache manager implementation
 #[derive(Debug)]
 pub struct FortressCacheManager {
@@ -209,15 +242,36 @@ pub struct FortressCacheManager {
     /// Invalidation manager
     invalidation_manager: Arc<dyn CacheInvalidation>,
     /// Performance metrics
+    #[cfg(not(feature = "performance-optimization"))]
     performance_metrics: Arc<RwLock<PerformanceMetrics>>,
+    #[cfg(feature = "performance-optimization")]
+    performance_metrics: Arc<ParkingLotRwLock<PerformanceMetrics>>,
     /// Health status
+    #[cfg(not(feature = "performance-optimization"))]
     health_status: Arc<RwLock<HealthStatus>>,
+    #[cfg(feature = "performance-optimization")]
+    health_status: Arc<ParkingLotRwLock<HealthStatus>>,
     /// Response time samples
+    #[cfg(not(feature = "performance-optimization"))]
     response_times: Arc<RwLock<Vec<f64>>>,
+    #[cfg(feature = "performance-optimization")]
+    response_times: Arc<ParkingLotRwLock<Vec<f64>>>,
     /// Error count
+    #[cfg(not(feature = "performance-optimization"))]
     error_count: Arc<RwLock<u64>>,
+    #[cfg(feature = "performance-optimization")]
+    error_count: Arc<ParkingLotRwLock<u64>>,
     /// Operation count
+    #[cfg(not(feature = "performance-optimization"))]
     operation_count: Arc<RwLock<u64>>,
+    #[cfg(feature = "performance-optimization")]
+    operation_count: Arc<ParkingLotRwLock<u64>>,
+    /// Access patterns for predictive warming
+    #[cfg(feature = "performance-optimization")]
+    access_patterns: Arc<DashMap<String, AccessPattern>>,
+    /// Last pattern analysis time
+    #[cfg(feature = "performance-optimization")]
+    last_pattern_analysis: Arc<ParkingLotRwLock<DateTime<Utc>>>,
 }
 
 impl FortressCacheManager {
@@ -229,36 +283,83 @@ impl FortressCacheManager {
         // Create invalidation manager
         let invalidation_manager = Arc::new(CacheInvalidationManager::new(config.invalidation_config.clone()));
 
-        let manager = Self {
-            config,
-            cache,
-            invalidation_manager,
-            performance_metrics: Arc::new(RwLock::new(PerformanceMetrics {
-                avg_response_time_us: 0.0,
-                p95_response_time_us: 0.0,
-                p99_response_time_us: 0.0,
-                throughput_ops_per_sec: 0.0,
-                error_rate: 0.0,
-                efficiency_score: 0.0,
-            })),
-            health_status: Arc::new(RwLock::new(HealthStatus {
-                healthy: true,
-                last_health_check: Utc::now(),
-                issues: Vec::new(),
-                warnings: Vec::new(),
-            })),
-            response_times: Arc::new(RwLock::new(Vec::new())),
-            error_count: Arc::new(RwLock::new(0)),
-            operation_count: Arc::new(RwLock::new(0)),
-        };
+        #[cfg(not(feature = "performance-optimization"))]
+        {
+            let manager = Self {
+                config,
+                cache,
+                invalidation_manager,
+                performance_metrics: Arc::new(RwLock::new(PerformanceMetrics {
+                    avg_response_time_us: 0.0,
+                    p95_response_time_us: 0.0,
+                    p99_response_time_us: 0.0,
+                    throughput_ops_per_sec: 0.0,
+                    error_rate: 0.0,
+                    efficiency_score: 0.0,
+                })),
+                health_status: Arc::new(RwLock::new(HealthStatus {
+                    healthy: true,
+                    last_health_check: Utc::now(),
+                    issues: Vec::new(),
+                    warnings: Vec::new(),
+                })),
+                response_times: Arc::new(RwLock::new(Vec::new())),
+                error_count: Arc::new(RwLock::new(0)),
+                operation_count: Arc::new(RwLock::new(0)),
+            };
 
-        // Auto-warm if enabled
-        if manager.config.enable_auto_warming && !manager.config.warm_up_keys.is_empty() {
-            let warm_up_keys = manager.config.warm_up_keys.clone();
-            let _ = manager.warm_up(warm_up_keys).await;
+            // Auto-warm if enabled
+            if manager.config.enable_auto_warming && !manager.config.warm_up_keys.is_empty() {
+                let warm_up_keys = manager.config.warm_up_keys.clone();
+                let _ = manager.warm_up(warm_up_keys).await;
+            }
+
+            Ok(manager)
         }
+        
+        #[cfg(feature = "performance-optimization")]
+        {
+            let manager = Self {
+                config,
+                cache,
+                invalidation_manager,
+                performance_metrics: Arc::new(ParkingLotRwLock::new(PerformanceMetrics {
+                    avg_response_time_us: 0.0,
+                    p95_response_time_us: 0.0,
+                    p99_response_time_us: 0.0,
+                    throughput_ops_per_sec: 0.0,
+                    error_rate: 0.0,
+                    efficiency_score: 0.0,
+                })),
+                health_status: Arc::new(ParkingLotRwLock::new(HealthStatus {
+                    healthy: true,
+                    last_health_check: Utc::now(),
+                    issues: Vec::new(),
+                    warnings: Vec::new(),
+                })),
+                response_times: Arc::new(ParkingLotRwLock::new(Vec::new())),
+                error_count: Arc::new(ParkingLotRwLock::new(0)),
+                operation_count: Arc::new(ParkingLotRwLock::new(0)),
+                access_patterns: Arc::new(DashMap::new()),
+                last_pattern_analysis: Arc::new(ParkingLotRwLock::new(Utc::now())),
+            };
 
-        Ok(manager)
+            // Auto-warm if enabled
+            if manager.config.enable_auto_warming && !manager.config.warm_up_keys.is_empty() {
+                let warm_up_keys = manager.config.warm_up_keys.clone();
+                let _ = manager.warm_up(warm_up_keys).await;
+            }
+
+            // Start predictive warming if enabled
+            if manager.config.enable_predictive_warming {
+                let manager_clone = manager.clone();
+                tokio::spawn(async move {
+                    manager_clone.start_predictive_warming().await;
+                });
+            }
+
+            Ok(manager)
+        }
     }
     /// Create cache based on configuration
     async fn create_cache(config: &CacheManagerConfig) -> Result<Arc<dyn DistributedCache>> {

@@ -13,6 +13,13 @@ use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::{interval, sleep};
 
+#[cfg(feature = "performance-optimization")]
+use dashmap::DashMap;
+#[cfg(feature = "performance-optimization")]
+use parking_lot::{RwLock as ParkingLotRwLock, Mutex as ParkingLotMutex};
+#[cfg(feature = "performance-optimization")]
+use crossbeam::queue::SegQueue;
+
 /// Security alert severity levels
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum AlertSeverity {
@@ -123,6 +130,12 @@ pub struct AnomalyDetectionConfig {
     pub response_time_threshold_ms: f64,
     /// Alert cooldown period in minutes
     pub alert_cooldown_minutes: u32,
+    /// Enable ML-based behavioral analysis
+    pub enable_ml_detection: bool,
+    /// ML model confidence threshold
+    pub ml_confidence_threshold: f64,
+    /// Behavioral pattern window size (hours)
+    pub behavior_window_hours: u32,
 }
 
 impl Default for AnomalyDetectionConfig {
@@ -135,6 +148,9 @@ impl Default for AnomalyDetectionConfig {
             concurrent_requests_threshold: 1000,
             response_time_threshold_ms: 5000.0,
             alert_cooldown_minutes: 5,
+            enable_ml_detection: true,
+            ml_confidence_threshold: 0.8,
+            behavior_window_hours: 24,
         }
     }
 }
@@ -169,32 +185,66 @@ impl Default for SecurityMonitoringConfig {
 /// Security monitoring system
 pub struct SecurityMonitoringSystem {
     /// Current metrics
+    #[cfg(not(feature = "performance-optimization"))]
     metrics: Arc<RwLock<SecurityMetrics>>,
+    #[cfg(feature = "performance-optimization")]
+    metrics: Arc<ParkingLotRwLock<SecurityMetrics>>,
     /// Historical metrics (time series)
+    #[cfg(not(feature = "performance-optimization"))]
     historical_metrics: Arc<Mutex<VecDeque<(DateTime<Utc>, SecurityMetrics)>>>,
+    #[cfg(feature = "performance-optimization")]
+    historical_metrics: Arc<ParkingLotMutex<VecDeque<(DateTime<Utc>, SecurityMetrics)>>>,
     /// Active alerts
+    #[cfg(not(feature = "performance-optimization"))]
     active_alerts: Arc<Mutex<Vec<SecurityAlert>>>,
+    #[cfg(feature = "performance-optimization")]
+    active_alerts: Arc<SegQueue<SecurityAlert>>,
     /// Alert history
+    #[cfg(not(feature = "performance-optimization"))]
     alert_history: Arc<Mutex<VecDeque<SecurityAlert>>>,
+    #[cfg(feature = "performance-optimization")]
+    alert_history: Arc<ParkingLotMutex<VecDeque<SecurityAlert>>>,
     /// Event counters for anomaly detection
+    #[cfg(not(feature = "performance-optimization"))]
     event_counters: Arc<Mutex<HashMap<String, VecDeque<DateTime<Utc>>>>>,
+    #[cfg(feature = "performance-optimization")]
+    event_counters: Arc<DashMap<String, VecDeque<DateTime<Utc>>>>,
     /// Configuration
     config: SecurityMonitoringConfig,
     /// Alert callback
     alert_callback: Option<Box<dyn Fn(SecurityAlert) + Send + Sync>>,
+    /// ML-based behavioral patterns
+    #[cfg(feature = "performance-optimization")]
+    behavior_patterns: Arc<DashMap<String, Vec<f64>>>,
 }
 
 impl SecurityMonitoringSystem {
     /// Create new security monitoring system
     pub fn new(config: SecurityMonitoringConfig) -> Self {
-        Self {
-            metrics: Arc::new(RwLock::new(SecurityMetrics::default())),
-            historical_metrics: Arc::new(Mutex::new(VecDeque::new())),
-            active_alerts: Arc::new(Mutex::new(Vec::new())),
-            alert_history: Arc::new(Mutex::new(VecDeque::new())),
-            event_counters: Arc::new(Mutex::new(HashMap::new())),
-            config,
-            alert_callback: None,
+        #[cfg(not(feature = "performance-optimization"))]
+        {
+            Self {
+                metrics: Arc::new(RwLock::new(SecurityMetrics::default())),
+                historical_metrics: Arc::new(Mutex::new(VecDeque::new())),
+                active_alerts: Arc::new(Mutex::new(Vec::new())),
+                alert_history: Arc::new(Mutex::new(VecDeque::new())),
+                event_counters: Arc::new(Mutex::new(HashMap::new())),
+                config,
+                alert_callback: None,
+            }
+        }
+        #[cfg(feature = "performance-optimization")]
+        {
+            Self {
+                metrics: Arc::new(ParkingLotRwLock::new(SecurityMetrics::default())),
+                historical_metrics: Arc::new(ParkingLotMutex::new(VecDeque::new())),
+                active_alerts: Arc::new(SegQueue::new()),
+                alert_history: Arc::new(ParkingLotMutex::new(VecDeque::new())),
+                event_counters: Arc::new(DashMap::new()),
+                config,
+                alert_callback: None,
+                behavior_patterns: Arc::new(DashMap::new()),
+            }
         }
     }
 

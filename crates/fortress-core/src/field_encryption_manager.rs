@@ -46,7 +46,7 @@ impl DefaultFieldEncryptionManager {
             key_manager,
             algorithm_selector,
             configs: Arc::new(RwLock::new(HashMap::new())),
-            default_algorithm: "chacha20poly1305".to_string(),
+            default_algorithm: "kyber768".to_string(),
         }
     }
 

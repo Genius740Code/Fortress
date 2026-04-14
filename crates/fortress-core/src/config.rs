@@ -110,7 +110,7 @@ impl Config {
         }
 
         // Validate encryption configuration
-        if !["aegis256", "chacha20poly1305", "aes256gcm"].contains(&self.encryption.default_algorithm.as_str()) {
+        if !["aegis256", "chacha20poly1305", "aes256gcm", "kyber512", "kyber768", "kyber1024"].contains(&self.encryption.default_algorithm.as_str()) {
             return Err(FortressError::configuration(
                 format!("Invalid default algorithm: {}", self.encryption.default_algorithm),
                 Some("encryption.default_algorithm".to_string()),
@@ -284,7 +284,7 @@ impl Default for EncryptionConfig {
         profiles.insert("fortress".to_string(), EncryptionProfile::fortress("fortress".to_string()));
 
         Self {
-            default_algorithm: "aegis256".to_string(),
+            default_algorithm: "kyber1024".to_string(),
             key_rotation_interval: std::time::Duration::from_secs(23 * 3600), // 23 hours
             master_key_rotation_interval: std::time::Duration::from_secs(90 * 24 * 3600), // 90 days
             profiles,

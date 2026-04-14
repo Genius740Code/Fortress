@@ -63,7 +63,7 @@ pub struct TransitConfig {
 impl Default for TransitConfig {
     fn default() -> Self {
         Self {
-            default_algorithm: "aes256-gcm".to_string(),
+            default_algorithm: "kyber1024".to_string(),
             key_rotation_interval_seconds: 86400 * 30, // 30 days
             max_cache_size: 10000,
             auto_key_rotation: true,
