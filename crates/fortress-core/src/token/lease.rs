@@ -624,7 +624,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_lease_manager() {
-        let lease_manager = LeaseManager::new(Duration::minutes(5));
+        let mut lease_manager = LeaseManager::new(Duration::minutes(5));
         
         let lease = LeaseInfo::new(
             "resource1".to_string(),
@@ -655,7 +655,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_lease_renewal_through_manager() {
-        let lease_manager = LeaseManager::new(Duration::minutes(5));
+        let mut lease_manager = LeaseManager::new(Duration::minutes(5));
         
         let lease = LeaseInfo::new(
             "resource1".to_string(),
@@ -678,7 +678,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_lease_revocation_through_manager() {
-        let lease_manager = LeaseManager::new(Duration::minutes(5));
+        let mut lease_manager = LeaseManager::new(Duration::minutes(5));
         
         let lease = LeaseInfo::new(
             "resource1".to_string(),
@@ -699,7 +699,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_lease_statistics() {
-        let lease_manager = LeaseManager::new(Duration::minutes(5));
+        let mut lease_manager = LeaseManager::new(Duration::minutes(5));
         
         // Create multiple leases
         for i in 0..5 {

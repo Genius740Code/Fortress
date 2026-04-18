@@ -1218,14 +1218,12 @@ impl DatabaseEngine {
             for (lease_id, username) in to_remove {
 
                 // Drop user from database
-
-                // TODO: Implement proper user dropping - temporarily commented out for compilation
-                log::warn!("Database user dropping not yet implemented: {}", username);
-
-                
+                if let Err(e) = self.drop_database_user(&config, &username).await {
+                    log::error!("Failed to drop database user {}: {}", username, e);
+                    // Continue with memory cleanup even if database drop fails
+                }
 
                 // Remove from memory
-
                 credentials.remove(&lease_id);
 
                 expired_count += 1;
@@ -1684,8 +1682,11 @@ impl SecretsEngine for DatabaseEngine {
 
         for (lease_id, username) in to_remove {
 
-            // TODO: Implement proper user dropping - temporarily commented out for compilation
-            log::warn!("Database user dropping not yet implemented: {}", username);
+            // Drop user from database
+            if let Err(e) = self.drop_database_user(&config, &username).await {
+                log::error!("Failed to drop database user {}: {}", username, e);
+                // Continue with memory cleanup even if database drop fails
+            }
 
             credentials.remove(&lease_id);
 
@@ -1866,9 +1867,10 @@ impl SecretsEngine for DatabaseEngine {
         if let Some(credential) = credentials.remove(lease_id) {
 
             // Drop user from database
-
-            // TODO: Implement proper user dropping - temporarily commented out for compilation
-            log::warn!("Database user dropping not yet implemented: {}", credential.username);
+            if let Err(e) = self.drop_database_user(&config, &credential.username).await {
+                log::error!("Failed to drop database user {}: {}", credential.username, e);
+                // Continue with memory cleanup even if database drop fails
+            }
 
 
 

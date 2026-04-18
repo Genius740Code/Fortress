@@ -827,7 +827,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_token() {
-        let token_manager = TokenManager::new();
+        let mut token_manager = TokenManager::new();
         
         let request = CreateTokenRequest {
             token_type: TokenType::User,
@@ -849,7 +849,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_token_validation() {
-        let token_manager = TokenManager::new();
+        let mut token_manager = TokenManager::new();
         
         // Create token
         let request = CreateTokenRequest {
@@ -874,7 +874,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_token_renewal() {
-        let token_manager = TokenManager::new();
+        let mut token_manager = TokenManager::new();
         
         let request = CreateTokenRequest {
             token_type: TokenType::Service,
@@ -901,7 +901,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_token_revocation() {
-        let token_manager = TokenManager::new();
+        let mut token_manager = TokenManager::new();
         
         let request = CreateTokenRequest {
             token_type: TokenType::User,
@@ -933,7 +933,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_entity_token_listing() {
-        let token_manager = TokenManager::new();
+        let mut token_manager = TokenManager::new();
         
         // Create multiple tokens for same entity
         for i in 0..3 {
@@ -960,7 +960,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_token_search() {
-        let token_manager = TokenManager::new();
+        let mut token_manager = TokenManager::new();
         
         // Create tokens with different types and roles
         let user_request = CreateTokenRequest {
@@ -1007,7 +1007,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_token_statistics() {
-        let token_manager = TokenManager::new();
+        let mut token_manager = TokenManager::new();
         
         // Create tokens with different types
         let types = vec![TokenType::User, TokenType::Service, TokenType::Batch];
@@ -1033,7 +1033,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_token_validation_context() {
-        let token_manager = TokenManager::new();
+        let mut token_manager = TokenManager::new();
         
         // Create token with IP restrictions
         let mut request = CreateTokenRequest {
@@ -1070,7 +1070,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cleanup_expired_tokens() {
-        let token_manager = TokenManager::new();
+        let mut token_manager = TokenManager::new();
         
         // Create token with very short TTL
         let request = CreateTokenRequest {
