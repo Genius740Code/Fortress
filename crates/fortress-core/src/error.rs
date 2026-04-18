@@ -982,6 +982,14 @@ pub enum ConfigurationErrorCode {
 
     
 
+    /// Parse error in configuration
+
+    #[error("Configuration parse error")]
+
+    ParseError,
+
+    
+
     /// Permission denied for configuration file
 
     #[error("Configuration file access denied")]
@@ -2742,6 +2750,54 @@ impl FortressError {
 
 
 
+    /// Create a new serialization error
+
+    pub fn serialization<S: Into<String>>(message: S, details: &str) -> Self {
+
+        Self::Internal {
+
+            message: format!("Serialization error: {}", message.into()),
+
+            code: format!("SerializationError: {}", details),
+
+        }
+
+    }
+
+
+
+    /// Create a new compression error
+
+    pub fn compression<S: Into<String>>(message: S, details: &str) -> Self {
+
+        Self::Internal {
+
+            message: format!("Compression error: {}", message.into()),
+
+            code: format!("CompressionError: {}", details),
+
+        }
+
+    }
+
+
+
+    /// Create a new memory error
+
+    pub fn memory<S: Into<String>>(message: S) -> Self {
+
+        Self::Internal {
+
+            message: format!("Memory error: {}", message.into()),
+
+            code: "MemoryError".to_string(),
+
+        }
+
+    }
+
+
+
     /// Check if this error is retryable
 
     pub fn is_retryable(&self) -> bool {
@@ -2922,11 +2978,51 @@ impl From<toml::de::Error> for FortressError {
 
             format!("TOML parsing error: {}", err),
 
-            None,
+            Some("toml_parse".to_string()),
 
-            ConfigurationErrorCode::InvalidFormat,
+            ConfigurationErrorCode::ParseError,
 
         )
+
+    }
+
+}
+
+
+
+impl From<std::string::FromUtf8Error> for FortressError {
+
+    fn from(err: std::string::FromUtf8Error) -> Self {
+
+        Self::internal(
+
+            format!("UTF-8 conversion error: {}", err),
+
+            "Utf8Error".to_string(),
+
+        )
+
+    }
+
+}
+
+
+
+impl serde::de::Error for FortressError {
+
+    fn custom<T: std::fmt::Display>(msg: T) -> Self {
+
+        FortressError::internal(msg.to_string(), "CustomError".to_string())
+
+    }
+
+}
+
+impl serde::ser::Error for FortressError {
+
+    fn custom<T: std::fmt::Display>(msg: T) -> Self {
+
+        FortressError::internal(msg.to_string(), "CustomError".to_string())
 
     }
 

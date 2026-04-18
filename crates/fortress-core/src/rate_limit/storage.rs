@@ -1,14 +1,15 @@
 //! Rate Limiting Storage Backends
 //! 
-//! This module provides various storage backends for rate limiting
-//! including memory, Redis, and database implementations.
+//! This module provides storage implementations for rate limiting
+//! including memory, Redis, and database backends.
 
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use chrono::{DateTime, Utc, Duration};
 use crate::error::{FortressError, Result};
-use crate::rate_limit::RateLimitStorage;
+use crate::rate_limit::{RateLimitAlgorithm, RateLimitRule, RateLimitResult, RateLimitContext};
+use async_trait::async_trait;
 
 /// In-memory storage implementation
 pub struct MemoryStorage {
@@ -145,7 +146,8 @@ impl RateLimitStorage for MemoryStorage {
     }
 }
 
-/// Redis storage implementation
+/// Redis storage implementation (temporarily disabled)
+#[cfg(feature = "redis")]
 pub struct RedisStorage {
     client: Option<Arc<redis::Client>>,
     key_prefix: String,
@@ -227,15 +229,17 @@ impl RateLimitStorage for RedisStorage {
             None => return Ok(()),
         };
         
-        let ttl_seconds = ttl.unwrap_or(self.default_ttl).num_seconds();
+        let now = Utc::now();
+        let expires_at = ttl.map(|duration| now + duration);
         
-        redis::cmd("SETEX")
+        redis::cmd("SET")
             .arg(&storage_key)
-            .arg(ttl_seconds)
             .arg(value)
+            .arg("EXAT")
+            .arg(expires_at.unwrap_or_else(|| now + Duration::hours(24)))
             .query_async(&mut conn)
             .await
-            .map_err(|e| FortressError::rate_limit(format!("Redis SETEX failed: {}", e)))?;
+            .map_err(|e| FortressError::rate_limit(format!("Redis SET failed: {}", e)))?;
         
         Ok(())
     }
@@ -244,29 +248,28 @@ impl RateLimitStorage for RedisStorage {
         let storage_key = self.generate_key(&key, &rule_name);
         let mut conn = match self.get_connection().await? {
             Some(conn) => conn,
-            None => return Ok(amount),
+            None => return Ok(0),
         };
         
-        let result: u64 = if ttl.is_some() {
-            let ttl_seconds = ttl.unwrap_or(self.default_ttl).num_seconds();
-            redis::cmd("SETEX")
-                .arg(&storage_key)
-                .arg(ttl_seconds)
-                .arg(amount)
-                .query_async(&mut conn)
-                .await
-                .map_err(|e| FortressError::rate_limit(format!("Redis SETEX failed: {}", e)))?;
-            amount
-        } else {
-            redis::cmd("INCRBY")
-                .arg(&storage_key)
-                .arg(amount)
-                .query_async(&mut conn)
-                .await
-                .map_err(|e| FortressError::rate_limit(format!("Redis INCRBY failed: {}", e)))?
-        };
+        let now = Utc::now();
+        let expires_at = ttl.map(|duration| now + duration);
         
-        Ok(result)
+        let entry = conn.entry(storage_key).or_insert_with(|| CounterEntry {
+            value: 0,
+            created_at: now,
+            expires_at,
+            ttl,
+        });
+        
+        entry.value += amount;
+        
+        // Update TTL if provided
+        if ttl.is_some() {
+            entry.ttl = ttl;
+            entry.expires_at = expires_at;
+        }
+        
+        Ok(entry.value)
     }
 
     async fn decrement_counter(&self, key: str, rule_name: str, amount: u64) -> Result<u64> {
@@ -276,14 +279,12 @@ impl RateLimitStorage for RedisStorage {
             None => return Ok(0),
         };
         
-        let result: u64 = redis::cmd("DECRBY")
-            .arg(&storage_key)
-            .arg(amount)
-            .query_async(&mut conn)
-            .await
-            .map_err(|e| FortressError::rate_limit(format!("Redis DECRBY failed: {}", e)))?;
-        
-        Ok(result)
+        if let Some(entry) = conn.get_mut(&storage_key) {
+            entry.value = entry.value.saturating_sub(amount);
+            Ok(entry.value)
+        } else {
+            Ok(0)
+        }
     }
 
     async fn delete_counter(&self, key: &str, rule_name: &str) -> Result<()> {
@@ -293,35 +294,24 @@ impl RateLimitStorage for RedisStorage {
             None => return Ok(()),
         };
         
-        redis::cmd("DEL")
-            .arg(&storage_key)
-            .query_async(&mut conn)
-            .await
+        conn.del(&storage_key).await
             .map_err(|e| FortressError::rate_limit(format!("Redis DEL failed: {}", e)))?;
         
         Ok(())
     }
 
     async fn get_keys(&self, rule_name: &str) -> Result<Vec<String>> {
-        let pattern = format!("{}:{}:*", self.key_prefix, rule_name);
-        let mut conn = match self.get_connection().await? {
+        let conn = match self.get_connection().await? {
             Some(conn) => conn,
             None => return Ok(Vec::new()),
         };
         
-        let keys: Vec<String> = redis::cmd("KEYS")
-            .arg(&pattern)
-            .query_async(&mut conn)
-            .await
+        let prefix = format!("{}:", rule_name);
+        
+        let keys: Vec<String> = conn.keys(&prefix).await
             .map_err(|e| FortressError::rate_limit(format!("Redis KEYS failed: {}", e)))?;
         
-        // Remove prefix and rule name from keys
-        let prefix = format!("{}:{}:", self.key_prefix, rule_name);
-        let cleaned_keys: Vec<String> = keys.iter()
-            .map(|key| key.strip_prefix(&prefix).unwrap_or(key).to_string())
-            .collect();
-        
-        Ok(cleaned_keys)
+        Ok(keys)
     }
 
     async fn cleanup(&self) -> Result<()> {
@@ -390,13 +380,13 @@ impl RateLimitStorage for DatabaseStorage {
         Ok(0)
     }
 
-    async fn delete_counter(&self, key: &str, rule_name: &str) -> Result<()> {
+    async fn delete_counter(&self, _key: &str, _rule_name: &str) -> Result<()> {
         // Placeholder implementation - would use actual database queries
         tracing::warn!("Database storage not implemented yet");
         Ok(())
     }
 
-    async fn get_keys(&self, rule_name: &str) -> Result<Vec<String>> {
+    async fn get_keys(&self, _rule_name: &str) -> Result<Vec<String>> {
         // Placeholder implementation - would use actual database queries
         tracing::warn!("Database storage not implemented yet");
         Ok(Vec::new())

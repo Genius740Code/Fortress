@@ -465,6 +465,7 @@ pub async fn create_memcached_cache(config: MemcachedConfig) -> Result<Box<dyn c
 
 /// Factory function that returns error when Memcached feature is not enabled
 #[cfg(not(feature = "memcached"))]
+#[cfg(feature = "distributed-cache")]
 pub async fn create_memcached_cache(_config: MemcachedConfig) -> Result<Box<dyn crate::distributed_cache::DistributedCache>> {
     Err(FortressError::storage(
         "Memcached support not enabled. Enable the 'memcached' feature in Cargo.toml".to_string(),

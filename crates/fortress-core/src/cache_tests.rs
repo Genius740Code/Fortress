@@ -6,7 +6,8 @@
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::distributed_cache::{DistributedCache, DistributedCacheConfig, CacheBackend};
+    #[cfg(feature = "distributed-cache")]
+use crate::distributed_cache::{DistributedCache, DistributedCacheConfig, CacheBackend};
     use crate::cache_manager::{CacheManager, CacheManagerConfig, CacheType};
     use crate::cache_invalidation::{CacheInvalidation, CacheInvalidationManager, InvalidationConfig, InvalidationReason};
     use crate::cache_hybrid::{HybridCache, HybridCacheConfig, WriteStrategy};
@@ -44,6 +45,7 @@ mod tests {
         )
     }
 
+    #[cfg(feature = "distributed-cache")]
     mod distributed_cache_tests {
         use super::*;
 

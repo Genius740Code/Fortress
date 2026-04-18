@@ -7,6 +7,7 @@ use crate::error::{FortressError, Result};
 use crate::key::{KeyId, KeyMetadata, SecureKey};
 use crate::encryption::PerformanceProfile;
 use crate::cache_manager::{CacheManager, CacheManagerConfig, CacheType};
+#[cfg(feature = "distributed-cache")]
 use crate::distributed_cache::DistributedCacheConfig;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -103,6 +104,7 @@ impl Default for CacheIntegrationConfig {
         Self {
             cache_config: CacheManagerConfig {
                 cache_type: CacheType::InMemory,
+                #[cfg(feature = "distributed-cache")]
                 distributed_config: Some(DistributedCacheConfig {
                     max_cache_size: 10000,
                     default_ttl_seconds: 3600,
@@ -268,6 +270,7 @@ pub struct FortressCacheIntegration {
 
 impl FortressCacheIntegration {
     /// Create a new cache integration
+    #[cfg(feature = "distributed-cache")]
     pub async fn new(config: CacheIntegrationConfig) -> Result<Self> {
         // Create cache manager
         let cache_manager = crate::cache_manager::create_cache_manager(config.cache_config.clone()).await?;
@@ -323,6 +326,15 @@ impl FortressCacheIntegration {
         }
 
         Ok(integration)
+    }
+
+    #[cfg(not(feature = "distributed-cache"))]
+    pub async fn new(_config: CacheIntegrationConfig) -> Result<Self> {
+        Err(FortressError::storage(
+            "Distributed cache integration not available".to_string(),
+            "cache_integration".to_string(),
+            crate::error::StorageErrorCode::BackendNotAvailable,
+        ))
     }
 
     /// Check rate limiting

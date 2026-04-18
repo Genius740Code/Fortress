@@ -509,6 +509,7 @@ pub async fn create_redis_cache(config: RedisConfig) -> Result<Box<dyn crate::di
 
 /// Factory function that returns error when Redis feature is not enabled
 #[cfg(not(feature = "redis"))]
+#[cfg(feature = "distributed-cache")]
 pub async fn create_redis_cache(_config: RedisConfig) -> Result<Box<dyn crate::distributed_cache::DistributedCache>> {
     Err(FortressError::storage(
         "Redis support not enabled. Enable the 'redis' feature in Cargo.toml".to_string(),

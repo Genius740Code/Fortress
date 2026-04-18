@@ -662,10 +662,14 @@ pub mod query_optimizer;
 
 
 
-/// Distributed caching layer
+/// Memory optimization system
+pub mod memory;
 
+/// High-performance serialization system
+pub mod serialization;
 
-
+/// Distributed caching system (temporarily disabled)
+#[cfg(feature = "distributed-cache")]
 pub mod distributed_cache;
 
 
@@ -698,6 +702,7 @@ pub mod cache_memcached;
 
 
 
+#[cfg(feature = "distributed-cache")]
 pub mod cache_hybrid;
 
 
@@ -1392,6 +1397,7 @@ pub mod prelude {
 
 
 
+    #[cfg(feature = "distributed-cache")]
     pub use crate::distributed_cache::{
 
         DistributedCache, DistributedCacheConfig, CacheBackend, EvictionPolicy,

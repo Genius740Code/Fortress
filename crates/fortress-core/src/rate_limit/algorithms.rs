@@ -9,6 +9,7 @@ use tokio::sync::RwLock;
 use chrono::{DateTime, Utc, Duration};
 use crate::error::{FortressError, Result};
 use crate::rate_limit::{RateLimitAlgorithm, RateLimitRule, RateLimitResult, RateLimitContext, RateLimitAction};
+use async_trait::async_trait;
 
 /// Token bucket algorithm implementation
 pub struct TokenBucketAlgorithm {
@@ -136,7 +137,7 @@ impl RateLimitAlgorithm for TokenBucketAlgorithm {
             max_tokens: rule.limit,
             refill_rate: rule.limit / rule.window_seconds,
             last_refill: Utc::now(),
-            burst_tokens: rule.burst_or(rule.limit),
+            burst_tokens: rule.burst.unwrap_or(rule.limit),
         });
         Ok(())
     }
@@ -202,12 +203,12 @@ impl SlidingWindowAlgorithm {
     }
 
     /// Count requests in the window
-    fn count_requests(&window: &SlidingWindow) -> u64 {
+    fn count_requests(window: &SlidingWindow) -> u64 {
         window.requests.len() as u64
     }
 
-    /// Add a request to the window
-    fn add_request(&mut window, timestamp: DateTime<Utc>) {
+    /// Add a request to window
+    fn add_request(window: &mut SlidingWindow, timestamp: DateTime<Utc>) {
         window.requests.push(timestamp);
     }
 }
@@ -229,14 +230,14 @@ impl RateLimitAlgorithm for SlidingWindowAlgorithm {
         let now = context.timestamp;
         
         // Clean up old requests
-        self.cleanup_old_requests(window, now);
+        Self::cleanup_old_requests(window, now);
 
-        let current_count = self.count_requests(window);
+        let current_count = Self::count_requests(window);
         let allowed = current_count < rule.max_requests;
 
         // Add current request to window if allowed
         if allowed {
-            self.add_request(window, now);
+            Self::add_request(window, now);
         }
 
         let remaining = rule.max_requests.saturating_sub(current_count + 1);
@@ -328,7 +329,7 @@ impl FixedWindowAlgorithm {
     }
 
     /// Reset window if needed
-    fn reset_window_if_needed(&mut window, now: DateTime<Utc>, rule: &RateLimitRule) {
+    fn reset_window_if_needed(window: &mut FixedWindow, now: DateTime<Utc>, rule: &RateLimitRule) {
         if now - window.window_start >= window.window_size {
             window.count = 0;
             window.window_start = now;
@@ -337,7 +338,7 @@ impl FixedWindowAlgorithm {
     }
 
     /// Increment count
-    fn increment_count(&mut window) {
+    fn increment_count(window: &mut FixedWindow) {
         window.count += 1;
     }
 }
@@ -361,13 +362,13 @@ impl RateLimitAlgorithm for FixedWindowAlgorithm {
         let now = context.timestamp;
         
         // Reset window if needed
-        self.reset_window_if_needed(window, now, rule);
+        Self::reset_window_if_needed(window, now, rule);
 
         let allowed = window.count < window.max_requests;
 
         // Increment count if allowed
         if allowed {
-            self.increment_count(window);
+            Self::increment_count(window);
         }
 
         let remaining = window.max_requests.saturating_sub(window.count);

@@ -9,6 +9,7 @@ use tokio::sync::RwLock;
 use serde::{Serialize, Deserialize};
 use chrono::{DateTime, Utc, Duration};
 use crate::error::{FortressError, Result};
+use async_trait::async_trait;
 
 pub mod manager;
 pub mod algorithms;
@@ -378,41 +379,17 @@ impl RateLimitManager {
             Err(FortressError::rate_limit(format!("Rate limit rule '{}' not found", rule_name)))
         }
     }
-
     /// Get rate limit metrics
     pub async fn get_metrics(&self) -> RateLimitMetrics {
         let metrics = self.metrics.read().await;
         metrics.clone()
     }
 
-    /// Check if conditions match the request context
     fn check_conditions(&self, conditions: &[RateLimitCondition], context: &RateLimitContext) -> bool {
         conditions.iter().all(|condition| {
             let value = self.extract_field_value(&condition.field, context);
             self.evaluate_condition(&condition.operator, &value, &condition.value)
         })
-    }
-
-    /// Extract field value from context
-    fn extract_field_value(&self, field: &str, context: &RateLimitContext) -> String {
-        match field {
-            "ip" => context.ip_address.clone(),
-            "user" => context.user_id.clone().unwrap_or_default(),
-            "api_key" => context.api_key.clone().unwrap_or_default(),
-            "token" => context.token.clone().unwrap_or_default(),
-            "path" => context.path.clone(),
-            "method" => context.method.clone(),
-            header_name => {
-                context.headers.get(header_name).cloned().unwrap_or_default()
-            }
-            _ => {
-                // Try metadata
-                context.metadata.get(field)
-                    .and_then(|v| v.as_str())
-                    .unwrap_or_default()
-                    .to_string()
-            }
-        }
     }
 
     /// Evaluate condition

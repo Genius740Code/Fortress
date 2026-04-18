@@ -3,7 +3,10 @@
 //! This module provides a multi-tier caching system that combines local
 //! in-memory caching with distributed backends for optimal performance.
 
+#[cfg(feature = "distributed-cache")]
+
 use crate::error::Result;
+#[cfg(feature = "distributed-cache")]
 use crate::distributed_cache::{DistributedCache, CacheBackend};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -16,8 +19,10 @@ use chrono::{DateTime, Utc};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HybridCacheConfig {
     /// Local cache configuration
+    #[cfg(feature = "distributed-cache")]
     pub local_config: crate::distributed_cache::DistributedCacheConfig,
     /// Distributed cache configuration
+    #[cfg(feature = "distributed-cache")]
     pub distributed_config: crate::distributed_cache::DistributedCacheConfig,
     /// Cache coordination strategy
     pub coordination_strategy: CoordinationStrategy,
@@ -42,12 +47,14 @@ pub struct HybridCacheConfig {
 impl Default for HybridCacheConfig {
     fn default() -> Self {
         Self {
+            #[cfg(feature = "distributed-cache")]
             local_config: crate::distributed_cache::DistributedCacheConfig {
                 backend: CacheBackend::InMemory,
                 max_cache_size: 10000,
                 default_ttl_seconds: 300, // 5 minutes
                 ..Default::default()
             },
+            #[cfg(feature = "distributed-cache")]
             distributed_config: crate::distributed_cache::DistributedCacheConfig {
                 backend: CacheBackend::InMemory,
                 default_ttl_seconds: 3600, // 1 hour
@@ -631,6 +638,7 @@ impl DistributedCache for HybridCache {
         
         // Return combined statistics
         let stats = self.stats.read().await;
+        #[cfg(feature = "distributed-cache")]
         Ok(crate::distributed_cache::CacheStatistics {
             total_entries: stats.local_stats.total_entries + stats.distributed_stats.total_entries,
             cache_size_bytes: stats.local_stats.cache_size_bytes + stats.distributed_stats.cache_size_bytes,
@@ -649,6 +657,8 @@ impl DistributedCache for HybridCache {
             avg_set_time_us: (stats.local_stats.avg_set_time_us + stats.distributed_stats.avg_set_time_us) / 2.0,
             last_reset: stats.local_stats.last_reset,
         })
+        #[cfg(not(feature = "distributed-cache"))]
+        Err(crate::error::FortressError::cache("Distributed cache not available"))
     }
 
     async fn reset_statistics(&self) -> Result<()> {

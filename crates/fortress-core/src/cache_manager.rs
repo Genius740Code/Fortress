@@ -4,8 +4,10 @@
 //! all caching components and provides intelligent caching strategies.
 
 use crate::error::{FortressError, Result};
+#[cfg(feature = "distributed-cache")]
 use crate::distributed_cache::{DistributedCache, DistributedCacheConfig};
 use crate::cache_invalidation::{CacheInvalidation, CacheInvalidationManager, InvalidationConfig, InvalidationReason};
+#[cfg(feature = "distributed-cache")]
 use crate::cache_hybrid::HybridCacheConfig;
 #[cfg(feature = "redis")]
 use crate::cache_redis::{RedisCache, RedisConfig};
@@ -30,12 +32,14 @@ pub struct CacheManagerConfig {
     /// Cache type to use
     pub cache_type: CacheType,
     /// Cache-specific configurations
+    #[cfg(feature = "distributed-cache")]
     pub distributed_config: Option<DistributedCacheConfig>,
     #[cfg(feature = "redis")]
     pub redis_config: Option<RedisConfig>,
     #[cfg(feature = "memcached")]
     pub memcached_config: Option<MemcachedConfig>,
     /// Hybrid cache configuration (local + distributed)
+    #[cfg(feature = "distributed-cache")]
     pub hybrid_config: Option<HybridCacheConfig>,
     /// Invalidation configuration
     pub invalidation_config: InvalidationConfig,
@@ -104,11 +108,13 @@ impl Default for CacheManagerConfig {
     fn default() -> Self {
         Self {
             cache_type: CacheType::InMemory,
+            #[cfg(feature = "distributed-cache")]
             distributed_config: Some(DistributedCacheConfig::default()),
             #[cfg(feature = "redis")]
             redis_config: None,
             #[cfg(feature = "memcached")]
             memcached_config: None,
+            #[cfg(feature = "distributed-cache")]
             hybrid_config: None,
             invalidation_config: InvalidationConfig::default(),
             enable_auto_warming: false,
@@ -129,6 +135,7 @@ impl Default for CacheManagerConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheManagerStatistics {
     /// Overall cache statistics
+    #[cfg(feature = "distributed-cache")]
     pub cache_stats: crate::distributed_cache::CacheStatistics,
     /// Invalidation statistics
     pub invalidation_stats: crate::cache_invalidation::InvalidationStats,
@@ -238,6 +245,7 @@ struct AccessPattern {
 pub struct FortressCacheManager {
     config: CacheManagerConfig,
     /// Primary cache implementation
+    #[cfg(feature = "distributed-cache")]
     cache: Arc<dyn DistributedCache>,
     /// Invalidation manager
     invalidation_manager: Arc<dyn CacheInvalidation>,
@@ -276,6 +284,7 @@ pub struct FortressCacheManager {
 
 impl FortressCacheManager {
     /// Create a new cache manager
+    #[cfg(feature = "distributed-cache")]
     pub async fn new(config: CacheManagerConfig) -> Result<Self> {
         // Create cache based on type
         let cache = Self::create_cache(&config).await?;
@@ -362,12 +371,20 @@ impl FortressCacheManager {
         }
     }
     /// Create cache based on configuration
+    #[cfg(feature = "distributed-cache")]
     async fn create_cache(config: &CacheManagerConfig) -> Result<Arc<dyn DistributedCache>> {
         match &config.cache_type {
             CacheType::InMemory => {
-                let cache_config = config.distributed_config.clone().unwrap_or_default();
-                let cache = crate::distributed_cache::create_distributed_cache(cache_config).await?;
-                Ok(Arc::from(cache))
+                #[cfg(feature = "distributed-cache")]
+                {
+                    let cache_config = config.distributed_config.clone().unwrap_or_default();
+                    let cache = crate::distributed_cache::create_distributed_cache(cache_config).await?;
+                    Ok(Arc::from(cache))
+                }
+                #[cfg(not(feature = "distributed-cache"))]
+                {
+                    Err(crate::error::FortressError::cache("Distributed cache not available"))
+                }
             }
             CacheType::Redis => {
                 #[cfg(feature = "redis")]
@@ -426,12 +443,20 @@ impl FortressCacheManager {
             }
             CacheType::Auto => {
                 // Auto-select based on available features and environment
-                Self::auto_select_cache(config).await
+                #[cfg(feature = "distributed-cache")]
+                {
+                    Self::auto_select_cache(config).await
+                }
+                #[cfg(not(feature = "distributed-cache"))]
+                {
+                    Err(crate::error::FortressError::cache("Distributed cache not available"))
+                }
             }
         }
     }
 
     /// Auto-select cache based on environment
+    #[cfg(feature = "distributed-cache")]
     async fn auto_select_cache(config: &CacheManagerConfig) -> Result<Arc<dyn DistributedCache>> {
         // Try Redis first if available
         #[cfg(feature = "redis")]
@@ -450,9 +475,16 @@ impl FortressCacheManager {
         }
 
         // Fall back to in-memory cache
-        let cache_config = config.distributed_config.clone().unwrap_or_default();
-        let cache = crate::distributed_cache::create_distributed_cache(cache_config).await?;
-        Ok(Arc::from(cache))
+        #[cfg(feature = "distributed-cache")]
+        {
+            let cache_config = config.distributed_config.clone().unwrap_or_default();
+            let cache = crate::distributed_cache::create_distributed_cache(cache_config).await?;
+            Ok(Arc::from(cache))
+        }
+        #[cfg(not(feature = "distributed-cache"))]
+        {
+            Err(crate::error::FortressError::cache("Distributed cache not available"))
+        }
     }
 
     /// Update performance metrics
@@ -481,11 +513,13 @@ impl FortressCacheManager {
 
         // Calculate metrics
         if self.config.enable_monitoring {
+            #[cfg(feature = "distributed-cache")]
             self.calculate_performance_metrics().await;
         }
     }
 
     /// Calculate performance metrics
+    #[cfg(feature = "distributed-cache")]
     async fn calculate_performance_metrics(&self) {
         let response_times = self.response_times.read().await;
         let operation_count = *self.operation_count.read().await;
@@ -530,6 +564,7 @@ impl FortressCacheManager {
     }
 
     /// Update health status
+    #[cfg(feature = "distributed-cache")]
     async fn update_health_status(&self) {
         let mut health_status = self.health_status.write().await;
         health_status.last_health_check = Utc::now();
@@ -580,6 +615,7 @@ impl FortressCacheManager {
     }
 
     /// Get performance recommendations
+    #[cfg(feature = "distributed-cache")]
     async fn generate_recommendations(&self) -> Vec<String> {
         let mut recommendations = Vec::new();
         
@@ -622,6 +658,7 @@ impl FortressCacheManager {
 
 #[async_trait]
 impl CacheManager for FortressCacheManager {
+    #[cfg(feature = "distributed-cache")]
     async fn get(&self, key: &str) -> Result<Option<Vec<u8>>> {
         let start_time = std::time::Instant::now();
         
@@ -634,6 +671,7 @@ impl CacheManager for FortressCacheManager {
         result
     }
 
+    #[cfg(feature = "distributed-cache")]
     async fn set(&self, key: &str, value: Vec<u8>, ttl_seconds: Option<u64>) -> Result<()> {
         let start_time = std::time::Instant::now();
         
@@ -646,6 +684,7 @@ impl CacheManager for FortressCacheManager {
         result
     }
 
+    #[cfg(feature = "distributed-cache")]
     async fn delete(&self, key: &str) -> Result<bool> {
         let start_time = std::time::Instant::now();
         
@@ -661,6 +700,7 @@ impl CacheManager for FortressCacheManager {
         result
     }
 
+    #[cfg(feature = "distributed-cache")]
     async fn exists(&self, key: &str) -> Result<bool> {
         let start_time = std::time::Instant::now();
         
@@ -673,6 +713,7 @@ impl CacheManager for FortressCacheManager {
         result
     }
 
+    #[cfg(feature = "distributed-cache")]
     async fn clear(&self) -> Result<()> {
         let start_time = std::time::Instant::now();
         
@@ -685,6 +726,7 @@ impl CacheManager for FortressCacheManager {
         result
     }
 
+    #[cfg(feature = "distributed-cache")]
     async fn mget(&self, keys: &[&str]) -> Result<Vec<Option<Vec<u8>>>> {
         let start_time = std::time::Instant::now();
         
@@ -697,6 +739,7 @@ impl CacheManager for FortressCacheManager {
         result
     }
 
+    #[cfg(feature = "distributed-cache")]
     async fn mset(&self, entries: &[(&str, Vec<u8>, Option<u64>)]) -> Result<()> {
         let start_time = std::time::Instant::now();
         
@@ -709,6 +752,7 @@ impl CacheManager for FortressCacheManager {
         result
     }
 
+    #[cfg(feature = "distributed-cache")]
     async fn increment(&self, key: &str, delta: i64) -> Result<i64> {
         let start_time = std::time::Instant::now();
         
@@ -721,6 +765,7 @@ impl CacheManager for FortressCacheManager {
         result
     }
 
+    #[cfg(feature = "distributed-cache")]
     async fn get_statistics(&self) -> Result<CacheManagerStatistics> {
         self.update_health_status().await;
         
@@ -739,6 +784,7 @@ impl CacheManager for FortressCacheManager {
         })
     }
 
+    #[cfg(feature = "distributed-cache")]
     async fn reset_statistics(&self) -> Result<()> {
         self.cache.reset_statistics().await?;
         
@@ -774,6 +820,7 @@ impl CacheManager for FortressCacheManager {
         Ok(())
     }
 
+    #[cfg(feature = "distributed-cache")]
     async fn health_check(&self) -> Result<HealthStatus> {
         self.update_health_status().await;
         Ok(self.health_status.read().await.clone())
@@ -815,18 +862,145 @@ impl CacheManager for FortressCacheManager {
         Ok(warmed_count)
     }
 
+    #[cfg(feature = "distributed-cache")]
     async fn get_performance_recommendations(&self) -> Result<Vec<String>> {
         Ok(self.generate_recommendations().await)
+    }
+
+    #[cfg(not(feature = "distributed-cache"))]
+    async fn get_statistics(&self) -> Result<CacheManagerStatistics> {
+        // Return default statistics when distributed cache is not available
+        let performance_metrics = self.performance_metrics.read().await.clone();
+        let health_status = self.health_status.read().await.clone();
+        
+        Ok(CacheManagerStatistics {
+            invalidation_stats: crate::cache_invalidation::InvalidationStats {
+                total_invalidations: 0,
+                invalidations_by_reason: std::collections::HashMap::new(),
+                avg_invalidation_time_us: 0.0,
+                failed_invalidations: 0,
+                cascaded_invalidations: 0,
+                dependencies_tracked: 0,
+                last_invalidation: Some(Utc::now()),
+            },
+            performance_metrics,
+            health_status,
+            recommendations: vec!["Distributed cache not available".to_string()],
+        })
+    }
+
+    #[cfg(not(feature = "distributed-cache"))]
+    async fn health_check(&self) -> Result<HealthStatus> {
+        let mut health_status = self.health_status.read().await.clone();
+        health_status.healthy = true;
+        health_status.issues.push("Distributed cache not available".to_string());
+        Ok(health_status)
+    }
+
+    #[cfg(not(feature = "distributed-cache"))]
+    async fn increment(&self, _key: &str, _delta: i64) -> Result<i64> {
+        Err(FortressError::storage(
+            "Distributed cache not available".to_string(),
+            "cache_manager".to_string(),
+            crate::error::StorageErrorCode::BackendNotAvailable,
+        ))
+    }
+
+    #[cfg(not(feature = "distributed-cache"))]
+    async fn reset_statistics(&self) -> Result<()> {
+        // Reset performance metrics only
+        {
+            let mut metrics = self.performance_metrics.write().await;
+            *metrics = PerformanceMetrics {
+                avg_response_time_us: 0.0,
+                p95_response_time_us: 0.0,
+                p99_response_time_us: 0.0,
+                throughput_ops_per_sec: 0.0,
+                error_rate: 0.0,
+                efficiency_score: 0.0,
+            };
+        }
+        Ok(())
+    }
+
+    #[cfg(not(feature = "distributed-cache"))]
+    async fn get_performance_recommendations(&self) -> Result<Vec<String>> {
+        Ok(vec!["Distributed cache not available".to_string()])
+    }
+
+    #[cfg(not(feature = "distributed-cache"))]
+    async fn get(&self, _key: &str) -> Result<Option<Vec<u8>>> {
+        Err(FortressError::storage(
+            "Distributed cache not available".to_string(),
+            "cache_manager".to_string(),
+            crate::error::StorageErrorCode::BackendNotAvailable,
+        ))
+    }
+
+    #[cfg(not(feature = "distributed-cache"))]
+    async fn set(&self, _key: &str, _value: Vec<u8>, _ttl_seconds: Option<u64>) -> Result<()> {
+        Err(FortressError::storage(
+            "Distributed cache not available".to_string(),
+            "cache_manager".to_string(),
+            crate::error::StorageErrorCode::BackendNotAvailable,
+        ))
+    }
+
+    #[cfg(not(feature = "distributed-cache"))]
+    async fn delete(&self, _key: &str) -> Result<bool> {
+        Err(FortressError::storage(
+            "Distributed cache not available".to_string(),
+            "cache_manager".to_string(),
+            crate::error::StorageErrorCode::BackendNotAvailable,
+        ))
+    }
+
+    #[cfg(not(feature = "distributed-cache"))]
+    async fn exists(&self, _key: &str) -> Result<bool> {
+        Err(FortressError::storage(
+            "Distributed cache not available".to_string(),
+            "cache_manager".to_string(),
+            crate::error::StorageErrorCode::BackendNotAvailable,
+        ))
+    }
+
+    #[cfg(not(feature = "distributed-cache"))]
+    async fn clear(&self) -> Result<()> {
+        Err(FortressError::storage(
+            "Distributed cache not available".to_string(),
+            "cache_manager".to_string(),
+            crate::error::StorageErrorCode::BackendNotAvailable,
+        ))
+    }
+
+    #[cfg(not(feature = "distributed-cache"))]
+    async fn mget(&self, _keys: &[&str]) -> Result<Vec<Option<Vec<u8>>>> {
+        Err(FortressError::storage(
+            "Distributed cache not available".to_string(),
+            "cache_manager".to_string(),
+            crate::error::StorageErrorCode::BackendNotAvailable,
+        ))
+    }
+
+    #[cfg(not(feature = "distributed-cache"))]
+    async fn mset(&self, _entries: &[(&str, Vec<u8>, Option<u64>)]) -> Result<()> {
+        Err(FortressError::storage(
+            "Distributed cache not available".to_string(),
+            "cache_manager".to_string(),
+            crate::error::StorageErrorCode::BackendNotAvailable,
+        ))
     }
 }
 
 /// Factory function to create cache manager
+#[cfg(feature = "distributed-cache")]
 pub async fn create_cache_manager(config: CacheManagerConfig) -> Result<Box<dyn CacheManager>> {
     let manager = FortressCacheManager::new(config).await?;
     Ok(Box::new(manager))
 }
 
 #[cfg(test)]
+#[cfg(feature = "distributed-cache")]
 mod tests {
     use super::*;
     use crate::distributed_cache::DistributedCache;
