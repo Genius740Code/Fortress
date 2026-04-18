@@ -578,7 +578,10 @@ pub mod database_key_manager;
 
 pub mod plugin;
 
-// pub mod wasm_runtime; // Temporarily disabled due to wasmtime API issues
+pub mod wasm_runtime;
+
+#[cfg(test)]
+mod wasm_runtime_test;
 
 
 
