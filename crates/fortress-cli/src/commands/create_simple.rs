@@ -298,7 +298,7 @@ async fn generate_simple_keys(path: &PathBuf) -> Result<()> {
     use fortress_core::key::{SecureKey, KeyId};
     
     // Generate a real cryptographic key
-    let key = SecureKey::generate(32); // 256-bit key
+    let key = SecureKey::generate(32).expect("Failed to generate secure key"); // 256-bit key
     let key_id = KeyId::new();
     
     // Create keys directory

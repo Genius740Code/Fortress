@@ -178,7 +178,7 @@ impl SecureProtocolHandler {
             sequence_number: 0,
             last_activity: chrono::Utc::now(),
             encryption_key: channel.session_key.clone(),
-            auth_key: SecureKey::generate(32), // Separate auth key
+            auth_key: SecureKey::generate(32).expect("Failed to generate secure key"), // Separate auth key
             is_active: true,
         };
         
@@ -538,7 +538,7 @@ impl SecureProtocolHandler {
     /// Initiate key rotation
     pub async fn initiate_key_rotation(&self, channel_id: &str) -> Result<SecureMessage> {
         // Generate new session key
-        let new_key = SecureKey::generate(32);
+        let new_key = SecureKey::generate(32).expect("Failed to generate secure key");
         
         // Create key exchange data
         let key_exchange = KeyExchangeData {
@@ -634,7 +634,7 @@ mod tests {
         let channel = SecureChannel {
             channel_id: "test-channel".to_string(),
             enclave_id: "test-enclave".to_string(),
-            session_key: SecureKey::generate(32),
+            session_key: SecureKey::generate(32).expect("Failed to generate secure key"),
             created_at: chrono::Utc::now(),
             is_active: true,
         };
@@ -655,7 +655,7 @@ mod tests {
         let channel = SecureChannel {
             channel_id: "test-channel".to_string(),
             enclave_id: "test-enclave".to_string(),
-            session_key: SecureKey::generate(32),
+            session_key: SecureKey::generate(32).expect("Failed to generate secure key"),
             created_at: chrono::Utc::now(),
             is_active: true,
         };
@@ -684,7 +684,7 @@ mod tests {
         let channel = SecureChannel {
             channel_id: "test-channel".to_string(),
             enclave_id: "test-enclave".to_string(),
-            session_key: SecureKey::generate(32),
+            session_key: SecureKey::generate(32).expect("Failed to generate secure key"),
             created_at: chrono::Utc::now(),
             is_active: true,
         };

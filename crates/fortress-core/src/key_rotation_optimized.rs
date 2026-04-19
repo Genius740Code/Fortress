@@ -555,7 +555,7 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
     /// Get pooled key for operations
     async fn get_pooled_key(&self) -> SecureKey {
         let mut pool = self.memory_pool.write().await;
-        pool.pop().unwrap_or_else(|| SecureKey::generate(256))
+        pool.pop().unwrap_or_else(|| SecureKey::generate(256).expect("Failed to generate secure key"))
     }
 
     /// Return key to memory pool
@@ -563,7 +563,7 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
         let mut pool = self.memory_pool.write().await;
         if pool.len() < self.config.memory_pool_size {
             // Generate a new key for the pool
-            pool.push(SecureKey::generate(256));
+            pool.push(SecureKey::generate(256).expect("Failed to generate secure key"));
         }
     }
 

@@ -280,7 +280,13 @@ pub struct AlgorithmStatistics {
 
 impl Default for AlgorithmRegistry {
     fn default() -> Self {
-        Self::new().unwrap()
+        Self::new().unwrap_or_else(|_| {
+            // Create a minimal registry if initialization fails
+            Self {
+                algorithms: std::collections::HashMap::new(),
+                metadata: std::collections::HashMap::new(),
+            }
+        })
     }
 }
 

@@ -458,7 +458,7 @@ impl TeeProvider for AwsNitroProvider {
         
         // Generate session key for secure channel
         use crate::key::SecureKey;
-        let session_key = SecureKey::generate(32); // 256-bit session key
+        let session_key = SecureKey::generate(32).expect("Failed to generate secure key"); // 256-bit session key
         
         let channel = SecureChannel {
             channel_id: Uuid::new_v4().to_string(),

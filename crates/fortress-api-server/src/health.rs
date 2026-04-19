@@ -284,7 +284,8 @@ impl HealthChecker {
     async fn check_encryption_system(&self) -> ServerResult<()> {
         // Test encryption/decryption with default algorithm
         let algorithm = Aegis256::new();
-        let key = SecureKey::generate(algorithm.key_size());
+        let key = SecureKey::generate(algorithm.key_size())
+            .expect("Failed to generate secure key");
         
         let plaintext = b"health_check_test";
         let ciphertext = algorithm.encrypt(plaintext, key.as_bytes())?;
@@ -310,7 +311,8 @@ impl HealthChecker {
         // Test key generation
         let key_manager = InMemoryKeyManager::new();
         let algorithm = Aegis256::new();
-        let key = SecureKey::generate(algorithm.key_size());
+        let key = SecureKey::generate(algorithm.key_size())
+            .expect("Failed to generate secure key");
         
         // Store the key
         let key_id = "test_key".to_string();

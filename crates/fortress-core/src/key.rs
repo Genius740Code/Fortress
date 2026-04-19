@@ -180,7 +180,8 @@ impl Default for InMemoryKeyManager {
 impl KeyManager for InMemoryKeyManager {
 
     async fn generate_key(&self, algorithm: &dyn EncryptionAlgorithm) -> Result<SecureKey> {
-        let key = SecureKey::generate(algorithm.key_size());
+        let key = SecureKey::generate(algorithm.key_size())
+            .expect("Failed to generate secure key");
         
         // Log key generation
         let mut metadata = std::collections::HashMap::new();
@@ -2114,7 +2115,8 @@ impl KeyManager for HsmKeyManager {
         // Return a placeholder SecureKey - the actual key is stored in HSM
         // This is a limitation of the current design - we may need to refactor
         // SecureKey to support HSM references
-        Ok(SecureKey::generate(algorithm.key_size()))
+        Ok(SecureKey::generate(algorithm.key_size())
+            .expect("Failed to generate secure key"))
     }
     
     async fn store_key(&self, _key_id: &KeyId, _key: &SecureKey, _metadata: &KeyMetadata) -> Result<()> {
@@ -2146,7 +2148,7 @@ impl KeyManager for HsmKeyManager {
         };
         
         // Return a placeholder key - actual operations should use HSM provider directly
-        let key = SecureKey::generate(256); // Default size
+        let key = SecureKey::generate(256).expect("Failed to generate secure key"); // Default size
         
         Ok((key, metadata))
     }
@@ -2195,7 +2197,8 @@ impl KeyManager for HsmKeyManager {
         }
         
         // Return placeholder key
-        let _key = SecureKey::generate(algorithm.key_size());
+        let _key = SecureKey::generate(algorithm.key_size())
+            .expect("Failed to generate secure key");
         
         Ok(())
     }
@@ -2296,7 +2299,7 @@ impl KeyManager for HsmKeyManager {
         let keys = self.list_keys().await?;
         for (_key_id, metadata) in keys {
             if metadata.purpose == purpose && metadata.is_active() {
-                let key = SecureKey::generate(256); // Placeholder - real HSM would use provider
+                let key = SecureKey::generate(256).expect("Failed to generate secure key"); // Placeholder - real HSM would use provider
                 return Ok((key, metadata));
             }
         }

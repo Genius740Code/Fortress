@@ -219,10 +219,21 @@ impl WebSocketServer {
         }
 
         // Set connection as authenticated
-        connection.set_authenticated(
-            auth_result.user_id.unwrap(),
-            auth_result.session_id,
-        ).await;
+        let user_id = auth_result.user_id.ok_or_else(|| {
+            FortressError::authentication(
+                "Authentication failed: missing user ID",
+                Some("websocket_connection".to_string())
+            )
+        })?;
+        
+        let session_id = auth_result.session_id.ok_or_else(|| {
+            FortressError::authentication(
+                "Authentication failed: missing session ID",
+                Some("websocket_connection".to_string())
+            )
+        })?;
+        
+        connection.set_authenticated(user_id, Some(session_id)).await;
 
         // Send authentication success message
         let success_msg = WebSocketMessage::new(

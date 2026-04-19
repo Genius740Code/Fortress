@@ -598,11 +598,19 @@ pub enum EncryptionErrorCode {
 
     
 
-    /// Invalid input data
+    /// Invalid input
 
     #[error("Invalid input")]
 
     InvalidInput,
+
+    
+
+    /// Key generation failed
+
+    #[error("Key generation failed")]
+
+    KeyGenerationFailed,
 
 }
 
@@ -2099,6 +2107,14 @@ pub enum AuditErrorCode {
     #[error("Audit verification failed")]
 
     VerificationFailed,
+
+    
+
+    /// System error
+
+    #[error("System error")]
+
+    SystemError,
 
 }
 

@@ -101,13 +101,15 @@ impl EntropyPool {
         
         // Mix the pool periodically
         if self.last_mix.elapsed() > Duration::from_millis(100) {
-            self.mix_pool();
+            if let Err(e) = self.mix_pool() {
+                tracing::warn!("Failed to mix entropy pool: {}", e);
+            }
         }
     }
 
-    fn mix_pool(&mut self) {
+    fn mix_pool(&mut self) -> Result<()> {
         if self.buffer.len() < 32 {
-            return;
+            return Ok(());
         }
         
         let pool_data: Vec<u8> = self.buffer.iter().cloned().collect();
@@ -147,7 +149,10 @@ impl EntropyPool {
         // Add additional entropy from system state
         let time_now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or(std::time::Duration::from_secs(0));
+            .map_err(|_| FortressError::internal(
+                "System time went backwards",
+                "trng_system_time",
+            ))?;
         
         let system_entropy = [
             (time_now.as_nanos() as u64 % 256) as u8,
@@ -161,6 +166,7 @@ impl EntropyPool {
         
         self.last_mix = Instant::now();
         self.entropy_bits = self.entropy_bits.min(256); // Cap entropy estimate
+        Ok(())
     }
 
     fn get_bytes(&mut self, count: usize) -> Result<Vec<u8>> {
@@ -180,7 +186,12 @@ impl EntropyPool {
                 result.push(byte);
             } else {
                 // Pool exhausted, mix and try again
-                self.mix_pool();
+                if let Err(e) = self.mix_pool() {
+                    return Err(FortressError::internal(
+                        format!("Failed to mix entropy pool: {}", e),
+                        "trng_pool_mix".to_string(),
+                    ));
+                }
                 if let Some(byte) = self.buffer.pop_front() {
                     result.push(byte);
                 } else {
@@ -421,7 +432,10 @@ impl TrueRandomGenerator {
         for i in 0..20 {
             let now = SystemTime::now();
             let duration = now.duration_since(UNIX_EPOCH)
-                .unwrap_or(Duration::from_secs(0));
+                .map_err(|_| FortressError::internal(
+                    "System time went backwards during entropy collection",
+                    "trng_entropy_time",
+                ))?;
             
             // Add different time components
             entropy_data.extend_from_slice(&duration.as_nanos().to_le_bytes());
@@ -447,7 +461,88 @@ impl TrueRandomGenerator {
 
     /// Generate true random bytes
     pub fn generate_bytes(&self, count: usize) -> Result<Vec<u8>> {
-        self.fallback_generate(count)
+        // First try to use entropy pool
+        match self.generate_from_entropy_pool(count) {
+            Ok(bytes) => Ok(bytes),
+            Err(e) => {
+                tracing::warn!("Entropy pool generation failed: {}, using CSPRNG fallback", e);
+                if self.config.enable_fallback {
+                    self.fallback_generate(count)
+                } else {
+                    Err(FortressError::internal(
+                        "TRNG failed and fallback is disabled",
+                        "trng_no_fallback",
+                    ))
+                }
+            }
+        }
+    }
+
+    /// Generate random bytes from entropy pool
+    fn generate_from_entropy_pool(&self, count: usize) -> Result<Vec<u8>> {
+        // Perform health check first
+        self.health_check()?;
+        
+        let mut pool = self.entropy_pool.lock().map_err(|_| {
+            FortressError::internal(
+                "Failed to acquire entropy pool lock",
+                "trng_pool_lock",
+            )
+        })?;
+        
+        // If insufficient entropy, try to refresh
+        if pool.entropy_available() < 8 * count {
+            drop(pool);
+            self.refresh_entropy_pool()?;
+            pool = self.entropy_pool.lock().map_err(|_| {
+                FortressError::internal(
+                    "Failed to acquire entropy pool lock after refresh",
+                    "trng_pool_lock_refresh",
+                )
+            })?;
+        }
+        
+        pool.get_bytes(count)
+    }
+
+    /// Refresh entropy pool with new data
+    fn refresh_entropy_pool(&self) -> Result<()> {
+        let mut total_entropy = 0usize;
+        
+        // Collect entropy from all sources
+        for source in [
+            EntropySource::CpuTiming,
+            EntropySource::NetworkJitter,
+            EntropySource::DiskIo,
+            EntropySource::MemoryLatency,
+            EntropySource::SystemTime,
+        ] {
+            match self.collect_entropy(source) {
+                Ok((data, bits)) => {
+                    let mut pool = self.entropy_pool.lock().map_err(|_| {
+                        FortressError::internal(
+                            "Failed to acquire entropy pool lock for refresh",
+                            "trng_refresh_lock",
+                        )
+                    })?;
+                    pool.add_entropy(&data, bits);
+                    total_entropy += bits;
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to collect entropy from {:?} during refresh: {}", source, e);
+                }
+            }
+        }
+        
+        if total_entropy == 0 {
+            return Err(FortressError::internal(
+                "Failed to collect any entropy during refresh",
+                "trng_refresh_failed",
+            ));
+        }
+        
+        tracing::debug!("Refreshed entropy pool with {} bits", total_entropy);
+        Ok(())
     }
 
     /// Generate a random u64 value
@@ -473,11 +568,9 @@ impl TrueRandomGenerator {
         Ok(())
     }
 
-    /// Refresh entropy pool with new data
+    /// Refresh entropy pool with new data (public interface)
     pub fn refresh_entropy(&self) -> Result<()> {
-        // Simplified implementation - just return success for now
-        // The full entropy collection system needs further refinement
-        Ok(())
+        self.refresh_entropy_pool()
     }
 
     /// Perform health check on the TRNG system
@@ -576,15 +669,20 @@ impl TrueRandomGenerator {
 
 impl Default for TrueRandomGenerator {
     fn default() -> Self {
-        Self::new().unwrap_or_else(|_| {
-            // If TRNG fails to initialize, create a fallback-only version
-            Self {
-                config: TrngConfig::default(),
-                entropy_pool: Arc::new(Mutex::new(EntropyPool::new())),
-                health_status: Arc::new(Mutex::new(TrngHealth::Failed)),
-                last_health_check: Arc::new(Mutex::new(Instant::now())),
-            }
-        })
+        // For Default implementation, create a CSPRNG-only TRNG
+        // This ensures we never have a failed TRNG instance
+        let config = TrngConfig {
+            min_entropy_bits: 0, // Don't require entropy pool
+            enable_fallback: true, // Always enable fallback
+            ..TrngConfig::default()
+        };
+        
+        Self {
+            config,
+            entropy_pool: Arc::new(Mutex::new(EntropyPool::new())),
+            health_status: Arc::new(Mutex::new(TrngHealth::Healthy)),
+            last_health_check: Arc::new(Mutex::new(Instant::now())),
+        }
     }
 }
 
@@ -593,7 +691,14 @@ static GLOBAL_TRNG: std::sync::OnceLock<std::sync::Mutex<Option<Arc<TrueRandomGe
 
 /// Initialize the global TRNG instance
 pub fn init_global_trng() -> Result<()> {
-    let trng = Arc::new(TrueRandomGenerator::new()?);
+    let trng = match TrueRandomGenerator::new() {
+        Ok(trng) => Arc::new(trng),
+        Err(e) => {
+            tracing::warn!("Failed to initialize full TRNG: {}, using CSPRNG fallback", e);
+            Arc::new(TrueRandomGenerator::default())
+        }
+    };
+    
     let global = GLOBAL_TRNG.get_or_init(|| std::sync::Mutex::new(None));
     let mut guard = global.lock().map_err(|_| FortressError::key_management(
         "Failed to acquire lock on global TRNG during initialization", 

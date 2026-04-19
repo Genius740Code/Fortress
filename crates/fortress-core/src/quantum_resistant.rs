@@ -492,7 +492,8 @@ impl HybridEncryption {
     async fn generate_keypair(&self) -> Result<(Vec<u8>, Vec<u8>)> {
         // Generate classical key
         let classical_algorithm = create_algorithm(&self.classical_algorithm)?;
-        let classical_key = SecureKey::generate(classical_algorithm.key_size());
+        let classical_key = SecureKey::generate(classical_algorithm.key_size())
+            .expect("Failed to generate classical key");
         
         // Generate quantum-resistant key
         let lwe = LweEncryption::new(self.security_parameter, 1024, 32);

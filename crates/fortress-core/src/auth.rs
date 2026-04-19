@@ -704,9 +704,11 @@ mod tests {
     async fn test_user_creation() {
         let mut auth = AuthManager::new();
         
-        let user_id = auth.create_user("testuser".to_string(), "Password123!".to_string()).await.unwrap();
+        let user_id = auth.create_user("testuser".to_string(), "Password123!".to_string()).await
+            .expect("Failed to create test user");
         
-        let user = auth.get_user(&user_id).unwrap();
+        let user = auth.get_user(&user_id)
+            .expect("Failed to retrieve created user");
         assert_eq!(user.username, "testuser");
         assert!(user.active);
     }
@@ -715,7 +717,8 @@ mod tests {
     async fn test_authentication() {
         let mut auth = AuthManager::new();
         
-        let user_id = auth.create_user("testuser".to_string(), "Password123!".to_string()).await.unwrap();
+        let user_id = auth.create_user("testuser".to_string(), "Password123!".to_string()).await
+            .expect("Failed to create test user");
         
         let login_request = LoginRequest {
             username: "testuser".to_string(),
@@ -724,7 +727,8 @@ mod tests {
             ip_address: Some("127.0.0.1".to_string()),
         };
         
-        let response = auth.authenticate(login_request).await.unwrap();
+        let response = auth.authenticate(login_request).await
+            .expect("Failed to authenticate test user");
         assert_eq!(response.user.id, user_id);
         assert!(!response.token.is_empty());
     }
@@ -733,24 +737,25 @@ mod tests {
     async fn test_role_assignment() {
         let mut auth = AuthManager::new();
         
-        let user_id = auth.create_user("testuser".to_string(), "Password123!".to_string()).await.unwrap();
+        let user_id = auth.create_user("testuser".to_string(), "Password123!".to_string()).await
+            .expect("Failed to create test user");
         
         let permission_id = auth.create_permission(
             "read_data".to_string(),
             "Read data permission".to_string(),
             "data".to_string(),
             "read".to_string(),
-        ).unwrap();
+        ).expect("Failed to create test permission");
         
         let role_id = auth.create_role(
             "data_reader".to_string(),
             "Can read data".to_string(),
             vec![permission_id.clone()],
-        ).unwrap();
+        ).expect("Failed to create test role");
         
-        auth.assign_role(&user_id, role_id.clone()).unwrap();
+        auth.assign_role(&user_id, role_id.clone()).expect("Failed to assign test role");
         
-        let user = auth.get_user(&user_id).unwrap();
+        let user = auth.get_user(&user_id).expect("Failed to retrieve user after role assignment");
         assert!(user.roles.contains(&role_id));
         
         assert!(auth.user_has_permission(&user_id, &permission_id));

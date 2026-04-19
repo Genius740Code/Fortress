@@ -373,7 +373,8 @@ impl KeyManager for DatabaseKeyManager {
     async fn generate_key(&self, algorithm: &dyn EncryptionAlgorithm) -> Result<SecureKey> {
         let start_time = std::time::Instant::now();
         
-        let key = SecureKey::generate(algorithm.key_size());
+        let key = SecureKey::generate(algorithm.key_size())
+            .expect("Failed to generate secure key");
         
         // Update metrics
         if self.config.enable_performance_monitoring {
@@ -648,7 +649,7 @@ impl KeyManager for DatabaseKeyManager {
         let keys = self.list_keys().await?;
         for (_key_id, metadata) in keys {
             if metadata.purpose == purpose && metadata.is_active() {
-                let key = SecureKey::generate(256); // Placeholder - would retrieve actual key
+                let key = SecureKey::generate(256).expect("Failed to generate secure key"); // Placeholder - would retrieve actual key
                 return Ok((key, metadata));
             }
         }
