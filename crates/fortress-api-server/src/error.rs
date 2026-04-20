@@ -173,7 +173,9 @@ impl IntoResponse for ServerError {
     fn into_response(self) -> Response {
         let status = self.status_code();
         let error_code = self.error_code();
-        let message = self.to_string();
+        
+        // Use sanitized error message to prevent information disclosure
+        let message = crate::handlers::sanitize_error(&self);
 
         let error_response = json!({
             "error": {
@@ -187,7 +189,7 @@ impl IntoResponse for ServerError {
         tracing::error!(
             error_code = error_code,
             status = status.as_u16(),
-            message = message,
+            message = %self, // Log full error for debugging but sanitize for client
             "Server error occurred"
         );
 

@@ -30,6 +30,48 @@ use utoipa::{
     OpenApi,
 };
 
+/// Sanitize error messages to prevent information disclosure
+pub fn sanitize_error(error: &ServerError) -> String {
+    match error {
+        ServerError::Core(core_err) => {
+            match core_err {
+                fortress_core::error::FortressError::Storage { .. } => "Database operation failed".to_string(),
+                fortress_core::error::FortressError::Encryption { .. } => "Data protection failed".to_string(),
+                fortress_core::error::FortressError::KeyManagement { .. } => "Key operation failed".to_string(),
+                fortress_core::error::FortressError::Configuration { .. } => "Configuration error".to_string(),
+                fortress_core::error::FortressError::Cluster { .. } => "Cluster operation failed".to_string(),
+                fortress_core::error::FortressError::QueryExecution { .. } => "Query operation failed".to_string(),
+                fortress_core::error::FortressError::Validation { .. } => "Invalid input provided".to_string(),
+                fortress_core::error::FortressError::Io { .. } => "I/O operation failed".to_string(),
+                fortress_core::error::FortressError::Network { .. } => "Network operation failed".to_string(),
+                fortress_core::error::FortressError::Authentication { .. } => "Authentication failed".to_string(),
+                fortress_core::error::FortressError::RateLimit { .. } => "Rate limit exceeded".to_string(),
+                fortress_core::error::FortressError::Internal { .. } => "Internal server error".to_string(),
+                fortress_core::error::FortressError::PolicyError(_) => "Access denied".to_string(),
+                fortress_core::error::FortressError::Token { .. } => "Authentication failed".to_string(),
+                fortress_core::error::FortressError::Seal { .. } => "Data protection failed".to_string(),
+                fortress_core::error::FortressError::Plugin { .. } => "Plugin operation failed".to_string(),
+                _ => "Internal server error".to_string(),
+            }
+        },
+        ServerError::Authentication(_) => "Authentication failed".to_string(),
+        ServerError::Authorization(_) => "Access denied".to_string(),
+        ServerError::Validation(_) => "Invalid input provided".to_string(),
+        ServerError::NotFound(_) => "Resource not found".to_string(),
+        ServerError::Conflict(_) => "Resource conflict".to_string(),
+        ServerError::RateLimit => "Rate limit exceeded".to_string(),
+        ServerError::DdosBlocked => "Request blocked".to_string(),
+        ServerError::QuotaExceeded(_) => "Quota exceeded".to_string(),
+        ServerError::PayloadTooLarge(_) => "Payload too large".to_string(),
+        ServerError::Serialization(_) => "Data processing failed".to_string(),
+        ServerError::Network(_) => "Network operation failed".to_string(),
+        ServerError::Configuration(_) => "Configuration error".to_string(),
+        ServerError::Internal(_) => "Internal server error".to_string(),
+        ServerError::Timeout => "Request timeout".to_string(),
+        ServerError::Unavailable(_) => "Service unavailable".to_string(),
+    }
+}
+
 /// Storage record (simplified for this example)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 
@@ -135,14 +177,35 @@ pub async fn store_data(
         "Store data request received"
     );
 
-    // Validate tenant access if multi-tenant
+    // Input validation
+    let validator = fortress_core::input_validation::InputValidator::new();
+    
+    // Validate tenant ID if present
     if let Some(ref tenant_id) = request.tenant_id {
+        validator.validate_string(tenant_id, "tenant_id")?;
+        
+        // Validate tenant access if multi-tenant
         if let Some(ref claims) = claims {
             if !state.auth_manager.has_tenant_access(claims, tenant_id) {
                 return Err(ServerError::access_denied("Access denied to tenant"));
             }
         }
     }
+    
+    // Validate key ID if present
+    if let Some(ref key_id) = request.key_id {
+        validator.validate_string(key_id, "key_id")?;
+    }
+    
+    // Validate algorithm if present
+    if let Some(ref algorithm) = request.algorithm {
+        validator.validate_string(algorithm, "algorithm")?;
+    }
+    
+    // Validate data size
+    let data_str = serde_json::to_string(&request.data)
+        .map_err(|e| ServerError::validation(format!("Invalid JSON data: {}", e)))?;
+    validator.validate_length(&data_str, 0, 100000)?; // Max 100KB
 
     // Generate data ID
     let data_id = Uuid::new_v4().to_string();
@@ -271,6 +334,13 @@ pub async fn retrieve_data(
         data_id = %data_id,
         "Retrieve data request received"
     );
+
+    // Input validation
+    let validator = fortress_core::input_validation::InputValidator::new();
+    
+    // Validate data ID
+    validator.validate_uuid(&data_id)?;
+    validator.validate_string(&data_id, "data_id")?;
 
     // Retrieve the storage record
     let record_bytes = state.storage.get(&data_id).await

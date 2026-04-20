@@ -5,8 +5,8 @@ use fortress_core::encryption::{create_algorithm, SecureKey};
 #[tokio::test]
 async fn test_new_algorithms() {
     // Test XChaCha20-Poly1305
-    let alg = create_algorithm("xchacha20poly1305").unwrap();
-    let key = SecureKey::generate(alg.key_size());
+    let alg = create_algorithm("xchacha20poly1305")?;
+    let key = SecureKey::generate(alg.key_size())?;
     let plaintext = b"Hello, XChaCha20!";
     let ciphertext = alg.encrypt(plaintext, key.as_bytes()).unwrap();
     let decrypted = alg.decrypt(&ciphertext, key.as_bytes()).unwrap();
@@ -14,8 +14,8 @@ async fn test_new_algorithms() {
     println!("✓ XChaCha20-Poly1305 test passed");
 
     // Test Blake3Encrypt
-    let alg = create_algorithm("blake3encrypt").unwrap();
-    let key = SecureKey::generate(alg.key_size());
+    let alg = create_algorithm("blake3encrypt")?;
+    let key = SecureKey::generate(alg.key_size())?;
     let plaintext = b"Hello, Blake3!";
     let ciphertext = alg.encrypt(plaintext, key.as_bytes()).unwrap();
     let decrypted = alg.decrypt(&ciphertext, key.as_bytes()).unwrap();
@@ -50,7 +50,6 @@ fn main() {
                 println!("✓ Successfully created algorithm: {}", alg_name);
                 println!("   Key size: {} bytes", alg.key_size());
                 println!("   Nonce size: {} bytes", alg.nonce_size());
-                println!("   Tag size: {} bytes", alg.tag_size());
                 println!("   Security level: {} bits", alg.security_level());
                 println!("   Performance profile: {:?}", alg.performance_profile());
                 println!();

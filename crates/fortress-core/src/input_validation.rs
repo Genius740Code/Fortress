@@ -355,6 +355,50 @@ impl InputValidator {
 
         Ok((page, page_size))
     }
+
+    /// Validate general string input
+    pub fn validate_string(&self, input: &str, field_name: &str) -> Result<String, FortressError> {
+        if input.is_empty() {
+            return Err(FortressError::validation(
+                &format!("{} cannot be empty", field_name),
+                Some("empty_field".to_string()),
+                None,
+            ));
+        }
+
+        if input.len() > MAX_INPUT_LENGTH {
+            return Err(FortressError::validation(
+                &format!("{} is too long", field_name),
+                Some("max_length".to_string()),
+                Some(MAX_INPUT_LENGTH.to_string()),
+            ));
+        }
+
+        // Check for dangerous characters and patterns
+        self.validate_user_input(input)?;
+        Ok(input.to_string())
+    }
+
+    /// Validate input length
+    pub fn validate_length(&self, input: &str, min: usize, max: usize) -> Result<String, FortressError> {
+        if input.len() < min {
+            return Err(FortressError::validation(
+                &format!("Input too short (minimum {} characters)", min),
+                Some("min_length".to_string()),
+                Some(min.to_string()),
+            ));
+        }
+
+        if input.len() > max {
+            return Err(FortressError::validation(
+                &format!("Input too long (maximum {} characters)", max),
+                Some("max_length".to_string()),
+                Some(max.to_string()),
+            ));
+        }
+
+        Ok(input.to_string())
+    }
 }
 
 #[cfg(test)]

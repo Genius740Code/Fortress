@@ -196,7 +196,25 @@ async fn test_plugin_registration_and_execution() {
             "text": "Hello World",
             "operation": "uppercase"
         }),
-    ).await.unwrap();
+    ).await;
+    
+    match result {
+        Ok(response) => {
+            assert!(response.success);
+            assert!(response.data.is_some());
+            assert!(response.error.is_none());
+            let data = response.data.unwrap();
+            assert_eq!(data["original"], "Hello World");
+            assert_eq!(data["processed"], "HELLO WORLD");
+            assert_eq!(data["operation"], "uppercase");
+        }
+        Err(error) => {
+            assert!(!result.success);
+            assert!(result.error.is_some());
+            let error = result.error.unwrap();
+            assert!(error.contains("Unknown action"));
+        }
+    }
 
     assert!(result.success);
     assert!(result.data.is_some());

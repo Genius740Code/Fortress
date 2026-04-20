@@ -54,7 +54,7 @@ async fn test_basic_concepts() -> Result<(), Box<dyn std::error::Error>> {
     
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap()
+        .unwrap_or_else(|_| SystemTime::UNIX_EPOCH)
         .as_secs();
     
     println!("  - Current timestamp: {}", now);
