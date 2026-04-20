@@ -638,34 +638,13 @@ impl SecureKey {
             })?;
             Ok::<Vec<u8>, crate::error::FortressError>(key)
         })?;
-
         Ok(Self::new(key))
-
     }
-
-    /// Generate a random key with panic on failure (for backward compatibility)
-    /// 
-    /// # Security Note
-    /// This method will panic if key generation fails, which is secure because
-    /// it's better to crash than to use weak/predictable keys.
-    /// Use `generate()` instead for proper error handling.
-    #[deprecated(note = "Use generate() instead for proper error handling")]
-    pub fn generate_unsafe(length: usize) -> Self {
-        Self::generate(length).expect("Failed to generate secure random key - system cannot operate securely")
-    }
-
 }
 
-
-
 impl Drop for SecureKey {
-
     fn drop(&mut self) {
-
-        // Zeroize the key when dropped
-
         let mut key_bytes = self.key.as_ref().to_vec();
-
         key_bytes.zeroize();
 
     }
@@ -2655,7 +2634,7 @@ mod tests {
     #[tokio::test]
     async fn test_aegis256_encrypt_decrypt() {
         let algorithm = Aegis256::new();
-        let key = SecureKey::generate_unsafe(algorithm.key_size());
+        let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
         let plaintext = b"Hello, World!";
         let ciphertext = algorithm.encrypt(plaintext, key.as_bytes()).unwrap();
         let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
@@ -2689,7 +2668,7 @@ mod tests {
     #[tokio::test]
     async fn test_aegis256_performance() {
         let algorithm = Aegis256::new();
-        let key = SecureKey::generate_unsafe(algorithm.key_size());
+        let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
         let plaintext = vec![0u8; 1024 * 1024]; // 1MB
         let start = std::time::Instant::now();
         let _ciphertext = algorithm.encrypt(&plaintext, key.as_bytes()).unwrap();
@@ -2703,7 +2682,7 @@ mod tests {
     #[tokio::test]
     async fn test_chacha20poly1305_encrypt_decrypt() {
         let algorithm = ChaCha20Poly1305::new();
-        let key = SecureKey::generate_unsafe(algorithm.key_size());
+        let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
         let plaintext = b"Hello, Fortress!";
         let ciphertext = algorithm.encrypt(plaintext, key.as_bytes()).unwrap();
         let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
@@ -2715,7 +2694,7 @@ mod tests {
     #[tokio::test]
     async fn test_aes256gcm_encrypt_decrypt() {
         let algorithm = Aes256Gcm::new();
-        let key = SecureKey::generate_unsafe(algorithm.key_size());
+        let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
         let plaintext = b"Hello, Fortress!";
         let ciphertext = algorithm.encrypt(plaintext, key.as_bytes()).unwrap();
         let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
@@ -2725,7 +2704,7 @@ mod tests {
     #[tokio::test]
     async fn test_xchacha20poly1305_encrypt_decrypt() {
         let algorithm = XChaCha20Poly1305::new();
-        let key = SecureKey::generate_unsafe(algorithm.key_size());
+        let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
         let plaintext = b"Hello, XChaCha20!";
         let ciphertext = algorithm.encrypt(plaintext, key.as_bytes()).unwrap();
         let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
@@ -2735,7 +2714,7 @@ mod tests {
     #[tokio::test]
     async fn test_aes256ctr_encrypt_decrypt() {
         let algorithm = Aes256Ctr::new();
-        let key = SecureKey::generate_unsafe(algorithm.key_size());
+        let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
         let plaintext = b"Hello, AES-CTR!";
         let ciphertext = algorithm.encrypt(plaintext, key.as_bytes()).unwrap();
         let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
@@ -2745,7 +2724,7 @@ mod tests {
     #[tokio::test]
     async fn test_argon2idencrypt_encrypt_decrypt() {
         let algorithm = Argon2idEncrypt::new();
-        let key = SecureKey::generate_unsafe(algorithm.key_size());
+        let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
         let plaintext = b"Hello, Argon2id!";
         let ciphertext = algorithm.encrypt(plaintext, key.as_bytes()).unwrap();
         let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
@@ -2755,7 +2734,7 @@ mod tests {
     #[tokio::test]
     async fn test_compositeencrypt_encrypt_decrypt() {
         let algorithm = CompositeEncrypt::new();
-        let key = SecureKey::generate_unsafe(algorithm.key_size());
+        let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
         let plaintext = b"Hello, Composite!";
         let ciphertext = algorithm.encrypt(plaintext, key.as_bytes()).unwrap();
         let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
@@ -2765,7 +2744,7 @@ mod tests {
     #[tokio::test]
     async fn test_blake3encrypt_encrypt_decrypt() {
         let algorithm = Blake3Encrypt::new();
-        let key = SecureKey::generate_unsafe(algorithm.key_size());
+        let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
         let plaintext = b"Hello, Blake3!";
         let ciphertext = algorithm.encrypt(plaintext, key.as_bytes()).unwrap();
         let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
@@ -2775,7 +2754,7 @@ mod tests {
     #[tokio::test]
     async fn test_hmacsha512encrypt_encrypt_decrypt() {
         let algorithm = HmacSha512Encrypt::new();
-        let key = SecureKey::generate_unsafe(algorithm.key_size());
+        let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
         let plaintext = b"Hello, HMAC-SHA512!";
         let ciphertext = algorithm.encrypt(plaintext, key.as_bytes()).unwrap();
         let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
@@ -2951,7 +2930,7 @@ mod tests {
 
     fn test_secure_key() {
 
-        let key = SecureKey::generate_unsafe(32);
+        let key = SecureKey::generate(32).expect("Failed to generate key for test");
 
         assert_eq!(key.len(), 32);
 
@@ -3050,7 +3029,7 @@ mod tests {
     fn test_aegis256_implementation() {
         // This test verifies that our AEGIS-256 implementation works correctly
         let algorithm = Aegis256::new();
-        let key = SecureKey::generate_unsafe(algorithm.key_size());
+        let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
         let plaintext = b"Hello, Fortress! Testing AEGIS-256 implementation.";
         
         // Test encryption and decryption
@@ -3064,7 +3043,7 @@ mod tests {
     #[tokio::test]
     async fn test_aegis256_encrypt_decrypt() {
         let algorithm = Aegis256::new();
-        let key = SecureKey::generate_unsafe(algorithm.key_size());
+        let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
         let plaintext = b"Hello, Fortress! Testing async AEGIS-256.";
         
         // Test async encryption and decryption
@@ -3078,7 +3057,7 @@ mod tests {
     #[test]
     fn test_salsa20_encrypt_decrypt() {
         let algorithm = Salsa20::new();
-        let key = SecureKey::generate_unsafe(algorithm.key_size());
+        let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
         let plaintext = b"Hello, Fortress! Testing Salsa20.";
         
         // Test encryption and decryption
@@ -3092,7 +3071,7 @@ mod tests {
     #[test]
     fn test_ascon_encrypt_decrypt() {
         let algorithm = Ascon::new();
-        let key = SecureKey::generate_unsafe(algorithm.key_size());
+        let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
         let plaintext = b"Hello, Fortress! Testing ASCON.";
         
         // Test encryption and decryption
@@ -3106,7 +3085,7 @@ mod tests {
     #[test]
     fn test_kmac256_encrypt_decrypt() {
         let algorithm = Kmac256::new();
-        let key = SecureKey::generate_unsafe(algorithm.key_size());
+        let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
         let plaintext = b"Hello, Fortress! Testing KMAC256.";
         
         // Test encryption and decryption

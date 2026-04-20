@@ -132,7 +132,7 @@ impl ConnectionManager {
     ) -> Result<Arc<WebSocketConnection>> {
         let connection_id = Uuid::new_v4().to_string();
         let info = ConnectionInfo {
-            id: connection_id.clone(),
+            id: connection_id.to_string(),
             connected_at: Instant::now(),
             last_activity: Instant::now(),
             client_ip,
@@ -155,7 +155,7 @@ impl ConnectionManager {
         });
 
         // Add to connections map
-        self.connections.write().await.insert(connection_id.clone(), connection.clone());
+        self.connections.write().await.insert(connection_id.to_string(), connection.clone());
         
         // Update statistics
         {

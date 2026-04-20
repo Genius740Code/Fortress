@@ -95,7 +95,7 @@ mod aws_integration_tests {
             Ok(storage) => storage,
             Err(e) => {
                 config.cleanup_env_vars();
-                panic!("Failed to create S3 storage: {}", e);
+                assert!(false, "Failed to create S3 storage: {}", e);
             }
         };
 

@@ -134,9 +134,9 @@ impl SubscriptionManager {
         
         // Create subscription
         let subscription = Subscription {
-            id: subscription_id.clone(),
-            connection_id: connection_id.clone(),
-            topic: topic.clone(),
+            id: subscription_id,
+            connection_id: connection_id,
+            topic: topic,
             filters,
             options,
             created_at: Instant::now(),
@@ -149,19 +149,19 @@ impl SubscriptionManager {
         // Add to subscriptions
         {
             let mut subscriptions = self.subscriptions.write().await;
-            subscriptions.insert(subscription_id.clone(), subscription.clone());
+            subscriptions.insert(subscription.id.clone(), subscription.clone());
         }
 
         // Update topic mapping
         {
             let mut topic_subscriptions = self.topic_subscriptions.write().await;
-            topic_subscriptions.entry(topic.clone()).or_insert_with(Vec::new).push(subscription_id.clone());
+            topic_subscriptions.entry(subscription.topic.clone()).or_insert_with(Vec::new).push(subscription.id.clone());
         }
 
         // Update connection mapping
         {
             let mut connection_subscriptions = self.connection_subscriptions.write().await;
-            connection_subscriptions.entry(connection_id.clone()).or_insert_with(Vec::new).push(subscription_id.clone());
+            connection_subscriptions.entry(subscription.connection_id.clone()).or_insert_with(Vec::new).push(subscription.id.clone());
         }
 
         // Update statistics
@@ -173,16 +173,16 @@ impl SubscriptionManager {
                 stats.peak_subscriptions = stats.active_subscriptions;
             }
             
-            if !stats.messages_per_topic.contains_key(&topic) {
+            if !stats.messages_per_topic.contains_key(&subscription.topic) {
                 stats.total_topics += 1;
             }
         }
 
         // Send event
-        tracing::info!("Created subscription {} for topic {} on connection {}", subscription_id, topic, connection_id);
-        let event = SubscriptionEvent::Created { subscription };
+        tracing::info!("Created subscription {} for topic {} on connection {}", subscription.id, subscription.topic, subscription.connection_id);
+        let event = SubscriptionEvent::Created { subscription: subscription.clone() };
         let _ = self.event_sender.send(event);
-        Ok(subscription_id)
+        Ok(subscription.id.to_string())
     }
 
     /// Cancel subscription
@@ -271,33 +271,22 @@ impl SubscriptionManager {
         };
 
         // Filter active subscriptions and apply filters
-        let matching_subscriptions: Vec<String> = {
+        let (matching_subscriptions, exclude_connections): (Vec<String>, Vec<String>) = {
             let subscriptions = self.subscriptions.read().await;
-            subscription_ids.clone().into_iter().filter(|sub_id| {
+            let mut matching = Vec::new();
+            let mut exclude = Vec::new();
+            
+            for sub_id in &subscription_ids {
                 if let Some(subscription) = subscriptions.get(sub_id) {
-                    subscription.status == SubscriptionStatus::Active && self.matches_filters(&subscription, &message)
-                } else {
-                    false
+                    if subscription.status == SubscriptionStatus::Active && self.matches_filters(subscription, &message) {
+                        matching.push(sub_id.clone());
+                    } else {
+                        exclude.push(subscription.connection_id.to_string());
+                    }
                 }
-            }).collect()
-        };
-
-        // Get connections to exclude (those not matching)
-        let exclude_connections: Vec<String> = {
-            let subscriptions = self.subscriptions.read().await;
-            subscription_ids.clone().into_iter().filter(|sub_id| {
-                if let Some(subscription) = subscriptions.get(sub_id) {
-                    subscription.status != SubscriptionStatus::Active || !self.matches_filters(&subscription, &message)
-                } else {
-                    false
-                }
-            }).map(|sub_id| {
-                if let Some(subscription) = subscriptions.get(&sub_id) {
-                    subscription.connection_id.clone()
-                } else {
-                    String::new()
-                }
-            }).collect()
+            }
+            
+            (matching, exclude)
         };
 
         // Send event
@@ -366,7 +355,7 @@ impl SubscriptionManager {
     fn extract_field_value(&self, field: &str, data_update: &DataUpdatePayload) -> serde_json::Value {
         // Check metadata first
         if let Some(value) = data_update.metadata.get(field) {
-            return serde_json::Value::String(value.clone());
+            return serde_json::Value::String(value.to_string());
         }
 
         // Check data fields

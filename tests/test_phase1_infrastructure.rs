@@ -30,7 +30,7 @@ async fn test_storage_backend_extensions() {
         FortressError::Storage { code, .. } => {
             assert_eq!(code, fortress_core::error::StorageErrorCode::NotImplemented);
         }
-        _ => panic!("Expected Storage error"),
+        _ => assert!(false, "Expected Storage error, got {:?}", e),
     }
     
     // Test streaming methods

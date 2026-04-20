@@ -550,7 +550,7 @@ async fn test_custom_operation_types() {
     let request = mpa_service.get_approval_request(&request_id, requester_id.clone()).await.unwrap().unwrap();
     match request.operation_type {
         OperationType::Custom(name) => assert_eq!(name, "DatabaseMigration"),
-        _ => panic!("Expected custom operation type"),
+        _ => assert!(false, "Expected custom operation type, got {:?}", request.operation_type),
     }
     
     // Approve the custom operation

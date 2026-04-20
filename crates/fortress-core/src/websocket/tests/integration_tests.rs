@@ -62,7 +62,7 @@ mod tests {
                     let response_msg: WebSocketMessage = serde_json::from_str(&response)?;
                     assert!(matches!(response_msg.message_type, MessageType::AuthResponse(_)));
                 }
-                _ => panic!("Expected text message"),
+                _ => assert!(false, "Expected text message, got {:?}", msg),
             }
         }
 
@@ -116,7 +116,7 @@ mod tests {
                     let response_msg: WebSocketMessage = serde_json::from_str(&response)?;
                     assert!(matches!(response_msg.message_type, MessageType::SubscribeResponse(_)));
                 }
-                _ => panic!("Expected text message"),
+                _ => assert!(false, "Expected text message, got {:?}", msg),
             }
         }
 
@@ -358,7 +358,7 @@ mod tests {
                     let response_msg: WebSocketMessage = serde_json::from_str(&response)?;
                     assert!(matches!(response_msg.message_type, MessageType::Error(_)));
                 }
-                _ => panic!("Expected text error message"),
+                _ => assert!(false, "Expected text error message, got {:?}", msg),
             }
         }
 

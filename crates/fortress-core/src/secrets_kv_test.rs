@@ -44,7 +44,7 @@ mod tests {
             assert_eq!(data.get("password").unwrap().as_str().unwrap(), "super-secret");
             println!("✓ Secret data verified");
         } else {
-            panic!("Expected to find secret but got None");
+            assert!(false, "Expected to find secret but got None");
         }
         
         // Check engine status

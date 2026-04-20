@@ -906,7 +906,8 @@ mod tests {
                 assert_eq!(metrics.cpu_usage, 75.5);
                 assert_eq!(metrics.memory_usage, 60.2);
             }
-            _ => panic!("Expected SystemMetrics message"),
+            _ => assert!(matches!(message_type, MessageType::SystemMetrics), 
+             "Expected SystemMetrics message, got {:?}", message_type),
         }
     }
 }
