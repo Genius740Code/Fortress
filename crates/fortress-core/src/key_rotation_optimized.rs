@@ -15,6 +15,32 @@ use tokio::sync::{RwLock, Semaphore};
 use tokio::time::{timeout, Duration, Instant};
 use uuid::Uuid;
 
+/// Versioned key cache to reduce string allocations
+#[derive(Debug)]
+pub struct VersionedKeyCache {
+    cache: Arc<RwLock<HashMap<(String, u32), Arc<String>>>>,
+}
+
+impl VersionedKeyCache {
+    pub fn new() -> Self {
+        Self {
+            cache: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+
+    pub async fn get_or_create(&self, key_id: &str, version: u32) -> Arc<String> {
+        let mut cache = self.cache.write().await;
+        cache.entry((key_id.to_string(), version))
+            .or_insert_with(|| Arc::new(format!("{}_v{}", key_id, version)))
+            .clone()
+    }
+
+    pub async fn clear(&self) {
+        let mut cache = self.cache.write().await;
+        cache.clear();
+    }
+}
+
 /// Performance metrics for key rotation operations
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RotationMetrics {
@@ -139,6 +165,8 @@ pub struct OptimizedKeyRotationManager<T: KeyManager> {
     memory_pool: Arc<RwLock<Vec<SecureKey>>>,
     /// Security audit log
     audit_log: Arc<RwLock<Vec<SecurityAuditEntry>>>,
+    /// Versioned key cache to reduce string allocations
+    versioned_key_cache: Arc<VersionedKeyCache>,
 }
 
 /// Security audit entry
@@ -178,6 +206,7 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
             active_rotations: Arc::new(RwLock::new(HashMap::new())),
             memory_pool: Arc::new(RwLock::new(Vec::with_capacity(memory_pool_size))),
             audit_log: Arc::new(RwLock::new(Vec::new())),
+            versioned_key_cache: Arc::new(VersionedKeyCache::new()),
         }
     }
 
@@ -295,7 +324,7 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
     ) -> Result<()> {
         // Phase 1: Optimized backup creation
         let (old_key, old_metadata) = self.key_manager.retrieve_key(&context.key_id).await?;
-        let old_versioned_id = format!("{}_v{}", context.key_id, old_metadata.version);
+        let old_versioned_id = self.versioned_key_cache.get_or_create(&context.key_id, old_metadata.version).await;
         
         // Use memory pool for backup key
         let _backup_key = self.get_pooled_key().await;
@@ -342,7 +371,8 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
 
         if validation_result.is_err() || validation_result.as_ref().unwrap().is_err() {
             // Cleanup and rollback
-            let _ = self.key_manager.delete_key(&format!("{}_v{}", context.key_id, new_version)).await;
+            let new_versioned_id = self.versioned_key_cache.get_or_create(&context.key_id, new_version).await;
+            let _ = self.key_manager.delete_key(&new_versioned_id).await;
             let _ = self.key_manager.delete_key(&old_versioned_id).await;
             
             return Err(FortressError::key_management(
@@ -443,7 +473,7 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
 
     /// Optimized rollback
     async fn rollback_key_optimized(&self, context: &RotationContext, old_version: u32, new_version: u32) -> Result<()> {
-        let old_versioned_id = format!("{}_v{}", context.key_id, old_version);
+        let old_versioned_id = self.versioned_key_cache.get_or_create(&context.key_id, old_version).await;
         
         let rollback_validation = timeout(
             Duration::from_secs(context.config.rollback_timeout_secs),
@@ -479,7 +509,7 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
         self.validate_post_switch_optimized(&context.key_id, old_version).await?;
 
         // Cleanup failed version
-        let new_versioned_id = format!("{}_v{}", context.key_id, new_version);
+        let new_versioned_id = self.versioned_key_cache.get_or_create(&context.key_id, new_version).await;
         let _ = self.key_manager.delete_key(&new_versioned_id).await;
 
         Ok(())
@@ -488,16 +518,15 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
     /// Optimized cleanup
     async fn cleanup_rotation_optimized(&self, context: &RotationContext, new_version: u32) -> Result<()> {
         // Cleanup old version
-        let old_versioned_id = format!("{}_v{}", context.key_id, new_version - 1);
+        let old_versioned_id = self.versioned_key_cache.get_or_create(&context.key_id, new_version - 1).await;
         let cleanup_result = self.key_manager.delete_key(&old_versioned_id).await;
 
         if let Err(e) = cleanup_result {
-            // Log cleanup failure but don't fail the operation
-            tracing::warn!("Warning: Failed to cleanup old key version {}: {}", old_versioned_id, e);
+            tracing::warn!("Failed to cleanup old version during rotation: {}", e);
         }
 
         // Cleanup versioned new key
-        let new_versioned_id = format!("{}_v{}", context.key_id, new_version);
+        let new_versioned_id = self.versioned_key_cache.get_or_create(&context.key_id, new_version).await;
         let _ = self.key_manager.delete_key(&new_versioned_id).await;
 
         // Return key to memory pool

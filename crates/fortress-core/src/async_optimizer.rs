@@ -291,15 +291,15 @@ impl AsyncPerformanceMonitor {
         let total_duration: Duration = times.iter().sum();
         let average_duration = total_duration / times.len() as u32;
         
-        // Calculate percentiles
-        let mut sorted_times = times.clone();
-        sorted_times.sort();
+        // Calculate percentiles using indices instead of cloning
+        let mut indices: Vec<usize> = (0..times.len()).collect();
+        indices.sort_by(|&i, &j| times[i].cmp(&times[j]));
         
-        let p95_index = (sorted_times.len() as f64 * 0.95) as usize;
-        let p99_index = (sorted_times.len() as f64 * 0.99) as usize;
+        let p95_index = (indices.len() as f64 * 0.95) as usize;
+        let p99_index = (indices.len() as f64 * 0.99) as usize;
         
-        let p95_duration = sorted_times.get(p95_index).cloned().unwrap_or(Duration::ZERO);
-        let p99_duration = sorted_times.get(p99_index).cloned().unwrap_or(Duration::ZERO);
+        let p95_duration = times.get(indices[p95_index]).cloned().unwrap_or(Duration::ZERO);
+        let p99_duration = times.get(indices[p99_index]).cloned().unwrap_or(Duration::ZERO);
         
         AsyncPerformanceStats {
             total_operations: times.len() as u64,

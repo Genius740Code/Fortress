@@ -74,6 +74,10 @@ pub struct TokenManager {
     config: TokenManagerConfig,
     /// Cleanup task handle
     cleanup_task: Option<tokio::task::JoinHandle<()>>,
+    /// Indexed fields for efficient search
+    type_index: Arc<RwLock<HashMap<TokenType, Vec<String>>>>,
+    role_index: Arc<RwLock<HashMap<TokenRole, Vec<String>>>>,
+    entity_index: Arc<RwLock<HashMap<String, Vec<String>>>>,
 }
 
 impl TokenManager {
@@ -92,6 +96,9 @@ impl TokenManager {
             lease_manager: Arc::new(LeaseManager::new(config.cleanup_interval)),
             config,
             cleanup_task: None,
+            type_index: Arc::new(RwLock::new(HashMap::new())),
+            role_index: Arc::new(RwLock::new(HashMap::new())),
+            entity_index: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -418,9 +425,30 @@ impl TokenManager {
         let tokens = self.tokens.read().await;
         let mut matching_tokens = Vec::new();
 
-        for token_info in tokens.values() {
-            if self.token_matches_criteria(token_info, &criteria) {
-                matching_tokens.push(token_info.clone());
+        // Use indexed search when possible
+        let candidate_tokens = if let Some(ref token_type) = criteria.token_type {
+            // Use type index
+            let type_index = self.type_index.read().await;
+            type_index.get(token_type).cloned().unwrap_or_default()
+        } else if let Some(ref role) = criteria.role {
+            // Use role index
+            let role_index = self.role_index.read().await;
+            role_index.get(role).cloned().unwrap_or_default()
+        } else if let Some(ref entity_id) = criteria.entity_id {
+            // Use entity index
+            let entity_index = self.entity_index.read().await;
+            entity_index.get(entity_id).cloned().unwrap_or_default()
+        } else {
+            // Fall back to all token IDs
+            tokens.keys().cloned().collect()
+        };
+
+        // Use indexed search with references instead of clones
+        for token_id in candidate_tokens {
+            if let Some(token_info) = tokens.get(&token_id) {
+                if self.token_matches_criteria(token_info, &criteria) {
+                    matching_tokens.push(token_info.clone());
+                }
             }
         }
 

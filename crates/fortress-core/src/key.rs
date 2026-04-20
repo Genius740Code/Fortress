@@ -31,6 +31,9 @@ use crate::hsm::{HsmConfig, HsmKeyManagerInner};
 // Import futures for concurrent processing
 use futures;
 
+// Import versioned key cache for performance optimization
+use crate::key_rotation_optimized::VersionedKeyCache;
+
 
 /// Unique identifier for a key
 
@@ -141,6 +144,9 @@ pub struct InMemoryKeyManager {
 
     keys: Arc<RwLock<HashMap<KeyId, (SecureKey, KeyMetadata)>>>,
 
+    /// Cache for versioned key IDs to avoid repeated string allocations
+    versioned_cache: Arc<VersionedKeyCache>,
+
 }
 
 
@@ -154,6 +160,7 @@ impl InMemoryKeyManager {
         Self {
 
             keys: Arc::new(RwLock::new(HashMap::new())),
+            versioned_cache: Arc::new(VersionedKeyCache::new()),
 
         }
 
@@ -376,7 +383,7 @@ impl KeyManager for InMemoryKeyManager {
         
         // Phase 1: Prepare new key without disrupting existing operations
         let (old_key, old_metadata) = self.retrieve_key(key_id).await?;
-        let old_versioned_id = format!("{}_v{}", key_id, old_metadata.version);
+        let old_versioned_id = self.versioned_cache.get_or_create(key_id, old_metadata.version).await;
         
         // Create backup with timeout protection
         let backup_result = timeout(
@@ -413,7 +420,7 @@ impl KeyManager for InMemoryKeyManager {
          .with_metadata("transition_status".to_string(), "preparing".to_string());
         
         // Store new key with versioned ID for validation
-        let new_versioned_id = format!("{}_v{}", key_id, new_version);
+        let new_versioned_id = self.versioned_cache.get_or_create(key_id, new_version).await;
         self.store_key(&new_versioned_id, &new_key, &new_metadata).await?;
         
         // Phase 3: Validate new key before switching
@@ -575,7 +582,7 @@ impl KeyManager for InMemoryKeyManager {
         self.store_key(key_id, &self.retrieve_key(key_id).await?.0, &metadata).await?;
         
         // Cleanup old version
-        let old_versioned_id = format!("{}_v{}", key_id, new_version - 1);
+        let old_versioned_id = self.versioned_cache.get_or_create(key_id, new_version - 1).await;
         let cleanup_result = self.delete_key(&old_versioned_id).await;
         
         if let Err(e) = cleanup_result {
@@ -584,15 +591,15 @@ impl KeyManager for InMemoryKeyManager {
         }
         
         // Cleanup versioned new key (it's now the main key)
-        let new_versioned_id = format!("{}_v{}", key_id, new_version);
+        let new_versioned_id = self.versioned_cache.get_or_create(key_id, new_version).await;
         let _ = self.delete_key(&new_versioned_id).await;
         
         Ok(())
     }
 
     async fn validate_dual_keys(&self, key_id: &KeyId, old_version: u32, new_version: u32) -> Result<bool> {
-        let old_key_id = format!("{}_v{}", key_id, old_version);
-        let new_key_id = format!("{}_v{}", key_id, new_version);
+        let old_key_id = self.versioned_cache.get_or_create(key_id, old_version).await;
+        let new_key_id = self.versioned_cache.get_or_create(key_id, new_version).await;
         
         let old_exists = self.key_exists(&old_key_id).await?;
         let new_exists = self.key_exists(&new_key_id).await?;
@@ -612,7 +619,7 @@ impl KeyManager for InMemoryKeyManager {
         use tokio::time::{timeout, Duration};
         
         // First, validate we have the backup
-        let old_versioned_id = format!("{}_v{}", key_id, old_version);
+        let old_versioned_id = self.versioned_cache.get_or_create(key_id, old_version).await;
         let backup_validation = timeout(
             Duration::from_secs(10),
             self.validate_dual_keys(key_id, old_version, new_version)
@@ -660,7 +667,7 @@ impl KeyManager for InMemoryKeyManager {
         }
         
         // Cleanup failed new version
-        let new_versioned_id = format!("{}_v{}", key_id, new_version);
+        let new_versioned_id = self.versioned_cache.get_or_create(key_id, new_version).await;
         let cleanup_result = self.delete_key(&new_versioned_id).await;
         
         if let Err(e) = cleanup_result {
@@ -753,7 +760,7 @@ impl KeyManager for InMemoryKeyManager {
          .with_metadata("transition_started".to_string(), Utc::now().to_rfc3339());
         
         // Create backup of old key
-        let old_versioned_id = format!("{}_v{}", key_id, old_metadata.version);
+        let old_versioned_id = self.versioned_cache.get_or_create(key_id, old_metadata.version).await;
         let (old_key, old_metadata_copy) = self.retrieve_key(key_id).await?;
         let old_metadata_backup = old_metadata_copy.clone()
             .with_metadata("transition_status".to_string(), "backup".to_string())
@@ -762,7 +769,7 @@ impl KeyManager for InMemoryKeyManager {
         self.store_key(&old_versioned_id, &old_key, &old_metadata_backup).await?;
         
         // Store new key with versioned ID
-        let new_versioned_id = format!("{}_v{}", key_id, new_version);
+        let new_versioned_id = self.versioned_cache.get_or_create(key_id, new_version).await;
         let new_metadata_with_status = new_metadata.clone()
             .with_metadata("transition_status".to_string(), "active".to_string());
         self.store_key(&new_versioned_id, &new_key, &new_metadata_with_status).await?;
@@ -2068,6 +2075,8 @@ pub struct HsmKeyManager {
     inner: Arc<HsmKeyManagerInner>,
     /// Local cache for key metadata to reduce HSM calls
     metadata_cache: Arc<RwLock<HashMap<KeyId, KeyMetadata>>>,
+    /// Cache for versioned key IDs to avoid repeated string allocations
+    versioned_cache: Arc<VersionedKeyCache>,
 }
 
 impl HsmKeyManager {
@@ -2078,6 +2087,7 @@ impl HsmKeyManager {
         Ok(Self {
             inner,
             metadata_cache: Arc::new(RwLock::new(HashMap::new())),
+            versioned_cache: Arc::new(VersionedKeyCache::new()),
         })
     }
     
@@ -2243,7 +2253,7 @@ impl KeyManager for HsmKeyManager {
         let new_version = old_metadata.version + 1;
         
         // Generate new key in HSM
-        let new_key_id = format!("{}_v{}", key_id, new_version);
+        let new_key_id = self.versioned_cache.get_or_create(key_id, new_version).await;
         self.inner.provider().generate_key(&new_key_id, algorithm).await?;
         
         // Store backup of old key
@@ -2255,7 +2265,7 @@ impl KeyManager for HsmKeyManager {
 
     async fn complete_key_transition(&self, key_id: &KeyId, new_version: u32) -> Result<()> {
         // HSM implementation - cleanup old versions
-        let old_key_id = format!("{}_v{}", key_id, new_version - 1);
+        let old_key_id = self.versioned_cache.get_or_create(key_id, new_version - 1).await;
         let backup_key_id = format!("{}_v{}_backup", key_id, new_version - 1);
         
         // Delete old versions from HSM
@@ -2266,8 +2276,8 @@ impl KeyManager for HsmKeyManager {
     }
 
     async fn validate_dual_keys(&self, key_id: &KeyId, old_version: u32, new_version: u32) -> Result<bool> {
-        let old_key_id = format!("{}_v{}", key_id, old_version);
-        let new_key_id = format!("{}_v{}", key_id, new_version);
+        let old_key_id = self.versioned_cache.get_or_create(key_id, old_version).await;
+        let new_key_id = self.versioned_cache.get_or_create(key_id, new_version).await;
         
         let old_exists = self.key_exists(&old_key_id).await?;
         let new_exists = self.key_exists(&new_key_id).await?;
@@ -2284,7 +2294,7 @@ impl KeyManager for HsmKeyManager {
         let _ = self.inner.provider().delete_key(&new_key_id).await;
         
         // Restore from backup (simplified - real HSM would need proper key restore)
-        let _restored_key_id = format!("{}_v{}", key_id, old_version);
+        let _restored_key_id = self.versioned_cache.get_or_create(key_id, old_version).await;
         // In real implementation, this would restore from backup
         
         Ok(())
@@ -2362,7 +2372,7 @@ impl KeyManager for HsmKeyManager {
         let new_version = old_metadata.version + 1;
         
         // Generate new key in HSM
-        let new_key_id = format!("{}_v{}", key_id, new_version);
+        let new_key_id = self.versioned_cache.get_or_create(key_id, new_version).await;
         self.inner.provider().generate_key(&new_key_id, algorithm).await?;
         
         // Store backup of old key
@@ -2387,7 +2397,7 @@ impl KeyManager for HsmKeyManager {
         // For now, we'll just cache it locally
         {
             let mut cache = self.metadata_cache.write().await;
-            cache.insert(new_key_id.clone(), new_metadata.clone());
+            cache.insert(new_key_id.to_string(), new_metadata.clone());
         }
         
         Ok(new_version)

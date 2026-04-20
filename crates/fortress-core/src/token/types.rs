@@ -5,6 +5,7 @@
 use chrono::{DateTime, Utc, Duration};
 use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 use uuid::Uuid;
 
 /// Token type enumeration

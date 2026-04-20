@@ -8,7 +8,6 @@
 use crate::error::{FortressError, Result};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use std::collections::VecDeque;
 use sha2::{Sha256, Digest};
 
 /// Configuration for the TRNG system
@@ -72,9 +71,73 @@ pub struct TrueRandomGenerator {
     last_health_check: Arc<Mutex<Instant>>,
 }
 
+/// Circular buffer for efficient entropy management
+struct CircularBuffer {
+    buffer: [u8; 4096],
+    head: usize,
+    size: usize,
+}
+
+impl CircularBuffer {
+    fn new() -> Self {
+        Self {
+            buffer: [0u8; 4096],
+            head: 0,
+            size: 0,
+        }
+    }
+
+    fn add_entropy(&mut self, data: &[u8]) {
+        for &byte in data {
+            self.buffer[self.head] = byte;
+            self.head = (self.head + 1) % 4096;
+            if self.size < 4096 {
+                self.size += 1;
+            }
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.size
+    }
+
+    fn as_vec(&self) -> Vec<u8> {
+        if self.size == 0 {
+            return Vec::new();
+        }
+
+        let mut result = Vec::with_capacity(self.size);
+        let start_pos = if self.size < 4096 { 0 } else { self.head };
+        
+        for i in 0..self.size {
+            let pos = (start_pos + i) % 4096;
+            result.push(self.buffer[pos]);
+        }
+        
+        result
+    }
+
+    fn pop_front(&mut self) -> Option<u8> {
+        if self.size == 0 {
+            return None;
+        }
+
+        let tail_pos = if self.size < 4096 { 
+            0 
+        } else { 
+            self.head 
+        };
+        
+        let byte = self.buffer[tail_pos];
+        self.size -= 1;
+        
+        Some(byte)
+    }
+}
+
 /// Internal entropy pool for collecting and mixing entropy
 struct EntropyPool {
-    buffer: VecDeque<u8>,
+    buffer: CircularBuffer,
     entropy_bits: usize,
     last_mix: Instant,
 }
@@ -82,20 +145,15 @@ struct EntropyPool {
 impl EntropyPool {
     fn new() -> Self {
         Self {
-            buffer: VecDeque::with_capacity(4096),
+            buffer: CircularBuffer::new(),
             entropy_bits: 0,
             last_mix: Instant::now(),
         }
     }
 
     fn add_entropy(&mut self, data: &[u8], estimated_bits: usize) {
-        // Add data to pool
-        for byte in data {
-            if self.buffer.len() >= 4096 {
-                self.buffer.pop_front(); // Remove oldest byte
-            }
-            self.buffer.push_back(*byte);
-        }
+        // Add data to pool using efficient circular buffer
+        self.buffer.add_entropy(data);
         
         self.entropy_bits += estimated_bits;
         
@@ -112,7 +170,7 @@ impl EntropyPool {
             return Ok(());
         }
         
-        let pool_data: Vec<u8> = self.buffer.iter().cloned().collect();
+        let pool_data = self.buffer.as_vec();
         let original_len = self.buffer.len();
         let mut hasher = Sha256::new();
         
@@ -133,7 +191,7 @@ impl EntropyPool {
         let hash = hasher.finalize();
         
         // Replace pool with hashed entropy with enhanced mixing
-        self.buffer.clear();
+        let mut new_buffer = CircularBuffer::new();
         for (i, &byte) in hash.iter().enumerate() {
             // Enhanced mixing with multiple entropy sources
             let mixed_byte = byte
@@ -143,7 +201,7 @@ impl EntropyPool {
                 .wrapping_add((hash.len() % 256) as u8)
                 .wrapping_mul((i + 1) as u8)
                 ^ (i.wrapping_mul(0x9e3779b9) % 256) as u8;
-            self.buffer.push_back(mixed_byte);
+            new_buffer.add_entropy(&[mixed_byte]);
         }
         
         // Add additional entropy from system state
@@ -161,9 +219,11 @@ impl EntropyPool {
         ];
         
         for &byte in &system_entropy {
-            self.buffer.push_back(byte.wrapping_add(self.entropy_bits as u8));
+            new_buffer.add_entropy(&[byte.wrapping_add(self.entropy_bits as u8)]);
         }
         
+        // Replace the old buffer with the new mixed buffer
+        self.buffer = new_buffer;
         self.last_mix = Instant::now();
         self.entropy_bits = self.entropy_bits.min(256); // Cap entropy estimate
         Ok(())

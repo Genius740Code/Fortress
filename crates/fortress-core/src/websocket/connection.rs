@@ -71,8 +71,8 @@ pub struct ConnectionStats {
 /// Broadcast message for multiple connections
 #[derive(Debug, Clone)]
 pub struct BroadcastMessage {
-    /// Message to broadcast
-    pub message: WebSocketMessage,
+    /// Message to broadcast (shared reference)
+    pub message: Arc<WebSocketMessage>,
     /// Target connection IDs (None = broadcast to all)
     pub target_connections: Option<Vec<String>>,
     /// Exclude connection IDs
@@ -231,7 +231,7 @@ impl ConnectionManager {
     /// Broadcast message to all connections
     pub async fn broadcast(&self, message: WebSocketMessage) -> Result<()> {
         let broadcast_msg = BroadcastMessage {
-            message,
+            message: Arc::new(message),
             target_connections: None,
             exclude_connections: Vec::new(),
         };
@@ -247,7 +247,7 @@ impl ConnectionManager {
         connection_ids: Vec<String>
     ) -> Result<()> {
         let broadcast_msg = BroadcastMessage {
-            message,
+            message: Arc::new(message),
             target_connections: Some(connection_ids),
             exclude_connections: Vec::new(),
         };
@@ -303,7 +303,7 @@ impl ConnectionManager {
                     }
                     
                     if let Some(connection) = connections_guard.get(&connection_id) {
-                        if let Err(e) = connection.send_message(broadcast_msg.message.clone()).await {
+                        if let Err(e) = connection.send_message((*broadcast_msg.message).clone()).await {
                             tracing::error!("Failed to send message to {}: {}", connection_id, e);
                         }
                     }

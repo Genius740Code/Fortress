@@ -226,7 +226,6 @@ path = "examples/testplugin_demo.rs"
 name = "testplugin_working_demo"
 path = "examples/testplugin_working_demo.rs"
 
-
 [workspace.dependencies]
 # Shared workspace dependencies for consistent versions
 tokio = "1.35"
