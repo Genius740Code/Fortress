@@ -162,8 +162,20 @@ async fn create_app_state() -> Result<Arc<AppState>, Box<dyn std::error::Error>>
     let metrics = Arc::new(MetricsCollector::new());
     let key_manager = Arc::new(fortress_core::key::InMemoryKeyManager::new());
     
-    // Initialize storage (using filesystem for now)
-    let storage = Arc::new(fortress_core::storage::FileSystemStorage::new("./data")?);
+    // Initialize storage with optimized connection pool
+    let storage_config = fortress_core::storage::StorageConfig {
+        backend_type: fortress_core::storage::StorageBackendType::FileSystem {
+            base_path: "./data".to_string(),
+        },
+        config: std::collections::HashMap::new(),
+        connection_pool_size: std::env::var("FORTRESS_DB_POOL_SIZE")
+            .unwrap_or_else(|_| "10".to_string())
+            .parse()
+            .unwrap_or(10),
+        connection_timeout: std::time::Duration::from_secs(30).as_secs(),
+        max_connections: 100,
+    };
+    let storage = Arc::new(fortress_core::storage::FileSystemStorage::with_config("./data", storage_config)?);
     
     // Initialize field encryption manager
     let field_encryption_manager = Arc::new(

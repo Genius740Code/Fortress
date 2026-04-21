@@ -13,6 +13,7 @@
 use crate::error::{FortressError, Result, EncryptionErrorCode};
 
 use async_trait::async_trait;
+use tokio::task;
 
 use base64::{Engine as _, engine::general_purpose};
 
@@ -111,9 +112,17 @@ pub trait EncryptionAlgorithm: Send + Sync + fmt::Debug {
 
     async fn encrypt_async(&self, plaintext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
 
-        // Default implementation calls the sync version
+        // Move CPU-intensive encryption to blocking thread pool to prevent event loop blocking
 
-        Ok(self.encrypt(plaintext, key)?)
+        let plaintext = plaintext.to_vec();
+
+        let key = key.to_vec();
+
+        tokio::task::block_in_place(move || {
+
+            self.encrypt(&plaintext, &key)
+
+        })
 
     }
 
@@ -123,9 +132,17 @@ pub trait EncryptionAlgorithm: Send + Sync + fmt::Debug {
 
     async fn decrypt_async(&self, ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
 
-        // Default implementation calls the sync version
+        // Move CPU-intensive decryption to blocking thread pool to prevent event loop blocking
 
-        Ok(self.decrypt(ciphertext, key)?)
+        let ciphertext = ciphertext.to_vec();
+
+        let key = key.to_vec();
+
+        tokio::task::block_in_place(move || {
+
+            self.decrypt(&ciphertext, &key)
+
+        })
 
     }
 
@@ -705,24 +722,27 @@ impl EncryptionAlgorithm for Aegis256 {
             ));
         }
         
-        // Create AEGIS cipher for this operation
-        let key_array = {
-            let mut arr = [0u8; 32];
-            arr.copy_from_slice(key);
-            arr
-        };
-        let nonce_array = [0u8; 32]; // AEGIS-256 uses 32-byte nonce
-        
-        let key = aegis::aegis256::Key::from(*GenericArray::from_slice(&key_array));
-        let nonce = aegis::aegis256::Nonce::from(*GenericArray::from_slice(&nonce_array));
-        let cipher = Aegis256Cipher::<32>::new(&key, &nonce);
-        
-        let (ciphertext, tag) = cipher.encrypt(plaintext, &[]);
-        
-        // Combine ciphertext and tag for storage
-        let mut result = ciphertext;
-        result.extend_from_slice(&tag);
-        Ok(result)
+        // Move CPU-intensive encryption to blocking thread pool
+        tokio::task::block_in_place(|| {
+            // Create AEGIS cipher for this operation
+            let key_array = {
+                let mut arr = [0u8; 32];
+                arr.copy_from_slice(key);
+                arr
+            };
+            let nonce_array = [0u8; 32]; // AEGIS-256 uses 32-byte nonce
+            
+            let key = aegis::aegis256::Key::from(*GenericArray::from_slice(&key_array));
+            let nonce = aegis::aegis256::Nonce::from(*GenericArray::from_slice(&nonce_array));
+            let cipher = Aegis256Cipher::<32>::new(&key, &nonce);
+            
+            let (ciphertext, tag) = cipher.encrypt(plaintext, &[]);
+            
+            // Combine ciphertext and tag for storage
+            let mut result = ciphertext;
+            result.extend_from_slice(&tag);
+            Ok(result)
+        })
     }
 
     fn decrypt(&self, ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
@@ -742,29 +762,32 @@ impl EncryptionAlgorithm for Aegis256 {
             ));
         }
         
-        // Create AEGIS cipher for this operation
-        let key_array = {
-            let mut arr = [0u8; 32];
-            arr.copy_from_slice(key);
-            arr
-        };
-        let nonce_array = [0u8; 32]; // AEGIS-256 uses 32-byte nonce
-        
-        let key = aegis::aegis256::Key::from(*GenericArray::from_slice(&key_array));
-        let nonce = aegis::aegis256::Nonce::from(*GenericArray::from_slice(&nonce_array));
-        let cipher = Aegis256Cipher::<32>::new(&key, &nonce);
-        
-        // Split ciphertext and tag
-        let ciphertext_len = ciphertext.len() - 32;
-        let ciphertext_part = &ciphertext[..ciphertext_len];
-        let tag = aegis::aegis256::Tag::from(*GenericArray::from_slice(&ciphertext[ciphertext_len..]));
-        
-        cipher.decrypt(ciphertext_part, &tag, &[])
-            .map_err(|_| FortressError::encryption(
-                "AEGIS-256 decryption failed",
-                "aegis256",
-                EncryptionErrorCode::DecryptionFailed,
-            ))
+        // Move CPU-intensive decryption to blocking thread pool
+        tokio::task::block_in_place(|| {
+            // Create AEGIS cipher for this operation
+            let key_array = {
+                let mut arr = [0u8; 32];
+                arr.copy_from_slice(key);
+                arr
+            };
+            let nonce_array = [0u8; 32]; // AEGIS-256 uses 32-byte nonce
+            
+            let key = aegis::aegis256::Key::from(*GenericArray::from_slice(&key_array));
+            let nonce = aegis::aegis256::Nonce::from(*GenericArray::from_slice(&nonce_array));
+            let cipher = Aegis256Cipher::<32>::new(&key, &nonce);
+            
+            // Split ciphertext and tag
+            let ciphertext_len = ciphertext.len() - 32;
+            let ciphertext_part = &ciphertext[..ciphertext_len];
+            let tag = aegis::aegis256::Tag::from(*GenericArray::from_slice(&ciphertext[ciphertext_len..]));
+            
+            cipher.decrypt(ciphertext_part, &tag, &[])
+                .map_err(|_| FortressError::encryption(
+                    "AEGIS-256 decryption failed",
+                    "aegis256",
+                    EncryptionErrorCode::DecryptionFailed,
+                ))
+        })
     }
 
     fn key_size(&self) -> usize {

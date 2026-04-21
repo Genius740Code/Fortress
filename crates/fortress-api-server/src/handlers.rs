@@ -31,44 +31,44 @@ use utoipa::{
 };
 
 /// Sanitize error messages to prevent information disclosure
-pub fn sanitize_error(error: &ServerError) -> String {
+pub fn sanitize_error(error: &ServerError) -> &'static str {
     match error {
         ServerError::Core(core_err) => {
             match core_err {
-                fortress_core::error::FortressError::Storage { .. } => "Database operation failed".to_string(),
-                fortress_core::error::FortressError::Encryption { .. } => "Data protection failed".to_string(),
-                fortress_core::error::FortressError::KeyManagement { .. } => "Key operation failed".to_string(),
-                fortress_core::error::FortressError::Configuration { .. } => "Configuration error".to_string(),
-                fortress_core::error::FortressError::Cluster { .. } => "Cluster operation failed".to_string(),
-                fortress_core::error::FortressError::QueryExecution { .. } => "Query operation failed".to_string(),
-                fortress_core::error::FortressError::Validation { .. } => "Invalid input provided".to_string(),
-                fortress_core::error::FortressError::Io { .. } => "I/O operation failed".to_string(),
-                fortress_core::error::FortressError::Network { .. } => "Network operation failed".to_string(),
-                fortress_core::error::FortressError::Authentication { .. } => "Authentication failed".to_string(),
-                fortress_core::error::FortressError::RateLimit { .. } => "Rate limit exceeded".to_string(),
-                fortress_core::error::FortressError::Internal { .. } => "Internal server error".to_string(),
-                fortress_core::error::FortressError::PolicyError(_) => "Access denied".to_string(),
-                fortress_core::error::FortressError::Token { .. } => "Authentication failed".to_string(),
-                fortress_core::error::FortressError::Seal { .. } => "Data protection failed".to_string(),
-                fortress_core::error::FortressError::Plugin { .. } => "Plugin operation failed".to_string(),
-                _ => "Internal server error".to_string(),
+                fortress_core::error::FortressError::Storage { .. } => "Database operation failed",
+                fortress_core::error::FortressError::Encryption { .. } => "Data protection failed",
+                fortress_core::error::FortressError::KeyManagement { .. } => "Key operation failed",
+                fortress_core::error::FortressError::Configuration { .. } => "Configuration error",
+                fortress_core::error::FortressError::Cluster { .. } => "Cluster operation failed",
+                fortress_core::error::FortressError::QueryExecution { .. } => "Query operation failed",
+                fortress_core::error::FortressError::Validation { .. } => "Invalid input provided",
+                fortress_core::error::FortressError::Io { .. } => "I/O operation failed",
+                fortress_core::error::FortressError::Network { .. } => "Network operation failed",
+                fortress_core::error::FortressError::Authentication { .. } => "Authentication failed",
+                fortress_core::error::FortressError::RateLimit { .. } => "Rate limit exceeded",
+                fortress_core::error::FortressError::Internal { .. } => "Internal server error",
+                fortress_core::error::FortressError::PolicyError(_) => "Access denied",
+                fortress_core::error::FortressError::Token { .. } => "Authentication failed",
+                fortress_core::error::FortressError::Seal { .. } => "Data protection failed",
+                fortress_core::error::FortressError::Plugin { .. } => "Plugin operation failed",
+                _ => "Internal server error",
             }
         },
-        ServerError::Authentication(_) => "Authentication failed".to_string(),
-        ServerError::Authorization(_) => "Access denied".to_string(),
-        ServerError::Validation(_) => "Invalid input provided".to_string(),
-        ServerError::NotFound(_) => "Resource not found".to_string(),
-        ServerError::Conflict(_) => "Resource conflict".to_string(),
-        ServerError::RateLimit => "Rate limit exceeded".to_string(),
-        ServerError::DdosBlocked => "Request blocked".to_string(),
-        ServerError::QuotaExceeded(_) => "Quota exceeded".to_string(),
-        ServerError::PayloadTooLarge(_) => "Payload too large".to_string(),
-        ServerError::Serialization(_) => "Data processing failed".to_string(),
-        ServerError::Network(_) => "Network operation failed".to_string(),
-        ServerError::Configuration(_) => "Configuration error".to_string(),
-        ServerError::Internal(_) => "Internal server error".to_string(),
-        ServerError::Timeout => "Request timeout".to_string(),
-        ServerError::Unavailable(_) => "Service unavailable".to_string(),
+        ServerError::Authentication(_) => "Authentication failed",
+        ServerError::Authorization(_) => "Access denied",
+        ServerError::Validation(_) => "Invalid input provided",
+        ServerError::NotFound(_) => "Resource not found",
+        ServerError::Conflict(_) => "Resource conflict",
+        ServerError::RateLimit => "Rate limit exceeded",
+        ServerError::DdosBlocked => "Request blocked",
+        ServerError::QuotaExceeded(_) => "Quota exceeded",
+        ServerError::PayloadTooLarge(_) => "Payload too large",
+        ServerError::Serialization(_) => "Data processing failed",
+        ServerError::Network(_) => "Network operation failed",
+        ServerError::Configuration(_) => "Configuration error",
+        ServerError::Internal(_) => "Internal server error",
+        ServerError::Timeout => "Request timeout",
+        ServerError::Unavailable(_) => "Service unavailable",
     }
 }
 
@@ -238,6 +238,7 @@ pub async fn store_data(
             if let Some(field_value) = get_nested_value(&request.data, field_name) {
                 let field_id = fortress_core::field_encryption::FieldIdentifier::Name(field_name.clone());
                 
+                // Cache serialized field value to avoid repeated serialization
                 let field_bytes = serde_json::to_vec(&field_value)
                     .map_err(|e| ServerError::serialization(e.to_string()))?;
                 
@@ -274,6 +275,7 @@ pub async fn store_data(
     };
 
     // Store the encrypted data using the storage backend
+    // Cache serialized record to avoid repeated serialization
     let record_bytes = serde_json::to_vec(&storage_record)
         .map_err(|e| ServerError::serialization(e.to_string()))?;
     
@@ -791,8 +793,8 @@ pub async fn security_health_check(
     let audit_health = health_checker.get_component_health("audit_logging").await;
     
     let security_status = serde_json::json!({
-        "status": if auth_health.is_some() && auth_health.as_ref().unwrap().status == crate::models::HealthStatus::Healthy &&
-                        encryption_health.is_some() && encryption_health.as_ref().unwrap().status == crate::models::HealthStatus::Healthy {
+        "status": if auth_health.is_some() && auth_health.as_ref().map(|h| h.status == crate::models::HealthStatus::Healthy).unwrap_or(false) &&
+                        encryption_health.is_some() && encryption_health.as_ref().map(|h| h.status == crate::models::HealthStatus::Healthy).unwrap_or(false) {
             "secure"
         } else {
             "degraded"
@@ -858,7 +860,7 @@ pub async fn get_security_events(
     
     let filtered_events: Vec<_> = events.into_iter()
         .filter(|event| {
-            let _event_time = event["timestamp"].as_str().unwrap();
+            let _event_time = event["timestamp"].as_str().unwrap_or("");
             // Apply filters based on query parameters
             if let Some(severity) = &params.severity {
                 if event["severity"].as_str().unwrap_or("") != severity {

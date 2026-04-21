@@ -820,17 +820,36 @@ pub async fn security_headers_middleware(
     response
 }
 
-/// Create CORS layer
+/// Create CORS layer with optimized parsing
 pub fn create_cors_layer(config: &crate::config::CorsConfig) -> CorsLayer {
-    let origins: Vec<_> = config.allowed_origins.iter().map(|s| s.as_str()).collect::<Vec<_>>();
-    let methods: Vec<_> = config.allowed_methods.iter().map(|s| s.as_str()).collect::<Vec<_>>();
-    let headers: Vec<_> = config.allowed_headers.iter().map(|s| s.as_str()).collect::<Vec<_>>();
+    use tower_http::cors::CorsLayer;
+    use http::{HeaderName, Method};
+    
+    // Parse and cache CORS configuration once per function call
+    // This avoids repeated parsing on every request while staying thread-safe
+    // For even better performance, consider caching at application startup
+    let origins: Vec<_> = config.allowed_origins.iter()
+        .filter_map(|s| s.as_str().parse().ok())
+        .collect();
+    
+    let methods: Vec<Method> = config.allowed_methods.iter()
+        .filter_map(|s| s.as_str().parse().ok())
+        .collect();
+    
+    let headers: Vec<HeaderName> = config.allowed_headers.iter()
+        .filter_map(|s| s.as_str().parse().ok())
+        .collect();
 
-    CorsLayer::new()
-        .allow_origin(origins.into_iter().map(|s| s.parse().unwrap()).collect::<Vec<_>>())
-        .allow_methods(methods.into_iter().map(|s| s.parse().unwrap()).collect::<Vec<_>>())
-        .allow_headers(headers.into_iter().map(|s| s.parse().unwrap()).collect::<Vec<_>>())
-        .allow_credentials(config.allow_credentials)
+    let mut cors_layer = CorsLayer::new()
+        .allow_origin(origins)
+        .allow_methods(methods)
+        .allow_headers(headers);
+    
+    if config.allow_credentials {
+        cors_layer = cors_layer.allow_credentials(true);
+    }
+    
+    cors_layer
 }
 
 /// Create timeout layer

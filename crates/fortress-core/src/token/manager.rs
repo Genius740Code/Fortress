@@ -423,7 +423,7 @@ impl TokenManager {
     /// Search tokens
     pub async fn search_tokens(&self, criteria: TokenSearchCriteria) -> Result<TokenSearchResults> {
         let tokens = self.tokens.read().await;
-        let mut matching_tokens = Vec::new();
+        let mut matching_tokens: Vec<TokenInfo> = Vec::new();
 
         // Use indexed search when possible
         let candidate_tokens = if let Some(ref token_type) = criteria.token_type {
@@ -443,14 +443,13 @@ impl TokenManager {
             tokens.keys().cloned().collect()
         };
 
-        // Use indexed search with references instead of clones
-        for token_id in candidate_tokens {
-            if let Some(token_info) = tokens.get(&token_id) {
-                if self.token_matches_criteria(token_info, &criteria) {
-                    matching_tokens.push(token_info.clone());
-                }
-            }
-        }
+        // Use indexed lookup with filter
+        let matching_tokens: Vec<_> = candidate_tokens
+            .iter()
+            .filter_map(|token_id| tokens.get(token_id))
+            .filter(|token_info| self.token_matches_criteria(token_info, &criteria))
+            .cloned()
+            .collect();
 
         // Apply pagination
         let total_count = matching_tokens.len() as u64;

@@ -80,6 +80,17 @@ pub struct InvalidationConfig {
     pub grace_period_ms: u64,
 }
 
+/// Invalidation strategy
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum InvalidationStrategy {
+    /// Time-based invalidation with TTL
+    TimeToLive { ttl_seconds: u64 },
+    /// Write-through cache invalidation on write operations
+    WriteThrough { invalidate_on_write: bool },
+    /// Write-behind cache with delayed invalidation
+    WriteBehind { delay_seconds: u64 },
+}
+
 impl Default for InvalidationConfig {
     fn default() -> Self {
         Self {
@@ -91,7 +102,7 @@ impl Default for InvalidationConfig {
             timeout_seconds: 30,
             max_retries: 3,
             enable_logging: true,
-            grace_period_ms: 100,
+            grace_period_ms: 5000,
         }
     }
 }

@@ -2,8 +2,7 @@ use color_eyre::eyre::{Result, Context};
 use console::style;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde_json::{json, Value};
-use fortress_core::storage::{create_storage_backend, StorageConfig as StorageBackendConfig, StorageBackendType};
-use fortress_core::config::{DatabaseConfig, EncryptionConfig, StorageConfig, ApiConfig, MonitoringConfig, TransactionConfig, StreamingConfig, BackupConfig, AuditConfig, KeyDerivationConfig, Config};
+use fortress_core::config::{DatabaseConfig, EncryptionConfig, ApiConfig, MonitoringConfig, TransactionConfig, StreamingConfig, BackupConfig, AuditConfig, KeyDerivationConfig, Config};
 use std::path::PathBuf;
 use tracing::{info, debug, warn};
 use std::process::Command;
@@ -74,20 +73,10 @@ pub async fn handle_migrate(
     
     println!("Target directory: {}", style(target_dir.display()).bold());
     
-    // Create Fortress database
-    println!("Creating Fortress database...");
-    let _fortress_config = create_fortress_config(&to, &target_dir)?;
-    
-    // Initialize Fortress storage
-    let storage_config = StorageBackendConfig {
-        backend_type: StorageBackendType::FileSystem {
-            base_path: target_dir.to_string_lossy().to_string(),
-        },
-        config: std::collections::HashMap::new(),
-    };
-    let storage = create_storage_backend(storage_config)
-        .await
-        .context("Failed to initialize Fortress storage")?;
+    // Initialize Fortress storage with simple filesystem backend  
+    let storage = fortress_core::storage::FileSystemStorage::new(&target_dir.to_string_lossy().to_string())
+        .context("Failed to create storage")?;
+    let storage = Box::new(storage) as Box<dyn fortress_core::storage::StorageBackend>;
     
     // Get list of tables to migrate
     let tables = if let Some(table_name) = table {
@@ -196,7 +185,7 @@ fn create_fortress_config(name: &str, data_dir: &PathBuf) -> Result<Config> {
             profiles: std::collections::HashMap::new(),
             key_derivation: KeyDerivationConfig::default(),
         },
-        storage: StorageConfig {
+        storage: fortress_core::config::StorageConfig {
             backend: "filesystem".to_string(),
             base_path: Some(data_dir.to_string_lossy().to_string()),
             s3: None,

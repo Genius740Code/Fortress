@@ -43,6 +43,12 @@ pub struct CacheManagerConfig {
     pub hybrid_config: Option<HybridCacheConfig>,
     /// Invalidation configuration
     pub invalidation_config: InvalidationConfig,
+    /// Default TTL in seconds
+    pub default_ttl_seconds: u64,
+    /// Enable proactive invalidation
+    pub proactive_invalidation: bool,
+    /// Invalidation strategy
+    pub invalidation_strategy: InvalidationStrategy,
     /// Enable automatic cache warming
     pub enable_auto_warming: bool,
     /// Keys to warm up automatically
@@ -78,6 +84,21 @@ pub enum CacheType {
     Hybrid,
     /// Auto-select based on environment
     Auto,
+}
+
+/// Cache invalidation strategies
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum InvalidationStrategy {
+    /// Time-based invalidation with TTL
+    TimeToLive { ttl_seconds: u64 },
+    /// Write-through cache invalidation
+    WriteThrough { invalidate_on_write: bool },
+    /// Write-behind cache invalidation with delay
+    WriteBehind { delay_seconds: u64 },
+    /// Event-driven invalidation
+    EventDriven,
+    /// Manual invalidation only
+    Manual,
 }
 
 /// Performance thresholds for cache management
@@ -117,6 +138,9 @@ impl Default for CacheManagerConfig {
             #[cfg(feature = "distributed-cache")]
             hybrid_config: None,
             invalidation_config: InvalidationConfig::default(),
+            default_ttl_seconds: 3600, // 1 hour default TTL
+            proactive_invalidation: true,
+            invalidation_strategy: InvalidationStrategy::TimeToLive { ttl_seconds: 3600 },
             enable_auto_warming: false,
             warm_up_keys: Vec::new(),
             enable_monitoring: true,

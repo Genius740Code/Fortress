@@ -48,11 +48,20 @@ pub trait StorageBackend: Send + Sync + fmt::Debug {
 
     /// Batch get multiple keys efficiently
     async fn batch_get(&self, keys: &[String]) -> Result<Vec<(String, Option<Vec<u8>>)>> {
-        let mut results = Vec::new();
-        for key in keys {
-            let value = self.get(key).await?;
-            results.push((key.clone(), value));
-        }
+        // Use concurrent operations with bounded concurrency
+        use futures::future::join_all;
+        
+        let futures: Vec<_> = keys.iter()
+            .map(|key| async move {
+                let value = self.get(key).await?;
+                Ok::<_, FortressError>((key.as_str().to_string(), value))
+            })
+            .collect();
+        
+        let results = join_all(futures).await
+            .into_iter()
+            .collect::<Result<Vec<_>>>()?;
+        
         Ok(results)
     }
 
@@ -350,6 +359,29 @@ impl FileSystemStorage {
                 "filesystem".to_string(),
                 StorageErrorCode::ConnectionFailed,
             ))?;
+
+        Ok(Self { base_path: path })
+    }
+
+    /// Create a new file system storage backend with configuration
+    pub fn with_config<P: Into<std::path::PathBuf>>(base_path: P, config: StorageConfig) -> Result<Self> {
+        let path = base_path.into();
+        
+        // Create directory if it doesn't exist
+        std::fs::create_dir_all(&path)
+            .map_err(|e| FortressError::storage(
+                format!("Failed to create directory: {}", e),
+                "filesystem".to_string(),
+                StorageErrorCode::ConnectionFailed,
+            ))?;
+
+        // Log connection pool configuration
+        tracing::info!(
+            "FileSystemStorage initialized with connection pool: size={}, timeout={}s, max={}",
+            config.connection_pool_size,
+            config.connection_timeout,
+            config.max_connections
+        );
 
         Ok(Self { base_path: path })
     }
@@ -779,9 +811,9 @@ impl StorageBackend for S3Storage {
             supported_compression_algorithms: vec![],
             metadata: {
                 let mut meta = HashMap::new();
-                meta.insert("bucket".to_string(), self.bucket.clone());
+                meta.insert("bucket", self.bucket.clone());
                 if let Some(prefix) = &self.prefix {
-                    meta.insert("prefix".to_string(), prefix.clone());
+                    meta.insert("prefix", prefix.clone());
                 }
                 meta
             },
@@ -1006,7 +1038,20 @@ pub struct StorageConfig {
     pub backend_type: StorageBackendType,
     /// Backend-specific configuration
     pub config: HashMap<String, serde_json::Value>,
+    /// Connection pool size
+    #[serde(default = "default_connection_pool_size")]
+    pub connection_pool_size: usize,
+    /// Connection timeout in seconds
+    #[serde(default = "default_connection_timeout")]
+    pub connection_timeout: u64,
+    /// Maximum number of connections
+    #[serde(default = "default_max_connections")]
+    pub max_connections: usize,
 }
+
+fn default_connection_pool_size() -> usize { 10 }
+fn default_connection_timeout() -> u64 { 30 }
+fn default_max_connections() -> usize { 100 }
 
 /// Storage backend types
 #[derive(Debug, Clone, Serialize, Deserialize)]

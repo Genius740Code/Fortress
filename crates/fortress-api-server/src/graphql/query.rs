@@ -31,11 +31,14 @@ impl Query {
         let db_keys = storage.list_prefix("db:").await
             .map_err(|e| async_graphql::Error::new(format!("Database listing failed: {}", e)))?;
         
+        // Batch fetch all database entries to reduce round trips
+        let db_data = storage.batch_get(&db_keys).await
+            .map_err(|e| async_graphql::Error::new(format!("Database batch retrieval failed: {}", e)))?;
+        
         let mut databases = Vec::new();
         
-        for key in db_keys {
-            if let Some(data) = storage.get(&key).await
-                .map_err(|e| async_graphql::Error::new(format!("Database data retrieval failed: {}", e)))? {
+        for (_key, data) in db_data {
+            if let Some(data) = data {
                 
                 if let Ok(db_info) = serde_json::from_slice::<serde_json::Value>(&data) {
                     if let (Some(name), Some(status), Some(algorithm), Some(created_at)) = (
