@@ -16,6 +16,8 @@ use tower_http::{
     trace::TraceLayer,
     compression::CompressionLayer,
 };
+use axum::http::{header, Method, HeaderValue};
+use chrono::Duration;
 use tracing::info;
 
 // Import from fortress_api_server instead of fortress_server
@@ -58,6 +60,14 @@ async fn create_router(_openapi: utoipa::openapi::OpenApi) -> Result<Router, Box
     // Create application state
     let state = create_app_state().await?;
 
+    // Get allowed origins from environment or use secure defaults
+    let allowed_origins_str = std::env::var("FORTRESS_ALLOWED_ORIGINS")
+        .unwrap_or_else(|_| "https://fortress.example.com,http://localhost:3000,http://localhost:8080".to_string());
+    let allowed_origins = allowed_origins_str
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .collect::<Vec<_>>();
+
     // Create base router with all endpoints
     let app = Router::new()
         // Health and API documentation
@@ -94,13 +104,34 @@ async fn create_router(_openapi: utoipa::openapi::OpenApi) -> Result<Router, Box
         
         // Admin operations
         .route("/api/v1/admin/data", get(admin_list_data))
-        
-        // Middleware
+        // Middleware with restricted CORS
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())
                 .layer(CompressionLayer::new())
-                .layer(CorsLayer::permissive())
+                // Restricted CORS
+                .layer(
+                    CorsLayer::new()
+                        .allow_origin(allowed_origins_str.parse::<HeaderValue>().unwrap_or_else(|_| "https://fortress.example.com".parse().unwrap()))
+                        .allow_methods([
+                            Method::GET,
+                            Method::POST,
+                            Method::PUT,
+                            Method::DELETE,
+                            Method::PATCH,
+                            Method::OPTIONS
+                        ])
+                        .allow_headers([
+                            header::AUTHORIZATION,
+                            header::ACCEPT,
+                            header::CONTENT_TYPE,
+                            header::ORIGIN,
+                            header::ACCESS_CONTROL_REQUEST_METHOD,
+                            header::ACCESS_CONTROL_REQUEST_HEADERS
+                        ])
+                        .allow_credentials(true)
+                        .max_age(std::time::Duration::from_secs(3600))
+                )
         )
         .with_state(state);
 
@@ -115,9 +146,16 @@ async fn create_app_state() -> Result<Arc<AppState>, Box<dyn std::error::Error>>
     use fortress_core::field_encryption_manager::DefaultFieldEncryptionManager;
     use chrono::Duration;
     
-    // Initialize components
+    // Initialize components with secure JWT secret from environment
+    let jwt_secret = std::env::var("FORTRESS_JWT_SECRET")
+        .map_err(|_| "FORTRESS_JWT_SECRET environment variable not set")?;
+    
+    if jwt_secret.len() < 32 {
+        return Err("FORTRESS_JWT_SECRET must be at least 32 characters long".into());
+    }
+    
     let auth_manager = Arc::new(AuthManager::new(
-        "demo-jwt-secret", 
+        &jwt_secret,
         Duration::seconds(3600), 
         Arc::new(InMemoryUserStore::new())
     ));

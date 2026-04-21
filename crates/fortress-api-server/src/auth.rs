@@ -660,7 +660,14 @@ impl AuthManager {
 
     /// Validate and extract claims from token
     pub fn validate_token(&self, token: &str) -> ServerResult<TokenClaims> {
-        let validation = Validation::default();
+        let mut validation = Validation::default();
+        // Explicitly specify allowed algorithms to prevent "alg:none" attacks
+        validation.algorithms = vec![jsonwebtoken::Algorithm::HS256];
+        // Validate critical claims
+        validation.validate_exp = true;
+        validation.validate_nbf = true;
+        validation.leeway = 0; // No leeway for time-based claims
+        
         let token_data = decode::<TokenClaims>(token, &self.decoding_key, &validation)
             .map_err(|e| ServerError::auth(format!("Invalid token: {}", e)))?;
         
