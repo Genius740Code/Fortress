@@ -462,6 +462,29 @@ impl FileSystemStorage {
             Err(_) => Ok(None),
         }
     }
+
+    /// Extract original key from data file path by loading corresponding metadata
+    fn extract_key_from_path(&self, data_path: &std::path::Path) -> Option<String> {
+        // Convert data path to metadata path
+        if let Some(data_filename) = data_path.file_name() {
+            if let Some(data_str) = data_filename.to_str() {
+                if data_str.ends_with(".data") {
+                    let meta_filename = data_str.replace(".data", ".meta");
+                    let meta_path = data_path.parent().unwrap().join(meta_filename);
+                    
+                    // This is a synchronous operation in an async context,
+                    // but we're just checking if the file exists and reading it
+                    // In a real implementation, this should be made async
+                    if let Ok(metadata_data) = std::fs::read(&meta_path) {
+                        if let Ok(metadata) = serde_json::from_slice::<FileMetadata>(&metadata_data) {
+                            return Some(metadata.key);
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
 }
 
 #[async_trait]
@@ -577,9 +600,9 @@ impl StorageBackend for FileSystemStorage {
                 Ok(Some(entry)) => {
                     let path = entry.path();
                     if path.extension().and_then(|s| s.to_str()) == Some("data") {
-                        // Check if this matches our prefix
-                        if let Some(metadata) = self.load_metadata(&path.to_string_lossy()).await? {
-                            if metadata.key.starts_with(prefix) {
+                        // Extract original key from metadata file path
+                        if let Some(original_key) = self.extract_key_from_path(&path) {
+                            if original_key.starts_with(prefix) {
                                 current_idx += 1;
                             }
                         }
@@ -600,9 +623,10 @@ impl StorageBackend for FileSystemStorage {
                 Ok(Some(entry)) => {
                     let path = entry.path();
                     if path.extension().and_then(|s| s.to_str()) == Some("data") {
-                        if let Some(metadata) = self.load_metadata(&path.to_string_lossy()).await? {
-                            if metadata.key.starts_with(prefix) {
-                                keys.push(metadata.key);
+                        // Extract original key from metadata file path
+                        if let Some(original_key) = self.extract_key_from_path(&path) {
+                            if original_key.starts_with(prefix) {
+                                keys.push(original_key);
                                 collected += 1;
                             }
                         }

@@ -734,7 +734,10 @@ impl EncryptionAlgorithm for Aegis256 {
                 EncryptionErrorCode::EncryptionFailed,
             ))?;
         
-        Ok(ciphertext)
+        // Prepend nonce to ciphertext for decrypt compatibility
+        let mut result = nonce.to_vec();
+        result.extend_from_slice(&ciphertext);
+        Ok(result)
     }
 
     fn decrypt(&self, ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
@@ -862,21 +865,32 @@ impl EncryptionAlgorithm for ChaCha20Poly1305 {
 
 
 
-        // Generate random nonce
+        // Generate random 24-byte nonce for XChaCha20Poly1305
 
-        let mut nonce = vec![0u8; self.nonce_size()];
+        let mut xnonce = [0u8; 24];
 
         // Try to use TRNG first, fallback to getrandom
-        match crate::trng::fill_random(&mut nonce) {
+
+        match crate::trng::fill_random(&mut xnonce) {
+
             Ok(_) => {},
+
             Err(_) => {
-                getrandom::getrandom(&mut nonce)
+
+                getrandom::getrandom(&mut xnonce)
+
                     .map_err(|_e| FortressError::encryption(
+
                         "Failed to generate nonce: random error".to_string(),
+
                         self.name().to_string(),
+
                         EncryptionErrorCode::EncryptionFailed,
+
                     ))?;
+
             }
+
         }
 
 
@@ -897,14 +911,6 @@ impl EncryptionAlgorithm for ChaCha20Poly1305 {
 
 
 
-        // Convert nonce to the correct format (XChaCha20 uses 24-byte nonce)
-
-        let mut xnonce = [0u8; 24];
-
-        xnonce[..12].copy_from_slice(&nonce);
-
-        
-
         let ciphertext = cipher
 
             .encrypt(&chacha20poly1305::XNonce::from_slice(&xnonce), plaintext)
@@ -923,7 +929,7 @@ impl EncryptionAlgorithm for ChaCha20Poly1305 {
 
         // Prepend nonce to ciphertext
 
-        let mut result = nonce;
+        let mut result = xnonce.to_vec();
 
         result.extend_from_slice(&ciphertext);
 

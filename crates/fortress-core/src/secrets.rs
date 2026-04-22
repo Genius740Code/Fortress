@@ -30,7 +30,7 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
-use crate::error::{FortressError, Result};
+use crate::error::{FortressError, Result, SecretsErrorCode};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -236,7 +236,11 @@ impl SecretsEngineManager {
     pub async fn write(&self, path: &str, data: &serde_json::Value) -> Result<Secret> {
         let engine_prefix = self.find_engine(path).await?;
         let engines = self.engines.read().await;
-        let engine = engines.get(&engine_prefix).unwrap();
+        let engine = engines.get(&engine_prefix).ok_or_else(|| FortressError::secrets_with_code(
+            format!("Engine not found for prefix: {}", engine_prefix),
+            Some(engine_prefix),
+            SecretsErrorCode::EngineNotFound,
+        ))?;
         engine.write(path, data).await
     }
 
@@ -244,7 +248,11 @@ impl SecretsEngineManager {
     pub async fn read(&self, path: &str) -> Result<Option<Secret>> {
         let engine_prefix = self.find_engine(path).await?;
         let engines = self.engines.read().await;
-        let engine = engines.get(&engine_prefix).unwrap();
+        let engine = engines.get(&engine_prefix).ok_or_else(|| FortressError::secrets_with_code(
+            format!("Engine not found for prefix: {}", engine_prefix),
+            Some(engine_prefix),
+            SecretsErrorCode::EngineNotFound,
+        ))?;
         engine.read(path).await
     }
 
@@ -252,7 +260,11 @@ impl SecretsEngineManager {
     pub async fn delete(&self, path: &str) -> Result<()> {
         let engine_prefix = self.find_engine(path).await?;
         let engines = self.engines.read().await;
-        let engine = engines.get(&engine_prefix).unwrap();
+        let engine = engines.get(&engine_prefix).ok_or_else(|| FortressError::secrets_with_code(
+            format!("Engine not found for prefix: {}", engine_prefix),
+            Some(engine_prefix),
+            SecretsErrorCode::EngineNotFound,
+        ))?;
         engine.delete(path).await
     }
 
@@ -260,7 +272,11 @@ impl SecretsEngineManager {
     pub async fn list(&self, path: &str) -> Result<Vec<String>> {
         let engine_prefix = self.find_engine(path).await?;
         let engines = self.engines.read().await;
-        let engine = engines.get(&engine_prefix).unwrap();
+        let engine = engines.get(&engine_prefix).ok_or_else(|| FortressError::secrets_with_code(
+            format!("Engine not found for prefix: {}", engine_prefix),
+            Some(engine_prefix),
+            SecretsErrorCode::EngineNotFound,
+        ))?;
         engine.list(path).await
     }
 
@@ -268,7 +284,11 @@ impl SecretsEngineManager {
     pub async fn renew(&self, lease_id: &str, increment: Option<u64>) -> Result<LeaseInfo> {
         let engine_prefix = self.find_lease_engine(lease_id).await?;
         let engines = self.engines.read().await;
-        let engine = engines.get(&engine_prefix).unwrap();
+        let engine = engines.get(&engine_prefix).ok_or_else(|| FortressError::secrets_with_code(
+            format!("Engine not found for prefix: {}", engine_prefix),
+            Some(engine_prefix),
+            SecretsErrorCode::EngineNotFound,
+        ))?;
         let lease = engine.renew(lease_id, increment).await?;
         
         // Update lease in manager
@@ -284,7 +304,11 @@ impl SecretsEngineManager {
     pub async fn revoke(&self, lease_id: &str) -> Result<()> {
         let engine_prefix = self.find_lease_engine(lease_id).await?;
         let engines = self.engines.read().await;
-        let engine = engines.get(&engine_prefix).unwrap();
+        let engine = engines.get(&engine_prefix).ok_or_else(|| FortressError::secrets_with_code(
+            format!("Engine not found for prefix: {}", engine_prefix),
+            Some(engine_prefix),
+            SecretsErrorCode::EngineNotFound,
+        ))?;
         engine.revoke(lease_id).await?;
         
         // Remove lease from manager

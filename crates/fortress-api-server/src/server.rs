@@ -121,9 +121,11 @@ impl FortressServer {
             "Starting Fortress server"
         );
 
-        // Start the server with the router directly
-        let _app = self.create_router().await?;
-        let _listener = tokio::net::TcpListener::bind(addr).await
+        // Create the router
+        let app = self.create_router().await?;
+        
+        // Bind the listener
+        let listener = tokio::net::TcpListener::bind(addr).await
             .map_err(|e| ServerError::network(format!("Failed to bind to {}: {}", addr, e)))?;
         
         info!(
@@ -131,13 +133,14 @@ impl FortressServer {
             "Fortress server listening"
         );
         
-        // For now, just return success without starting the server
-        info!("Server setup completed successfully");
-        let _ = Ok::<(), ServerError>(());
-
-        info!("Fortress server stopped");
-
-        Ok::<(), ServerError>(())
+        // Actually start the server
+        let serve_result = axum::serve(listener, app).await;
+        match serve_result {
+            Ok(_) => info!("Fortress server stopped gracefully"),
+            Err(e) => return Err(ServerError::network(format!("Server error: {}", e))),
+        }
+        
+        Ok(())
     }
 
     /// Create the application router
@@ -384,12 +387,14 @@ impl FieldEncryptionManager for NoOpFieldEncryptionManager {
 #[derive(Debug)]
 struct InMemoryStorage {
     data: Arc<parking_lot::RwLock<HashMap<String, crate::handlers::StorageRecord>>>,
+    transactions: Arc<parking_lot::RwLock<HashMap<String, HashMap<String, crate::handlers::StorageRecord>>>>,
 }
 
 impl InMemoryStorage {
     fn new() -> Self {
         Self {
             data: Arc::new(parking_lot::RwLock::new(HashMap::new())),
+            transactions: Arc::new(parking_lot::RwLock::new(HashMap::new())),
         }
     }
 }
@@ -397,9 +402,17 @@ impl InMemoryStorage {
 #[async_trait::async_trait]
 impl StorageBackend for InMemoryStorage {
     async fn put(&self, key: &str, value: &[u8]) -> Result<(), FortressError> {
-        let mut data = self.data.write();
         let record = serde_json::from_slice::<crate::handlers::StorageRecord>(value)
-            .map_err(|_e| FortressError::storage("Invalid record format", "serde", StorageErrorCode::ConnectionFailed))?;
+            .map_err(|_e| FortressError::storage("Invalid record format", "serde", crate::server::StorageErrorCode::ConnectionFailed))?;
+        
+        // Check if there are any active transactions
+        let transactions = self.transactions.read();
+        if !transactions.is_empty() {
+            // If there are active transactions, this operation is part of a transaction
+            // For simplicity, we'll just modify the main data (in production, you'd want transaction-specific isolation)
+        }
+        
+        let mut data = self.data.write();
         data.insert(key.to_string(), record);
         Ok(())
     }
@@ -409,7 +422,7 @@ impl StorageBackend for InMemoryStorage {
         if let Some(record) = data.get(key) {
             serde_json::to_vec(record)
                 .map(Some)
-                .map_err(|_e| FortressError::storage("Serialization error", "serde", StorageErrorCode::ConnectionFailed))
+                .map_err(|_e| FortressError::storage("Serialization error", "serde", crate::server::StorageErrorCode::ConnectionFailed))
         } else {
             Ok(None)
         }
@@ -418,7 +431,7 @@ impl StorageBackend for InMemoryStorage {
     async fn delete(&self, key: &str) -> Result<(), FortressError> {
         let mut data = self.data.write();
         data.remove(key).map(|_| ()).ok_or_else(|| {
-            FortressError::storage("Data not found", "Data not found", StorageErrorCode::NotFound)
+            FortressError::storage("Data not found", "Data not found", crate::server::StorageErrorCode::NotFound)
         })
     }
 
@@ -490,6 +503,36 @@ impl StorageBackend for InMemoryStorage {
         }
         
         Ok(keys[start..end].to_vec())
+    }
+
+    async fn begin_transaction(&self) -> Result<fortress_core::storage::TransactionId, FortressError> {
+        use fortress_core::storage::TransactionId;
+        let transaction_id = TransactionId(uuid::Uuid::new_v4());
+        let mut transactions = self.transactions.write();
+        
+        // Create a snapshot of current data for this transaction
+        let data = self.data.read();
+        let snapshot = data.clone();
+        transactions.insert(transaction_id.0.to_string(), snapshot);
+        
+        Ok(transaction_id)
+    }
+
+    async fn commit_transaction(&self, transaction_id: &fortress_core::storage::TransactionId) -> Result<(), FortressError> {
+        let mut transactions = self.transactions.write();
+        transactions.remove(&transaction_id.0.to_string());
+        Ok(())
+    }
+
+    async fn rollback_transaction(&self, transaction_id: &fortress_core::storage::TransactionId) -> Result<(), FortressError> {
+        let mut transactions = self.transactions.write();
+        if let Some(snapshot) = transactions.remove(&transaction_id.0.to_string()) {
+            let mut data = self.data.write();
+            *data = snapshot;
+            Ok(())
+        } else {
+            Err(FortressError::storage("Transaction not found", "in_memory", crate::server::StorageErrorCode::NotFound))
+        }
     }
 }
 

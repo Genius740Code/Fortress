@@ -91,7 +91,7 @@ impl Default for SecurityHeadersConfig {
             content_security_policy: Some(
                 "default-src 'self'; \
                  script-src 'self'; \
-                 style-src 'self' 'unsafe-inline'; \
+                 style-src 'self'; \
                  img-src 'self' data: https:; \
                  font-src 'self' data:; \
                  connect-src 'self'; \

@@ -55,9 +55,8 @@ pub async fn handle_migrate(
             }
         }
         Err(e) => {
-            warn!("Could not test PostgreSQL connection: {}", e);
-            println!("  Continuing without connection test...");
-            println!("⚠ Continuing without connection test...");
+            error!("Failed to connect to PostgreSQL: {}", e);
+            return Err(color_eyre::Report::msg(format!("Database connection failed: {}", e)));
         }
     }
     
@@ -108,12 +107,18 @@ pub async fn handle_migrate(
         // Migrate data in batches
         let progress_bar = if progress {
             let pb = ProgressBar::new(row_count as u64);
-            pb.set_style(
-                ProgressStyle::default_bar()
-                    .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})")
-                    .expect("Invalid progress template")
-                    .progress_chars("#>-")
-            );
+            let template_result = ProgressStyle::default_bar()
+                .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})");
+                
+            let style = match template_result {
+                Ok(style) => style.progress_chars("#>-"),
+                Err(e) => {
+                    warn!("Failed to create progress template: {}, using default", e);
+                    ProgressStyle::default_bar()
+                }
+            };
+            
+            pb.set_style(style);
             pb.set_message(format!("Migrating {}", table_name));
             Some(pb)
         } else {
@@ -320,7 +325,7 @@ async fn fetch_postgres_batch(source: &str, table_name: &str, offset: u64, batch
         .arg(source)
         .arg("-c")
         .arg(&format!(
-            "SELECT * FROM {} ORDER BY id LIMIT {} OFFSET {}",
+            "SELECT row_to_json(t) FROM (SELECT * FROM {} ORDER BY id LIMIT {} OFFSET {}) t",
             table_name, batch_size, offset
         ))
         .output();
@@ -329,22 +334,20 @@ async fn fetch_postgres_batch(source: &str, table_name: &str, offset: u64, batch
         Ok(result) => {
             if result.status.success() {
                 let data_str = String::from_utf8_lossy(&result.stdout);
-                // Simple parsing - in production, use proper CSV/JSON parsing
                 let mut batch_data = Vec::new();
-                for line in data_str.lines().skip(1) { // Skip header
-                    if line.trim().is_empty() { continue; }
-                    let row_data: Vec<&str> = line.split(',').collect();
-                    let mut row_json = serde_json::Map::new();
+                
+                for line in data_str.lines() {
+                    let line = line.trim();
+                    if line.is_empty() { continue; }
                     
-                    // Simple mapping - in production, use proper schema
-                    if row_data.len() >= 4 {
-                        row_json.insert("id".to_string(), json!(row_data[0]));
-                        row_json.insert("name".to_string(), json!(row_data[1]));
-                        row_json.insert("email".to_string(), json!(row_data[2]));
-                        row_json.insert("created_at".to_string(), json!(row_data[3]));
+                    // Parse JSON output from PostgreSQL
+                    match serde_json::from_str::<Value>(line) {
+                        Ok(json_value) => batch_data.push(json_value),
+                        Err(e) => {
+                            warn!("Failed to parse JSON row: {} - Line: {}", e, line);
+                            // Continue processing other rows instead of failing completely
+                        }
                     }
-                    
-                    batch_data.push(Value::Object(row_json));
                 }
                 Ok(batch_data)
             } else {
@@ -352,7 +355,7 @@ async fn fetch_postgres_batch(source: &str, table_name: &str, offset: u64, batch
             }
         }
         Err(e) => {
-            warn!("Could not fetch batch: {}", e);
+            error!("Could not fetch batch: {}", e);
             return Err(color_eyre::Report::msg(format!("Failed to fetch batch: {}", e)));
         }
     }

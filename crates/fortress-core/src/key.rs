@@ -188,7 +188,11 @@ impl KeyManager for InMemoryKeyManager {
 
     async fn generate_key(&self, algorithm: &dyn EncryptionAlgorithm) -> Result<SecureKey> {
         let key = SecureKey::generate(algorithm.key_size())
-            .expect("Failed to generate secure key");
+            .map_err(|e| FortressError::key_management(
+                format!("Failed to generate secure key: {}", e),
+                None,
+                KeyErrorCode::KeyGenerationError,
+            ))?;
         
         // Log key generation
         let mut metadata = std::collections::HashMap::new();

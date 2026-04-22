@@ -112,7 +112,10 @@ async fn create_router(_openapi: utoipa::openapi::OpenApi) -> Result<Router, Box
                 // Restricted CORS
                 .layer(
                     CorsLayer::new()
-                        .allow_origin(allowed_origins_str.parse::<HeaderValue>().unwrap_or_else(|_| "https://fortress.example.com".parse().unwrap()))
+                        .allow_origin({
+                            let fallback_origin = HeaderValue::from_static("https://fortress.example.com");
+                            allowed_origins_str.parse::<HeaderValue>().unwrap_or(fallback_origin)
+                        })
                         .allow_methods([
                             Method::GET,
                             Method::POST,
