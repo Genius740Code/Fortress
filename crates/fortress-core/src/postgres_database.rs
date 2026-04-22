@@ -1069,12 +1069,29 @@ impl StorageBackend for PostgresStorage {
     }
 
     async fn list_prefix(&self, prefix: &str) -> Result<Vec<String>> {
+        self.list_prefix_paginated(prefix, None, None).await
+    }
+
+    async fn list_prefix_paginated(&self, prefix: &str, limit: Option<usize>, offset: Option<usize>) -> Result<Vec<String>> {
         let data = self.data_storage.read().await;
-        Ok(data
+        let mut keys: Vec<_> = data
             .keys()
             .filter(|key| key.starts_with(prefix))
             .cloned()
-            .collect())
+            .collect();
+        
+        // Apply pagination
+        let start_idx = offset.unwrap_or(0);
+        let end_idx = match limit {
+            Some(limit) => std::cmp::min(start_idx + limit, keys.len()),
+            None => keys.len(),
+        };
+        
+        if start_idx >= keys.len() {
+            return Ok(Vec::new());
+        }
+        
+        Ok(keys[start_idx..end_idx].to_vec())
     }
 
     fn metadata(&self) -> crate::storage::StorageMetadata {

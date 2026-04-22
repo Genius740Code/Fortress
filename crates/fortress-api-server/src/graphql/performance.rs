@@ -6,9 +6,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
+use std::ops::Deref;
 use tokio::sync::RwLock;
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
+use once_cell::sync::Lazy;
 
 /// Performance metrics for a single operation
 #[derive(Debug, Clone, async_graphql::SimpleObject)]
@@ -16,6 +18,7 @@ pub struct OperationMetrics {
     pub operation_id: String,
     pub operation_type: OperationType,
     pub operation_name: String,
+    pub created_at_ms: u64,
     pub duration_ms: Option<u64>,
     pub success: bool,
     pub error_message: Option<String>,
@@ -77,6 +80,10 @@ impl OperationMetrics {
             operation_id: Uuid::new_v4().to_string(),
             operation_type,
             operation_name,
+            created_at_ms: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64,
             duration_ms: None,
             success: false,
             error_message: None,
@@ -275,19 +282,105 @@ impl PerformanceMonitor {
             .collect()
     }
 
-    /// Start background cleanup task
+    /// Start background cleanup task with enhanced memory management
     pub fn start_cleanup_task(self: Arc<Self>) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(self.cleanup_interval);
+            
             loop {
                 interval.tick().await;
                 
-                // Clean up old operations (older than 1 hour) - simplified for GraphQL compatibility
+                // Enhanced cleanup with multiple strategies
                 let mut operations = self.operations.write().await;
-                operations.retain(|_op| {
-                    // Keep operations that are recent (simplified logic)
-                    true // For now, keep all operations - real cleanup would need timestamp field
+                let initial_count = operations.len();
+                
+                if initial_count == 0 {
+                    continue; // Skip cleanup if empty
+                }
+                
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs();
+                
+                // Multi-tier cleanup strategy
+                let mut removed_count = 0;
+                
+                // 1. Remove very old operations (> 2 hours)
+                let _two_hours_ago = now - 7200;
+                operations.retain(|op| {
+                    let op_age_secs = now - (op.created_at_ms / 1000);
+                    let keep = op_age_secs < 7200;
+                    if !keep {
+                        removed_count += 1;
+                    }
+                    keep
                 });
+                
+                // 2. If still too many, remove old operations (> 1 hour)
+                if operations.len() > self.max_operations {
+                    let _one_hour_ago = now - 3600;
+                    operations.retain(|op| {
+                        let op_age_secs = now - (op.created_at_ms / 1000);
+                        let keep = op_age_secs < 3600;
+                        if !keep {
+                            removed_count += 1;
+                        }
+                        keep
+                    });
+                }
+                
+                // 3. If still over limit, remove by age and completion status
+                if operations.len() > self.max_operations {
+                    // Sort by age (oldest first) and completion status
+                    operations.sort_by(|a, b| {
+                        let a_age = a.created_at_ms;
+                        let b_age = b.created_at_ms;
+                        
+                        // Prioritize keeping completed operations
+                        match (a.duration_ms.is_some(), b.duration_ms.is_some()) {
+                            (true, false) => std::cmp::Ordering::Less,
+                            (false, true) => std::cmp::Ordering::Greater,
+                            _ => a_age.cmp(&b_age),
+                        }
+                    });
+                    
+                    // Keep only the newest operations
+                    let target_size = self.max_operations * 80 / 100; // Keep 80% to avoid frequent cleanup
+                    let excess = operations.len().saturating_sub(target_size);
+                    if excess > 0 {
+                        operations.drain(0..excess);
+                        removed_count += excess;
+                    }
+                }
+                
+                // 4. Final safety check - hard limit
+                let hard_limit = self.max_operations + self.max_operations / 10; // 10% buffer
+                if operations.len() > hard_limit {
+                    let emergency_removal = operations.len() - self.max_operations;
+                    operations.drain(0..emergency_removal);
+                    removed_count += emergency_removal;
+                    
+                    tracing::warn!(
+                        "Emergency cleanup: removed {} operations to prevent memory overflow",
+                        emergency_removal
+                    );
+                }
+                
+                // Log cleanup statistics
+                if removed_count > 0 {
+                    tracing::debug!(
+                        "Performance monitor cleanup: removed {}/{} operations, {} remaining",
+                        removed_count,
+                        initial_count,
+                        operations.len()
+                    );
+                }
+                
+                // Memory optimization: shrink capacity if significantly reduced
+                if operations.len() < initial_count / 2 && operations.capacity() > operations.len() * 2 {
+                    operations.shrink_to_fit();
+                }
             }
         })
     }
@@ -341,13 +434,39 @@ impl OperationTracker {
 pub struct QueryAnalyzer {
     slow_query_threshold: Duration,
     complex_query_threshold: usize,
+    // Cached regex patterns for efficient parsing
+    patterns: QueryPatterns,
 }
+
+/// Pre-compiled regex patterns for query analysis - globally cached
+#[derive(Clone)]
+struct QueryPatterns {
+    braces: regex::Regex,
+    colons: regex::Regex,
+    parentheses: regex::Regex,
+    page_keyword: regex::Regex,
+    nested_fields: regex::Regex,
+    fragment_spread: regex::Regex,
+}
+
+// Global cached regex patterns for maximum performance
+static CACHED_PATTERNS: Lazy<QueryPatterns> = Lazy::new(|| {
+    QueryPatterns {
+        braces: regex::Regex::new(r"\{").unwrap_or_else(|_| regex::Regex::new(r"").unwrap()),
+        colons: regex::Regex::new(r":").unwrap_or_else(|_| regex::Regex::new(r"").unwrap()),
+        parentheses: regex::Regex::new(r"\(").unwrap_or_else(|_| regex::Regex::new(r"").unwrap()),
+        page_keyword: regex::Regex::new(r"\b(page|first|last|before|after)\b").unwrap_or_else(|_| regex::Regex::new(r"").unwrap()),
+        nested_fields: regex::Regex::new(r"\{[^{}]*\{").unwrap_or_else(|_| regex::Regex::new(r"").unwrap()),
+        fragment_spread: regex::Regex::new(r"\.\.\.").unwrap_or_else(|_| regex::Regex::new(r"").unwrap()),
+    }
+});
 
 impl QueryAnalyzer {
     pub fn new(slow_query_threshold: Duration, complex_query_threshold: usize) -> Self {
         Self {
             slow_query_threshold,
             complex_query_threshold,
+            patterns: CACHED_PATTERNS.deref().clone(),
         }
     }
 
@@ -366,20 +485,29 @@ impl QueryAnalyzer {
     }
 
     fn calculate_complexity(&self, query: &str) -> usize {
-        // Simple complexity calculation based on query characteristics
+        // Ultra-efficient complexity calculation using globally cached regex patterns
         let mut complexity = 0;
         
-        // Count fields
-        complexity += query.matches('{').count();
+        // Count field selections (opening braces)
+        complexity += self.patterns.braces.find_iter(query).count() * 2;
         
-        // Count nested objects
-        complexity += query.matches(':').count();
+        // Count field arguments/variables (colons)
+        complexity += self.patterns.colons.find_iter(query).count();
         
-        // Count filters/arguments
-        complexity += query.matches('(').count();
+        // Count function calls/filters (parentheses)
+        complexity += self.patterns.parentheses.find_iter(query).count() * 3;
         
-        // Count pagination
-        complexity += query.matches("page").count();
+        // Count pagination keywords (weighted higher)
+        complexity += self.patterns.page_keyword.find_iter(query).count() * 5;
+        
+        // Count nested objects (complexity multiplier)
+        complexity += self.patterns.nested_fields.find_iter(query).count() * 10;
+        
+        // Count fragment spreads (complexity multiplier)
+        complexity += self.patterns.fragment_spread.find_iter(query).count() * 7;
+        
+        // Base complexity for query length
+        complexity += query.len() / 100;
         
         complexity
     }

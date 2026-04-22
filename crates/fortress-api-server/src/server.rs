@@ -463,6 +463,34 @@ impl StorageBackend for InMemoryStorage {
             ]),
         })
     }
+
+    async fn list_prefix_paginated(
+        &self,
+        prefix: &str,
+        offset: Option<usize>,
+        limit: Option<usize>,
+    ) -> Result<Vec<String>, FortressError> {
+        let data = self.data.read();
+        let mut keys: Vec<String> = data.keys()
+            .filter(|key| key.starts_with(prefix))
+            .cloned()
+            .collect();
+        
+        keys.sort();
+        
+        let start = offset.unwrap_or(0);
+        let end = if let Some(limit) = limit {
+            std::cmp::min(start + limit, keys.len())
+        } else {
+            keys.len()
+        };
+        
+        if start >= keys.len() {
+            return Ok(Vec::new());
+        }
+        
+        Ok(keys[start..end].to_vec())
+    }
 }
 
 #[cfg(test)]

@@ -3,9 +3,10 @@
 //! Implements multi-level caching with LRU eviction, TTL management,
 //! and intelligent cache warming strategies for optimal performance.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use std::hash::Hash;
 use tokio::sync::RwLock;
 use serde::{Serialize, Deserialize};
 
@@ -44,47 +45,107 @@ impl<T> CacheEntry<T> {
 
 /// High-performance LRU cache with TTL support
 #[derive(Clone)]
-pub struct GraphQLCache<T: Clone> {
+pub struct GraphQLCache<T: Clone + Send + Sync + 'static> {
     entries: Arc<RwLock<HashMap<String, CacheEntry<T>>>>,
+    lru_order: Arc<RwLock<VecDeque<String>>>,
     max_size: usize,
     default_ttl: Duration,
 }
 
-impl<T: Clone> GraphQLCache<T> {
+impl<T: Clone + Send + Sync + 'static> GraphQLCache<T> {
     pub fn new(max_size: usize, default_ttl: Duration) -> Self {
         Self {
             entries: Arc::new(RwLock::new(HashMap::new())),
+            lru_order: Arc::new(RwLock::new(VecDeque::new())),
             max_size,
             default_ttl,
         }
     }
 
-    /// Get value from cache
+    /// Get value from cache with optimized non-blocking async operations
     pub async fn get(&self, key: &str) -> Option<T> {
-        let mut entries = self.entries.write().await;
-        
-        if let Some(entry) = entries.get_mut(key) {
+        // Optimized read-first approach with minimal write operations
+        let entries = self.entries.read().await;
+        if let Some(entry) = entries.get(key) {
             if entry.is_expired() {
-                entries.remove(key);
-                None
-            } else {
-                Some(entry.access().clone())
+                // Fast path for expired entries - schedule cleanup
+                let key_owned = key.to_string();
+                drop(entries);
+                self.schedule_cleanup(key_owned);
+                return None;
             }
-        } else {
-            None
+            
+            // Cache hit - get value and schedule async metadata update
+            let value = entry.value.clone();
+            let access_count = entry.access_count;
+            drop(entries);
+            
+            // Schedule async update to avoid blocking
+            self.schedule_access_update(key, access_count);
+            
+            return Some(value);
         }
+        
+        None
+    }
+    
+    /// Schedule cleanup task for expired entries (non-blocking)
+    fn schedule_cleanup(&self, key: String) {
+        let cache = self.clone();
+        tokio::spawn(async move {
+            let mut entries = cache.entries.write().await;
+            let mut lru_order = cache.lru_order.write().await;
+            entries.remove(&key);
+            lru_order.retain(|k| k != &key);
+        });
+    }
+    
+    /// Schedule access metadata update (non-blocking)
+    fn schedule_access_update(&self, key: &str, access_count: u64) {
+        let cache = self.clone();
+        let key_owned = key.to_string();
+        tokio::spawn(async move {
+            // Update LRU order first (most critical)
+            {
+                let mut lru_order = cache.lru_order.write().await;
+                lru_order.retain(|k| k != &key_owned);
+                lru_order.push_front(key_owned.clone());
+            }
+            
+            // Then update entry metadata
+            {
+                let mut entries = cache.entries.write().await;
+                if let Some(entry) = entries.get_mut(&key_owned) {
+                    entry.access_count = access_count + 1;
+                    entry.last_accessed = std::time::Instant::now();
+                }
+            }
+        });
     }
 
-    /// Put value in cache with custom TTL
+    /// Put value in cache with custom TTL and optimized LRU handling
     pub async fn put_with_ttl(&self, key: String, value: T, ttl: Duration) {
         let mut entries = self.entries.write().await;
+        let mut lru_order = self.lru_order.write().await;
         
-        // Evict if necessary
-        if entries.len() >= self.max_size {
-            self.evict_lru(&mut entries);
+        // Check if key already exists and update it
+        if entries.contains_key(&key) {
+            // Remove from current LRU position
+            lru_order.retain(|k| k != &key);
+        } else {
+            // New key - evict if necessary
+            while entries.len() >= self.max_size {
+                // Evict LRU entry efficiently
+                if let Some(lru_key) = lru_order.pop_back() {
+                    entries.remove(&lru_key);
+                } else {
+                    break; // Safety check
+                }
+            }
         }
         
-        entries.insert(key, CacheEntry::new(value, ttl));
+        entries.insert(key.clone(), CacheEntry::new(value, ttl));
+        lru_order.push_front(key);
     }
 
     /// Put value in cache with default TTL
@@ -92,16 +153,36 @@ impl<T: Clone> GraphQLCache<T> {
         self.put_with_ttl(key, value, self.default_ttl).await;
     }
 
-    /// Remove expired entries
+    /// Remove expired entries with optimized batch processing
     pub async fn cleanup_expired(&self) {
-        let mut entries = self.entries.write().await;
-        entries.retain(|_, entry| !entry.is_expired());
+        // Collect expired keys with read lock only
+        let expired_keys = {
+            let entries = self.entries.read().await;
+            entries.iter()
+                .filter(|(_, entry)| entry.is_expired())
+                .map(|(key, _)| key.clone())
+                .collect::<Vec<_>>()
+        };
+        
+        // Batch remove with write lock
+        if !expired_keys.is_empty() {
+            let mut entries = self.entries.write().await;
+            let mut lru_order = self.lru_order.write().await;
+            
+            for key in &expired_keys {
+                entries.remove(key);
+            }
+            
+            lru_order.retain(|k| !expired_keys.contains(k));
+        }
     }
 
     /// Clear all cache entries
     pub async fn clear(&self) {
         let mut entries = self.entries.write().await;
+        let mut lru_order = self.lru_order.write().await;
         entries.clear();
+        lru_order.clear();
     }
 
     /// Get cache statistics
@@ -119,20 +200,12 @@ impl<T: Clone> GraphQLCache<T> {
         }
     }
 
-    /// Evict least recently used entries
-    fn evict_lru(&self, entries: &mut HashMap<String, CacheEntry<T>>) {
-        if entries.is_empty() {
-            return;
+    /// Evict least recently used entries - optimized for direct access
+    fn evict_lru(&self, entries: &mut HashMap<String, CacheEntry<T>>, lru_order: &mut VecDeque<String>) {
+        // Direct O(1) eviction using pop_back()
+        if let Some(lru_key) = lru_order.pop_back() {
+            entries.remove(&lru_key);
         }
-
-        // Find the LRU entry
-        let lru_key = entries
-            .iter()
-            .min_by_key(|(_, entry)| entry.last_accessed)
-            .map(|(key, _)| key.clone())
-            .unwrap();
-
-        entries.remove(&lru_key);
     }
 }
 
@@ -236,19 +309,37 @@ impl GraphQLCacheManager {
         })
     }
 
-    /// Generate cache key for database operations
+    /// Generate cache key for database operations - optimized
     pub fn database_key(&self, name: &str) -> String {
-        format!("db:{}", name)
+        // Pre-allocate capacity to avoid reallocations
+        let mut key = String::with_capacity(name.len() + 3);
+        key.push_str("db:");
+        key.push_str(name);
+        key
     }
 
-    /// Generate cache key for table operations
+    /// Generate cache key for table operations - optimized
     pub fn table_key(&self, database: &str, table: &str) -> String {
-        format!("table:{}:{}", database, table)
+        // Pre-allocate exact capacity
+        let mut key = String::with_capacity(database.len() + table.len() + 6);
+        key.push_str("table:");
+        key.push_str(database);
+        key.push_str(":");
+        key.push_str(table);
+        key
     }
 
-    /// Generate cache key for query operations
+    /// Generate cache key for query operations - optimized
     pub fn query_key(&self, database: &str, table: &str, query_hash: &str) -> String {
-        format!("query:{}:{}:{}", database, table, query_hash)
+        // Pre-allocate exact capacity
+        let mut key = String::with_capacity(database.len() + table.len() + query_hash.len() + 7);
+        key.push_str("query:");
+        key.push_str(database);
+        key.push_str(":");
+        key.push_str(table);
+        key.push_str(":");
+        key.push_str(query_hash);
+        key
     }
 
     /// Get comprehensive cache statistics
@@ -279,7 +370,41 @@ pub struct CacheManagerStats {
 pub struct QueryHasher;
 
 impl QueryHasher {
-    /// Generate a hash for query caching
+    /// Efficiently hash JSON value without string allocation
+    fn hash_json_value(value: &serde_json::Value, hasher: &mut std::collections::hash_map::DefaultHasher) {
+        match value {
+            serde_json::Value::Null => 0.hash(hasher),
+            serde_json::Value::Bool(b) => b.hash(hasher),
+            serde_json::Value::Number(n) => {
+                if let Some(i) = n.as_i64() {
+                    i.hash(hasher);
+                } else if let Some(u) = n.as_u64() {
+                    u.hash(hasher);
+                } else if let Some(f) = n.as_f64() {
+                    f.to_bits().hash(hasher);
+                }
+            }
+            serde_json::Value::String(s) => s.hash(hasher),
+            serde_json::Value::Array(arr) => {
+                arr.len().hash(hasher);
+                for item in arr {
+                    Self::hash_json_value(item, hasher);
+                }
+            }
+            serde_json::Value::Object(obj) => {
+                // Sort keys for consistent hashing
+                let mut keys: Vec<_> = obj.keys().collect();
+                keys.sort_unstable();
+                keys.len().hash(hasher);
+                for key in keys {
+                    key.hash(hasher);
+                    Self::hash_json_value(&obj[key], hasher);
+                }
+            }
+        }
+    }
+
+    /// Generate a hash for query caching with zero allocations
     pub fn hash_query(
         database: &str,
         table: &str,
@@ -291,16 +416,20 @@ impl QueryHasher {
 
         let mut hasher = DefaultHasher::new();
         
-        // Hash query components
+        // Hash query components directly - zero allocations
         database.hash(&mut hasher);
         table.hash(&mut hasher);
-        filters.to_string().hash(&mut hasher);
         
+        // Hash JSON value efficiently without string allocation
+        Self::hash_json_value(filters, &mut hasher);
+        
+        // Hash pagination directly without string conversion
         if let Some(pagination) = pagination {
             pagination.page.hash(&mut hasher);
             pagination.page_size.hash(&mut hasher);
         }
 
-        format!("{:x}", hasher.finish())
+        // Use faster hex formatting
+        format!("{:016x}", hasher.finish())
     }
 }

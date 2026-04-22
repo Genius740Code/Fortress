@@ -680,7 +680,33 @@ impl StorageBackend for MySQLDatabase {
         Ok(count > 0)
     }
 
-    async fn list_prefix(&self, prefix: &str, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<String>> {
+    async fn list_prefix(&self, prefix: &str) -> Result<Vec<String>> {
+        self.list_prefix_paginated(prefix, None, None).await
+    }
+
+    async fn list_prefix_paginated(&self, prefix: &str, limit: Option<usize>, offset: Option<usize>) -> Result<Vec<String>> {
+        let limit = limit.unwrap_or(1000) as u32; // Default limit
+        let offset = offset.unwrap_or(0) as u32;
+        
+        let prefix_query = format!(
+            "SELECT id FROM {} WHERE id LIKE ? LIMIT ? OFFSET ?", 
+            self.config.data_table
+        );
+        let rows = sqlx::query(&prefix_query)
+            .bind(format!("{}%", prefix))
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| FortressError::storage(
+                format!("Failed to list prefix: {}", e),
+                "mysql".to_string(),
+                StorageErrorCode::ReadError,
+            ))?;
+        Ok(rows.into_iter().map(|row| row.get::<String, _>(0)).collect())
+    }
+
+    async fn list_prefix_with_legacy_params(&self, prefix: &str, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<String>> {
         let limit = limit.unwrap_or(1000); // Default limit
         let offset = offset.unwrap_or(0);
         
@@ -699,7 +725,6 @@ impl StorageBackend for MySQLDatabase {
                 "mysql".to_string(),
                 StorageErrorCode::ReadError,
             ))?;
-
         Ok(rows.into_iter().map(|row| row.get::<String, _>(0)).collect())
     }
 

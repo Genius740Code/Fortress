@@ -430,18 +430,15 @@ where
         }
 
         // Create rate limit request
-        let rate_limit_request = tokio::task::block_in_place(
-            "rate_limit_request_creation",
-            tokio::runtime::Handle::current(),
-            || self.create_rate_limit_request(&request, headers, path, method),
-        );
+        let rate_limit_request = self.create_rate_limit_request(&request, headers, path, method);
 
         // Check rate limit
-        let rate_limit_response = tokio::task::block_in_place(
-            "rate_limit_check",
-            tokio::runtime::Handle::current(),
-            || self.config.rate_limiter.check_rate_limit(&rate_limit_request),
-        );
+        let rate_limit_response = self.config.rate_limiter.check_rate_limit(&rate_limit_request)
+            .map_err(|e| FortressError::rate_limit(
+                format!("Rate limit check failed: {}", e),
+                None,
+                None,
+            ))?;
 
         match rate_limit_response {
             Ok(response) => {

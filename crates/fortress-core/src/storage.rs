@@ -44,7 +44,12 @@ pub trait StorageBackend: Send + Sync + fmt::Debug {
     async fn exists(&self, key: &str) -> Result<bool>;
 
     /// List all keys with a given prefix
-    async fn list_prefix(&self, prefix: &str) -> Result<Vec<String>>;
+    async fn list_prefix(&self, prefix: &str) -> Result<Vec<String>> {
+        self.list_prefix_paginated(prefix, None, None).await
+    }
+
+    /// List keys with pagination support
+    async fn list_prefix_paginated(&self, prefix: &str, limit: Option<usize>, offset: Option<usize>) -> Result<Vec<String>>;
 
     /// Batch get multiple keys efficiently
     async fn batch_get(&self, keys: &[String]) -> Result<Vec<(String, Option<Vec<u8>>)>> {
@@ -304,12 +309,30 @@ impl StorageBackend for InMemoryStorage {
     }
 
     async fn list_prefix(&self, prefix: &str) -> Result<Vec<String>> {
+        // Use the optimized paginated version internally
+        self.list_prefix_paginated(prefix, None, None).await
+    }
+
+    async fn list_prefix_paginated(&self, prefix: &str, limit: Option<usize>, offset: Option<usize>) -> Result<Vec<String>> {
         let data = self.data.read().await;
-        Ok(data
+        let mut keys: Vec<_> = data
             .keys()
             .filter(|key| key.starts_with(prefix))
             .cloned()
-            .collect())
+            .collect();
+        
+        // Apply pagination
+        let start_idx = offset.unwrap_or(0);
+        let end_idx = match limit {
+            Some(limit) => std::cmp::min(start_idx + limit, keys.len()),
+            None => keys.len(),
+        };
+        
+        if start_idx >= keys.len() {
+            return Ok(Vec::new());
+        }
+        
+        Ok(keys[start_idx..end_idx].to_vec())
     }
 
     fn metadata(&self) -> StorageMetadata {
@@ -527,6 +550,11 @@ impl StorageBackend for FileSystemStorage {
     }
 
     async fn list_prefix(&self, prefix: &str) -> Result<Vec<String>> {
+        // Use the optimized paginated version internally
+        self.list_prefix_paginated(prefix, None, None).await
+    }
+
+    async fn list_prefix_paginated(&self, prefix: &str, limit: Option<usize>, offset: Option<usize>) -> Result<Vec<String>> {
         let mut entries = tokio::fs::read_dir(&self.base_path)
             .await
             .map_err(|e| FortressError::storage(
@@ -535,27 +563,63 @@ impl StorageBackend for FileSystemStorage {
                 StorageErrorCode::ConnectionFailed,
             ))?;
 
+        let start_idx = offset.unwrap_or(0);
+        let limit = limit.unwrap_or(usize::MAX);
+        
+        // Streaming pagination - process entries one by one to avoid memory overhead
         let mut keys = Vec::new();
-        while let Some(entry) = entries.next_entry().await
-            .map_err(|e| FortressError::storage(
-                format!("Failed to read directory entry: {}", e),
-                "filesystem".to_string(),
-                StorageErrorCode::ConnectionFailed,
-            ))? {
-            
-            let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) == Some("data") {
-                // Try to load metadata to get the original key
-                if let Some(metadata) = self.load_metadata(&path.to_string_lossy()).await? {
-                    if metadata.key.starts_with(prefix) {
-                        keys.push(metadata.key);
+        let mut current_idx = 0;
+        let mut collected = 0;
+        
+        // Skip entries until we reach the offset
+        while current_idx < start_idx {
+            match entries.next_entry().await {
+                Ok(Some(entry)) => {
+                    let path = entry.path();
+                    if path.extension().and_then(|s| s.to_str()) == Some("data") {
+                        // Check if this matches our prefix
+                        if let Some(metadata) = self.load_metadata(&path.to_string_lossy()).await? {
+                            if metadata.key.starts_with(prefix) {
+                                current_idx += 1;
+                            }
+                        }
                     }
                 }
+                Ok(None) => break, // No more entries
+                Err(e) => return Err(FortressError::storage(
+                    format!("Failed to read directory entry: {}", e),
+                    "filesystem".to_string(),
+                    StorageErrorCode::ConnectionFailed,
+                )),
             }
         }
-
+        
+        // Collect entries up to the limit
+        while collected < limit {
+            match entries.next_entry().await {
+                Ok(Some(entry)) => {
+                    let path = entry.path();
+                    if path.extension().and_then(|s| s.to_str()) == Some("data") {
+                        if let Some(metadata) = self.load_metadata(&path.to_string_lossy()).await? {
+                            if metadata.key.starts_with(prefix) {
+                                keys.push(metadata.key);
+                                collected += 1;
+                            }
+                        }
+                    }
+                }
+                Ok(None) => break, // No more entries
+                Err(e) => return Err(FortressError::storage(
+                    format!("Failed to read directory entry: {}", e),
+                    "filesystem".to_string(),
+                    StorageErrorCode::ConnectionFailed,
+                )),
+            }
+        }
+        
         Ok(keys)
     }
+    
 
     fn metadata(&self) -> StorageMetadata {
         StorageMetadata {
@@ -744,56 +808,77 @@ impl StorageBackend for S3Storage {
     }
 
     async fn list_prefix(&self, prefix: &str) -> Result<Vec<String>> {
+        self.list_prefix_paginated(prefix, None, None).await
+    }
+
+    async fn list_prefix_paginated(&self, prefix: &str, limit: Option<usize>, offset: Option<usize>) -> Result<Vec<String>> {
         let s3_prefix = match &self.prefix {
             Some(storage_prefix) => format!("{}/{}", storage_prefix, prefix),
             None => prefix.to_string(),
         };
-
+        
         let mut keys = Vec::new();
         let mut continuation_token = None;
-
-        loop {
-            let mut request = self.client
-                .list_objects_v2()
-                .bucket(&self.bucket)
-                .prefix(&s3_prefix);
-
-            if let Some(token) = continuation_token {
-                request = request.continuation_token(token);
-            }
-
-            let response = request
-                .send()
-                .await
-                .map_err(|e| FortressError::storage(
-                    format!("Failed to list objects in S3: {}", e),
-                    "s3".to_string(),
-                    StorageErrorCode::InvalidOperation,
-                ))?;
-
-            if let Some(objects) = response.contents() {
-                for object in objects {
-                    if let Some(key) = object.key() {
-                        // Remove the storage prefix to get the original key
-                        let original_key = match &self.prefix {
-                            Some(storage_prefix) => {
-                                key.strip_prefix(&format!("{}/", storage_prefix))
-                                    .unwrap_or(key)
+        let mut current_count = 0;
+        
+        // Apply offset
+        if let Some(offset_val) = offset {
+            if offset_val > 0 {
+                // Skip to offset by discarding initial results
+                while current_count < offset_val && continuation_token.is_some() {
+                    let mut request = self.client
+                        .list_objects_v2()
+                        .bucket(&self.bucket)
+                        .prefix(&s3_prefix);
+                    
+                    if let Some(token) = continuation_token {
+                        request = request.continuation_token(token);
+                    }
+                    
+                    let response = request
+                        .send()
+                        .await
+                        .map_err(|e| FortressError::storage(
+                            format!("Failed to list objects in S3: {}", e),
+                            "s3".to_string(),
+                            StorageErrorCode::InvalidOperation,
+                        ))?;
+                    
+                    if let Some(objects) = response.contents() {
+                        current_count += objects.len();
+                        
+                        for object in objects {
+                            if let Some(key) = object.key() {
+                                // Remove the storage prefix to get the original key
+                                let original_key = match &self.prefix {
+                                    Some(storage_prefix) => {
+                                        key.strip_prefix(&format!("{}/", storage_prefix))
+                                            .unwrap_or(key)
+                                    }
+                                    None => key,
+                                };
+                                keys.push(original_key.to_string());
                             }
-                            None => key,
-                        };
-                        keys.push(original_key.to_string());
+                        }
+                    }
+                    
+                    continuation_token = response.next_continuation_token();
+                    
+                    // Break if we've reached the offset
+                    if current_count >= offset_val || continuation_token.is_none() {
+                        break;
                     }
                 }
             }
-
-            if response.is_truncated() {
-                continuation_token = response.next_continuation_token().map(|s| s.to_string());
-            } else {
-                break;
+        }
+        
+        // Apply limit
+        if let Some(limit_val) = limit {
+            if keys.len() > limit_val {
+                keys = keys.into_iter().take(limit_val).collect();
             }
         }
-
+        
         Ok(keys)
     }
 
@@ -964,6 +1049,10 @@ impl StorageBackend for AzureBlobStorage {
     }
 
     async fn list_prefix(&self, prefix: &str) -> Result<Vec<String>> {
+        self.list_prefix_paginated(prefix, None, None).await
+    }
+
+    async fn list_prefix_paginated(&self, prefix: &str, limit: Option<usize>, offset: Option<usize>) -> Result<Vec<String>> {
         let container_client = self.client.container_client(&self.container);
         
         let mut stream = container_client
@@ -972,16 +1061,30 @@ impl StorageBackend for AzureBlobStorage {
             .into_stream();
         
         let mut keys = Vec::new();
+        let mut current_count = 0;
         
-        while let Some(blob_response) = stream.next().await {
-            let blob_response = blob_response.map_err(|e| FortressError::storage(
-                format!("Failed to list blobs: {}", e),
-                "azure_blob",
-                StorageErrorCode::ReadError,
-            ))?;
-            
-            for blob in blob_response.blobs.blobs {
-                keys.push(blob.name.clone());
+        // Apply offset
+        if let Some(offset_val) = offset {
+            if offset_val > 0 {
+                // Skip to offset by discarding initial results
+                while current_count < offset_val {
+                    if let Some(blob_response) = stream.next().await {
+                        current_count += blob_response.blobs.blobs.len();
+                        
+                        for blob in blob_response.blobs.blobs {
+                            keys.push(blob.name.clone());
+                        }
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // Apply limit
+        if let Some(limit_val) = limit {
+            if keys.len() > limit_val {
+                keys = keys.into_iter().take(limit_val).collect();
             }
         }
         
