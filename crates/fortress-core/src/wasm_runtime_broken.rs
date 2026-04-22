@@ -217,11 +217,9 @@ impl Plugin for WasmPlugin {
         let start_time = Instant::now();
         
         // Check if plugin is initialized
-        if self.instance.is_none() {
-            return Err(FortressError::plugin("Plugin not initialized".to_string()));
-        }
-        
-        let instance = self.instance.as_ref().unwrap();
+        let instance = self.instance.as_ref().ok_or_else(|| {
+            FortressError::plugin("Plugin not initialized".to_string())
+        })?;
         let mut store = Store::new(&self.engine, self.context.clone());
         
         // Set fuel limit for this execution

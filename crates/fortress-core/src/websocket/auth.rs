@@ -286,7 +286,9 @@ impl WebSocketAuthenticator {
             });
         }
         
-        let session = session_data.unwrap();
+        let session = session_data.ok_or_else(|| {
+            FortressError::authentication("Invalid session data", None)
+        })?;
         
         Ok(AuthResult {
             success: true,
@@ -457,7 +459,7 @@ impl WebSocketAuthenticator {
         // For demo, simulate session validation
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_else(|_| Duration::from_secs(0))
             .as_secs();
         
         // Simulate session store lookup

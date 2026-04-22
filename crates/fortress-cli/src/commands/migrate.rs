@@ -4,7 +4,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use serde_json::{json, Value};
 use fortress_core::config::{DatabaseConfig, EncryptionConfig, ApiConfig, MonitoringConfig, TransactionConfig, StreamingConfig, BackupConfig, AuditConfig, KeyDerivationConfig, Config};
 use std::path::PathBuf;
-use tracing::{info, debug, warn};
+use tracing::{info, debug, warn, error};
 use std::process::Command;
 
 /// Handle data migration from external database to Fortress

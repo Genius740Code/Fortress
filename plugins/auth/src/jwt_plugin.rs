@@ -267,10 +267,29 @@ fn initialize_user_database() {
 }
 
 fn get_user(username: &str) -> Option<UserRecord> {
-    unsafe {
-        initialize_user_database();
-        USER_DATABASE.as_ref()?.get(username).cloned()
-    }
+    use std::sync::{Mutex, OnceLock};
+    
+    static USER_DB_SAFE: OnceLock<Mutex<HashMap<String, UserRecord>>> = OnceLock::new();
+    
+    let db = USER_DB_SAFE.get_or_init(|| {
+        let mut db = HashMap::new();
+        
+        // Add test user
+        db.insert("admin".to_string(), UserRecord {
+            id: "user-1".to_string(),
+            username: "admin".to_string(),
+            password_hash: hash_password("admin123").unwrap_or_default(),
+            email: Some("admin@fortress.com".to_string()),
+            roles: vec!["admin".to_string(), "user".to_string()],
+            permissions: vec!["*".to_string()],
+            tenant_id: None,
+            active: true,
+        });
+        
+        Mutex::new(db)
+    });
+    
+    db.lock().ok()?.get(username).cloned()
 }
 
 fn hash_password(password: &str) -> Result<String, String> {
