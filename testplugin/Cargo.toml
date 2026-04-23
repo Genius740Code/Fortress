@@ -2,7 +2,7 @@
 name = "TestPlugin"
 version = "1.0.0-alpha"
 edition = "2021"
-license = "Fortress Sustainable Use License 1.0"
+license = "GPL-3.0"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

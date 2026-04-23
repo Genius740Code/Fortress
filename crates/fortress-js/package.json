@@ -58,7 +58,7 @@
     "email": "team@fortressdb.io",
     "url": "https://fortressdb.io"
   },
-  "license": "Fortress Sustainable Use License 1.0",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/Genius740Code/Fortress.git",

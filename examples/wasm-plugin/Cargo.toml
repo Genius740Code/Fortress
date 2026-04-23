@@ -4,7 +4,7 @@ version = "1.0.0-alpha"
 edition = "2021"
 authors = ["Fortress Team <team@fortress-db.com>"]
 description = "Enhanced audit logging plugin for Fortress with real-time analytics"
-license = "Fortress Sustainable Use License 1.0"
+license = "MIT"
 repository = "https://github.com/Genius740Code/Fortress"
 keywords = ["fortress", "plugin", "audit", "wasm", "analytics"]
 

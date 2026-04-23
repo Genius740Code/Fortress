@@ -1,11 +1,38 @@
-# fortress-cli-napi
+# Fortress CLI NAPI
 
-NAPI bindings for Fortress CLI - Node.js native bindings for the Fortress secure database CLI tool.
+[![Crates.io](https://img.shields.io/crates/v/fortress-cli-napi.svg)](https://crates.io/crates/fortress-cli-napi)
+[![License: Fortress Sustainable Use License 1.0](https://img.shields.io/badge/License-Fortress%20Sustainable%20Use%20License%201.0-blue.svg)](../../LICENSE)
+
+🛡️ **Fortress CLI NAPI** - Native Node.js bindings for Fortress CLI. Enterprise-grade security and database management from Node.js applications.
 
 ## Installation
 
+### Install from Crates.io (Recommended)
+
 ```bash
-npm install fortress-cli-napi
+# Install the NAPI package
+cargo install fortress-cli-napi
+```
+
+### Install from Source
+
+```bash
+# Clone repository
+git clone https://github.com/Genius740Code/Fortress.git
+cd Fortress
+
+# Install NAPI bindings
+cargo install --path crates/fortress-cli-napi
+```
+
+### NPM Package (Node.js bindings)
+
+```bash
+# Install globally
+npm install -g @fortress/cli-napi
+
+# Install as dependency
+npm install @fortress/cli-napi
 ```
 
 ## Usage
@@ -21,14 +48,6 @@ await cli.init();
 await cli.serverStart();
 await cli.keyCreate({ name: 'my-key', algorithm: 'aes256-gcm' });
 ```
-
-## Features
-
-- ✅ **Native Performance**: NAPI bindings for maximum performance
-- ✅ **Complete CLI API**: All CLI commands available programmatically  
-- ✅ **Cross-Platform**: Windows, macOS, and Linux support
-- ✅ **TypeScript Support**: Full TypeScript definitions included
-- ✅ **Error Handling**: Comprehensive error reporting
 
 ## API Reference
 
@@ -143,7 +162,7 @@ npm test
 
 ## License
 
-This project is licensed under the Server Side Public License (SSPL) - see the [LICENSE](../../LICENSE) file for details.
+This project is licensed under the Fortress Sustainable Use License 1.0 - see the [LICENSE](../../LICENSE) file for details.
 
 ## Support
 
