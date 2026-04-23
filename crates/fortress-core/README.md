@@ -2,9 +2,9 @@
 
 [![Crates.io](https://img.shields.io/crates/v/fortress-core.svg)](https://crates.io/crates/fortress-core)
 [![Documentation](https://docs.rs/fortress-core/badge.svg)](https://docs.rs/fortress-core)
-[![License: Fortress Sustainable Use License 1.0](https://img.shields.io/badge/License-Fortress%20Sustainable%20Use%20License%201.0-blue.svg)](../../LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
 
-🛡️ **Fortress Core** - The heart of Fortress secure database system. Enterprise-grade encryption, key management, and security primitives.
+**Fortress Core** - The heart of Fortress secure database system. Enterprise-grade encryption, key management, and security primitives.
 
 ## Features
 
@@ -20,7 +20,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-fortress-core = "0.1.0"
+fortress-core = "1.0.1"
 ```
 
 Or install via cargo:
@@ -99,18 +99,14 @@ Fortress Core is optimized for high-performance encryption:
 - **`postgres`**: PostgreSQL database backend
 - **`simd`**: SIMD optimizations for supported platforms
 - **`hardware-acceleration`**: Hardware acceleration support
-- **`performance-optimization`**: Advanced performance features
-- **`distributed-cache`**: Redis and Memcached support
-- **`observability``: OpenTelemetry and distributed tracing
 
 ## License
 
-This project is licensed under the **Fortress Sustainable Use License 1.0** - see the [LICENSE](../../LICENSE) file for details.
+This project is licensed under MIT - see the [LICENSE](../../LICENSE) file for details.
 
 ## Documentation
 
 - [API Documentation](https://docs.rs/fortress-core)
-- [Main Fortress Documentation](https://docs.fortress-db.com)
 - [Examples](../../examples/)
 
 ## Contributing

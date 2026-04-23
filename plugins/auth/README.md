@@ -1,9 +1,9 @@
 # Fortress Authentication Plugins
 
 [![Crates.io](https://img.shields.io/crates/v/fortress-auth-plugins.svg)](https://crates.io/crates/fortress-auth-plugins)
-[![License: Fortress Sustainable Use License 1.0](https://img.shields.io/badge/License-Fortress%20Sustainable%20Use%20License%201.0-blue.svg)](../../LICENSE)
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](../../LICENSE)
 
-🛡️ **Fortress Authentication Plugins** - WebAssembly-based authentication plugins for Fortress security platform. Enterprise-grade, sandboxed authentication with hot-swapping capabilities.
+**Fortress Authentication Plugins** - WebAssembly-based authentication plugins for Fortress security platform. Enterprise-grade, sandboxed authentication with hot-swapping capabilities.
 
 ## Features
 
@@ -406,13 +406,13 @@ registry.set_log_level(LogLevel::Debug);
 
 ## License
 
-This project is licensed under the Fortress Sustainable Use License 1.0 - see the [LICENSE](../../LICENSE) file for details.
+This project is licensed under **GPL-3.0** - see the [LICENSE](../../LICENSE) file for details.
 
 ## Support
 
-- Documentation: [Fortress Docs](https://docs.fortressdb.io)
-- Issues: [GitHub Issues](https://github.com/fortress-security/fortress/issues)
-- Community: [Discord](https://discord.gg/fortress)
+- **Documentation**: [https://github.com/Genius740Code/Fortress/blob/main/docs](https://github.com/Genius740Code/Fortress/blob/main/docs)
+- **Issues**: [https://github.com/Genius740Code/Fortress/issues](https://github.com/Genius740Code/Fortress/issues)
+- **Discussions**: [https://github.com/Genius740Code/Fortress/discussions](https://github.com/Genius740Code/Fortress/discussions)
 
 ### Basic Plugin Management
 ```rust

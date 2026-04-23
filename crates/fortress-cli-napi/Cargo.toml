@@ -1,11 +1,11 @@
 [package]
 name = "fortress-cli-napi"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
-authors = ["Fortress Team <team@fortressdb.io>"]
+authors = ["Genius740Code"]
 license = "MIT"
 description = "NAPI bindings for Fortress CLI"
-homepage = "https://fortressdb.io"
+
 repository = "https://github.com/Genius740Code/Fortress"
 keywords = ["cli", "database", "encryption", "security", "napi"]
 categories = ["command-line-utilities", "database"]
@@ -15,7 +15,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 # Fortress core CLI - use as binary dependency
-fortress-cli = { path = "../fortress-cli", version = "1.0.0", default-features = false, optional = true }
+fortress-cli = { path = "../fortress-cli", version = "1.0.1", default-features = false, optional = true }
 
 # NAPI bindings
 napi = { version = "2.0", default-features = false, features = ["napi4"] }

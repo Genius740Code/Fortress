@@ -1,9 +1,9 @@
 # Fortress Server
 
 [![Crates.io](https://img.shields.io/crates/v/fortress-server.svg)](https://crates.io/crates/fortress-server)
-[![License: Fortress Sustainable Use License 1.0](https://img.shields.io/badge/License-Fortress%20Sustainable%20Use%20License%201.0-blue.svg)](../../LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
 
-🛡️ **Fortress Server** - High-performance secure database server with enterprise-grade encryption, clustering, and REST/GraphQL APIs.
+**Fortress Server** - High-performance secure database server with enterprise-grade encryption, clustering, and REST/GraphQL APIs.
 
 ## Features
 
@@ -26,7 +26,7 @@ Add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-fortress-server = "0.1.0"
+fortress-server = "1.0.1"
 tokio = { version = "1.35", features = ["full"] }
 tracing-subscriber = "0.3"
 ```
@@ -355,14 +355,14 @@ For production, ensure you:
 
 ## License
 
-This project is licensed under the **Fortress Sustainable Use License 1.0** - see the [LICENSE](../../LICENSE) file for details.
+This project is licensed under **MIT** - see the [LICENSE](../../LICENSE) file for details.
 
 ## Contributing
 
-Please read [CONTRIBUTING.md](../../CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+Please read our [Contributing Guide](../../CONTRIBUTING.md) before contributing.
 
 ## Support
 
-- 📖 [Documentation](https://docs.fortress-db.com)
-- 🐛 [Issue Tracker](https://github.com/Genius740Code/Fortress/issues)
-- 💬 [Discussions](https://github.com/Genius740Code/Fortress/discussions)
+- **Documentation**: [https://github.com/Genius740Code/Fortress/blob/main/docs](https://github.com/Genius740Code/Fortress/blob/main/docs)
+- **Issues**: [https://github.com/Genius740Code/Fortress/issues](https://github.com/Genius740Code/Fortress/issues)
+- **Discussions**: [https://github.com/Genius740Code/Fortress/discussions](https://github.com/Genius740Code/Fortress/discussions)

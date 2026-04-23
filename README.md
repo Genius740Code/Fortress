@@ -8,14 +8,14 @@
 
 A comprehensive security platform that provides enterprise-grade cryptography, key management, distributed caching, clustering, and compliance features with simplicity of modern APIs.
 
-## Current Status: **v1.0.0 - PRODUCTION RELEASE**
+## Current Status: **v1.0.1 - PRODUCTION RELEASE**
 > **Official production release with enterprise-grade security**
 > - ✓ All core security features implemented and tested
 > - ✓ Zero-downtime key rotation and clustering operational
 > - ✓ Compliance frameworks implemented (GDPR, HIPAA, PCI-DSS)
 > - ✓ GraphQL API with enterprise-grade security features
 > - ✓ Quantum-resistant cryptography available
-> - **Download v1.0.0 from [GitHub Releases](https://github.com/fortress-security/fortress/releases/tag/v1.0.0)**
+> - **Download v1.0.1 from [GitHub Releases](https://github.com/fortress-security/fortress/releases/tag/v1.0.1)**
 
 ## Key Features
 

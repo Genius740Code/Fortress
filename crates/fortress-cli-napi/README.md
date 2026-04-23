@@ -1,9 +1,9 @@
 # Fortress CLI NAPI
 
 [![Crates.io](https://img.shields.io/crates/v/fortress-cli-napi.svg)](https://crates.io/crates/fortress-cli-napi)
-[![License: Fortress Sustainable Use License 1.0](https://img.shields.io/badge/License-Fortress%20Sustainable%20Use%20License%201.0-blue.svg)](../../LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
 
-🛡️ **Fortress CLI NAPI** - Native Node.js bindings for Fortress CLI. Enterprise-grade security and database management from Node.js applications.
+**Fortress CLI NAPI** - Native Node.js bindings for Fortress CLI. Enterprise-grade security and database management from Node.js applications.
 
 ## Installation
 
@@ -162,10 +162,10 @@ npm test
 
 ## License
 
-This project is licensed under the Fortress Sustainable Use License 1.0 - see the [LICENSE](../../LICENSE) file for details.
+This project is licensed under **MIT** - see the [LICENSE](../../LICENSE) file for details.
 
 ## Support
 
-- 📖 [Documentation](https://github.com/Genius740Code/Fortress/blob/main/docs)
-- 🐛 [Issue Tracker](https://github.com/Genius740Code/Fortress/issues)
-- 💬 [Discussions](https://github.com/Genius740Code/Fortress/discussions)
+- **Documentation**: [https://github.com/Genius740Code/Fortress/blob/main/docs](https://github.com/Genius740Code/Fortress/blob/main/docs)
+- **Issues**: [https://github.com/Genius740Code/Fortress/issues](https://github.com/Genius740Code/Fortress/issues)
+- **Discussions**: [https://github.com/Genius740Code/Fortress/discussions](https://github.com/Genius740Code/Fortress/discussions)

@@ -1,20 +1,20 @@
 # Fortress Python SDK
 
 [![PyPI version](https://badge.fury.io/py/fortress-db.svg)](https://badge.fury.io/py/fortress-db)
-[![License: Fortress Sustainable Use License 1.0](https://img.shields.io/badge/License-Fortress%20Sustainable%20Use%20License%201.0-blue.svg)](../../LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
 
-🛡️ **Fortress** - Turnkey Simplicity + Enterprise Security. Python SDK for Fortress secure database system with multi-layer encryption.
+**Fortress** - Turnkey simplicity + enterprise security. Python SDK for Fortress secure database system with multi-layer encryption.
 
-## ✨ Features
+## Features
 
-- **🔐 Enterprise-grade Encryption**: Support for AES-256-GCM, ChaCha20-Poly1305, AEGIS-256
-- **🔑 Advanced Key Management**: Secure key generation with cryptographically secure RNG
-- **⚡ High Performance**: Rust backend integration with connection pooling and caching
-- **�️ Security First**: Rate limiting, input validation, audit logging, and comprehensive error handling
-- **� Easy Configuration**: Flexible security and performance configurations
-- **� Monitoring**: Built-in performance metrics and health monitoring
-- **🧵 Thread Safe**: Concurrent access support with proper resource management
-- **� Context Manager**: Automatic resource cleanup with Python context manager support
+- **Enterprise-grade Encryption**: Support for AES-256-GCM, ChaCha20-Poly1305, AEGIS-256
+- **Advanced Key Management**: Secure key generation with cryptographically secure RNG
+- **High Performance**: Rust backend integration with connection pooling and caching
+- **Security First**: Rate limiting, input validation, audit logging, and comprehensive error handling
+- **Easy Configuration**: Flexible security and performance configurations
+- **Monitoring**: Built-in performance metrics and health monitoring
+- **Thread Safe**: Concurrent access support with proper resource management
+- **Context Manager**: Automatic resource cleanup with Python context manager support
 
 ## Installation
 
@@ -474,13 +474,13 @@ Fortress is designed with security as the primary concern:
 
 ## License
 
-This project is licensed under the **Fortress Sustainable Use License 1.0** - see the [LICENSE](../../LICENSE) file for details.
+This project is licensed under **MIT** - see the [LICENSE](../../LICENSE) file for details.
 
 ## Support
 
-- **Documentation**: [GitHub Docs](https://github.com/Genius740Code/Fortress/blob/main/docs)
-- **Issues**: [GitHub Issues](https://github.com/Genius740Code/Fortress/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/Genius740Code/Fortress/discussions)
+- **Documentation**: [https://github.com/Genius740Code/Fortress/blob/main/docs](https://github.com/Genius740Code/Fortress/blob/main/docs)
+- **Issues**: [https://github.com/Genius740Code/Fortress/issues](https://github.com/Genius740Code/Fortress/issues)
+- **Discussions**: [https://github.com/Genius740Code/Fortress/discussions](https://github.com/Genius740Code/Fortress/discussions)
 
 ## Contributing
 

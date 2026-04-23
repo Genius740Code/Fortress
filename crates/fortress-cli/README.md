@@ -1,9 +1,9 @@
 # Fortress CLI
 
 [![Crates.io](https://img.shields.io/crates/v/fortress-cli.svg)](https://crates.io/crates/fortress-cli)
-[![License: Fortress Sustainable Use License 1.0](https://img.shields.io/badge/License-Fortress%20Sustainable%20Use%20License%201.0-blue.svg)](../../LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
 
-🛡️ **Fortress CLI** - Command-line interface for Fortress secure database system. Enterprise-grade encryption and key management from your terminal.
+**Fortress CLI** - Command-line interface for Fortress secure database system. Enterprise-grade encryption and key management from your terminal.
 
 ## Installation
 
@@ -531,7 +531,7 @@ echo 'source <(fortress completion fish)' >> ~/.config/fish/config.fish
 
 ## License
 
-This project is licensed under the **Fortress Sustainable Use License 1.0** - see the [LICENSE](../../LICENSE) file for details.
+This project is licensed under **MIT** - see the [LICENSE](../../LICENSE) file for details.
 
 ## Support
 
@@ -542,4 +542,4 @@ This project is licensed under the **Fortress Sustainable Use License 1.0** - se
 
 ---
 
-**Fortress CLI** - Security at your fingertips. 🛡️
+**Fortress CLI** - Security at your fingertips.

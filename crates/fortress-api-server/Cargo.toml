@@ -1,11 +1,11 @@
 [package]
 name = "fortress-api-server"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
-authors = ["Fortress Team <team@fortressdb.io>"]
+authors = ["Genius740Code"]
 license = "MIT"
 description = "REST API server for Fortress secure database system"
-homepage = "https://fortressdb.io"
+
 repository = "https://github.com/Genius740Code/Fortress"
 documentation = "https://fortressdb.io/docs"
 keywords = ["database", "encryption", "security", "api", "rest"]
@@ -18,7 +18,7 @@ path = "src/main.rs"
 
 [dependencies]
 # Core Fortress library
-fortress-core = { path = "../fortress-core", version = "1.0.0" }
+fortress-core = { path = "../fortress-core", version = "1.0.1" }
 
 # Async runtime
 tokio = { version = "1.35", features = ["full"] }

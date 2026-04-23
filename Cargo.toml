@@ -1,10 +1,10 @@
 [package]
-name = "fortress-db"
-version = "1.0.0"
+name = "fortress"
+version = "1.0.1"
 edition = "2021"
-authors = ["Fortress Team <team@fortressdb.io>"]
+authors = ["Genius740Code"]
 license = "MIT"
-description = "🛡️ Fortress - Turnkey Simplicity + Enterprise Security. A highly customizable, secure database system with multi-layer encryption."
+description = "Fortress -  + Enterprise Security. A highly customizable, secure database system with multi-layer encryption."
 readme = "README.md"
 repository = "https://github.com/Genius740Code/Fortress"
 documentation = "https://github.com/Genius740Code/Fortress/blob/main/docs"
@@ -18,6 +18,7 @@ members = [
     "crates/fortress-cli",
     "crates/fortress-api-server",
     "crates/fortress-cli-napi",
+    "crates/fortress-db",
     "plugins/auth",
     # "crates/fortress-python",
     # "crates/fortress-js",
@@ -124,8 +125,8 @@ zeroize = { version = "1.7", features = ["zeroize_derive"] }
 derive_builder = "0.12"
 derive_more = { version = "0.99", features = ["from", "into", "display"] }
 
-# WebAssembly (optional) - moved to fortress-js crate
-# wasm-bindgen = { version = "0.2", optional = true }
+# WebAssembly (optional) - moved to fortress-cli
+fortress-cli = { path = "crates/fortress-cli", version = "1.0.1", optional = true }
 # js-sys = { version = "0.3", optional = true }
 # web-sys = { version = "0.3", optional = true, features = ["console", "ReadableStream"] }
 # console_error_panic_hook = { version = "0.1", optional = true }
@@ -161,7 +162,7 @@ tracing-subscriber = "0.3"
 test-case = "3.3"
 
 # Example dependencies
-fortress-core = { path = "crates/fortress-core" }
+fortress-core = { path = "crates/fortress-core", version = "1.0.1" }
 
 [features]
 default = []

@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "fortress-db"
-version = "1.0.0"
+version = "1.0.1"
 description = "🛡️ Fortress - Turnkey Simplicity + Enterprise Security. Python SDK for Fortress secure database system with multi-layer encryption."
 readme = "README.md"
 license = {text = "MIT"}
@@ -76,7 +76,7 @@ performance = [
 dynamic = ["version"]
 
 [project.urls]
-Homepage = "https://fortressdb.io"
+
 Documentation = "https://github.com/Genius740Code/Fortress/blob/main/docs"
 Repository = "https://github.com/Genius740Code/Fortress"
 "Bug Tracker" = "https://github.com/Genius740Code/Fortress/issues"

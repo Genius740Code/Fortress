@@ -1,6 +1,6 @@
 # fortress-db
 
-🛡️ **Fortress** - Turnkey Simplicity + Enterprise Security
+**Fortress** - Enterprise Security
 
 A highly customizable, secure database system with multi-layer encryption. This meta-package provides the complete Fortress database ecosystem.
 
