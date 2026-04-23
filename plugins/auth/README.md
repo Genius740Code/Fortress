@@ -1,30 +1,126 @@
 # Fortress Authentication Plugins
 
-WebAssembly-based authentication plugins for the Fortress security platform.
+[![Crates.io](https://img.shields.io/crates/v/fortress-auth-plugins.svg)](https://crates.io/crates/fortress-auth-plugins)
+[![License: Fortress Sustainable Use License 1.0](https://img.shields.io/badge/License-Fortress%20Sustainable%20Use%20License%201.0-blue.svg)](../../LICENSE)
 
-## Overview
+🛡️ **Fortress Authentication Plugins** - WebAssembly-based authentication plugins for Fortress security platform. Enterprise-grade, sandboxed authentication with hot-swapping capabilities.
 
-The Fortress authentication plugin system provides secure, sandboxed authentication modules that can be dynamically loaded and executed. Each plugin implements specific authentication methods while maintaining security isolation through WebAssembly runtime.
+## Features
+
+- **WebAssembly Sandbox**: Secure, isolated authentication modules
+- **Multiple Auth Methods**: JWT, OAuth 2.0, SAML 2.0 support
+- **Hot-Swapping**: Zero-downtime plugin updates
+- **Enterprise Security**: Production-grade security controls
+- **High Performance**: Near-native WASM execution speed
+- **Memory Safe**: Rust-based implementation with zero vulnerabilities
+- **Comprehensive Monitoring**: Health checks and performance metrics
+
+## Installation
+
+### Install from Crates.io (Recommended)
+
+```bash
+# Install auth plugins package
+cargo install fortress-auth-plugins
+```
+
+### Install from Source
+
+```bash
+# Clone repository
+git clone https://github.com/Genius740Code/Fortress.git
+cd Fortress
+
+# Install auth plugins
+cargo install --path plugins/auth
+```
+
+## Quick Start
+
+### Basic Usage
+
+```rust
+use fortress_auth_plugins::PluginRegistry;
+
+let mut registry = PluginRegistry::new();
+registry.initialize().await?;
+
+// List available plugins
+let plugins = registry.list_plugins();
+for plugin in plugins {
+    println!("Plugin: {} - {}", plugin.name, plugin.description);
+}
+
+// Authenticate with JWT plugin
+use fortress_auth_plugins::AuthContext;
+
+let context = AuthContext {
+    method: "JWT".to_string(),
+    credentials: serde_json::json!({
+        "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+    }),
+    request_id: "req-123".to_string(),
+};
+
+let result = registry.authenticate("jwt_auth", context).await?;
+if result.success {
+    println!("User authenticated: {}", result.user_id);
+}
+```
+
+### Plugin Management
+
+```rust
+use fortress_core::{
+    auth_plugin_integration::{AuthPluginIntegrationService, IntegrationConfig},
+    auth_plugin_integration::DeploymentStrategy,
+};
+
+// Create integration service
+let config = IntegrationConfig::default();
+let service = AuthPluginIntegrationService::new(config)?;
+
+// Initialize service
+service.initialize().await?;
+
+// Deploy JWT plugin
+let deployment_id = service.deploy_plugin(
+    "jwt",
+    "./target/wasm-plugins/jwt_plugin.wasm",
+    DeploymentStrategy::Rolling,
+).await?;
+
+// Hot-swap plugin with zero downtime
+let hot_swap_id = service.hot_swap_plugin(
+    "jwt",
+    "./target/wasm-plugins/jwt_plugin_v2.wasm",
+    DeploymentStrategy::BlueGreen,
+).await?;
+```
 
 ## Available Plugins
 
-### JWT Authentication Plugin (`jwt_plugin`)
+### 🔐 JWT Authentication Plugin (`jwt_plugin`)
 - **Methods**: JWT token validation, Basic username/password
 - **Features**: Token generation, validation, refresh, user management
 - **Security**: HMAC-SHA256 signatures, configurable expiration
 - **Use Case**: Stateless authentication for APIs and web services
 
-### OAuth 2.0 / OpenID Connect Plugin (`oauth_plugin`)
+### 🔗 OAuth 2.0 / OpenID Connect Plugin (`oauth_plugin`)
 - **Methods**: OAuth 2.0 authorization code flow, OpenID Connect
 - **Features**: Authorization code flow, token exchange, user info retrieval
 - **Security**: PKCE support, token validation, secure state management
 - **Use Case**: Social login, enterprise SSO, third-party authentication
 
-### SAML 2.0 Plugin (`saml_plugin`)
+### 🏛️ SAML 2.0 Plugin (`saml_plugin`)
 - **Methods**: SAML 2.0 assertion validation
 - **Features**: Assertion parsing, attribute extraction, user mapping
 - **Security**: XML signature validation, timestamp verification
 - **Use Case**: Enterprise SSO, federated authentication
+
+## Overview
+
+The Fortress authentication plugin system provides secure, sandboxed authentication modules that can be dynamically loaded and executed. Each plugin implements specific authentication methods while maintaining security isolation through WebAssembly runtime.
 
 ## Building
 
@@ -310,7 +406,7 @@ registry.set_log_level(LogLevel::Debug);
 
 ## License
 
-MIT License - see LICENSE file for details.
+This project is licensed under the Fortress Sustainable Use License 1.0 - see the [LICENSE](../../LICENSE) file for details.
 
 ## Support
 
