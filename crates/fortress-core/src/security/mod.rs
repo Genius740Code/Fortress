@@ -3,23 +3,21 @@
 //! This module provides comprehensive security features including
 //! rate limiting, threat detection, and security monitoring.
 
-pub mod rate_limiter;
-pub mod headers;
-pub mod monitoring;
-pub mod audit;
-pub mod side_channel;
+pub mod memory_safety;
+pub mod zero_knowledge;
 
-pub use rate_limiter::{
-    ProductionRateLimiter, ProductionRateLimitConfig, RateLimitRequest, RateLimitResponse,
-    ProductionRateLimitMetrics, RateLimitSpec, ViolationAction, ThreatLevel, GeoLocation,
-    ProductionTokenBucket, ProductionSlidingWindow, AdaptiveRateLimiter, DistributedRateLimiter,
-    RateLimitMiddleware, RateLimitMiddlewareConfig, rate_limit, rate_limit_middleware
+pub use memory_safety::{
+    ConstantTimeOps, SecureKey, SecureMemoryPool, GlobalSecureMemoryPool, utils
+};
+pub use zero_knowledge::{
+    ZeroKnowledgeProof, SecurityLevel, SchnorrProof, SchnorrProofData,
+    AccessControlProof, AccessControlCircuit, AnonymousAuth, GroupParameters,
+    UserId, Credential, AnonymousProof, GdprComplianceProof, PersonalData,
+    ProcessingPurpose, ConsentRecord
 };
 
-pub use headers::SecurityHeaders;
-pub use monitoring::SecurityMonitor;
-pub use audit::SecurityAuditor;
-pub use side_channel::{
-    SideChannelProtectionManager, SideChannelConfig, NoiseLevel, ProtectionLevel,
-    AttackDetectionResult, AttackType, AttackSeverity, SecurityAuditResult
-};
+#[cfg(test)]
+mod memory_safety_tests;
+
+#[cfg(test)]
+mod zero_knowledge_tests;

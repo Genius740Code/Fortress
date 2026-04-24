@@ -394,7 +394,7 @@ impl<S> RateLimitMiddlewareService<S> {
 
         tracing::event!(
             target: "rate_limiter",
-            level: log_level,
+            log_level,
             request_id = %request.request_id,
             ip_address = %request.ip_address,
             user_id = ?request.user_id,

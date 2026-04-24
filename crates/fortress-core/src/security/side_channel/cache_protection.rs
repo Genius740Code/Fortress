@@ -126,7 +126,7 @@ pub struct AnomalyDetector {
     /// Baseline patterns
     baseline_patterns: Arc<RwLock<HashMap<String, BaselinePattern>>>,
     /// Detection history
-    detection_history: Arc<RwLock<Vec<AnomalyDetection>>>>,
+    detection_history: Arc<RwLock<Vec<AnomalyDetection>>>,
 }
 
 /// Baseline pattern for normal access behavior

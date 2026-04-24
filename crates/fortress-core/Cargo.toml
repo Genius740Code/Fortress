@@ -1,6 +1,6 @@
 [package]
 name = "fortress-core"
-version = "1.0.11"
+version = "1.0.3"
 edition = "2021"
 authors = ["Genius740Code"]
 license = "MIT"
@@ -111,6 +111,9 @@ merlin = "3.0"
 
 # Zeroize for secure memory handling
 zeroize = { version = "1.7", features = ["zeroize_derive"] }
+
+# Subtle for constant-time operations
+subtle = "2.5"
 
 # Generic array for cryptography
 generic-array = "0.14"

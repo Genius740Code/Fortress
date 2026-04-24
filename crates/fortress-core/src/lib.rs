@@ -920,6 +920,9 @@ pub mod security_headers;
 /// Security monitoring and alerting
 pub mod security_monitoring;
 
+/// Comprehensive security module with memory safety and zero-knowledge proofs
+pub mod security;
+
 pub mod auth_plugin;
 
 pub mod auth_plugin_manager;
