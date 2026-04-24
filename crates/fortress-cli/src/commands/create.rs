@@ -99,7 +99,7 @@ pub async fn handle_create(
     create_database(&db_name, &db_path, &selected_template).await?;
     
     println!();
-    println!("{}", style("✅ Database created successfully!").green().bold());
+    println!("{}", style("✓ Database created successfully").green().bold());
     println!("Name: {}", style(&db_name).bold());
     println!("Path: {}", style(db_path.display()).bold());
     println!("Template: {}", style(&selected_template).bold());
@@ -325,72 +325,72 @@ fn create_enterprise_template(name: &str) -> Config {
 }
 
 fn display_template_preview(template_name: &str, config: &Config) {
-    println!("{}", style("📋 Template Preview: {}").bold().cyan(), template_name);
+    println!("{}", style("Template Preview: {}").bold().cyan(), template_name);
     println!("{}", "=".repeat(50));
     
     match template_name {
         "startup" => {
-            println!("🚀 {}", style("Startup Template").bold().yellow());
+            println!("{}", style("Startup Template").bold().yellow());
             println!("Perfect for development and small applications");
             println!();
-            println!("📊 Database Configuration:");
+            println!("Database Configuration:");
             println!("  Max Size: {}", style("1GB").bold());
             println!("  Cache Size: {}", style("32MB").bold());
             println!("  Pool Size: {}", style("5").bold());
             println!();
-            println!("🔐 Encryption:");
+            println!("Encryption:");
             println!("  Algorithm: {}", style("AEGIS-256").bold().green());
             println!("  Key Rotation: {}", style("23 hours").bold());
             println!("  Master Key Rotation: {}", style("90 days").bold());
             println!();
-            println!("⚙️  Features:");
-            println!("  ✅ Development optimized");
-            println!("  ✅ Fast startup");
-            println!("  ✅ Minimal resource usage");
+            println!("Features:");
+            println!("  ✓ Development optimized");
+            println!("  ✓ Fast startup");
+            println!("  ✓ Minimal resource usage");
         }
         "enterprise" => {
-            println!("🏢 {}", style("Enterprise Template").bold().yellow());
+            println!("{}", style("Enterprise Template").bold().yellow());
             println!("Production-ready with enhanced security and monitoring");
             println!();
-            println!("📊 Database Configuration:");
+            println!("Database Configuration:");
             println!("  Max Size: {}", style("10GB").bold());
             println!("  Cache Size: {}", style("256MB").bold());
             println!("  Pool Size: {}", style("20").bold());
             println!();
-            println!("🔐 Encryption:");
+            println!("Encryption:");
             println!("  Algorithm: {}", style("AES-256-GCM").bold().green());
             println!("  Key Rotation: {}", style("7 days").bold());
             println!("  Master Key Rotation: {}", style("30 days").bold());
             println!("  Key Derivation: {}", style("Argon2id").bold());
             println!();
-            println!("⚙️  Features:");
-            println!("  ✅ Production ready");
-            println!("  ✅ Enhanced security");
-            println!("  ✅ Monitoring enabled");
-            println!("  ✅ WebAssembly support");
-            println!("  ✅ Rate limiting");
-            println!("  ✅ JWT authentication");
+            println!("Features:");
+            println!("  ✓ Production ready");
+            println!("  ✓ Enhanced security");
+            println!("  ✓ Monitoring enabled");
+            println!("  ✓ WebAssembly support");
+            println!("  ✓ Rate limiting");
+            println!("  ✓ JWT authentication");
         }
         "custom" => {
-            println!("🎨 {}", style("Custom Template").bold().yellow());
+            println!("{}", style("Custom Template").bold().yellow());
             println!("Flexible configuration for specific requirements");
             println!();
-            println!("📊 Database Configuration:");
+            println!("Database Configuration:");
             println!("  Max Size: {}", style(config.database.max_size.unwrap_or(1024*1024*1024) / (1024*1024)).bold());
             println!("  Cache Size: {}", style(config.encryption.key_derivation.memory_cost.unwrap_or(64*1024) / 1024).bold());
             println!("  Pool Size: {}", style(config.database.pool_size).bold());
             println!();
-            println!("🔐 Encryption:");
+            println!("Encryption:");
             println!("  Algorithm: {}", style(config.encryption.default_algorithm).bold().green());
             println!("  Key Rotation: {}", style(config.encryption.key_rotation_interval.as_secs() / 3600).bold());
             println!("  Master Key Rotation: {}", style(config.encryption.master_key_rotation_interval.as_secs() / (24*3600)).bold());
             println!();
-            println!("⚙️  Features:");
-            println!("  ✅ Customizable");
-            println!("  ✅ Flexible configuration");
+            println!("Features:");
+            println!("  ✓ Customizable");
+            println!("  ✓ Flexible configuration");
         }
         _ => {
-            println!("❌ Unknown template: {}", style(template_name).red());
+            println!("✗ Unknown template: {}", style(template_name).red());
             return;
         }
     }
@@ -401,7 +401,7 @@ fn display_template_preview(template_name: &str, config: &Config) {
 }
 
 fn list_available_templates() {
-    println!("{}", style("📋 Available Templates").bold().cyan());
+    println!("{}", style("Available Templates").bold().cyan());
     println!("{}", "=".repeat(50));
     
     let templates = vec![

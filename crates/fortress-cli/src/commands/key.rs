@@ -286,7 +286,7 @@ async fn perform_safety_checks() -> Result<()> {
             if !resources_ok {
                 return Err(color_eyre::eyre::eyre!("Insufficient system resources. Please free up disk space or memory."));
             }
-            println!("  ✅ Sufficient resources available");
+            println!("  ✓ Sufficient resources available");
         }
         Err(e) => {
             warn!("Could not check system resources: {}", e);
@@ -301,7 +301,7 @@ async fn perform_safety_checks() -> Result<()> {
             if !can_rotate {
                 return Err(color_eyre::eyre::eyre!("Insufficient time since last rotation. Please wait before rotating again."));
             }
-            println!("  ✅ Key rotation due (last rotation: 7 days ago)");
+            println!("  ✓ Key rotation due (last rotation: 7 days ago)");
         }
         Err(e) => {
             warn!("Could not check rotation interval: {}", e);
@@ -344,7 +344,7 @@ async fn validate_rollback(version: &Option<String>) -> Result<()> {
                 if !exists {
                     return Err(color_eyre::eyre::eyre!("Version {} not found in backups", v));
                 }
-                println!("  ✅ Version {} found in backups", v);
+                println!("  ✓ Version {} found in backups", v);
             }
             Err(e) => {
                 warn!("Could not verify version availability: {}", e);
@@ -355,7 +355,7 @@ async fn validate_rollback(version: &Option<String>) -> Result<()> {
         println!("  Checking latest backup version...");
         match get_latest_backup_version().await {
             Ok(latest_version) => {
-                println!("  ✅ Latest backup version: {}", latest_version);
+                println!("  ✓ Latest backup version: {}", latest_version);
             }
             Err(e) => {
                 warn!("Could not get latest backup version: {}", e);
@@ -371,11 +371,11 @@ async fn validate_rollback(version: &Option<String>) -> Result<()> {
             if !safe {
                 return Err(color_eyre::eyre::eyre!("Rollback may corrupt data. Please review backup integrity."));
             }
-            println!("  ✅ Rollback safety verified");
+            println!("  Rollback safety verified");
         }
         Err(e) => {
             warn!("Could not verify rollback safety: {}", e);
-            println!("  ⚠ Could not verify rollback safety (proceeding with caution)");
+            println!("  Could not verify rollback safety (proceeding with caution)");
         }
     }
     
@@ -645,7 +645,7 @@ async fn perform_key_rollback(version: &Option<String>) -> Result<RollbackInfo> 
     let _rollback_result = execute_rollback(&key_id, target_version).await?;
     
     // Step 4: Verify rollback integrity
-    println!("  ✅ Verifying rollback integrity...");
+    println!("  Verifying rollback integrity...");
     verify_rollback_integrity(&key_id, target_version).await?;
     
     // Step 5: Update key metadata
@@ -734,7 +734,7 @@ async fn verify_rollback_target(key_id: &str, target_version: u32) -> Result<()>
         ));
     }
     
-    println!("    ✅ Rollback target verified");
+    println!("    ✓ Rollback target verified");
     Ok(())
 }
 
@@ -796,7 +796,7 @@ async fn execute_rollback(key_id: &str, target_version: u32) -> Result<()> {
     // Store the rolled back metadata - Note: Since store_key_metadata doesn't exist, we'll simulate
     println!("    Storing rolled back metadata (simulated)");
     
-    println!("    ✅ Rollback executed successfully");
+    println!("    ✓ Rollback executed successfully");
     Ok(())
 }
 
@@ -830,7 +830,7 @@ async fn verify_rollback_integrity(key_id: &str, target_version: u32) -> Result<
         return Err(color_eyre::eyre::eyre!("Key not found after rollback"));
     }
     
-    println!("    ✅ Rollback integrity verified");
+    println!("    ✓ Rollback integrity verified");
     Ok(())
 }
 

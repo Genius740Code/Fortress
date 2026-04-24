@@ -14,16 +14,25 @@ rust-version = "1.70"
 
 [dependencies]
 # Core Fortress library
-fortress-core = { path = "../fortress-core", version = "1.0.0" }
+fortress-core = { path = "../fortress-core", version = "1.0.1" }
+
+# Serialization
+serde_json = "1.0"
+
+# UUID generation
+uuid = { version = "1.6", features = ["v4"] }
+
+# Async runtime
+tokio = { version = "1.0", features = ["full"] }
 
 # CLI tool
-fortress-cli = { path = "../fortress-cli", version = "1.0.0", optional = true }
+fortress-cli = { path = "../fortress-cli", version = "1.0.1", optional = true }
 
 # Server components  
-fortress-api-server = { path = "../fortress-api-server", version = "1.0.0", optional = true }
+fortress-api-server = { path = "../fortress-api-server", version = "1.0.1", optional = true }
 
 # NAPI bindings for Node.js
-fortress-cli-napi = { path = "../fortress-cli-napi", version = "1.0.0", optional = true }
+fortress-cli-napi = { path = "../fortress-cli-napi", version = "1.0.1", optional = true }
 
 [features]
 default = ["cli", "server"]

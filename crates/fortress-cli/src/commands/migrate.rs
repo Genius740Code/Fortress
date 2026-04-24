@@ -84,7 +84,7 @@ pub async fn handle_migrate(
         list_postgres_tables(&source).await?
     };
     
-    println!("📋 Found {} tables to migrate", style(tables.len()).bold());
+    println!("Found {} tables to migrate", style(tables.len()).bold());
     
     let mut total_rows = 0u64;
     let mut total_migrated = 0u64;
@@ -158,17 +158,17 @@ pub async fn handle_migrate(
             pb.finish_with_message(format!("Completed {}", table_name));
         }
         
-        println!("  ✅ Migrated {} rows successfully", style(migrated_rows).bold().green());
+        println!("  ✓ Migrated {} rows successfully", style(migrated_rows).bold().green());
     }
     
-    println!("\n🎉 Migration Summary:");
-    println!("  📊 Total rows processed: {}", style(total_rows).bold());
-    println!("  ✅ Total rows migrated: {}", style(total_migrated).bold().green());
-    println!("  📋 Tables migrated: {}", style(tables.len()).bold());
-    println!("  🏰 Fortress database: {}", style(&to).bold());
-    println!("  📁 Location: {}", style(target_dir.display()).bold());
+    println!("\nMigration Summary:");
+    println!("  Total rows processed: {}", style(total_rows).bold());
+    println!("  ✓ Total rows migrated: {}", style(total_migrated).bold().green());
+    println!("  Tables migrated: {}", style(tables.len()).bold());
+    println!("  Fortress database: {}", style(&to).bold());
+    println!("  Location: {}", style(target_dir.display()).bold());
     
-    println!("\n✅ Migration completed successfully!");
+    println!("\n✓ Migration completed successfully");
     info!("Migration from PostgreSQL to '{}' completed", &to);
     
     Ok(())

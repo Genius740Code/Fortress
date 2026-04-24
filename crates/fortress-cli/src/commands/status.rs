@@ -121,10 +121,10 @@ pub async fn handle_status(data_dir: Option<String>) -> Result<()> {
                 style("✅").green(), 
                 style("Running").green().bold()
             );
-            println!("  🌐 Address: {}", style(&server_info.address).bold());
-            println!("  📋 PID: {}", style(server_info.pid).bold());
-            println!("  ⏱️  Uptime: {}", style(format_duration(server_info.uptime)).bold());
-            println!("  🔧 Version: {}", style(server_info.version).bold());
+            println!("  Address: {}", style(&server_info.address).bold());
+            println!("  PID: {}", style(server_info.pid).bold());
+            println!("  Uptime: {}", style(format_duration(server_info.uptime)).bold());
+            println!("  Version: {}", style(server_info.version).bold());
             
             // Get detailed server metrics
             if let Ok(metrics) = get_server_metrics(&server_info.address).await {

@@ -77,7 +77,7 @@ pub async fn execute_cluster_command(command: ClusterCommands) -> Result<()> {
 
 /// Initialize a new cluster
 async fn init_cluster(args: InitArgs) -> Result<()> {
-    println!("🚀 Initializing new Fortress cluster...");
+    println!("Initializing new Fortress cluster...");
     
     let config = ClusterConfig {
         node_id: Uuid::new_v4(),
@@ -95,19 +95,19 @@ async fn init_cluster(args: InitArgs) -> Result<()> {
     let mut manager = ClusterManager::new(config.clone())?;
     manager.start().await?;
 
-    println!("✅ Cluster initialized successfully!");
-    println!("📊 Node ID: {}", manager.local_node.id);
-    println!("🌐 Bind address: {}", manager.local_node.address);
-    println!("🔐 Replication factor: {}", manager.config.replication_factor);
-    println!("⚖️  Minimum nodes for quorum: {}", manager.config.min_nodes);
-    println!("💾 Configuration saved to: {:?}", get_cluster_config_path());
+    println!("✓ Cluster initialized successfully");
+    println!("Node ID: {}", manager.local_node.id);
+    println!("Bind address: {}", manager.local_node.address);
+    println!("Replication factor: {}", manager.config.replication_factor);
+    println!("Minimum nodes for quorum: {}", manager.config.min_nodes);
+    println!("Configuration saved to: {:?}", get_cluster_config_path());
 
     Ok(())
 }
 
 /// Join an existing cluster
 async fn join_cluster(args: JoinArgs) -> Result<()> {
-    println!("🔗 Joining Fortress cluster...");
+    println!("Joining Fortress cluster...");
     
     let config = ClusterConfig {
         node_id: Uuid::new_v4(),
@@ -125,15 +125,15 @@ async fn join_cluster(args: JoinArgs) -> Result<()> {
     let mut manager = ClusterManager::new(config.clone())?;
     manager.start().await?;
 
-    println!("✅ Successfully joined cluster!");
-    println!("📊 Node ID: {}", manager.local_node.id);
-    println!("🌐 Bind address: {}", manager.local_node.address);
-    println!("🔗 Seed node: {}", args.seed_address);
-    println!("💾 Configuration saved to: {:?}", get_cluster_config_path());
+    println!("✓ Successfully joined cluster!");
+    println!("Node ID: {}", manager.local_node.id);
+    println!("Bind address: {}", manager.local_node.address);
+    println!("Seed node: {}", args.seed_address);
+    println!("Configuration saved to: {:?}", get_cluster_config_path());
 
     // Show current cluster members
     let members = manager.get_members().await;
-    println!("👥 Cluster members ({}):", members.len());
+    println!("Cluster members ({}):", members.len());
     for (node_id, node) in members.iter() {
         println!("  - {}: {} ({})", node_id, node.address, format_node_state(&node.state));
     }

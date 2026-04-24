@@ -8,12 +8,7 @@ version = "1.0.1"
 description = "🛡️ Fortress - Turnkey Simplicity + Enterprise Security. Python SDK for Fortress secure database system with multi-layer encryption."
 readme = "README.md"
 license = {text = "MIT"}
-authors = [
-    {name = "Fortress Team", email = "team@fortressdb.io"}
-]
-maintainers = [
-    {name = "Fortress Team", email = "team@fortressdb.io"}
-]
+
 keywords = [
     "database", "encryption", "security", "privacy", "secure-storage", "aegis", "chacha20", "aes256", 
     "field-encryption", "key-rotation", "hsm", "compliance", "gdpr", "hipaa", "pci-dss", 

@@ -8,7 +8,7 @@ use tracing::{info, warn, error};
 use serde_json;
 
 pub async fn handle_stop() -> Result<()> {
-    println!("{}", style("🛑 Stopping Fortress Server").bold().cyan());
+    println!("{}", style("Stopping Fortress Server").bold().cyan());
     println!();
     
     // Check if server is running

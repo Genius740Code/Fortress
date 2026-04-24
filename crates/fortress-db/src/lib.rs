@@ -33,12 +33,16 @@
 // Re-export all the core components
 pub use fortress_core;
 
+// Import specific types we need
+use fortress_core::storage::InMemoryStorage;
+use fortress_core::key::InMemoryKeyManager;
+
 // Re-export optional components when features are enabled
 #[cfg(feature = "cli")]
 pub use fortress_cli;
 
 #[cfg(feature = "server")]  
-pub use fortress_server;
+pub use fortress_api_server;
 
 #[cfg(feature = "napi")]
 pub use fortress_cli_napi;
@@ -48,10 +52,10 @@ pub mod prelude {
     pub use fortress_core::prelude::*;
     
     #[cfg(feature = "cli")]
-    pub use fortress_cli::prelude::*;
+    pub use fortress_cli::{Commands, KeyAction, ConfigAction};
     
     #[cfg(feature = "server")]
-    pub use fortress_server::prelude::*;
+    pub use fortress_api_server::prelude::*;
 }
 
 /// Fortress builder for easy initialization
@@ -73,14 +77,18 @@ impl FortressBuilder {
 
 /// Main Fortress interface
 pub struct Fortress {
-    core: fortress_core::Fortress,
+    storage: std::sync::Arc<dyn fortress_core::storage::StorageBackend>,
+    key_manager: std::sync::Arc<InMemoryKeyManager>,
 }
 
 impl Fortress {
     /// Create a new Fortress instance
     pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        let core = fortress_core::Fortress::builder().build().await?;
-        Ok(Self { core })
+        // Create a simple in-memory storage backend for now
+        let storage = std::sync::Arc::new(InMemoryStorage::new());
+        let key_manager = std::sync::Arc::new(InMemoryKeyManager::new());
+        
+        Ok(Self { storage, key_manager })
     }
     
     /// Create a builder for configuration
@@ -90,39 +98,78 @@ impl Fortress {
     
     /// Create a new database
     pub async fn create_database(&self, name: &str) -> Result<Database, Box<dyn std::error::Error>> {
-        let db = self.core.create_database(name).await?;
-        Ok(Database { inner: db })
+        Ok(Database { 
+            name: name.to_string(),
+            storage: self.storage.clone(),
+            key_manager: self.key_manager.clone(),
+        })
     }
 }
 
 /// Database interface
 pub struct Database {
-    inner: fortress_core::Database,
+    name: String,
+    storage: std::sync::Arc<dyn fortress_core::storage::StorageBackend>,
+    key_manager: std::sync::Arc<InMemoryKeyManager>,
 }
 
 impl Database {
     /// Insert data into a table
     pub async fn insert(&self, table: &str, data: &serde_json::Value) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
-        let result = self.inner.insert(table, data).await?;
+        let key = format!("{}/{}", table, uuid::Uuid::new_v4());
+        let serialized = serde_json::to_vec(data)?;
+        
+        // For now, just store the data directly
+        // In a real implementation, this would encrypt the data first
+        self.storage.put(&key, &serialized).await?;
+        
+        // Return the data with an ID
+        let mut result = data.clone();
+        if let Some(obj) = result.as_object_mut() {
+            obj.insert("id".to_string(), serde_json::Value::String(key));
+        }
+        
         Ok(result)
     }
     
     /// Query data from a table
-    pub async fn query(&self, table: &str, filter: Option<&serde_json::Value>) -> Result<Vec<serde_json::Value>, Box<dyn std::error::Error>> {
-        let results = self.inner.query(table, filter).await?;
+    pub async fn query(&self, table: &str, _filter: Option<&serde_json::Value>) -> Result<Vec<serde_json::Value>, Box<dyn std::error::Error>> {
+        let prefix = format!("{}/", table);
+        let keys = self.storage.list_prefix(&prefix).await?;
+        
+        let mut results = Vec::new();
+        for key in keys {
+            if let Some(data) = self.storage.get(&key).await? {
+                if let Ok(value) = serde_json::from_slice::<serde_json::Value>(&data) {
+                    results.push(value);
+                }
+            }
+        }
+        
         Ok(results)
     }
     
     /// Update data in a table
     pub async fn update(&self, table: &str, id: &str, data: &serde_json::Value) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
-        let result = self.inner.update(table, id, data).await?;
+        let key = format!("{}/{}", table, id);
+        let serialized = serde_json::to_vec(data)?;
+        
+        self.storage.put(&key, &serialized).await?;
+        
+        // Return the data with the ID
+        let mut result = data.clone();
+        if let Some(obj) = result.as_object_mut() {
+            obj.insert("id".to_string(), serde_json::Value::String(id.to_string()));
+        }
+        
         Ok(result)
     }
     
     /// Delete data from a table
     pub async fn delete(&self, table: &str, id: &str) -> Result<bool, Box<dyn std::error::Error>> {
-        let deleted = self.inner.delete(table, id).await?;
-        Ok(deleted)
+        let key = format!("{}/{}", table, id);
+        self.storage.delete(&key).await?;
+        Ok(true)
     }
 }
 
