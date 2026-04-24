@@ -880,7 +880,7 @@ impl AdvancedPerformanceMonitor {
 
 /// Macro for easy operation profiling
 #[macro_export]
-macro_rules! profile_operation {
+macro_rules! profile_operation_monitor {
     ($monitor:expr, $operation_type:expr, $operation_name:expr, $block:block) => {{
         let operation_id = $monitor.start_operation($operation_type, $operation_name.to_string(), std::collections::HashMap::new()).await;
         let result = async move $block.await;

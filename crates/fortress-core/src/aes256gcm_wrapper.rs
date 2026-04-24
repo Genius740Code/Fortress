@@ -143,6 +143,10 @@ impl EncryptionAlgorithm for Aes256GcmWrapper {
     fn performance_profile(&self) -> PerformanceProfile {
         PerformanceProfile::Fortress
     }
+
+    fn clone_box(&self) -> Box<dyn EncryptionAlgorithm> {
+        Box::new(self.clone())
+    }
 }
 
 /// Type alias for easier use of AES-256-GCM wrapper

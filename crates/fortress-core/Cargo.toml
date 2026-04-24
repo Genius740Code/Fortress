@@ -74,6 +74,7 @@ anyhow = "1.0"
 
 # Lazy static initialization
 lazy_static = "1.4"
+once_cell = "1.19"
 
 # Time and date
 chrono = { version = "0.4", features = ["serde"] }

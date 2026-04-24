@@ -2814,6 +2814,22 @@ impl FortressError {
 
 
 
+    /// Create a new processor error
+
+    pub fn processor_error<S: Into<String>>(message: S) -> Self {
+
+        Self::Internal {
+
+            message: format!("Processor error: {}", message.into()),
+
+            code: "ProcessorError".to_string(),
+
+        }
+
+    }
+
+
+
     /// Check if this error is retryable
 
     pub fn is_retryable(&self) -> bool {

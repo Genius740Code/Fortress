@@ -671,6 +671,9 @@ pub mod memory;
 /// High-performance serialization system
 pub mod serialization;
 
+/// Performance optimization module with SIMD, async, and memory management
+pub mod performance;
+
 /// Distributed caching system (temporarily disabled)
 #[cfg(feature = "distributed-cache")]
 pub mod distributed_cache;
@@ -1395,6 +1398,18 @@ pub mod prelude {
         QueryOptimizer, QueryOptimizerConfig, TableStatistics, ColumnStatistics,
 
         IndexStatistics, OptimizerStats, hash_query
+
+    };
+
+    pub use crate::performance::{
+
+        SimdEncryptor, AdaptiveEncryptor, StandardEncryptor, encrypt_data_async, decrypt_data_async,
+
+        BatchEncryptor, AsyncEncryptionService, MemoryPool, PooledBuffer, MemoryMonitor, MemoryStats,
+
+        PerformanceMetrics, PerformanceTimer, PerformanceProfiler, global_metrics, global_profiler,
+
+        HighPerformanceEncryptor, PerformanceConfig, PerformanceUtils
 
     };
 
