@@ -1032,6 +1032,14 @@ pub mod tee_key_management;
 
 
 
+/// Unified key management interface
+
+
+
+pub mod key_management;
+
+
+
 /// TEE integration tests
 
 
@@ -1093,6 +1101,8 @@ pub mod prelude {
 
 
     pub use crate::key::{KeyManager, KeyId, KeyMetadata, SmartKeyRotationScheduler, RotationInterval, RotationMetrics};
+
+    pub use crate::key_management::{UnifiedKeyManager, create_cli_key_manager};
 
 
 

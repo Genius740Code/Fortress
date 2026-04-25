@@ -689,18 +689,28 @@ pub fn print_completion_script(shell: &str) -> Result<(), FortressError> {
 // Custom completion functions for dynamic values
 pub mod dynamic_completions {
     use crate::enhanced_error::FortressError;
-    // use fortress_core::key_management::KeyManager; // TODO: Implement when key_management module is available
+    use fortress_core::key_management::create_cli_key_manager;
     
     pub async fn complete_key_ids() -> Result<Vec<String>, FortressError> {
-        // This would integrate with the actual key manager
-        // For now, return some example completions
-        Ok(vec![
-            "key_001".to_string(),
-            "key_002".to_string(),
-            "key_003".to_string(),
-            "aes256_key_2024".to_string(),
-            "chacha20_key_2024".to_string(),
-        ])
+        // Create a key manager and list actual key IDs
+        let key_manager = create_cli_key_manager().await
+            .map_err(|e| FortressError::cli("create_key_manager", format!("Failed to create key manager: {}", e)))?;
+        
+        let key_ids = key_manager.list_key_ids().await
+            .map_err(|e| FortressError::cli("list_keys", format!("Failed to list keys: {}", e)))?;
+        
+        // If no keys exist, provide some helpful examples
+        if key_ids.is_empty() {
+            Ok(vec![
+                "key_001".to_string(),
+                "key_002".to_string(),
+                "aes256_key_2024".to_string(),
+                "chacha20_key_2024".to_string(),
+                "aegis256_key_2024".to_string(),
+            ])
+        } else {
+            Ok(key_ids)
+        }
     }
     
     pub async fn complete_algorithms() -> Vec<String> {
@@ -712,6 +722,46 @@ pub mod dynamic_completions {
             "sha512".to_string(),
             "blake3".to_string(),
         ]
+    }
+    
+    /// Complete keys by algorithm type (e.g., "aes", "aegis", "chacha")
+    pub async fn complete_keys_by_algorithm(algorithm_hint: &str) -> Result<Vec<String>, FortressError> {
+        let key_manager = create_cli_key_manager().await
+            .map_err(|e| FortressError::cli("create_key_manager", format!("Failed to create key manager: {}", e)))?;
+        
+        let key_ids = key_manager.list_keys_by_algorithm(algorithm_hint).await
+            .map_err(|e| FortressError::cli("list_keys_by_algorithm", format!("Failed to list keys by algorithm: {}", e)))?;
+        
+        // If no keys match, provide helpful examples
+        if key_ids.is_empty() {
+            Ok(vec![
+                format!("{}_key_001", algorithm_hint),
+                format!("{}_key_2024", algorithm_hint),
+                format!("test_{}", algorithm_hint),
+            ])
+        } else {
+            Ok(key_ids)
+        }
+    }
+    
+    /// Complete only active (non-expired) keys
+    pub async fn complete_active_keys() -> Result<Vec<String>, FortressError> {
+        let key_manager = create_cli_key_manager().await
+            .map_err(|e| FortressError::cli("create_key_manager", format!("Failed to create key manager: {}", e)))?;
+        
+        let key_ids = key_manager.list_active_keys().await
+            .map_err(|e| FortressError::cli("list_active_keys", format!("Failed to list active keys: {}", e)))?;
+        
+        // If no active keys, provide helpful examples
+        if key_ids.is_empty() {
+            Ok(vec![
+                "active_key_001".to_string(),
+                "primary_key".to_string(),
+                "current_key".to_string(),
+            ])
+        } else {
+            Ok(key_ids)
+        }
     }
     
     pub async fn complete_config_files() -> Vec<String> {

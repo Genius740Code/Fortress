@@ -107,6 +107,15 @@ pub enum FortressError {
         plugin_version: Option<String>,
         compatibility_info: Vec<String>,
     },
+    
+    CliError {
+        command: String,
+        reason: String,
+        error_code: String,
+        help_text: String,
+        suggestion: Option<String>,
+        example_usage: Option<String>,
+    },
 }
 
 impl fmt::Display for FortressError {
@@ -122,6 +131,7 @@ impl fmt::Display for FortressError {
             FortressError::ComplianceError { regulation, .. } => write!(f, "Compliance violation: {}", regulation),
             FortressError::PerformanceError { metric, .. } => write!(f, "Performance degradation: {}", metric),
             FortressError::PluginError { plugin_name, .. } => write!(f, "Plugin error: {}", plugin_name),
+            FortressError::CliError { command, .. } => write!(f, "CLI error in command '{}': {}", command, command),
         }
     }
 }
@@ -136,6 +146,9 @@ impl FortressError {
                 *s = Some(suggestion.into());
             }
             FortressError::KeyError { suggestion: s, .. } => {
+                *s = Some(suggestion.into());
+            }
+            FortressError::CliError { suggestion: s, .. } => {
                 *s = Some(suggestion.into());
             }
             _ => {}
@@ -155,6 +168,7 @@ impl FortressError {
             FortressError::ComplianceError { error_code, .. } => error_code,
             FortressError::PerformanceError { error_code, .. } => error_code,
             FortressError::PluginError { error_code, .. } => error_code,
+            FortressError::CliError { error_code, .. } => error_code,
         }
     }
     
@@ -170,6 +184,7 @@ impl FortressError {
             FortressError::ComplianceError { help_text, .. } => help_text,
             FortressError::PerformanceError { help_text, .. } => help_text,
             FortressError::PluginError { help_text, .. } => help_text,
+            FortressError::CliError { help_text, .. } => help_text,
         }
     }
     
@@ -185,6 +200,20 @@ impl FortressError {
             FortressError::ComplianceError { remediation_steps, .. } => remediation_steps.clone(),
             FortressError::PerformanceError { optimization_suggestions, .. } => optimization_suggestions.clone(),
             FortressError::PluginError { compatibility_info, .. } => compatibility_info.clone(),
+            FortressError::CliError { suggestion, example_usage, .. } => {
+                let mut steps = vec![
+                    "Check command syntax and parameters".to_string(),
+                    "Run 'fortress help' for available commands".to_string(),
+                    "Verify configuration files are correct".to_string(),
+                ];
+                if let Some(suggestion) = suggestion {
+                    steps.push(format!("Suggestion: {}", suggestion));
+                }
+                if let Some(example) = example_usage {
+                    steps.push(format!("Example: {}", example));
+                }
+                steps
+            }
         }
     }
     
@@ -198,8 +227,9 @@ impl FortressError {
             FortressError::NetworkError { .. } => ErrorSeverity::Medium,
             FortressError::FileSystemError { .. } => ErrorSeverity::Medium,
             FortressError::ComplianceError { .. } => ErrorSeverity::Critical,
-            FortressError::PerformanceError { .. } => ErrorSeverity::Low,
-            FortressError::PluginError { .. } => ErrorSeverity::Medium,
+            FortressError::PerformanceError { .. } => ErrorSeverity::Medium,
+            FortressError::PluginError { .. } => ErrorSeverity::Low,
+            FortressError::CliError { .. } => ErrorSeverity::Medium,
         }
     }
 }
@@ -398,6 +428,19 @@ impl FortressError {
                 "Try using a different file path".to_string(),
                 "Check if the file exists and is accessible".to_string(),
             ],
+        }
+    }
+    
+    pub fn cli(command: impl Into<String>, reason: impl Into<String>) -> Self {
+        let cmd_str = command.into();
+        let reason_str = reason.into();
+        FortressError::CliError {
+            command: cmd_str.clone(),
+            reason: reason_str.clone(),
+            error_code: "CLI001".to_string(),
+            help_text: format!("CLI command '{}' failed: {}", cmd_str, reason_str),
+            suggestion: Some(format!("Check 'fortress help {}' for correct usage", cmd_str)),
+            example_usage: Some(format!("fortress {} <options>", cmd_str)),
         }
     }
     
