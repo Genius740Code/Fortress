@@ -1,6 +1,6 @@
 [package]
 name = "fortress-core"
-version = "1.0.3"
+version = "1.0.4"
 edition = "2021"
 authors = ["Genius740Code"]
 license = "MIT"
@@ -29,6 +29,8 @@ byteorder = "1.4"
 ring = "0.17"
 chacha20poly1305 = "0.10"
 aes-gcm = "0.10"
+aes = "0.8"
+block-modes = "0.9"
 aegis = "0.9"
 argon2 = "0.5"
 blake3 = "1.5"
