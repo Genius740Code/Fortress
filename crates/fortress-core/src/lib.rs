@@ -628,24 +628,15 @@ pub mod mpc_party;
 /// MPC Network implementation
 
 
-
 pub mod mpc_network;
 
-
-
-/// Homomorphic encryption capabilities (experimental)
-
-#[cfg(feature = "experimental")]
-
+/// Production-ready homomorphic encryption
+#[cfg(any(feature = "experimental", feature = "homomorphic-encryption"))]
 pub mod homomorphic_encryption;
-
-
 
 /// Quantum-resistant encryption options
 
-
-
-pub mod quantum_resistant;
+// Quantum-resistant module is available under experimental feature
 
 
 
@@ -1356,29 +1347,15 @@ pub mod prelude {
 
 
 
-    #[cfg(feature = "experimental")]
-
+    #[cfg(any(feature = "experimental", feature = "homomorphic-encryption"))]
     pub use crate::homomorphic_encryption::{
-
         HomomorphicEncryption, HomomorphicScheme, HomomorphicOperation, HomomorphicCiphertext,
-
         HomomorphicManager, HomomorphicManagerBuilder, HomomorphicPerformance,
-
-        PaillierHomomorphic,
-
+        PaillierHomomorphic, CkksHomomorphic,
     };
 
 
-
-    pub use crate::quantum_resistant::{
-
-        QuantumResistantEncryption, QuantumResistantScheme, QuantumResistantCiphertext,
-
-        QuantumResistantManager, QuantumResistantManagerBuilder, QuantumPerformance,
-
-        LweEncryption, HybridEncryption,
-
-    };
+    // quantum_resistant module is available under experimental feature
 
 
 

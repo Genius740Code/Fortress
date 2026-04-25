@@ -42,6 +42,10 @@ num-bigint = "0.4"
 num-traits = "0.2"
 num-integer = "0.1"
 
+# Production homomorphic encryption dependencies
+subtle = "2.5"  # Constant-time operations
+zeroize = { version = "1.7", features = ["zeroize_derive"] }  # Secure memory handling
+
 # Random number generation
 rand = "0.8"
 getrandom = "0.2"
@@ -110,12 +114,6 @@ bulletproofs = "4.0"
 
 # Merlin for transcript protocols
 merlin = "3.0"
-
-# Zeroize for secure memory handling
-zeroize = { version = "1.7", features = ["zeroize_derive"] }
-
-# Subtle for constant-time operations
-subtle = "2.5"
 
 # Generic array for cryptography
 generic-array = "0.14"
@@ -231,7 +229,8 @@ advanced-profiling = ["performance-optimization", "pprof", "tracing-subscriber"]
 monitoring = ["performance-optimization", "metrics-exporter-prometheus"]
 full-performance = ["performance-optimization", "distributed-cache", "advanced-profiling", "monitoring"]
 observability = ["tracing-subscriber", "opentelemetry", "opentelemetry_sdk", "tracing-opentelemetry", "gethostname"]
-experimental = []  # Experimental features including homomorphic encryption
+experimental = []  # Experimental features
+homomorphic-encryption = []  # Production-ready homomorphic encryption
 # Phase 3 features
 discovery = ["kube", "k8s-openapi", "trust-dns-resolver"]
 mesh = ["kube", "k8s-openapi"]
