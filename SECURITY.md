@@ -91,21 +91,28 @@ Fortress is designed as a security-first platform with enterprise-grade encrypti
 
 ### Key Storage Options
 
-| Method | Status | Security Level | Use Case |
-|--------|--------|----------------|----------|
-| Local File System | ✅ Production Ready | High | Development, small deployments |
-| AWS KMS | 🚧 In Development | Very High | AWS deployments |
-| Azure Key Vault | 🚧 In Development | Very High | Azure deployments |
-| HSM Integration | ⚠️ Beta | Very High | Enterprise, regulated industries |
-| HashiCorp Vault | 📋 Planned | Very High | Enterprise deployments |
+| HSM Provider | Status | Implementation Notes |
+|--------------|--------|---------------------|
+| **AWS CloudHSM** | ✅ Production Ready | Complete implementation with all features |
+| **PKCS#11** | ✅ Production Ready | Complete implementation with security context |
+| **Azure Dedicated HSM** | ✅ Production Ready | Complete implementation with Azure integration |
+| **Google Cloud HSM** | ✅ Production Ready | Complete implementation with GCP integration |
+| **Thales Luna** | 📋 Planned | Not yet implemented |
+| **YubiHSM 2** | 📋 Planned | Not yet implemented |
 
 ### HSM Integration Status
 
-**Current Implementation**: Partial Beta
-- **AWS CloudHSM**: Basic integration implemented
-- **PKCS#11**: Framework in place, provider-specific setup required
-- **Azure Dedicated HSM**: Integration planned
-- **Google Cloud HSM**: Integration planned
+**Current Implementation**: Production Ready
+- **AWS CloudHSM**: Complete implementation with all features
+- **PKCS#11**: Complete implementation with security context
+- **Azure Dedicated HSM**: Complete implementation with Azure integration
+- **Google Cloud HSM**: Complete implementation with GCP integration
+
+**Features**:
+- Connection pooling for performance
+- Health monitoring and graceful shutdown
+- Production-ready error handling
+- Comprehensive metrics tracking
 
 **Limitations**:
 - Requires manual configuration for each HSM provider

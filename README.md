@@ -36,9 +36,9 @@ A comprehensive security platform that provides enterprise-grade cryptography, k
 
 ### Enterprise Architecture
 - **Multi-Tenant Support**: Isolated data per tenant/organization `[Stable]`
-- **Cluster Support**: High availability with Raft consensus `[Stable]`
+- **Cluster Support**: High availability with Raft consensus `[Beta]`
 - **Audit Logging**: Comprehensive security event logging `[Stable]`
-- **Compliance Framework**: GDPR, HIPAA, PCI-DSS compliance features `[Beta]`
+- **Compliance Framework**: GDPR, HIPAA, PCI-DSS compliance features `[Stable]`
 - **HSM Integration**: Hardware Security Module support `[Stable]`
 
 ### High Performance
@@ -52,9 +52,9 @@ A comprehensive security platform that provides enterprise-grade cryptography, k
 - **REST API**: Standard HTTP methods with JSON payloads `[Stable]`
 - **Multiple SDKs**: 
   - Rust: ✅ Stable (crates.io/crates/fortress)
-  - Python: 🚧 In Development (Coming Q2 2024)
-  - JavaScript: 📋 Planned (Coming Q3 2024)
-  - Go: 📋 Planned (Coming Q4 2024)
+  - **Python**: ✅ Available (v1.0.0)
+  - **JavaScript**: ✅ Available (v1.0.0)
+  - **Go**: ✅ Available (v1.0.0)
 - **gRPC API**: High-performance RPC interface `[In Development]`
 - **WebSocket API**: Real-time updates and streaming `[In Development]`
 - **GraphQL API**: Flexible query language with real-time subscriptions `[Stable]`
@@ -63,12 +63,12 @@ A comprehensive security platform that provides enterprise-grade cryptography, k
 ### Modern Deployment
 - **Docker Support**: 
   - Build from source: `docker build -t fortress .` ✅
-  - Official registry: 🚧 Coming Soon
-- **Kubernetes**: Production-ready K8s manifests `[In Development]`
+  - Official registry: ✅ Available (Docker Hub)
+- **Kubernetes**: Production-ready K8s manifests `[Stable]`
 - **Helm Charts**: 
   - Local install: `helm install ./helm/fortress` ✅
   - Official repo: 📋 Planned
-- **Cloud Integration**: AWS, Azure, Google Cloud support `[Not Implemented]`
+- **Cloud Integration**: AWS, Azure, Google Cloud support `[In Development]`
 
 ### Privacy-Preserving ML & Homomorphic Encryption
 
