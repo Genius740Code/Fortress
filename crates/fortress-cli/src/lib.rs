@@ -37,6 +37,53 @@ pub mod utils;
 /// configuration structures, and shared data structures.
 pub mod types;
 
+/// Configuration wizard
+///
+/// Interactive configuration setup with dialoguer for user-friendly configuration
+pub mod config_wizard;
+
+/// Progress bars
+///
+/// Progress tracking for long-running operations with indicatif
+pub mod progress;
+
+/// Shell completions
+///
+/// Auto-completion support for various shells with clap_complete
+pub mod completions;
+
+/// Enhanced error handling
+///
+/// Structured error reporting with documentation integration and troubleshooting guides
+pub mod enhanced_error;
+
+/// Error documentation
+///
+/// Detailed error documentation and troubleshooting guides
+pub mod error_docs;
+
+/// GraphQL subscriptions
+///
+/// Real-time GraphQL subscriptions for data changes, security events, and metrics
+pub mod graphql_subscriptions;
+
+/// Query optimization
+///
+/// GraphQL query optimization with caching, batching, and performance monitoring
+pub mod query_optimizer;
+
+/// API versioning
+///
+/// Backward-compatible API versioning system with migration support
+pub mod api_versioning;
+
+/// Integration tests
+///
+/// Comprehensive integration tests for all CLI enhancements
+pub mod integration_tests;
+
 // Re-export commonly used types
 pub use color_eyre::eyre::{Result, Context};
 pub use types::{Commands, KeyAction, ConfigAction};
+pub use enhanced_error::FortressError;
+pub use config_wizard::{ConfigurationWizard, FortressConfig};

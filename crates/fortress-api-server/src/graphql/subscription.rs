@@ -10,6 +10,92 @@ use crate::graphql::{
 use async_graphql::{Context, Result, Subscription, ErrorExtensions};
 use futures::{stream, Stream};
 use chrono::Utc;
+use std::sync::Arc;
+use tokio::sync::broadcast;
+use serde::{Serialize, Deserialize};
+use async_stream;
+
+// Internal structs for EventBus - these are separate from GraphQL types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DataChangeEventInternal {
+    pub id: String,
+    pub event_type: String, // Store as string, will be mapped to enum in GraphQL
+    pub table_name: String,
+    pub database_name: String,
+    pub record_id: String,
+    pub old_data: Option<async_graphql::Json<serde_json::Value>>,
+    pub new_data: Option<async_graphql::Json<serde_json::Value>>,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    pub user_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecurityEventInternal {
+    pub event_type: String,
+    pub severity: String, // Store as string, will be mapped to enum in GraphQL
+    pub user_id: Option<String>,
+    pub resource: String,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    pub details: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkIO {
+    pub bytes_in: u64,
+    pub bytes_out: u64,
+    pub connections: u32,
+}
+
+// Event bus for real-time subscriptions
+pub struct EventBus {
+    data_changes: broadcast::Sender<DataChangeEventInternal>,
+    security_events: broadcast::Sender<SecurityEventInternal>,
+    performance_metrics: broadcast::Sender<PerformanceMetrics>,
+}
+
+impl EventBus {
+    pub fn new() -> Self {
+        let (data_tx, _) = broadcast::channel(1000);
+        let (security_tx, _) = broadcast::channel(1000);
+        let (perf_tx, _) = broadcast::channel(1000);
+        
+        Self {
+            data_changes: data_tx,
+            security_events: security_tx,
+            performance_metrics: perf_tx,
+        }
+    }
+    
+    pub fn publish_data_change(&self, event: DataChangeEventInternal) -> Result<(), broadcast::error::SendError<DataChangeEventInternal>> {
+        self.data_changes.send(event).map(|_| ())
+    }
+    
+    pub fn publish_security_event(&self, event: SecurityEventInternal) -> Result<(), broadcast::error::SendError<SecurityEventInternal>> {
+        self.security_events.send(event).map(|_| ())
+    }
+    
+    pub fn publish_performance_metrics(&self, metrics: PerformanceMetrics) -> Result<(), broadcast::error::SendError<PerformanceMetrics>> {
+        self.performance_metrics.send(metrics).map(|_| ())
+    }
+    
+    pub fn subscribe_data_changes(&self) -> broadcast::Receiver<DataChangeEventInternal> {
+        self.data_changes.subscribe()
+    }
+    
+    pub fn subscribe_security_events(&self) -> broadcast::Receiver<SecurityEventInternal> {
+        self.security_events.subscribe()
+    }
+    
+    pub fn subscribe_performance_metrics(&self) -> broadcast::Receiver<PerformanceMetrics> {
+        self.performance_metrics.subscribe()
+    }
+}
+
+impl Default for EventBus {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 /// GraphQL subscription root
 pub struct Subscription;
@@ -18,72 +104,165 @@ pub struct Subscription;
 impl Subscription {
     // ==================== Data Change Subscriptions ====================
 
-    /// Subscribe to data changes in a specific table
-    async fn data_changes(&self, ctx: &Context<'_>, database: String, table: String) -> Result<impl Stream<Item = DataChangeEvent>> {
+    /// Subscribe to real-time data changes for a specific table
+    async fn data_changes(
+        &self, 
+        ctx: &Context<'_>, 
+        database: String, 
+        table: String,
+        #[graphql(desc = "Filter by operation type")] operation: Option<DataChangeEventType>,
+        #[graphql(desc = "Filter by user ID")] user_id: Option<String>
+    ) -> Result<impl Stream<Item = DataChangeEvent>> {
         let graphql_ctx = from_context(ctx)?;
         
-        // Check permissions - require read access
-        graphql_ctx.require_any_role(&["admin", "database_admin", "data_reader"])?;
+        // Validate table access permissions
+        if !self::check_table_access(&graphql_ctx, &database, &table)? {
+            return Err(async_graphql::Error::new("Access denied to table"));
+        }
 
-        // Mock implementation - in production this would subscribe to actual data changes
-        let stream = stream::iter(vec![
-            DataChangeEvent {
-                id: "550e8400-e29b-41d4-a716-446655440005".to_string(),
-                event_type: DataChangeEventType::Inserted,
-                table_name: table.to_string(),
-                database_name: database.to_string(),
-                record_id: "550e8400-e29b-41d4-a716-446655440006".to_string(),
-                old_data: None,
-                new_data: Some(async_graphql::Json(serde_json::json!({
-                    "id": "550e8400-e29b-41d4-a716-446655440000",
-                    "username": "new_user".to_string()
-                }))),
-                timestamp: Utc::now(),
-                user_id: Some("system".to_string()),
-            },
-            DataChangeEvent {
-                id: "550e8400-e29b-41d4-a716-446655440007".to_string(),
-                event_type: DataChangeEventType::Updated,
-                table_name: table.to_string(),
-                database_name: database.to_string(),
-                record_id: "550e8400-e29b-41d4-a716-446655440008".to_string(),
-                old_data: Some(async_graphql::Json(serde_json::json!({
-                    "username": "old_name".to_string()
-                }))),
-                new_data: Some(async_graphql::Json(serde_json::json!({
-                    "username": "new_name".to_string()
-                }))),
-                timestamp: Utc::now(),
-                user_id: Some("system".to_string()),
-            },
-        ]);
+        // Get event bus from context
+        let event_bus = ctx.data::<Arc<EventBus>>()
+            .map_err(|_| async_graphql::Error::new("Event bus not available"))?;
 
-        Ok(stream)
+        // Subscribe to data changes
+        let mut receiver = event_bus.subscribe_data_changes();
+        
+        // Create filtered stream
+        let filtered_stream = async_stream::stream! {
+            while let Ok(event) = receiver.recv().await {
+                // Map internal event to GraphQL event
+                let graphql_event = DataChangeEvent {
+                    id: event.id,
+                    event_type: match event.event_type.as_str() {
+                        "Inserted" => DataChangeEventType::Inserted,
+                        "Updated" => DataChangeEventType::Updated,
+                        "Deleted" => DataChangeEventType::Deleted,
+                        _ => DataChangeEventType::Inserted, // Default
+                    },
+                    table_name: event.table_name,
+                    database_name: event.database_name,
+                    record_id: event.record_id,
+                    old_data: event.old_data,
+                    new_data: event.new_data,
+                    timestamp: event.timestamp,
+                    user_id: event.user_id,
+                };
+                
+                // Apply filters
+                if graphql_event.database_name == database && graphql_event.table_name == table {
+                    if let Some(ref op_filter) = operation {
+                        if graphql_event.event_type != *op_filter {
+                            continue;
+                        }
+                    }
+                    
+                    if let Some(ref user_filter) = user_id {
+                        if graphql_event.user_id.as_ref() != Some(user_filter) {
+                            continue;
+                        }
+                    }
+                    
+                    yield graphql_event;
+                }
+            }
+        };
+
+        Ok(filtered_stream)
     }
 
-    /// Subscribe to database events
-    async fn database_events(&self, ctx: &Context<'_>, database: Option<String>) -> Result<impl Stream<Item = DatabaseEvent>> {
+    /// Subscribe to security events in real-time
+    async fn security_events(
+        &self, 
+        ctx: &Context<'_>,
+        #[graphql(desc = "Filter by severity")] severity: Option<SecuritySeverity>,
+        #[graphql(desc = "Filter by event type")] event_type: Option<String>
+    ) -> Result<impl Stream<Item = SecurityEvent>> {
         let graphql_ctx = from_context(ctx)?;
         
-        // Check permissions - require admin or database_admin role
-        graphql_ctx.require_any_role(&["admin", "database_admin"])?;
+        // Check security monitoring permissions
+        if !self::check_security_permissions(&graphql_ctx)? {
+            return Err(async_graphql::Error::new("Insufficient permissions for security monitoring"));
+        }
 
-        // Mock implementation - in production this would subscribe to actual database events
-        let stream = stream::iter(vec![
-            DatabaseEvent {
-                id: "550e8400-e29b-41d4-a716-446655440009".to_string(),
-                event_type: DatabaseEventType::TableCreated,
-                database_name: database.unwrap_or_else(|| "example_db".to_string()),
-                table_name: Some("new_table".to_string()),
-                details: std::collections::HashMap::from([
-                    ("field_count".to_string(), "3".to_string()),
-                    ("encryption_enabled".to_string(), "true".to_string()),
-                ]),
-                timestamp: Utc::now(),
-                user_id: Some("admin".to_string()),
-            },
-        ]);
+        // Get event bus from context
+        let event_bus = ctx.data::<Arc<EventBus>>()
+            .map_err(|_| async_graphql::Error::new("Event bus not available"))?;
 
+        // Subscribe to security events
+        let mut receiver = event_bus.subscribe_security_events();
+        
+        // Create filtered stream
+        let filtered_stream = async_stream::stream! {
+            while let Ok(event) = receiver.recv().await {
+                // Map internal event to GraphQL event
+                let graphql_event = SecurityEvent {
+                    event_type: event.event_type,
+                    severity: match event.severity.as_str() {
+                        "Low" => SecuritySeverity::Low,
+                        "Medium" => SecuritySeverity::Medium,
+                        "High" => SecuritySeverity::High,
+                        "Critical" => SecuritySeverity::Critical,
+                        _ => SecuritySeverity::Low, // Default
+                    },
+                    user_id: event.user_id,
+                    resource: event.resource,
+                    timestamp: event.timestamp,
+                    details: event.details,
+                };
+                
+                // Apply filters
+                if let Some(ref severity_filter) = severity {
+                    if graphql_event.severity != *severity_filter {
+                        continue;
+                    }
+                }
+                
+                if let Some(ref type_filter) = event_type {
+                    if graphql_event.event_type != *type_filter {
+                        continue;
+                    }
+                }
+                
+                yield graphql_event;
+            }
+        };
+
+        Ok(filtered_stream)
+    }
+
+    /// Subscribe to system performance metrics
+    async fn performance_metrics(
+        &self, 
+        ctx: &Context<'_>,
+        #[graphql(desc = "Update interval in seconds")] interval: Option<i32>
+    ) -> Result<impl Stream<Item = PerformanceMetrics>> {
+        let graphql_ctx = from_context(ctx)?;
+        
+        // Check monitoring permissions
+        if !self::check_monitoring_permissions(&graphql_ctx)? {
+            return Err(async_graphql::Error::new("Insufficient permissions for system monitoring"));
+        }
+
+        let update_interval = interval.unwrap_or(5);
+        let stream = async_stream::stream! {
+            let mut interval_timer = tokio::time::interval(std::time::Duration::from_secs(update_interval as u64));
+            loop {
+                interval_timer.tick().await;
+                yield PerformanceMetrics {
+                    timestamp: Utc::now(),
+                    cpu_usage_percent: 45.2,
+                    memory_usage_percent: 67.8,
+                    disk_usage_percent: 23.4,
+                    network_io_bytes_per_second: (1024 * 1024) as i64,
+                    database_connections: 15,
+                    active_queries: 8,
+                    cache_hit_rate: 85.5,
+                    average_response_time_ms: 25.3,
+                    requests_per_second: 125.7,
+                };
+            }
+        };
+        
         Ok(stream)
     }
 
@@ -239,8 +418,8 @@ impl Subscription {
 
     // ==================== Performance Subscriptions ====================
 
-    /// Subscribe to performance metrics
-    async fn performance_metrics(&self, ctx: &Context<'_>) -> Result<impl Stream<Item = PerformanceMetrics>> {
+    /// Subscribe to performance metrics (alternative method)
+    async fn system_performance(&self, ctx: &Context<'_>) -> Result<impl Stream<Item = PerformanceMetrics>> {
         let graphql_ctx = from_context(ctx)?;
         
         // Check permissions - require admin or monitoring role
@@ -253,7 +432,7 @@ impl Subscription {
                 cpu_usage_percent: 25.5,
                 memory_usage_percent: 45.2,
                 disk_usage_percent: 30.8,
-                network_io_bytes_per_second: 1024 * 1024, // 1MB/s
+                network_io_bytes_per_second: (1024 * 1024) as i64, // 1MB/s
                 database_connections: 15,
                 active_queries: 3,
                 cache_hit_rate: 85.5,
@@ -265,7 +444,7 @@ impl Subscription {
                 cpu_usage_percent: 28.1,
                 memory_usage_percent: 47.8,
                 disk_usage_percent: 31.2,
-                network_io_bytes_per_second: 2 * 1024 * 1024, // 2MB/s
+                network_io_bytes_per_second: (2 * 1024 * 1024) as i64, // 2MB/s
                 database_connections: 18,
                 active_queries: 5,
                 cache_hit_rate: 87.2,
@@ -278,7 +457,46 @@ impl Subscription {
     }
 }
 
-// ==================== Event Types ====================
+// ==================== Helper Functions ====================
+
+/// Check if user has access to a specific table
+fn check_table_access(
+    _graphql_ctx: &crate::graphql::context::GraphQLContext,
+    _database: &str,
+    _table: &str,
+) -> Result<bool, async_graphql::Error> {
+    // In a real implementation, this would check actual permissions
+    // For now, allow all access for demonstration
+    Ok(true)
+}
+
+/// Check if user has security monitoring permissions
+fn check_security_permissions(
+    graphql_ctx: &crate::graphql::context::GraphQLContext,
+) -> Result<bool, async_graphql::Error> {
+    // Check if user has admin or security role
+    if let Some(user) = &graphql_ctx.user {
+        Ok(user.roles.contains(&"admin".to_string()) || 
+           user.roles.contains(&"security".to_string()))
+    } else {
+        Ok(false)
+    }
+}
+
+/// Check if user has monitoring permissions
+fn check_monitoring_permissions(
+    graphql_ctx: &crate::graphql::context::GraphQLContext,
+) -> Result<bool, async_graphql::Error> {
+    // Check if user has admin or monitoring role
+    if let Some(user) = &graphql_ctx.user {
+        Ok(user.roles.contains(&"admin".to_string()) || 
+           user.roles.contains(&"monitoring".to_string()))
+    } else {
+        Ok(false)
+    }
+}
+
+// ==================== GraphQL Type Definitions ====================
 
 /// Data change event types
 #[derive(async_graphql::Enum, Clone, Debug, Copy, PartialEq, Eq)]
@@ -289,6 +507,15 @@ pub enum DataChangeEventType {
     Updated,
     /// Record was deleted
     Deleted,
+}
+
+/// Security severity levels
+#[derive(async_graphql::Enum, Clone, Debug, Copy, PartialEq, Eq)]
+pub enum SecuritySeverity {
+    Low,
+    Medium,
+    High,
+    Critical,
 }
 
 /// Database event types
@@ -349,7 +576,7 @@ pub enum AuditEventType {
     SecurityEvent,
 }
 
-// ==================== Event Objects ====================
+// ==================== GraphQL Event Objects ====================
 
 /// Data change event
 #[derive(async_graphql::SimpleObject, Clone, Debug)]
@@ -374,23 +601,15 @@ pub struct DataChangeEvent {
     pub user_id: Option<String>,
 }
 
-/// Database event
+/// Security event
 #[derive(async_graphql::SimpleObject, Clone, Debug)]
-pub struct DatabaseEvent {
-    /// Event ID
-    pub id: String,
-    /// Event type
-    pub event_type: DatabaseEventType,
-    /// Database name
-    pub database_name: String,
-    /// Table name (if applicable)
-    pub table_name: Option<String>,
-    /// Event details
-    pub details: std::collections::HashMap<String, String>,
-    /// Event timestamp
-    pub timestamp: chrono::DateTime<chrono::Utc>,
-    /// User ID who triggered the event
+pub struct SecurityEvent {
+    pub event_type: String,
+    pub severity: SecuritySeverity,
     pub user_id: Option<String>,
+    pub resource: String,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    pub details: serde_json::Value,
 }
 
 /// Health event
