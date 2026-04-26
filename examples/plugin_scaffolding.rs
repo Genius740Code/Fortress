@@ -193,7 +193,7 @@ impl Plugin for {} {{
     fs::write(format!("{}/src/lib.rs", dir_name), lib_rs)?;
     fs::create_dir_all(format!("{}/src", dir_name))?;
     
-    println!("✅ Template plugin '{}' created in {}/", name, dir_name);
+    println!("✓ Template plugin '{}' created in {}/", name, dir_name);
     println!("");
     println!("Next steps:");
     println!("1. cd {}", dir_name);
@@ -319,7 +319,7 @@ mod tests {{
     fs::write(format!("{}/src/lib.rs", dir_name), lib_rs)?;
     fs::create_dir_all(format!("{}/src", dir_name))?;
     
-    println!("✅ Macro plugin '{}' created in {}/", name, dir_name);
+    println!("✓ Macro plugin '{}' created in {}/", name, dir_name);
     println!("");
     println!("Next steps:");
     println!("1. cd {}", dir_name);
@@ -490,7 +490,7 @@ mod tests {{
     fs::write(format!("{}/src/lib.rs", dir_name), lib_rs)?;
     fs::create_dir_all(format!("{}/src", dir_name))?;
     
-    println!("✅ Declarative plugin '{}' created in {}/", name, dir_name);
+    println!("✓ Declarative plugin '{}' created in {}/", name, dir_name);
     println!("");
     println!("Next steps:");
     println!("1. cd {}", dir_name);
@@ -627,7 +627,7 @@ async fn main() -> Result<()> {{
     fs::write(format!("{}/src/lib.rs", dir_name), lib_rs)?;
     fs::create_dir_all(format!("{}/src", dir_name))?;
     
-    println!("✅ Configuration-based plugin '{}' created in {}/", name, dir_name);
+    println!("✓ Configuration-based plugin '{}' created in {}/", name, dir_name);
     println!("");
     println!("Next steps:");
     println!("1. cd {}", dir_name);
@@ -900,7 +900,7 @@ mod tests {{
     fs::write(format!("{}/src/lib.rs", dir_name), lib_rs)?;
     fs::create_dir_all(format!("{}/src", dir_name))?;
     
-    println!("✅ Full plugin '{}' created in {}/", name, dir_name);
+    println!("✓ Full plugin '{}' created in {}/", name, dir_name);
     println!("");
     println!("Next steps:");
     println!("1. cd {}", dir_name);

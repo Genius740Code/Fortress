@@ -60,7 +60,7 @@ impl ConfigurationWizard {
         
         term.clear_screen()
             .map_err(|e| FortressError::configuration_error("clear_screen", &format!("{}", e), "terminal operation"))?;
-        println!("🛡️  Fortress Configuration Wizard");
+        println!("Fortress Configuration Wizard");
         println!("================================");
         println!("This wizard will help you configure Fortress for your environment.\n");
         
@@ -92,14 +92,14 @@ impl ConfigurationWizard {
             .map_err(|e| FortressError::configuration_error("save_confirmation", &format!("{}", e), "user confirmation"))? 
         {
             Self::save_configuration(&config).await?;
-            println!("✅ Configuration saved successfully!");
+            println!("✓ Configuration saved successfully!");
         }
         
         Ok(config)
     }
     
     async fn configure_database() -> Result<DatabaseConfig, FortressError> {
-        println!("\n📊 Database Configuration");
+        println!("\nDatabase Configuration");
         println!("--------------------------");
         
         let db_choices = vec!["SQLite (Recommended for development)", 
@@ -184,7 +184,7 @@ impl ConfigurationWizard {
     }
     
     async fn configure_encryption() -> Result<EncryptionConfig, FortressError> {
-        println!("\n🔐 Encryption Configuration");
+        println!("\nEncryption Configuration");
         println!("---------------------------");
         
         let enable_encryption = Confirm::new()
@@ -236,7 +236,7 @@ impl ConfigurationWizard {
     }
     
     async fn configure_networking() -> Result<NetworkingConfig, FortressError> {
-        println!("\n🌐 Networking Configuration");
+        println!("\nNetworking Configuration");
         println!("---------------------------");
         
         let bind_address = Input::<String>::new()
@@ -272,7 +272,7 @@ impl ConfigurationWizard {
     }
     
     async fn configure_security() -> Result<SecurityConfig, FortressError> {
-        println!("\n🛡️  Security Configuration");
+        println!("\nSecurity Configuration");
         println!("---------------------------");
         
         let auth_choices = vec!["JWT Tokens (Recommended)", "API Keys", "OAuth2", "LDAP"];
@@ -317,7 +317,7 @@ impl ConfigurationWizard {
     }
     
     fn display_configuration_summary(config: &FortressConfig) -> Result<(), FortressError> {
-        println!("\n📋 Configuration Summary");
+        println!("\nConfiguration Summary");
         println!("========================");
         
         if config.database.backend == "sqlite" {

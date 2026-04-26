@@ -15,10 +15,10 @@ use chrono::Utc;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    println!("🔐 Fortress Cryptographically Secure Audit Logging Demo\n");
+    println!("Fortress Cryptographically Secure Audit Logging Demo\n");
 
     // 1. Initialize the secure audit logger
-    println!("📝 1. Initializing Secure Audit Logger...");
+    println!("1. Initializing Secure Audit Logger...");
     let mut audit_logger = fortress_core::secure_audit_merkle::SecureAuditLogger::new()?;
     
     // Configure with security settings
@@ -34,10 +34,10 @@ async fn main() -> Result<()> {
     };
     
     audit_logger.configure(config).await?;
-    println!("✅ Secure audit logger configured successfully");
+    println!("✓ Secure audit logger configured successfully");
 
     // 2. Log some audit events
-    println!("\n📊 2. Logging Cryptographically Secure Events...");
+    println!("\n2. Logging Cryptographically Secure Events...");
     
     let events = vec![
         (SecureAuditEventType::Authentication, "admin", "/login", "authenticate", SecureAuditOutcome::Success),
@@ -65,14 +65,14 @@ async fn main() -> Result<()> {
             metadata,
         ).await?;
 
-        println!("✅ Logged: {} -> {} ({})", event_type, outcome, output.entry_id);
+        println!("✓ Logged: {} -> {} ({})", event_type, outcome, output.entry_id);
     }
 
     // 3. Verify audit log integrity
-    println!("\n🔍 3. Verifying Audit Log Integrity...");
+    println!("\n3. Verifying Audit Log Integrity...");
     let integrity_report = audit_logger.verify_integrity("/tmp/secure_audit.log").await?;
     
-    println!("📊 Integrity Report:");
+    println!("Integrity Report:");
     println!("   Total Entries: {}", integrity_report.total_entries);
     println!("   Valid Entries: {}", integrity_report.valid_entries);
     println!("   Invalid Entries: {}", integrity_report.invalid_entries);
@@ -81,13 +81,13 @@ async fn main() -> Result<()> {
     println!("   Chain Integrity: {}", integrity_report.chain_integrity_valid);
 
     if integrity_report.tampered_entries.is_empty() {
-        println!("✅ No tampering detected!");
+        println!("✓ No tampering detected!");
     } else {
-        println!("🚨 Tampering detected in {} entries!", integrity_report.tampered_entries.len());
+        println!("⚠ Tampering detected in {} entries!", integrity_report.tampered_entries.len());
     }
 
     // 4. Generate Zero-Knowledge Proofs
-    println!("\n🔐 4. Generating Zero-Knowledge Proofs...");
+    println!("\n4. Generating Zero-Knowledge Proofs...");
     
     let zk_params = ZkProofParameters {
         max_range_size: 1000,
@@ -112,14 +112,14 @@ async fn main() -> Result<()> {
         Default::default(),
     ).await?;
 
-    println!("✅ Generated range proof for audit count");
+    println!("✓ Generated range proof for audit count");
 
     // Verify the range proof
     let range_valid = zk_verifier.verify_range_proof(&range_proof, range_params)?;
-    println!("✅ Range proof verification: {}", if range_valid { "VALID" } else { "INVALID" });
+    println!("✓ Range proof verification: {}", if range_valid { "VALID" } else { "INVALID" });
 
     // 5. Initialize Tamper Detection System
-    println!("\n🚨 5. Setting Up Tamper Detection...");
+    println!("\n5. Setting Up Tamper Detection...");
     
     let tamper_config = TamperDetectionConfig {
         enable_real_time_monitoring: true,
@@ -135,21 +135,21 @@ async fn main() -> Result<()> {
 
     let mut tamper_detector = TamperDetectionSystem::new(tamper_config).await?;
     tamper_detector.start_monitoring(&audit_logger).await?;
-    println!("✅ Tamper detection system active");
+    println!("✓ Tamper detection system active");
 
     // 6. Demonstrate Security Features
-    println!("\n🛡️ 6. Security Features Demonstrated:");
-    println!("   ✅ Merkle Tree Integrity: O(log n) verification");
-    println!("   ✅ Digital Signatures: Ed25519 non-repudiation");
-    println!("   ✅ Hash Chain: Tamper-evident sequential linking");
-    println!("   ✅ Zero-Knowledge Proofs: Privacy-preserving verification");
-    println!("   ✅ Real-Time Monitoring: Continuous integrity checks");
-    println!("   ✅ Automated Alerting: Multi-channel notifications");
-    println!("   ✅ Administrator-Proof: Secure even with root access");
+    println!("\n6. Security Features Demonstrated:");
+    println!("   ✓ Merkle Tree Integrity: O(log n) verification");
+    println!("   ✓ Digital Signatures: Ed25519 non-repudiation");
+    println!("   ✓ Hash Chain: Tamper-evident sequential linking");
+    println!("   ✓ Zero-Knowledge Proofs: Privacy-preserving verification");
+    println!("   ✓ Real-Time Monitoring: Continuous integrity checks");
+    println!("   ✓ Automated Alerting: Multi-channel notifications");
+    println!("   ✓ Administrator-Proof: Secure even with root access");
 
-    println!("\n🎉 Cryptographically Secure Audit Logging Demo Complete!");
-    println!("📚 Documentation: docs/CRYPTOGRAPHIC_AUDIT_LOGGING.md");
-    println!("🔗 Integration: Add to lib.rs and Cargo.toml as shown");
+    println!("\nCryptographically Secure Audit Logging Demo Complete!");
+    println!("Documentation: docs/CRYPTOGRAPHIC_AUDIT_LOGGING.md");
+    println!("Integration: Add to lib.rs and Cargo.toml as shown");
 
     Ok(())
 }

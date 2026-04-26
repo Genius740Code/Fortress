@@ -13,7 +13,7 @@ use std::time::Duration;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize the observability system
-    println!("🔍 Initializing Fortress Observability System...");
+    println!("Initializing Fortress Observability System...");
     
     // Create comprehensive observability configuration
     let observability_config = create_observability_config();
@@ -42,7 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Shutdown gracefully
     observability_manager.shutdown().await?;
     
-    println!("✅ Observability demo completed successfully!");
+    println!("✓ Observability demo completed successfully");
     Ok(())
 }
 
@@ -156,7 +156,7 @@ async fn register_health_checks(health_checker: &HealthChecker) -> Result<()> {
     
     health_checker.register_check(Box::new(MemoryHealthCheck::new("memory".to_string(), memory_config))).await?;
     
-    println!("✅ Health checks registered");
+    println!("✓ Health checks registered");
     Ok(())
 }
 
@@ -237,7 +237,7 @@ async fn register_alert_rules(alert_manager: &AlertManager, metrics_provider: Ar
     
     alert_manager.add_rule(db_alert_rule).await?;
     
-    println!("✅ Alert rules registered");
+    println!("✓ Alert rules registered");
     Ok(())
 }
 
@@ -272,7 +272,7 @@ async fn create_sample_dashboard(dashboard_manager: &DashboardManager) -> Result
     
     dashboard_manager.create_dashboard(dashboard).await?;
     
-    println!("✅ Sample dashboard created");
+    println!("✓ Sample dashboard created");
     Ok(())
 }
 
@@ -469,7 +469,7 @@ async fn run_demo(
     observability_manager: &ObservabilityManager,
     metrics_provider: Arc<MockMetricsProvider>,
 ) -> Result<()> {
-    println!("\n🚀 Starting observability demo...\n");
+    println!("\nStarting observability demo...\n");
     
     // Demo duration in seconds
     let demo_duration = 120;
@@ -495,7 +495,7 @@ async fn run_demo(
         tokio::time::sleep(Duration::from_secs(10)).await;
     }
     
-    println!("\n📊 Final observability summary:");
+    println!("\nFinal observability summary:");
     print_final_summary(&observability_manager).await?;
     
     Ok(())
@@ -650,7 +650,7 @@ async fn print_final_summary(observability_manager: &ObservabilityManager) -> Re
     // Get final metrics summary
     let metrics_summary = observability_manager.metrics().get_summary().await;
     
-    println!("📊 Metrics Summary:");
+    println!("Metrics Summary:");
     println!("  Total Metrics: {}", metrics_summary.total_metrics);
     println!("  Collection Rate: {:.2} metrics/sec", metrics_summary.collection_rate);
     println!("  Memory Usage: {} bytes", metrics_summary.memory_usage_bytes);
@@ -658,7 +658,7 @@ async fn print_final_summary(observability_manager: &ObservabilityManager) -> Re
     // Get final health status
     let health_status = observability_manager.health_checker().get_overall_health().await;
     
-    println!("\n🏥 Health Status:");
+    println!("\nHealth Status:");
     println!("  Overall Status: {:?}", health_status.status);
     println!("  Total Components: {}", health_status.total_components);
     println!("  Healthy: {}", health_status.healthy_components);
@@ -669,7 +669,7 @@ async fn print_final_summary(observability_manager: &ObservabilityManager) -> Re
     // Get active alerts
     let active_alerts = observability_manager.alert_manager().get_active_alerts().await;
     
-    println!("\n🚨 Active Alerts: {}", active_alerts.len());
+    println!("\nActive Alerts: {}", active_alerts.len());
     for alert in active_alerts.iter().take(5) {
         println!("  [{}] {}: {}", alert.severity, alert.title, alert.message);
     }
@@ -677,7 +677,7 @@ async fn print_final_summary(observability_manager: &ObservabilityManager) -> Re
     // Get dashboard info
     let dashboards = observability_manager.dashboard_manager().list_dashboards().await;
     
-    println!("\n📊 Dashboards: {}", dashboards.len());
+    println!("\nDashboards: {}", dashboards.len());
     for dashboard in &dashboards {
         println!("  - {} ({} widgets)", dashboard.name, dashboard.widgets.len());
     }

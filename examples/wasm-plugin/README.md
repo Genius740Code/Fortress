@@ -4,19 +4,19 @@ A comprehensive WebAssembly plugin that provides enhanced audit logging with rea
 
 ## Features
 
-### 🔍 **Enhanced Audit Logging**
+### Enhanced Audit Logging
 - **Structured Events**: JSON-formatted audit events with comprehensive metadata
 - **Real-time Processing**: Immediate event analysis and risk scoring
 - **Multiple Event Types**: Data access, modification, authentication, key rotation
 - **Rich Context**: IP addresses, user agents, session IDs, and more
 
-### 🚨 **Security Analytics**
+### Security Analytics
 - **Risk Scoring**: Automated risk assessment for each event (0-100 scale)
 - **Anomaly Detection**: Identifies unusual patterns and suspicious activities
 - **Security Alerts**: Automatic triggering for high-risk events
 - **Pattern Recognition**: Detects brute force attacks, bulk operations, etc.
 
-### 📊 **Real-time Metrics**
+### Real-time Metrics
 - **Event Counting**: Track total events processed
 - **Failed Authentication**: Monitor authentication failures
 - **Suspicious Patterns**: Track recurring anomalous activities

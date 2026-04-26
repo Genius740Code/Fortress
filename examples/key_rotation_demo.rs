@@ -15,14 +15,14 @@ use tokio;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🔐 Fortress Smart Key Rotation System Demo");
+    println!("Fortress Smart Key Rotation System Demo");
     println!("==========================================");
 
     // Create key manager
     let key_manager = Arc::new(InMemoryKeyManager::new());
     
     // Demonstrate Smart Key Rotation Scheduler
-    println!("\n📋 Smart Key Rotation Scheduler");
+    println!("\nSmart Key Rotation Scheduler");
     let mut smart_scheduler = SmartKeyRotationScheduler::new(key_manager.clone());
     
     // Set security level intervals

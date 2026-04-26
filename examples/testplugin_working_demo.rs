@@ -198,7 +198,7 @@ impl PluginManager {
 
 #[tokio::main]
 async fn main() -> color_eyre::eyre::Result<()> {
-    println!("🚀 Fortress TestPlugin Working Demo");
+    println!("Fortress TestPlugin Working Demo");
     println!("===================================");
     println!("This demonstrates the TestPlugin functionality");
     println!("that matches what exists in testplugin/ directory");
@@ -207,13 +207,13 @@ async fn main() -> color_eyre::eyre::Result<()> {
     let plugin_manager = PluginManager::new();
     
     // Create and register the TestPlugin
-    println!("\n📦 Loading TestPlugin...");
+    println!("\nLoading TestPlugin...");
     let test_plugin = Arc::new(TestPlugin::new());
     
     plugin_manager.register_plugin(test_plugin.clone()).await
         .map_err(|e| color_eyre::eyre::eyre!("Failed to register plugin: {}", e))?;
     
-    println!("✅ TestPlugin registered successfully!");
+    println!("✓ TestPlugin registered successfully");
     println!("   Plugin ID: {}", test_plugin.metadata().id);
     println!("   Plugin Name: {}", test_plugin.metadata().name);
     println!("   Version: {}", test_plugin.metadata().version);
@@ -222,7 +222,7 @@ async fn main() -> color_eyre::eyre::Result<()> {
     println!("   Capabilities: {:?}", test_plugin.metadata().capabilities);
 
     // Test the "hello" action
-    println!("\n🔧 Testing 'hello' action...");
+    println!("\nTesting 'hello' action...");
     let hello_input = PluginInput {
         action: "hello".to_string(),
         data: serde_json::json!({
@@ -235,17 +235,17 @@ async fn main() -> color_eyre::eyre::Result<()> {
         .map_err(|e| color_eyre::eyre::eyre!("Failed to execute hello action: {}", e))?;
     
     if hello_result.success {
-        println!("✅ Hello action successful!");
+        println!("✓ Hello action successful");
         if let Some(data) = hello_result.data {
             println!("   Response: {}", serde_json::to_string_pretty(&data)?);
         }
         println!("   Execution time: {}ms", hello_result.metrics.execution_time_ms);
     } else {
-        println!("❌ Hello action failed: {:?}", hello_result.error);
+        println!("✗ Hello action failed: {:?}", hello_result.error);
     }
 
     // Test the "echo" action
-    println!("\n🔧 Testing 'echo' action...");
+    println!("\nTesting 'echo' action...");
     let echo_input = PluginInput {
         action: "echo".to_string(),
         data: serde_json::json!({
@@ -263,17 +263,17 @@ async fn main() -> color_eyre::eyre::Result<()> {
         .map_err(|e| color_eyre::eyre::eyre!("Failed to execute echo action: {}", e))?;
     
     if echo_result.success {
-        println!("✅ Echo action successful!");
+        println!("✓ Echo action successful");
         if let Some(data) = echo_result.data {
             println!("   Echoed data: {}", serde_json::to_string_pretty(&data)?);
         }
         println!("   Execution time: {}ms", echo_result.metrics.execution_time_ms);
     } else {
-        println!("❌ Echo action failed: {:?}", echo_result.error);
+        println!("✗ Echo action failed: {:?}", echo_result.error);
     }
 
     // Test error handling with invalid action
-    println!("\n🔧 Testing error handling with invalid action...");
+    println!("\nTesting error handling with invalid action...");
     let invalid_input = PluginInput {
         action: "invalid_action".to_string(),
         data: serde_json::json!({"test": "data"}),
@@ -284,64 +284,64 @@ async fn main() -> color_eyre::eyre::Result<()> {
         .map_err(|e| color_eyre::eyre::eyre!("Failed to execute invalid action: {}", e))?;
     
     if !invalid_result.success {
-        println!("✅ Error handling working correctly!");
+        println!("✓ Error handling working correctly");
         println!("   Expected error: {:?}", invalid_result.error);
     } else {
-        println!("⚠️  Unexpected success with invalid action");
+        println!("⚠ Unexpected success with invalid action");
     }
 
     // List all registered plugins
-    println!("\n📋 Registered plugins:");
+    println!("\nRegistered plugins:");
     let plugins = plugin_manager.list_plugins().await;
     for plugin in plugins {
         println!("   - {} v{} ({})", plugin.name, plugin.version, plugin.id);
     }
 
     // Get plugin health status
-    println!("\n🏥 Plugin health status:");
+    println!("\nPlugin health status:");
     let health_status = plugin_manager.health_check_all().await;
     for (plugin_id, health) in health_status {
         println!("   {}: {} - {}", plugin_id, 
-            if health.healthy { "✅ Healthy" } else { "❌ Unhealthy" },
+            if health.healthy { "✓ Healthy" } else { "✗ Unhealthy" },
             health.message
         );
     }
 
     // Test plugin health check directly
-    println!("\n🔍 Direct plugin health check:");
+    println!("\nDirect plugin health check:");
     let health = test_plugin.health_check().await
         .map_err(|e| color_eyre::eyre::eyre!("Health check failed: {}", e))?;
     
-    println!("   Health: {}", if health.healthy { "✅ Healthy" } else { "❌ Unhealthy" });
+    println!("   Health: {}", if health.healthy { "✓ Healthy" } else { "✗ Unhealthy" });
     println!("   Message: {}", health.message);
     println!("   Last Check: {}", health.last_check);
 
-    println!("\n🎉 TestPlugin demo completed successfully!");
-    println!("\n💡 This demonstrates that:");
-    println!("   ✅ The Fortress plugin system infrastructure works");
-    println!("   ✅ Plugins can be loaded and registered");
-    println!("   ✅ Plugin actions can be executed successfully");
-    println!("   ✅ Error handling works correctly");
-    println!("   ✅ Health monitoring is functional");
-    println!("   ✅ The testplugin interface is properly implemented");
+    println!("\nTestPlugin demo completed successfully");
+    println!("\nThis demonstrates that:");
+    println!("   ✓ The Fortress plugin system infrastructure works");
+    println!("   ✓ Plugins can be loaded and registered");
+    println!("   ✓ Plugin actions can be executed successfully");
+    println!("   ✓ Error handling works correctly");
+    println!("   ✓ Health monitoring is functional");
+    println!("   ✓ The testplugin interface is properly implemented");
 
-    println!("\n📁 About the actual testplugin:");
-    println!("   📂 Location: testplugin/ directory");
-    println!("   📄 Main file: testplugin/src/lib.rs");
-    println!("   🔧 Build command: cd testplugin && cargo build");
-    println!("   🧪 Test command: cargo test");
-    println!("   📦 Cargo.toml: Includes fortress-core dependency");
+    println!("\nAbout the actual testplugin:");
+    println!("   Location: testplugin/ directory");
+    println!("   Main file: testplugin/src/lib.rs");
+    println!("   Build command: cd testplugin && cargo build");
+    println!("   Test command: cargo test");
+    println!("   Cargo.toml: Includes fortress-core dependency");
 
-    println!("\n🔗 Plugin System Status:");
-    println!("   ✅ Basic plugin infrastructure: Working");
-    println!("   🔧 Plugin registry and management: Working");
-    println!("   📡 Plugin execution: Working");
-    println!("   🏥 Health monitoring: Working");
-    println!("   🔒 Error handling: Working");
-    println!("   📦 Marketplace infrastructure: Implemented");
-    println!("   🌐 WebAssembly runtime: Basic implementation");
+    println!("\nPlugin System Status:");
+    println!("   ✓ Basic plugin infrastructure: Working");
+    println!("   Plugin registry and management: Working");
+    println!("   Plugin execution: Working");
+    println!("   Health monitoring: Working");
+    println!("   Error handling: Working");
+    println!("   Marketplace infrastructure: Implemented");
+    println!("   WebAssembly runtime: Basic implementation");
 
-    println!("\n🚀 Next Steps:");
+    println!("\nNext Steps:");
     println!("   1. Examine testplugin/src/lib.rs for reference implementation");
     println!("   2. Use plugin scaffolding tools in examples/plugin_scaffolding.rs");
     println!("   3. Create custom plugins following the same pattern");

@@ -505,38 +505,38 @@ impl ErrorDocumentation {
     pub fn format_for_display(&self) -> String {
         let mut output = String::new();
         
-        output.push_str(&format!("🔴 Error Code: {}\n", self.error_code));
-        output.push_str(&format!("📋 Title: {}\n", self.title));
-        output.push_str(&format!("📖 Description: {}\n", self.description));
-        output.push_str(&format!("🚨 Severity: {}\n", self.severity));
-        output.push_str(&format!("📁 Category: {}\n\n", self.category));
+        output.push_str(&format!("✗ Error Code: {}\n", self.error_code));
+        output.push_str(&format!("Title: {}\n", self.title));
+        output.push_str(&format!("Description: {}\n", self.description));
+        output.push_str(&format!("Severity: {}\n", self.severity));
+        output.push_str(&format!("Category: {}\n\n", self.category));
         
-        output.push_str("🔍 Common Causes:\n");
+        output.push_str("Common Causes:\n");
         for (i, cause) in self.common_causes.iter().enumerate() {
             output.push_str(&format!("  {}. {}\n", i + 1, cause));
         }
         
-        output.push_str("\n💡 Solutions:\n");
+        output.push_str("\nSolutions:\n");
         for (i, solution) in self.solutions.iter().enumerate() {
             output.push_str(&format!("  {}. {}\n", i + 1, solution));
         }
         
         if !self.examples.is_empty() {
-            output.push_str("\n📝 Example Commands:\n");
+            output.push_str("\nExample Commands:\n");
             for example in &self.examples {
                 output.push_str(&format!("  $ {}\n", example));
             }
         }
         
         if !self.prevention_tips.is_empty() {
-            output.push_str("\n🛡️  Prevention Tips:\n");
+            output.push_str("\nPrevention Tips:\n");
             for (i, tip) in self.prevention_tips.iter().enumerate() {
                 output.push_str(&format!("  {}. {}\n", i + 1, tip));
             }
         }
         
         if !self.related_docs.is_empty() {
-            output.push_str("\n📚 Related Documentation:\n");
+            output.push_str("\nRelated Documentation:\n");
             for doc in &self.related_docs {
                 output.push_str(&format!("  • {}\n", doc));
             }
@@ -644,15 +644,15 @@ impl Default for ErrorDocumentationRegistry {
 pub fn display_error_enhanced(error: &FortressError) {
     let error_code = error.error_code();
     
-    println!("🔴 Fortress Error: {}", error);
-    println!("📋 Error Code: {}", error_code);
-    println!("🚨 Severity: {}", error.severity());
-    println!("📖 Help: {}", error.help_text());
+    println!("✗ Fortress Error: {}", error);
+    println!("Error Code: {}", error_code);
+    println!("Severity: {}", error.severity());
+    println!("Help: {}", error.help_text());
     
     // Show troubleshooting steps
     let steps = error.troubleshooting_steps();
     if !steps.is_empty() {
-        println!("\n🔍 Troubleshooting Steps:");
+        println!("\nTroubleshooting Steps:");
         for (i, step) in steps.iter().enumerate() {
             println!("  {}. {}", i + 1, step);
         }
@@ -664,16 +664,16 @@ pub fn display_error_enhanced(error: &FortressError) {
     }
     
     // Suggest next steps
-    println!("\n💡 Next Steps:");
+    println!("\nNext Steps:");
     println!("  • Run 'fortress --help' for available commands");
     println!("  • Check documentation at: https://docs.fortress.security");
     println!("  • Report issues at: https://github.com/Genius740Code/Fortress/issues");
     
     // Show recoverability
     if error.is_recoverable() {
-        println!("  ✅ This error is recoverable - try the suggested solutions above");
+        println!("  ✓ This error is recoverable - try the suggested solutions above");
     } else {
-        println!("  ⚠️  This error requires administrative intervention");
+        println!("  ⚠ This error requires administrative intervention");
     }
 }
 

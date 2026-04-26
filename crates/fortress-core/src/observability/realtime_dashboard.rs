@@ -657,7 +657,7 @@ impl RealTimeDashboard {
         </div>
         
         <div class="widget">
-            <div class="widget-title">⚡ Performance Metrics</div>
+            <div class="widget-title">Performance Metrics</div>
             <div class="metric">
                 <span class="metric-label">Avg Response Time</span>
                 <span class="metric-value" id="response-time">--ms</span>
@@ -677,7 +677,7 @@ impl RealTimeDashboard {
         </div>
         
         <div class="widget">
-            <div class="widget-title">🌐 Network</div>
+            <div class="widget-title">Network</div>
             <div class="metric">
                 <span class="metric-label">RX Bandwidth</span>
                 <span class="metric-value" id="rx-bandwidth">-- MB/s</span>

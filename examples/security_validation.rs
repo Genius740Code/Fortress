@@ -101,7 +101,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // rotation_result is Result<(), so we check if it's Ok
     match rotation_result {
         Ok(_) => println!("  ✓ Rotation succeeded during concurrent access"),
-        Err(e) => println!("  ❌ Rotation failed: {}", e),
+        Err(e) => println!("  ✗ Rotation failed: {}", e),
     }
 
     // Test 4: Rollback validation (simulated failure)

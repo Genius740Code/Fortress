@@ -535,7 +535,7 @@ impl super::HsmProvider for Pkcs11Provider {
                     *token_label_guard = token_label.clone();
                 }
 
-                // ✅ COMPLETED: PKCS#11 token login with PIN authentication implemented
+                // COMPLETED: PKCS#11 token login with PIN authentication implemented
                 // Perform login if credentials are provided
                 match &config.credentials {
                     super::HsmCredentials::Pkcs11 { pin, user_type } => {

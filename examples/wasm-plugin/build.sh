@@ -11,28 +11,28 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo -e "${GREEN}🔨 Building Fortress Enhanced Audit Plugin${NC}"
+echo -e "${GREEN}Building Fortress Enhanced Audit Plugin${NC}"
 
 # Check prerequisites
-echo -e "${YELLOW}📋 Checking prerequisites...${NC}"
+echo -e "${YELLOW}Checking prerequisites...${NC}"
 
 if ! command -v cargo &> /dev/null; then
-    echo -e "${RED}❌ Rust/Cargo not found. Please install Rust first.${NC}"
+    echo -e "${RED}✗ Rust/Cargo not found. Please install Rust first.${NC}"
     exit 1
 fi
 
 if ! command -v wasm-pack &> /dev/null; then
-    echo -e "${YELLOW}⚠️  wasm-pack not found. Installing...${NC}"
+    echo -e "${YELLOW}⚠ wasm-pack not found. Installing...${NC}"
     cargo install wasm-pack
 fi
 
 # Clean previous builds
-echo -e "${YELLOW}🧹 Cleaning previous builds...${NC}"
+echo -e "${YELLOW}Cleaning previous builds...${NC}"
 rm -rf pkg
 rm -rf dist
 
 # Build for web target (primary)
-echo -e "${GREEN}🌐 Building for Web target...${NC}"
+echo -e "${GREEN}Building for Web target...${NC}"
 wasm-pack build \
     --target web \
     --out-dir pkg \
@@ -40,7 +40,7 @@ wasm-pack build \
     --features web
 
 # Create distribution directory
-echo -e "${YELLOW}📦 Creating distribution package...${NC}"
+echo -e "${YELLOW}Creating distribution package...${NC}"
 mkdir -p dist
 
 # Copy main WebAssembly file
@@ -91,35 +91,35 @@ set -e
 PLUGIN_NAME="enhanced-audit"
 WASM_FILE="fortress_enhanced_audit.wasm"
 
-echo "🔧 Installing $PLUGIN_NAME plugin for Fortress..."
+echo "Installing $PLUGIN_NAME plugin for Fortress..."
 
 # Check if Fortress CLI is available
 if ! command -v fortress &> /dev/null; then
-    echo "❌ Fortress CLI not found. Please install Fortress first."
+    echo "✗ Fortress CLI not found. Please install Fortress first."
     exit 1
 fi
 
 # Install the plugin
-echo "📦 Installing WebAssembly file..."
+echo "Installing WebAssembly file..."
 fortress plugin install ./$WASM_FILE
 
 # Enable the plugin
-echo "⚡ Enabling plugin..."
+echo "Enabling plugin..."
 fortress plugin enable $PLUGIN_NAME
 
 # Verify installation
-echo "✅ Verifying installation..."
+echo "✓ Verifying installation..."
 fortress plugin list | grep $PLUGIN_NAME
 
 if [ $? -eq 0 ]; then
-    echo "🎉 Plugin installed successfully!"
+    echo "✓ Plugin installed successfully!"
     echo ""
     echo "Next steps:"
     echo "  1. Configure the plugin: fortress plugin configure $PLUGIN_NAME"
     echo "  2. Check plugin status: fortress plugin status $PLUGIN_NAME"
     echo "  3. View plugin metrics: fortress plugin metrics $PLUGIN_NAME"
 else
-    echo "❌ Plugin installation failed!"
+    echo "✗ Plugin installation failed!"
     exit 1
 fi
 EOF
@@ -133,23 +133,23 @@ cat > dist/test.sh << 'EOF'
 # Test script for Fortress Enhanced Audit Plugin
 set -e
 
-echo "🧪 Testing Enhanced Audit Plugin..."
+echo "Testing Enhanced Audit Plugin..."
 
 # Test 1: Plugin loads correctly
-echo "📋 Test 1: Plugin loading..."
+echo "Test 1: Plugin loading..."
 fortress plugin info enhanced-audit
 
 # Test 2: Configuration
-echo "⚙️  Test 2: Configuration..."
+echo "Test 2: Configuration..."
 fortress plugin configure enhanced-audit --set risk-threshold=70
 
 # Test 3: Metrics
-echo "📊 Test 3: Metrics collection..."
+echo "Test 3: Metrics collection..."
 fortress plugin metrics enhanced-audit
 
 # Test 4: Event processing
-echo "🔄 Test 4: Event processing..."
-echo "✅ All tests passed!"
+echo "Test 4: Event processing..."
+echo "✓ All tests passed!"
 EOF
 
 chmod +x dist/test.sh
@@ -201,19 +201,19 @@ fortress plugin configure enhanced-audit --set alert-email=security@company.com
 EOF
 
 # Create archive
-echo -e "${GREEN}📦 Creating distribution archive...${NC}"
+echo -e "${GREEN}Creating distribution archive...${NC}"
 cd dist
 tar -czf fortress-enhanced-audit-plugin-0.1.0.tar.gz *
 cd ..
 
 # Generate checksums
-echo -e "${GREEN}🔐 Generating checksums...${NC}"
+echo -e "${GREEN}Generating checksums...${NC}"
 sha256sum dist/fortress-enhanced-audit-plugin-0.1.0.tar.gz > dist/fortress-enhanced-audit-plugin-0.1.0.tar.gz.sha256
 
 # Display results
-echo -e "${GREEN}✅ Build completed successfully!${NC}"
+echo -e "${GREEN}✓ Build completed successfully!${NC}"
 echo ""
-echo -e "${YELLOW}📦 Distribution files:${NC}"
+echo -e "${YELLOW}Distribution files:${NC}"
 echo "  - dist/fortress_enhanced_audit.wasm ($(stat -f%z dist/fortress_enhanced_audit.wasm) bytes)"
 echo "  - dist/fortress_enhanced_audit.js ($(stat -f%z dist/fortress_enhanced_audit.js) bytes)"
 echo "  - dist/plugin-metadata.json"
@@ -222,11 +222,11 @@ echo "  - dist/test.sh"
 echo "  - dist/README.md"
 echo "  - dist/fortress-enhanced-audit-plugin-0.1.0.tar.gz"
 echo ""
-echo -e "${GREEN}🚀 Installation:${NC}"
+echo -e "${GREEN}Installation:${NC}"
 echo "  ./install.sh"
 echo ""
-echo -e "${GREEN}🧪 Testing:${NC}"
+echo -e "${GREEN}Testing:${NC}"
 echo "  ./test.sh"
 echo ""
-echo -e "${GREEN}📋 Checksum:${NC}"
+echo -e "${GREEN}Checksum:${NC}"
 cat dist/fortress-enhanced-audit-plugin-0.1.0.tar.gz.sha256

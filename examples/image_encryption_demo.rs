@@ -19,33 +19,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
     tracing_subscriber::fmt::init();
 
-    println!("🔒 Fortress Image Encryption Demo");
+    println!("Fortress Image Encryption Demo");
     println!("================================");
 
     // Create a simple test image (JPEG header with some data)
     let test_image_data = create_test_jpeg_image();
 
     // Demo 1: Basic Image Encryption
-    println!("\n📸 Demo 1: Basic Image Encryption");
+    println!("\nDemo 1: Basic Image Encryption");
     demo_basic_encryption(&test_image_data).await?;
 
     // Demo 2: Thumbnail Generation
-    println!("\n🖼️  Demo 2: Thumbnail Generation");
+    println!("\nDemo 2: Thumbnail Generation");
     demo_thumbnail_generation(&test_image_data).await?;
 
     // Demo 3: Streaming Encryption
-    println!("\n🔄 Demo 3: Streaming Encryption");
+    println!("\nDemo 3: Streaming Encryption");
     demo_streaming_encryption(&test_image_data).await?;
 
     // Demo 4: Format Detection
-    println!("\n🔍 Demo 4: Format Detection");
+    println!("\nDemo 4: Format Detection");
     demo_format_detection(&test_image_data)?;
 
     // Demo 5: Metadata Handling
-    println!("\n📋 Demo 5: Metadata Handling");
+    println!("\nDemo 5: Metadata Handling");
     demo_metadata_handling(&test_image_data).await?;
 
-    println!("\n✅ All demos completed successfully!");
+    println!("\nAll demos completed successfully!");
     Ok(())
 }
 
@@ -100,7 +100,7 @@ async fn demo_basic_encryption(image_data: &[u8]) -> Result<(), Box<dyn std::err
     let encrypted_image = encryptor.encrypt(image_data.to_vec(), options, &key).await?;
     
     let encryption_time = start_time.elapsed();
-    println!("✅ Encryption completed in {:?}", encryption_time);
+    println!("✓ Encryption completed in {:?}", encryption_time);
     println!("   Original size: {} bytes", encrypted_image.original_size);
     println!("   Encrypted size: {} bytes", encrypted_image.encrypted_data.ciphertext.len());
     println!("   Format: {:?}", encrypted_image.format_info.format);
@@ -112,12 +112,12 @@ async fn demo_basic_encryption(image_data: &[u8]) -> Result<(), Box<dyn std::err
     let decrypted_data = encryptor.decrypt(&encrypted_image, &key).await?;
     
     let decryption_time = start_time.elapsed();
-    println!("✅ Decryption completed in {:?}", decryption_time);
+    println!("✓ Decryption completed in {:?}", decryption_time);
     println!("   Decrypted size: {} bytes", decrypted_data.len());
     
     // Verify integrity
     let integrity_check = image_data == decrypted_data.as_slice();
-    println!("   Integrity check: {}", if integrity_check { "✅ PASSED" } else { "❌ FAILED" });
+    println!("   Integrity check: {}", if integrity_check { "✓ PASSED" } else { "❌ FAILED" });
     
     Ok(())
 }
@@ -238,7 +238,7 @@ async fn demo_streaming_encryption(image_data: &[u8]) -> Result<(), Box<dyn std:
     let result = streaming_encryptor.encrypt_streaming(&session_id, image_data, options, &key).await?;
     
     let encryption_time = start_time.elapsed();
-    println!("✅ Streaming encryption completed in {:?}", encryption_time);
+    println!("✓ Streaming encryption completed in {:?}", encryption_time);
     println!("   Total chunks: {}", result.chunks.len());
     println!("   Throughput: {:.2} MB/s", result.throughput_bps / (1024.0 * 1024.0));
     println!("   Statistics:");
@@ -258,12 +258,12 @@ async fn demo_streaming_encryption(image_data: &[u8]) -> Result<(), Box<dyn std:
     let decrypted_data = streaming_decryptor.decrypt_streaming(&result.chunks, &key).await?;
     
     let decryption_time = start_time.elapsed();
-    println!("✅ Streaming decryption completed in {:?}", decryption_time);
+    println!("✓ Streaming decryption completed in {:?}", decryption_time);
     println!("   Decrypted size: {} bytes", decrypted_data.len());
     
     // Verify integrity
     let integrity_check = image_data == decrypted_data.as_slice();
-    println!("   Integrity check: {}", if integrity_check { "✅ PASSED" } else { "❌ FAILED" });
+    println!("   Integrity check: {}", if integrity_check { "✓ PASSED" } else { "❌ FAILED" });
     
     // Clean up session
     streaming_encryptor.cancel_session(&session_id).await?;
@@ -287,7 +287,7 @@ fn demo_format_detection(image_data: &[u8]) -> Result<(), Box<dyn std::error::Er
     
     // Test format validation
     let is_valid = detected_format.validate_data(image_data)?;
-    println!("   Data validation: {}", if is_valid { "✅ VALID" } else { "❌ INVALID" });
+    println!("   Data validation: {}", if is_valid { "✓ VALID" } else { "❌ INVALID" });
     
     // Test extension detection
     let extensions = vec!["jpg", "jpeg", "png", "tiff", "bmp", "webp"];
@@ -333,7 +333,7 @@ async fn demo_metadata_handling(image_data: &[u8]) -> Result<(), Box<dyn std::er
     let encrypted_metadata = metadata_processor.encrypt_metadata(&metadata, &key)?;
     
     let encryption_time = start_time.elapsed();
-    println!("   ✅ Metadata encrypted in {:?}", encryption_time);
+    println!("   ✓ Metadata encrypted in {:?}", encryption_time);
     println!("     Algorithm: {}", encrypted_metadata.encryption_algorithm);
     println!("     Version: {}", encrypted_metadata.version);
     println!("     Checksum: {}", encrypted_metadata.checksum);
@@ -346,12 +346,12 @@ async fn demo_metadata_handling(image_data: &[u8]) -> Result<(), Box<dyn std::er
     let decrypted_metadata = metadata_processor.decrypt_metadata(&encrypted_metadata, &key)?;
     
     let decryption_time = start_time.elapsed();
-    println!("   ✅ Metadata decrypted in {:?}", decryption_time);
+    println!("   ✓ Metadata decrypted in {:?}", decryption_time);
     
     // Verify metadata integrity
     let integrity_check = metadata.basic_info.title == decrypted_metadata.basic_info.title &&
                          metadata.technical_info.format == decrypted_metadata.technical_info.format;
-    println!("   Metadata integrity: {}", if integrity_check { "✅ PASSED" } else { "❌ FAILED" });
+    println!("   Metadata integrity: {}", if integrity_check { "✓ PASSED" } else { "❌ FAILED" });
     
     // Test searchable fields
     println!("   Searchable fields:");

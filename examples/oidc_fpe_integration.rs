@@ -125,7 +125,7 @@ impl SecureUserService {
 
     /// Simulate user authentication with OIDC
     pub async fn authenticate_user(&mut self, client_id: &str, username: &str, password: &str) -> Result<String, FortressError> {
-        println!("🔐 Authenticating user '{}' for client '{}'", username, client_id);
+        println!("Authenticating user '{}' for client '{}'", username, client_id);
 
         // In a real implementation, you would validate credentials against a user database
         if username != "testuser" || password != "Password123!" {
@@ -228,13 +228,13 @@ impl SecureUserService {
         // Store profile
         self.user_profiles.insert(user_info.sub.clone(), profile.clone());
         
-        println!("✅ User profile created successfully");
+        println!("✓ User profile created successfully");
         Ok(profile)
     }
 
     /// Get user profile with decrypted sensitive data
     pub async fn get_user_profile(&self, access_token: &str, user_id: &str) -> Result<UserProfileData, FortressError> {
-        println!("🔍 Retrieving user profile for '{}'", user_id);
+        println!("Retrieving user profile for '{}'", user_id);
 
         // Validate access token
         let _user_info = self.oidc_provider.user_info(access_token).await?;
@@ -299,7 +299,7 @@ impl SecureUserService {
 
     /// Batch encrypt sensitive data
     pub fn batch_encrypt_sensitive_data(&self, data: Vec<(String, SensitiveDataType)>) -> Result<Vec<EncryptedData>, FortressError> {
-        println!("🔐 Batch encrypting {} sensitive data items", data.len());
+        println!("Batch encrypting {} sensitive data items", data.len());
 
         let mut results = Vec::new();
 
@@ -340,13 +340,13 @@ impl SecureUserService {
             results.push(encrypted);
         }
 
-        println!("✅ Batch encryption completed successfully");
+        println!("✓ Batch encryption completed successfully");
         Ok(results)
     }
 
     /// Demonstrate compliance reporting
     pub fn generate_compliance_report(&self) -> ComplianceReport {
-        println!("📊 Generating compliance report");
+        println!("Generating compliance report");
 
         let total_profiles = self.user_profiles.len();
         let mut profiles_with_ssn = 0;
@@ -380,13 +380,13 @@ impl SecureUserService {
             timestamp: chrono::Utc::now(),
         };
 
-        println!("✅ Compliance report generated");
+        println!("✓ Compliance report generated");
         report
     }
 
     /// Run demonstration scenario
     pub async fn run_demo(&mut self) -> Result<(), FortressError> {
-        println!("🚀 Starting OIDC + FPE Integration Demo\n");
+        println!("Starting OIDC + FPE Integration Demo\n");
 
         // Step 1: Authenticate users from different services
         println!("\n=== Step 1: User Authentication ===");
@@ -467,7 +467,7 @@ impl SecureUserService {
         println!("  OIDC Clients: {}", report.oidc_clients_configured);
         println!("  Rego Policies Enabled: {}", report.rego_policies_enabled);
         
-        println!("\n🎉 Demo completed successfully!");
+        println!("\nDemo completed successfully!");
         Ok(())
     }
 }

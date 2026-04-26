@@ -15,7 +15,7 @@ use rand::Rng;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🚀 Fortress High-Performance Key Rotation Demo");
+    println!("Fortress High-Performance Key Rotation Demo");
     println!("============================================");
 
     // Initialize optimized rotation manager
@@ -35,13 +35,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rotation_manager = OptimizedKeyRotationManager::new(key_manager, config);
     let algorithm = create_algorithm("aegis256")?;
 
-    println!("✅ Optimized rotation manager initialized");
+    println!("Optimized rotation manager initialized");
     println!("   - Max concurrent rotations: {}", rotation_manager.config.max_concurrent_rotations);
     println!("   - Memory pool size: {}", rotation_manager.config.memory_pool_size);
     println!("   - Security hardening: {}", rotation_manager.config.enable_security_hardening);
 
     // Demo 1: Single Key Rotation Performance
-    println!("\n🎯 Demo 1: Single Key Rotation Performance");
+    println!("\nDemo 1: Single Key Rotation Performance");
     println!("-----------------------------------------");
     
     let single_key_id = "performance_demo_key".to_string();
@@ -57,7 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     
     rotation_manager.key_manager.store_key(&single_key_id, &key, &metadata).await?;
-    println!("📝 Created test key: {}", single_key_id);
+    println!("Created test key: {}", single_key_id);
 
     let security_context = SecurityContext {
         requestor_id: "performance_user".to_string(),
@@ -72,13 +72,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rotation_id = rotation_manager.rotate_key_optimized(&single_key_id, algorithm.as_ref(), security_context.clone()).await?;
     let rotation_time = start_time.elapsed();
     
-    println!("✅ Single rotation completed:");
+    println!("Single rotation completed:");
     println!("   - Rotation ID: {}", rotation_id);
     println!("   - Time: {}ms", rotation_time.as_millis());
     println!("   - Version: {}", rotation_manager.key_manager.retrieve_key(&single_key_id).await?.1.version);
 
     // Demo 2: Concurrent Rotations
-    println!("\n⚡ Demo 2: Concurrent Rotations");
+    println!("\nDemo 2: Concurrent Rotations");
     println!("----------------------------");
     
     let concurrent_count = 50;
@@ -87,7 +87,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .collect();
     
     // Create keys for concurrent rotation
-    println!("📝 Creating {} keys for concurrent rotation...", concurrent_count);
+    println!("Creating {} keys for concurrent rotation...", concurrent_count);
     let create_start = Instant::now();
     
     for key_id in &key_ids {
@@ -106,12 +106,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     
     let create_time = create_start.elapsed();
-    println!("✅ Keys created in {}ms (avg: {}ms per key)", 
+    println!("Keys created in {}ms (avg: {}ms per key)", 
              create_time.as_millis(), 
              create_time.as_millis() / concurrent_count as u128);
 
     // Perform concurrent rotations
-    println!("🔄 Starting {} concurrent rotations...", concurrent_count);
+    println!("Starting {} concurrent rotations...", concurrent_count);
     let concurrent_start = Instant::now();
     
     let tasks: Vec<_> = key_ids.into_iter().map(|key_id| {
@@ -142,7 +142,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Err(e) => {
                 failed += 1;
-                println!("❌ Failed to rotate {}: {}", key_id, e);
+                println!("Failed to rotate {}: {}", key_id, e);
             }
         }
     }
@@ -153,7 +153,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         0.0
     };
     
-    println!("✅ Concurrent rotations completed:");
+    println!("Concurrent rotations completed:");
     println!("   - Total time: {}ms", concurrent_time.as_millis());
     println!("   - Successful: {}", successful);
     println!("   - Failed: {}", failed);
@@ -161,7 +161,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   - Average rotation time: {:.2}ms", avg_rotation_time);
 
     // Demo 3: Bulk Rotation Performance
-    println!("\n📦 Demo 3: Bulk Rotation Performance");
+    println!("\nDemo 3: Bulk Rotation Performance");
     println!("-----------------------------------");
     
     let batch_size = 100;
@@ -170,7 +170,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .collect();
     
     // Create batch keys
-    println!("📝 Creating {} keys for batch rotation...", batch_size);
+    println!("Creating {} keys for batch rotation...", batch_size);
     for key_id in &batch_key_ids {
         let key = rotation_manager.key_manager.generate_key(algorithm.as_ref()).await?;
         let metadata = KeyMetadata::new(
@@ -187,24 +187,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     
     // Perform bulk rotation
-    println!("🔄 Starting bulk rotation of {} keys...", batch_size);
+    println!("Starting bulk rotation of {} keys...", batch_size);
     let bulk_start = Instant::now();
     
     let rotation_ids = rotation_manager.bulk_rotate_keys(&batch_key_ids, algorithm.as_ref(), security_context.clone()).await?;
     let bulk_time = bulk_start.elapsed();
     
-    println!("✅ Bulk rotation completed:");
+    println!("Bulk rotation completed:");
     println!("   - Total time: {}ms", bulk_time.as_millis());
     println!("   - Rotations completed: {}", rotation_ids.len());
     println!("   - Throughput: {:.2} rotations/sec", rotation_ids.len() as f64 / bulk_time.as_secs_f64());
     println!("   - Average time per rotation: {:.2}ms", bulk_time.as_millis() as f64 / rotation_ids.len() as f64);
 
     // Demo 4: Performance Metrics
-    println!("\n📊 Demo 4: Performance Metrics");
+    println!("\nDemo 4: Performance Metrics");
     println!("----------------------------");
     
     let metrics = rotation_manager.get_metrics().await;
-    println!("📈 Rotation Metrics:");
+    println!("Rotation Metrics:");
     println!("   - Total rotations: {}", metrics.total_rotations);
     println!("   - Successful rotations: {}", metrics.successful_rotations);
     println!("   - Failed rotations: {}", metrics.failed_rotations);
@@ -217,22 +217,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   - Keys currently rotating: {}", metrics.keys_rotating);
 
     // Demo 5: Security Audit Log
-    println!("\n🔒 Demo 5: Security Audit Log");
+    println!("\nDemo 5: Security Audit Log");
     println!("---------------------------");
     
     let audit_log = rotation_manager.get_audit_log(Some(10)).await;
-    println!("📋 Recent Security Events (last 10):");
+    println!("Recent Security Events (last 10):");
     for (i, entry) in audit_log.iter().enumerate() {
         println!("   {}. {} - {} ({})", 
                 i + 1, 
                 entry.timestamp.format("%H:%M:%S"), 
                 entry.action, 
-                if entry.success { "✅" } else { "❌" });
+                if entry.success { "SUCCESS" } else { "FAILED" });
         println!("      Key: {}, Requestor: {}", entry.key_id, entry.requestor_id);
     }
 
     // Demo 6: Stress Test
-    println!("\n💪 Demo 6: Stress Test");
+    println!("\nDemo 6: Stress Test");
     println!("---------------------");
     
     let stress_count = 200;
@@ -252,7 +252,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     rotation_manager.key_manager.store_key(&stress_key_id, &stress_key, &stress_metadata).await?;
     
-    println!("🔄 Performing {} sequential rotations on single key...", stress_count);
+    println!("Performing {} sequential rotations on single key...", stress_count);
     let stress_start = Instant::now();
     let mut stress_successful = 0;
     let mut stress_failed = 0;
@@ -271,7 +271,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     let stress_time = stress_start.elapsed();
     
-    println!("✅ Stress test completed:");
+    println!("Stress test completed:");
     println!("   - Total time: {}ms", stress_time.as_millis());
     println!("   - Successful: {}", stress_successful);
     println!("   - Failed: {}", stress_failed);
@@ -280,7 +280,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   - Final key version: {}", rotation_manager.key_manager.retrieve_key(&stress_key_id).await?.1.version);
 
     // Demo 7: Memory Efficiency Test
-    println!("\n🧠 Demo 7: Memory Efficiency Test");
+    println!("\nDemo 7: Memory Efficiency Test");
     println!("------------------------------");
     
     let memory_test_count = 100;
@@ -304,7 +304,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         rotation_manager.key_manager.store_key(key_id, &key, &metadata).await?;
     }
     
-    println!("🔄 Testing memory pooling with {} keys...", memory_test_count);
+    println!("Testing memory pooling with {} keys...", memory_test_count);
     let memory_start = Instant::now();
     
     // Perform multiple rotations to test memory pooling
@@ -315,37 +315,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     let memory_time = memory_start.elapsed();
     
-    println!("✅ Memory efficiency test completed:");
+    println!("Memory efficiency test completed:");
     println!("   - Total rotations: {}", memory_test_count * 3);
     println!("   - Total time: {}ms", memory_time.as_millis());
     println!("   - Average time per rotation: {:.2}ms", memory_time.as_millis() as f64 / (memory_test_count * 3) as f64);
     println!("   - Memory pool size: {}", rotation_manager.config.memory_pool_size);
 
     // Final Summary
-    println!("\n🎉 Performance Demo Summary");
+    println!("\nPerformance Demo Summary");
     println!("===========================");
     
     let final_metrics = rotation_manager.get_metrics().await;
-    println!("🏆 Final Performance Metrics:");
+    println!("Final Performance Metrics:");
     println!("   - Total rotations performed: {}", final_metrics.total_rotations);
     println!("   - Overall success rate: {:.2}%", 
              (final_metrics.successful_rotations as f64 / final_metrics.total_rotations as f64) * 100.0);
     println!("   - Average rotation time: {:.2}ms", final_metrics.avg_rotation_time_ms);
     println!("   - Peak concurrent rotations: {}", final_metrics.concurrent_rotations_peak);
     
-    println!("\n✨ Key Performance Achievements:");
-    println!("   🚀 High-speed rotation with sub-50ms average times");
-    println!("   📈 Scalable concurrent processing (100+ simultaneous)");
-    println!("   🧠 Efficient memory usage with pooling");
-    println!("   🛡️ Security-hardened with comprehensive audit logging");
-    println!("   ⚡ Zero-downtime operations maintained throughout");
-    println!("   📊 Real-time performance monitoring and metrics");
+    println!("\nKey Performance Achievements:");
+    println!("   High-speed rotation with sub-50ms average times");
+    println!("   Scalable concurrent processing (100+ simultaneous)");
+    println!("   Efficient memory usage with pooling");
+    println!("   Security-hardened with comprehensive audit logging");
+    println!("   Zero-downtime operations maintained throughout");
+    println!("   Real-time performance monitoring and metrics");
 
-    println!("\n🎯 The Fortress zero-downtime key rotation system is:");
-    println!("   ✅ FAST - Optimized for high-performance operations");
-    println!("   ✅ SCALABLE - Handles hundreds of concurrent rotations");
-    println!("   ✅ EFFICIENT - Memory pooling and batch processing");
-    println!("   ✅ SECURE - Comprehensive security and audit features");
+    println!("\nThe Fortress zero-downtime key rotation system is:");
+    println!("   FAST - Optimized for high-performance operations");
+    println!("   SCALABLE - Handles hundreds of concurrent rotations");
+    println!("   EFFICIENT - Memory pooling and batch processing");
+    println!("   SECURE - Comprehensive security and audit features");
 
     Ok(())
 }

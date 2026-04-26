@@ -14,7 +14,7 @@ use std::collections::HashMap;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🔐 Fortress Field Encryption Demo");
+    println!("Fortress Field Encryption Demo");
     println!("================================");
 
     // Initialize key manager and field encryption manager
@@ -30,7 +30,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     user_data.insert(FieldIdentifier::path(vec!["profile", "bio"]), b"Software engineer".to_vec());
 
     // Configure field encryption based on sensitivity
-    println!("\n📋 Configuring field encryption...");
+    println!("\nConfiguring field encryption...");
 
     // Username - no encryption (public)
     let username_config = FieldEncryptionConfig::new(
@@ -74,13 +74,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .with_performance_profile(PerformanceProfile::Balanced);
     field_manager.set_field_config(bio_config).await?;
 
-    println!("✅ Field encryption configured successfully!");
+    println!("✓ Field encryption configured successfully");
 
     // Encrypt all fields
-    println!("\n🔒 Encrypting user data...");
+    println!("\nEncrypting user data...");
     let encrypted_data = field_manager.encrypt_fields_batch(&user_data).await?;
 
-    println!("📊 Encryption Results:");
+    println!("Encryption Results:");
     for (field, encrypted) in &encrypted_data {
         let original_size = user_data.get(field).unwrap().len();
         let encrypted_size = encrypted.ciphertext.len();
@@ -95,7 +95,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Decrypt all fields
-    println!("\n🔓 Decrypting user data...");
+    println!("\nDecrypting user data...");
     let mut decrypt_inputs = HashMap::new();
     for (field, encrypted) in &encrypted_data {
         decrypt_inputs.insert(
@@ -117,7 +117,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         
         println!("  • {}: {}", 
             field.as_string(), 
-            if matches { "✅ Match" } else { "❌ Mismatch" }
+            if matches { "✓ Match" } else { "✗ Mismatch" }
         );
         
         if !matches {

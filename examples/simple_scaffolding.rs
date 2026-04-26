@@ -178,7 +178,7 @@ mod tests {{
     
     fs::write(format!("{}/src/lib.rs", dir_name), lib_rs)?;
     
-    println!("✅ Plugin '{}' created successfully!", plugin_name);
+    println!("✓ Plugin '{}' created successfully", plugin_name);
     println!("");
     println!("Directory: {}/", dir_name);
     println!("");

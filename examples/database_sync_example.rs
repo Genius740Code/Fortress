@@ -89,17 +89,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     print_operation_result(&push_result);
     
     // Perform PostgreSQL to MongoDB pull
-    println!("🔄 Pulling data from PostgreSQL to MongoDB...");
+    println!("Pulling data from PostgreSQL to MongoDB...");
     let pull_result = pull_postgres_to_mongo(&manager, &postgres_config, &mongo_config).await?;
     
     print_operation_result(&pull_result);
     
     // Demonstrate advanced MongoDB operations
-    println!("🔍 Demonstrating advanced MongoDB operations...");
+    println!("Demonstrating advanced MongoDB operations...");
     demonstrate_mongo_features(&mongo_db).await?;
     
     // Demonstrate advanced PostgreSQL operations
-    println!("🔍 Demonstrating advanced PostgreSQL operations...");
+    println!("Demonstrating advanced PostgreSQL operations...");
     demonstrate_postgres_features(&postgres_db).await?;
     
     // Demonstrate bidirectional sync
@@ -216,12 +216,12 @@ async fn demonstrate_mongo_features(mongo_db: &MongoKeyDatabase) -> Result<()> {
     println!("    Aggregation results: {:?}", aggregation_results);
     
     // Test text search
-    println!("  🔍 Testing MongoDB text search...");
+    println!("  Testing MongoDB text search...");
     let search_results = mongo_db.text_search("document", Some(5)).await?;
     println!("    Search results: {} items found", search_results.len());
     
     // Test filtered pull
-    println!("  🎯 Testing filtered pull...");
+    println!("  Testing filtered pull...");
     let filtered_results = mongo_db.pull_filtered(MongoPullFilter::Prefix("item_1".to_string())).await?;
     println!("    Filtered results: {} items", filtered_results.len());
     
@@ -247,12 +247,12 @@ async fn demonstrate_postgres_features(postgres_db: &PostgresKeyDatabase) -> Res
     println!("    Cursor results: {} items", cursor.results.len());
     
     // Test full-text search
-    println!("  🔍 Testing PostgreSQL full-text search...");
+    println!("  Testing PostgreSQL full-text search...");
     let search_results = postgres_db.full_text_search("content", Some(5)).await?;
     println!("    Search results: {} items found", search_results.len());
     
     // Test JSONB query
-    println!("  🎯 Testing PostgreSQL JSONB query...");
+    println!("  Testing PostgreSQL JSONB query...");
     let jsonb_query = PostgresJsonbQuery::Equals {
         path: "priority",
         value: serde_json::Value::String("high".to_string()),
@@ -262,7 +262,7 @@ async fn demonstrate_postgres_features(postgres_db: &PostgresKeyDatabase) -> Res
     println!("    JSONB query results: {} items", jsonb_results.len());
     
     // Test bulk operations
-    println!("  📦 Testing PostgreSQL bulk operations...");
+    println!("  Testing PostgreSQL bulk operations...");
     let bulk_entries = vec![
         PostgresBulkEntry {
             key: "bulk_test_1".to_string(),

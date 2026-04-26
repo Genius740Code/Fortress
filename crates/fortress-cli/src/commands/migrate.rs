@@ -90,11 +90,11 @@ pub async fn handle_migrate(
     let mut total_migrated = 0u64;
     
     for table_name in &tables {
-        println!("\n🔄 Migrating table: {}", style(table_name).bold().yellow());
+        println!("\nMigrating table: {}", style(table_name).bold().yellow());
         
         // Get table schema
         let schema = get_postgres_table_schema(&source, table_name).await?;
-        println!("  📝 Table schema: {} columns", style(schema.len()).bold());
+        println!("  Table schema: {} columns", style(schema.len()).bold());
         
         // Create Fortress table
         create_fortress_table(&storage, table_name, &schema).await?;
@@ -102,7 +102,7 @@ pub async fn handle_migrate(
         // Get row count
         let row_count = get_postgres_row_count(&source, table_name).await?;
         total_rows += row_count;
-        println!("  📊 Rows to migrate: {}", style(row_count).bold());
+        println!("  Rows to migrate: {}", style(row_count).bold());
         
         // Migrate data in batches
         let progress_bar = if progress {

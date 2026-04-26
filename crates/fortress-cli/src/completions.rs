@@ -636,12 +636,12 @@ pub fn install_completions() -> Result<(), FortressError> {
         .map_err(|e| FortressError::io_error(format!("Failed to create fish completion file: {}", e)))?;
     generate_completions(clap_complete::shells::Fish, &mut fish_output)?;
     
-    println!("✅ Shell completions installed:");
+    println!("✓ Shell completions installed:");
     println!("  Bash: {}", bash_file.display());
     println!("  Zsh: {}", zsh_file.display());
     println!("  Fish: {}", fish_file.display());
     
-    println!("\n📝 To enable completions:");
+    println!("\nTo enable completions:");
     match std::env::consts::OS {
         "linux" => {
             println!("  Bash: Add 'source ~/.local/share/bash-completion/completions/fortress' to ~/.bashrc");

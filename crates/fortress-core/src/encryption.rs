@@ -2702,7 +2702,7 @@ mod tests {
         let ciphertext = algorithm.encrypt(plaintext, key.as_bytes()).unwrap();
         let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
         assert_eq!(plaintext.to_vec(), decrypted);
-        println!("🎉 AEGIS-256 implementation is working correctly!");
+        println!("AEGIS-256 implementation is working correctly!");
     }
     */
 

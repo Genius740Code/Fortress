@@ -68,19 +68,19 @@ impl RotationAlertHandler for ConsoleAlertHandler {
     async fn handle_alert(&self, alert: RotationAlert) -> Result<()> {
         match alert {
             RotationAlert::UpcomingRotations { keys, hours_until } => {
-                println!("🔑 ALERT: {} keys need rotation within {} hours", keys.len(), hours_until);
+                println!("ALERT: {} keys need rotation within {} hours", keys.len(), hours_until);
                 for (key_id, when) in keys {
                     println!("  - Key {} at {}", key_id, when.format("%Y-%m-%d %H:%M:%S UTC"));
                 }
             }
             RotationAlert::PerformanceIssue { metric, value, threshold } => {
-                println!("⚠️  PERFORMANCE ALERT: {} = {} (threshold: {})", metric, value, threshold);
+                println!("⚠ PERFORMANCE ALERT: {} = {} (threshold: {})", metric, value, threshold);
             }
             RotationAlert::HighFailureRate { failure_rate, threshold } => {
-                println!("🚨 HIGH FAILURE RATE: {:.2}% (threshold: {:.2}%)", failure_rate * 100.0, threshold * 100.0);
+                println!("HIGH FAILURE RATE: {:.2}% (threshold: {:.2}%)", failure_rate * 100.0, threshold * 100.0);
             }
             RotationAlert::NoRotationConfigured => {
-                println!("⚠️  CONFIGURATION ALERT: No keys configured for automatic rotation");
+                println!("⚠ CONFIGURATION ALERT: No keys configured for automatic rotation");
             }
         }
         Ok(())
@@ -193,7 +193,7 @@ impl RotationMonitor {
         let duration = start_time.elapsed();
         
         if !rotated_keys.is_empty() {
-            println!("✅ Auto-rotated {} keys in {:?}", rotated_keys.len(), duration);
+            println!("✓ Auto-rotated {} keys in {:?}", rotated_keys.len(), duration);
             
             // Log rotation details
             for (key_id, metadata) in rotated_keys {
@@ -244,7 +244,7 @@ pub struct RotationStatusReport {
 
 /// Example usage of the smart key rotation system
 pub async fn example_usage() -> Result<()> {
-    println!("🚀 Smart Key Rotation System Example");
+    println!("Smart Key Rotation System Example");
     println!("=====================================");
     
     // Create key manager
@@ -266,7 +266,7 @@ pub async fn example_usage() -> Result<()> {
         RotationInterval::Custom(ChronoDuration::hours(12))
     );
     
-    println!("✅ Configured rotation intervals:");
+    println!("✓ Configured rotation intervals:");
     println!("  - High Security: 23 hours");
     println!("  - Sensitive: 7 days");
     println!("  - Standard: 30 days");
@@ -292,13 +292,13 @@ pub async fn example_usage() -> Result<()> {
     let mut monitor_with_handlers = monitor;
     monitor_with_handlers.add_alert_handler(Box::new(ConsoleAlertHandler));
     
-    println!("✅ Monitoring configured:");
+    println!("✓ Monitoring configured:");
     println!("  - Check interval: {} seconds", config.check_interval_seconds);
     println!("  - Auto-rotation: {}", config.auto_rotation_enabled);
     println!("  - Alert threshold: {} hours", config.alert_threshold_hours);
     
     // Generate some test keys
-    println!("\n🔑 Generating test keys...");
+    println!("\nGenerating test keys...");
     let algorithm = create_algorithm("AES256-GCM")?;
     
     // Create keys with different purposes and ages
@@ -330,12 +330,12 @@ pub async fn example_usage() -> Result<()> {
     }
     
     // Perform initial rotation check
-    println!("\n🔄 Performing initial rotation check...");
+    println!("\nPerforming initial rotation check...");
     let rotated_keys = monitor_with_handlers.scheduler.check_and_rotate().await?;
-    println!("✅ Rotated {} keys", rotated_keys.len());
+    println!("✓ Rotated {} keys", rotated_keys.len());
     
     // Get status report
-    println!("\n📊 Status Report:");
+    println!("\nStatus Report:");
     let report = monitor_with_handlers.get_status_report().await?;
     println!("  - Total rotations: {}", report.metrics.total_rotations);
     println!("  - Successful rotations: {}", report.metrics.successful_rotations);
@@ -344,18 +344,18 @@ pub async fn example_usage() -> Result<()> {
     println!("  - Upcoming rotations: {}", report.upcoming_rotations);
     
     // Demonstrate force rotation
-    println!("\n🔧 Demonstrating force rotation...");
+    println!("\nDemonstrating force rotation...");
     let (new_key, new_metadata) = monitor_with_handlers.scheduler.force_rotate_key("low_security_key_1").await?;
-    println!("✅ Force rotated key to version {}", new_metadata.version);
+    println!("✓ Force rotated key to version {}", new_metadata.version);
     
     // Show metrics after force rotation
     let final_metrics = monitor_with_handlers.scheduler.get_metrics().await?;
-    println!("📈 Final metrics:");
+    println!("Final metrics:");
     println!("  - Total rotations: {}", final_metrics.total_rotations);
     println!("  - Last rotation: {:?}", final_metrics.last_rotation_time);
     
-    println!("\n🎉 Smart key rotation system demo completed!");
-    println!("📝 In production, the monitoring loop would run continuously");
+    println!("\nSmart key rotation system demo completed!");
+    println!("In production, the monitoring loop would run continuously");
     
     Ok(())
 }

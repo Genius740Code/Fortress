@@ -594,7 +594,7 @@ struct RollbackInfo {
 
 /// Perform actual key rollback
 async fn perform_key_rollback(version: &Option<String>) -> Result<RollbackInfo> {
-    println!("🔄 Starting key rollback process...");
+    println!("Starting key rollback process...");
     
     let key_manager = InMemoryKeyManager::new();
     

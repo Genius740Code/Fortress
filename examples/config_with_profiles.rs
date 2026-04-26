@@ -6,20 +6,20 @@
 use fortress_core::prelude::*;
 
 fn main() -> Result<()> {
-    println!("🔧 Fortress Configuration with Performance Profiles\n");
+    println!("Fortress Configuration with Performance Profiles\n");
 
     // Load configuration from file
     let config_path = "examples/performance_profile_config.toml";
-    println!("📁 Loading configuration from: {}", config_path);
+    println!("Loading configuration from: {}", config_path);
     
     let config = match Config::from_file(config_path) {
         Ok(config) => {
-            println!("✅ Configuration loaded successfully!");
+            println!("✓ Configuration loaded successfully");
             config
         }
         Err(e) => {
-            println!("❌ Failed to load configuration: {}", e);
-            println!("💡 Using default configuration instead...");
+            println!("✗ Failed to load configuration: {}", e);
+            println!("Using default configuration instead...");
             Config::default()
         }
     };
@@ -27,16 +27,16 @@ fn main() -> Result<()> {
     println!();
 
     // Display basic configuration info
-    println!("📋 Configuration Summary:");
+    println!("Configuration Summary:");
     println!("Database Path: {}", config.database.path);
     println!("Default Algorithm: {}", config.encryption.default_algorithm);
     println!("Available Profiles: {}", config.encryption.profiles.len());
     println!();
 
     // Display profile information
-    println!("🎯 Available Performance Profiles:");
+    println!("Available Performance Profiles:");
     for (name, profile) in &config.encryption.profiles {
-        println!("📝 Profile: {} ({:?})", name, profile.performance_profile);
+        println!("Profile: {} ({:?})", name, profile.performance_profile);
         println!("   Algorithm: {}", profile.algorithm);
         println!("   Key Rotation: {:?}", profile.key_rotation_interval);
         if !profile.parameters.is_empty() {
@@ -46,24 +46,24 @@ fn main() -> Result<()> {
     }
 
     // Now demonstrate the new performance profile system
-    println!("🚀 Advanced Performance Profile System:");
+    println!("Advanced Performance Profile System:");
     demonstrate_performance_profiles()?;
 
     // Show how to create a custom configuration
-    println!("🛠️  Creating Custom Configuration:");
+    println!("Creating Custom Configuration:");
     create_custom_config_example()?;
 
-    println!("✅ Configuration example completed successfully!");
+    println!("✓ Configuration example completed successfully");
     Ok(())
 }
 
 fn demonstrate_performance_profiles() -> Result<()> {
     let manager = ProfileManager::new();
     
-    println!("📋 Available Advanced Profiles:");
+    println!("Available Advanced Profiles:");
     for profile_name in manager.list_profiles() {
         let profile = manager.get_profile(profile_name).unwrap();
-        println!("📝 {} ({})", profile.name, profile.profile_type);
+        println!("{} ({})", profile.name, profile.profile_type);
         if let Some(description) = &profile.description {
             println!("   Description: {}", description);
         }
@@ -172,7 +172,7 @@ fn create_custom_config_example() -> Result<()> {
         buffer_size: 1024,       // Small buffers
     };
 
-    println!("🔧 IoT Device Profile:");
+    println!("IoT Device Profile:");
     println!("{}", iot_profile.summary());
     println!("   Memory usage: {}MB (very low)", iot_profile.resources.max_memory_mb);
     println!("   CPU usage: {}% (conservative)", iot_profile.resources.max_cpu_percent);
@@ -182,18 +182,18 @@ fn create_custom_config_example() -> Result<()> {
 
     // Validate the custom profile
     match iot_profile.validate() {
-        Ok(_) => println!("✅ IoT profile validation passed"),
-        Err(e) => println!("❌ IoT profile validation failed: {}", e),
+        Ok(_) => println!("✓ IoT profile validation passed"),
+        Err(e) => println!("✗ IoT profile validation failed: {}", e),
     }
 
     // Create a profile manager and add the custom profile
     let mut manager = ProfileManager::new();
     match manager.add_profile(iot_profile) {
         Ok(_) => {
-            println!("✅ IoT profile added to manager");
-            println!("📋 Total profiles available: {}", manager.list_profiles().len());
+            println!("✓ IoT profile added to manager");
+            println!("Total profiles available: {}", manager.list_profiles().len());
         }
-        Err(e) => println!("❌ Failed to add IoT profile: {}", e),
+        Err(e) => println!("✗ Failed to add IoT profile: {}", e),
     }
 
     println!();

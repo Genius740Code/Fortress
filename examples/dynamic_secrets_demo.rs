@@ -19,11 +19,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dynamic_engine = DynamicSecretsEngine::new();
     manager.register("dynamic/", Box::new(dynamic_engine)).await?;
     
-    println!("🔐 Fortress Dynamic Secrets Engine Demo");
+    println!("Fortress Dynamic Secrets Engine Demo");
     println!("=====================================");
     
     // Configure AWS integration
-    println!("\n📡 Configuring AWS integration...");
+    println!("\nConfiguring AWS integration...");
     let aws_config = json!({
         "access_key_id": "AKIAIOSFODNN7EXAMPLE",
         "secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
@@ -33,10 +33,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Note: In a real implementation, you would get the dynamic engine
     // and call configure_aws() on it directly
-    println!("✅ AWS configured for region: us-west-2");
+    println!("✓ AWS configured for region: us-west-2");
     
     // Generate AWS IAM credentials
-    println!("\n🔑 Generating AWS IAM credentials...");
+    println!("\nGenerating AWS IAM credentials...");
     let aws_credential_request = json!({
         "type": "aws",
         "policy": {
@@ -60,8 +60,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     let aws_secret = manager.write("dynamic/aws/myapp", &aws_credential_request).await?;
     
-    println!("✅ AWS credentials generated successfully!");
-    println!("📋 Credential Details:");
+    println!("✓ AWS credentials generated successfully");
+    println!("Credential Details:");
     println!("   Access Key ID: {}", 
         aws_secret.data.get("access_key_id")
             .and_then(|v| v.as_str())
@@ -91,7 +91,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     
     // Generate PostgreSQL credentials
-    println!("\n🐘 Generating PostgreSQL credentials...");
+    println!("\nGenerating PostgreSQL credentials...");
     let pg_credential_request = json!({
         "type": "postgresql",
         "database_url": "postgresql://admin:password@localhost:5432/myapp_db",
@@ -102,8 +102,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     let pg_secret = manager.write("dynamic/db/myapp", &pg_credential_request).await?;
     
-    println!("✅ PostgreSQL credentials generated successfully!");
-    println!("📋 Database Details:");
+    println!("✓ PostgreSQL credentials generated successfully");
+    println!("Database Details:");
     println!("   Username: {}", 
         pg_secret.data.get("username")
             .and_then(|v| v.as_str())
@@ -137,7 +137,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .join(", "));
     
     // Generate MySQL credentials
-    println!("\n🐬 Generating MySQL credentials...");
+    println!("\nGenerating MySQL credentials...");
     let mysql_credential_request = json!({
         "type": "mysql",
         "database_url": "mysql://admin:password@localhost:3306/myapp_db",
@@ -147,8 +147,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     let mysql_secret = manager.write("dynamic/db/myapp_mysql", &mysql_credential_request).await?;
     
-    println!("✅ MySQL credentials generated successfully!");
-    println!("📋 Database Details:");
+    println!("✓ MySQL credentials generated successfully");
+    println!("Database Details:");
     println!("   Username: {}", 
         mysql_secret.data.get("username")
             .and_then(|v| v.as_str())
@@ -164,7 +164,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .unwrap_or("N/A"));
     
     // List all dynamic secrets
-    println!("\n📋 Listing all dynamic secrets...");
+    println!("\nListing all dynamic secrets...");
     let secrets = manager.list("dynamic/").await?;
     
     for (i, secret_path) in secrets.iter().enumerate() {
@@ -172,9 +172,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     
     // Demonstrate credential retrieval
-    println!("\n🔍 Retrieving AWS credentials...");
+    println!("\nRetrieving AWS credentials...");
     if let Some(retrieved_secret) = manager.read("dynamic/aws/myapp").await? {
-        println!("✅ Successfully retrieved AWS credentials");
+        println!("✓ Successfully retrieved AWS credentials");
         println!("   Access Key ID: {}", 
             retrieved_secret.data.get("access_key_id")
                 .and_then(|v| v.as_str())
@@ -187,14 +187,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     
     // Demonstrate credential cleanup
-    println!("\n🧹 Cleaning up expired credentials...");
+    println!("\nCleaning up expired credentials...");
     
     // Note: In a real implementation, you would get the dynamic engine
     // and call cleanup_expired_credentials() on it
-    println!("✅ Cleanup completed");
+    println!("✓ Cleanup completed");
     
     // Show engine statistics
-    println!("\n📊 Engine Statistics:");
+    println!("\nEngine Statistics:");
     let engines = manager.list_engines().await;
     for engine_name in engines {
         if let Some(engine) = manager.engines.try_lock().unwrap().get(&engine_name) {
@@ -214,16 +214,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     
-    println!("🎉 Dynamic Secrets Engine demo completed successfully!");
-    println!("\n💡 Key Features Demonstrated:");
-    println!("   ✅ AWS IAM temporary credential generation");
-    println!("   ✅ PostgreSQL dynamic user creation");
-    println!("   ✅ MySQL dynamic user creation");
-    println!("   ✅ TTL-based credential expiration");
-    println!("   ✅ Automatic credential cleanup");
-    println!("   ✅ Comprehensive audit logging");
-    println!("   ✅ Role-based permission assignment");
-    println!("   ✅ Secure credential storage");
+    println!("Dynamic Secrets Engine demo completed successfully");
+    println!("\nKey Features Demonstrated:");
+    println!("   ✓ AWS IAM temporary credential generation");
+    println!("   ✓ PostgreSQL dynamic user creation");
+    println!("   ✓ MySQL dynamic user creation");
+    println!("   ✓ TTL-based credential expiration");
+    println!("   ✓ Automatic credential cleanup");
+    println!("   ✓ Comprehensive audit logging");
+    println!("   ✓ Role-based permission assignment");
+    println!("   ✓ Secure credential storage");
     
     Ok(())
 }

@@ -2,7 +2,7 @@ use fortress_core::prelude::*;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    println!("🔐 Testing Production Homomorphic Encryption");
+    println!("Testing Production Homomorphic Encryption");
     
     // Test HomomorphicManager with production schemes
     let manager = HomomorphicManager::new();
@@ -14,7 +14,7 @@ async fn main() -> Result<()> {
     }
     
     // Test CKKS scheme
-    println!("\n🔐 Testing CKKS Scheme");
+    println!("\nTesting CKKS Scheme");
     let ckks_scheme = manager.get_scheme("ckks_2048").unwrap();
     
     // Generate keys
@@ -59,6 +59,6 @@ async fn main() -> Result<()> {
     println!("  Decryption time: {} ms", perf.decryption_time_ms);
     println!("  Addition time: {} ms", perf.addition_time_ms);
     
-    println!("\n✅ Production Homomorphic Encryption Test Complete!");
+    println!("\n✓ Production Homomorphic Encryption Test Complete!");
     Ok(())
 }

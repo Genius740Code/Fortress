@@ -176,7 +176,7 @@ async fn test_maximum_stress() -> Result<(), Box<dyn std::error::Error>> {
 /// Bulk operations load test
 #[tokio::test]
 async fn test_bulk_operations_load() -> Result<(), Box<dyn std::error::Error>> {
-    println!("📦 Starting Bulk Operations Load Test");
+    println!("Starting Bulk Operations Load Test");
     
     let key_manager = Arc::new(InMemoryKeyManager::new());
     let mut config = OptimizedRotationConfig::default();
@@ -331,7 +331,7 @@ async fn test_resource_exhaustion() -> Result<(), Box<dyn std::error::Error>> {
 /// Mixed workload test
 #[tokio::test]
 async fn test_mixed_workload() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🔄 Starting Mixed Workload Test");
+    println!("Starting Mixed Workload Test");
     
     let key_manager = Arc::new(InMemoryKeyManager::new());
     let config = OptimizedRotationConfig::default();

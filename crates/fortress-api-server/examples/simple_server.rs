@@ -27,11 +27,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     config.features.metrics_enabled = true;
     config.features.health_enabled = true;
 
-    println!("🚀 Starting Fortress server...");
-    println!("📍 Server will bind to {}:{}", config.network.host, config.network.port);
-    println!("🔐 Authentication: {}", if config.features.auth_enabled { "enabled" } else { "disabled" });
-    println!("📊 Metrics: {}", if config.features.metrics_enabled { "enabled" } else { "disabled" });
-    println!("💚 Health checks: {}", if config.features.health_enabled { "enabled" } else { "disabled" });
+    println!("Fortress server starting");
+    println!("Server will bind to {}{}", config.network.host, config.network.port);
+    println!("Authentication: {}", if config.features.auth_enabled { "enabled" } else { "disabled" });
+    println!("Metrics: {}", if config.features.metrics_enabled { "enabled" } else { "disabled" });
+    println!("Health checks: {}", if config.features.health_enabled { "enabled" } else { "disabled" });
 
     // Create and start the server
     let server = FortressServer::new(config).await?;

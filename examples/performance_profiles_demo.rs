@@ -6,12 +6,12 @@
 use fortress_core::prelude::*;
 
 fn main() -> Result<()> {
-    println!("🚀 Fortress Performance Profiles Demo\n");
+    println!("Fortress Performance Profiles Demo\n");
 
     // Initialize profile manager
     let mut profile_manager = ProfileManager::new();
     
-    println!("📋 Available Profiles:");
+    println!("Available Profiles:");
     for profile_name in profile_manager.list_profiles() {
         let profile = profile_manager.get_profile(profile_name).unwrap();
         println!("  • {} ({})", profile.name, profile.profile_type);
@@ -35,12 +35,12 @@ fn main() -> Result<()> {
 }
 
 fn demo_preset_profiles(manager: &ProfileManager) -> Result<()> {
-    println!("🎯 Preset Profile Demonstrations:");
+    println!("Preset Profile Demonstrations:\n");
     println!("=================================");
 
     // Lightning Profile
     let lightning = manager.get_profile("lightning").unwrap();
-    println!("⚡ Lightning Profile:");
+    println!("Lightning Profile:");
     println!("{}", lightning.summary());
     println!("  Description: {}", lightning.description.as_ref().unwrap_or(&"No description".to_string()));
     println!("  Tags: {}", lightning.tags.join(", "));
@@ -48,7 +48,7 @@ fn demo_preset_profiles(manager: &ProfileManager) -> Result<()> {
 
     // Balanced Profile
     let balanced = manager.get_profile("balanced").unwrap();
-    println!("⚖️  Balanced Profile:");
+    println!("Balanced Profile:");
     println!("{}", balanced.summary());
     println!("  Description: {}", balanced.description.as_ref().unwrap_or(&"No description".to_string()));
     println!("  Tags: {}", balanced.tags.join(", "));
@@ -56,7 +56,7 @@ fn demo_preset_profiles(manager: &ProfileManager) -> Result<()> {
 
     // Fortress Profile
     let fortress = manager.get_profile("fortress").unwrap();
-    println!("🛡️  Fortress Profile:");
+    println!("Fortress Profile:");
     println!("{}", fortress.summary());
     println!("  Description: {}", fortress.description.as_ref().unwrap_or(&"No description".to_string()));
     println!("  Tags: {}", fortress.tags.join(", "));
@@ -66,7 +66,7 @@ fn demo_preset_profiles(manager: &ProfileManager) -> Result<()> {
 }
 
 fn demo_custom_profiles(manager: &mut ProfileManager) -> Result<()> {
-    println!("🎮 Custom Profile Creation (Game-like Settings):");
+    println!("Custom Profile Creation (Game-like Settings):");
     println!("=================================================");
 
     // Gaming Profile - High Performance
@@ -115,9 +115,9 @@ fn demo_custom_profiles(manager: &mut ProfileManager) -> Result<()> {
         buffer_size: 32768,          // Large buffers
     };
 
-    println!("🎮 Adding Gaming Profile...");
+    println!("Adding Gaming Profile...");
     manager.add_profile(gaming_profile.clone())?;
-    println!("✅ Gaming profile added successfully!");
+    println!("✓ Gaming profile added successfully");
     println!("{}", gaming_profile.summary());
     println!();
 
@@ -144,9 +144,9 @@ fn demo_custom_profiles(manager: &mut ProfileManager) -> Result<()> {
         buffer_size: 65536,        // Very large buffers for media
     };
 
-    println!("📺 Adding Streaming Profile...");
+    println!("Adding Streaming Profile...");
     manager.add_profile(streaming_profile)?;
-    println!("✅ Streaming profile added successfully!");
+    println!("✓ Streaming profile added successfully");
     println!();
 
     // Development Profile - Resource Conscious
@@ -173,16 +173,16 @@ fn demo_custom_profiles(manager: &mut ProfileManager) -> Result<()> {
         batch_write_size: 10,      // Small batches
     };
 
-    println!("💻 Adding Development Profile...");
+    println!("Adding Development Profile...");
     manager.add_profile(dev_profile)?;
-    println!("✅ Development profile added successfully!");
+    println!("✓ Development profile added successfully");
     println!();
 
     Ok(())
 }
 
 fn demo_auto_optimization(manager: &mut ProfileManager) -> Result<()> {
-    println!("🤖 Auto-Optimization Demo:");
+    println!("Auto-Optimization Demo:");
     println!("=========================");
 
     // Simulate different system configurations
@@ -222,14 +222,14 @@ fn demo_auto_optimization(manager: &mut ProfileManager) -> Result<()> {
     ];
 
     for (name, system_info) in system_configs {
-        println!("🖥️  {}", name);
+        println!("{}", name);
         println!("   Memory: {}GB, CPU: {} cores, Arch: {}", 
                  system_info.total_memory_gb, 
                  system_info.cpu_cores, 
                  system_info.cpu_arch);
         
         let capabilities = system_info.capabilities();
-        println!("   Capabilities: HW Accel: {}, SIMD: {}, High Mem: {}, Multi-core: {}", 
+        println!("   Capabilities: HW Accel: {}, SIMD: {}, High Mem: {}, Multi-core: {}",  
                  capabilities.supports_hardware_acceleration,
                  capabilities.supports_simd,
                  capabilities.high_memory,
@@ -246,11 +246,11 @@ fn demo_auto_optimization(manager: &mut ProfileManager) -> Result<()> {
 }
 
 fn demo_profile_management(manager: &mut ProfileManager) -> Result<()> {
-    println!("⚙️  Profile Management Demo:");
+    println!("Profile Management Demo:");
     println!("===========================");
 
     // List all profiles
-    println!("📋 All Available Profiles:");
+    println!("All Available Profiles:");
     for profile_name in manager.list_profiles() {
         let profile = manager.get_profile(profile_name).unwrap();
         println!("  • {} - {} ({})", 
@@ -287,7 +287,7 @@ fn demo_profile_management(manager: &mut ProfileManager) -> Result<()> {
     println!();
 
     // Profile validation demo
-    println!("✅ Profile Validation:");
+    println!("Profile Validation:");
     let mut invalid_profile = PerformanceProfileConfig::new("invalid".to_string());
     invalid_profile.resources.max_cpu_percent = 150; // Invalid
     
@@ -304,10 +304,10 @@ fn demo_profile_management(manager: &mut ProfileManager) -> Result<()> {
     println!();
 
     // Remove a custom profile
-    println!("🗑️  Profile Removal:");
+    println!("Profile Removal:");
     println!("Removing 'gaming' profile...");
     manager.remove_profile("gaming")?;
-    println!("✅ Profile removed successfully");
+    println!("✓ Profile removed successfully");
     
     let remaining_profiles = manager.list_profiles();
     println!("Remaining profiles: {}", remaining_profiles.len());

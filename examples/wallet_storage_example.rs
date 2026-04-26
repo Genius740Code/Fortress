@@ -149,7 +149,7 @@ impl SecureWalletStorage {
             last_accessed: None,
         };
         
-        println!("✅ Wallet generated securely: {}", wallet_id);
+        println!("✓ Wallet generated securely: {}", wallet_id);
         println!("   Public Address: {}", wallet.public_address);
         println!("   Private Key: ENCRYPTED (never stored in plaintext)");
         
@@ -194,8 +194,8 @@ impl SecureWalletStorage {
         // Decrypt the private key
         let decrypted_private_key = self.algorithm.decrypt(&encrypted_key, encryption_key.as_bytes())?;
         
-        println!("✅ Private key decrypted successfully");
-        println!("   ⚠️  WARNING: Use immediately and zeroize after use!");
+        println!("✓ Private key decrypted successfully");
+        println!("   ⚠ WARNING: Use immediately and zeroize after use!");
         
         Ok(decrypted_private_key)
     }
@@ -233,7 +233,7 @@ impl SecureWalletStorage {
         // CRITICAL: Zeroize the private key immediately after use
         zeroize::Zeroize::zeroize(&mut private_key);
         
-        println!("✅ Transaction signed successfully");
+        println!("✓ Transaction signed successfully");
         println!("   Signature: {}", base64::engine::general_purpose::STANDARD.encode(&signature));
         
         Ok(signature)
@@ -301,7 +301,7 @@ impl SecureWalletStorage {
         // Zeroize the decrypted key
         zeroize::Zeroize::zeroize(&mut decrypted_key);
         
-        println!("✅ Key rotation completed successfully");
+        println!("✓ Key rotation completed successfully");
         println!("   Old key destroyed, new key active");
         
         Ok(())
@@ -337,7 +337,7 @@ impl SecureWalletStorage {
         // Destroy the encryption key
         self.key_manager.destroy_key(&key_id)?;
         
-        println!("✅ Wallet deleted securely");
+        println!("✓ Wallet deleted securely");
         println!("   All data and keys destroyed");
         
         Ok(())
@@ -418,7 +418,7 @@ impl SecureWalletStorage {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    println!("🔐 Fortress Secure Wallet Storage Demo");
+    println!("Fortress Secure Wallet Storage Demo");
     println!("======================================\n");
     
     // Configure the key cache for optimal performance
@@ -436,9 +436,9 @@ async fn main() -> Result<()> {
     };
     
     // Create the secure wallet storage
-    println!("🚀 Initializing secure wallet storage...");
+    println!("Initializing secure wallet storage...");
     let storage = SecureWalletStorage::new(cache_config).await?;
-    println!("✅ Storage initialized with XChaCha20-Poly1305 encryption\n");
+    println!("✓ Storage initialized with XChaCha20-Poly1305 encryption\n");
     
     // Example 1: Generate a new wallet
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
@@ -450,7 +450,7 @@ async fn main() -> Result<()> {
     println!("  ID: {}", solana_wallet.wallet_id);
     println!("  Type: {}", solana_wallet.wallet_type);
     println!("  Public Address: {}", solana_wallet.public_address);
-    println!("  Private Key: 🔒 ENCRYPTED (never exposed)");
+    println!("  Private Key: ENCRYPTED (never exposed)");
     println!("  Created: {}", solana_wallet.created_at);
     
     // Example 2: Sign a transaction
@@ -462,7 +462,7 @@ async fn main() -> Result<()> {
     println!("Transaction: {:?}", std::str::from_utf8(transaction_data).unwrap());
     
     let signature = storage.sign_transaction(&solana_wallet.wallet_id, transaction_data).await?;
-    println!("\n✅ Transaction signed successfully!");
+    println!("\n✓ Transaction signed successfully!");
     println!("   Signature: {}", base64::engine::general_purpose::STANDARD.encode(&signature));
     
     // Example 3: Generate multiple wallets
@@ -471,10 +471,10 @@ async fn main() -> Result<()> {
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
     
     let eth_wallet = storage.generate_wallet("ethereum").await?;
-    println!("✅ Ethereum wallet created: {}", eth_wallet.wallet_id);
+    println!("✓ Ethereum wallet created: {}", eth_wallet.wallet_id);
     
     let btc_wallet = storage.generate_wallet("bitcoin").await?;
-    println!("✅ Bitcoin wallet created: {}", btc_wallet.wallet_id);
+    println!("✓ Bitcoin wallet created: {}", btc_wallet.wallet_id);
     
     // Example 4: Rotate encryption keys
     println!("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
@@ -483,7 +483,7 @@ async fn main() -> Result<()> {
     
     println!("Rotating key for wallet: {}", solana_wallet.wallet_id);
     storage.rotate_wallet_key(&solana_wallet.wallet_id).await?;
-    println!("✅ Key rotated - wallet is now using a fresh encryption key");
+    println!("✓ Key rotated - wallet is now using a fresh encryption key");
     
     // Example 5: Sign another transaction after key rotation
     println!("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
@@ -494,7 +494,7 @@ async fn main() -> Result<()> {
     println!("Transaction: {:?}", std::str::from_utf8(transaction_data2).unwrap());
     
     let signature2 = storage.sign_transaction(&solana_wallet.wallet_id, transaction_data2).await?;
-    println!("\n✅ Transaction signed successfully after key rotation!");
+    println!("\n✓ Transaction signed successfully after key rotation!");
     println!("   Signature: {}", base64::engine::general_purpose::STANDARD.encode(&signature2));
     
     // Example 6: View cache statistics
@@ -521,21 +521,21 @@ async fn main() -> Result<()> {
     
     println!("Deleting wallet: {}", btc_wallet.wallet_id);
     storage.delete_wallet(&btc_wallet.wallet_id).await?;
-    println!("✅ Wallet deleted - all data and keys destroyed");
+    println!("✓ Wallet deleted - all data and keys destroyed");
     
     println!("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    println!("🎉 Demo completed successfully!");
+    println!("Demo completed successfully!");
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
     
-    println!("📋 Summary:");
+    println!("Summary:");
     println!("  • Generated 3 wallets (Solana, Ethereum, Bitcoin)");
     println!("  • Signed 2 transactions with Solana wallet");
     println!("  • Rotated encryption key for enhanced security");
     println!("  • Viewed cache performance statistics");
     println!("  • Securely deleted Bitcoin wallet");
-    println!("\n🔒 All private keys remained encrypted at all times");
-    println!("⚡ Fast access via in-memory caching");
-    println!("🛡️ Production-ready security with Fortress");
+    println!("\nAll private keys remained encrypted at all times");
+    println!("Fast access via in-memory caching");
+    println!("Production-ready security with Fortress");
     
     Ok(())
 }

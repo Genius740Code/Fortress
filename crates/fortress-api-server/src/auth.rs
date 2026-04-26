@@ -1050,7 +1050,7 @@ mod auth_security_tests {
         let hash2 = hash_password_secure(password).unwrap();
         assert_ne!(hash, hash2);
         
-        println!("✅ Secure password hashing test passed");
+        println!("✓ Secure password hashing test passed");
     }
 
     #[test]
@@ -1066,6 +1066,6 @@ mod auth_security_tests {
         assert!(hash.len() > 50); // Argon2id hashes are long
         assert!(hash.contains('$')); // Contains delimiter
         
-        println!("✅ Argon2id security test passed");
+        println!("✓ Argon2id security test passed");
     }
 }

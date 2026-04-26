@@ -512,29 +512,29 @@ impl ErrorDocumentationSystem {
             .map_err(|e| FortressError::configuration_error("clear_screen", &format!("{}", e), "terminal operation"))?;
 
         // Header
-        println!("{}", title_style.apply_to(format!("🔴 Error Code: {}", doc.error_code)));
-        println!("{}", title_style.apply_to(format!("📋 Title: {}", doc.title)));
-        println!("📖 Description: {}\n", doc.description);
+        println!("{}", title_style.apply_to(format!("✗ Error Code: {}", doc.error_code)));
+        println!("{}", title_style.apply_to(format!("Title: {}", doc.title)));
+        println!("Description: {}\n", doc.description);
 
         // Severity and Category
-        println!("{} Severity: {:?}", header_style.apply_to("🚨"), doc.severity);
-        println!("{} Category: {:?}\n", header_style.apply_to("📁"), doc.category);
+        println!("{} Severity: {:?}", header_style.apply_to("Severity"), doc.severity);
+        println!("{} Category: {:?}\n", header_style.apply_to("Category"), doc.category);
 
         // Common Causes
-        println!("{}", header_style.apply_to("🔍 Common Causes:"));
+        println!("{}", header_style.apply_to("Common Causes:"));
         for (i, cause) in doc.common_causes.iter().enumerate() {
             println!("  {}. {}", i + 1, cause);
         }
 
         // Solutions
-        println!("\n{}", header_style.apply_to("💡 Solutions:"));
+        println!("\n{}", header_style.apply_to("Solutions:"));
         for (i, solution) in doc.solutions.iter().enumerate() {
             println!("  {}. {}", i + 1, solution);
         }
 
         // Examples
         if !doc.examples.is_empty() {
-            println!("\n{}", header_style.apply_to("📝 Example Commands:"));
+            println!("\n{}", header_style.apply_to("Example Commands:"));
             for example in &doc.examples {
                 println!("  {}", code_style.apply_to(format!("$ {}", example)));
             }
@@ -542,7 +542,7 @@ impl ErrorDocumentationSystem {
 
         // Prevention Tips
         if !doc.prevention_tips.is_empty() {
-            println!("\n{}", header_style.apply_to("🛡️  Prevention Tips:"));
+            println!("\n{}", header_style.apply_to("Prevention Tips:"));
             for (i, tip) in doc.prevention_tips.iter().enumerate() {
                 println!("  {}. {}", i + 1, tip);
             }
@@ -550,7 +550,7 @@ impl ErrorDocumentationSystem {
 
         // Related Documentation
         if !doc.related_docs.is_empty() {
-            println!("\n{}", header_style.apply_to("📚 Related Documentation:"));
+            println!("\n{}", header_style.apply_to("Related Documentation:"));
             for doc in &doc.related_docs {
                 println!("  • {}", doc);
             }
@@ -558,7 +558,7 @@ impl ErrorDocumentationSystem {
 
         // Recovery Commands
         if !doc.recovery_commands.is_empty() {
-            println!("\n{}", header_style.apply_to("🔧 Quick Recovery Commands:"));
+            println!("\n{}", header_style.apply_to("Quick Recovery Commands:"));
             for cmd in &doc.recovery_commands {
                 println!("  {}", code_style.apply_to(format!("$ {}", cmd)));
             }
@@ -566,7 +566,7 @@ impl ErrorDocumentationSystem {
 
         // Interactive Troubleshooting
         if !doc.troubleshooting_steps.is_empty() {
-            println!("\n{}", header_style.apply_to("🔧 Interactive Troubleshooting:"));
+            println!("\n{}", header_style.apply_to("Interactive Troubleshooting:"));
             
             if Confirm::new()
                 .with_prompt("Would you like to run interactive troubleshooting?")
@@ -586,21 +586,21 @@ impl ErrorDocumentationSystem {
         let title_style = Style::new().bold().red();
         let header_style = Style::new().bold().yellow();
 
-        println!("{}", title_style.apply_to("🔴 Fortress Error"));
-        println!("📋 Message: {}", error);
-        println!("📖 Help: {}", error.help_text());
+        println!("{}", title_style.apply_to("✗ Fortress Error"));
+        println!("Message: {}", error);
+        println!("Help: {}", error.help_text());
 
         // Show troubleshooting steps
         let steps = error.troubleshooting_steps();
         if !steps.is_empty() {
-            println!("\n{}", header_style.apply_to("🔍 Troubleshooting Steps:"));
+            println!("\n{}", header_style.apply_to("Troubleshooting Steps:"));
             for (i, step) in steps.iter().enumerate() {
                 println!("  {}. {}", i + 1, step);
             }
         }
 
         // Suggest next steps
-        println!("\n{}", header_style.apply_to("💡 Next Steps:"));
+        println!("\n{}", header_style.apply_to("Next Steps:"));
         println!("  • Run 'fortress --help' for available commands");
         println!("  • Check documentation at: https://docs.fortress.security");
         println!("  • Report issues at: https://github.com/Genius740Code/Fortress/issues");
@@ -644,19 +644,19 @@ impl ErrorDocumentationSystem {
         let step_style = Style::new().bold().green();
         let code_style = Style::new().dim();
 
-        println!("\n{}", header_style.apply_to("🔧 Starting Interactive Troubleshooting"));
+        println!("\n{}", header_style.apply_to("Starting Interactive Troubleshooting"));
 
         for step in &doc.troubleshooting_steps {
             println!("\n{}", step_style.apply_to(format!("Step {}: {}", step.step_number, step.title)));
-            println!("📝 {}", step.description);
+            println!("{}", step.description);
 
             if let Some(time_estimate) = step.time_estimate_minutes {
-                println!("⏱️  Estimated time: {} minutes", time_estimate);
+                println!("Estimated time: {} minutes", time_estimate);
             }
 
             // Show commands
             if !step.commands.is_empty() {
-                println!("\n🔧 Commands to run:");
+                println!("\nCommands to run:");
                 for cmd in &step.commands {
                     println!("  {}", code_style.apply_to(format!("$ {}", cmd)));
                 }
@@ -686,13 +686,13 @@ impl ErrorDocumentationSystem {
                         pb.inc(1);
                     }
 
-                    pb.finish_with_message(format!("✅ Step {} completed", step.step_number));
+                    pb.finish_with_message(format!("✓ Step {} completed", step.step_number));
                 }
             }
 
             // Show expected output
             if let Some(expected) = &step.expected_output {
-                println!("\n📋 Expected Output:");
+                println!("\nExpected Output:");
                 println!("  {}", expected);
             }
 
@@ -709,8 +709,8 @@ impl ErrorDocumentationSystem {
             }
         }
 
-        println!("\n✅ Interactive troubleshooting completed!");
-        println!("💡 If the issue persists, consider:");
+        println!("\n✓ Interactive troubleshooting completed!");
+        println!("If the issue persists, consider:");
         println!("  • Checking related errors: 'fortress help related <error-code>'");
         println!("  • Running diagnostics: 'fortress doctor'");
         println!("  • Contacting support: https://github.com/Genius740Code/Fortress/issues");
@@ -722,8 +722,8 @@ impl ErrorDocumentationSystem {
         let results = self.search_documentation(query);
 
         if results.is_empty() {
-            println!("❌ No documentation found for query: '{}'", query);
-            println!("💡 Try searching for:");
+            println!("✗ No documentation found for query: '{}'", query);
+            println!("Try searching for:");
             println!("  • Error codes (e.g., 'ENC001')");
             println!("  • Error types (e.g., 'database', 'encryption')");
             println!("  • Keywords (e.g., 'connection', 'key', 'config')");
@@ -831,7 +831,7 @@ pub async fn list_help_categories() -> Result<(), FortressError> {
         let errors = doc_system.get_errors_by_category(category);
         
         if errors.is_empty() {
-            println!("❌ No errors found in this category");
+            println!("✗ No errors found in this category");
             return Ok(());
         }
 

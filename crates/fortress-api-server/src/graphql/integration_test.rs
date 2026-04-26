@@ -425,64 +425,64 @@ impl IntegrationTestResults {
         
         report.push_str(&format!(
             "| Security Integration | {} | {} |\n",
-            if self.security_integration.passed { "✅ PASS" } else { "❌ FAIL" },
+            if self.security_integration.passed { "✓ PASS" } else { "✗ FAIL" },
             self.security_integration.details
         ));
         
         report.push_str(&format!(
             "| Authentication Integration | {} | {} |\n",
-            if self.auth_integration.passed { "✅ PASS" } else { "❌ FAIL" },
+            if self.auth_integration.passed { "✓ PASS" } else { "✗ FAIL" },
             self.auth_integration.details
         ));
         
         report.push_str(&format!(
             "| Cache Integration | {} | {} |\n",
-            if self.cache_integration.passed { "✅ PASS" } else { "❌ FAIL" },
+            if self.cache_integration.passed { "✓ PASS" } else { "✗ FAIL" },
             self.cache_integration.details
         ));
         
         report.push_str(&format!(
             "| Performance Integration | {} | {} |\n",
-            if self.performance_integration.passed { "✅ PASS" } else { "❌ FAIL" },
+            if self.performance_integration.passed { "✓ PASS" } else { "✗ FAIL" },
             self.performance_integration.details
         ));
         
         report.push_str(&format!(
             "| End-to-End Workflow | {} | {} |\n",
-            if self.end_to_end_workflow.passed { "✅ PASS" } else { "❌ FAIL" },
+            if self.end_to_end_workflow.passed { "✓ PASS" } else { "✗ FAIL" },
             self.end_to_end_workflow.details
         ));
         
         report.push_str(&format!(
             "| Security Test Suite | {} | {} |\n",
-            if self.security_test_suite.passed { "✅ PASS" } else { "❌ FAIL" },
+            if self.security_test_suite.passed { "✓ PASS" } else { "✗ FAIL" },
             self.security_test_suite.details
         ));
         
         report.push_str(&format!(
             "| Performance Benchmark | {} | {} |\n",
-            if self.performance_benchmark.passed { "✅ PASS" } else { "❌ FAIL" },
+            if self.performance_benchmark.passed { "✓ PASS" } else { "✗ FAIL" },
             self.performance_benchmark.details
         ));
         
         report.push_str("\n## Overall Status\n\n");
         report.push_str(&format!(
             "**Result: {}**\n\n",
-            if self.overall_success { "✅ ALL TESTS PASSED" } else { "❌ SOME TESTS FAILED" }
+            if self.overall_success { "✓ ALL TESTS PASSED" } else { "✗ SOME TESTS FAILED" }
         ));
         
         if self.overall_success {
-            report.push_str("🎉 **The GraphQL API is fully integrated and ready for production!**\n\n");
+            report.push_str("**The GraphQL API is fully integrated and ready for production!**\n\n");
             report.push_str("All components are working correctly:\n");
-            report.push_str("- ✅ Security layer is active and blocking threats\n");
-            report.push_str("- ✅ Authentication system is working properly\n");
-            report.push_str("- ✅ Caching layer is operational\n");
-            report.push_str("- ✅ Performance monitoring is active\n");
-            report.push_str("- ✅ End-to-end workflows are functional\n");
-            report.push_str("- ✅ Security tests are passing\n");
-            report.push_str("- ✅ Performance benchmarks are successful\n");
+            report.push_str("- ✓ Security layer is active and blocking threats\n");
+            report.push_str("- ✓ Authentication system is working properly\n");
+            report.push_str("- ✓ Caching layer is operational\n");
+            report.push_str("- ✓ Performance monitoring is active\n");
+            report.push_str("- ✓ End-to-end workflows are functional\n");
+            report.push_str("- ✓ Security tests are passing\n");
+            report.push_str("- ✓ Performance benchmarks are successful\n");
         } else {
-            report.push_str("⚠️ **Some integration tests failed. Review the details above.**\n\n");
+            report.push_str("⚠ **Some integration tests failed. Review the details above.**\n\n");
         }
         
         report

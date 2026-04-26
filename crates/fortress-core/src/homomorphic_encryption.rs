@@ -1,6 +1,6 @@
 //! Production-Ready Homomorphic Encryption
 //!
-//! ## 🛡️ ENTERPRISE-GRADE HOMOMORPHIC ENCRYPTION
+//! ## ENTERPRISE-GRADE HOMOMORPHIC ENCRYPTION
 //!
 //! This module provides **production-ready** homomorphic encryption schemes suitable
 //! for security-critical applications. These implementations feature:
@@ -10,7 +10,7 @@
 //! - Formal verification and security audits
 //! - Production-grade key management
 //!
-//! ## ✅ PRODUCTION SECURITY FEATURES
+//! ## PRODUCTION SECURITY FEATURES
 //!
 //! **READY FOR PRODUCTION** - These implementations include:
 //! - Constant-time cryptographic operations
@@ -59,7 +59,7 @@
 //! let result = manager.decrypt(&key_pair, &sum_cipher).await?;
 //! assert_eq!(result, 100);
 //!
-//! ## ⚠️ EDUCATIONAL DISCLAIMER
+//! ## EDUCATIONAL DISCLAIMER
 //!
 //! This is a **simplified educational implementation** for learning purposes.
 //! Real production homomorphic encryption requires:
@@ -326,7 +326,7 @@ pub struct PaillierHomomorphic {
 impl PaillierHomomorphic {
     /// Create a new production-ready Paillier homomorphic encryption instance
     pub fn new(key_size: usize) -> Self {
-        tracing::info!("🔐 Creating PRODUCTION Paillier implementation with side-channel protections");
+        tracing::info!("Creating PRODUCTION Paillier implementation with side-channel protections");
         let performance = HomomorphicPerformance {
             encryption_time_ms: match key_size {
                 2048 => 5.0,
@@ -365,7 +365,7 @@ impl PaillierHomomorphic {
 
     /// Generate production-ready Paillier key pair with security enhancements
     fn generate_keypair(&self) -> Result<(Vec<u8>, Vec<u8>)> {
-        tracing::info!("🔐 Generating PRODUCTION Paillier keys with enhanced security");
+        tracing::info!("Generating PRODUCTION Paillier keys with enhanced security");
         
         // Generate two large prime numbers p and q
         let p = self.generate_secure_prime(self.key_size / 2)?;
@@ -407,7 +407,7 @@ impl PaillierHomomorphic {
     
     /// Generate production-ready prime with enhanced security and validation
     fn generate_secure_prime(&self, bit_size: usize) -> Result<BigUint> {
-        tracing::info!("🔐 Generating PRODUCTION cryptographically secure prime with validation");
+        tracing::info!("Generating PRODUCTION cryptographically secure prime with validation");
         use std::time::{SystemTime, UNIX_EPOCH};
         
         let mut rng = OsRng;
@@ -416,7 +416,7 @@ impl PaillierHomomorphic {
         // Ensure minimum bit size for security
         let actual_bit_size = std::cmp::max(bit_size, 512);
         
-        tracing::debug!("🔐 Generating {}-bit cryptographically secure prime", actual_bit_size);
+        tracing::debug!("Generating {}-bit cryptographically secure prime", actual_bit_size);
         
         // Generate candidate using cryptographically secure random bits
         let mut attempts = 0;
@@ -460,7 +460,7 @@ impl PaillierHomomorphic {
             
             if is_prime {
                 let elapsed = start_time.elapsed().unwrap_or_default();
-                tracing::info!("✅ Generated {}-bit prime in {}ms after {} attempts", 
+                tracing::info!("Generated {}-bit prime in {}ms after {} attempts", 
                              actual_bit_size, elapsed.as_millis(), attempts);
                 return Ok(candidate);
             }
@@ -727,7 +727,7 @@ impl PaillierHomomorphic {
 
     /// Production-ready Paillier encryption with side-channel protections
     fn encrypt_paillier(&self, plaintext: &[u8], public_key: &[u8]) -> Result<Vec<u8>> {
-        tracing::info!("🔐 Using PRODUCTION encryption with constant-time operations");
+        tracing::info!("Using PRODUCTION encryption with constant-time operations");
         // Deserialize public key
         let (n, g) = self.deserialize_paillier_public_key(public_key)?;
         let n_squared = &n * &n;
@@ -768,7 +768,7 @@ impl PaillierHomomorphic {
 
     /// Production-ready Paillier decryption with side-channel protections
     fn decrypt_paillier(&self, ciphertext: &[u8], private_key: &[u8]) -> Result<Vec<u8>> {
-        tracing::info!("🔐 Using PRODUCTION decryption with constant-time operations");
+        tracing::info!("Using PRODUCTION decryption with constant-time operations");
         // Deserialize private key
         let (p, q, lambda, mu) = self.deserialize_paillier_private_key(private_key)?;
         
@@ -807,7 +807,7 @@ impl PaillierHomomorphic {
 
     /// Production-ready Paillier homomorphic addition with optimizations
     fn add_paillier(&self, ciphertext1: &[u8], ciphertext2: &[u8]) -> Result<Vec<u8>> {
-        tracing::info!("🔐 Using PRODUCTION homomorphic addition with SIMD optimizations");
+        tracing::info!("Using PRODUCTION homomorphic addition with SIMD optimizations");
         // Convert ciphertexts to BigUint
         let c1 = BigUint::from_bytes_be(ciphertext1);
         let c2 = BigUint::from_bytes_be(ciphertext2);
@@ -897,7 +897,7 @@ impl HomomorphicEncryption for PaillierHomomorphic {
             HomomorphicOperation::AddPlaintext => {
                 // For educational purposes, implement a simplified plaintext addition
                 // This is a demonstration of the mathematical concept, not a secure implementation
-                tracing::warn!("⚠️  EDUCATIONAL plaintext addition - NOT FOR PRODUCTION");
+                tracing::warn!("⚠ EDUCATIONAL plaintext addition - NOT FOR PRODUCTION");
                 
                 if operands.len() != 1 {
                     return Err(FortressError::encryption(
@@ -948,7 +948,7 @@ pub struct CkksHomomorphic {
 impl CkksHomomorphic {
     /// Create a new production-ready CKKS homomorphic encryption instance
     pub fn new(security_parameter: usize, ring_dimension: usize, depth: usize, scale: u64) -> Self {
-        tracing::info!("🔐 Creating PRODUCTION CKKS implementation with SIMD optimizations");
+        tracing::info!("Creating PRODUCTION CKKS implementation with SIMD optimizations");
         
         // Validate parameters
         assert!(ring_dimension.is_power_of_two(), "Ring dimension must be a power of 2");
@@ -1011,7 +1011,7 @@ impl CkksHomomorphic {
 
     /// Generate CKKS keys with enhanced security
     fn generate_ckks_keys(&self) -> Result<(Vec<u8>, Vec<u8>)> {
-        tracing::info!("🔐 Generating PRODUCTION CKKS keys with enhanced security");
+        tracing::info!("Generating PRODUCTION CKKS keys with enhanced security");
         
         // Generate secret key (random from ternary distribution)
         let mut rng = OsRng;
@@ -1067,7 +1067,7 @@ impl CkksHomomorphic {
 
     /// Encrypt real number using CKKS
     fn encrypt_ckks(&self, value: f64, public_key: &[u8]) -> Result<Vec<u8>> {
-        tracing::info!("🔐 Using PRODUCTION CKKS encryption with SIMD optimizations");
+        tracing::info!("Using PRODUCTION CKKS encryption with SIMD optimizations");
         
         // Scale: value (convert u64 scale to f64 for calculation)
         let scale_f64 = self.scale as f64;
@@ -1092,7 +1092,7 @@ impl CkksHomomorphic {
 
     /// Decrypt CKKS ciphertext
     fn decrypt_ckks(&self, ciphertext: &[u8], _secret_key: &[u8]) -> Result<f64> {
-        tracing::info!("🔐 Using PRODUCTION CKKS decryption with constant-time operations");
+        tracing::info!("Using PRODUCTION CKKS decryption with constant-time operations");
         
         // Deserialize ciphertext
         let len = u32::from_be_bytes(ciphertext[0..4].try_into().unwrap()) as usize;
@@ -1114,7 +1114,7 @@ impl CkksHomomorphic {
 
     /// CKKS addition
     fn add_ckks(&self, ciphertext1: &[u8], ciphertext2: &[u8]) -> Result<Vec<u8>> {
-        tracing::info!("🔐 Using PRODUCTION CKKS addition with SIMD optimizations");
+        tracing::info!("Using PRODUCTION CKKS addition with SIMD optimizations");
         
         // Deserialize ciphertexts
         let c1 = self.deserialize_ciphertext(ciphertext1)?;
@@ -1129,7 +1129,7 @@ impl CkksHomomorphic {
 
     /// CKKS multiplication
     fn multiply_ckks(&self, ciphertext1: &[u8], ciphertext2: &[u8]) -> Result<Vec<u8>> {
-        tracing::info!("🔐 Using PRODUCTION CKKS multiplication with SIMD optimizations");
+        tracing::info!("Using PRODUCTION CKKS multiplication with SIMD optimizations");
         
         // Deserialize ciphertexts
         let c1 = self.deserialize_ciphertext(ciphertext1)?;
@@ -1310,7 +1310,7 @@ pub struct HomomorphicManager {
 impl HomomorphicManager {
     /// Create a new production-ready homomorphic manager
     pub fn new() -> Self {
-        tracing::info!("🔐 Initializing PRODUCTION homomorphic encryption with advanced schemes");
+        tracing::info!("Initializing PRODUCTION homomorphic encryption with advanced schemes");
         
         let mut schemes: HashMap<String, Box<dyn HomomorphicEncryption>> = HashMap::new();
         
@@ -1488,7 +1488,7 @@ mod tests {
         let decrypted = paillier.decrypt(&ciphertext, &key).await.unwrap();
         assert_eq!(decrypted, plaintext);
         
-        println!("✅ Production Paillier encryption/decryption verified - READY FOR PRODUCTION");
+        println!("✓ Production Paillier encryption/decryption verified - READY FOR PRODUCTION");
     }
 
     #[tokio::test]
@@ -1714,7 +1714,7 @@ mod tests {
         // Allow for approximation error in CKKS
         assert!((decrypted_value - 42.5).abs() < 0.01);
         
-        println!("✅ Production CKKS encryption/decryption verified - READY FOR PRODUCTION");
+        println!("✓ Production CKKS encryption/decryption verified - READY FOR PRODUCTION");
     }
 
     #[tokio::test]
@@ -1764,7 +1764,7 @@ mod tests {
         // Should be approximately 10 * 20 = 200
         assert!((mul_value - 200.0).abs() < 0.1);
         
-        println!("✅ Production CKKS homomorphic operations verified - READY FOR PRODUCTION");
+        println!("✓ Production CKKS homomorphic operations verified - READY FOR PRODUCTION");
     }
 
     #[tokio::test]
@@ -1785,7 +1785,7 @@ mod tests {
         assert!(schemes.contains(&"ckks_4096".to_string()));
         assert!(schemes.contains(&"ckks_8192".to_string()));
         
-        println!("✅ Production homomorphic manager with advanced schemes verified");
+        println!("✓ Production homomorphic manager with advanced schemes verified");
     }
 
     #[tokio::test]
@@ -1800,19 +1800,19 @@ mod tests {
         assert!(perf.size_expansion_factor > 0.0);
         assert!(perf.memory_usage_mb > 0.0);
         
-        println!("✅ Production-ready performance characteristics: {:?}", perf);
+        println!("✓ Production-ready performance characteristics: {:?}", perf);
     }
 
     #[tokio::test]
     async fn test_production_security_validation() {
         // Test that module is production-ready
-        println!("🔐 HOMOMORPHIC ENCRYPTION PRODUCTION VALIDATION");
+        println!("HOMOMORPHIC ENCRYPTION PRODUCTION VALIDATION");
         println!("This implementation is PRODUCTION-READY with security features:");
-        println!("✅ Side-channel resistant constant-time operations");
-        println!("✅ Enhanced prime generation with validation");
-        println!("✅ Production-grade cryptographic operations");
-        println!("✅ SIMD optimizations for performance");
-        println!("✅ Multiple FHE schemes (CKKS, Paillier)");
+        println!("✓ Side-channel resistant constant-time operations");
+        println!("✓ Enhanced prime generation with validation");
+        println!("✓ Production-grade cryptographic operations");
+        println!("✓ SIMD optimizations for performance");
+        println!("✓ Multiple FHE schemes (CKKS, Paillier)");
         
         let manager = HomomorphicManager::new();
         let scheme = manager.get_default_scheme().unwrap();
@@ -1820,8 +1820,8 @@ mod tests {
         // Check that security level meets production requirements
         assert!(scheme.security_level() >= 128); // Minimum security level
         
-        println!("✅ Production security requirements validated");
-        println!("✅ Cryptographically secure operations verified");
+        println!("✓ Production security requirements validated");
+        println!("✓ Cryptographically secure operations verified");
     }
 
     #[test] 
@@ -1858,7 +1858,7 @@ mod tests {
         let expected = 579u64.to_le_bytes().to_vec();
         assert_eq!(decrypted_result, expected);
         
-        println!("✅ Production-ready Paillier implementation fully verified");
+        println!("✓ Production-ready Paillier implementation fully verified");
     }
 
     #[test]
@@ -1872,6 +1872,6 @@ mod tests {
         assert!(!ckks.supports_operation(&HomomorphicOperation::Negate));
         assert!(!ckks.supports_operation(&HomomorphicOperation::Exponentiate(2)));
         
-        println!("✅ Production CKKS operation support validation verified");
+        println!("✓ Production CKKS operation support validation verified");
     }
 }

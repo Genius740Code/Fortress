@@ -202,7 +202,7 @@ async fn list_tenants(
                         println!("     Max storage: {} bytes", max_storage);
                     }
                     if let Some(max_conns) = tenant.resource_limits.max_connections {
-                        println!("     🔗 Max connections: {}", max_conns);
+                        println!("     Max connections: {}", max_conns);
                     }
                 }
                 println!();

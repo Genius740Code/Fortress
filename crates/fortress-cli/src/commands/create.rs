@@ -84,14 +84,14 @@ pub async fn handle_create(
     // Handle dry-run mode
     if dry_run {
         println!();
-        println!("{}", style("🔍 DRY RUN MODE - Template Preview").bold().yellow());
+        println!("{}", style("DRY RUN MODE - Template Preview").bold().yellow());
         println!();
         
         let config = generate_config(&db_name, &selected_template)?;
         display_template_preview(&selected_template, &config);
         
         println!();
-        println!("{}", style("ℹ️  Use --dry-run to preview templates without creating").cyan());
+        println!("{}", style("Use --dry-run to preview templates without creating").cyan());
         return Ok(());
     }
     
@@ -396,8 +396,8 @@ fn display_template_preview(template_name: &str, config: &Config) {
     }
     
     println!();
-    println!("📁 Target Location: {}", style(config.database.path).bold());
-    println!("📂 Data Directory: {}", style(config.storage.base_path.as_ref().unwrap_or(&"./data".to_string())).bold());
+    println!("Target Location: {}", style(config.database.path).bold());
+    println!("Data Directory: {}", style(config.storage.base_path.as_ref().unwrap_or(&"./data".to_string())).bold());
 }
 
 fn list_available_templates() {
@@ -405,9 +405,9 @@ fn list_available_templates() {
     println!("{}", "=".repeat(50));
     
     let templates = vec![
-        ("startup", "Development and small applications", "🚀"),
-        ("enterprise", "Production-ready with enhanced security", "🏢"),
-        ("custom", "Flexible configuration for specific needs", "🎨"),
+        ("startup", "Development and small applications", "Fast"),
+        ("enterprise", "Production-ready with enhanced security", "Secure"),
+        ("custom", "Flexible configuration for specific needs", "Custom"),
     ];
     
     for (name, description, icon) in templates {

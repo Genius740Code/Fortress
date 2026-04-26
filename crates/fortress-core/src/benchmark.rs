@@ -162,11 +162,11 @@ impl AegisBenchmark {
             results.iter().min_by_key(|r| r.data_size),
             results.iter().max_by_key(|r| r.data_size)
         ) {
-            println!("🔹 Small data ({}): {}", 
+            println!("Small data ({}): {}", 
                 min.data_size, 
                 BenchmarkResults::format_throughput(min.encrypt_throughput_mbps)
             );
-            println!("🔸 Large data ({}): {}", 
+            println!("Large data ({}): {}", 
                 max.data_size, 
                 BenchmarkResults::format_throughput(max.encrypt_throughput_mbps)
             );
@@ -176,13 +176,13 @@ impl AegisBenchmark {
         let avg_encrypt: f64 = results.iter().map(|r| r.encrypt_throughput_mbps).sum::<f64>() / results.len() as f64;
         let avg_decrypt: f64 = results.iter().map(|r| r.decrypt_throughput_mbps).sum::<f64>() / results.len() as f64;
         
-        println!("📈 Average encryption: {}", 
+        println!("Average encryption: {}", 
             BenchmarkResults::format_throughput(avg_encrypt)
         );
-        println!("📉 Average decryption: {}", 
+        println!("Average decryption: {}", 
             BenchmarkResults::format_throughput(avg_decrypt)
         );
-        println!("⚡ Combined average: {}", 
+        println!("Combined average: {}", 
             BenchmarkResults::format_throughput(avg_encrypt + avg_decrypt)
         );
 

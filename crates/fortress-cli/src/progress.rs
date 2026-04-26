@@ -122,7 +122,7 @@ pub async fn encrypt_large_dataset_with_progress(
         }
     }
     
-    pb.finish_with_message("✅ Encryption complete!");
+    pb.finish_with_message("Encryption complete!");
     Ok(result)
 }
 
@@ -146,7 +146,7 @@ pub async fn run_database_migration_with_progress(
         pb.set_position((i + 1) as u64);
     }
     
-    pb.finish_with_message("✅ Database migration complete!");
+    pb.finish_with_message("Database migration complete!");
     Ok(())
 }
 
@@ -173,7 +173,7 @@ pub async fn generate_multiple_keys_with_progress(
         pb.set_position((i + 1) as u64);
     }
     
-    pb.finish_with_message("✅ Key generation complete!");
+    pb.finish_with_message("Key generation complete!");
     Ok(keys)
 }
 
@@ -197,7 +197,7 @@ pub async fn process_files_with_progress(
         pb.set_position((i + 1) as u64);
     }
     
-    pb.finish_with_message("✅ File processing complete!");
+    pb.finish_with_message("File processing complete!");
     Ok(())
 }
 
@@ -237,7 +237,7 @@ pub async fn download_file_with_progress(
         }
     }
     
-    pb.finish_with_message("✅ Download complete!");
+    pb.finish_with_message("Download complete!");
     Ok(())
 }
 
@@ -270,7 +270,7 @@ pub async fn upload_file_with_progress(
         }
     }
     
-    pb.finish_with_message("✅ Upload complete!");
+    pb.finish_with_message("Upload complete!");
     Ok(())
 }
 

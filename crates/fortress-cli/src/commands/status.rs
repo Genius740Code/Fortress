@@ -71,13 +71,13 @@ pub async fn handle_status(data_dir: Option<String>) -> Result<()> {
             }
         }
         println!("{} Encryption keys: {} ({})", 
-            style("✅").green(), 
+            style("✓").green(), 
             style("Found").green(),
             style(format!("{} keys", key_count)).bold()
         );
     } else {
         println!("{} Encryption keys: {}", 
-            style("❌").red(), 
+            style("✗").red(), 
             style("Missing").red()
         );
     }
@@ -98,14 +98,14 @@ pub async fn handle_status(data_dir: Option<String>) -> Result<()> {
         }
         
         println!("{} Data storage: {} ({}, {} files)", 
-            style("✅").green(), 
+            style("✓").green(), 
             style("Found").green(),
             style(format_bytes(data_size)).bold(),
             style(file_count).bold()
         );
     } else {
         println!("{} Data storage: {}", 
-            style("❌").red(), 
+            style("✗").red(), 
             style("Missing").red()
         );
     }
@@ -113,12 +113,12 @@ pub async fn handle_status(data_dir: Option<String>) -> Result<()> {
     println!();
     
     // Check server status
-    println!("{} Server Status:", style("🖥️").blue());
+    println!("{} Server Status:", style("[S]").blue());
     
     match check_server_status().await {
         Ok(server_info) => {
             println!("  {} Status: {}", 
-                style("✅").green(), 
+                style("✓").green(), 
                 style("Running").green().bold()
             );
             println!("  Address: {}", style(&server_info.address).bold());
@@ -128,7 +128,7 @@ pub async fn handle_status(data_dir: Option<String>) -> Result<()> {
             
             // Get detailed server metrics
             if let Ok(metrics) = get_server_metrics(&server_info.address).await {
-                println!("  📊 Performance:");
+                println!("  Performance:");
                 println!("    Requests/sec: {:.2}", style(metrics.requests_per_second).bold());
                 println!("    Avg Response: {}ms", style(metrics.average_response_time_ms).bold());
                 println!("    Active Connections: {}", style(metrics.active_connections).bold());
@@ -138,15 +138,15 @@ pub async fn handle_status(data_dir: Option<String>) -> Result<()> {
         }
         Err(e) => {
             println!("  {} Status: {}", 
-                style("❌").red(), 
+                style("✗").red(), 
                 style("Not running").red().bold()
             );
-            println!("  ℹ️  {}", e);
+            println!("  Info: {}", e);
         }
     }
     
     println!();
-    println!("📁 Database path: {}", style(db_path.display()).bold());
+    println!("Database path: {}", style(db_path.display()).bold());
     
     Ok(())
 }

@@ -56,14 +56,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match result {
         Ok(auth_result) => {
-            println!("✅ JWT Authentication successful!");
+            println!("✓ JWT Authentication successful!");
             println!("User: {}", auth_result.user_info.as_ref().unwrap().username);
             if let Some(token) = &auth_result.token {
                 println!("Token: {}", token);
             }
         }
         Err(e) => {
-            println!("❌ JWT Authentication failed: {}", e);
+            println!("✗ JWT Authentication failed: {}", e);
         }
     }
 
@@ -89,14 +89,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match result {
         Ok(auth_result) => {
-            println!("✅ OAuth Authentication successful!");
+            println!("✓ OAuth Authentication successful!");
             println!("User: {}", auth_result.user_info.as_ref().unwrap().username);
             if let Some(token) = &auth_result.token {
                 println!("Token: {}", token);
             }
         }
         Err(e) => {
-            println!("❌ OAuth Authentication failed: {}", e);
+            println!("✗ OAuth Authentication failed: {}", e);
         }
     }
 
@@ -122,11 +122,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match result {
         Ok(auth_result) => {
-            println!("✅ SAML Authentication successful!");
+            println!("✓ SAML Authentication successful!");
             println!("User: {}", auth_result.user_info.as_ref().username);
         }
         Err(e) => {
-            println!("❌ SAML Authentication failed: {}", e);
+            println!("✗ SAML Authentication failed: {}", e);
         }
     }
 
@@ -147,11 +147,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         match validation_result {
             Ok(user_info) => {
-                println!("✅ Token validation successful!");
+                println!("✓ Token validation successful!");
                 println!("User: {}", user_info.username);
             }
             Err(e) => {
-                println!("❌ Token validation failed: {}", e);
+                println!("✗ Token validation failed: {}", e);
             }
         }
     }
@@ -171,7 +171,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Failed auths: {}", stats.failed_auths);
     println!("Average auth time: {:.2}ms", stats.avg_auth_time_ms);
 
-    println!("\n🎉 Plugin-Based Authentication System Demo Complete! 🎉");
+    println!("\nPlugin-Based Authentication System Demo Complete");
 
     Ok(())
 }

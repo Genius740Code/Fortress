@@ -21,7 +21,7 @@ mod auth_tests {
         let hash2 = hash_password_secure(password).unwrap();
         assert_ne!(hash, hash2);
         
-        println!("✅ Secure password hashing test passed");
+        println!("✓ Secure password hashing test passed");
     }
 
     #[test]
@@ -36,7 +36,7 @@ mod auth_tests {
         assert_eq!(admin.username, "admin");
         assert!(verify_password_secure("admin123", &admin.password_hash).unwrap());
         
-        println!("✅ User store creation test passed");
+        println!("✓ User store creation test passed");
     }
 
     #[test]
@@ -65,7 +65,7 @@ mod auth_tests {
         let result = auth_manager.authenticate("testuser", "password123", "127.0.0.1", "Mozilla/5.0");
         assert!(result.await.is_ok());
         
-        println!("✅ Account lockout test passed");
+        println!("✓ Account lockout test passed");
     }
 
     #[test]
@@ -81,6 +81,6 @@ mod auth_tests {
         assert!(hash.len() > 50); // Argon2id hashes are long
         assert!(hash.contains('$')); // Contains delimiter
         
-        println!("✅ Argon2id security test passed");
+        println!("✓ Argon2id security test passed");
     }
 }

@@ -47,7 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     println!("✓ HSM key settings work correctly");
     
-    println!("All HSM integration tests passed! ✅");
+    println!("All HSM integration tests passed!");
     
     Ok(())
 }

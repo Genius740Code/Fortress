@@ -3,13 +3,13 @@
 use std::path::Path;
 
 fn main() {
-    println!("🔐 Fortress Encryption Algorithms Demo");
+    println!("Fortress Encryption Algorithms Demo");
     println!("=====================================");
     
     // Since we can't easily run the full tests due to other compilation issues,
     // let's at least demonstrate that the algorithms are properly defined
     
-    println!("\n📋 Available Encryption Algorithms:");
+    println!("\nAvailable Encryption Algorithms:");
     println!("-----------------------------------");
     
     let algorithms = vec![
@@ -21,12 +21,12 @@ fn main() {
     ];
     
     for (id, name, description) in algorithms {
-        println!("✅ {} - {}", name, id);
+        println!("✓ {} - {}", name, id);
         println!("   Description: {}", description);
         println!();
     }
     
-    println!("\n🚀 Performance Profiles:");
+    println!("\nPerformance Profiles:");
     println!("------------------------");
     
     let profiles = vec![
@@ -39,10 +39,10 @@ fn main() {
     ];
     
     for (name, description) in profiles {
-        println!("⚡ {} - {}", name, description);
+        println!("{} - {}", name, description);
     }
     
-    println!("\n🔧 Key Features Added:");
+    println!("\nKey Features Added:");
     println!("--------------------");
     println!("• XChaCha20-Poly1305: 192-bit nonce for better nonce reuse protection");
     println!("• Blake3 Encrypt: Modern hash-based encryption with SIMD optimization");
@@ -51,7 +51,7 @@ fn main() {
     println!("• Improved field-level encryption algorithm selection");
     println!("• Comprehensive test coverage for all new algorithms");
     
-    println!("\n📊 Algorithm Specifications:");
+    println!("\nAlgorithm Specifications:");
     println!("--------------------------");
     
     let specs = vec![
@@ -61,7 +61,7 @@ fn main() {
     ];
     
     for (name, key_size, nonce_size, tag_size, security) in specs {
-        println!("🔒 {}", name);
+        println!("{}", name);
         println!("   Key Size: {}", key_size);
         println!("   Nonce/Salt Size: {}", nonce_size);
         println!("   Tag/Hash Size: {}", tag_size);
@@ -69,7 +69,7 @@ fn main() {
         println!();
     }
     
-    println!("🎯 Usage Examples:");
+    println!("Usage Examples:");
     println!("-----------------");
     println!("```rust");
     println!("use fortress_core::encryption::create_algorithm;");
@@ -87,7 +87,7 @@ fn main() {
     println!("let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes())?;");
     println!("```");
     
-    println!("\n✨ Summary:");
+    println!("\nSummary:");
     println!("-----------");
     println!("Successfully added 3 new encryption algorithms to Fortress:");
     println!("• All algorithms are fully implemented and tested");
@@ -96,5 +96,5 @@ fn main() {
     println!("• Easy to extend with additional algorithms in the future");
     println!("• Maintains backward compatibility with existing code");
     
-    println!("\n🎉 Fortress encryption capabilities have been significantly enhanced!");
+    println!("\nFortress encryption capabilities have been significantly enhanced!");
 }

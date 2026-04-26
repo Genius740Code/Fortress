@@ -84,21 +84,21 @@ impl HelpCommandHandler {
     }
 
     async fn handle_search(&self, query: &str) -> Result<(), FortressError> {
-        println!("🔍 Searching for help on: '{}'", query);
+        println!("Searching for help on: '{}'", query);
         
         let results = self.doc_system.search_documentation(query);
         
         if results.is_empty() {
-            println!("❌ No documentation found for query: '{}'", query);
+            println!("✗ No documentation found for query: '{}'", query);
             self.suggest_alternatives(query).await?;
             return Ok(());
         }
 
         if results.len() == 1 {
-            println!("✅ Found exact match:");
+            println!("✓ Found exact match:");
             self.doc_system.display_documentation(results[0]).await?;
         } else {
-            println!("📋 Found {} results:", results.len());
+            println!("Found {} results:", results.len());
             
             // Display results and let user choose
             self.display_search_results(results).await?;
@@ -108,12 +108,12 @@ impl HelpCommandHandler {
     }
 
     async fn handle_error(&self, error_code: &str) -> Result<(), FortressError> {
-        println!("🔍 Looking up error code: '{}'", error_code);
+        println!("Looking up error code: '{}'", error_code);
         
         if let Some(doc) = self.doc_system.get_documentation(error_code) {
             self.doc_system.display_documentation(doc).await?;
         } else {
-            println!("❌ Error code '{}' not found", error_code);
+            println!("✗ Error code '{}' not found", error_code);
             self.suggest_similar_errors(error_code).await?;
         }
 
@@ -162,11 +162,11 @@ impl HelpCommandHandler {
         }
 
         if filtered_errors.is_empty() {
-            println!("❌ No errors found matching the specified filters");
+            println!("✗ No errors found matching the specified filters");
             return Ok(());
         }
 
-        println!("📋 Found {} matching errors:", filtered_errors.len());
+        println!("Found {} matching errors:", filtered_errors.len());
         
         for doc in &filtered_errors {
             println!("  {} - {} ({:?})", doc.error_code, doc.title, doc.severity);
@@ -283,14 +283,14 @@ impl HelpCommandHandler {
                 self.handle_categories().await?;
             },
             2 => {
-                println!("🔧 Running system diagnostics...");
+                println!("Running system diagnostics...");
                 self.run_diagnostics().await?;
             },
             3 => {
                 self.show_support_info().await?;
             },
             4 => {
-                println!("👋 Thank you for using the Fortress Help Wizard!");
+                println!("Thank you for using the Fortress Help Wizard!");
             },
             _ => {}
         }
@@ -299,12 +299,12 @@ impl HelpCommandHandler {
     }
 
     async fn handle_related(&self, error_code: &str) -> Result<(), FortressError> {
-        println!("🔗 Finding related errors for: '{}'", error_code);
+        println!("Finding related errors for: '{}'", error_code);
         
         let related_errors = self.doc_system.get_related_errors(error_code);
         
         if related_errors.is_empty() {
-            println!("❌ No related errors found for '{}'", error_code);
+            println!("✗ No related errors found for '{}'", error_code);
             
             // Suggest checking the error itself
             if Confirm::new()
@@ -318,7 +318,7 @@ impl HelpCommandHandler {
             return Ok(());
         }
 
-        println!("📋 Found {} related errors:", related_errors.len());
+        println!("Found {} related errors:", related_errors.len());
         
         for doc in &related_errors {
             println!("  {} - {} ({:?})", doc.error_code, doc.title, doc.severity);
@@ -345,7 +345,7 @@ impl HelpCommandHandler {
     }
 
     async fn handle_troubleshoot(&self, problem_type: &str) -> Result<(), FortressError> {
-        println!("🔧 Quick troubleshooting for: '{}'", problem_type);
+        println!("Quick troubleshooting for: '{}'", problem_type);
         
         // Map problem type to specific troubleshooting guide
         match problem_type.to_lowercase().as_str() {
@@ -356,7 +356,7 @@ impl HelpCommandHandler {
             "config" | "configuration" => self.troubleshoot_config().await?,
             "performance" | "perf" => self.troubleshoot_performance().await?,
             _ => {
-                println!("❌ Unknown problem type: '{}'", problem_type);
+                println!("✗ Unknown problem type: '{}'", problem_type);
                 self.suggest_troubleshooting_topics().await?;
             }
         }
@@ -368,7 +368,7 @@ impl HelpCommandHandler {
     async fn handle_config_wizard(&self) -> Result<(), FortressError> {
         use dialoguer::{Confirm, Select, Input};
         
-        println!("\n🔧 Configuration Problem Wizard");
+        println!("\nConfiguration Problem Wizard");
         
         let config_issues = vec![
             "Invalid configuration file",
@@ -387,7 +387,7 @@ impl HelpCommandHandler {
         match issue_selection {
             0 => self.handle_error("CFG001").await?,
             1 => {
-                println!("📋 Common missing fields:");
+                println!("Common missing fields:");
                 println!("  • database.host");
                 println!("  • database.port");
                 println!("  • encryption.algorithm");
@@ -399,11 +399,11 @@ impl HelpCommandHandler {
                     .interact()
                     .map_err(|e| FortressError::configuration_error("user_interaction", &format!("{}", e), "boolean input"))? 
                 {
-                    println!("🔧 Run: fortress config validate");
+                    println!("Run: fortress config validate");
                 }
             },
             2 => {
-                println!("📋 Common data type issues:");
+                println!("Common data type issues:");
                 println!("  • Port numbers should be integers");
                 println!("  • Booleans should be true/false");
                 println!("  • Strings should be quoted");
@@ -411,13 +411,13 @@ impl HelpCommandHandler {
                 self.handle_error("CFG001").await?;
             },
             3 => {
-                println!("📋 Environment variable troubleshooting:");
+                println!("Environment variable troubleshooting:");
                 println!("  • Check if variables are set: env | grep FORTRESS");
                 println!("  • Verify variable format: FORTRESS_DB_HOST=localhost");
                 println!("  • Restart service after changing variables");
             },
             4 => {
-                println!("📋 TOML syntax tips:");
+                println!("TOML syntax tips:");
                 println!("  • Use double quotes for strings");
                 println!("  • Numbers don't need quotes");
                 println!("  • Booleans are true/false");
@@ -429,7 +429,7 @@ impl HelpCommandHandler {
                     .interact()
                     .map_err(|e| FortressError::configuration_error("user_interaction", &format!("{}", e), "boolean input"))? 
                 {
-                    println!("🌐 Visit: https://toml.io/linter");
+                    println!("Visit: https://toml.io/linter");
                 }
             },
             _ => {}
@@ -461,13 +461,13 @@ impl HelpCommandHandler {
             0 | 1 => self.handle_error("DB001").await?,
             2 => self.handle_error("AUTH001").await?,
             3 => {
-                println!("📋 Database not found troubleshooting:");
+                println!("Database not found troubleshooting:");
                 println!("  1. Check database name in config");
                 println!("  2. Verify database exists: psql -l");
                 println!("  3. Create database if needed: CREATE DATABASE fortress");
             },
             4 => {
-                println!("📋 Permission denied troubleshooting:");
+                println!("Permission denied troubleshooting:");
                 println!("  1. Check user exists: \\du");
                 println!("  2. Grant permissions: GRANT ALL PRIVILEGES");
                 println!("  3. Verify database ownership");
@@ -481,7 +481,7 @@ impl HelpCommandHandler {
     async fn handle_encryption_wizard(&self) -> Result<(), FortressError> {
         use dialoguer::{Confirm, Select};
         
-        println!("\n🔐 Encryption Problem Wizard");
+        println!("\nEncryption Problem Wizard");
         
         let crypto_issues = vec![
             "Invalid key length",
@@ -503,7 +503,7 @@ impl HelpCommandHandler {
             2 => self.handle_error("ENC002").await?,
             3 => self.handle_error("KEY002").await?,
             4 => {
-                println!("📋 Supported algorithms:");
+                println!("Supported algorithms:");
                 println!("  • AEGIS-256 (recommended)");
                 println!("  • ChaCha20-Poly1305");
                 println!("  • AES-256-GCM");
@@ -522,9 +522,9 @@ impl HelpCommandHandler {
     async fn handle_network_wizard(&self) -> Result<(), FortressError> {
         use dialoguer::Confirm;
         
-        println!("\n🌐 Network Problem Wizard");
+        println!("\nNetwork Problem Wizard");
         
-        println!("📋 Network troubleshooting steps:");
+        println!("Network troubleshooting steps:");
         println!("  1. Check connectivity: ping <host>");
         println!("  2. Test port: telnet <host> <port>");
         println!("  3. Check firewall: ufw status");
@@ -537,7 +537,7 @@ impl HelpCommandHandler {
             .interact()
             .map_err(|e| FortressError::configuration_error("user_interaction", &format!("{}", e), "boolean input"))? 
         {
-            println!("🔧 Run: fortress doctor --network");
+            println!("Run: fortress doctor --network");
         }
 
         Ok(())
@@ -546,7 +546,7 @@ impl HelpCommandHandler {
     async fn handle_performance_wizard(&self) -> Result<(), FortressError> {
         use dialoguer::{Confirm, Select};
         
-        println!("\n⚡ Performance Problem Wizard");
+        println!("\nPerformance Problem Wizard");
         
         let perf_issues = vec![
             "Slow queries",
@@ -564,31 +564,31 @@ impl HelpCommandHandler {
 
         match issue_selection {
             0 => {
-                println!("📋 Slow query optimization:");
+                println!("Slow query optimization:");
                 println!("  1. Check query plans: EXPLAIN ANALYZE");
                 println!("  2. Add indexes: CREATE INDEX");
                 println!("  3. Optimize queries: fortress query optimize");
             },
             1 => {
-                println!("📋 Memory usage optimization:");
+                println!("Memory usage optimization:");
                 println!("  1. Check memory: fortress status --memory");
                 println!("  2. Adjust cache size: config cache.max_size");
                 println!("  3. Monitor leaks: fortress doctor --memory");
             },
             2 => {
-                println!("📋 CPU usage optimization:");
+                println!("CPU usage optimization:");
                 println!("  1. Check processes: top -p $(pgrep fortress)");
                 println!("  2. Profile queries: fortress profile");
                 println!("  3. Adjust workers: config server.workers");
             },
             3 => {
-                println!("📋 Connection pool optimization:");
+                println!("Connection pool optimization:");
                 println!("  1. Check pool status: fortress pool stats");
                 println!("  2. Increase pool size: config database.pool_size");
                 println!("  3. Set timeout: config database.timeout");
             },
             4 => {
-                println!("📋 Cache optimization:");
+                println!("Cache optimization:");
                 println!("  1. Check cache stats: fortress cache stats");
                 println!("  2. Clear cache: fortress cache clear");
                 println!("  3. Warm cache: fortress cache warm");
@@ -602,9 +602,9 @@ impl HelpCommandHandler {
     async fn handle_filesystem_wizard(&self) -> Result<(), FortressError> {
         use dialoguer::Confirm;
         
-        println!("\n📁 File System Problem Wizard");
+        println!("\nFile System Problem Wizard");
         
-        println!("📋 File system troubleshooting:");
+        println!("File system troubleshooting:");
         println!("  1. Check permissions: ls -la");
         println!("  2. Check disk space: df -h");
         println!("  3. Check file integrity: fortress fsck");
@@ -616,7 +616,7 @@ impl HelpCommandHandler {
             .interact()
             .map_err(|e| FortressError::configuration_error("user_interaction", &format!("{}", e), "boolean input"))? 
         {
-            println!("🔧 Run: fortress doctor --filesystem");
+            println!("Run: fortress doctor --filesystem");
         }
 
         Ok(())
@@ -625,7 +625,7 @@ impl HelpCommandHandler {
     async fn handle_compliance_wizard(&self) -> Result<(), FortressError> {
         use dialoguer::{Confirm, Select};
         
-        println!("\n📋 Compliance Problem Wizard");
+        println!("\nCompliance Problem Wizard");
         
         let compliance_issues = vec![
             "Audit failures",
@@ -642,25 +642,25 @@ impl HelpCommandHandler {
 
         match issue_selection {
             0 => {
-                println!("📋 Audit failure troubleshooting:");
+                println!("Audit failure troubleshooting:");
                 println!("  1. Check audit logs: fortress audit logs");
                 println!("  2. Run audit: fortress compliance audit");
                 println!("  3. Fix issues: fortress compliance fix");
             },
             1 => {
-                println!("📋 Policy violation troubleshooting:");
+                println!("Policy violation troubleshooting:");
                 println!("  1. Check policies: fortress policy list");
                 println!("  2. Validate compliance: fortress compliance validate");
                 println!("  3. Update policies: fortress policy update");
             },
             2 => {
-                println!("📋 Reporting error troubleshooting:");
+                println!("Reporting error troubleshooting:");
                 println!("  1. Check report config: fortress config show");
                 println!("  2. Test report: fortress compliance report --test");
                 println!("  3. Generate report: fortress compliance report");
             },
             3 => {
-                println!("📋 Data retention troubleshooting:");
+                println!("Data retention troubleshooting:");
                 println!("  1. Check retention policy: fortress retention show");
                 println!("  2. Validate retention: fortress retention validate");
                 println!("  3. Clean up data: fortress retention cleanup");
@@ -674,9 +674,9 @@ impl HelpCommandHandler {
     async fn handle_plugin_wizard(&self) -> Result<(), FortressError> {
         use dialoguer::Confirm;
         
-        println!("\n🔌 Plugin Problem Wizard");
+        println!("\nPlugin Problem Wizard");
         
-        println!("📋 Plugin troubleshooting:");
+        println!("Plugin troubleshooting:");
         println!("  1. List plugins: fortress plugin list");
         println!("  2. Check plugin status: fortress plugin status");
         println!("  3. Test plugin: fortress plugin test <name>");
@@ -688,7 +688,7 @@ impl HelpCommandHandler {
             .interact()
             .map_err(|e| FortressError::configuration_error("user_interaction", &format!("{}", e), "boolean input"))? 
         {
-            println!("🔧 Run: fortress doctor --plugins");
+            println!("Run: fortress doctor --plugins");
         }
 
         Ok(())
@@ -697,7 +697,7 @@ impl HelpCommandHandler {
     async fn handle_general_wizard(&self) -> Result<(), FortressError> {
         use dialoguer::{Confirm, Select};
         
-        println!("\n❓ General Problem Wizard");
+        println!("\nGeneral Problem Wizard");
         
         let general_options = vec![
             "Run system diagnostics",
@@ -716,10 +716,10 @@ impl HelpCommandHandler {
         match selection {
             0 => self.run_diagnostics().await?,
             1 => {
-                println!("🔧 Run: fortress status --verbose");
+                println!("Run: fortress status --verbose");
             },
             2 => {
-                println!("🔧 Run: fortress logs --tail 100");
+                println!("Run: fortress logs --tail 100");
             },
             3 => {
                 let query = dialoguer::Input::<String>::new()
@@ -737,7 +737,7 @@ impl HelpCommandHandler {
 
     // Helper methods
     async fn suggest_alternatives(&self, query: &str) -> Result<(), FortressError> {
-        println!("💡 Suggestions:");
+        println!("Suggestions:");
         println!("  • Try different keywords: 'database', 'encryption', 'config'");
         println!("  • Use error codes: 'ENC001', 'DB001', 'CFG001'");
         println!("  • Browse categories: 'fortress help categories'");
@@ -746,7 +746,7 @@ impl HelpCommandHandler {
     }
 
     async fn suggest_similar_errors(&self, error_code: &str) -> Result<(), FortressError> {
-        println!("💡 Similar error codes:");
+        println!("Similar error codes:");
         println!("  • ENC001 - Invalid Key Length");
         println!("  • DB001 - Database Connection Failed");
         println!("  • CFG001 - Invalid Configuration Value");
@@ -755,7 +755,7 @@ impl HelpCommandHandler {
     }
 
     async fn suggest_troubleshooting_topics(&self) -> Result<(), FortressError> {
-        println!("💡 Available troubleshooting topics:");
+        println!("Available troubleshooting topics:");
         println!("  • database - Database connection issues");
         println!("  • encryption - Encryption and key problems");
         println!("  • auth - Authentication failures");
@@ -786,7 +786,7 @@ impl HelpCommandHandler {
     }
 
     async fn run_diagnostics(&self) -> Result<(), FortressError> {
-        println!("🔧 Running Fortress Diagnostics");
+        println!("Running Fortress Diagnostics");
         println!("==============================");
         
         // Simulate diagnostic checks
@@ -802,12 +802,12 @@ impl HelpCommandHandler {
         ];
 
         for (i, check) in checks.iter().enumerate() {
-            println!("✅ ({}/8) {}", i + 1, check);
+            println!("✓ ({}/8) {}", i + 1, check);
             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
         }
 
-        println!("\n🎉 All diagnostics passed!");
-        println!("💡 If you're still experiencing issues, try:");
+        println!("\nAll diagnostics passed!");
+        println!("If you're still experiencing issues, try:");
         println!("  • fortress help wizard");
         println!("  • fortress logs --tail 50");
         println!("  • fortress status --verbose");
@@ -816,28 +816,28 @@ impl HelpCommandHandler {
     }
 
     async fn show_support_info(&self) -> Result<(), FortressError> {
-        println!("📞 Fortress Support Information");
+        println!("Fortress Support Information");
         println!("==========================");
         println!();
-        println!("📚 Documentation:");
+        println!("Documentation:");
         println!("  • https://docs.fortress.security");
         println!("  • https://github.com/Genius740Code/Fortress/wiki");
         println!();
-        println!("🐛 Bug Reports:");
+        println!("Bug Reports:");
         println!("  • https://github.com/Genius740Code/Fortress/issues");
         println!("  • Use 'fortress bug report' to generate template");
         println!();
-        println!("💬 Community:");
+        println!("Community:");
         println!("  • Discord: https://discord.gg/fortress");
         println!("  • Reddit: r/FortressSecurity");
         println!("  • Stack Overflow: tag with fortress");
         println!();
-        println!("📧 Enterprise Support:");
+        println!("Enterprise Support:");
         println!("  • Email: support@fortress.security");
         println!("  • Phone: +1-800-FORTRESS");
         println!("  • 24/7 support available for enterprise customers");
         println!();
-        println!("🔍 Before contacting support, please gather:");
+        println!("Before contacting support, please gather:");
         println!("  • Fortress version: 'fortress version --detailed'");
         println!("  • System information: 'fortress doctor'");
         println!("  • Error logs: 'fortress logs --tail 100'");
@@ -848,37 +848,37 @@ impl HelpCommandHandler {
 
     // Troubleshooting guides
     async fn troubleshoot_database(&self) -> Result<(), FortressError> {
-        println!("🗄️ Database Troubleshooting Guide");
+        println!("Database Troubleshooting Guide");
         println!("==============================");
         self.handle_error("DB001").await
     }
 
     async fn troubleshoot_encryption(&self) -> Result<(), FortressError> {
-        println!("🔐 Encryption Troubleshooting Guide");
+        println!("Encryption Troubleshooting Guide");
         println!("================================");
         self.handle_error("ENC001").await
     }
 
     async fn troubleshoot_auth(&self) -> Result<(), FortressError> {
-        println!("🔐 Authentication Troubleshooting Guide");
+        println!("Authentication Troubleshooting Guide");
         println!("=======================================");
         self.handle_error("AUTH001").await
     }
 
     async fn troubleshoot_network(&self) -> Result<(), FortressError> {
-        println!("🌐 Network Troubleshooting Guide");
+        println!("Network Troubleshooting Guide");
         println!("===============================");
         self.handle_network_wizard().await
     }
 
     async fn troubleshoot_config(&self) -> Result<(), FortressError> {
-        println!("⚙️ Configuration Troubleshooting Guide");
+        println!("Configuration Troubleshooting Guide");
         println!("====================================");
         self.handle_error("CFG001").await
     }
 
     async fn troubleshoot_performance(&self) -> Result<(), FortressError> {
-        println!("⚡ Performance Troubleshooting Guide");
+        println!("Performance Troubleshooting Guide");
         println!("=====================================");
         self.handle_performance_wizard().await
     }

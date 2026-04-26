@@ -343,7 +343,7 @@ async fn generate_simple_keys(path: &PathBuf) -> Result<()> {
 
 fn configure_encryption_interactive(template: &str) -> Result<EncryptionConfig> {
     println!();
-    println!("{}", style("🔐 Encryption Configuration").bold().cyan());
+    println!("{}", style("Encryption Configuration").bold().cyan());
     
     // Encryption algorithm selection
     let algorithms = vec!["aegis256", "aes256gcm", "chacha20poly1305"];

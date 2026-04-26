@@ -11,7 +11,7 @@ use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    println!("🚀 Fortress Advanced Performance Optimization Example");
+    println!("Fortress Advanced Performance Optimization Example");
     println!("=====================================================");
 
     // Initialize performance monitoring
@@ -98,41 +98,41 @@ async fn main() -> Result<()> {
         performance_monitor.clone(),
     ));
 
-    println!("✅ Performance optimization components initialized");
+    println!("✓ Performance optimization components initialized");
     println!();
 
     // Demonstrate query optimization
-    println!("🔍 Query Optimization Demo");
+    println!("Query Optimization Demo");
     println!("----------------------------");
     demonstrate_query_optimization(&query_optimizer).await?;
     println!();
 
     // Demonstrate distributed caching
-    println!("💾 Distributed Caching Demo");
+    println!("Distributed Caching Demo");
     println!("----------------------------");
     demonstrate_distributed_caching(&distributed_cache).await?;
     println!();
 
     // Demonstrate connection pooling
-    println!("🔗 Connection Pooling Demo");
+    println!("Connection Pooling Demo");
     println!("----------------------------");
     demonstrate_connection_pooling(&connection_pool).await?;
     println!();
 
     // Demonstrate performance monitoring
-    println!("📊 Performance Monitoring Demo");
+    println!("Performance Monitoring Demo");
     println!("----------------------------");
     demonstrate_performance_monitoring(&performance_monitor).await?;
     println!();
 
     // Demonstrate automatic tuning
-    println!("🎛️  Automatic Tuning Demo");
+    println!("Automatic Tuning Demo");
     println!("----------------------------");
     demonstrate_automatic_tuning(&auto_tuner).await?;
     println!();
 
     // Show comprehensive performance statistics
-    println!("📈 Comprehensive Performance Statistics");
+    println!("Comprehensive Performance Statistics");
     println!("--------------------------------------");
     show_performance_statistics(
         &performance_monitor,
@@ -143,7 +143,7 @@ async fn main() -> Result<()> {
     ).await?;
 
     println!();
-    println!("🎉 Performance optimization demo completed successfully!");
+    println!("Performance optimization demo completed successfully!");
 
     Ok(())
 }
@@ -221,7 +221,7 @@ async fn demonstrate_distributed_caching(
     for (i, key) in cache_keys.iter().enumerate() {
         let ttl = Some(3600 + (i as u64 * 600)); // Different TTLs
         distributed_cache.set(key, test_data.clone(), ttl).await?;
-        println!("  ✅ Cached: {} (TTL: {}s)", key, ttl.unwrap_or(0));
+        println!("  ✓ Cached: {} (TTL: {}s)", key, ttl.unwrap_or(0));
     }
     let set_time = start_time.elapsed();
 
@@ -230,8 +230,8 @@ async fn demonstrate_distributed_caching(
     for key in &cache_keys {
         let retrieved = distributed_cache.get(key).await?;
         match retrieved {
-            Some(data) => println!("  ✅ Retrieved: {} ({} bytes)", key, data.len()),
-            None => println!("  ❌ Missed: {}", key),
+            Some(data) => println!("  ✓ Retrieved: {} ({} bytes)", key, data.len()),
+            None => println!("  ✗ Missed: {}", key),
         }
     }
     let get_time = start_time.elapsed();
@@ -283,7 +283,7 @@ async fn demonstrate_connection_pooling(
 
     for i in 0..10 {
         let conn = connection_pool.get_connection().await?;
-        println!("  ✅ Acquired connection {}: {} (endpoint: {})", 
+        println!("  ✓ Acquired connection {}: {} (endpoint: {})", 
             i + 1, conn.id, conn.endpoint.id);
         connections.push(conn);
     }
@@ -298,7 +298,7 @@ async fn demonstrate_connection_pooling(
     let start_time = std::time::Instant::now();
     for (i, conn) in connections.into_iter().enumerate() {
         connection_pool.return_connection(conn).await?;
-        println!("  ✅ Returned connection {}", i + 1);
+        println!("  ✓ Returned connection {}", i + 1);
     }
     let return_time = start_time.elapsed();
     println!("Connection return time: {:.2} ms", return_time.as_millis());
@@ -323,7 +323,7 @@ async fn demonstrate_connection_pooling(
 
     // Perform health check
     let healthy = connection_pool.health_check().await?;
-    println!("  - Health check: {}", if healthy { "✅ Healthy" } else { "❌ Unhealthy" });
+    println!("  - Health check: {}", if healthy { "✓ Healthy" } else { "✗ Unhealthy" });
 
     Ok(())
 }
@@ -368,7 +368,7 @@ async fn demonstrate_performance_monitoring(
         metadata.insert("success".to_string(), serde_json::Value::Bool(true));
 
         performance_monitor.finish_operation(operation_id, false, metadata).await?;
-        println!("  ✅ Profiled: {} ({:?})", op_name, op_type);
+        println!("  ✓ Profiled: {} ({:?})", op_name, op_type);
     }
 
     // Wait for metrics aggregation
@@ -377,25 +377,25 @@ async fn demonstrate_performance_monitoring(
     // Show performance alerts
     let alerts = performance_monitor.get_alerts().await?;
     if !alerts.is_empty() {
-        println!("\n🚨 Performance Alerts:");
+        println!("\nPerformance Alerts:");
         for alert in alerts {
             println!("  - {}: {} ({:?})", 
                 alert.severity, alert.message, alert.alert_type);
         }
     } else {
-        println!("\n✅ No performance alerts");
+        println!("\nNo performance alerts");
     }
 
     // Show tuning recommendations
     let recommendations = performance_monitor.get_recommendations().await?;
     if !recommendations.is_empty() {
-        println!("\n💡 Tuning Recommendations:");
+        println!("\nTuning Recommendations:");
         for rec in recommendations {
             println!("  - {}: {} (Priority: {:?})", 
                 rec.recommendation_type, rec.description, rec.priority);
         }
     } else {
-        println!("\n✅ No tuning recommendations at this time");
+        println!("\nNo tuning recommendations at this time");
     }
 
     Ok(())
@@ -433,7 +433,7 @@ async fn demonstrate_automatic_tuning(
 
     println!("\nApplying sample tuning recommendation...");
     let change_id = auto_tuner.apply_recommendation(&sample_recommendation).await?;
-    println!("  ✅ Applied change: {}", change_id);
+    println!("  ✓ Applied change: {}", change_id);
 
     // Wait a bit for the change to be processed
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -457,7 +457,7 @@ async fn show_performance_statistics(
 
     // Performance metrics
     let metrics = performance_monitor.get_metrics().await?;
-    println!("\n📊 Performance Metrics:");
+    println!("\nPerformance Metrics:");
     for (operation_type, aggregated_metrics) in metrics {
         println!("  {}:", operation_type);
         println!("    - Operations: {}", aggregated_metrics.total_operations);
@@ -470,7 +470,7 @@ async fn show_performance_statistics(
 
     // Cache statistics
     let cache_stats = distributed_cache.get_statistics().await?;
-    println!("\n💾 Cache Statistics:");
+    println!("\nCache Statistics:");
     println!("  - Hit ratio: {:.2}%", cache_stats.hit_ratio * 100.0);
     println!("  - Total operations: {}", cache_stats.hits + cache_stats.misses);
     println!("  - Cache size: {:.2} MB", cache_stats.cache_size_bytes as f64 / 1024.0 / 1024.0);
@@ -478,7 +478,7 @@ async fn show_performance_statistics(
 
     // Connection pool statistics
     let pool_stats = connection_pool.get_statistics().await?;
-    println!("\n🔗 Connection Pool Statistics:");
+    println!("\nConnection Pool Statistics:");
     println!("  - Total connections: {}", pool_stats.total_connections);
     println!("  - Active connections: {}", pool_stats.active_connections);
     println!("  - Utilization: {:.1}%", pool_stats.utilization * 100.0);
@@ -486,14 +486,14 @@ async fn show_performance_statistics(
 
     // Query optimizer statistics
     let optimizer_stats = query_optimizer.get_optimizer_stats().await?;
-    println!("\n🔍 Query Optimizer Statistics:");
+    println!("\nQuery Optimizer Statistics:");
     println!("  - Cached plans: {}", optimizer_stats.cached_plans_count);
     println!("  - Cache hit ratio: {:.2}%", optimizer_stats.cache_hit_ratio * 100.0);
     println!("  - Tables with stats: {}", optimizer_stats.tables_with_stats);
 
     // Auto-tuner status
     let tuning_status = auto_tuner.get_tuning_status().await?;
-    println!("\n🎛️  Auto-Tuning Status:");
+    println!("\nAuto-Tuning Status:");
     println!("  - Enabled: {}", tuning_status.enabled);
     println!("  - Safety mode: {}", tuning_status.safety_mode);
     println!("  - Active strategies: {}", tuning_status.active_strategies_count);
@@ -505,16 +505,16 @@ async fn show_performance_statistics(
         &pool_stats,
         &optimizer_stats,
     );
-    println!("\n🏆 Overall Performance Score: {:.1}/100", overall_score);
+    println!("\nOverall Performance Score: {:.1}/100", overall_score);
 
     if overall_score >= 90.0 {
-        println!("  🌟 Excellent performance!");
+        println!("  Excellent performance!");
     } else if overall_score >= 75.0 {
-        println!("  ✅ Good performance");
+        println!("  Good performance");
     } else if overall_score >= 60.0 {
-        println!("  ⚠️  Performance needs improvement");
+        println!("  ⚠ Performance needs improvement");
     } else {
-        println!("  ❌ Poor performance - optimization needed");
+        println!("  ✗ Poor performance - optimization needed");
     }
 
     Ok(())
