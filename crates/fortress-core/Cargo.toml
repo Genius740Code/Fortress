@@ -183,6 +183,12 @@ tar = "0.4"
 # JWT support
 jsonwebtoken = "9.2"
 
+# Advanced authentication dependencies
+totp-rs = { version = "5.1", optional = true }
+qrcode = { version = "0.14", optional = true }
+percent-encoding = { version = "2.3", optional = true }
+user-agent-parser = { version = "0.3", optional = true }
+
 dashmap = { version = "5.5", optional = true }
 crossbeam = { version = "0.8", optional = true }
 atomic = { version = "0.6", optional = true }
@@ -231,6 +237,7 @@ full-performance = ["performance-optimization", "distributed-cache", "advanced-p
 observability = ["tracing-subscriber", "opentelemetry", "opentelemetry_sdk", "tracing-opentelemetry", "gethostname"]
 experimental = []  # Experimental features
 homomorphic-encryption = []  # Production-ready homomorphic encryption
+advanced-authentication = ["totp-rs", "qrcode", "percent-encoding", "user-agent-parser"]
 # Phase 3 features
 discovery = ["kube", "k8s-openapi", "trust-dns-resolver"]
 mesh = ["kube", "k8s-openapi"]

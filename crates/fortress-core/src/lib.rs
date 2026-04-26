@@ -886,11 +886,7 @@ pub mod kv_engine;
 
 /// Transit Engine - Encryption as a Service with AEGIS-256
 
-
-
 pub mod transit_engine;
-
-
 
 /// Image encryption and processing system
 
@@ -901,6 +897,9 @@ pub mod image_encryption;
 /// Authentication and authorization system
 
 pub mod auth;
+
+#[cfg(test)]
+pub mod auth_advanced_tests;
 
 /// Security audit logging system
 pub mod security_audit;

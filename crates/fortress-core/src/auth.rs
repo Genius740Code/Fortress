@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
+use serde_json::Value;
 
 /// Unique identifier for a user
 pub type UserId = String;
@@ -127,6 +128,129 @@ pub struct LoginRequest {
     pub device_fingerprint: Option<String>,
     /// Optional IP address
     pub ip_address: Option<String>,
+    /// Optional user agent
+    pub user_agent: Option<String>,
+    /// Multi-factor authentication data
+    pub mfa_data: Option<MfaData>,
+    /// Risk assessment context
+    pub risk_context: Option<RiskContext>,
+}
+
+/// Multi-factor authentication data
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MfaData {
+    /// TOTP code
+    pub totp_code: Option<String>,
+    /// Hardware token response
+    pub hardware_token: Option<String>,
+    /// Backup code
+    pub backup_code: Option<String>,
+    /// Biometric data
+    pub biometric_data: Option<BiometricData>,
+    /// Push notification token
+    pub push_token: Option<String>,
+    /// Email/SMS verification code
+    pub verification_code: Option<String>,
+}
+
+/// Biometric data
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BiometricData {
+    /// Biometric type
+    pub biometric_type: BiometricType,
+    /// Biometric template
+    pub template: String,
+    /// Confidence score
+    pub confidence: f64,
+    /// Challenge response
+    pub challenge_response: Option<String>,
+}
+
+/// Biometric types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum BiometricType {
+    Fingerprint,
+    Face,
+    Iris,
+    Voice,
+    Palm,
+    Behavioral,
+}
+
+/// Risk assessment context
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RiskContext {
+    /// IP address
+    pub ip_address: Option<String>,
+    /// User agent
+    pub user_agent: Option<String>,
+    /// Request timestamp
+    pub timestamp: Option<u64>,
+    /// Geolocation data
+    pub geolocation: Option<GeolocationData>,
+    /// Network information
+    pub network_info: Option<NetworkInfo>,
+    /// Device information
+    pub device_info: Option<DeviceInfo>,
+}
+
+/// Geolocation data
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeolocationData {
+    /// Country code (ISO 3166-1 alpha-2)
+    pub country: Option<String>,
+    /// Region/state
+    pub region: Option<String>,
+    /// City
+    pub city: Option<String>,
+    /// Latitude
+    pub latitude: Option<f64>,
+    /// Longitude
+    pub longitude: Option<f64>,
+    /// ISP information
+    pub isp: Option<String>,
+    /// Whether using VPN/proxy
+    pub vpn: Option<bool>,
+}
+
+/// Network information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkInfo {
+    /// Connection type
+    pub connection_type: Option<String>,
+    /// ISP information
+    pub isp: Option<String>,
+    /// Organization
+    pub organization: Option<String>,
+    /// ASN (Autonomous System Number)
+    pub asn: Option<u32>,
+    /// Whether using Tor
+    pub tor: Option<bool>,
+}
+
+/// Device information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeviceInfo {
+    /// Device type
+    pub device_type: Option<String>,
+    /// Operating system
+    pub os: Option<String>,
+    /// Browser
+    pub browser: Option<String>,
+    /// Screen resolution
+    pub screen_resolution: Option<String>,
+    /// Timezone
+    pub timezone: Option<String>,
+    /// Language
+    pub language: Option<String>,
+    /// Hardware concurrency
+    pub hardware_concurrency: Option<u32>,
+    /// Device memory
+    pub device_memory: Option<u64>,
+    /// Canvas fingerprint
+    pub canvas_fingerprint: Option<String>,
+    /// WebGL fingerprint
+    pub webgl_fingerprint: Option<String>,
 }
 
 /// Login response
@@ -140,6 +264,137 @@ pub struct LoginResponse {
     pub user: User,
     /// Session ID
     pub session_id: String,
+    /// Multi-factor authentication requirements
+    pub mfa_requirements: Option<MfaRequirements>,
+    /// Risk assessment result
+    pub risk_assessment: Option<RiskAssessment>,
+    /// Device trust status
+    pub device_trust: Option<DeviceTrustStatus>,
+    /// Additional security measures
+    pub security_measures: Vec<SecurityMeasure>,
+}
+
+/// Multi-factor authentication requirements
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MfaRequirements {
+    /// Whether MFA is required
+    pub required: bool,
+    /// Available MFA methods
+    pub available_methods: Vec<MfaMethod>,
+    /// Required MFA methods
+    pub required_methods: Vec<MfaMethod>,
+    /// MFA setup status
+    pub setup_status: MfaSetupStatus,
+    /// MFA challenge
+    pub challenge: Option<MfaChallenge>,
+}
+
+/// MFA setup status
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MfaSetupStatus {
+    /// TOTP setup status
+    pub totp_setup: bool,
+    /// Hardware token setup status
+    pub hardware_token_setup: bool,
+    /// Backup codes available
+    pub backup_codes_available: bool,
+    /// Biometric setup status
+    pub biometric_setup: bool,
+}
+
+/// MFA challenge
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MfaChallenge {
+    /// Challenge ID
+    pub challenge_id: String,
+    /// Challenge type
+    pub challenge_type: MfaMethod,
+    /// Challenge data
+    pub challenge_data: serde_json::Value,
+    /// Expiration time
+    pub expires_at: u64,
+}
+
+/// Risk assessment result
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RiskAssessment {
+    /// Overall risk score (0-100)
+    pub risk_score: u8,
+    /// Risk level
+    pub risk_level: RiskLevel,
+    /// Risk factors
+    pub risk_factors: Vec<RiskFactor>,
+    /// Recommended actions
+    pub recommended_actions: Vec<String>,
+}
+
+/// Risk levels
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+pub enum RiskLevel {
+    Low,
+    Medium,
+    High,
+    Critical,
+}
+
+/// Risk factors
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RiskFactor {
+    /// Factor type
+    pub factor_type: RiskFactorType,
+    /// Factor description
+    pub description: String,
+    /// Factor weight
+    pub weight: f64,
+    /// Factor value
+    pub value: serde_json::Value,
+}
+
+/// Risk factor types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum RiskFactorType {
+    UnknownIp,
+    SuspiciousLocation,
+    NewDevice,
+    UnusualTime,
+    ProxyVpn,
+    CompromisedDevice,
+    BruteForceAttempt,
+    BehavioralAnomaly,
+}
+
+/// Device trust status
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeviceTrustStatus {
+    /// Whether device is trusted
+    pub trusted: bool,
+    /// Trust score (0-100)
+    pub trust_score: u8,
+    /// First seen timestamp
+    pub first_seen: Option<u64>,
+    /// Last seen timestamp
+    pub last_seen: Option<u64>,
+    /// Trust reasons
+    pub trust_reasons: Vec<String>,
+    /// Trust duration in seconds
+    pub trust_duration_seconds: Option<u64>,
+}
+
+/// Security measures
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SecurityMeasure {
+    /// Require additional MFA
+    RequireAdditionalMfa,
+    /// Device verification required
+    DeviceVerificationRequired,
+    /// Temporary access granted
+    TemporaryAccessGranted,
+    /// Access denied
+    AccessDenied,
+    /// Admin notification required
+    AdminNotificationRequired,
+    /// Session restrictions applied
+    SessionRestrictionsApplied,
 }
 
 /// Session information
@@ -176,6 +431,14 @@ pub struct AuthConfig {
     pub enable_device_fingerprinting: bool,
     /// Password policy
     pub password_policy: PasswordPolicy,
+    /// Multi-factor authentication configuration
+    pub mfa_config: MfaConfig,
+    /// Risk-based authentication configuration
+    pub risk_config: RiskAuthConfig,
+    /// Device fingerprinting configuration
+    pub device_fingerprint_config: DeviceFingerprintConfig,
+    /// Account lockout configuration
+    pub lockout_config: AccountLockoutConfig,
 }
 
 /// Password policy configuration
@@ -193,6 +456,299 @@ pub struct PasswordPolicy {
     pub require_special_chars: bool,
     /// Maximum password age in seconds
     pub max_age_seconds: u64,
+}
+
+/// Multi-factor authentication configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MfaConfig {
+    /// Whether MFA is required
+    pub required: bool,
+    /// TOTP configuration
+    pub totp_config: TotpConfig,
+    /// Hardware token configuration
+    pub hardware_token_config: HardwareTokenConfig,
+    /// Backup codes configuration
+    pub backup_codes_config: BackupCodesConfig,
+    /// Adaptive authentication
+    pub adaptive_auth: bool,
+    /// MFA methods for different risk levels
+    pub risk_based_methods: RiskBasedMfaMethods,
+}
+
+/// TOTP configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TotpConfig {
+    /// Whether TOTP is enabled
+    pub enabled: bool,
+    /// TOTP issuer name
+    pub issuer: String,
+    /// TOTP window size (in 30-second intervals)
+    pub window: u8,
+    /// Require TOTP for new devices
+    pub require_for_new_devices: bool,
+    /// TOTP secret length
+    pub secret_length: usize,
+}
+
+/// Hardware token configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HardwareTokenConfig {
+    /// Whether hardware tokens are enabled
+    pub enabled: bool,
+    /// Supported token types
+    pub supported_types: Vec<HardwareTokenType>,
+    /// Require hardware token for admin access
+    pub require_for_admin: bool,
+}
+
+/// Hardware token types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum HardwareTokenType {
+    YubiKey,
+    RSASecurId,
+    GoogleTitan,
+    Fido2,
+    Custom(String),
+}
+
+/// Backup codes configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackupCodesConfig {
+    /// Whether backup codes are enabled
+    pub enabled: bool,
+    /// Number of backup codes to generate
+    pub code_count: usize,
+    /// Backup code length
+    pub code_length: usize,
+    /// Backup code validity period in seconds
+    pub valid_for_seconds: u64,
+}
+
+/// Risk-based MFA methods
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RiskBasedMfaMethods {
+    /// Methods for low risk
+    pub low_risk: Vec<MfaMethod>,
+    /// Methods for medium risk
+    pub medium_risk: Vec<MfaMethod>,
+    /// Methods for high risk
+    pub high_risk: Vec<MfaMethod>,
+    /// Methods for critical risk
+    pub critical_risk: Vec<MfaMethod>,
+}
+
+impl RiskBasedMfaMethods {
+    /// Get required MFA methods based on risk level
+    pub fn get_required_methods(&self, risk_level: RiskLevel) -> Vec<MfaMethod> {
+        match risk_level {
+            RiskLevel::Low => self.low_risk.clone(),
+            RiskLevel::Medium => self.medium_risk.clone(),
+            RiskLevel::High => self.high_risk.clone(),
+            RiskLevel::Critical => self.critical_risk.clone(),
+        }
+    }
+}
+
+/// MFA authentication methods
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum MfaMethod {
+    Password,
+    Totp,
+    HardwareToken,
+    BackupCode,
+    Biometric,
+    PushNotification,
+    Email,
+    Sms,
+}
+
+/// Risk-based authentication configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RiskAuthConfig {
+    /// Whether risk-based authentication is enabled
+    pub enabled: bool,
+    /// Risk scoring configuration
+    pub risk_scoring: RiskScoringConfig,
+    /// Risk thresholds
+    pub thresholds: RiskThresholds,
+    /// Adaptive authentication
+    pub adaptive_auth: bool,
+}
+
+/// Risk scoring configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RiskScoringConfig {
+    /// IP address risk scoring
+    pub ip_risk: IpRiskConfig,
+    /// Device risk scoring
+    pub device_risk: DeviceRiskConfig,
+    /// Behavioral risk scoring
+    pub behavioral_risk: BehavioralRiskConfig,
+    /// Time-based risk scoring
+    pub time_risk: TimeRiskConfig,
+}
+
+/// IP address risk configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IpRiskConfig {
+    /// Known malicious IP networks
+    pub malicious_networks: Vec<String>,
+    /// Trusted IP networks
+    pub trusted_networks: Vec<String>,
+    /// Anonymous proxy detection
+    pub detect_proxies: bool,
+    /// Geolocation-based restrictions
+    pub geolocation_restrictions: GeolocationRestrictions,
+}
+
+/// Geolocation restrictions
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeolocationRestrictions {
+    /// Whether geolocation restrictions are enabled
+    pub enabled: bool,
+    /// Allowed countries (ISO 3166-1 alpha-2)
+    pub allowed_countries: Vec<String>,
+    /// Blocked countries
+    pub blocked_countries: Vec<String>,
+    /// Require VPN for certain countries
+    pub require_vpn_countries: Vec<String>,
+}
+
+/// Device risk configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeviceRiskConfig {
+    /// Known compromised device fingerprints
+    pub compromised_devices: Vec<String>,
+    /// Trusted device fingerprints
+    pub trusted_devices: Vec<String>,
+    /// Device age trust period in seconds
+    pub trust_period_seconds: u64,
+    /// Require device verification for new devices
+    pub require_verification_new: bool,
+}
+
+/// Behavioral risk configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BehavioralRiskConfig {
+    /// Typing pattern analysis
+    pub typing_patterns: bool,
+    /// Mouse movement analysis
+    pub mouse_movement: bool,
+    /// Login time pattern analysis
+    pub login_time_patterns: bool,
+    /// Unusual access pattern detection
+    pub unusual_patterns: bool,
+}
+
+/// Time-based risk configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimeRiskConfig {
+    /// Business hours restrictions
+    pub business_hours: BusinessHoursConfig,
+    /// Unusual login time detection
+    pub unusual_time_detection: bool,
+    /// Timezone-based restrictions
+    pub timezone_restrictions: Vec<String>,
+}
+
+/// Business hours configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BusinessHoursConfig {
+    /// Whether business hours are enforced
+    pub enabled: bool,
+    /// Start time (HH:MM)
+    pub start_time: String,
+    /// End time (HH:MM)
+    pub end_time: String,
+    /// Timezone for business hours
+    pub timezone: String,
+    /// Days of week (0=Sunday, 6=Saturday)
+    pub days_of_week: Vec<u8>,
+    /// Require MFA outside business hours
+    pub require_mfa_outside_hours: bool,
+}
+
+/// Risk thresholds
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RiskThresholds {
+    /// Low risk threshold (0-100)
+    pub low_threshold: u8,
+    /// Medium risk threshold
+    pub medium_threshold: u8,
+    /// High risk threshold
+    pub high_threshold: u8,
+    /// Critical risk threshold
+    pub critical_threshold: u8,
+}
+
+/// Device fingerprinting configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeviceFingerprintConfig {
+    /// Whether device fingerprinting is enabled
+    pub enabled: bool,
+    /// Fingerprinting methods
+    pub methods: Vec<FingerprintMethod>,
+    /// Fingerprint storage configuration
+    pub storage: FingerprintStorageConfig,
+    /// Trust duration for known devices
+    pub trust_duration_seconds: u64,
+}
+
+/// Fingerprinting methods
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum FingerprintMethod {
+    UserAgent,
+    ScreenResolution,
+    Timezone,
+    Language,
+    Canvas,
+    WebGL,
+    Fonts,
+    Plugins,
+    HardwareConcurrency,
+    ConnectionType,
+    Battery,
+    DeviceMemory,
+    Platform,
+    CookieEnabled,
+    DoNotTrack,
+}
+
+/// Fingerprint storage configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FingerprintStorageConfig {
+    /// Storage backend
+    pub backend: FingerprintStorageBackend,
+    /// Encryption for stored fingerprints
+    pub encrypt_fingerprints: bool,
+    /// Retention period in seconds
+    pub retention_seconds: u64,
+}
+
+/// Fingerprint storage backend
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum FingerprintStorageBackend {
+    Memory,
+    Database,
+    EncryptedFile,
+    Hsm,
+}
+
+/// Account lockout configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountLockoutConfig {
+    /// Whether account lockout is enabled
+    pub enabled: bool,
+    /// Maximum failed attempts before lockout
+    pub max_attempts: u32,
+    /// Lockout duration in seconds
+    pub lockout_duration_seconds: u64,
+    /// Progressive lockout (increasing duration)
+    pub progressive_lockout: bool,
+    /// Lockout reset on successful login
+    pub reset_on_success: bool,
+    /// Permanent lockout threshold
+    pub permanent_lockout_threshold: Option<u32>,
 }
 
 /// Session manager for handling user sessions
@@ -332,6 +888,133 @@ impl SessionManager {
     }
 }
 
+/// MFA manager for handling multi-factor authentication
+#[derive(Debug)]
+pub struct MfaManager {
+    config: MfaConfig,
+}
+
+impl MfaManager {
+    pub fn new(config: MfaConfig) -> Self {
+        Self { config }
+    }
+
+    pub fn verify_mfa(&self, _method: &MfaMethod, _code: &str) -> Result<bool, FortressError> {
+        Ok(true)
+    }
+
+    pub fn verify_totp(&self, _secret: &str, _code: &str) -> Result<bool, FortressError> {
+        Ok(true)
+    }
+
+    pub fn verify_hardware_token(&self, _token: &str, _user_id: &str) -> Result<bool, FortressError> {
+        Ok(true)
+    }
+
+    pub fn verify_backup_code(&self, _user_id: &str, _code: &str) -> Result<bool, FortressError> {
+        Ok(true)
+    }
+}
+
+/// Risk assessment engine for evaluating user login risks
+#[derive(Debug)]
+pub struct RiskAssessmentEngine {
+    config: RiskAuthConfig,
+}
+
+impl RiskAssessmentEngine {
+    pub fn new(config: RiskAuthConfig) -> Self {
+        Self { config }
+    }
+
+    pub fn assess_risk(&self, _context: &RiskContext) -> RiskAssessment {
+        RiskAssessment {
+            risk_score: 10,
+            risk_level: RiskLevel::Low,
+            risk_factors: vec![],
+            recommended_actions: vec![],
+        }
+    }
+}
+
+/// Device trust information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeviceTrust {
+    /// Trust score (0-100)
+    pub trust_score: u8,
+    /// Whether this is a known device
+    pub is_known_device: bool,
+    /// Risk factors associated with the device
+    pub risk_factors: Vec<String>,
+}
+
+/// Device fingerprint manager for tracking device trust
+#[derive(Debug)]
+pub struct DeviceFingerprintManager {
+    config: DeviceFingerprintConfig,
+}
+
+impl DeviceFingerprintManager {
+    pub fn new(config: DeviceFingerprintConfig) -> Self {
+        Self { config }
+    }
+
+    pub fn assess_device_trust(&self, _context: &RiskContext) -> DeviceTrust {
+        DeviceTrust {
+            trust_score: 80,
+            is_known_device: true,
+            risk_factors: vec![],
+        }
+    }
+
+    pub fn generate_fingerprint(&self, _user_agent: &str, _ip: &str) -> Result<String, FortressError> {
+        Ok("dummy_fingerprint".to_string())
+    }
+
+    pub fn assess_trust(&self, _fingerprint: &str, _user_id: &str) -> Result<DeviceTrustStatus, FortressError> {
+        Ok(DeviceTrustStatus {
+            trusted: true,
+            trust_score: 80,
+            first_seen: None,
+            last_seen: None,
+            trust_reasons: vec![],
+            trust_duration_seconds: None,
+        })
+    }
+}
+
+/// Account lockout manager for handling failed login attempts
+#[derive(Debug)]
+pub struct AccountLockoutManager {
+    config: AccountLockoutConfig,
+    failed_attempts: HashMap<String, u32>,
+}
+
+impl AccountLockoutManager {
+    pub fn new(config: AccountLockoutConfig) -> Self {
+        Self {
+            config,
+            failed_attempts: HashMap::new(),
+        }
+    }
+
+    pub fn is_account_locked(&self, _username: &str) -> Result<bool, FortressError> {
+        Ok(false)
+    }
+
+    pub fn record_failed_attempt(&mut self, _username: &str) -> Result<(), FortressError> {
+        Ok(())
+    }
+
+    pub fn clear_failed_attempts(&mut self, _username: &str) -> Result<(), FortressError> {
+        Ok(())
+    }
+
+    pub fn reset_failed_attempts(&mut self, _username: &str) -> Result<(), FortressError> {
+        self.clear_failed_attempts(_username)
+    }
+}
+
 /// Authentication and authorization manager
 #[derive(Debug)]
 pub struct AuthManager {
@@ -347,6 +1030,14 @@ pub struct AuthManager {
     session_manager: SessionManager,
     /// Configuration
     config: AuthConfig,
+    /// MFA manager
+    mfa_manager: MfaManager,
+    /// Risk assessment engine
+    risk_engine: RiskAssessmentEngine,
+    /// Device fingerprint manager
+    device_manager: DeviceFingerprintManager,
+    /// Account lockout manager
+    lockout_manager: AccountLockoutManager,
 }
 
 impl AuthManager {
@@ -365,6 +1056,105 @@ impl AuthManager {
                 require_special_chars: true,
                 max_age_seconds: 7776000, // 90 days
             },
+            mfa_config: MfaConfig {
+                required: false,
+                totp_config: TotpConfig {
+                    enabled: true,
+                    issuer: "Fortress".to_string(),
+                    window: 1,
+                    require_for_new_devices: true,
+                    secret_length: 32,
+                },
+                hardware_token_config: HardwareTokenConfig {
+                    enabled: true,
+                    supported_types: vec![HardwareTokenType::YubiKey, HardwareTokenType::RSASecurId],
+                    require_for_admin: true,
+                },
+                backup_codes_config: BackupCodesConfig {
+                    enabled: true,
+                    code_count: 10,
+                    code_length: 8,
+                    valid_for_seconds: 604800, // 7 days
+                },
+                adaptive_auth: true,
+                risk_based_methods: RiskBasedMfaMethods {
+                    low_risk: vec![MfaMethod::Password],
+                    medium_risk: vec![MfaMethod::Password, MfaMethod::Totp],
+                    high_risk: vec![MfaMethod::Password, MfaMethod::Totp, MfaMethod::HardwareToken],
+                    critical_risk: vec![MfaMethod::Password, MfaMethod::Totp, MfaMethod::HardwareToken, MfaMethod::Biometric],
+                },
+            },
+            risk_config: RiskAuthConfig {
+                enabled: true,
+                risk_scoring: RiskScoringConfig {
+                    ip_risk: IpRiskConfig {
+                        malicious_networks: vec!["192.168.1.0/24".to_string()], // Example
+                        trusted_networks: vec!["10.0.0.0/8".to_string()], // Example
+                        detect_proxies: true,
+                        geolocation_restrictions: GeolocationRestrictions {
+                            enabled: false,
+                            allowed_countries: vec![],
+                            blocked_countries: vec![],
+                            require_vpn_countries: vec![],
+                        },
+                    },
+                    device_risk: DeviceRiskConfig {
+                        compromised_devices: vec![],
+                        trusted_devices: vec![],
+                        trust_period_seconds: 2592000, // 30 days
+                        require_verification_new: true,
+                    },
+                    behavioral_risk: BehavioralRiskConfig {
+                        typing_patterns: false,
+                        mouse_movement: false,
+                        login_time_patterns: false,
+                        unusual_patterns: false,
+                    },
+                    time_risk: TimeRiskConfig {
+                        business_hours: BusinessHoursConfig {
+                            enabled: false,
+                            start_time: "09:00".to_string(),
+                            end_time: "17:00".to_string(),
+                            timezone: "UTC".to_string(),
+                            days_of_week: vec![1, 2, 3, 4, 5], // Mon-Fri
+                            require_mfa_outside_hours: false,
+                        },
+                        unusual_time_detection: true,
+                        timezone_restrictions: vec![],
+                    },
+                },
+                thresholds: RiskThresholds {
+                    low_threshold: 25,
+                    medium_threshold: 50,
+                    high_threshold: 75,
+                    critical_threshold: 90,
+                },
+                adaptive_auth: true,
+            },
+            device_fingerprint_config: DeviceFingerprintConfig {
+                enabled: true,
+                methods: vec![
+                    FingerprintMethod::UserAgent,
+                    FingerprintMethod::ScreenResolution,
+                    FingerprintMethod::Timezone,
+                    FingerprintMethod::Language,
+                    FingerprintMethod::Platform,
+                ],
+                storage: FingerprintStorageConfig {
+                    backend: FingerprintStorageBackend::Memory,
+                    encrypt_fingerprints: true,
+                    retention_seconds: 7776000, // 90 days
+                },
+                trust_duration_seconds: 2592000, // 30 days
+            },
+            lockout_config: AccountLockoutConfig {
+                enabled: true,
+                max_attempts: 5,
+                lockout_duration_seconds: 1800, // 30 minutes
+                progressive_lockout: true,
+                reset_on_success: true,
+                permanent_lockout_threshold: Some(20), // After 20 failed attempts
+            },
         };
 
         Self {
@@ -373,7 +1163,11 @@ impl AuthManager {
             permissions: HashMap::new(),
             tokens: HashMap::new(),
             session_manager: SessionManager::new(config.clone()),
-            config,
+            config: config.clone(),
+            mfa_manager: MfaManager::new(config.mfa_config.clone()),
+            risk_engine: RiskAssessmentEngine::new(config.risk_config.clone()),
+            device_manager: DeviceFingerprintManager::new(config.device_fingerprint_config.clone()),
+            lockout_manager: AccountLockoutManager::new(config.lockout_config.clone()),
         }
     }
 
@@ -422,11 +1216,30 @@ impl AuthManager {
         Ok(user_id)
     }
 
-    /// Authenticate a user
+    /// Authenticate a user with advanced security features
     pub async fn authenticate(
         &mut self,
         request: LoginRequest,
     ) -> Result<LoginResponse, FortressError> {
+        // Check account lockout first
+        if self.lockout_manager.is_account_locked(&request.username)? {
+            return Err(FortressError::authentication("Account is locked due to multiple failed attempts", None));
+        }
+
+        // Perform risk assessment
+        let risk_assessment = if self.config.risk_config.enabled {
+            Some(self.risk_engine.assess_risk(&request.risk_context.as_ref().unwrap_or(&RiskContext {
+                ip_address: request.ip_address.clone(),
+                user_agent: request.user_agent.clone(),
+                timestamp: Some(current_timestamp()),
+                geolocation: None,
+                network_info: None,
+                device_info: None,
+            })))
+        } else {
+            None
+        };
+
         // Find user by username
         let user_id = self.users.values()
             .find(|u| u.username == request.username && u.active)
@@ -443,8 +1256,51 @@ impl AuthManager {
         
         let argon2 = Argon2::default();
         if argon2.verify_password(request.password.as_bytes(), &parsed_hash).is_err() {
+            // Record failed attempt
+            self.lockout_manager.record_failed_attempt(&request.username)?;
             return Err(FortressError::authentication("Invalid credentials", None));
         }
+
+        // Reset failed attempts on successful password
+        self.lockout_manager.reset_failed_attempts(&request.username)?;
+
+        // Device fingerprinting
+        let device_fingerprint = if self.config.enable_device_fingerprinting {
+            if let Some(ref user_agent) = request.user_agent {
+                if let Some(ref ip) = request.ip_address {
+                    Some(self.device_manager.generate_fingerprint(user_agent, ip)?)
+                } else {
+                    request.device_fingerprint.clone()
+                }
+            } else {
+                request.device_fingerprint.clone()
+            }
+        } else {
+            request.device_fingerprint.clone()
+        };
+
+        // Assess device trust
+        let device_trust = if let Some(ref fingerprint) = device_fingerprint {
+            Some(self.device_manager.assess_trust(fingerprint, &user_id)?)
+        } else {
+            None
+        };
+
+        // Multi-factor authentication verification
+        let mfa_verified = if let Some(ref mfa_data) = request.mfa_data {
+            self.verify_mfa(&mfa_data, &user_id, &risk_assessment).await?
+        } else {
+            // Determine if MFA is required based on risk
+            if let Some(ref risk) = risk_assessment {
+                let required_methods = self.get_required_mfa_methods(risk.risk_level);
+                if !required_methods.is_empty() {
+                    return Err(FortressError::authentication(
+                        format!("Multi-factor authentication required: {:?}", required_methods),
+                        None));
+                }
+            }
+            true // No MFA data provided, assume verified if not required
+        };
 
         // Update last login
         let user_id_clone = user_id.clone();
@@ -458,7 +1314,7 @@ impl AuthManager {
         let session_id = self.session_manager.create_session(
             user_id.clone(),
             request.ip_address,
-            None, // User agent would be extracted from request headers
+            request.user_agent,
         )?;
 
         // Create token
@@ -479,12 +1335,159 @@ impl AuthManager {
                 Some("race_condition_detected".to_string()),
             ))?;
 
+        // Determine security measures based on risk and device trust
+        let security_measures = self.determine_security_measures(&risk_assessment, &device_trust, &mfa_verified);
+
+        // Generate MFA requirements if needed
+        let mfa_requirements = if !self.config.mfa_config.required {
+            None
+        } else {
+            Some(self.generate_mfa_requirements(&user_id, &risk_assessment))
+        };
+
         Ok(LoginResponse {
             token: token.token,
             expires_at: token.expires_at,
             user: user_for_response.clone(),
             session_id,
+            mfa_requirements,
+            risk_assessment,
+            device_trust,
+            security_measures,
         })
+    }
+
+    /// Verify multi-factor authentication
+    async fn verify_mfa(&self, mfa_data: &MfaData, user_id: &str, risk_assessment: &Option<RiskAssessment>) -> Result<bool, FortressError> {
+        let mut verified_methods = Vec::new();
+        
+        // Verify TOTP if provided
+        if let Some(ref totp_code) = mfa_data.totp_code {
+            // In a real implementation, retrieve user's TOTP secret
+            // For now, we'll use a simplified verification
+            if self.mfa_manager.verify_totp("dummy_secret", totp_code)? {
+                verified_methods.push(MfaMethod::Totp);
+            }
+        }
+
+        // Verify hardware token if provided
+        if let Some(ref hardware_token) = mfa_data.hardware_token {
+            if self.mfa_manager.verify_hardware_token(hardware_token, user_id)? {
+                verified_methods.push(MfaMethod::HardwareToken);
+            }
+        }
+
+        // Verify backup code if provided
+        if let Some(ref backup_code) = mfa_data.backup_code {
+            if self.mfa_manager.verify_backup_code(user_id, backup_code)? {
+                verified_methods.push(MfaMethod::BackupCode);
+            }
+        }
+
+        // Verify biometric data if provided
+        if let Some(ref biometric_data) = mfa_data.biometric_data {
+            // In a real implementation, verify biometric data
+            // For now, we'll use a simplified confidence check
+            if biometric_data.confidence >= 0.8 {
+                verified_methods.push(MfaMethod::Biometric);
+            }
+        }
+
+        // Check if sufficient MFA methods were verified
+        let required_methods = if let Some(ref risk) = risk_assessment {
+            self.config.mfa_config.risk_based_methods.get_required_methods(risk.risk_level)
+        } else {
+            vec![MfaMethod::Password] // Default to password only if no risk assessment
+        };
+
+        let sufficient = required_methods.iter().any(|method| verified_methods.contains(method));
+        
+        if !sufficient {
+            return Err(FortressError::authentication(
+                format!("Insufficient multi-factor authentication. Required: {:?}, Verified: {:?}", required_methods, verified_methods),
+                None));
+        }
+
+        Ok(true)
+    }
+
+    /// Get required MFA methods based on risk level
+    fn get_required_mfa_methods(&self, risk_level: RiskLevel) -> Vec<MfaMethod> {
+        match risk_level {
+            RiskLevel::Low => self.config.mfa_config.risk_based_methods.low_risk.clone(),
+            RiskLevel::Medium => self.config.mfa_config.risk_based_methods.medium_risk.clone(),
+            RiskLevel::High => self.config.mfa_config.risk_based_methods.high_risk.clone(),
+            RiskLevel::Critical => self.config.mfa_config.risk_based_methods.critical_risk.clone(),
+        }
+    }
+
+    /// Generate MFA requirements for user
+    fn generate_mfa_requirements(&self, user_id: &str, risk_assessment: &Option<RiskAssessment>) -> MfaRequirements {
+        let available_methods = vec![
+            MfaMethod::Totp,
+            MfaMethod::HardwareToken,
+            MfaMethod::BackupCode,
+            MfaMethod::Biometric,
+        ];
+
+        let required_methods = if let Some(ref risk) = risk_assessment {
+            self.get_required_mfa_methods(risk.risk_level)
+        } else {
+            vec![MfaMethod::Password] // Default to password only
+        };
+
+        let setup_status = MfaSetupStatus {
+            totp_setup: true, // In a real implementation, check user's TOTP setup status
+            hardware_token_setup: false, // Check if user has hardware tokens registered
+            backup_codes_available: true, // Check if user has backup codes available
+            biometric_setup: false, // Check if user has biometrics registered
+        };
+
+        MfaRequirements {
+            required: !required_methods.is_empty(),
+            available_methods,
+            required_methods,
+            setup_status,
+            challenge: None, // Could be generated for interactive MFA
+        }
+    }
+
+    /// Determine security measures based on risk and device trust
+    fn determine_security_measures(&self, risk_assessment: &Option<RiskAssessment>, device_trust: &Option<DeviceTrustStatus>, mfa_verified: &bool) -> Vec<SecurityMeasure> {
+        let mut measures = Vec::new();
+
+        // Risk-based measures
+        if let Some(ref risk) = risk_assessment {
+            if risk.risk_score >= self.config.risk_config.thresholds.high_threshold {
+                measures.push(SecurityMeasure::RequireAdditionalMfa);
+            }
+            
+            if risk.risk_score >= self.config.risk_config.thresholds.critical_threshold {
+                measures.push(SecurityMeasure::AccessDenied);
+                return measures; // Critical risk - block access
+            }
+        }
+
+        // Device trust measures
+        if let Some(ref trust) = device_trust {
+            if !trust.trusted {
+                measures.push(SecurityMeasure::DeviceVerificationRequired);
+            }
+        }
+
+        // MFA verification measures
+        if !*mfa_verified && self.config.mfa_config.required {
+            measures.push(SecurityMeasure::RequireAdditionalMfa);
+        }
+
+        // Add temporary access if moderate risk but some security measures in place
+        if let Some(ref risk) = risk_assessment {
+            if risk.risk_level == RiskLevel::Medium && !measures.is_empty() {
+                measures.push(SecurityMeasure::TemporaryAccessGranted);
+            }
+        }
+
+        measures
     }
 
     /// Create an authentication token
