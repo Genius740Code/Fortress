@@ -1,0 +1,1 @@
+impl Future<Output = std::result::Result<secure_audit_merkle::SecureAuditEntry, error::FortressError>>

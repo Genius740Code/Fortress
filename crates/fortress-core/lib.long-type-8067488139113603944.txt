@@ -1,0 +1,1 @@
+impl Future<Output = std::result::Result<Vec<audit_tamper_detection::ResponseAction>, error::FortressError>>

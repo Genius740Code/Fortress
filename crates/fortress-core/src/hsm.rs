@@ -3330,3 +3330,565 @@ impl HsmProvider for GoogleCloudHsmProvider {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::encryption::{EncryptionAlgorithm, Aes256GcmWrapper};
+    
+    /// Test HSM configuration creation and validation
+    #[tokio::test]
+    async fn test_hsm_config_creation() {
+        let config = HsmConfig {
+            provider: HsmProviderType::AwsCloudHsm,
+            connection: HsmConnection::AwsCloudHsm { 
+                cluster_id: "test-cluster".to_string() 
+            },
+            credentials: HsmCredentials::Aws { 
+                access_key_id: "test-key-id".to_string(),
+                secret_access_key: "test-secret-key".to_string(),
+                region: "us-east-1".to_string(),
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        assert_eq!(config.provider, HsmProviderType::AwsCloudHsm);
+        assert_eq!(config.key_settings.extractable, false);
+        assert_eq!(config.key_settings.sensitive, true);
+    }
+    
+    /// Test AWS CloudHSM provider initialization
+    #[tokio::test]
+    async fn test_aws_cloudhsm_initialization() {
+        let config = HsmConfig {
+            provider: HsmProviderType::AwsCloudHsm,
+            connection: HsmConnection::AwsCloudHsm { 
+                cluster_id: "test-cluster".to_string() 
+            },
+            credentials: HsmCredentials::Aws { 
+                access_key_id: "AKIATEST123456789012".to_string(),
+                secret_access_key: "abcdefghijklmnopqrstuvwxyz1234567890".to_string(),
+                region: "us-east-1".to_string(),
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let provider = AwsCloudHsmProvider::new().await.expect("AWS provider should create");
+        let result = provider.initialize(&config).await;
+        
+        assert!(result.is_ok(), "AWS CloudHSM initialization should succeed");
+    }
+    
+    /// Test AWS CloudHSM initialization with invalid credentials
+    #[tokio::test]
+    async fn test_aws_cloudhsm_invalid_credentials() {
+        let config = HsmConfig {
+            provider: HsmProviderType::AwsCloudHsm,
+            connection: HsmConnection::AwsCloudHsm { 
+                cluster_id: "test-cluster".to_string() 
+            },
+            credentials: HsmCredentials::Aws { 
+                access_key_id: "short".to_string(),
+                secret_access_key: "short".to_string(),
+                region: "us-east-1".to_string(),
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let provider = AwsCloudHsmProvider::new().await.expect("AWS provider should create");
+        let result = provider.initialize(&config).await;
+        
+        assert!(result.is_err(), "AWS CloudHSM should reject invalid credentials");
+    }
+    
+    /// Test PKCS#11 provider initialization
+    #[tokio::test]
+    async fn test_pkcs11_initialization() {
+        let config = HsmConfig {
+            provider: HsmProviderType::Pkcs11,
+            connection: HsmConnection::Pkcs11 { 
+                library_path: "/usr/lib/libpkcs11.so".to_string(),
+                slot_id: Some(0),
+                token_label: Some("test-token".to_string()),
+            },
+            credentials: HsmCredentials::Pkcs11 { 
+                pin: "123456".to_string(),
+                user_type: Pkcs11UserType::User,
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let provider = Pkcs11Provider::new().await.expect("PKCS#11 provider should create");
+        let result = provider.initialize(&config).await;
+        
+        assert!(result.is_ok(), "PKCS#11 initialization should succeed");
+    }
+    
+    /// Test Azure Dedicated HSM provider initialization
+    #[tokio::test]
+    async fn test_azure_hsm_initialization() {
+        let config = HsmConfig {
+            provider: HsmProviderType::AzureDedicatedHsm,
+            connection: HsmConnection::Azure { 
+                resource_id: "/subscriptions/test/resourceGroups/test/providers/Microsoft.HardwareSecurityModules/hsmInstances/test".to_string() 
+            },
+            credentials: HsmCredentials::Azure { 
+                client_id: "test-client-id".to_string(),
+                client_secret: "test-client-secret".to_string(),
+                tenant_id: "test-tenant-id".to_string(),
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let provider = AzureDedicatedHsmProvider::new().await.expect("Azure provider should create");
+        let result = provider.initialize(&config).await;
+        
+        assert!(result.is_ok(), "Azure HSM initialization should succeed");
+    }
+    
+    /// Test Google Cloud HSM provider initialization
+    #[tokio::test]
+    async fn test_google_cloud_hsm_initialization() {
+        let config = HsmConfig {
+            provider: HsmProviderType::GoogleCloudHsm,
+            connection: HsmConnection::Google { 
+                project_id: "test-project".to_string(),
+                location: "us-central1".to_string(),
+                key_ring: "test-keyring".to_string(),
+            },
+            credentials: HsmCredentials::Google { 
+                service_account_key: "test-service-account-key".to_string(),
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let provider = GoogleCloudHsmProvider::new().await.expect("Google Cloud provider should create");
+        let result = provider.initialize(&config).await;
+        
+        assert!(result.is_ok(), "Google Cloud HSM initialization should succeed");
+    }
+    
+    /// Test HSM key manager creation
+    #[tokio::test]
+    async fn test_hsm_key_manager_creation() {
+        let config = HsmConfig {
+            provider: HsmProviderType::AwsCloudHsm,
+            connection: HsmConnection::AwsCloudHsm { 
+                cluster_id: "test-cluster".to_string() 
+            },
+            credentials: HsmCredentials::Aws { 
+                access_key_id: "AKIATEST123456789012".to_string(),
+                secret_access_key: "abcdefghijklmnopqrstuvwxyz1234567890".to_string(),
+                region: "us-east-1".to_string(),
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let manager = HsmKeyManagerInner::new(config).await;
+        assert!(manager.is_ok(), "HSM key manager should create successfully");
+    }
+    
+    /// Test key generation in HSM
+    #[tokio::test]
+    async fn test_hsm_key_generation() {
+        let config = HsmConfig {
+            provider: HsmProviderType::AwsCloudHsm,
+            connection: HsmConnection::AwsCloudHsm { 
+                cluster_id: "test-cluster".to_string() 
+            },
+            credentials: HsmCredentials::Aws { 
+                access_key_id: "AKIATEST123456789012".to_string(),
+                secret_access_key: "abcdefghijklmnopqrstuvwxyz1234567890".to_string(),
+                region: "us-east-1".to_string(),
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let manager = HsmKeyManagerInner::new(config).await.expect("HSM manager should create");
+        let provider = manager.provider();
+        
+        // Initialize provider
+        let init_result = provider.initialize(&config).await;
+        assert!(init_result.is_ok(), "Provider should initialize");
+        
+        // Test key generation
+        let key_id = KeyId::from("test-key-1");
+        let algorithm = Aes256GcmWrapper::new();
+        
+        let result = provider.generate_key(&key_id, &algorithm).await;
+        assert!(result.is_ok(), "Key generation should succeed");
+    }
+    
+    /// Test key metadata retrieval
+    #[tokio::test]
+    async fn test_hsm_key_metadata() {
+        let config = HsmConfig {
+            provider: HsmProviderType::AwsCloudHsm,
+            connection: HsmConnection::AwsCloudHsm { 
+                cluster_id: "test-cluster".to_string() 
+            },
+            credentials: HsmCredentials::Aws { 
+                access_key_id: "AKIATEST123456789012".to_string(),
+                secret_access_key: "abcdefghijklmnopqrstuvwxyz1234567890".to_string(),
+                region: "us-east-1".to_string(),
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let manager = HsmKeyManagerInner::new(config).await.expect("HSM manager should create");
+        let provider = manager.provider();
+        
+        // Initialize provider
+        let init_result = provider.initialize(&config).await;
+        assert!(init_result.is_ok(), "Provider should initialize");
+        
+        // Test metadata retrieval
+        let key_id = KeyId::from("test-key-metadata");
+        let result = provider.get_key_metadata(&key_id).await;
+        
+        assert!(result.is_ok(), "Key metadata retrieval should succeed");
+        let metadata = result.unwrap();
+        assert_eq!(metadata.key_id, key_id);
+        assert_eq!(metadata.algorithm, "AES-256-GCM");
+        assert_eq!(metadata.key_size, 256);
+    }
+    
+    /// Test key deletion
+    #[tokio::test]
+    async fn test_hsm_key_deletion() {
+        let config = HsmConfig {
+            provider: HsmProviderType::AwsCloudHsm,
+            connection: HsmConnection::AwsCloudHsm { 
+                cluster_id: "test-cluster".to_string() 
+            },
+            credentials: HsmCredentials::Aws { 
+                access_key_id: "AKIATEST123456789012".to_string(),
+                secret_access_key: "abcdefghijklmnopqrstuvwxyz1234567890".to_string(),
+                region: "us-east-1".to_string(),
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let manager = HsmKeyManagerInner::new(config).await.expect("HSM manager should create");
+        let provider = manager.provider();
+        
+        // Initialize provider
+        let init_result = provider.initialize(&config).await;
+        assert!(init_result.is_ok(), "Provider should initialize");
+        
+        // Test key deletion
+        let key_id = KeyId::from("test-key-delete");
+        let result = provider.delete_key(&key_id).await;
+        
+        assert!(result.is_ok(), "Key deletion should succeed");
+    }
+    
+    /// Test key listing
+    #[tokio::test]
+    async fn test_hsm_key_listing() {
+        let config = HsmConfig {
+            provider: HsmProviderType::AwsCloudHsm,
+            connection: HsmConnection::AwsCloudHsm { 
+                cluster_id: "test-cluster".to_string() 
+            },
+            credentials: HsmCredentials::Aws { 
+                access_key_id: "AKIATEST123456789012".to_string(),
+                secret_access_key: "abcdefghijklmnopqrstuvwxyz1234567890".to_string(),
+                region: "us-east-1".to_string(),
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let manager = HsmKeyManagerInner::new(config).await.expect("HSM manager should create");
+        let provider = manager.provider();
+        
+        // Initialize provider
+        let init_result = provider.initialize(&config).await;
+        assert!(init_result.is_ok(), "Provider should initialize");
+        
+        // Test key listing
+        let result = provider.list_keys().await;
+        
+        assert!(result.is_ok(), "Key listing should succeed");
+        let keys = result.unwrap();
+        assert!(!keys.is_empty(), "Should return sample keys");
+        
+        // Verify key structure
+        for (key_id, metadata) in keys {
+            assert!(!key_id.to_string().is_empty(), "Key ID should not be empty");
+            assert!(!metadata.algorithm.is_empty(), "Algorithm should not be empty");
+            assert!(metadata.key_size > 0, "Key size should be positive");
+        }
+    }
+    
+    /// Test signing operations
+    #[tokio::test]
+    async fn test_hsm_signing() {
+        let config = HsmConfig {
+            provider: HsmProviderType::AwsCloudHsm,
+            connection: HsmConnection::AwsCloudHsm { 
+                cluster_id: "test-cluster".to_string() 
+            },
+            credentials: HsmCredentials::Aws { 
+                access_key_id: "AKIATEST123456789012".to_string(),
+                secret_access_key: "abcdefghijklmnopqrstuvwxyz1234567890".to_string(),
+                region: "us-east-1".to_string(),
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let manager = HsmKeyManagerInner::new(config).await.expect("HSM manager should create");
+        let provider = manager.provider();
+        
+        // Initialize provider
+        let init_result = provider.initialize(&config).await;
+        assert!(init_result.is_ok(), "Provider should initialize");
+        
+        // Test signing
+        let key_id = KeyId::from("test-sign-key");
+        let data = b"Test data for signing";
+        
+        let result = provider.sign(&key_id, data).await;
+        assert!(result.is_ok(), "Signing should succeed");
+        
+        let signature = result.unwrap();
+        assert_eq!(signature.len(), 256, "Signature should be 256 bytes");
+    }
+    
+    /// Test signature verification
+    #[tokio::test]
+    async fn test_hsm_verification() {
+        let config = HsmConfig {
+            provider: HsmProviderType::AwsCloudHsm,
+            connection: HsmConnection::AwsCloudHsm { 
+                cluster_id: "test-cluster".to_string() 
+            },
+            credentials: HsmCredentials::Aws { 
+                access_key_id: "AKIATEST123456789012".to_string(),
+                secret_access_key: "abcdefghijklmnopqrstuvwxyz1234567890".to_string(),
+                region: "us-east-1".to_string(),
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let manager = HsmKeyManagerInner::new(config).await.expect("HSM manager should create");
+        let provider = manager.provider();
+        
+        // Initialize provider
+        let init_result = provider.initialize(&config).await;
+        assert!(init_result.is_ok(), "Provider should initialize");
+        
+        // Test signing and verification
+        let key_id = KeyId::from("test-verify-key");
+        let data = b"Test data for verification";
+        
+        let signature = provider.sign(&key_id, data).await.expect("Signing should succeed");
+        let verification = provider.verify(&key_id, data, &signature).await;
+        
+        assert!(verification.is_ok(), "Verification should succeed");
+        assert!(verification.unwrap(), "Signature should verify correctly");
+    }
+    
+    /// Test encryption operations
+    #[tokio::test]
+    async fn test_hsm_encryption() {
+        let config = HsmConfig {
+            provider: HsmProviderType::AwsCloudHsm,
+            connection: HsmConnection::AwsCloudHsm { 
+                cluster_id: "test-cluster".to_string() 
+            },
+            credentials: HsmCredentials::Aws { 
+                access_key_id: "AKIATEST123456789012".to_string(),
+                secret_access_key: "abcdefghijklmnopqrstuvwxyz1234567890".to_string(),
+                region: "us-east-1".to_string(),
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let manager = HsmKeyManagerInner::new(config).await.expect("HSM manager should create");
+        let provider = manager.provider();
+        
+        // Initialize provider
+        let init_result = provider.initialize(&config).await;
+        assert!(init_result.is_ok(), "Provider should initialize");
+        
+        // Test encryption
+        let key_id = KeyId::from("test-encrypt-key");
+        let plaintext = b"Test data for encryption";
+        
+        let result = provider.encrypt(&key_id, plaintext).await;
+        assert!(result.is_ok(), "Encryption should succeed");
+        
+        let ciphertext = result.unwrap();
+        assert!(ciphertext.len() > plaintext.len(), "Ciphertext should be longer than plaintext");
+    }
+    
+    /// Test decryption operations
+    #[tokio::test]
+    async fn test_hsm_decryption() {
+        let config = HsmConfig {
+            provider: HsmProviderType::AwsCloudHsm,
+            connection: HsmConnection::AwsCloudHsm { 
+                cluster_id: "test-cluster".to_string() 
+            },
+            credentials: HsmCredentials::Aws { 
+                access_key_id: "AKIATEST123456789012".to_string(),
+                secret_access_key: "abcdefghijklmnopqrstuvwxyz1234567890".to_string(),
+                region: "us-east-1".to_string(),
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let manager = HsmKeyManagerInner::new(config).await.expect("HSM manager should create");
+        let provider = manager.provider();
+        
+        // Initialize provider
+        let init_result = provider.initialize(&config).await;
+        assert!(init_result.is_ok(), "Provider should initialize");
+        
+        // Test encryption and decryption
+        let key_id = KeyId::from("test-decrypt-key");
+        let plaintext = b"Test data for decryption";
+        
+        let ciphertext = provider.encrypt(&key_id, plaintext).await.expect("Encryption should succeed");
+        let decrypted = provider.decrypt(&key_id, &ciphertext).await;
+        
+        assert!(decrypted.is_ok(), "Decryption should succeed");
+        assert_eq!(decrypted.unwrap(), plaintext, "Decrypted data should match original");
+    }
+    
+    /// Test health check functionality
+    #[tokio::test]
+    async fn test_hsm_health_check() {
+        let config = HsmConfig {
+            provider: HsmProviderType::AwsCloudHsm,
+            connection: HsmConnection::AwsCloudHsm { 
+                cluster_id: "test-cluster".to_string() 
+            },
+            credentials: HsmCredentials::Aws { 
+                access_key_id: "AKIATEST123456789012".to_string(),
+                secret_access_key: "abcdefghijklmnopqrstuvwxyz1234567890".to_string(),
+                region: "us-east-1".to_string(),
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let manager = HsmKeyManagerInner::new(config).await.expect("HSM manager should create");
+        let provider = manager.provider();
+        
+        // Initialize provider
+        let init_result = provider.initialize(&config).await;
+        assert!(init_result.is_ok(), "Provider should initialize");
+        
+        // Test health check
+        let result = provider.health_check().await;
+        assert!(result.is_ok(), "Health check should succeed");
+        assert!(result.unwrap(), "Health check should return true");
+    }
+    
+    /// Test error handling for uninitialized provider
+    #[tokio::test]
+    async fn test_hsm_uninitialized_errors() {
+        let config = HsmConfig {
+            provider: HsmProviderType::AwsCloudHsm,
+            connection: HsmConnection::AwsCloudHsm { 
+                cluster_id: "test-cluster".to_string() 
+            },
+            credentials: HsmCredentials::Aws { 
+                access_key_id: "AKIATEST123456789012".to_string(),
+                secret_access_key: "abcdefghijklmnopqrstuvwxyz1234567890".to_string(),
+                region: "us-east-1".to_string(),
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let manager = HsmKeyManagerInner::new(config).await.expect("HSM manager should create");
+        let provider = manager.provider();
+        
+        // Don't initialize provider - test error handling
+        let key_id = KeyId::from("test-error-key");
+        
+        // All operations should fail when not initialized
+        let result = provider.generate_key(&key_id, &Aes256GcmWrapper::new()).await;
+        assert!(result.is_err(), "Key generation should fail when not initialized");
+        
+        let result = provider.get_key_metadata(&key_id).await;
+        assert!(result.is_err(), "Metadata retrieval should fail when not initialized");
+        
+        let result = provider.delete_key(&key_id).await;
+        assert!(result.is_err(), "Key deletion should fail when not initialized");
+    }
+    
+    /// Test connection pooling functionality
+    #[tokio::test]
+    async fn test_hsm_connection_pooling() {
+        let config = HsmConfig {
+            provider: HsmProviderType::AwsCloudHsm,
+            connection: HsmConnection::AwsCloudHsm { 
+                cluster_id: "test-cluster".to_string() 
+            },
+            credentials: HsmCredentials::Aws { 
+                access_key_id: "AKIATEST123456789012".to_string(),
+                secret_access_key: "abcdefghijklmnopqrstuvwxyz1234567890".to_string(),
+                region: "us-east-1".to_string(),
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let manager = HsmKeyManagerInner::new(config).await.expect("HSM manager should create");
+        let provider = manager.provider();
+        
+        // Initialize provider
+        let init_result = provider.initialize(&config).await;
+        assert!(init_result.is_ok(), "Provider should initialize");
+        
+        // Test multiple operations to exercise connection pool
+        let key_id = KeyId::from("test-pool-key");
+        let algorithm = Aes256GcmWrapper::new();
+        
+        // Perform multiple operations concurrently
+        let mut handles = Vec::new();
+        for i in 0..5 {
+            let key_id_clone = KeyId::from(format!("test-pool-key-{}", i));
+            let provider_ref = provider as &dyn HsmProvider;
+            let handle = tokio::spawn(async move {
+                provider_ref.generate_key(&key_id_clone, &algorithm).await
+            });
+            handles.push(handle);
+        }
+        
+        // Wait for all operations to complete
+        for handle in handles {
+            let result = handle.await.expect("Task should complete");
+            assert!(result.is_ok(), "Concurrent key generation should succeed");
+        }
+    }
+    
+    /// Test shutdown functionality
+    #[tokio::test]
+    async fn test_hsm_shutdown() {
+        let config = HsmConfig {
+            provider: HsmProviderType::AwsCloudHsm,
+            connection: HsmConnection::AwsCloudHsm { 
+                cluster_id: "test-cluster".to_string() 
+            },
+            credentials: HsmCredentials::Aws { 
+                access_key_id: "AKIATEST123456789012".to_string(),
+                secret_access_key: "abcdefghijklmnopqrstuvwxyz1234567890".to_string(),
+                region: "us-east-1".to_string(),
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let manager = HsmKeyManagerInner::new(config).await.expect("HSM manager should create");
+        let provider = manager.provider();
+        
+        // Initialize provider
+        let init_result = provider.initialize(&config).await;
+        assert!(init_result.is_ok(), "Provider should initialize");
+        
+        // Test shutdown
+        let result = provider.shutdown().await;
+        assert!(result.is_ok(), "Shutdown should succeed");
+    }
+}

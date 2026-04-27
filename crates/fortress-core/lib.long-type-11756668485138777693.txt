@@ -1,0 +1,1 @@
+Pin<Box<impl Future<Output = std::result::Result<audit_tamper_detection::ResponseAction, error::FortressError>>>>

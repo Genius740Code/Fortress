@@ -184,10 +184,7 @@ pub trait EncryptionAlgorithm: Send + Sync + fmt::Debug {
 
     }
 
-    /// Clone the algorithm for use in async contexts
-
-    fn clone_box(&self) -> Box<dyn EncryptionAlgorithm>;
-
+    
 }
 
 
@@ -804,12 +801,7 @@ impl EncryptionAlgorithm for Aegis256 {
     fn performance_profile(&self) -> PerformanceProfile {
         PerformanceProfile::Balanced
     }
-
-    fn clone_box(&self) -> Box<dyn EncryptionAlgorithm> {
-        Box::new(self.clone())
-    }
 }
-
 
 /// ChaCha20-Poly1305 encryption algorithm
 
@@ -1232,10 +1224,6 @@ impl EncryptionAlgorithm for XChaCha20Poly1305 {
     fn performance_profile(&self) -> PerformanceProfile {
         PerformanceProfile::Balanced
     }
-
-    fn clone_box(&self) -> Box<dyn EncryptionAlgorithm> {
-        Box::new(self.clone())
-    }
 }
 
 /// Blake3-based encryption algorithm
@@ -1391,10 +1379,6 @@ impl EncryptionAlgorithm for Blake3Encrypt {
 
     fn performance_profile(&self) -> PerformanceProfile {
         PerformanceProfile::Hardware
-    }
-
-    fn clone_box(&self) -> Box<dyn EncryptionAlgorithm> {
-        Box::new(self.clone())
     }
 }
 
@@ -1564,10 +1548,7 @@ impl EncryptionAlgorithm for HmacSha512Encrypt {
         PerformanceProfile::Fortress
     }
 
-    fn clone_box(&self) -> Box<dyn EncryptionAlgorithm> {
-        Box::new(self.clone())
     }
-}
 
 /// AES-256-CTR encryption algorithm
 ///
@@ -1705,10 +1686,7 @@ impl EncryptionAlgorithm for Aes256Ctr {
         PerformanceProfile::Streaming
     }
 
-    fn clone_box(&self) -> Box<dyn EncryptionAlgorithm> {
-        Box::new(self.clone())
     }
-}
 
 /// Argon2id-based encryption algorithm
 ///
@@ -1928,10 +1906,7 @@ impl EncryptionAlgorithm for Argon2idEncrypt {
         PerformanceProfile::Fortress
     }
 
-    fn clone_box(&self) -> Box<dyn EncryptionAlgorithm> {
-        Box::new(self.clone())
     }
-}
 
 /// Composite encryption algorithm
 ///
@@ -2138,10 +2113,7 @@ impl EncryptionAlgorithm for CompositeEncrypt {
         PerformanceProfile::Quantum
     }
 
-    fn clone_box(&self) -> Box<dyn EncryptionAlgorithm> {
-        Box::new(self.clone())
     }
-}
 
 /// Salsa20 stream cipher
 ///
@@ -2287,10 +2259,7 @@ impl EncryptionAlgorithm for Salsa20 {
         PerformanceProfile::Streaming
     }
 
-    fn clone_box(&self) -> Box<dyn EncryptionAlgorithm> {
-        Box::new(self.clone())
     }
-}
 
 /// ASCON lightweight AEAD algorithm
 ///
@@ -2482,10 +2451,7 @@ impl EncryptionAlgorithm for Ascon {
         PerformanceProfile::Lightning
     }
 
-    fn clone_box(&self) -> Box<dyn EncryptionAlgorithm> {
-        Box::new(self.clone())
     }
-}
 
 /// KMAC256 keyed hash-based encryption
 ///
@@ -2647,11 +2613,6 @@ impl EncryptionAlgorithm for Kmac256 {
     fn performance_profile(&self) -> PerformanceProfile {
         PerformanceProfile::Balanced
     }
-
-    fn clone_box(&self) -> Box<dyn EncryptionAlgorithm> {
-        Box::new(self.clone())
-    }
-}
 
 /// Factory function to create encryption algorithms by name
 

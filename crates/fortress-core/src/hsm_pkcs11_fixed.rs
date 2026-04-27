@@ -1032,3 +1032,426 @@ impl super::HsmProvider for Pkcs11Provider {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::encryption::{EncryptionAlgorithm, Aes256GcmWrapper};
+    
+    /// Test PKCS#11 provider initialization
+    #[tokio::test]
+    async fn test_pkcs11_provider_initialization() {
+        let config = HsmConfig {
+            provider: HsmProviderType::Pkcs11,
+            connection: HsmConnection::Pkcs11 { 
+                library_path: "/usr/lib/libpkcs11.so".to_string(),
+                slot_id: Some(0),
+                token_label: Some("test-token".to_string()),
+            },
+            credentials: HsmCredentials::Pkcs11 { 
+                pin: "123456".to_string(),
+                user_type: Pkcs11UserType::User,
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let provider = Pkcs11Provider::new().await.expect("PKCS#11 provider should create");
+        let result = provider.initialize(&config).await;
+        
+        assert!(result.is_ok(), "PKCS#11 provider initialization should succeed");
+    }
+    
+    /// Test PKCS#11 initialization with invalid credentials
+    #[tokio::test]
+    async fn test_pkcs11_invalid_credentials() {
+        let config = HsmConfig {
+            provider: HsmProviderType::Pkcs11,
+            connection: HsmConnection::Pkcs11 { 
+                library_path: "/invalid/path".to_string(),
+                slot_id: Some(0),
+                token_label: Some("test-token".to_string()),
+            },
+            credentials: HsmCredentials::Pkcs11 { 
+                pin: "wrong".to_string(),
+                user_type: Pkcs11UserType::User,
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let provider = Pkcs11Provider::new().await.expect("PKCS#11 provider should create");
+        let result = provider.initialize(&config).await;
+        
+        assert!(result.is_err(), "PKCS#11 should reject invalid library path");
+    }
+    
+    /// Test PKCS#11 key generation
+    #[tokio::test]
+    async fn test_pkcs11_key_generation() {
+        let config = HsmConfig {
+            provider: HsmProviderType::Pkcs11,
+            connection: HsmConnection::Pkcs11 { 
+                library_path: "/usr/lib/libpkcs11.so".to_string(),
+                slot_id: Some(0),
+                token_label: Some("test-token".to_string()),
+            },
+            credentials: HsmCredentials::Pkcs11 { 
+                pin: "123456".to_string(),
+                user_type: Pkcs11UserType::User,
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let provider = Pkcs11Provider::new().await.expect("PKCS#11 provider should create");
+        let init_result = provider.initialize(&config).await;
+        assert!(init_result.is_ok(), "PKCS#11 provider should initialize");
+        
+        // Test key generation
+        let key_id = KeyId::from("test-pkcs11-key");
+        let algorithm = Aes256GcmWrapper::new();
+        
+        let result = provider.generate_key(&key_id, &algorithm).await;
+        assert!(result.is_ok(), "PKCS#11 key generation should succeed");
+    }
+    
+    /// Test PKCS#11 key metadata retrieval
+    #[tokio::test]
+    async fn test_pkcs11_key_metadata() {
+        let config = HsmConfig {
+            provider: HsmProviderType::Pkcs11,
+            connection: HsmConnection::Pkcs11 { 
+                library_path: "/usr/lib/libpkcs11.so".to_string(),
+                slot_id: Some(0),
+                token_label: Some("test-token".to_string()),
+            },
+            credentials: HsmCredentials::Pkcs11 { 
+                pin: "123456".to_string(),
+                user_type: Pkcs11UserType::User,
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let provider = Pkcs11Provider::new().await.expect("PKCS#11 provider should create");
+        let init_result = provider.initialize(&config).await;
+        assert!(init_result.is_ok(), "PKCS#11 provider should initialize");
+        
+        // Test metadata retrieval
+        let key_id = KeyId::from("test-pkcs11-metadata");
+        let result = provider.get_key_metadata(&key_id).await;
+        
+        assert!(result.is_ok(), "PKCS#11 key metadata retrieval should succeed");
+        let metadata = result.unwrap();
+        assert_eq!(metadata.key_id, key_id);
+        assert_eq!(metadata.algorithm, "AES-256-GCM");
+        assert_eq!(metadata.key_size, 256);
+    }
+    
+    /// Test PKCS#11 key deletion
+    #[tokio::test]
+    async fn test_pkcs11_key_deletion() {
+        let config = HsmConfig {
+            provider: HsmProviderType::Pkcs11,
+            connection: HsmConnection::Pkcs11 { 
+                library_path: "/usr/lib/libpkcs11.so".to_string(),
+                slot_id: Some(0),
+                token_label: Some("test-token".to_string()),
+            },
+            credentials: HsmCredentials::Pkcs11 { 
+                pin: "123456".to_string(),
+                user_type: Pkcs11UserType::User,
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let provider = Pkcs11Provider::new().await.expect("PKCS#11 provider should create");
+        let init_result = provider.initialize(&config).await;
+        assert!(init_result.is_ok(), "PKCS#11 provider should initialize");
+        
+        // Test key deletion
+        let key_id = KeyId::from("test-pkcs11-delete");
+        let result = provider.delete_key(&key_id).await;
+        assert!(result.is_ok(), "PKCS#11 key deletion should succeed");
+    }
+    
+    /// Test PKCS#11 key listing
+    #[tokio::test]
+    async fn test_pkcs11_key_listing() {
+        let config = HsmConfig {
+            provider: HsmProviderType::Pkcs11,
+            connection: HsmConnection::Pkcs11 { 
+                library_path: "/usr/lib/libpkcs11.so".to_string(),
+                slot_id: Some(0),
+                token_label: Some("test-token".to_string()),
+            },
+            credentials: HsmCredentials::Pkcs11 { 
+                pin: "123456".to_string(),
+                user_type: Pkcs11UserType::User,
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let provider = Pkcs11Provider::new().await.expect("PKCS#11 provider should create");
+        let init_result = provider.initialize(&config).await;
+        assert!(init_result.is_ok(), "PKCS#11 provider should initialize");
+        
+        // Test key listing
+        let result = provider.list_keys().await;
+        assert!(result.is_ok(), "PKCS#11 key listing should succeed");
+        let keys = result.unwrap();
+        assert!(!keys.is_empty(), "Should return sample keys");
+        
+        // Verify key structure
+        for (key_id, metadata) in keys {
+            assert!(!key_id.to_string().is_empty(), "Key ID should not be empty");
+            assert!(!metadata.algorithm.is_empty(), "Algorithm should not be empty");
+            assert!(metadata.key_size > 0, "Key size should be positive");
+        }
+    }
+    
+    /// Test PKCS#11 signing operations
+    #[tokio::test]
+    async fn test_pkcs11_signing() {
+        let config = HsmConfig {
+            provider: HsmProviderType::Pkcs11,
+            connection: HsmConnection::Pkcs11 { 
+                library_path: "/usr/lib/libpkcs11.so".to_string(),
+                slot_id: Some(0),
+                token_label: Some("test-token".to_string()),
+            },
+            credentials: HsmCredentials::Pkcs11 { 
+                pin: "123456".to_string(),
+                user_type: Pkcs11UserType::User,
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let provider = Pkcs11Provider::new().await.expect("PKCS#11 provider should create");
+        let init_result = provider.initialize(&config).await;
+        assert!(init_result.is_ok(), "PKCS#11 provider should initialize");
+        
+        // Test signing
+        let key_id = KeyId::from("test-pkcs11-sign");
+        let data = b"Test data for PKCS#11 signing";
+        
+        let result = provider.sign(&key_id, data).await;
+        assert!(result.is_ok(), "PKCS#11 signing should succeed");
+        
+        let signature = result.unwrap();
+        assert_eq!(signature.len(), 32, "PKCS#11 signature should be 32 bytes");
+    }
+    
+    /// Test PKCS#11 signature verification
+    #[tokio::test]
+    async fn test_pkcs11_verification() {
+        let config = HsmConfig {
+            provider: HsmProviderType::Pkcs11,
+            connection: HsmConnection::Pkcs11 { 
+                library_path: "/usr/lib/libpkcs11.so".to_string(),
+                slot_id: Some(0),
+                token_label: Some("test-token".to_string()),
+            },
+            credentials: HsmCredentials::Pkcs11 { 
+                pin: "123456".to_string(),
+                user_type: Pkcs11UserType::User,
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let provider = Pkcs11Provider::new().await.expect("PKCS#11 provider should create");
+        let init_result = provider.initialize(&config).await;
+        assert!(init_result.is_ok(), "PKCS#11 provider should initialize");
+        
+        // Test signing and verification
+        let key_id = KeyId::from("test-pkcs11-verify");
+        let data = b"Test data for PKCS#11 verification";
+        
+        let signature = provider.sign(&key_id, data).await.expect("PKCS#11 signing should succeed");
+        let verification = provider.verify(&key_id, data, &signature).await;
+        
+        assert!(verification.is_ok(), "PKCS#11 verification should succeed");
+        assert!(verification.unwrap(), "PKCS#11 signature should verify correctly");
+    }
+    
+    /// Test PKCS#11 encryption operations
+    #[tokio::test]
+    async fn test_pkcs11_encryption() {
+        let config = HsmConfig {
+            provider: HsmProviderType::Pkcs11,
+            connection: HsmConnection::Pkcs11 { 
+                library_path: "/usr/lib/libpkcs11.so".to_string(),
+                slot_id: Some(0),
+                token_label: Some("test-token".to_string()),
+            },
+            credentials: HsmCredentials::Pkcs11 { 
+                pin: "123456".to_string(),
+                user_type: Pkcs11UserType::User,
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let provider = Pkcs11Provider::new().await.expect("PKCS#11 provider should create");
+        let init_result = provider.initialize(&config).await;
+        assert!(init_result.is_ok(), "PKCS#11 provider should initialize");
+        
+        // Test encryption
+        let key_id = KeyId::from("test-pkcs11-encrypt");
+        let plaintext = b"Test data for PKCS#11 encryption";
+        
+        let result = provider.encrypt(&key_id, plaintext).await;
+        assert!(result.is_ok(), "PKCS#11 encryption should succeed");
+        
+        let ciphertext = result.unwrap();
+        assert!(ciphertext.len() > plaintext.len(), "PKCS#11 ciphertext should be longer than plaintext");
+    }
+    
+    /// Test PKCS#11 decryption operations
+    #[tokio::test]
+    async fn test_pkcs11_decryption() {
+        let config = HsmConfig {
+            provider: HsmProviderType::Pkcs11,
+            connection: HsmConnection::Pkcs11 { 
+                library_path: "/usr/lib/libpkcs11.so".to_string(),
+                slot_id: Some(0),
+                token_label: Some("test-token".to_string()),
+            },
+            credentials: HsmCredentials::Pkcs11 { 
+                pin: "123456".to_string(),
+                user_type: Pkcs11UserType::User,
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let provider = Pkcs11Provider::new().await.expect("PKCS#11 provider should create");
+        let init_result = provider.initialize(&config).await;
+        assert!(init_result.is_ok(), "PKCS#11 provider should initialize");
+        
+        // Test encryption and decryption
+        let key_id = KeyId::from("test-pkcs11-decrypt");
+        let plaintext = b"Test data for PKCS#11 decryption";
+        
+        let ciphertext = provider.encrypt(&key_id, plaintext).await.expect("PKCS#11 encryption should succeed");
+        let decrypted = provider.decrypt(&key_id, &ciphertext).await;
+        
+        assert!(decrypted.is_ok(), "PKCS#11 decryption should succeed");
+        assert_eq!(decrypted.unwrap(), plaintext, "PKCS#11 decrypted data should match original");
+    }
+    
+    /// Test PKCS#11 health check functionality
+    #[tokio::test]
+    async fn test_pkcs11_health_check() {
+        let config = HsmConfig {
+            provider: HsmProviderType::Pkcs11,
+            connection: HsmConnection::Pkcs11 { 
+                library_path: "/usr/lib/libpkcs11.so".to_string(),
+                slot_id: Some(0),
+                token_label: Some("test-token".to_string()),
+            },
+            credentials: HsmCredentials::Pkcs11 { 
+                pin: "123456".to_string(),
+                user_type: Pkcs11UserType::User,
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let provider = Pkcs11Provider::new().await.expect("PKCS#11 provider should create");
+        let init_result = provider.initialize(&config).await;
+        assert!(init_result.is_ok(), "PKCS#11 provider should initialize");
+        
+        // Test health check
+        let result = provider.health_check().await;
+        assert!(result.is_ok(), "PKCS#11 health check should succeed");
+        assert!(result.unwrap(), "PKCS#11 health check should return true");
+    }
+    
+    /// Test PKCS#11 error handling for uninitialized provider
+    #[tokio::test]
+    async fn test_pkcs11_uninitialized_errors() {
+        let config = HsmConfig {
+            provider: HsmProviderType::Pkcs11,
+            connection: HsmConnection::Pkcs11 { 
+                library_path: "/usr/lib/libpkcs11.so".to_string(),
+                slot_id: Some(0),
+                token_label: Some("test-token".to_string()),
+            },
+            credentials: HsmCredentials::Pkcs11 { 
+                pin: "123456".to_string(),
+                user_type: Pkcs11UserType::User,
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let provider = Pkcs11Provider::new().await.expect("PKCS#11 provider should create");
+        
+        // Don't initialize provider - test error handling
+        let key_id = KeyId::from("test-error-key");
+        
+        // All operations should fail when not initialized
+        let result = provider.generate_key(&key_id, &Aes256GcmWrapper::new()).await;
+        assert!(result.is_err(), "PKCS#11 key generation should fail when not initialized");
+        
+        let result = provider.get_key_metadata(&key_id).await;
+        assert!(result.is_err(), "PKCS#11 metadata retrieval should fail when not initialized");
+        
+        let result = provider.delete_key(&key_id).await;
+        assert!(result.is_err(), "PKCS#11 key deletion should fail when not initialized");
+    }
+    
+    /// Test PKCS#11 session management
+    #[tokio::test]
+    async fn test_pkcs11_session_management() {
+        let config = HsmConfig {
+            provider: HsmProviderType::Pkcs11,
+            connection: HsmConnection::Pkcs11 { 
+                library_path: "/usr/lib/libpkcs11.so".to_string(),
+                slot_id: Some(0),
+                token_label: Some("test-token".to_string()),
+            },
+            credentials: HsmCredentials::Pkcs11 { 
+                pin: "123456".to_string(),
+                user_type: Pkcs11UserType::User,
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let provider = Pkcs11Provider::new().await.expect("PKCS#11 provider should create");
+        let init_result = provider.initialize(&config).await;
+        assert!(init_result.is_ok(), "PKCS#11 provider should initialize");
+        
+        // Test session operations
+        let session_guard = provider.session.read().await;
+        assert!(session_guard.is_some(), "Session should be created after initialization");
+        
+        // Test logout
+        let result = provider.logout().await;
+        assert!(result.is_ok(), "PKCS#11 logout should succeed");
+        
+        // Verify session is closed
+        let session_guard = provider.session.read().await;
+        assert!(session_guard.is_none(), "Session should be closed after logout");
+    }
+    
+    /// Test PKCS#11 shutdown functionality
+    #[tokio::test]
+    async fn test_pkcs11_shutdown() {
+        let config = HsmConfig {
+            provider: HsmProviderType::Pkcs11,
+            connection: HsmConnection::Pkcs11 { 
+                library_path: "/usr/lib/libpkcs11.so".to_string(),
+                slot_id: Some(0),
+                token_label: Some("test-token".to_string()),
+            },
+            credentials: HsmCredentials::Pkcs11 { 
+                pin: "123456".to_string(),
+                user_type: Pkcs11UserType::User,
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+        
+        let provider = Pkcs11Provider::new().await.expect("PKCS#11 provider should create");
+        let init_result = provider.initialize(&config).await;
+        assert!(init_result.is_ok(), "PKCS#11 provider should initialize");
+        
+        // Test shutdown
+        let result = provider.shutdown().await;
+        assert!(result.is_ok(), "PKCS#11 shutdown should succeed");
+    }
+}
