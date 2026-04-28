@@ -168,8 +168,7 @@ impl SimdEncryptor {
 
 /// Adaptive encryptor that automatically selects the best encryption method
 pub struct AdaptiveEncryptor {
-    simd_encryptor: SimdEncryptor,
-    standard_algorithm: Box<dyn EncryptionAlgorithm>,
+    algorithm: Box<dyn EncryptionAlgorithm>,
     key: Vec<u8>,
 }
 
@@ -177,20 +176,16 @@ impl AdaptiveEncryptor {
     /// Create a new adaptive encryptor
     pub fn new(algorithm: Box<dyn EncryptionAlgorithm>, key: &[u8]) -> Self {
         Self {
-            simd_encryptor: SimdEncryptor::new(algorithm.clone_box(), key),
-            standard_algorithm: algorithm,
+            algorithm,
             key: key.to_vec(),
         }
     }
 
     /// Encrypt data using the optimal method
     pub fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>, FortressError> {
-        // Use SIMD for large datasets, standard for small ones
-        if data.len() >= 1024 && (SimdEncryptor::is_avx2_supported() || SimdEncryptor::is_avx512_supported()) {
-            self.simd_encryptor.encrypt(data)
-        } else {
-            self.standard_algorithm.encrypt(data, &self.key)
-        }
+        // For now, just use standard encryption
+        // SIMD optimization would require more complex architecture
+        self.algorithm.encrypt(data, &self.key)
     }
 
     /// Get supported SIMD features

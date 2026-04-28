@@ -1075,12 +1075,7 @@ impl EncryptionAlgorithm for ChaCha20Poly1305 {
 
     }
 
-    fn clone_box(&self) -> Box<dyn EncryptionAlgorithm> {
-
-        Box::new(self.clone())
-
-    }
-
+    
 }
 
 
@@ -1547,8 +1542,7 @@ impl EncryptionAlgorithm for HmacSha512Encrypt {
     fn performance_profile(&self) -> PerformanceProfile {
         PerformanceProfile::Fortress
     }
-
-    }
+}
 
 /// AES-256-CTR encryption algorithm
 ///
@@ -1685,8 +1679,7 @@ impl EncryptionAlgorithm for Aes256Ctr {
     fn performance_profile(&self) -> PerformanceProfile {
         PerformanceProfile::Streaming
     }
-
-    }
+}
 
 /// Argon2id-based encryption algorithm
 ///
@@ -1905,8 +1898,7 @@ impl EncryptionAlgorithm for Argon2idEncrypt {
     fn performance_profile(&self) -> PerformanceProfile {
         PerformanceProfile::Fortress
     }
-
-    }
+}
 
 /// Composite encryption algorithm
 ///
@@ -2112,8 +2104,7 @@ impl EncryptionAlgorithm for CompositeEncrypt {
     fn performance_profile(&self) -> PerformanceProfile {
         PerformanceProfile::Quantum
     }
-
-    }
+}
 
 /// Salsa20 stream cipher
 ///
@@ -2258,8 +2249,7 @@ impl EncryptionAlgorithm for Salsa20 {
     fn performance_profile(&self) -> PerformanceProfile {
         PerformanceProfile::Streaming
     }
-
-    }
+}
 
 /// ASCON lightweight AEAD algorithm
 ///
@@ -2613,6 +2603,7 @@ impl EncryptionAlgorithm for Kmac256 {
     fn performance_profile(&self) -> PerformanceProfile {
         PerformanceProfile::Balanced
     }
+}
 
 /// Factory function to create encryption algorithms by name
 

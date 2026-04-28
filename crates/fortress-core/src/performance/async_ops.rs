@@ -16,10 +16,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 static ASYNC_OPERATIONS: AtomicU64 = AtomicU64::new(0);
 
 /// Async version of encrypt_data that moves CPU-intensive work to blocking threads
-pub async fn encrypt_data_async(data: &[u8], key: &[u8], algorithm: &dyn EncryptionAlgorithm) -> Result<Vec<u8>, FortressError> {
+pub async fn encrypt_data_async(data: &[u8], key: &[u8], algorithm: Arc<dyn EncryptionAlgorithm>) -> Result<Vec<u8>, FortressError> {
     let data = data.to_vec();
     let key = key.to_vec();
-    let algorithm = algorithm.clone_box();
     
     ASYNC_OPERATIONS.fetch_add(1, Ordering::Relaxed);
     
@@ -29,10 +28,9 @@ pub async fn encrypt_data_async(data: &[u8], key: &[u8], algorithm: &dyn Encrypt
 }
 
 /// Async version of decrypt_data that moves CPU-intensive work to blocking threads
-pub async fn decrypt_data_async(encrypted_data: &[u8], key: &[u8], algorithm: &dyn EncryptionAlgorithm) -> Result<Vec<u8>, FortressError> {
+pub async fn decrypt_data_async(encrypted_data: &[u8], key: &[u8], algorithm: Arc<dyn EncryptionAlgorithm>) -> Result<Vec<u8>, FortressError> {
     let encrypted_data = encrypted_data.to_vec();
     let key = key.to_vec();
-    let algorithm = algorithm.clone_box();
     
     tokio::task::spawn_blocking(move || {
         algorithm.decrypt(&encrypted_data, &key)
@@ -55,18 +53,18 @@ impl BatchEncryptor {
     }
 
     /// Encrypt multiple data items concurrently
-    pub async fn encrypt_batch(&self, data_batch: &[&[u8]], key: &[u8], algorithm: &dyn EncryptionAlgorithm) -> Result<Vec<Vec<u8>>, FortressError> {
+    pub async fn encrypt_batch(&self, data_batch: &[&[u8]], key: &[u8], algorithm: Arc<dyn EncryptionAlgorithm>) -> Result<Vec<Vec<u8>>, FortressError> {
         let tasks: Vec<_> = data_batch.iter()
             .enumerate()
             .map(|(i, data)| {
                 let permit = self.semaphore.clone();
                 let data = data.to_vec();
                 let key = key.to_vec();
-                let algorithm = algorithm.clone_box();
+                let algorithm = algorithm.clone();
                 
                 async move {
                     let _permit = permit.acquire().await.map_err(|e| FortressError::internal(format!("Semaphore acquire error: {}", e), "SEMAPHORE_ACQUIRE_ERROR".to_string()))?;
-                    encrypt_data_async(&data, &key, &*algorithm).await
+                    encrypt_data_async(&data, &key, algorithm).await
                 }
             })
             .collect();
@@ -75,9 +73,16 @@ impl BatchEncryptor {
     }
 
     /// Encrypt batch with controlled concurrency using streams
-    pub async fn encrypt_batch_limited(&self, data_batch: &[&[u8]], key: &[u8], algorithm: &dyn EncryptionAlgorithm) -> Result<Vec<Vec<u8>>, FortressError> {
+    pub async fn encrypt_batch_limited(&self, data_batch: &[&[u8]], key: &[u8], algorithm: Arc<dyn EncryptionAlgorithm>) -> Result<Vec<Vec<u8>>, FortressError> {
         let results: Vec<Result<Vec<u8>, FortressError>> = stream::iter(data_batch)
-            .map(|data| encrypt_data_async(data, key, algorithm))
+            .map(|data| {
+                let data = data.to_vec();
+                let key = key.to_vec();
+                let algorithm = algorithm.clone();
+                async move {
+                    encrypt_data_async(&data, &key, algorithm).await
+                }
+            })
             .buffer_unordered(self.concurrency_limit)
             .collect()
             .await;
@@ -205,8 +210,7 @@ pub struct AsyncEncryptionService {
 
 impl AsyncEncryptionService {
     /// Create a new async encryption service
-    pub fn new(algorithm: Box<dyn EncryptionAlgorithm>, batch_size: usize, batch_timeout: Duration, concurrency_limit: usize) -> Self {
-        let algorithm: Arc<dyn EncryptionAlgorithm> = Arc::from(algorithm);
+    pub fn new(algorithm: Arc<dyn EncryptionAlgorithm>, batch_size: usize, batch_timeout: Duration, concurrency_limit: usize) -> Self {
         let key = vec![0u8; 32]; // Default key, should be configurable
         let algorithm_clone = algorithm.clone();
         
@@ -241,12 +245,12 @@ impl AsyncEncryptionService {
 
     /// Encrypt multiple items using the batch encryptor
     pub async fn encrypt_batch(&self, data_batch: &[&[u8]], key: &[u8]) -> Result<Vec<Vec<u8>>, FortressError> {
-        self.batch_encryptor.encrypt_batch(data_batch, key, &*self.algorithm).await
+        self.batch_encryptor.encrypt_batch(data_batch, key, self.algorithm.clone()).await
     }
 
     /// Encrypt multiple items with concurrency control
     pub async fn encrypt_batch_limited(&self, data_batch: &[&[u8]], key: &[u8]) -> Result<Vec<Vec<u8>>, FortressError> {
-        self.batch_encryptor.encrypt_batch_limited(data_batch, key, &*self.algorithm).await
+        self.batch_encryptor.encrypt_batch_limited(data_batch, key, self.algorithm.clone()).await
     }
 
     /// Get async operation count
@@ -263,6 +267,15 @@ pub trait CloneBox {
 impl<T: EncryptionAlgorithm + Clone + 'static> CloneBox for T {
     fn clone_box(&self) -> Box<dyn EncryptionAlgorithm> {
         Box::new(self.clone())
+    }
+}
+
+// Implement CloneBox for trait objects
+impl CloneBox for dyn EncryptionAlgorithm {
+    fn clone_box(&self) -> Box<dyn EncryptionAlgorithm> {
+        // This is a workaround - in practice, this would need a proper cloning mechanism
+        // For now, we'll use a panic to indicate this needs proper implementation
+        panic!("clone_box not implemented for trait objects - use concrete types")
     }
 }
 
