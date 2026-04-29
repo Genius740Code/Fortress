@@ -608,6 +608,24 @@ mod tests {
     }
 
     #[test]
+    fn test_all_auth_methods_serialization() {
+        let methods = vec![
+            AuthMethod::JWT,
+            AuthMethod::OAuth,
+            AuthMethod::SAML,
+            AuthMethod::Basic,
+            AuthMethod::ApiKey,
+            AuthMethod::Custom("custom_method".to_string()),
+        ];
+
+        for method in methods {
+            let serialized = serde_json::to_string(&method).unwrap();
+            let deserialized: AuthMethod = serde_json::from_str(&serialized).unwrap();
+            assert_eq!(method, deserialized);
+        }
+    }
+
+    #[test]
     fn test_auth_request_creation() {
         let request = AuthRequest {
             method: AuthMethod::Basic,
@@ -635,6 +653,221 @@ mod tests {
         assert_eq!(request.credentials.username, Some("testuser".to_string()));
     }
 
+    #[test]
+    fn test_jwt_authentication_request() {
+        let request = AuthRequest {
+            method: AuthMethod::JWT,
+            credentials: AuthCredentials {
+                username: None,
+                password: None,
+                token: Some("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test".to_string()),
+                authorization_code: None,
+                state: None,
+                redirect_uri: None,
+                saml_assertion: None,
+                api_key: None,
+                additional_data: HashMap::new(),
+            },
+            context: AuthContext {
+                ip_address: Some("192.168.1.100".to_string()),
+                user_agent: Some("Mozilla/5.0".to_string()),
+                timestamp: current_timestamp(),
+                device_fingerprint: Some("device_fingerprint_123".to_string()),
+                request_id: Uuid::new_v4().to_string(),
+            },
+        };
+
+        assert_eq!(request.method, AuthMethod::JWT);
+        assert!(request.credentials.token.is_some());
+        assert!(request.context.device_fingerprint.is_some());
+    }
+
+    #[test]
+    fn test_oauth_authentication_request() {
+        let mut additional_data = HashMap::new();
+        additional_data.insert("provider".to_string(), serde_json::Value::String("google".to_string()));
+        additional_data.insert("scope".to_string(), serde_json::Value::String("openid profile email".to_string()));
+
+        let request = AuthRequest {
+            method: AuthMethod::OAuth,
+            credentials: AuthCredentials {
+                username: None,
+                password: None,
+                token: None,
+                authorization_code: Some("auth_code_123".to_string()),
+                state: Some("state_456".to_string()),
+                redirect_uri: Some("https://example.com/callback".to_string()),
+                saml_assertion: None,
+                api_key: None,
+                additional_data,
+            },
+            context: AuthContext {
+                ip_address: Some("10.0.0.1".to_string()),
+                user_agent: Some("Chrome/91.0".to_string()),
+                timestamp: current_timestamp(),
+                device_fingerprint: Some("oauth_device_789".to_string()),
+                request_id: Uuid::new_v4().to_string(),
+            },
+        };
+
+        assert_eq!(request.method, AuthMethod::OAuth);
+        assert!(request.credentials.authorization_code.is_some());
+        assert!(request.credentials.redirect_uri.is_some());
+        assert!(request.credentials.additional_data.contains_key("provider"));
+    }
+
+    #[test]
+    fn test_saml_authentication_request() {
+        let request = AuthRequest {
+            method: AuthMethod::SAML,
+            credentials: AuthCredentials {
+                username: None,
+                password: None,
+                token: None,
+                authorization_code: None,
+                state: None,
+                redirect_uri: None,
+                saml_assertion: Some("saml_assertion_xml".to_string()),
+                api_key: None,
+                additional_data: HashMap::new(),
+            },
+            context: AuthContext {
+                ip_address: Some("172.16.0.1".to_string()),
+                user_agent: Some("Safari/14.0".to_string()),
+                timestamp: current_timestamp(),
+                device_fingerprint: None,
+                request_id: Uuid::new_v4().to_string(),
+            },
+        };
+
+        assert_eq!(request.method, AuthMethod::SAML);
+        assert!(request.credentials.saml_assertion.is_some());
+    }
+
+    #[test]
+    fn test_api_key_authentication_request() {
+        let mut additional_data = HashMap::new();
+        additional_data.insert("key_type".to_string(), serde_json::Value::String("production".to_string()));
+        additional_data.insert("permissions".to_string(), serde_json::Value::Array(vec![
+            serde_json::Value::String("read".to_string()),
+            serde_json::Value::String("write".to_string()),
+        ]));
+
+        let request = AuthRequest {
+            method: AuthMethod::ApiKey,
+            credentials: AuthCredentials {
+                username: None,
+                password: None,
+                token: None,
+                authorization_code: None,
+                state: None,
+                redirect_uri: None,
+                saml_assertion: None,
+                api_key: Some("api_key_abcdef123456".to_string()),
+                additional_data,
+            },
+            context: AuthContext {
+                ip_address: Some("203.0.113.1".to_string()),
+                user_agent: Some("curl/7.68.0".to_string()),
+                timestamp: current_timestamp(),
+                device_fingerprint: None,
+                request_id: Uuid::new_v4().to_string(),
+            },
+        };
+
+        assert_eq!(request.method, AuthMethod::ApiKey);
+        assert!(request.credentials.api_key.is_some());
+        assert!(request.credentials.additional_data.contains_key("key_type"));
+    }
+
+    #[test]
+    fn test_custom_authentication_request() {
+        let mut additional_data = HashMap::new();
+        additional_data.insert("custom_field".to_string(), serde_json::Value::String("custom_value".to_string()));
+        additional_data.insert("metadata".to_string(), serde_json::Value::Object(serde_json::json!({
+            "version": "1.0",
+            "provider": "custom_auth_provider"
+        })));
+
+        let request = AuthRequest {
+            method: AuthMethod::Custom("biometric_auth".to_string()),
+            credentials: AuthCredentials {
+                username: Some("user@example.com".to_string()),
+                password: None,
+                token: None,
+                authorization_code: None,
+                state: None,
+                redirect_uri: None,
+                saml_assertion: None,
+                api_key: None,
+                additional_data,
+            },
+            context: AuthContext {
+                ip_address: Some("198.51.100.1".to_string()),
+                user_agent: Some("CustomAuthClient/1.0".to_string()),
+                timestamp: current_timestamp(),
+                device_fingerprint: Some("biometric_device_xyz".to_string()),
+                request_id: Uuid::new_v4().to_string(),
+            },
+        };
+
+        assert_eq!(request.method, AuthMethod::Custom("biometric_auth".to_string()));
+        assert!(request.credentials.username.is_some());
+        assert!(request.credentials.additional_data.contains_key("custom_field"));
+    }
+
+    #[test]
+    fn test_auth_result_creation() {
+        let mut metadata = HashMap::new();
+        metadata.insert("login_method".to_string(), serde_json::Value::String("password".to_string()));
+        metadata.insert("mfa_used".to_string(), serde_json::Value::Bool(false));
+
+        let result = AuthResult {
+            success: true,
+            user_info: Some(AuthUserInfo {
+                user_id: "user_123".to_string(),
+                username: "testuser".to_string(),
+                email: "testuser@example.com".to_string(),
+                roles: vec!["user".to_string()],
+                permissions: vec!["read".to_string()],
+                metadata: HashMap::new(),
+            }),
+            token: Some("jwt_token_abc123".to_string()),
+            refresh_token: Some("refresh_token_xyz789".to_string()),
+            expires_at: Some(current_timestamp() + 3600),
+            error: None,
+            metadata,
+        };
+
+        assert!(result.success);
+        assert!(result.user_info.is_some());
+        assert!(result.token.is_some());
+        assert!(result.refresh_token.is_some());
+        assert!(result.expires_at.is_some());
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn test_auth_result_failure() {
+        let result = AuthResult {
+            success: false,
+            user_info: None,
+            token: None,
+            refresh_token: None,
+            expires_at: None,
+            error: Some("Invalid credentials".to_string()),
+            metadata: HashMap::new(),
+        };
+
+        assert!(!result.success);
+        assert!(result.user_info.is_none());
+        assert!(result.token.is_none());
+        assert!(result.refresh_token.is_none());
+        assert!(result.expires_at.is_none());
+        assert!(result.error.is_some());
+        assert_eq!(result.error.unwrap(), "Invalid credentials");
+    }
+
     #[tokio::test]
     async fn test_plugin_manager_creation() {
         let config = AuthPluginManagerConfig::default();
@@ -642,5 +875,256 @@ mod tests {
         
         assert_eq!(manager.default_method(), &AuthMethod::JWT);
         assert_eq!(manager.list_plugins().await.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_plugin_manager_with_custom_config() {
+        let config = AuthPluginManagerConfig {
+            plugin_directory: "./custom_plugins".to_string(),
+            default_method: AuthMethod::OAuth,
+            enable_hot_reload: true,
+            health_check_interval: 60,
+            max_plugins: 20,
+        };
+
+        let manager = AuthPluginManager::new(config);
+        
+        assert_eq!(manager.default_method(), &AuthMethod::OAuth);
+        assert_eq!(manager.list_plugins().await.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_plugin_manager_default_method_change() {
+        let config = AuthPluginManagerConfig::default();
+        let mut manager = AuthPluginManager::new(config);
+        
+        assert_eq!(manager.default_method(), &AuthMethod::JWT);
+        
+        manager.set_default_method(AuthMethod::SAML);
+        assert_eq!(manager.default_method(), &AuthMethod::SAML);
+        
+        manager.set_default_method(AuthMethod::ApiKey);
+        assert_eq!(manager.default_method(), &AuthMethod::ApiKey);
+    }
+
+    #[test]
+    fn test_auth_context_validation() {
+        let context = AuthContext {
+            ip_address: Some("127.0.0.1".to_string()),
+            user_agent: Some("Test Agent".to_string()),
+            timestamp: current_timestamp(),
+            device_fingerprint: Some("device_123".to_string()),
+            request_id: Uuid::new_v4().to_string(),
+        };
+
+        assert!(context.ip_address.is_some());
+        assert!(context.user_agent.is_some());
+        assert!(context.device_fingerprint.is_some());
+        assert!(!context.request_id.is_empty());
+        assert!(context.timestamp > 0);
+    }
+
+    #[test]
+    fn test_auth_context_minimal() {
+        let context = AuthContext {
+            ip_address: None,
+            user_agent: None,
+            timestamp: current_timestamp(),
+            device_fingerprint: None,
+            request_id: Uuid::new_v4().to_string(),
+        };
+
+        assert!(context.ip_address.is_none());
+        assert!(context.user_agent.is_none());
+        assert!(context.device_fingerprint.is_none());
+        assert!(!context.request_id.is_empty());
+        assert!(context.timestamp > 0);
+    }
+
+    #[test]
+    fn test_credentials_with_additional_data() {
+        let mut additional_data = HashMap::new();
+        additional_data.insert("client_id".to_string(), serde_json::Value::String("client_123".to_string()));
+        additional_data.insert("client_version".to_string(), serde_json::Value::String("1.0.0".to_string()));
+        additional_data.insert("features".to_string(), serde_json::Value::Array(vec![
+            serde_json::Value::String("mfa".to_string()),
+            serde_json::Value::String("sso".to_string()),
+        ]));
+
+        let credentials = AuthCredentials {
+            username: Some("user@example.com".to_string()),
+            password: Some("secure_password".to_string()),
+            token: None,
+            authorization_code: None,
+            state: None,
+            redirect_uri: None,
+            saml_assertion: None,
+            api_key: None,
+            additional_data,
+        };
+
+        assert_eq!(credentials.username, Some("user@example.com".to_string()));
+        assert_eq!(credentials.password, Some("secure_password".to_string()));
+        assert_eq!(credentials.additional_data.len(), 3);
+        assert!(credentials.additional_data.contains_key("client_id"));
+        assert!(credentials.additional_data.contains_key("client_version"));
+        assert!(credentials.additional_data.contains_key("features"));
+    }
+
+    #[test]
+    fn test_hardware_token_types() {
+        let token_types = vec![
+            HardwareTokenType::YubiKey,
+            HardwareTokenType::RSASecurId,
+            HardwareTokenType::GoogleTitan,
+            HardwareTokenType::Fido2,
+            HardwareTokenType::Custom("CustomToken".to_string()),
+        ];
+
+        for token_type in token_types {
+            // Test serialization
+            let serialized = serde_json::to_string(&token_type).unwrap();
+            let deserialized: HardwareTokenType = serde_json::from_str(&serialized).unwrap();
+            assert_eq!(token_type, deserialized);
+        }
+    }
+
+    #[test]
+    fn test_biometric_types() {
+        let biometric_types = vec![
+            BiometricType::Fingerprint,
+            BiometricType::Face,
+            BiometricType::Iris,
+            BiometricType::Voice,
+            BiometricType::Palm,
+            BiometricType::Behavioral,
+        ];
+
+        for biometric_type in biometric_types {
+            // Test serialization
+            let serialized = serde_json::to_string(&biometric_type).unwrap();
+            let deserialized: BiometricType = serde_json::from_str(&serialized).unwrap();
+            assert_eq!(biometric_type, deserialized);
+        }
+    }
+
+    #[test]
+    fn test_auth_user_info() {
+        let mut user_metadata = HashMap::new();
+        user_metadata.insert("department".to_string(), serde_json::Value::String("engineering".to_string()));
+        user_metadata.insert("last_login".to_string(), serde_json::Value::Number(serde_json::Number::from(1234567890)));
+
+        let user_info = AuthUserInfo {
+            user_id: "user_456".to_string(),
+            username: "john.doe".to_string(),
+            email: "john.doe@example.com".to_string(),
+            roles: vec!["admin".to_string(), "developer".to_string()],
+            permissions: vec!["read".to_string(), "write".to_string(), "delete".to_string()],
+            metadata: user_metadata,
+        };
+
+        assert_eq!(user_info.user_id, "user_456");
+        assert_eq!(user_info.username, "john.doe");
+        assert_eq!(user_info.email, "john.doe@example.com");
+        assert_eq!(user_info.roles.len(), 2);
+        assert_eq!(user_info.permissions.len(), 3);
+        assert!(user_info.metadata.contains_key("department"));
+        assert!(user_info.metadata.contains_key("last_login"));
+    }
+
+    #[test]
+    fn test_edge_cases() {
+        // Test empty additional data
+        let credentials = AuthCredentials {
+            username: None,
+            password: None,
+            token: None,
+            authorization_code: None,
+            state: None,
+            redirect_uri: None,
+            saml_assertion: None,
+            api_key: None,
+            additional_data: HashMap::new(),
+        };
+        assert!(credentials.additional_data.is_empty());
+
+        // Test empty context
+        let context = AuthContext {
+            ip_address: None,
+            user_agent: None,
+            timestamp: 0,
+            device_fingerprint: None,
+            request_id: String::new(),
+        };
+        assert!(context.request_id.is_empty());
+        assert_eq!(context.timestamp, 0);
+
+        // Test custom auth method with empty string
+        let custom_method = AuthMethod::Custom(String::new());
+        match custom_method {
+            AuthMethod::Custom(s) => assert!(s.is_empty()),
+            _ => panic!("Expected Custom method"),
+        }
+    }
+
+    #[test]
+    fn test_complex_authentication_flow() {
+        // Simulate a complex authentication flow with multiple steps
+        let mut additional_data = HashMap::new();
+        additional_data.insert("flow_type".to_string(), serde_json::Value::String("multi_step".to_string()));
+        additional_data.insert("step".to_string(), serde_json::Value::Number(serde_json::Number::from(1)));
+        additional_data.insert("required_factors".to_string(), serde_json::Value::Array(vec![
+            serde_json::Value::String("password".to_string()),
+            serde_json::Value::String("totp".to_string()),
+            serde_json::Value::String("biometric".to_string()),
+        ]));
+
+        let request = AuthRequest {
+            method: AuthMethod::Custom("multi_factor".to_string()),
+            credentials: AuthCredentials {
+                username: Some("user@example.com".to_string()),
+                password: Some("initial_password".to_string()),
+                token: None,
+                authorization_code: None,
+                state: Some("multi_step_flow".to_string()),
+                redirect_uri: None,
+                saml_assertion: None,
+                api_key: None,
+                additional_data,
+            },
+            context: AuthContext {
+                ip_address: Some("192.168.1.100".to_string()),
+                user_agent: Some("MultiFactorAuthClient/2.0".to_string()),
+                timestamp: current_timestamp(),
+                device_fingerprint: Some("trusted_device_789".to_string()),
+                request_id: Uuid::new_v4().to_string(),
+            },
+        };
+
+        // Verify the complex request structure
+        assert_eq!(request.method, AuthMethod::Custom("multi_factor".to_string()));
+        assert!(request.credentials.username.is_some());
+        assert!(request.credentials.password.is_some());
+        assert!(request.credentials.state.is_some());
+        assert!(request.credentials.additional_data.contains_key("flow_type"));
+        assert!(request.credentials.additional_data.contains_key("step"));
+        assert!(request.credentials.additional_data.contains_key("required_factors"));
+        
+        if let Some(flow_type) = request.credentials.additional_data.get("flow_type") {
+            assert_eq!(flow_type, &serde_json::Value::String("multi_step".to_string()));
+        }
+        
+        if let Some(required_factors) = request.credentials.additional_data.get("required_factors") {
+            if let serde_json::Value::Array(factors) = required_factors {
+                assert_eq!(factors.len(), 3);
+            }
+        }
+    }
+
+    fn current_timestamp() -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
     }
 }
