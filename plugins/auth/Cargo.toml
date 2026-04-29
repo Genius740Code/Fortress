@@ -32,11 +32,7 @@ jwt = []
 oauth = []
 saml = []
 
-[profile.dev]
-panic = "abort"
-
-[profile.release]
-panic = "abort"
+# Profile configurations should be set at workspace root, not here
 
 [[test]]
 name = "integration_tests"

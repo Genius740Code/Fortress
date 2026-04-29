@@ -8,7 +8,6 @@ use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use uuid::Uuid;
 
 use crate::error::{FortressError, Result, TokenErrorCode};
 use super::{
@@ -18,7 +17,7 @@ use super::{
         TokenValidationResult, TokenLookupResult, TokenSearchCriteria,
         TokenSearchResults, TokenUsageStats, TokenCreationContext,
     },
-    lease::{LeaseManager, LeaseInfo},
+    lease::LeaseManager,
     revocation::{RevocationList, RevocationEntry, RevocationReason},
 };
 
@@ -423,7 +422,7 @@ impl TokenManager {
     /// Search tokens
     pub async fn search_tokens(&self, criteria: TokenSearchCriteria) -> Result<TokenSearchResults> {
         let tokens = self.tokens.read().await;
-        let mut matching_tokens: Vec<TokenInfo> = Vec::new();
+        let _matching_tokens: Vec<TokenInfo> = Vec::new();
 
         // Use indexed search when possible
         let candidate_tokens = if let Some(ref token_type) = criteria.token_type {
@@ -687,7 +686,7 @@ impl TokenManager {
     }
 
     /// Update token usage statistics
-    async fn update_usage_stats(&self, token_id: &str, success: bool, failed: bool) {
+    async fn update_usage_stats(&self, token_id: &str, _success: bool, failed: bool) {
         let mut tokens = self.tokens.write().await;
         if let Some(token_info) = tokens.get_mut(token_id) {
             let now = Utc::now();
@@ -726,7 +725,7 @@ impl TokenManager {
                     let mut tokens_guard = tokens.write().await;
                     let mut entity_tokens_guard = entity_tokens.write().await;
                     let mut metadata_guard = token_metadata.write().await;
-                    let now = Utc::now();
+                    let _now = Utc::now();
                     
                     let mut expired_token_ids = Vec::new();
                     

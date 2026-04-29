@@ -392,7 +392,7 @@ impl KvEngine {
     }
 
     /// Decrypt secret data (backward compatibility method)
-    async fn decrypt_secret_data(&self, encrypted_data: &serde_json::Value, nonce: &str) -> Result<serde_json::Value> {
+    async fn decrypt_secret_data(&self, encrypted_data: &serde_json::Value, _nonce: &str) -> Result<serde_json::Value> {
         let config = self.config.read().await;
         
         if !config.encryption_at_rest {
@@ -415,7 +415,7 @@ impl KvEngine {
             return Err(FortressError::secrets("Invalid encrypted data length".to_string()));
         }
         
-        let data_with_nonce = encrypted_bytes.clone();
+        let _data_with_nonce = encrypted_bytes.clone();
         let _extracted_nonce = encrypted_bytes.split_off(encrypted_bytes.len() - nonce_len);
         
         // Decrypt data

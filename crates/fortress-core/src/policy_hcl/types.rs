@@ -3,13 +3,12 @@
 //! This module defines the core types used throughout the HCL policy engine.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use serde::{Serialize, Deserialize};
 use chrono::{DateTime, Utc, Duration};
 use crate::token::TokenInfo;
-use crate::error::{FortressError, Result};
+use crate::error::Result;
 
 /// Parsed HCL policy
 #[derive(Debug, Clone, Serialize, Deserialize)]

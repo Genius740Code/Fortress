@@ -38,7 +38,6 @@ impl HclPolicyParser {
         let lines: Vec<&str> = hcl_content.lines().collect();
         let mut current_block = String::new();
         let mut in_block = false;
-        let mut block_indent = 0;
 
         for (line_num, line) in lines.iter().enumerate() {
             let trimmed = line.trim();
@@ -52,7 +51,6 @@ impl HclPolicyParser {
             if trimmed.ends_with('{') {
                 current_block = trimmed.trim_end_matches('{').trim().to_string();
                 in_block = true;
-                block_indent = line.len() - line.trim_start().len();
                 continue;
             }
 

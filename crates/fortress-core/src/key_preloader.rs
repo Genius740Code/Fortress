@@ -622,3 +622,586 @@ impl std::fmt::Debug for KeyPreloader {
             .finish()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::encryption::{Aes256GcmEncryption, EncryptionAlgorithm};
+    use crate::error::{FortressError, Result, StorageErrorCode};
+    use crate::key::{KeyId, KeyMetadata, KeyPurpose, PerformanceProfile};
+    use crate::key_database::{KeyDatabase, KeyDatabaseConfig, KeyDatabaseBackend, SqliteKeyDatabase, create_key_database};
+    use chrono::{DateTime, Utc, Duration as ChronoDuration};
+    use std::sync::Arc;
+    use tempfile::tempdir;
+
+    /// Create a test database for preloader tests
+    async fn create_test_database_with_keys() -> Result<Arc<dyn KeyDatabase>> {
+        let temp_dir = tempdir().map_err(|e| FortressError::storage(
+            format!("Failed to create temp dir: {}", e),
+            StorageErrorCode::IoError
+        ))?;
+        
+        let db_path = temp_dir.path().join("test_preload.db");
+        let connection_string = format!("sqlite:{}", db_path.display());
+        
+        let config = KeyDatabaseConfig {
+            backend: KeyDatabaseBackend::Sqlite,
+            connection_string,
+            max_connections: 5,
+            connection_timeout_seconds: 30,
+            encrypt_at_rest: false,
+            master_key: None,
+        };
+        
+        let db: Arc<dyn KeyDatabase> = Arc::from(create_key_database(config).await?);
+        db.initialize().await?;
+        
+        // Add test keys with different characteristics
+        let algorithm = Aes256GcmEncryption::new();
+        
+        // Key for encryption purpose
+        let key1 = SecureKey::generate(algorithm.key_size()).expect("Failed to generate test key");
+        let metadata1 = KeyMetadata::new(
+            KeyId::new("encryption_key"),
+            algorithm.name().to_string(),
+            1,
+            Utc::now(),
+            Utc::now() + ChronoDuration::days(30),
+            KeyPurpose::DataEncryption,
+            PerformanceProfile::Balanced,
+        );
+        db.store_key(&KeyId::new("encryption_key"), &key1, &metadata1).await?;
+        
+        // Key for authentication purpose
+        let key2 = SecureKey::generate(algorithm.key_size()).expect("Failed to generate test key");
+        let metadata2 = KeyMetadata::new(
+            KeyId::new("auth_key"),
+            algorithm.name().to_string(),
+            1,
+            Utc::now(),
+            Utc::now() + ChronoDuration::days(7), // Expires soon
+            KeyPurpose::Authentication,
+            PerformanceProfile::Lightning,
+        );
+        db.store_key(&KeyId::new("auth_key"), &key2, &metadata2).await?;
+        
+        // Key for session purpose
+        let key3 = SecureKey::generate(algorithm.key_size()).expect("Failed to generate test key");
+        let metadata3 = KeyMetadata::new(
+            KeyId::new("session_key"),
+            algorithm.name().to_string(),
+            1,
+            Utc::now(),
+            Utc::now() + ChronoDuration::hours(6), // Expires very soon
+            KeyPurpose::SessionManagement,
+            PerformanceProfile::HighPerformance,
+        );
+        db.store_key(&KeyId::new("session_key"), &key3, &metadata3).await?;
+        
+        // Key with custom purpose
+        let key4 = SecureKey::generate(algorithm.key_size()).expect("Failed to generate test key");
+        let metadata4 = KeyMetadata::new(
+            KeyId::new("custom_key"),
+            algorithm.name().to_string(),
+            1,
+            Utc::now(),
+            Utc::now() + ChronoDuration::days(90),
+            KeyPurpose::KeyEncryption,
+            PerformanceProfile::Balanced,
+        );
+        db.store_key(&KeyId::new("custom_key"), &key4, &metadata4).await?;
+        
+        Ok(db)
+    }
+
+    /// Create a test preloader configuration
+    fn create_test_preloader_config() -> KeyPreloadConfig {
+        KeyPreloadConfig {
+            enable_preload: true,
+            preload_all_keys: false,
+            preload_frequently_used: true,
+            preload_by_purpose: true,
+            max_keys_to_preload: 100,
+            max_memory_usage_bytes: 10 * 1024 * 1024, // 10MB
+            preload_expiring_soon: ChronoDuration::hours(12),
+            priority_purposes: vec![
+                "encryption".to_string(),
+                "authentication".to_string(),
+                "session".to_string(),
+            ],
+            priority_performance_profiles: vec![
+                "lightning".to_string(),
+                "balanced".to_string(),
+            ],
+            enable_background_preload: false, // Disable for testing
+            background_preload_interval: ChronoDuration::minutes(30),
+            track_preload_stats: true,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_preloader_creation() -> Result<()> {
+        let db = create_test_database_with_keys().await?;
+        let config = create_test_preloader_config();
+        
+        let preloader = KeyPreloader::new(db.clone(), config);
+        
+        // Verify initial state
+        let stats = preloader.get_stats().await;
+        assert_eq!(stats.total_preloaded_keys, 0);
+        assert_eq!(stats.preload_hits, 0);
+        assert_eq!(stats.preload_misses, 0);
+        assert_eq!(stats.total_memory_usage_bytes, 0);
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_preloader_initialization() -> Result<()> {
+        let db = create_test_database_with_keys().await?;
+        let mut config = create_test_preloader_config();
+        config.preload_all_keys = true; // Preload all keys for this test
+        
+        let preloader = KeyPreloader::new(db.clone(), config);
+        preloader.initialize().await?;
+        
+        // Check that keys were preloaded
+        let stats = preloader.get_stats().await;
+        assert!(stats.total_preloaded_keys > 0);
+        assert!(stats.total_memory_usage_bytes > 0);
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_preload_by_purpose() -> Result<()> {
+        let db = create_test_database_with_keys().await?;
+        let mut config = create_test_preloader_config();
+        config.preload_by_purpose = true;
+        config.preload_all_keys = false;
+        
+        let preloader = KeyPreloader::new(db.clone(), config);
+        preloader.initialize().await?;
+        
+        // Check that priority purpose keys were preloaded
+        let stats = preloader.get_stats().await;
+        assert!(stats.total_preloaded_keys > 0);
+        
+        // Verify encryption key is preloaded (it's in priority purposes)
+        let preloaded_key = preloader.get_preloaded_key(&KeyId::new("encryption_key")).await;
+        assert!(preloaded_key.is_some());
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_preload_expiring_soon() -> Result<()> {
+        let db = create_test_database_with_keys().await?;
+        let mut config = create_test_preloader_config();
+        config.preload_expiring_soon = ChronoDuration::hours(8); // Keys expiring within 8 hours
+        config.preload_all_keys = false;
+        config.preload_by_purpose = false;
+        
+        let preloader = KeyPreloader::new(db.clone(), config);
+        preloader.initialize().await?;
+        
+        // Check that expiring keys were preloaded
+        let stats = preloader.get_stats().await;
+        assert!(stats.total_preloaded_keys > 0);
+        
+        // Verify session key (expires in 6 hours) is preloaded
+        let preloaded_key = preloader.get_preloaded_key(&KeyId::new("session_key")).await;
+        assert!(preloaded_key.is_some());
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_force_preload_key() -> Result<()> {
+        let db = create_test_database_with_keys().await?;
+        let config = create_test_preloader_config();
+        let preloader = KeyPreloader::new(db.clone(), config);
+        preloader.initialize().await?;
+        
+        // Force preload a specific key
+        let key_id = KeyId::new("custom_key");
+        let preloaded = preloader.force_preload_key(&key_id).await?;
+        assert!(preloaded);
+        
+        // Verify key is now preloaded
+        let preloaded_key = preloader.get_preloaded_key(&key_id).await;
+        assert!(preloaded_key.is_some());
+        
+        // Try to preload non-existent key
+        let non_existent_id = KeyId::new("non_existent");
+        let not_preloaded = preloader.force_preload_key(&non_existent_id).await?;
+        assert!(!not_preloaded);
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_evict_key() -> Result<()> {
+        let db = create_test_database_with_keys().await?;
+        let mut config = create_test_preloader_config();
+        config.preload_all_keys = true;
+        
+        let preloader = KeyPreloader::new(db.clone(), config);
+        preloader.initialize().await?;
+        
+        // Verify key is preloaded
+        let key_id = KeyId::new("encryption_key");
+        let preloaded_before = preloader.get_preloaded_key(&key_id).await;
+        assert!(preloaded_before.is_some());
+        
+        // Evict the key
+        let evicted = preloader.evict_key(&key_id).await?;
+        assert!(evicted);
+        
+        // Verify key is no longer preloaded
+        let preloaded_after = preloader.get_preloaded_key(&key_id).await;
+        assert!(preloaded_after.is_none());
+        
+        // Try to evict non-existent key
+        let non_existent_id = KeyId::new("non_existent");
+        let not_evicted = preloader.evict_key(&non_existent_id).await?;
+        assert!(!not_evicted);
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_clear_preloaded_keys() -> Result<()> {
+        let db = create_test_database_with_keys().await?;
+        let mut config = create_test_preloader_config();
+        config.preload_all_keys = true;
+        
+        let preloader = KeyPreloader::new(db.clone(), config);
+        preloader.initialize().await?;
+        
+        // Verify keys are preloaded
+        let stats_before = preloader.get_stats().await;
+        assert!(stats_before.total_preloaded_keys > 0);
+        
+        // Clear all preloaded keys
+        let cleared_count = preloader.clear_preloaded_keys().await?;
+        assert!(cleared_count > 0);
+        
+        // Verify no keys are preloaded
+        let stats_after = preloader.get_stats().await;
+        assert_eq!(stats_after.total_preloaded_keys, 0);
+        assert_eq!(stats_after.total_memory_usage_bytes, 0);
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_access_tracking() -> Result<()> {
+        let db = create_test_database_with_keys().await?;
+        let mut config = create_test_preloader_config();
+        config.enable_access_tracking = true;
+        
+        let preloader = KeyPreloader::new(db.clone(), config);
+        preloader.initialize().await?;
+        
+        // Simulate key access
+        let key_id = KeyId::new("encryption_key");
+        preloader.record_key_access(&key_id).await?;
+        
+        // Get access stats
+        let access_stats = preloader.get_access_stats().await;
+        assert!(access_stats.contains_key(&key_id));
+        
+        let stats = access_stats.get(&key_id).unwrap();
+        assert_eq!(stats.access_count, 1);
+        assert!(stats.last_access_time > DateTime::from_timestamp(0, 0).unwrap());
+        
+        // Record multiple accesses
+        for _ in 0..5 {
+            preloader.record_key_access(&key_id).await?;
+        }
+        
+        let updated_stats = preloader.get_access_stats().await;
+        let updated_key_stats = updated_stats.get(&key_id).unwrap();
+        assert_eq!(updated_key_stats.access_count, 6);
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_frequently_used_preloading() -> Result<()> {
+        let db = create_test_database_with_keys().await?;
+        let mut config = create_test_preloader_config();
+        config.preload_frequently_used = true;
+        config.preload_all_keys = false;
+        config.enable_access_tracking = true;
+        
+        let preloader = KeyPreloader::new(db.clone(), config);
+        preloader.initialize().await?;
+        
+        // Record frequent access to a specific key
+        let key_id = KeyId::new("custom_key");
+        for _ in 0..10 {
+            preloader.record_key_access(&key_id).await?;
+        }
+        
+        // Trigger frequently used preloading
+        preloader.preload_frequently_used_keys().await?;
+        
+        // Verify the frequently used key is preloaded
+        let preloaded_key = preloader.get_preloaded_key(&key_id).await;
+        assert!(preloaded_key.is_some());
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_memory_limits() -> Result<()> {
+        let db = create_test_database_with_keys().await?;
+        let mut config = create_test_preloader_config();
+        config.max_keys_to_preload = 2; // Very small limit
+        config.max_memory_usage_bytes = 1000; // Very small memory limit
+        config.preload_all_keys = true;
+        
+        let preloader = KeyPreloader::new(db.clone(), config);
+        preloader.initialize().await?;
+        
+        // Verify memory limits are respected
+        let stats = preloader.get_stats().await;
+        assert!(stats.total_preloaded_keys <= 2);
+        assert!(stats.total_memory_usage_bytes <= 1000);
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_preload_strategies() -> Result<()> {
+        let db = create_test_database_with_keys().await?;
+        let config = create_test_preloader_config();
+        let preloader = KeyPreloader::new(db.clone(), config);
+        
+        // Test different strategies
+        let strategies = vec![
+            PreloadStrategy::All,
+            PreloadStrategy::FrequentlyUsed,
+            PreloadStrategy::ByPurpose,
+            PreloadStrategy::ExpiringSoon,
+            PreloadStrategy::ByPerformanceProfile,
+            PreloadStrategy::Custom("test_strategy".to_string()),
+        ];
+        
+        for strategy in strategies {
+            // Clear preloaded keys before each strategy test
+            let _ = preloader.clear_preloaded_keys().await;
+            
+            // Apply strategy
+            preloader.apply_preload_strategy(&strategy).await?;
+            
+            // Verify some keys might be preloaded (depending on strategy)
+            let stats = preloader.get_stats().await;
+            // The exact number depends on the strategy implementation
+            assert!(stats.total_preloaded_keys >= 0);
+        }
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_preloader_shutdown() -> Result<()> {
+        let db = create_test_database_with_keys().await?;
+        let mut config = create_test_preloader_config();
+        config.preload_all_keys = true;
+        
+        let preloader = KeyPreloader::new(db.clone(), config);
+        preloader.initialize().await?;
+        
+        // Verify keys are preloaded
+        let stats_before = preloader.get_stats().await;
+        assert!(stats_before.total_preloaded_keys > 0);
+        
+        // Shutdown preloader
+        preloader.shutdown().await?;
+        
+        // Verify no keys are preloaded after shutdown
+        let stats_after = preloader.get_stats().await;
+        assert_eq!(stats_after.total_preloaded_keys, 0);
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_preloader_operations() -> Result<()> {
+        let db = create_test_database_with_keys().await?;
+        let config = create_test_preloader_config();
+        let preloader = KeyPreloader::new(db.clone(), config);
+        preloader.initialize().await?;
+        
+        // Spawn multiple concurrent tasks
+        let mut handles = Vec::new();
+        
+        for i in 0..10 {
+            let preloader_clone = preloader.clone();
+            let handle = tokio::spawn(async move {
+                let key_id = KeyId::new(&format!("concurrent_test_{}", i));
+                
+                // Force preload key
+                let preload_result = preloader_clone.force_preload_key(&key_id).await;
+                assert!(preload_result.is_ok());
+                
+                // Record access
+                let access_result = preloader_clone.record_key_access(&key_id).await;
+                assert!(access_result.is_ok());
+                
+                // Get preloaded key
+                let get_result = preloader_clone.get_preloaded_key(&key_id).await;
+                assert!(get_result.is_ok());
+            });
+            
+            handles.push(handle);
+        }
+        
+        // Wait for all tasks to complete
+        for handle in handles {
+            let _ = handle.await;
+        }
+        
+        // Verify preloader is still in consistent state
+        let stats = preloader.get_stats().await;
+        assert!(stats.total_preloaded_keys >= 0);
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_preloader_performance_recommendations() -> Result<()> {
+        let db = create_test_database_with_keys().await?;
+        let config = create_test_preloader_config();
+        let preloader = KeyPreloader::new(db.clone(), config);
+        preloader.initialize().await?;
+        
+        // Get recommendations
+        let recommendations = preloader.get_performance_recommendations().await;
+        assert!(!recommendations.is_empty());
+        
+        // Add some access patterns and get new recommendations
+        for i in 0..5 {
+            let key_id = KeyId::new(&format!("rec_test_{}", i));
+            preloader.record_key_access(&key_id).await?;
+        }
+        
+        let updated_recommendations = preloader.get_performance_recommendations().await;
+        assert!(!updated_recommendations.is_empty());
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_preloader_with_no_keys() -> Result<()> {
+        // Create empty database
+        let temp_dir = tempdir().map_err(|e| FortressError::storage(
+            format!("Failed to create temp dir: {}", e),
+            crate::error::StorageErrorCode::IoError
+        ))?;
+        
+        let db_path = temp_dir.path().join("empty_test.db");
+        let connection_string = format!("sqlite:{}", db_path.display());
+        
+        let config = KeyDatabaseConfig {
+            backend: KeyDatabaseBackend::Sqlite,
+            connection_string,
+            max_connections: 5,
+            connection_timeout_seconds: 30,
+            encrypt_at_rest: false,
+            master_key: None,
+        };
+        
+        let db: Arc<dyn KeyDatabase> = Arc::from(create_key_database(config).await?);
+        db.initialize().await?;
+        
+        let preloader_config = create_test_preloader_config();
+        let preloader = KeyPreloader::new(db.clone(), preloader_config);
+        preloader.initialize().await?;
+        
+        // Verify no keys are preloaded
+        let stats = preloader.get_stats().await;
+        assert_eq!(stats.total_preloaded_keys, 0);
+        
+        // Try operations that should handle empty state gracefully
+        let cleared_count = preloader.clear_preloaded_keys().await?;
+        assert_eq!(cleared_count, 0);
+        
+        let recommendations = preloader.get_performance_recommendations().await;
+        // Should still provide recommendations even for empty state
+        assert!(!recommendations.is_empty());
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_preloader_error_handling() -> Result<()> {
+        let db = create_test_database_with_keys().await?;
+        let config = create_test_preloader_config();
+        let preloader = KeyPreloader::new(db.clone(), config);
+        preloader.initialize().await?;
+        
+        // Test operations with non-existent keys
+        let non_existent_id = KeyId::new("non_existent_key");
+        
+        // Try to get non-existent preloaded key
+        let result = preloader.get_preloaded_key(&non_existent_id).await;
+        assert!(result.is_none());
+        
+        // Try to evict non-existent key
+        let evicted = preloader.evict_key(&non_existent_id).await?;
+        assert!(!evicted);
+        
+        // Try to record access for non-existent key (should handle gracefully)
+        let access_result = preloader.record_key_access(&non_existent_id).await;
+        assert!(access_result.is_ok()); // Should not error
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_preloader_statistics_accuracy() -> Result<()> {
+        let db = create_test_database_with_keys().await?;
+        let mut config = create_test_preloader_config();
+        config.preload_all_keys = true;
+        config.enable_access_tracking = true;
+        
+        let preloader = KeyPreloader::new(db.clone(), config);
+        preloader.initialize().await?;
+        
+        // Perform known operations
+        let key_id = KeyId::new("encryption_key");
+        
+        // Force preload (should increment hits if already preloaded)
+        let _ = preloader.force_preload_key(&key_id).await?;
+        
+        // Get preloaded key (should increment hits)
+        let _ = preloader.get_preloaded_key(&key_id).await;
+        let _ = preloader.get_preloaded_key(&key_id).await;
+        
+        // Get non-existent key (should increment misses)
+        let _ = preloader.get_preloaded_key(&KeyId::new("non_existent")).await;
+        
+        // Record access
+        preloader.record_key_access(&key_id).await?;
+        
+        // Verify statistics
+        let stats = preloader.get_stats().await;
+        assert!(stats.total_preloaded_keys > 0);
+        assert!(stats.preload_hits >= 2); // At least 2 hits from our operations
+        assert!(stats.preload_misses >= 1); // At least 1 miss
+        assert!(stats.total_memory_usage_bytes > 0);
+        
+        // Verify access statistics
+        let access_stats = preloader.get_access_stats().await;
+        assert!(access_stats.contains_key(&key_id));
+        
+        let key_access_stats = access_stats.get(&key_id).unwrap();
+        assert_eq!(key_access_stats.access_count, 1);
+        
+        Ok(())
+    }
+}

@@ -309,7 +309,7 @@ impl CompatibilityManager {
 
     /// Check detailed compatibility
     pub async fn check_compatibility(&self, version: &str) -> Result<CompatibilityResult> {
-        let start = std::time::Instant::now();
+        let _start = std::time::Instant::now();
         
         let registry = self.version_registry.read().await;
         let version_info = registry.get(version).ok_or_else(|| {
@@ -482,7 +482,7 @@ impl CompatibilityManager {
             let mut found_next = false;
             
             // Look for direct migration rule
-            for ((from, to), rule) in migration_rules.iter() {
+            for ((from, to), _rule) in migration_rules.iter() {
                 if from == &current && self.can_migrate_to(to, to_version) {
                     path.push(to.clone());
                     current = to.clone();

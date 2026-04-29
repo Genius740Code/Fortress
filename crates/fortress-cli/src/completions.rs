@@ -1,5 +1,5 @@
 use clap::{Command, Arg, ValueHint};
-use clap_complete::{generate, Generator, Shell};
+use clap_complete::{generate, Generator};
 use crate::enhanced_error::FortressError;
 use std::io;
 
@@ -664,7 +664,7 @@ pub fn install_completions() -> Result<(), FortressError> {
 }
 
 pub fn print_completion_script(shell: &str) -> Result<(), FortressError> {
-    match shell {
+    let _ = match shell {
         "bash" => {
             generate_completions(clap_complete::shells::Bash, &mut std::io::stdout())
         }
@@ -690,6 +690,7 @@ pub fn print_completion_script(shell: &str) -> Result<(), FortressError> {
 pub mod dynamic_completions {
     use crate::enhanced_error::FortressError;
     use fortress_core::key_management::create_cli_key_manager;
+    use futures::stream::StreamExt;
     
     pub async fn complete_key_ids() -> Result<Vec<String>, FortressError> {
         // Create a key manager and list actual key IDs

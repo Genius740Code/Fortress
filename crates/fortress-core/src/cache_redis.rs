@@ -3,7 +3,6 @@
 //! This module provides a production-ready Redis cache backend with support
 //! for clustering, connection pooling, and advanced Redis features.
 
-use crate::error::{FortressError, Result};
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "redis")]

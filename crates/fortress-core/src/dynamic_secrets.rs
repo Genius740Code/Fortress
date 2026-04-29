@@ -1058,7 +1058,7 @@ impl DynamicSecretsEngine {
 
         &self,
 
-        path: &str,
+        _path: &str,
 
         params: serde_json::Value,
 
@@ -1208,7 +1208,7 @@ impl DynamicSecretsEngine {
 
         &self,
 
-        path: &str,
+        _path: &str,
 
         params: serde_json::Value,
 
@@ -1622,7 +1622,7 @@ impl DynamicSecretsEngine {
 
             let mut credentials = self.aws_credentials.write().await;
 
-            if let Some(credential) = credentials.remove(lease_id) {
+            if let Some(_credential) = credentials.remove(lease_id) {
 
                 log::info!("Revoked AWS credential with lease_id: {}", lease_id);
 

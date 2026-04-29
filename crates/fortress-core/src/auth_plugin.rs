@@ -277,7 +277,7 @@ impl WasmAuthPlugin {
         input: &serde_json::Value,
     ) -> Result<serde_json::Value> {
         // Convert input to PluginInput
-        let plugin_input = PluginInput {
+        let _plugin_input = PluginInput {
             action: "authenticate".to_string(),
             data: serde_json::to_value(input)?,
             parameters: HashMap::new(),

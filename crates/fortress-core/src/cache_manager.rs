@@ -6,7 +6,7 @@
 use crate::error::{FortressError, Result};
 #[cfg(feature = "distributed-cache")]
 use crate::distributed_cache::{DistributedCache, DistributedCacheConfig};
-use crate::cache_invalidation::{CacheInvalidation, CacheInvalidationManager, InvalidationConfig, InvalidationReason};
+use crate::cache_invalidation::{CacheInvalidation, InvalidationConfig, InvalidationReason};
 #[cfg(feature = "distributed-cache")]
 use crate::cache_hybrid::HybridCacheConfig;
 #[cfg(feature = "redis")]

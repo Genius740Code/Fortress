@@ -362,7 +362,7 @@ impl FortressCacheIntegration {
     }
 
     /// Log access
-    async fn log_access(&self, operation: &str, key_id: &str) {
+    async fn log_access(&self, _operation: &str, _key_id: &str) {
         if self.config.security_settings.enable_access_logging {
             let mut stats = self.stats.write().await;
             stats.security_stats.access_log_entries += 1;
@@ -373,7 +373,7 @@ impl FortressCacheIntegration {
     }
 
     /// Check security violations
-    async fn check_security_violation(&self, operation: &str, data_size: usize) -> Result<()> {
+    async fn check_security_violation(&self, _operation: &str, data_size: usize) -> Result<()> {
         if data_size > self.config.security_settings.max_entry_size_bytes {
             let mut stats = self.stats.write().await;
             stats.security_stats.security_violations += 1;

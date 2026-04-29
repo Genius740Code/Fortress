@@ -10,7 +10,6 @@
 
 
 
-use crate::error::FortressError;
 
 use axum::{
 
@@ -18,13 +17,14 @@ use axum::{
 
     extract::Request,
 
-    http::{header, HeaderMap, HeaderValue, Response, StatusCode},
+    response::Response,
+
+    http::{header, HeaderValue, StatusCode},
 
     middleware::Next,
 
-    response::IntoResponse,
-
 };
+
 
 use std::time::Duration;
 
@@ -180,29 +180,7 @@ impl Default for SecurityHeadersConfig {
 
             content_security_policy: Some(
 
-                "default-src 'self'; \
-
-                 script-src 'self'; \
-
-                 style-src 'self'; \
-
-                 img-src 'self' data: https:; \
-
-                 font-src 'self' data:; \
-
-                 connect-src 'self'; \
-
-                 frame-src 'self'; \
-
-                 object-src 'none'; \
-
-                 base-uri 'self'; \
-
-                 form-action 'self'; \
-
-                 frame-ancestors 'self'; \
-
-                 upgrade-insecure-requests;"
+                "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests;"
 
                     .to_string(),
 
@@ -226,31 +204,7 @@ impl Default for SecurityHeadersConfig {
 
             permissions_policy: Some(
 
-                "geolocation=(), \
-
-                 microphone=(), \
-
-                 camera=(), \
-
-                 payment=(), \
-
-                 usb=(), \
-
-                 magnetometer=(), \
-
-                 gyroscope=(), \
-
-                 accelerometer=(), \
-
-                 ambient-light-sensor=(), \
-
-                 autoplay=(), \
-
-                 encrypted-media=(), \
-
-                 fullscreen=(), \
-
-                 picture-in-picture=()"
+                "geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=(), ambient-light-sensor=(), autoplay=(), encrypted-media=(), fullscreen=(), picture-in-picture=()"
 
                     .to_string(),
 
@@ -960,8 +914,7 @@ mod tests {
 
     use axum::{routing::get, Router};
 
-    use tower::ServiceExt;
-
+    
 
 
     #[tokio::test]

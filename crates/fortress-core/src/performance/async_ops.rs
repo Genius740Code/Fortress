@@ -56,7 +56,7 @@ impl BatchEncryptor {
     pub async fn encrypt_batch(&self, data_batch: &[&[u8]], key: &[u8], algorithm: Arc<dyn EncryptionAlgorithm>) -> Result<Vec<Vec<u8>>, FortressError> {
         let tasks: Vec<_> = data_batch.iter()
             .enumerate()
-            .map(|(i, data)| {
+            .map(|(_i, data)| {
                 let permit = self.semaphore.clone();
                 let data = data.to_vec();
                 let key = key.to_vec();

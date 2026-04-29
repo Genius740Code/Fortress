@@ -111,6 +111,7 @@ static PLUGIN_CONFIG: OnceLock<JwtConfig> = OnceLock::new();
 static PLUGIN_INITIALIZED: OnceLock<bool> = OnceLock::new();
 
 // WASM host function declarations
+#[allow(dead_code)]
 extern "C" {
     fn auth_log(level: i32, ptr: *const u8, len: usize);
     fn auth_store_session(session_id_ptr: *const u8, session_id_len: usize, user_data_ptr: *const u8, user_data_len: usize) -> i32;
@@ -215,6 +216,7 @@ fn base64url_encode(data: &[u8]) -> String {
     URL_SAFE_NO_PAD.encode(data)
 }
 
+#[allow(dead_code)]
 fn base64url_decode(data: &str) -> Result<Vec<u8>, base64::DecodeError> {
     URL_SAFE_NO_PAD.decode(data)
 }
@@ -230,6 +232,8 @@ fn create_signature(data: &str, secret: &str) -> Result<String, String> {
 }
 
 // User database (simplified - in production, use proper user store)
+#[allow(dead_code)]
+#[allow(static_mut_refs)]
 static mut USER_DATABASE: Option<HashMap<String, UserRecord>> = None;
 
 #[derive(Debug, Clone)]
@@ -244,6 +248,7 @@ struct UserRecord {
     active: bool,
 }
 
+#[allow(dead_code)]
 fn initialize_user_database() {
     unsafe {
         if USER_DATABASE.is_none() {

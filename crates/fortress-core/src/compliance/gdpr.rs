@@ -123,7 +123,7 @@ impl GdprComplianceManager {
         Ok(())
     }
 
-    pub async fn check_access_compliance(&self, user_id: &str, data_id: &str) -> Result<bool> {
+    pub async fn check_access_compliance(&self, _user_id: &str, _data_id: &str) -> Result<bool> {
         // Simple implementation - in real system would check consent records
         Ok(true)
     }

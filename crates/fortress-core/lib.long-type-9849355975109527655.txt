@@ -1,1 +1,0 @@
-impl Future<Output = std::result::Result<compression::CompressionAlgorithm, error::FortressError>>

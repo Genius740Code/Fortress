@@ -154,7 +154,7 @@ impl WebSocketAuthenticator {
     }
 
     /// Authenticate with JWT token
-    async fn authenticate_jwt(&self, token: &str, client_ip: &str) -> Result<AuthResult> {
+    async fn authenticate_jwt(&self, token: &str, _client_ip: &str) -> Result<AuthResult> {
         let token_data = decode::<TokenClaims>(
             token,
             &DecodingKey::from_secret(self.config.jwt_secret.as_ref()),
@@ -210,7 +210,7 @@ impl WebSocketAuthenticator {
     }
 
     /// Authenticate with API key
-    async fn authenticate_api_key(&self, api_key: &str, client_ip: &str) -> Result<AuthResult> {
+    async fn authenticate_api_key(&self, api_key: &str, _client_ip: &str) -> Result<AuthResult> {
         // In a real implementation, validate API key against database
         // For now, we'll simulate basic validation
         
@@ -256,7 +256,7 @@ impl WebSocketAuthenticator {
     }
 
     /// Authenticate with session token
-    async fn authenticate_session(&self, session_token: &str, client_ip: &str) -> Result<AuthResult> {
+    async fn authenticate_session(&self, session_token: &str, _client_ip: &str) -> Result<AuthResult> {
         // In a real implementation, validate session token against session store
         // For now, we'll simulate basic validation
         
@@ -444,7 +444,7 @@ impl WebSocketAuthenticator {
     }
     
     /// SECURE: Get user ID associated with API key
-    async fn get_user_by_api_key(&self, api_key_hash: &str) -> Result<String> {
+    async fn get_user_by_api_key(&self, _api_key_hash: &str) -> Result<String> {
         // In production: query database for user associated with API key
         // For demo, return simulated user ID
         Ok("user_12345678".to_string())
@@ -452,7 +452,7 @@ impl WebSocketAuthenticator {
     
     /// SECURE: Validate session token and return session data
     async fn validate_session_token(&self, session_token: &str) -> Result<Option<SessionData>> {
-        use std::collections::HashMap;
+        
         use std::time::{SystemTime, UNIX_EPOCH};
         
         // In production: query secure session store

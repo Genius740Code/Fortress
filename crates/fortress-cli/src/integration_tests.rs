@@ -12,7 +12,7 @@ use std::collections::HashMap;
 
 pub async fn test_configuration_wizard_complete_flow() {
     // Test complete configuration wizard flow
-    let result = ConfigurationWizard::run_interactive_setup().await;
+    let _result = ConfigurationWizard::run_interactive_setup().await;
     
     // In a real test, this would mock user input
     // For now, we'll test the configuration validation

@@ -3,7 +3,7 @@
 //! This module provides lease management functionality for dynamic secrets
 //! and other time-limited resources.
 
-use chrono::{DateTime, Utc, Duration, Timelike};
+use chrono::{DateTime, Utc, Duration};
 use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
 use std::sync::Arc;

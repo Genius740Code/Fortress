@@ -94,7 +94,7 @@ pub struct MasterKey {
 impl MasterKey {
     /// Generate a new master key
     pub fn generate() -> Result<Self> {
-        use crate::trng::random_bytes;
+        
         
         let mut key = [0u8; 32];
         let random_data = crate::trng::random_bytes(32)?;

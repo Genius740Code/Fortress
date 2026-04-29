@@ -1,1 +1,0 @@
-Pin<Box<dyn Future<Output = std::result::Result<Vec<backup::BackupMetadata>, error::FortressError>> + Send>>

@@ -1,6 +1,5 @@
 use dialoguer::{Select, Confirm, Input, Password};
 use console::Term;
-use indicatif::{ProgressBar, ProgressStyle};
 use serde::{Serialize, Deserialize};
 use crate::enhanced_error::FortressError;
 use std::path::PathBuf;

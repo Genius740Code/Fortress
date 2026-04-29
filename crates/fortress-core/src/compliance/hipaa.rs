@@ -983,7 +983,7 @@ impl HipaaComplianceManager {
     }
 
     /// Send email notification
-    async fn send_email_notification(&self, individual: &IndividualContact, content: &NotificationContent) -> Result<NotificationResult> {
+    async fn send_email_notification(&self, individual: &IndividualContact, _content: &NotificationContent) -> Result<NotificationResult> {
         // Simulate email sending
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         
@@ -1001,7 +1001,7 @@ impl HipaaComplianceManager {
     }
 
     /// Send SMS notification
-    async fn send_sms_notification(&self, individual: &IndividualContact, content: &NotificationContent) -> Result<NotificationResult> {
+    async fn send_sms_notification(&self, individual: &IndividualContact, _content: &NotificationContent) -> Result<NotificationResult> {
         // Simulate SMS sending
         tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
         
@@ -1022,7 +1022,7 @@ impl HipaaComplianceManager {
     }
 
     /// Send mail notification
-    async fn send_mail_notification(&self, individual: &IndividualContact, content: &NotificationContent) -> Result<NotificationResult> {
+    async fn send_mail_notification(&self, individual: &IndividualContact, _content: &NotificationContent) -> Result<NotificationResult> {
         // Simulate mail sending
         tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
         
@@ -1040,7 +1040,7 @@ impl HipaaComplianceManager {
     }
 
     /// Send media notifications
-    async fn send_media_notifications(&self, breach: &BreachAssessment, content: &NotificationContent) -> Result<Vec<MediaNotificationResult>> {
+    async fn send_media_notifications(&self, breach: &BreachAssessment, _content: &NotificationContent) -> Result<Vec<MediaNotificationResult>> {
         let mut results = Vec::new();
         
         // Generate press release

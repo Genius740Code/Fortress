@@ -1,5 +1,5 @@
 use async_graphql::{Subscription, Result, Context};
-use futures::stream::{BoxStream, StreamExt};
+use futures::stream::StreamExt;
 use tokio_stream::{Stream, wrappers::BroadcastStream};
 use tokio::sync::broadcast;
 use serde::{Serialize, Deserialize};
@@ -526,7 +526,7 @@ impl Default for SubscriptionManager {
     }
 }
 
-struct QueryRoot {
+pub struct QueryRoot {
     _private: (),
 }
 

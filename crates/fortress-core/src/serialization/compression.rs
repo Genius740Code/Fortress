@@ -4,7 +4,6 @@
 //! serialization with multiple algorithms and adaptive selection.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use tokio::sync::RwLock;
 use serde::{Serialize, Deserialize};
 use crate::error::{FortressError, Result};
@@ -313,7 +312,7 @@ impl CompressionEngine {
         
         // Score each algorithm based on data characteristics
         let mut scored_algorithms: Vec<(CompressionAlgorithm, u32)> = configs.iter()
-            .filter(|(alg, config)| data.len() >= config.min_size)
+            .filter(|(_alg, config)| data.len() >= config.min_size)
             .map(|(alg, config)| {
                 let mut score = 0u32;
                 

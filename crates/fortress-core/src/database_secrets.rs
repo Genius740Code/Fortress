@@ -372,11 +372,11 @@ impl DatabaseEngine {
 
         &self,
 
-        config: &DatabaseConfig,
+        _config: &DatabaseConfig,
 
         username: &str,
 
-        password: &str,
+        _password: &str,
 
         permissions: &[String],
 
@@ -514,11 +514,11 @@ impl DatabaseEngine {
 
         &self,
 
-        config: &DatabaseConfig,
+        _config: &DatabaseConfig,
 
         username: &str,
 
-        password: &str,
+        _password: &str,
 
         permissions: &[String],
 
@@ -674,11 +674,11 @@ impl DatabaseEngine {
 
         &self,
 
-        config: &DatabaseConfig,
+        _config: &DatabaseConfig,
 
         username: &str,
 
-        password: &str,
+        _password: &str,
 
         permissions: &[String],
 
@@ -1254,7 +1254,7 @@ impl DatabaseEngine {
         requests: Vec<(String, Option<String>, Vec<String>, Option<u64>)>,
     ) -> Result<Vec<DatabaseCredential>> {
         let config = self.config.read().await;
-        let config = config.as_ref()
+        let _config = config.as_ref()
             .ok_or_else(|| FortressError::secrets("Database not configured".to_string()))?;
 
         let mut results = Vec::with_capacity(requests.len());

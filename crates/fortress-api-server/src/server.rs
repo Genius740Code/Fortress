@@ -14,7 +14,6 @@ use crate::auth::{AuthManager, OidcProviderConfig, OidcUserStore, InMemoryUserSt
 use axum::{
     Router,
     routing::get,
-    Json,
 };
 use tracing::info;
 use fortress_core::storage::StorageBackend;

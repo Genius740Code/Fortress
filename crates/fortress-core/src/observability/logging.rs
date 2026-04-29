@@ -325,7 +325,7 @@ pub struct StructuredLogger {
 
 /// Logging statistics
 #[derive(Debug, Default)]
-struct LogStats {
+pub struct LogStats {
     total_logs: u64,
     logs_by_level: HashMap<LogLevel, u64>,
     logs_by_target: HashMap<String, u64>,

@@ -4,10 +4,10 @@
 //! with automatic garbage collection and memory optimization.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::RwLock;
 use serde::{Serialize, Deserialize};
-use crate::error::{FortressError, Result};
+use crate::error::Result;
 
 /// Memory monitor for tracking and optimizing memory usage
 pub struct MemoryMonitor {
@@ -181,7 +181,7 @@ impl MemoryMonitor {
 
     /// Trigger garbage collection
     pub async fn trigger_gc(&self) -> Result<()> {
-        let start = std::time::Instant::now();
+        let _start = std::time::Instant::now();
         
         // Simulate GC work
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
@@ -268,7 +268,7 @@ impl MemoryMonitor {
         let current_usage_mb = current_usage_bytes as f64 / 1024.0 / 1024.0;
         let peak_usage_mb = peak_usage_bytes as f64 / 1024.0 / 1024.0;
         let usage_percentage = current_usage_mb / self.max_memory_mb as f64;
-        let net_allocated_mb = (current_usage_bytes as f64 / 1024.0 / 1024.0);
+        let net_allocated_mb = current_usage_bytes as f64 / 1024.0 / 1024.0;
         
         let fragmentation_percentage = *self.fragmentation_percentage.read().await;
         let allocation_rate = self.calculate_allocation_rate().await?;
@@ -340,7 +340,7 @@ impl MemoryMonitor {
 
     /// Perform memory optimization
     pub async fn optimize_memory(&self) -> Result<MemoryOptimizationResult> {
-        let start = std::time::Instant::now();
+        let _start = std::time::Instant::now();
         let mut optimizations = Vec::new();
 
         // Check if GC is needed
@@ -360,7 +360,7 @@ impl MemoryMonitor {
             optimizations.push("Memory compaction performed".to_string());
         }
 
-        let duration = start.elapsed();
+        let duration = _start.elapsed();
 
         Ok(MemoryOptimizationResult {
             optimizations,
@@ -400,7 +400,7 @@ impl MemoryMonitor {
 }
 
 /// Memory alert types
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum MemoryAlert {
     None,
     Warning {

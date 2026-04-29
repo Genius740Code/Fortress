@@ -364,7 +364,7 @@ impl crate::key_database::KeyDatabase for MongoKeyDatabase {
         Ok(())
     }
 
-    async fn list_keys(&self, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<(KeyId, KeyMetadata)>> {
+    async fn list_keys(&self, _limit: Option<u32>, _offset: Option<u32>) -> Result<Vec<(KeyId, KeyMetadata)>> {
         let keys_data = self.keys_data.read().await;
         
         let mut keys = Vec::new();
@@ -570,7 +570,7 @@ impl StorageBackend for MongoStorage {
 
     async fn list_prefix_paginated(&self, prefix: &str, limit: Option<usize>, offset: Option<usize>) -> Result<Vec<String>> {
         let data = self.data_storage.read().await;
-        let mut keys: Vec<_> = data
+        let keys: Vec<_> = data
             .keys()
             .filter(|key| key.starts_with(prefix))
             .cloned()

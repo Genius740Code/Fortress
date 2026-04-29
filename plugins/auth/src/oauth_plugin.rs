@@ -135,6 +135,7 @@ struct CachedToken {
 }
 
 // WASM host function declarations
+#[allow(dead_code)]
 extern "C" {
     fn auth_log(level: i32, ptr: *const u8, len: usize);
     fn auth_store_session(session_id_ptr: *const u8, session_id_len: usize, user_data_ptr: *const u8, user_data_len: usize) -> i32;
@@ -299,6 +300,7 @@ fn get_user_info_from_token(access_token: &str, config: &OAuthConfig) -> Result<
     }
 }
 
+#[allow(dead_code)]
 fn validate_id_token(id_token: &str) -> Result<OAuthUserInfo, String> {
     // Simplified ID token validation (in production, use proper JWT validation)
     let parts: Vec<&str> = id_token.split('.').collect();

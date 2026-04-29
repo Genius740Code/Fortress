@@ -431,8 +431,7 @@ mod tests {
         assert_eq!(DataClassification::Public.security_level(), 1);
         assert_eq!(DataClassification::Internal.security_level(), 2);
         assert_eq!(DataClassification::Confidential.security_level(), 3);
-        assert_eq!(DataClassification::Secret.security_level(), 4);
-        assert_eq!(DataClassification::TopSecret.security_level(), 5);
+        assert_eq!(DataClassification::Restricted.security_level(), 4);
     }
     
     #[test]

@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
-use tokio::time::{interval, sleep};
+use tokio::time::interval;
 
 #[cfg(feature = "performance-optimization")]
 use dashmap::DashMap;

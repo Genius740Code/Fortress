@@ -692,7 +692,7 @@ impl SpanContext {
 
 /// No-op tracer implementation
 #[derive(Debug)]
-struct NoOpTracer;
+pub struct NoOpTracer;
 
 #[cfg(feature = "opentelemetry")]
 impl Tracer for NoOpTracer {
@@ -710,7 +710,7 @@ impl Tracer for NoOpTracer {
 
 /// Console tracer implementation
 #[derive(Debug)]
-struct ConsoleTracer {
+pub struct ConsoleTracer {
     config: TracerConfig,
 }
 
@@ -735,7 +735,7 @@ impl Tracer for ConsoleTracer {
 }
 
 /// No-op span implementation
-struct NoOpSpan {
+pub struct NoOpSpan {
     name: String,
 }
 
@@ -764,7 +764,7 @@ impl Span for NoOpSpan {
 }
 
 /// Console span implementation
-struct ConsoleSpan {
+pub struct ConsoleSpan {
     name: String,
     start_time: std::time::Instant,
 }

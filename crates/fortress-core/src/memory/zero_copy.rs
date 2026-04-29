@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use tokio::sync::RwLock;
 use serde::{Serialize, Deserialize};
 use bytes::{Bytes, BytesMut};
-use crate::error::{FortressError, Result};
+use crate::error::Result;
 
 /// Zero-copy data type for efficient string handling
 pub type ZeroCopyString = Cow<'static, str>;
@@ -47,7 +47,7 @@ impl<T> ZeroCopyVec<T> {
     }
 
     /// Get an iterator over the elements
-    pub fn iter(&self) -> std::slice::Iter<T> {
+    pub fn iter(&self) -> std::slice::Iter<'_, T> {
         self.data.iter()
     }
 }
@@ -102,17 +102,17 @@ where
     }
 
     /// Get an iterator over key-value pairs
-    pub fn iter(&self) -> std::collections::hash_map::Iter<K, V> {
+    pub fn iter(&self) -> std::collections::hash_map::Iter<'_, K, V> {
         self.data.iter()
     }
 
     /// Get an iterator over keys
-    pub fn keys(&self) -> std::collections::hash_map::Keys<K, V> {
+    pub fn keys(&self) -> std::collections::hash_map::Keys<'_, K, V> {
         self.data.keys()
     }
 
     /// Get an iterator over values
-    pub fn values(&self) -> std::collections::hash_map::Values<K, V> {
+    pub fn values(&self) -> std::collections::hash_map::Values<'_, K, V> {
         self.data.values()
     }
 }

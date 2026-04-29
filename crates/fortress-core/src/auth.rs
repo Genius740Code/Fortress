@@ -11,7 +11,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
-use serde_json::Value;
 
 /// Unique identifier for a user
 pub type UserId = String;
@@ -1013,6 +1012,10 @@ impl AccountLockoutManager {
     pub fn reset_failed_attempts(&mut self, _username: &str) -> Result<(), FortressError> {
         self.clear_failed_attempts(_username)
     }
+
+    pub fn get_lockout_remaining(&self, _username: &str) -> Result<Option<u64>, FortressError> {
+        Ok(None)
+    }
 }
 
 /// Authentication and authorization manager
@@ -1422,7 +1425,7 @@ impl AuthManager {
     }
 
     /// Generate MFA requirements for user
-    fn generate_mfa_requirements(&self, user_id: &str, risk_assessment: &Option<RiskAssessment>) -> MfaRequirements {
+    fn generate_mfa_requirements(&self, _user_id: &str, risk_assessment: &Option<RiskAssessment>) -> MfaRequirements {
         let available_methods = vec![
             MfaMethod::Totp,
             MfaMethod::HardwareToken,

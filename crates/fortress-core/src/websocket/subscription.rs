@@ -442,7 +442,7 @@ impl SubscriptionManager {
 
     /// Start event processor
     pub async fn start_event_processor(&self) -> mpsc::UnboundedReceiver<SubscriptionEvent> {
-        let (sender, receiver) = mpsc::unbounded_channel();
+        let (_sender, receiver) = mpsc::unbounded_channel();
         
         // Note: In a real implementation, we'd replace the internal sender
         // For now, we'll return a new receiver

@@ -13,7 +13,6 @@
 use crate::error::{FortressError, Result, EncryptionErrorCode};
 
 use async_trait::async_trait;
-use tokio::task;
 
 use base64::{Engine as _, engine::general_purpose};
 
@@ -28,9 +27,7 @@ use serde_with::{serde_as, DurationSeconds};
 use zeroize::Zeroize;
 
 use chacha20poly1305::{KeyInit as ChaChaKeyInit, aead::Aead};
-use aegis::aegis256::Aegis256 as Aegis256Cipher;
 use blake3::Hasher as Blake3Hasher;
-use generic_array::GenericArray;
 use sha2::{Sha256, Sha512, Digest};
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac};

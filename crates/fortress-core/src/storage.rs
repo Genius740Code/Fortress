@@ -315,7 +315,7 @@ impl StorageBackend for InMemoryStorage {
 
     async fn list_prefix_paginated(&self, prefix: &str, limit: Option<usize>, offset: Option<usize>) -> Result<Vec<String>> {
         let data = self.data.read().await;
-        let mut keys: Vec<_> = data
+        let keys: Vec<_> = data
             .keys()
             .filter(|key| key.starts_with(prefix))
             .cloned()

@@ -360,7 +360,7 @@ impl WebSocketConnection {
     /// Send message to connection
     pub async fn send_message(&self, message: WebSocketMessage) -> Result<()> {
         let json = message.to_json()?;
-        let ws_message = Message::Text(json);
+        let _ws_message = Message::Text(json);
         
         // Update statistics would be handled by the connection manager
         tracing::debug!("Sending message to connection {}: {}", self.info.read().await.id, message.id);
@@ -375,7 +375,7 @@ impl WebSocketConnection {
         *self.state.write().await = ConnectionState::Disconnected;
         
         // Close WebSocket stream if available
-        if let Some(ref stream) = self.stream {
+        if let Some(ref _stream) = self.stream {
             // Close the stream
             // In real implementation: stream.close(None).await
         }

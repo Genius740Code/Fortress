@@ -391,7 +391,7 @@ impl SystemResourceMonitor {
         
         // Get load averages (Unix-like systems only)
         let load_averages = cfg!(unix).then(|| {
-            let loadavg = [0.0; 3];
+            let _loadavg = [0.0; 3];
             // Note: This would need platform-specific implementation
             // For now, return placeholder values
             Some((0.5, 0.3, 0.1))
@@ -472,7 +472,7 @@ impl SystemResourceMonitor {
 
     /// Collect network information
     async fn collect_network_info(
-        previous_network_stats: &Arc<RwLock<HashMap<String, (u64, u64, Instant)>>>,
+        _previous_network_stats: &Arc<RwLock<HashMap<String, (u64, u64, Instant)>>>,
     ) -> Result<Vec<NetworkUsage>> {
         let mut networks = Vec::new();
         

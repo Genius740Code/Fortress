@@ -174,7 +174,8 @@ impl SecureKey {
     /// # Security
     /// Use only when necessary for storage/transmission protocols.
     pub fn to_base64(&self) -> String {
-        base64::encode(&self.data)
+        use base64::{Engine as _, engine::general_purpose};
+        general_purpose::STANDARD.encode(&self.data)
     }
 
     /// Create secure key from hex string
@@ -198,7 +199,8 @@ impl SecureKey {
     /// # Returns
     /// * `Result<SecureKey, FortressError>` - Secure key or error
     pub fn from_base64(base64_str: &str) -> Result<Self, FortressError> {
-        let data = base64::decode(base64_str)
+        use base64::{Engine as _, engine::general_purpose};
+        let data = general_purpose::STANDARD.decode(base64_str)
             .map_err(|e| FortressError::encryption(format!("Invalid base64 format: {}", e), "base64_decode".to_string(), crate::error::EncryptionErrorCode::InvalidInput))?;
         Ok(Self::new(data))
     }

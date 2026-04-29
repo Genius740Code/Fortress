@@ -4,10 +4,10 @@
 //! memory allocation patterns for cryptographic operations.
 
 use crate::error::FortressError;
-use std::sync::{Arc, Mutex, Once};
+use std::sync::{Arc, Mutex};
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio::time::{interval, sleep};
 use once_cell::sync::Lazy;
 

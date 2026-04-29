@@ -688,7 +688,7 @@ impl SecureAuditLogger {
 
     /// Verify entry signature
     async fn verify_entry_signature(&self, entry: &SecureAuditEntry) -> Result<bool> {
-        let keypair = self.signing_keypair.read().await;
+        let _keypair = self.signing_keypair.read().await;
         
         // Create entry without signature for verification
         let mut entry_for_verification = entry.clone();

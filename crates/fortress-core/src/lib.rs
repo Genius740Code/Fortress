@@ -1525,23 +1525,27 @@ pub mod prelude {
 
     pub use crate::compliance::{
 
-        ComplianceManager, ComplianceConfig, ComplianceFramework, DataClassification,
+        ComplianceManager, ComplianceConfig, ComplianceFramework,
 
         ComplianceEvent, EventSeverity, ComplianceEventOutcome, ComplianceReport, ComplianceFinding,
 
         FindingStatus, ComplianceIssue, DataSubject, ConsentRecord, RightsRequest,
 
-        RightsRequestType, RequestStatus, ProtectedHealthInfo, PhiType, AccessControl,
-
-        CardholderData, CardAccessEvent, PciRequirement, BreachNotificationConfig,
-
-        ComplianceAuditConfig, EncryptionConfig, AccessControlConfig, PasswordPolicy,
-
-        GdprComplianceManager, HipaaComplianceManager, CoveredEntity, BusinessAssociate,
+        RightsRequestType, GdprComplianceManager, HipaaComplianceManager, CoveredEntity, BusinessAssociate,
 
         ComplianceAssessment, ComplianceConfigManager, ComplianceAuditLogger,
 
         AuditFilter, IntegrityReport,
+
+    };
+
+    pub use crate::compliance::framework::{
+
+        DataClassification, RequestStatus, ProtectedHealthInfo, PhiType, AccessControl,
+
+        CardholderData, CardAccessEvent, PciRequirement, BreachNotificationConfig,
+
+        ComplianceAuditConfig, EncryptionConfig, AccessControlConfig, PasswordPolicy,
 
     };
 

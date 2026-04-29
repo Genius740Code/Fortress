@@ -5,7 +5,6 @@
 use chrono::{DateTime, Utc, Duration};
 use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
-use std::sync::Arc;
 use uuid::Uuid;
 
 /// Token type enumeration
@@ -228,7 +227,7 @@ pub struct TokenUsageStats {
 }
 
 /// Token creation context
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TokenCreationContext {
     /// Who created this token
     pub created_by: String,

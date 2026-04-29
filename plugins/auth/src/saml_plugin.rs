@@ -194,6 +194,7 @@ fn log_message(level: i32, message: &str) {
 }
 
 // HTTP request helper
+#[allow(dead_code)]
 fn make_http_request(url: &str, method: &str, body: Option<&str>) -> Result<String, String> {
     let mut response_buffer = [0u8; 4096];
     let body_ptr = body.map(|b| b.as_ptr()).unwrap_or(std::ptr::null());

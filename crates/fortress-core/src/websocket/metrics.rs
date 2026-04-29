@@ -122,7 +122,7 @@ impl WebSocketMetrics {
     }
 
     /// Record connection established
-    pub async fn record_connection_established(&self, connection_id: &str, client_ip: &str, user_id: Option<String>) {
+    pub async fn record_connection_established(&self, _connection_id: &str, client_ip: &str, user_id: Option<String>) {
         let mut metrics = self.connection_metrics.write().await;
         metrics.total_connections += 1;
         metrics.active_connections += 1;
@@ -140,7 +140,7 @@ impl WebSocketMetrics {
     }
 
     /// Record connection closed
-    pub async fn record_connection_closed(&self, connection_id: &str, duration: Duration) {
+    pub async fn record_connection_closed(&self, _connection_id: &str, duration: Duration) {
         let mut metrics = self.connection_metrics.write().await;
         
         if metrics.active_connections > 0 {

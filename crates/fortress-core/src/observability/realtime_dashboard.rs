@@ -654,7 +654,7 @@ impl RealTimeDashboard {
 
         let performance_monitor = self.performance_monitor.clone();
 
-        let metrics_collector = self.metrics_collector.clone();
+        let _metrics_collector = self.metrics_collector.clone();
 
         let last_system_snapshot = self.last_system_snapshot.clone();
 
@@ -968,7 +968,7 @@ impl RealTimeDashboard {
 
                 for connection_id in to_remove {
 
-                    if let Some(connection_info) = connections_guard.remove(&connection_id) {
+                    if let Some(_connection_info) = connections_guard.remove(&connection_id) {
 
                         // Send disconnection status
 

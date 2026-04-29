@@ -495,7 +495,7 @@ impl TeeProvider for IntelSgxProvider {
         // Verify quote signature
         let signature_valid = self.verify_quote_signature(&quote).await?;
         
-        let is_valid = signature_valid;
+        let _is_valid = signature_valid;
         let security_issues = Vec::new();
         let mut details: HashMap<String, String> = HashMap::new();
         
@@ -525,7 +525,7 @@ impl TeeProvider for IntelSgxProvider {
         }
         
         let result = AttestationResult {
-            is_valid,
+            is_valid: _is_valid,
             tee_type: TeeType::IntelSgx,
             enclave_id: enclave_id.to_string(),
             security_version: isv_svn_clone.unwrap_or(0), // Use cloned isv_svn here
@@ -574,7 +574,7 @@ impl TeeProvider for IntelSgxProvider {
         // Verify quote signature
         let signature_valid = self.verify_quote_signature(&quote).await?;
         
-        let is_valid = signature_valid;
+        let _is_valid = signature_valid;
         
         // Generate session key for secure channel
         use crate::key::SecureKey;

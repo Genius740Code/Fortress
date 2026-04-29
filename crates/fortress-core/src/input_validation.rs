@@ -6,7 +6,6 @@
 use crate::error::FortressError;
 use regex::Regex;
 use std::collections::HashSet;
-use lazy_static::lazy_static;
 
 /// Maximum allowed input lengths
 const MAX_INPUT_LENGTH: usize = 10000;

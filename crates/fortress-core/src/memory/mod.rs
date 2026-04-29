@@ -4,7 +4,6 @@
 //! for Fortress to optimize performance and reduce memory overhead.
 
 use std::sync::Arc;
-use std::collections::HashMap;
 use tokio::sync::RwLock;
 use serde::{Serialize, Deserialize};
 

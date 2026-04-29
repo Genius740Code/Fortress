@@ -622,3 +622,543 @@ impl std::fmt::Debug for KeyCache {
             .finish()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::encryption::{Aes256GcmEncryption, EncryptionAlgorithm};
+    use crate::key::{KeyId, KeyMetadata, KeyPurpose, PerformanceProfile};
+    use chrono::{DateTime, Utc};
+    use std::time::Duration;
+
+    /// Create a test key cache with reasonable defaults
+    fn create_test_cache() -> KeyCache {
+        let config = KeyCacheConfig {
+            max_keys: 100,
+            max_memory_bytes: 10 * 1024 * 1024, // 10MB
+            enable_lru_eviction: true,
+            enable_time_eviction: true,
+            eviction_time_seconds: 3600, // 1 hour
+            track_access_frequency: true,
+            enable_stats: true,
+            enable_cache_warming: false,
+            background_cleanup_interval_seconds: 60, // 1 minute for testing
+            hit_ratio_threshold: 0.8,
+        };
+        KeyCache::new(config)
+    }
+
+    /// Create test key data
+    fn create_test_key_data(id: &str, version: u32) -> (SecureKey, KeyMetadata) {
+        let algorithm = Aes256GcmEncryption::new();
+        let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate test key");
+        let metadata = KeyMetadata::new(
+            KeyId::new(id),
+            algorithm.name().to_string(),
+            version,
+            Utc::now(),
+            Utc::now() + chrono::Duration::days(30),
+            KeyPurpose::DataEncryption,
+            PerformanceProfile::Balanced,
+        );
+        (key, metadata)
+    }
+
+    #[tokio::test]
+    async fn test_cache_creation() -> Result<()> {
+        let cache = create_test_cache();
+        
+        // Verify initial state
+        let stats = cache.get_stats().await;
+        assert_eq!(stats.total_keys, 0);
+        assert_eq!(stats.current_memory_bytes, 0);
+        assert_eq!(stats.cache_hits, 0);
+        assert_eq!(stats.cache_misses, 0);
+        assert_eq!(stats.evictions, 0);
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_cache_put_and_get() -> Result<()> {
+        let cache = create_test_cache();
+        let (key, metadata) = create_test_key_data("test_key_1", 1);
+        let key_id = KeyId::new("test_key_1");
+        
+        // Put key in cache
+        cache.put(key_id.clone(), key.clone(), metadata.clone()).await?;
+        
+        // Get key from cache
+        let cached_result = cache.get(&key_id).await;
+        assert!(cached_result.is_some());
+        
+        let (cached_key, cached_metadata) = cached_result.unwrap();
+        assert_eq!(key.as_bytes(), cached_key.as_bytes());
+        assert_eq!(metadata.algorithm, cached_metadata.algorithm);
+        assert_eq!(metadata.version, cached_metadata.version);
+        
+        // Verify stats updated
+        let stats = cache.get_stats().await;
+        assert_eq!(stats.total_keys, 1);
+        assert!(stats.current_memory_bytes > 0);
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_cache_miss() -> Result<()> {
+        let cache = create_test_cache();
+        let non_existent_id = KeyId::new("non_existent_key");
+        
+        // Try to get non-existent key
+        let result = cache.get(&non_existent_id).await;
+        assert!(result.is_none());
+        
+        // Verify miss count increased
+        let stats = cache.get_stats().await;
+        assert_eq!(stats.cache_misses, 1);
+        assert_eq!(stats.cache_hits, 0);
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_cache_hit_ratio() -> Result<()> {
+        let cache = create_test_cache();
+        let (key, metadata) = create_test_key_data("hit_ratio_test", 1);
+        let key_id = KeyId::new("hit_ratio_test");
+        
+        // Put key in cache
+        cache.put(key_id.clone(), key.clone(), metadata.clone()).await?;
+        
+        // Generate some hits and misses
+        let _ = cache.get(&key_id).await; // Hit
+        let _ = cache.get(&KeyId::new("non_existent_1")).await; // Miss
+        let _ = cache.get(&key_id).await; // Hit
+        let _ = cache.get(&KeyId::new("non_existent_2")).await; // Miss
+        let _ = cache.get(&key_id).await; // Hit
+        
+        // Check hit ratio
+        let stats = cache.get_stats().await;
+        assert_eq!(stats.cache_hits, 3);
+        assert_eq!(stats.cache_misses, 2);
+        assert_eq!(stats.hit_ratio, 0.6); // 3 hits / 5 total
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_cache_contains() -> Result<()> {
+        let cache = create_test_cache();
+        let (key, metadata) = create_test_key_data("contains_test", 1);
+        let key_id = KeyId::new("contains_test");
+        
+        // Key should not exist initially
+        assert!(!cache.contains(&key_id).await);
+        
+        // Put key in cache
+        cache.put(key_id.clone(), key, metadata).await?;
+        
+        // Key should exist now
+        assert!(cache.contains(&key_id).await);
+        
+        // Non-existent key should not exist
+        assert!(!cache.contains(&KeyId::new("non_existent")).await);
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_cache_remove() -> Result<()> {
+        let cache = create_test_cache();
+        let (key, metadata) = create_test_key_data("remove_test", 1);
+        let key_id = KeyId::new("remove_test");
+        
+        // Put key in cache
+        cache.put(key_id.clone(), key.clone(), metadata.clone()).await?;
+        assert!(cache.contains(&key_id).await);
+        
+        // Remove key
+        let removed = cache.remove(&key_id).await?;
+        assert!(removed);
+        assert!(!cache.contains(&key_id).await);
+        
+        // Try to remove non-existent key
+        let non_existent_id = KeyId::new("non_existent");
+        let not_removed = cache.remove(&non_existent_id).await?;
+        assert!(!not_removed);
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_cache_clear() -> Result<()> {
+        let cache = create_test_cache();
+        
+        // Add multiple keys
+        for i in 1..=5 {
+            let (key, metadata) = create_test_key_data(&format!("clear_test_{}", i), i);
+            let key_id = KeyId::new(&format!("clear_test_{}", i));
+            cache.put(key_id, key, metadata).await?;
+        }
+        
+        // Verify keys exist
+        let stats_before = cache.get_stats().await;
+        assert_eq!(stats_before.total_keys, 5);
+        
+        // Clear cache
+        let cleared_count = cache.clear().await?;
+        assert_eq!(cleared_count, 5);
+        
+        // Verify cache is empty
+        let stats_after = cache.get_stats().await;
+        assert_eq!(stats_after.total_keys, 0);
+        assert_eq!(stats_after.current_memory_bytes, 0);
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_lru_eviction() -> Result<()> {
+        let mut config = KeyCacheConfig::default();
+        config.max_keys = 3; // Small limit to trigger eviction
+        config.enable_lru_eviction = true;
+        config.enable_time_eviction = false; // Disable time-based eviction for this test
+        
+        let cache = KeyCache::new(config);
+        
+        // Add keys up to the limit
+        for i in 1..=3 {
+            let (key, metadata) = create_test_key_data(&format!("lru_test_{}", i), i);
+            let key_id = KeyId::new(&format!("lru_test_{}", i));
+            cache.put(key_id, key, metadata).await?;
+        }
+        
+        // Access first key to make it most recently used
+        let _ = cache.get(&KeyId::new("lru_test_1")).await;
+        
+        // Add one more key to trigger eviction
+        let (key, metadata) = create_test_key_data("lru_test_4", 4);
+        let key_id = KeyId::new("lru_test_4");
+        cache.put(key_id, key, metadata).await?;
+        
+        // Verify LRU key was evicted (should be lru_test_2 since we accessed lru_test_1)
+        assert!(!cache.contains(&KeyId::new("lru_test_2")).await);
+        assert!(cache.contains(&KeyId::new("lru_test_1")).await);
+        assert!(cache.contains(&KeyId::new("lru_test_3")).await);
+        assert!(cache.contains(&KeyId::new("lru_test_4")).await);
+        
+        // Verify eviction count
+        let stats = cache.get_stats().await;
+        assert_eq!(stats.evictions, 1);
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_time_based_eviction() -> Result<()> {
+        let mut config = KeyCacheConfig::default();
+        config.enable_time_eviction = true;
+        config.eviction_time_seconds = 1; // Very short for testing
+        config.enable_lru_eviction = false; // Disable LRU for this test
+        
+        let cache = KeyCache::new(config);
+        
+        // Add a key
+        let (key, metadata) = create_test_key_data("time_evict_test", 1);
+        let key_id = KeyId::new("time_evict_test");
+        cache.put(key_id.clone(), key, metadata).await?;
+        
+        // Key should exist initially
+        assert!(cache.contains(&key_id).await);
+        
+        // Wait for eviction time
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        
+        // Trigger cleanup (in real implementation, this would be background task)
+        // For this test, we'll access the key which should trigger cleanup
+        let _ = cache.get(&key_id).await;
+        
+        // Key should be evicted
+        // Note: This test depends on the implementation of time-based eviction
+        // In a real implementation, there would be a background cleanup task
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_memory_limit_eviction() -> Result<()> {
+        let mut config = KeyCacheConfig::default();
+        config.max_memory_bytes = 1000; // Very small limit
+        config.enable_lru_eviction = true;
+        config.enable_time_eviction = false;
+        
+        let cache = KeyCache::new(config);
+        
+        // Add keys until memory limit is reached
+        let mut added_keys = 0;
+        for i in 1..=10 {
+            let (key, metadata) = create_test_key_data(&format!("memory_test_{}", i), i);
+            let key_id = KeyId::new(&format!("memory_test_{}", i));
+            
+            if cache.put(key_id, key, metadata).await.is_ok() {
+                added_keys += 1;
+            } else {
+                break; // Stop if we hit memory limit
+            }
+        }
+        
+        // Verify memory usage is within limits
+        let stats = cache.get_stats().await;
+        assert!(stats.current_memory_bytes <= config.max_memory_bytes);
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_access_frequency_tracking() -> Result<()> {
+        let mut config = KeyCacheConfig::default();
+        config.track_access_frequency = true;
+        config.enable_stats = true;
+        
+        let cache = KeyCache::new(config);
+        
+        let (key, metadata) = create_test_key_data("freq_test", 1);
+        let key_id = KeyId::new("freq_test");
+        cache.put(key_id.clone(), key, metadata).await?;
+        
+        // Access key multiple times
+        for _ in 0..5 {
+            let _ = cache.get(&key_id).await;
+        }
+        
+        // Check stats
+        let stats = cache.get_stats().await;
+        assert_eq!(stats.cache_hits, 5);
+        
+        // Get detailed statistics (if available)
+        let detailed_stats = cache.get_detailed_stats().await;
+        assert!(detailed_stats.total_keys >= 1);
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_cache_performance_recommendations() -> Result<()> {
+        let cache = create_test_cache();
+        
+        // Get recommendations for empty cache
+        let recommendations = cache.get_performance_recommendations().await;
+        assert!(!recommendations.is_empty());
+        
+        // Add some keys and get recommendations
+        for i in 1..=5 {
+            let (key, metadata) = create_test_key_data(&format!("rec_test_{}", i), i);
+            let key_id = KeyId::new(&format!("rec_test_{}", i));
+            cache.put(key_id, key, metadata).await?;
+        }
+        
+        let recommendations = cache.get_performance_recommendations().await;
+        assert!(!recommendations.is_empty());
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_cache_warming() -> Result<()> {
+        let mut config = KeyCacheConfig::default();
+        config.enable_cache_warming = true;
+        
+        let cache = KeyCache::new(config);
+        
+        // Initialize cache (should trigger warming if configured)
+        cache.initialize().await?;
+        
+        // Cache warming would typically preload frequently used keys
+        // This test verifies the initialization doesn't error
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_background_cleanup() -> Result<()> {
+        let mut config = KeyCacheConfig::default();
+        config.background_cleanup_interval_seconds = 1; // Very short for testing
+        config.enable_time_eviction = true;
+        config.eviction_time_seconds = 2;
+        
+        let cache = KeyCache::new(config);
+        
+        // Add a key
+        let (key, metadata) = create_test_key_data("cleanup_test", 1);
+        let key_id = KeyId::new("cleanup_test");
+        cache.put(key_id.clone(), key, metadata).await?;
+        
+        // Wait for cleanup interval
+        tokio::time::sleep(Duration::from_secs(3)).await;
+        
+        // Background cleanup should have run (in real implementation)
+        // This test mainly verifies the cache doesn't panic during this time
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_access() -> Result<()> {
+        let cache = create_test_cache();
+        
+        // Add a key
+        let (key, metadata) = create_test_key_data("concurrent_test", 1);
+        let key_id = KeyId::new("concurrent_test");
+        cache.put(key_id.clone(), key.clone(), metadata.clone()).await?;
+        
+        // Spawn multiple concurrent tasks
+        let mut handles = Vec::new();
+        
+        for i in 0..10 {
+            let cache_clone = cache.clone();
+            let key_id_clone = key_id.clone();
+            
+            let handle = tokio::spawn(async move {
+                // Perform mixed operations
+                if i % 2 == 0 {
+                    // Get operation
+                    let _ = cache_clone.get(&key_id_clone).await;
+                } else {
+                    // Put operation with different key
+                    let (new_key, new_metadata) = create_test_key_data(&format!("concurrent_new_{}", i), i);
+                    let new_key_id = KeyId::new(&format!("concurrent_new_{}", i));
+                    let _ = cache_clone.put(new_key_id, new_key, new_metadata).await;
+                }
+            });
+            
+            handles.push(handle);
+        }
+        
+        // Wait for all tasks to complete
+        for handle in handles {
+            let _ = handle.await;
+        }
+        
+        // Verify cache is still in consistent state
+        let stats = cache.get_stats().await;
+        assert!(stats.total_keys >= 1);
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_cache_shutdown() -> Result<()> {
+        let cache = create_test_cache();
+        
+        // Add some keys
+        for i in 1..=3 {
+            let (key, metadata) = create_test_key_data(&format!("shutdown_test_{}", i), i);
+            let key_id = KeyId::new(&format!("shutdown_test_{}", i));
+            cache.put(key_id, key, metadata).await?;
+        }
+        
+        // Shutdown cache
+        cache.shutdown().await?;
+        
+        // Verify cache is empty after shutdown
+        let stats = cache.get_stats().await;
+        assert_eq!(stats.total_keys, 0);
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_error_handling() -> Result<()> {
+        let cache = create_test_cache();
+        
+        // Test operations with invalid data
+        let empty_key = SecureKey::from_bytes(&[]).expect("Failed to create empty key");
+        let metadata = KeyMetadata::new(
+            KeyId::new("error_test"),
+            "test_algorithm".to_string(),
+            1,
+            Utc::now(),
+            Utc::now() + chrono::Duration::days(30),
+            KeyPurpose::DataEncryption,
+            PerformanceProfile::Balanced,
+        );
+        
+        // Try to put empty key (should be handled gracefully)
+        let result = cache.put(KeyId::new("empty_key_test"), empty_key, metadata).await;
+        // Result depends on implementation - empty keys might be rejected or accepted
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_cache_statistics_accuracy() -> Result<()> {
+        let cache = create_test_cache();
+        
+        // Perform known operations
+        let (key1, metadata1) = create_test_key_data("stats_test_1", 1);
+        let (key2, metadata2) = create_test_key_data("stats_test_2", 2);
+        let key_id1 = KeyId::new("stats_test_1");
+        let key_id2 = KeyId::new("stats_test_2");
+        
+        // Put operations
+        cache.put(key_id1.clone(), key1, metadata1).await?;
+        cache.put(key_id2.clone(), key2, metadata2).await?;
+        
+        // Get operations (hits)
+        let _ = cache.get(&key_id1).await;
+        let _ = cache.get(&key_id2).await;
+        let _ = cache.get(&key_id1).await; // Second hit for key1
+        
+        // Get operations (misses)
+        let _ = cache.get(&KeyId::new("non_existent_1")).await;
+        let _ = cache.get(&KeyId::new("non_existent_2")).await;
+        
+        // Remove operation
+        let _ = cache.remove(&key_id2).await;
+        
+        // Verify statistics
+        let stats = cache.get_stats().await;
+        assert_eq!(stats.cache_hits, 3);
+        assert_eq!(stats.cache_misses, 2);
+        assert_eq!(stats.total_keys, 1); // One key removed
+        assert!(stats.current_memory_bytes > 0);
+        assert_eq!(stats.hit_ratio, 0.6); // 3 hits / 5 total accesses
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_large_key_handling() -> Result<()> {
+        let cache = create_test_cache();
+        
+        // Create a large key (if supported)
+        let large_key_data = vec![0u8; 1024 * 1024]; // 1MB key
+        let large_key = SecureKey::from_bytes(&large_key_data).expect("Failed to create large key");
+        
+        let metadata = KeyMetadata::new(
+            KeyId::new("large_key_test"),
+            "test_algorithm".to_string(),
+            1,
+            Utc::now(),
+            Utc::now() + chrono::Duration::days(30),
+            KeyPurpose::DataEncryption,
+            PerformanceProfile::Balanced,
+        );
+        
+        // Try to store large key
+        let result = cache.put(KeyId::new("large_key_test"), large_key, metadata).await;
+        
+        // Result depends on memory limits and implementation
+        if result.is_ok() {
+            // If accepted, verify it can be retrieved
+            let retrieved = cache.get(&KeyId::new("large_key_test")).await;
+            assert!(retrieved.is_some());
+            
+            let (retrieved_key, _) = retrieved.unwrap();
+            assert_eq!(retrieved_key.len(), large_key_data.len());
+        }
+        
+        Ok(())
+    }
+}

@@ -3,9 +3,6 @@
 //! This module provides a production-ready implementation of Shamir's Secret Sharing
 //! scheme for splitting and reconstructing secrets.
 
-use std::collections::HashMap;
-use std::convert::TryInto;
-use rand::{Rng, SeedableRng};
 use crate::error::{FortressError, Result, SealErrorCode};
 
 /// Finite field arithmetic for Shamir's Secret Sharing

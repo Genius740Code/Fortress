@@ -17,7 +17,6 @@ use tower_http::{
     compression::CompressionLayer,
 };
 use axum::http::{header, Method, HeaderValue};
-use chrono::Duration;
 use tracing::info;
 
 // Import from fortress_api_server instead of fortress_server
@@ -63,7 +62,7 @@ async fn create_router(_openapi: utoipa::openapi::OpenApi) -> Result<Router, Box
     // Get allowed origins from environment or use secure defaults
     let allowed_origins_str = std::env::var("FORTRESS_ALLOWED_ORIGINS")
         .unwrap_or_else(|_| "https://fortress.example.com,http://localhost:3000,http://localhost:8080".to_string());
-    let allowed_origins = allowed_origins_str
+    let _allowed_origins = allowed_origins_str
         .split(',')
         .map(|s| s.trim().to_string())
         .collect::<Vec<_>>();

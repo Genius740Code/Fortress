@@ -450,7 +450,7 @@ impl OidcProvider {
 
         // Clone user data to avoid borrow issues
         let user_id = user.id.clone();
-        let user_roles = user.roles.clone();
+        let _user_roles = user.roles.clone();
 
         // Generate tokens (refresh token needs mutable borrow)
         let refresh_token = self.generate_refresh_token(&auth_code_info)?;

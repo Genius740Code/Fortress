@@ -55,7 +55,15 @@ pub mod prelude {
     pub use fortress_cli::{Commands, KeyAction, ConfigAction};
     
     #[cfg(feature = "server")]
-    pub use fortress_api_server::prelude::*;
+    // Use specific imports from fortress_api_server to avoid conflicts with fortress_core
+    pub use fortress_api_server::prelude::{
+        ServerConfig, AuthManager, TokenClaims, HealthChecker,
+        MetricsCollector, AdvancedRateLimiter, RateLimitAlgorithm, RateLimitMetricsSnapshot,
+        FortressServer, GrpcServer, FortressGrpcService,
+    };
+    
+    #[cfg(feature = "server")]
+    pub use fortress_api_server::models::HealthStatus;
 }
 
 /// Fortress builder for easy initialization

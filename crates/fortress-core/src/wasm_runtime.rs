@@ -6,7 +6,6 @@
 use crate::error::{FortressError, Result};
 use crate::plugin::{Plugin, PluginContext, PluginInput, PluginResult, PluginMetadata};
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;

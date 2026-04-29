@@ -270,7 +270,7 @@ impl KubernetesAuth {
                     .ok_or_else(|| FortressError::secrets("Service account token not configured".to_string()))?));
 
             // Add CA certificate if provided
-            if let Some(ca_cert) = &config.kubernetes_ca_cert {
+            if let Some(_ca_cert) = &config.kubernetes_ca_cert {
                 log::debug!("Using Kubernetes CA certificate for API validation");
             }
 

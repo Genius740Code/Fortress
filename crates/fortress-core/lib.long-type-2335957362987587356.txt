@@ -1,1 +1,0 @@
-impl Future<Output = std::result::Result<Box<(dyn KeyDatabase + 'static)>, error::FortressError>>

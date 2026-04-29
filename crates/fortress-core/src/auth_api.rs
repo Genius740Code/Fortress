@@ -960,7 +960,7 @@ pub fn create_cors_config(_config: &AuthApiConfig) -> warp::cors::Builder {
 
 #[derive(Debug, Serialize)]
 
-struct ApiDocumentation {
+pub struct ApiDocumentation {
 
     title: String,
 

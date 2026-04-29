@@ -13,14 +13,26 @@ pub mod audit;
 pub mod config;
 pub mod unified_manager;
 
-pub use framework::*;
+// Use specific imports to avoid ambiguous re-exports
+pub use framework::{
+    ComplianceFramework, ComplianceEvent, EventSeverity, ComplianceEventOutcome,
+    ComplianceFinding, FindingStatus, ComplianceIssue, ComplianceStatus, ComplianceDeadline,
+    ComplianceConfig, ComplianceMetrics, ComplianceReport, DataSubject, ConsentRecord, RightsRequest,
+    ComplianceManager, RightsRequestType, RequestStatus, ProtectedHealthInfo, PhiType, AccessControl,
+    CardholderData, CardAccessEvent, PciRequirement, BreachNotificationConfig,
+    ComplianceAuditConfig, EncryptionConfig, AccessControlConfig, PasswordPolicy,
+    RiskAssessment, ActionItem as FrameworkActionItem
+};
 pub use gdpr::*;
 pub use hipaa::*;
-pub use pci_dss::*;
+pub use pci_dss::{
+    RiskLevel, SecurityControl, ControlStatus, VulnerabilityScan, ScanType, VulnerabilityFinding,
+    VulnerabilitySeverity, RemediationStatus, ComplianceAssessment, AssessmentType, OverallComplianceStatus,
+    RequirementResult, RequirementOutcome, NonComplianceIssue, IssueStatus, CorrectiveActionPlan,
+    ActionItem, ActionItemStatus, ScanConfiguration, ScheduledScan, ScheduledScanStatus,
+    VulnerabilityAnalysis, RemediationPriority, ComplianceImpact, PciDssComplianceManager,
+    PciEncryptionKey, KeyPurpose, RotationSchedule, PciDssComplianceStatus, PciDssMetrics, PciDssReport
+};
 pub use reporting::*;
 pub use audit::*;
 pub use config::*;
-pub use unified_manager::*;
-
-// Re-export RiskLevel to avoid ambiguity
-pub use pci_dss::RiskLevel;

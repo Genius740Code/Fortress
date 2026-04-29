@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use chrono::{DateTime, Utc, Duration, Datelike, Timelike};
+use chrono::{Duration, Datelike, Timelike};
 use regex::Regex;
 use serde::{Serialize, Deserialize};
 

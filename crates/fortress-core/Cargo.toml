@@ -122,6 +122,8 @@ warp = "0.3"
 
 axum = "0.7"
 
+tower = "0.4"
+
 tower-http = "0.5"
 
 sha3 = "0.10"

@@ -3,7 +3,6 @@
 //! This module provides a production-ready Memcached cache backend with support
 //! for connection pooling, consistent hashing, and advanced Memcached features.
 
-use crate::error::{FortressError, Result};
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "memcached")]

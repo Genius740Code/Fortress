@@ -21,7 +21,6 @@ use crate::error::FortressError;
 use crate::encryption::EncryptionAlgorithm;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::time::sleep;
 
 /// Performance optimization configuration
 #[derive(Debug, Clone)]

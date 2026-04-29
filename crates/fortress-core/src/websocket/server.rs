@@ -256,7 +256,7 @@ impl WebSocketServer {
     async fn wait_for_authentication(
         &self,
         connection: &Arc<crate::websocket::connection::WebSocketConnection>,
-        client_ip: &str
+        _client_ip: &str
     ) -> Result<crate::websocket::auth::AuthResult> {
         // In a real implementation, this would wait for the first message
         // For now, we'll simulate authentication timeout

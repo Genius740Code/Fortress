@@ -362,6 +362,20 @@ impl SecretsEngineManager {
         let mut manager = self.lease_manager.write().await;
         manager.cleanup_expired().await
     }
+
+    /// Write a secret with metadata
+    pub async fn write_with_metadata(&self, path: &str, data: &serde_json::Value, _metadata: Option<serde_json::Value>) -> Result<Secret> {
+        let engine_prefix = self.find_engine(path).await?;
+        let engines = self.engines.read().await;
+        let engine = engines.get(&engine_prefix).ok_or_else(|| FortressError::secrets_with_code(
+            format!("Engine not found for prefix: {}", engine_prefix),
+            Some(engine_prefix),
+            SecretsErrorCode::EngineNotFound,
+        ))?;
+        
+        // For now, just call write - the metadata can be handled by individual engines
+        engine.write(path, data).await
+    }
 }
 
 impl LeaseManager {

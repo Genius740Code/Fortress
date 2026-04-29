@@ -251,7 +251,7 @@ impl SecureAuditLogger {
     }
 
     /// Generate unique entry ID
-    async fn generate_entry_id(&self) -> String {
+    pub async fn generate_entry_id(&self) -> String {
         let mut counter = self.entry_counter.write().await;
         *counter += 1;
         
@@ -397,7 +397,7 @@ impl SecureAuditLogger {
         metadata: HashMap<String, serde_json::Value>,
     ) -> Result<SecureAuditEntry> {
         let config = self.config.read().await;
-        let config = config.as_ref()
+        let _config = config.as_ref()
             .ok_or_else(|| FortressError::audit("Audit logger not configured".to_string(), None, AuditErrorCode::ConfigurationError))?;
 
         let entry_id = self.generate_entry_id().await;
@@ -607,7 +607,7 @@ impl SecureAuditLogger {
     /// Verify log integrity
     pub async fn verify_log_integrity(&self, file_path: &str) -> Result<bool> {
         let config = self.config.read().await;
-        let config = config.as_ref()
+        let _config = config.as_ref()
             .ok_or_else(|| FortressError::audit("Audit logger not configured".to_string(), None, AuditErrorCode::ConfigurationError))?;
 
         let hmac_key = self.hmac_key.read().await;
@@ -870,7 +870,7 @@ mod tests {
         // Check statistics
         let stats = logger.get_stats().await;
         assert_eq!(stats.total_entries, 1);
-        assert_eq!(stats.entries_by_type.get(&AuditEventType::SecretAccess), Some(&1));
+        assert_eq!(stats.entries_by_type.get(&SecureAuditEventType::SecretAccess), Some(&1));
         assert_eq!(stats.entries_by_outcome.get(&AuditOutcome::Success), Some(&1));
     }
 

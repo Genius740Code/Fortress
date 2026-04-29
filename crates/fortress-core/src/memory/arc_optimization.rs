@@ -6,9 +6,9 @@
 use std::sync::Arc;
 use std::collections::HashMap;
 use tokio::sync::RwLock;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use serde::{Serialize, Deserialize};
-use crate::error::{FortressError, Result};
+use crate::error::Result;
 
 /// Arc optimization manager for efficient shared data handling
 pub struct ArcOptimizer {
@@ -64,7 +64,7 @@ impl ArcOptimizer {
 
     /// Create or get an Arc for byte data
     pub async fn get_arc_bytes(&self, key: String, data: Vec<u8>) -> Result<Arc<Vec<u8>>> {
-        let start = std::time::Instant::now();
+        let _start = std::time::Instant::now();
         
         // Check cache first
         {
@@ -130,7 +130,7 @@ impl ArcOptimizer {
 
     /// Create or get an Arc for string data
     pub async fn get_arc_string(&self, key: String, data: String) -> Result<Arc<String>> {
-        let start = std::time::Instant::now();
+        let _start = std::time::Instant::now();
         
         // Check cache first
         {
