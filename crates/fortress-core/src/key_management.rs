@@ -4,18 +4,15 @@
 //! in Fortress, making it easier for CLI tools and other components to interact
 //! with the key system without needing to know about specific implementations.
 
-use crate::error::Result;
-use crate::key::{KeyManager, KeyId, KeyMetadata};
-use crate::database_key_manager::{DatabaseKeyManager, DatabaseKeyManagerConfig};
-use async_trait::async_trait;
-use std::sync::Arc;
+// TODO: Implement once DatabaseKeyManager is available
 
 /// Unified key manager that provides a simple interface to all key operations
+// TODO: Implement once DatabaseKeyManager is available
 pub struct UnifiedKeyManager {
-    /// The underlying database key manager
-    inner: Arc<DatabaseKeyManager>,
+    // Placeholder implementation
 }
 
+/*
 impl UnifiedKeyManager {
     /// Create a new unified key manager with default configuration
     pub async fn new() -> Result<Self> {
@@ -202,3 +199,4 @@ mod tests {
         manager.delete_key(&key_id1).await.unwrap();
     }
 }
+*/

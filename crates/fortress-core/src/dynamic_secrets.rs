@@ -955,15 +955,15 @@ impl DynamicSecretsEngine {
             database_credentials: Arc::new(RwLock::new(HashMap::new())),
 
             stats: Arc::new(RwLock::new(EngineStats {
-
-                total_secrets: 0,
-
+                total_operations: 0,
+                successful_operations: 0,
+                failed_operations: 0,
+                avg_operation_time_ms: 0.0,
                 active_leases: 0,
-
+                stored_secrets: 0,
+                total_secrets: 0,
                 operations: HashMap::new(),
-
                 last_operation: None,
-
             })),
 
             encryption: Arc::new(Box::new(Aegis256::new())),
@@ -1751,39 +1751,30 @@ impl SecretsEngine for DynamicSecretsEngine {
             let ttl = (credential.expires_at - Utc::now()).num_seconds() as u64;
 
             let lease = Some(LeaseInfo {
-
                 lease_id: credential.lease_id.clone(),
-
                 ttl,
-
-                created_at: Utc::now(),
-
-                renewable: true,
-
                 max_ttl: Some(self.config.read().await.max_ttl),
-
+                created_at: Utc::now(),
+                expires_at: credential.expires_at,
+                renewable: true,
+                max_renewals: Some(5),
+                renewal_count: 0,
             });
 
 
 
             Ok(Secret {
-
                 data: secret_data,
-
                 metadata: SecretMetadata {
-
+                    name: path.to_string(),
                     version: 1,
-
                     created_at: Utc::now(),
-
                     updated_at: None,
-
-                    lease,
-
+                    created_by: Some("dynamic-secrets".to_string()),
+                    tags: HashMap::new(),
                     custom: HashMap::new(),
-
                 },
-
+                lease,
             })
 
         } else {
@@ -1821,17 +1812,14 @@ impl SecretsEngine for DynamicSecretsEngine {
             let ttl = (credential.expires_at - Utc::now()).num_seconds() as u64;
 
             let lease = Some(LeaseInfo {
-
                 lease_id: credential.lease_id.clone(),
-
                 ttl,
-
-                created_at: Utc::now(),
-
-                renewable: true,
-
                 max_ttl: Some(self.config.read().await.max_ttl),
-
+                created_at: Utc::now(),
+                expires_at: credential.expires_at,
+                renewable: true,
+                max_renewals: Some(5),
+                renewal_count: 0,
             });
 
 
@@ -1841,19 +1829,15 @@ impl SecretsEngine for DynamicSecretsEngine {
                 data: secret_data,
 
                 metadata: SecretMetadata {
-
+                    name: path.to_string(),
                     version: 1,
-
                     created_at: Utc::now(),
-
                     updated_at: None,
-
-                    lease,
-
+                    created_by: Some("dynamic-secrets".to_string()),
+                    tags: HashMap::new(),
                     custom: HashMap::new(),
-
                 },
-
+                lease,
             })
 
         }
@@ -1875,17 +1859,14 @@ impl SecretsEngine for DynamicSecretsEngine {
                 let ttl = (credential.expires_at - Utc::now()).num_seconds() as u64;
 
                 let lease = Some(LeaseInfo {
-
                     lease_id: credential.lease_id.clone(),
-
                     ttl,
-
-                    created_at: Utc::now(),
-
-                    renewable: true,
-
                     max_ttl: Some(self.config.read().await.max_ttl),
-
+                    created_at: Utc::now(),
+                    expires_at: credential.expires_at,
+                    renewable: true,
+                    max_renewals: Some(5),
+                    renewal_count: 0,
                 });
 
 
@@ -1911,23 +1892,17 @@ impl SecretsEngine for DynamicSecretsEngine {
 
 
                 return Ok(Some(Secret {
-
                     data: secret_data,
-
                     metadata: SecretMetadata {
-
+                        name: path.to_string(),
                         version: 1,
-
                         created_at: Utc::now(),
-
                         updated_at: None,
-
-                        lease,
-
+                        created_by: Some("dynamic-secrets".to_string()),
+                        tags: HashMap::new(),
                         custom: HashMap::new(),
-
                     },
-
+                    lease,
                 }));
 
             }
@@ -1947,17 +1922,14 @@ impl SecretsEngine for DynamicSecretsEngine {
                 let ttl = (credential.expires_at - Utc::now()).num_seconds() as u64;
 
                 let lease = Some(LeaseInfo {
-
                     lease_id: credential.lease_id.clone(),
-
                     ttl,
-
-                    created_at: Utc::now(),
-
-                    renewable: true,
-
                     max_ttl: Some(self.config.read().await.max_ttl),
-
+                    created_at: Utc::now(),
+                    expires_at: credential.expires_at,
+                    renewable: true,
+                    max_renewals: Some(5),
+                    renewal_count: 0,
                 });
 
 
@@ -1987,23 +1959,17 @@ impl SecretsEngine for DynamicSecretsEngine {
 
 
                 return Ok(Some(Secret {
-
                     data: secret_data,
-
                     metadata: SecretMetadata {
-
+                        name: path.to_string(),
                         version: 1,
-
                         created_at: Utc::now(),
-
                         updated_at: None,
-
-                        lease,
-
+                        created_by: Some("dynamic-secrets".to_string()),
+                        tags: HashMap::new(),
                         custom: HashMap::new(),
-
                     },
-
+                    lease,
                 }));
 
             }
@@ -2147,29 +2113,24 @@ impl SecretsEngine for DynamicSecretsEngine {
 
 
         Ok(EngineStatus {
-
             name: self.name().to_string(),
-
             engine_type: self.engine_type(),
-
             initialized: self.config.read().await.aws.is_some(),
-
+            active: true,
+            last_activity: Utc::now(),
             config: serde_json::to_value(&*self.config.read().await)
-
                 .unwrap_or_else(|_| serde_json::Value::Null),
-
             stats: EngineStats {
-
-                total_secrets: aws_count + db_count,
-
+                total_operations: 0,
+                successful_operations: 0,
+                failed_operations: 0,
+                avg_operation_time_ms: 0.0,
                 active_leases: aws_count + db_count,
-
+                stored_secrets: aws_count + db_count,
+                total_secrets: aws_count + db_count,
                 operations: stats.operations,
-
                 last_operation: stats.last_operation,
-
             },
-
         })
 
     }
@@ -2201,17 +2162,14 @@ impl SecretsEngine for DynamicSecretsEngine {
 
 
                 let updated_lease = LeaseInfo {
-
                     lease_id: lease_id.to_string(),
-
                     ttl: new_ttl,
-
-                    created_at: Utc::now(),
-
-                    renewable: true,
-
                     max_ttl: Some(max_ttl),
-
+                    created_at: Utc::now(),
+                    expires_at: Utc::now() + chrono::Duration::seconds(new_ttl as i64),
+                    renewable: true,
+                    max_renewals: Some(5),
+                    renewal_count: 0,
                 };
 
 
@@ -2277,17 +2235,14 @@ impl SecretsEngine for DynamicSecretsEngine {
 
 
                 let updated_lease = LeaseInfo {
-
                     lease_id: lease_id.to_string(),
-
                     ttl: new_ttl,
-
-                    created_at: Utc::now(),
-
-                    renewable: true,
-
                     max_ttl: Some(max_ttl),
-
+                    created_at: Utc::now(),
+                    expires_at: Utc::now() + chrono::Duration::seconds(new_ttl as i64),
+                    renewable: true,
+                    max_renewals: Some(5),
+                    renewal_count: 0,
                 };
 
 
@@ -2344,7 +2299,7 @@ impl SecretsEngine for DynamicSecretsEngine {
 
 
 
-    async fn configure(&mut self, config: serde_json::Value) -> Result<()> {
+    async fn configure(&self, config: serde_json::Value) -> Result<()> {
 
         let default_ttl = config.get("default_ttl")
 
@@ -2411,4 +2366,3 @@ impl SecretsEngine for DynamicSecretsEngine {
     }
 
 }
-

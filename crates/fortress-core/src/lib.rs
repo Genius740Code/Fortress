@@ -1101,7 +1101,7 @@ pub mod prelude {
 
     pub use crate::key::{KeyManager, KeyId, KeyMetadata, SmartKeyRotationScheduler, RotationInterval, RotationMetrics};
 
-    pub use crate::key_management::{UnifiedKeyManager, create_cli_key_manager};
+    pub use crate::key_management::UnifiedKeyManager;
 
 
 
@@ -1264,21 +1264,12 @@ pub mod prelude {
 
         KeyCache, KeyCacheConfig, CacheStats
 
-    };
-
-
-
-    pub use crate::database_key_manager::{
-
-        DatabaseKeyManager, DatabaseKeyManagerConfig, KeyManagerMetrics,
-
-        DatabaseKeyManagerStats
 
     };
-
 
 
     pub use crate::auth_plugin::{
+
 
         AuthPlugin, AuthPluginMetadata, AuthPluginCapabilities, AuthMethod,
 

@@ -72,7 +72,7 @@ impl TeeIntegrationTests {
         results.add_result("error_handling", self.test_error_handling().await);
         
         // Test 8: Performance and Scalability
-        results.add_result("performance_scalability", self.test_performance_scalability().await);
+        results.add_result("performance_scalability".to_string(), self.test_performance_scalability().await);
         
         results
     }
@@ -261,29 +261,29 @@ impl TeeIntegrationTests {
         ).await;
         
         // Test Intel SGX attestation verification
-        let sgx_quote = crate::tee_intel_sgx::SgxQuote {
+        let sgx_quote = crate::tee_attestation::SgxQuote {
             version: 3,
             quote_type: 0,
-            signature_data: crate::tee_intel_sgx::SgxSignatureData {
+            signature_data: crate::tee_attestation::SgxSignatureData {
                 signature: vec![0u8; 384],
                 attestation_key: vec![0u8; 384],
             },
-            report_body: crate::tee_intel_sgx::SgxReportBody {
-                cpu_svn: [0u8; 16],
-                misc_select: [0u8; 4],
-                reserved1: [0u8; 28],
-                isv_ext_prod_id: [0u8; 16],
-                isv_ext_svn: [0u8; 16],
-                attributes: crate::tee_intel_sgx::SgxAttributes { flags: 1, xfrm: 0 },
-                attributes_mask: crate::tee_intel_sgx::SgxAttributes { flags: 0, xfrm: 0 },
-                mr_enclave: [0u8; 32],
-                reserved2: [0u8; 32],
-                mr_signer: [0u8; 32],
-                reserved3: [0u8; 96],
+            report_body: crate::tee_attestation::SgxReportBody {
+                cpu_svn: [0u8; 16].to_vec(),
+                misc_select: [0u8; 4].to_vec(),
+                reserved1: [0u8; 28].to_vec(),
+                isv_ext_prod_id: [0u8; 16].to_vec(),
+                isv_ext_svn: [0u8; 16].to_vec(),
+                attributes: crate::tee_attestation::SgxAttributes { flags: 1, xfrm: 0 },
+                attributes_mask: crate::tee_attestation::SgxAttributes { flags: 0, xfrm: 0 },
+                mr_enclave: [0u8; 32].to_vec(),
+                reserved2: [0u8; 32].to_vec(),
+                mr_signer: [0u8; 32].to_vec(),
+                reserved3: [0u8; 96].to_vec(),
                 isv_prod_id: 1,
                 isv_svn: 1,
-                reserved4: [0u8; 60],
-                report_data: [0u8; 64],
+                reserved4: [0u8; 60].to_vec(),
+                report_data: [0u8; 64].to_vec(),
             },
         };
         
@@ -379,8 +379,8 @@ impl TeeIntegrationTests {
         details.insert("sgx_provider_registered".to_string(), sgx_registration.is_ok().to_string());
         
         // Test capabilities
-        let nitro_caps = tee_manager.get_capabilities(&TeeType::AwsNitro);
-        let sgx_caps = tee_manager.get_capabilities(&TeeType::IntelSgx);
+        let nitro_caps = tee_manager.get_capabilities(&TeeType::AwsNitro).await;
+        let sgx_caps = tee_manager.get_capabilities(&TeeType::IntelSgx).await;
         
         details.insert("nitro_capabilities_available".to_string(), nitro_caps.is_some().to_string());
         details.insert("sgx_capabilities_available".to_string(), sgx_caps.is_some().to_string());
@@ -460,7 +460,7 @@ impl TeeIntegrationTests {
             let channel = SecureChannel {
                 channel_id: format!("test-channel-{}", i),
                 enclave_id: format!("test-enclave-{}", i),
-                session_key: crate::key::SecureKey::generate(32),
+                session_key: crate::key::SecureKey::generate(32).expect("Failed to generate secure key"),
                 created_at: chrono::Utc::now(),
                 is_active: true,
             };
@@ -489,7 +489,7 @@ impl TeeIntegrationTests {
         let message_results = futures::future::join_all(message_tasks).await;
         
         // Test cleanup
-        let cleanup_count = handler.cleanup_inactive_channels(1).await;
+        let cleanup_count = handler.cleanup_inactive_channels(1).await.unwrap_or(0);
         
         let mut details = HashMap::new();
         details.insert("channels_created".to_string(), format!("{}", channels.len()));

@@ -301,15 +301,15 @@ impl DatabaseEngine {
             credentials: Arc::new(RwLock::new(HashMap::new())),
 
             stats: Arc::new(RwLock::new(EngineStats {
-
-                total_secrets: 0,
-
+                total_operations: 0,
+                successful_operations: 0,
+                failed_operations: 0,
+                avg_operation_time_ms: 0.0,
                 active_leases: 0,
-
+                stored_secrets: 0,
+                total_secrets: 0,
                 operations: HashMap::new(),
-
                 last_operation: None,
-
             })),
 
             encryption: Arc::new(Box::new(Aegis256::new())),
@@ -1507,51 +1507,36 @@ impl SecretsEngine for DatabaseEngine {
 
 
         let lease = Some(LeaseInfo {
-
             lease_id: credential.lease_id.clone(),
-
             ttl: ttl.unwrap_or_else(|| {
-
                 // Default TTL without async - use a reasonable default
-
                 3600
-
             }),
-
-            created_at: Utc::now(),
-
-            renewable: true,
-
             max_ttl: self.config.read().await
-
                 .as_ref()
-
                 .map(|c| Some(c.max_ttl))
-
                 .unwrap_or(None),
-
+            created_at: Utc::now(),
+            expires_at: credential.expires_at,
+            renewable: true,
+            max_renewals: Some(5),
+            renewal_count: 0,
         });
 
 
 
         Ok(Secret {
-
             data: secret_data,
-
             metadata: SecretMetadata {
-
+                name: path.to_string(),
                 version: 1,
-
                 created_at: Utc::now(),
-
                 updated_at: None,
-
-                lease,
-
+                created_by: Some("database-secrets".to_string()),
+                tags: HashMap::new(),
                 custom: HashMap::new(),
-
             },
-
+            lease,
         })
 
     }
@@ -1577,23 +1562,17 @@ impl SecretsEngine for DatabaseEngine {
         if let Some(credential) = credential {
 
             let lease = Some(LeaseInfo {
-
                 lease_id: credential.lease_id.clone(),
-
                 ttl: (credential.expires_at - Utc::now()).num_seconds() as u64,
-
-                created_at: Utc::now(),
-
-                renewable: true,
-
                 max_ttl: self.config.read().await
-
                     .as_ref()
-
                     .map(|c| Some(c.max_ttl))
-
                     .unwrap_or(None),
-
+                created_at: Utc::now(),
+                expires_at: credential.expires_at,
+                renewable: true,
+                max_renewals: Some(5),
+                renewal_count: 0,
             });
 
 
@@ -1619,23 +1598,17 @@ impl SecretsEngine for DatabaseEngine {
 
 
             Ok(Some(Secret {
-
                 data: secret_data,
-
                 metadata: SecretMetadata {
-
+                    name: path.to_string(),
                     version: 1,
-
                     created_at: Utc::now(),
-
                     updated_at: None,
-
-                    lease,
-
+                    created_by: Some("database-secrets".to_string()),
+                    tags: HashMap::new(),
                     custom: HashMap::new(),
-
                 },
-
+                lease,
             }))
 
         } else {
@@ -1793,17 +1766,14 @@ impl SecretsEngine for DatabaseEngine {
 
 
             let updated_lease = LeaseInfo {
-
                 lease_id: lease_id.to_string(),
-
                 ttl: new_ttl,
-
-                created_at: credential.created_at,
-
-                renewable: true,
-
                 max_ttl: Some(max_ttl),
-
+                created_at: credential.created_at,
+                expires_at: credential.expires_at,
+                renewable: true,
+                max_renewals: Some(5),
+                renewal_count: 0,
             };
 
 
@@ -1908,7 +1878,7 @@ impl SecretsEngine for DatabaseEngine {
 
 
 
-    async fn configure(&mut self, config: serde_json::Value) -> Result<()> {
+    async fn configure(&self, config: serde_json::Value) -> Result<()> {
 
         let database_type = config.get("database_type")
 
@@ -2066,16 +2036,36 @@ impl SecretsEngine for DatabaseEngine {
 
             initialized: config.is_some(),
 
+            active: true,
+
+            last_activity: chrono::Utc::now(),
+
             config: serde_json::to_value(&*config).unwrap_or_else(|_| serde_json::Value::Null),
 
             stats: EngineStats {
 
-                total_secrets: credentials.len() as u64,
+                total_operations: 0,
+
+                successful_operations: 0,
+
+                failed_operations: 0,
+
+                avg_operation_time_ms: 0.0,
+
                 active_leases: credentials.len() as u64,
+
+                stored_secrets: credentials.len() as u64,
+
+                total_secrets: credentials.len() as u64,
+
                 operations: stats.operations.clone(),
+
                 last_operation: stats.last_operation,
+
             },
+
         })
+
     }
 
 }

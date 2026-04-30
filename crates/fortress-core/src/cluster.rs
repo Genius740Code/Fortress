@@ -1150,4 +1150,406 @@ mod tests {
         // Should detect self as leader
         assert_eq!(manager.get_leader().await, Some(manager.local_node.id));
     }
+
+    #[tokio::test]
+    async fn test_cluster_node_discovery() {
+        let config1 = ClusterConfig {
+            node_id: Uuid::new_v4(),
+            bind_address: "127.0.0.1:8080".parse().unwrap(),
+            seed_nodes: vec!["127.0.0.1:8081".parse().unwrap()],
+            min_nodes: 2,
+            heartbeat_interval: Duration::from_millis(500),
+            election_timeout: Duration::from_millis(5000),
+            replication_factor: 3,
+        };
+
+        let config2 = ClusterConfig {
+            node_id: Uuid::new_v4(),
+            bind_address: "127.0.0.1:8081".parse().unwrap(),
+            seed_nodes: vec!["127.0.0.1:8080".parse().unwrap()],
+            min_nodes: 2,
+            heartbeat_interval: Duration::from_millis(500),
+            election_timeout: Duration::from_millis(5000),
+            replication_factor: 3,
+        };
+
+        let manager1 = ClusterManager::new(config1).unwrap();
+        let manager2 = ClusterManager::new(config2).unwrap();
+
+        // Test node discovery
+        let discovered_nodes = manager1.discover_nodes().await;
+        assert!(!discovered_nodes.is_empty());
+        
+        // Test cluster joining
+        let join_result = manager1.join_cluster().await;
+        assert!(join_result.is_ok());
+        
+        let members = manager1.get_members().await;
+        assert!(members.len() >= 1);
+    }
+
+    #[tokio::test]
+    async fn test_raft_consensus_election() {
+        let config = ClusterConfig {
+            node_id: Uuid::new_v4(),
+            bind_address: "127.0.0.1:8080".parse().unwrap(),
+            seed_nodes: vec![],
+            min_nodes: 1,
+            heartbeat_interval: Duration::from_millis(500),
+            election_timeout: Duration::from_millis(2000), // Shorter for testing
+            replication_factor: 3,
+        };
+
+        let manager = ClusterManager::new(config).unwrap();
+        
+        // Start election
+        let election_result = manager.start_election().await;
+        assert!(election_result.is_ok());
+        
+        // Verify leader election
+        let leader = manager.get_leader().await;
+        assert!(leader.is_some());
+        
+        // Verify term increased
+        let health = manager.get_health_status().await;
+        assert!(health.current_term > 0);
+    }
+
+    #[tokio::test]
+    async fn test_data_replication() {
+        let config = ClusterConfig {
+            node_id: Uuid::new_v4(),
+            bind_address: "127.0.0.1:8080".parse().unwrap(),
+            seed_nodes: vec![],
+            min_nodes: 1,
+            heartbeat_interval: Duration::from_millis(500),
+            election_timeout: Duration::from_millis(5000),
+            replication_factor: 3,
+        };
+
+        let manager = ClusterManager::new(config).unwrap();
+        
+        // Become leader first
+        manager.raft_engine.become_leader().await.unwrap();
+        
+        // Test data replication
+        let test_data = b"test replication data";
+        let replication_result = manager.replicate_data(test_data).await;
+        assert!(replication_result.is_ok());
+        
+        // Verify replication status
+        let replication_status = manager.get_replication_status().await;
+        assert!(replication_status.successful);
+        assert!(replication_status.replicated_nodes >= 1);
+    }
+
+    #[tokio::test]
+    async fn test_cluster_partition_handling() {
+        let config = ClusterConfig {
+            node_id: Uuid::new_v4(),
+            bind_address: "127.0.0.1:8080".parse().unwrap(),
+            seed_nodes: vec![],
+            min_nodes: 1,
+            heartbeat_interval: Duration::from_millis(500),
+            election_timeout: Duration::from_millis(2000), // Shorter for testing
+            replication_factor: 3,
+        };
+
+        let manager = ClusterManager::new(config).unwrap();
+        
+        // Simulate network partition
+        manager.simulate_partition(true).await;
+        
+        // Check cluster status during partition
+        let health = manager.get_health_status().await;
+        assert!(!health.is_healthy);
+        
+        // Recover from partition
+        manager.simulate_partition(false).await;
+        
+        // Check recovery
+        let health = manager.get_health_status().await;
+        assert!(health.is_healthy);
+    }
+
+    #[tokio::test]
+    async fn test_node_join_and_leave() {
+        let config = ClusterConfig {
+            node_id: Uuid::new_v4(),
+            bind_address: "127.0.0.1:8080".parse().unwrap(),
+            seed_nodes: vec![],
+            min_nodes: 1,
+            heartbeat_interval: Duration::from_millis(500),
+            election_timeout: Duration::from_millis(5000),
+            replication_factor: 3,
+        };
+
+        let mut manager = ClusterManager::new(config).unwrap();
+        
+        // Test node joining
+        let new_node = ClusterNode {
+            id: Uuid::new_v4(),
+            address: "127.0.0.1:8081".parse().unwrap(),
+            state: NodeState::Follower { leader: None, term: 0 },
+            last_heartbeat: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_else(|_| Duration::from_secs(0))
+                .as_millis() as u64,
+            capabilities: NodeCapabilities::default(),
+            load_metrics: LoadMetrics::default(),
+        };
+        
+        manager.handle_add_node(new_node.clone()).await.unwrap();
+        assert_eq!(manager.get_members().await.len(), 2);
+        
+        // Test node leaving gracefully
+        let leave_result = manager.handle_node_leave(new_node.id).await;
+        assert!(leave_result.is_ok());
+        assert_eq!(manager.get_members().await.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_load_balancing() {
+        let config = ClusterConfig {
+            node_id: Uuid::new_v4(),
+            bind_address: "127.0.0.1:8080".parse().unwrap(),
+            seed_nodes: vec![],
+            min_nodes: 1,
+            heartbeat_interval: Duration::from_millis(500),
+            election_timeout: Duration::from_millis(5000),
+            replication_factor: 3,
+        };
+
+        let manager = ClusterManager::new(config).unwrap();
+        
+        // Add multiple nodes
+        for i in 1..5 {
+            let node = ClusterNode {
+                id: Uuid::new_v4(),
+                address: format!("127.0.0.1:{}", 8080 + i).parse().unwrap(),
+                state: NodeState::Follower { leader: None, term: 0 },
+                last_heartbeat: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_else(|_| Duration::from_secs(0))
+                    .as_millis() as u64,
+                capabilities: NodeCapabilities::default(),
+                load_metrics: LoadMetrics::default(),
+            };
+            manager.handle_add_node(node).await.unwrap();
+        }
+        
+        // Test load balancing
+        let target_node = manager.select_target_node().await;
+        assert!(target_node.is_some());
+        
+        // Test load-aware selection
+        let balanced_node = manager.select_load_balanced_node().await;
+        assert!(balanced_node.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_failover_and_recovery() {
+        let config = ClusterConfig {
+            node_id: Uuid::new_v4(),
+            bind_address: "127.0.0.1:8080".parse().unwrap(),
+            seed_nodes: vec![],
+            min_nodes: 1,
+            heartbeat_interval: Duration::from_millis(500),
+            election_timeout: Duration::from_millis(2000), // Shorter for testing
+            replication_factor: 3,
+        };
+
+        let manager = ClusterManager::new(config).unwrap();
+        
+        // Become leader
+        manager.raft_engine.become_leader().await.unwrap();
+        let original_leader = manager.get_leader().await;
+        assert!(original_leader.is_some());
+        
+        // Simulate leader failure
+        manager.simulate_leader_failure().await;
+        
+        // Check failover
+        let new_leader = manager.get_leader().await;
+        assert!(new_leader.is_some());
+        // New leader should be different or same node recovered
+    }
+
+    #[tokio::test]
+    async fn test_cluster_configuration() {
+        let config = ClusterConfig {
+            node_id: Uuid::new_v4(),
+            bind_address: "127.0.0.1:8080".parse().unwrap(),
+            seed_nodes: vec![],
+            min_nodes: 3,
+            heartbeat_interval: Duration::from_millis(1000),
+            election_timeout: Duration::from_millis(10000),
+            replication_factor: 5,
+        };
+
+        let manager = ClusterManager::new(config).unwrap();
+        
+        // Test configuration retrieval
+        let current_config = manager.get_config().await;
+        assert_eq!(current_config.min_nodes, 3);
+        assert_eq!(current_config.replication_factor, 5);
+        
+        // Test configuration update
+        let new_config = ClusterConfig {
+            node_id: current_config.node_id,
+            bind_address: current_config.bind_address,
+            seed_nodes: current_config.seed_nodes,
+            min_nodes: 5,
+            heartbeat_interval: Duration::from_millis(2000),
+            election_timeout: Duration::from_millis(15000),
+            replication_factor: 7,
+        };
+        
+        let update_result = manager.update_config(new_config).await;
+        assert!(update_result.is_ok());
+        
+        let updated_config = manager.get_config().await;
+        assert_eq!(updated_config.min_nodes, 5);
+        assert_eq!(updated_config.replication_factor, 7);
+    }
+
+    #[tokio::test]
+    async fn test_performance_monitoring() {
+        let config = ClusterConfig {
+            node_id: Uuid::new_v4(),
+            bind_address: "127.0.0.1:8080".parse().unwrap(),
+            seed_nodes: vec![],
+            min_nodes: 1,
+            heartbeat_interval: Duration::from_millis(500),
+            election_timeout: Duration::from_millis(5000),
+            replication_factor: 3,
+        };
+
+        let manager = ClusterManager::new(config).unwrap();
+        
+        // Perform operations to generate metrics
+        for _ in 0..10 {
+            manager.get_health_status().await;
+            manager.get_members().await;
+        }
+        
+        // Get performance metrics
+        let metrics = manager.get_performance_metrics().await;
+        
+        assert!(metrics.total_operations > 0);
+        assert!(metrics.avg_operation_time_ms >= 0.0);
+        assert!(metrics.node_count >= 1);
+        
+        // Verify operation types
+        assert!(metrics.operations.contains_key("get_health_status"));
+        assert!(metrics.operations.contains_key("get_members"));
+    }
+
+    #[tokio::test]
+    async fn test_cluster_security_integration() {
+        let config = ClusterConfig {
+            node_id: Uuid::new_v4(),
+            bind_address: "127.0.0.1:8080".parse().unwrap(),
+            seed_nodes: vec![],
+            min_nodes: 1,
+            heartbeat_interval: Duration::from_millis(500),
+            election_timeout: Duration::from_millis(5000),
+            replication_factor: 3,
+        };
+
+        let manager = ClusterManager::new(config).unwrap();
+        
+        // Test node authentication
+        let trusted_node = ClusterNode {
+            id: Uuid::new_v4(),
+            address: "127.0.0.1:8081".parse().unwrap(),
+            state: NodeState::Follower { leader: None, term: 0 },
+            last_heartbeat: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_else(|_| Duration::from_secs(0))
+                .as_millis() as u64,
+            capabilities: NodeCapabilities::default(),
+            load_metrics: LoadMetrics::default(),
+        };
+        
+        // Test secure node addition
+        let auth_result = manager.authenticate_node(&trusted_node).await;
+        assert!(auth_result.is_ok());
+        
+        // Test unauthorized node rejection
+        let untrusted_node = ClusterNode {
+            id: Uuid::new_v4(),
+            address: "127.0.0.1:9999".parse().unwrap(),
+            state: NodeState::Follower { leader: None, term: 0 },
+            last_heartbeat: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_else(|_| Duration::from_secs(0))
+                .as_millis() as u64,
+            capabilities: NodeCapabilities::default(),
+            load_metrics: LoadMetrics::default(),
+        };
+        
+        let unauth_result = manager.authenticate_node(&untrusted_node).await;
+        assert!(unauth_result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_cluster_operations() {
+        let config = ClusterConfig {
+            node_id: Uuid::new_v4(),
+            bind_address: "127.0.0.1:8080".parse().unwrap(),
+            seed_nodes: vec![],
+            min_nodes: 1,
+            heartbeat_interval: Duration::from_millis(500),
+            election_timeout: Duration::from_millis(5000),
+            replication_factor: 3,
+        };
+
+        let manager = ClusterManager::new(config).unwrap();
+        
+        // Test concurrent operations
+        let mut handles = Vec::new();
+        
+        for i in 0..5 {
+            let manager_clone = manager.clone();
+            let handle = tokio::spawn(async move {
+                // Concurrent health checks
+                manager_clone.get_health_status().await
+            });
+            handles.push(handle);
+        }
+        
+        // Wait for all operations
+        for handle in handles {
+            let result = handle.await.unwrap();
+            assert!(result.total_nodes >= 1);
+        }
+        
+        // Test concurrent node additions
+        let mut add_handles = Vec::new();
+        for i in 0..3 {
+            let mut manager_clone = manager.clone();
+            let handle = tokio::spawn(async move {
+                let node = ClusterNode {
+                    id: Uuid::new_v4(),
+                    address: format!("127.0.0.1:{}", 8081 + i).parse().unwrap(),
+                    state: NodeState::Follower { leader: None, term: 0 },
+                    last_heartbeat: std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_else(|_| Duration::from_secs(0))
+                        .as_millis() as u64,
+                    capabilities: NodeCapabilities::default(),
+                    load_metrics: LoadMetrics::default(),
+                };
+                manager_clone.handle_add_node(node).await
+            });
+            add_handles.push(handle);
+        }
+        
+        // Wait for all additions
+        for handle in add_handles {
+            let result = handle.await.unwrap();
+            assert!(result.is_ok());
+        }
+    }
 }

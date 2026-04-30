@@ -199,8 +199,13 @@ impl KvEngine {
             secret_metadata: Arc::new(RwLock::new(HashMap::new())),
             leases: Arc::new(RwLock::new(HashMap::new())),
             stats: Arc::new(RwLock::new(EngineStats {
-                total_secrets: 0,
+                total_operations: 0,
+                successful_operations: 0,
+                failed_operations: 0,
+                avg_operation_time_ms: 0.0,
                 active_leases: 0,
+                stored_secrets: 0,
+                total_secrets: 0,
                 operations: HashMap::new(),
                 last_operation: None,
             })),
@@ -461,12 +466,15 @@ impl KvEngine {
             let secret = Secret {
                 data: decrypted_data,
                 metadata: SecretMetadata {
+                    name: path.to_string(),
                     version: versioned.version,
                     created_at: versioned.created_at,
                     updated_at: None,
-                    lease,
-                    custom: versioned.custom_metadata.clone(),
+                    created_by: None,
+                    tags: std::collections::HashMap::new(),
+                    custom: std::collections::HashMap::new(),
                 },
+                lease,
             };
             
             Ok(Some(secret))
@@ -583,9 +591,12 @@ impl KvEngine {
             let lease = LeaseInfo {
                 lease_id: lease_id.clone(),
                 ttl,
-                created_at: chrono::Utc::now(),
-                renewable: true,
                 max_ttl: Some(ttl * 24), // 24x the default TTL
+                created_at: chrono::Utc::now(),
+                expires_at: chrono::Utc::now() + chrono::Duration::seconds(ttl as i64),
+                renewable: true,
+                max_renewals: Some(5),
+                renewal_count: 0,
             };
             
             let mut leases = self.leases.write().await;
@@ -711,12 +722,15 @@ impl SecretsEngine for KvEngine {
         Ok(Secret {
             data: data.clone(),
             metadata: SecretMetadata {
+                name: path.to_string(),
                 version,
                 created_at: chrono::Utc::now(),
                 updated_at: None,
-                lease,
+                created_by: Some("secrets-kv".to_string()),
+                tags: HashMap::new(),
                 custom: HashMap::new(),
             },
+            lease,
         })
     }
 
@@ -750,12 +764,15 @@ impl SecretsEngine for KvEngine {
                     Ok(Some(Secret {
                         data: decrypted_data,
                         metadata: SecretMetadata {
+                            name: path.to_string(),
                             version: versioned.version,
                             created_at: versioned.created_at,
                             updated_at: None,
-                            lease,
-                            custom: versioned.custom_metadata.clone(),
+                            created_by: None,
+                            tags: std::collections::HashMap::new(),
+                            custom: HashMap::new(),
                         },
+                        lease,
                     }))
                 } else {
                     Ok(None)
@@ -898,7 +915,7 @@ impl SecretsEngine for KvEngine {
         Ok(())
     }
 
-    async fn configure(&mut self, config: serde_json::Value) -> Result<()> {
+    async fn configure(&self, config: serde_json::Value) -> Result<()> {
         let kv_config: KvConfig = serde_json::from_value(config)
             .map_err(|e| FortressError::secrets(format!("Invalid configuration: {}", e)))?;
         
@@ -918,6 +935,8 @@ impl SecretsEngine for KvEngine {
             name: self.name().to_string(),
             engine_type: self.engine_type(),
             initialized: true,
+            active: true,
+            last_activity: chrono::Utc::now(),
             config: serde_json::to_value(&*config).unwrap_or_default(),
             stats: stats.clone(),
         })

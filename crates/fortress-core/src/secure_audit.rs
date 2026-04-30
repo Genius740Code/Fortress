@@ -718,7 +718,7 @@ impl crate::secrets::SecretsEngine for SecureAuditLogger {
         Err(FortressError::audit("Revoke operation not supported on audit logger".to_string(), None, AuditErrorCode::PolicyNotFound))
     }
 
-    async fn configure(&mut self, config: serde_json::Value) -> Result<()> {
+    async fn configure(&self, config: serde_json::Value) -> Result<()> {
         let audit_config: SecureAuditConfig = serde_json::from_value(config)
             .map_err(|e| FortressError::audit(format!("Invalid audit configuration: {}", e), None, AuditErrorCode::ConfigurationError))?;
         
@@ -745,10 +745,17 @@ impl crate::secrets::SecretsEngine for SecureAuditLogger {
             name: self.name().to_string(),
             engine_type: self.engine_type(),
             initialized: config.is_some(),
+            active: true,
+            last_activity: Utc::now(),
             config: config_value,
             stats: crate::secrets::EngineStats {
-                total_secrets: stats.total_entries,
+                total_operations: 0,
+                successful_operations: 0,
+                failed_operations: 0,
+                avg_operation_time_ms: 0.0,
                 active_leases: 0,
+                stored_secrets: stats.total_entries,
+                total_secrets: stats.total_entries,
                 operations: HashMap::new(),
                 last_operation: stats.last_log_time,
             },

@@ -178,8 +178,13 @@ impl KubernetesAuth {
             config: Arc::new(RwLock::new(None)),
             sessions: Arc::new(RwLock::new(HashMap::new())),
             stats: Arc::new(RwLock::new(EngineStats {
-                total_secrets: 0,
+                total_operations: 0,
+                successful_operations: 0,
+                failed_operations: 0,
+                avg_operation_time_ms: 0.0,
                 active_leases: 0,
+                stored_secrets: 0,
+                total_secrets: 0,
                 operations: HashMap::new(),
                 last_operation: None,
             })),
@@ -583,7 +588,7 @@ impl SecretsEngine for KubernetesAuth {
         EngineType::Custom("kubernetes-auth".to_string())
     }
 
-    async fn write(&self, _path: &str, data: &serde_json::Value) -> Result<Secret> {
+    async fn write(&self, path: &str, data: &serde_json::Value) -> Result<Secret> {
         // Extract authentication data
         let namespace = data.get("namespace")
             .and_then(|v| v.as_str())
@@ -626,23 +631,29 @@ impl SecretsEngine for KubernetesAuth {
         let lease = Some(LeaseInfo {
             lease_id: format!("k8s:{}:{}", namespace, pod_name),
             ttl,
-            created_at: Utc::now(),
-            renewable: true,
             max_ttl: self.config.read().await
                 .as_ref()
                 .map(|c| Some(c.max_ttl))
                 .unwrap_or(None),
+            created_at: Utc::now(),
+            expires_at: auth_result.expires_at.unwrap_or_else(|| Utc::now() + chrono::Duration::seconds(3600)),
+            renewable: true,
+            max_renewals: Some(5),
+            renewal_count: 0,
         });
 
         Ok(Secret {
             data: secret_data,
             metadata: SecretMetadata {
+                name: path.to_string(),
                 version: 1,
                 created_at: Utc::now(),
                 updated_at: None,
-                lease,
+                created_by: Some("kubernetes-auth".to_string()),
+                tags: HashMap::new(),
                 custom: HashMap::new(),
             },
+            lease,
         })
     }
 
@@ -662,12 +673,15 @@ impl SecretsEngine for KubernetesAuth {
                     let lease = Some(LeaseInfo {
                         lease_id: format!("k8s:{}:{}", namespace, pod_name),
                         ttl,
-                        created_at: Utc::now(),
-                        renewable: true,
                         max_ttl: self.config.read().await
                             .as_ref()
                             .map(|c| Some(c.max_ttl))
                             .unwrap_or(None),
+                        created_at: Utc::now(),
+                        expires_at: auth_result.expires_at.unwrap_or_else(|| Utc::now() + chrono::Duration::seconds(3600)),
+                        renewable: true,
+                        max_renewals: Some(5),
+                        renewal_count: 0,
                     });
 
                     let secret_data = serde_json::json!({
@@ -683,12 +697,15 @@ impl SecretsEngine for KubernetesAuth {
                     return Ok(Some(Secret {
                         data: secret_data,
                         metadata: SecretMetadata {
+                            name: path.to_string(),
                             version: 1,
                             created_at: Utc::now(),
                             updated_at: None,
-                            lease,
+                            created_by: Some("kubernetes-auth".to_string()),
+                            tags: HashMap::new(),
                             custom: HashMap::new(),
                         },
+                        lease,
                     }));
                 }
             }
@@ -775,9 +792,12 @@ impl SecretsEngine for KubernetesAuth {
             let lease = LeaseInfo {
                 lease_id: lease_id.to_string(),
                 ttl: new_ttl,
-                created_at: Utc::now(),
-                renewable: true,
                 max_ttl: Some(config.max_ttl),
+                created_at: Utc::now(),
+                expires_at: auth_result.expires_at.unwrap_or_else(|| Utc::now() + Duration::seconds(new_ttl as i64)),
+                renewable: true,
+                max_renewals: Some(5),
+                renewal_count: 0,
             };
 
             // Update stats
@@ -821,7 +841,7 @@ impl SecretsEngine for KubernetesAuth {
         Ok(())
     }
 
-    async fn configure(&mut self, config: serde_json::Value) -> Result<()> {
+    async fn configure(&self, config: serde_json::Value) -> Result<()> {
         let k8s_config: KubernetesAuthConfig = serde_json::from_value(config)
             .map_err(|e| FortressError::secrets(format!("Invalid Kubernetes auth configuration: {}", e)))?;
         
@@ -845,6 +865,8 @@ impl SecretsEngine for KubernetesAuth {
             name: self.name().to_string(),
             engine_type: self.engine_type(),
             initialized: config.is_some(),
+            active: true,
+            last_activity: chrono::Utc::now(),
             config: config_value,
             stats: stats.clone(),
         })

@@ -14,9 +14,7 @@ mod tests {
 
     use super::*;
 
-    #[cfg(feature = "distributed-cache")]
-
-use crate::distributed_cache::{DistributedCache, DistributedCacheConfig, CacheBackend};
+    use crate::distributed_cache::{DistributedCache, DistributedCacheConfig, CacheBackend};
 
     use crate::cache_manager::{CacheManager, CacheManagerConfig, CacheType};
 
