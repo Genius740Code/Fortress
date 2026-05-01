@@ -340,7 +340,7 @@ impl DefaultAuditLogger {
     }
 
     /// Create a new audit entry
-    fn create_entry(
+    pub fn create_entry(
         &mut self,
         event_type: AuditEventType,
         security_level: SecurityLevel,
