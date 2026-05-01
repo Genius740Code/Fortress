@@ -18,6 +18,7 @@ pub mod benchmark;
 pub mod security;
 pub mod auth;
 pub mod encryption;
+pub mod query_executor;
 pub mod security_tests;
 pub mod integration_test;
 

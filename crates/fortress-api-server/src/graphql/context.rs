@@ -79,6 +79,29 @@ impl GraphQLContext {
     pub fn tenant_id(&self) -> Option<&str> {
         self.user.as_ref()?.tenant_id.as_deref()
     }
+
+    /// Check if the user has a specific permission
+    pub fn has_permission(&self, permission: &str) -> bool {
+        if let Some(user) = &self.user {
+            // For now, map roles to permissions
+            // In a real implementation, this would check a more sophisticated permission system
+            match permission {
+                "admin.query" | "query.statistics" | "query.explain" | "cache.clear" | "cache.stats" | "pool.stats" => {
+                    user.roles.contains(&"admin".to_string())
+                }
+                _ => user.roles.contains(&"user".to_string()),
+            }
+        } else {
+            false
+        }
+    }
+
+    /// Check if the user has permission for a specific table and operation
+    pub fn has_table_permission(&self, _table: &str, _operation: &str) -> bool {
+        // For now, just check if user is authenticated
+        // In a real implementation, this would check table-specific permissions
+        self.user.is_some()
+    }
 }
 
 /// Get the GraphQL context from the request
