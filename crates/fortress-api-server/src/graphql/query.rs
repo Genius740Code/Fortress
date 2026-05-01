@@ -617,7 +617,7 @@ impl Query {
                     created_at: secret.metadata.created_at,
                     updated_at: secret.metadata.updated_at,
                     version: secret.metadata.version as i32, // Cast u64 to i32
-                    lease: secret.metadata.lease.map(|lease| crate::graphql::types::LeaseInfo {
+                    lease: secret.lease.map(|lease| crate::graphql::types::LeaseInfo {
                         lease_id: lease.lease_id,
                         ttl: lease.ttl,
                         created_at: lease.created_at,

@@ -2,12 +2,11 @@
 //!
 //! Vault-inspired secrets engine with dynamic secrets, versioning, and lease management.
 
-use crate::error::{FortressError, Result};
+use crate::error::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use chrono::{DateTime, Utc};
-use uuid::Uuid;
 
 /// Secret data structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -154,7 +153,6 @@ pub struct EngineStats {
 }
 
 /// Secrets engine manager
-#[derive(Debug, Clone)]
 pub struct SecretsEngineManager {
     engines: HashMap<String, Box<dyn SecretsEngine>>,
     config: SecretsConfig,
@@ -221,7 +219,9 @@ impl SecretsEngineManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::FortressError;
     use futures::future::join_all;
+    use uuid::Uuid;
 
     #[tokio::test]
     async fn test_secret_lifecycle() -> Result<()> {
