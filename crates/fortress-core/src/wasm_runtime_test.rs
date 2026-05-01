@@ -17,7 +17,6 @@ async fn test_wasm_runtime_basic() {
         description: "Test plugin for WASM runtime verification".to_string(),
         author: "Fortress Team".to_string(),
         capabilities: vec![PluginCapability::Authentication],
-        wasm_module: None,
         config_schema: serde_json::Value::Null,
     };
     
@@ -32,21 +31,21 @@ async fn test_wasm_runtime_basic() {
     // Initialize plugin
     let context = PluginContext {
         config: std::collections::HashMap::new(),
-        user_id: Some("test_user".to_string()),
-        session_id: Some("test_session".to_string()),
-        request_id: Some("test_request".to_string()),
+        metadata: metadata.clone(),
+        encryption_access: false,
+        storage_access: false,
     };
     
     plugin.initialize(context).await.expect("Failed to initialize plugin");
     
     // Test plugin execution
     let input = PluginInput {
-        operation: "authenticate".to_string(),
-        parameters: serde_json::json!({
+        action: "authenticate".to_string(),
+        data: serde_json::json!({
             "username": "valid_user",
             "password": "test_password"
         }),
-        timestamp: chrono::Utc::now(),
+        parameters: std::collections::HashMap::new(),
     };
     
     let result = plugin.execute(input).await.expect("Failed to execute plugin");
@@ -75,7 +74,6 @@ async fn test_wasm_config_validation() {
         description: "Test plugin for config validation".to_string(),
         author: "Fortress Team".to_string(),
         capabilities: vec![PluginCapability::Authentication],
-        wasm_module: None,
         config_schema: serde_json::Value::Null,
     };
     
