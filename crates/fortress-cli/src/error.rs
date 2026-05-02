@@ -8,7 +8,7 @@ pub enum FortressError {
     #[error("Encryption failed: {reason}")]
     EncryptionError {
         reason: String,
-        #[serde(skip)]
+        #[serde(skip)]**License**: [![License: MIT](https://img.shields.io/badge/License-MIT--1.0-blue.svg)](https://opensource.org/licenses/MIT)
         source: Option<Box<dyn std::error::Error + Send + Sync>>,
         #[serde(skip)]
         suggestion: Option<String>,
