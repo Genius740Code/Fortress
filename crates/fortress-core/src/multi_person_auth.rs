@@ -134,6 +134,10 @@ pub struct ControlGroupMember {
 
 pub enum ControlGroupRole {
 
+    /// Regular member
+
+    Member,
+
     /// Regular approver
 
     Approver,

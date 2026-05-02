@@ -926,7 +926,7 @@ mod tests {
         let mut request = Request::builder()
             .method(Method::GET)
             .uri("/test")
-            .body(Empty::new())
+            .body(Body::empty())
             .unwrap();
 
         request.extensions_mut().insert(claims);

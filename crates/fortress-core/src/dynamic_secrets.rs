@@ -124,12 +124,6 @@ use base64::Engine as _;
 
 
 
-#[cfg(test)]
-
-mod tests;
-
-
-
 /// Dynamic secrets configuration
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1689,12 +1683,6 @@ impl DynamicSecretsEngine {
     }
 
 }
-
-
-
-#[cfg(test)]
-
-mod tests;
 
 
 

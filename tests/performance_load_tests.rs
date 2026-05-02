@@ -2648,7 +2648,7 @@ impl MockCluster {
             
             Ok(format!("cluster:{}:req:{}", node.name, request_id))
         } else {
-            Err(fortress_core::error::FortressError::cluster("Node not found"))
+            Err(fortress_core::error::FortressError::cluster("Node not found", None))
         }
     }
 }

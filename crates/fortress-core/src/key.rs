@@ -138,7 +138,7 @@ pub trait KeyManager: Send + Sync {
 
 /// In-memory key manager for testing and development
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 
 pub struct InMemoryKeyManager {
 

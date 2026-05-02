@@ -530,7 +530,7 @@ mod tests {
     #[tokio::test]
     async fn test_service_creation() {
         let config = IntegrationConfig::default();
-        let service = AuthPluginIntegrationService::new(config).unwrap();
+        let service = AuthPluginIntegrationService::new(config).await.unwrap();
         
         // Test that service was created successfully
         let health = service.get_health_status().await;
@@ -540,7 +540,7 @@ mod tests {
     #[tokio::test]
     async fn test_service_initialization() {
         let config = IntegrationConfig::default();
-        let service = AuthPluginIntegrationService::new(config).unwrap();
+        let service = AuthPluginIntegrationService::new(config).await.unwrap();
         
         // Test service initialization
         let result = service.initialize().await;
@@ -556,7 +556,7 @@ mod tests {
     #[tokio::test]
     async fn test_plugin_deployment_immediate() {
         let config = IntegrationConfig::default();
-        let service = AuthPluginIntegrationService::new(config).unwrap();
+        let service = AuthPluginIntegrationService::new(config).await.unwrap();
         
         // Test immediate deployment strategy
         let deployment_id = service.deploy_plugin(
@@ -578,7 +578,7 @@ mod tests {
     #[tokio::test]
     async fn test_plugin_deployment_rolling() {
         let config = IntegrationConfig::default();
-        let service = AuthPluginIntegrationService::new(config).unwrap();
+        let service = AuthPluginIntegrationService::new(config).await.unwrap();
         
         // Test rolling deployment strategy
         let deployment_id = service.deploy_plugin(
@@ -599,7 +599,7 @@ mod tests {
     #[tokio::test]
     async fn test_plugin_deployment_blue_green() {
         let config = IntegrationConfig::default();
-        let service = AuthPluginIntegrationService::new(config).unwrap();
+        let service = AuthPluginIntegrationService::new(config).await.unwrap();
         
         // Test blue-green deployment strategy
         let deployment_id = service.deploy_plugin(
@@ -620,7 +620,7 @@ mod tests {
     #[tokio::test]
     async fn test_plugin_deployment_canary() {
         let config = IntegrationConfig::default();
-        let service = AuthPluginIntegrationService::new(config).unwrap();
+        let service = AuthPluginIntegrationService::new(config).await.unwrap();
         
         // Test canary deployment strategy
         let deployment_id = service.deploy_plugin(
@@ -646,7 +646,7 @@ mod tests {
     #[tokio::test]
     async fn test_plugin_hot_swap() {
         let config = IntegrationConfig::default();
-        let service = AuthPluginIntegrationService::new(config).unwrap();
+        let service = AuthPluginIntegrationService::new(config).await.unwrap();
         
         // Test hot-swap deployment
         let deployment_id = service.hot_swap_plugin(
@@ -669,7 +669,7 @@ mod tests {
     #[tokio::test]
     async fn test_plugin_rollback() {
         let config = IntegrationConfig::default();
-        let service = AuthPluginIntegrationService::new(config).unwrap();
+        let service = AuthPluginIntegrationService::new(config).await.unwrap();
         
         // Test plugin rollback
         let result = service.rollback_plugin("test_plugin").await;
@@ -679,7 +679,7 @@ mod tests {
     #[tokio::test]
     async fn test_list_deployments() {
         let config = IntegrationConfig::default();
-        let service = AuthPluginIntegrationService::new(config).unwrap();
+        let service = AuthPluginIntegrationService::new(config).await.unwrap();
         
         // Deploy multiple plugins
         let _deployment1 = service.deploy_plugin(
@@ -707,7 +707,7 @@ mod tests {
     #[tokio::test]
     async fn test_authentication_methods() {
         let config = IntegrationConfig::default();
-        let service = AuthPluginIntegrationService::new(config).unwrap();
+        let service = AuthPluginIntegrationService::new(config).await.unwrap();
         
         // Test JWT authentication
         let jwt_credentials = serde_json::json!({
@@ -739,7 +739,7 @@ mod tests {
     #[tokio::test]
     async fn test_authentication_invalid_method() {
         let config = IntegrationConfig::default();
-        let service = AuthPluginIntegrationService::new(config).unwrap();
+        let service = AuthPluginIntegrationService::new(config).await.unwrap();
         
         // Test invalid authentication method
         let credentials = serde_json::json!({
@@ -754,7 +754,7 @@ mod tests {
     #[tokio::test]
     async fn test_auth_method_metrics() {
         let config = IntegrationConfig::default();
-        let service = AuthPluginIntegrationService::new(config).unwrap();
+        let service = AuthPluginIntegrationService::new(config).await.unwrap();
         
         // Get authentication method metrics
         let metrics = service.get_auth_method_metrics().await;
@@ -774,7 +774,7 @@ mod tests {
     #[tokio::test]
     async fn test_health_status() {
         let config = IntegrationConfig::default();
-        let service = AuthPluginIntegrationService::new(config).unwrap();
+        let service = AuthPluginIntegrationService::new(config).await.unwrap();
         
         // Get health status
         let health = service.get_health_status().await;
@@ -796,7 +796,7 @@ mod tests {
     #[tokio::test]
     async fn test_deployment_status_tracking() {
         let config = IntegrationConfig::default();
-        let service = AuthPluginIntegrationService::new(config).unwrap();
+        let service = AuthPluginIntegrationService::new(config).await.unwrap();
         
         // Deploy a plugin
         let deployment_id = service.deploy_plugin(
@@ -820,7 +820,7 @@ mod tests {
     #[tokio::test]
     async fn test_plugin_version_tracking() {
         let config = IntegrationConfig::default();
-        let service = AuthPluginIntegrationService::new(config).unwrap();
+        let service = AuthPluginIntegrationService::new(config).await.unwrap();
         
         // Test version tracking (simplified for tests)
         let version = service.get_plugin_version("test_plugin").await;
@@ -831,7 +831,7 @@ mod tests {
     #[tokio::test]
     async fn test_previous_version_tracking() {
         let config = IntegrationConfig::default();
-        let service = AuthPluginIntegrationService::new(config).unwrap();
+        let service = AuthPluginIntegrationService::new(config).await.unwrap();
         
         // Initially no previous version should exist
         let prev_version = service.get_previous_version("test_plugin").await;
@@ -863,7 +863,7 @@ mod tests {
             max_reload_attempts: 3,
         };
         
-        let service = AuthPluginIntegrationService::new(config).unwrap();
+        let service = AuthPluginIntegrationService::new(config).await.unwrap();
         
         // Initialize service
         let result = service.initialize().await;
@@ -913,7 +913,7 @@ mod tests {
     #[tokio::test]
     async fn test_error_handling_scenarios() {
         let config = IntegrationConfig::default();
-        let service = AuthPluginIntegrationService::new(config).unwrap();
+        let service = AuthPluginIntegrationService::new(config).await.unwrap();
         
         // Test deployment with invalid plugin name
         let result = service.deploy_plugin(
@@ -940,7 +940,7 @@ mod tests {
     #[tokio::test]
     async fn test_concurrent_deployments() {
         let config = IntegrationConfig::default();
-        let service = AuthPluginIntegrationService::new(config).unwrap();
+        let service = AuthPluginIntegrationService::new(config).await.unwrap();
         
         // Deploy multiple plugins concurrently
         let mut handles = Vec::new();
@@ -979,7 +979,7 @@ mod tests {
             ..IntegrationConfig::default()
         };
         
-        let service = AuthPluginIntegrationService::new(config).unwrap();
+        let service = AuthPluginIntegrationService::new(config).await.unwrap();
         
         // Get initial metrics
         let initial_metrics = service.get_auth_method_metrics().await;

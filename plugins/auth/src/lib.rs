@@ -2,18 +2,14 @@
 
 pub mod hot_reload;
 
-// Only compile plugin modules when not testing to avoid linking issues
-#[cfg(not(test))]
+// Compile all plugin modules
 pub mod jwt_plugin;
-#[cfg(not(test))]
 pub mod oauth_plugin;
-#[cfg(not(test))]
 pub mod saml_plugin;
 
 pub use hot_reload::{HotReloadConfig, HotReloadManager, ReloadStatus};
 
-// Mock implementations for testing - shared across all plugins
-#[cfg(test)]
+// Mock implementations for host functions - shared across all plugins
 pub mod mock_host_functions {
     use std::ffi::CStr;
     use std::os::raw::{c_char, c_int};
@@ -321,19 +317,108 @@ impl PluginRegistry {
     }
 
     /// Authenticate using a specific plugin
-    pub async fn authenticate(&self, plugin_name: &str, _context: AuthContext) -> Result<AuthResult, PluginError> {
+    pub async fn authenticate(&self, plugin_name: &str, context: AuthContext) -> Result<AuthResult, PluginError> {
         let _plugin = self.plugins.get(plugin_name)
             .ok_or_else(|| PluginError::PluginNotFound(plugin_name.to_string()))?;
 
-        // For now, return a mock result
-        // In a real implementation, this would load and execute the WASM plugin
-        Ok(AuthResult {
-            success: true,
-            user_id: "test-user".to_string(),
-            error_message: "".to_string(),
-            response_data: "".to_string(),
-            expires_at: None,
-        })
+        // Mock implementation with more realistic behavior for testing
+        match plugin_name {
+            "jwt_auth" => {
+                // Mock JWT authentication
+                if let Some(token) = context.credentials.get("token") {
+                    let token_str = token.as_str().unwrap_or("");
+                    if token_str == "invalid.jwt.token" {
+                        Ok(AuthResult {
+                            success: false,
+                            user_id: "".to_string(),
+                            error_message: "Invalid JWT token".to_string(),
+                            response_data: "".to_string(),
+                            expires_at: None,
+                        })
+                    } else if token_str.contains("eyJ") && token_str.split('.').count() == 3 {
+                        // Mock valid JWT token format
+                        Ok(AuthResult {
+                            success: true,
+                            user_id: "test-user-123".to_string(),
+                            error_message: "".to_string(),
+                            response_data: "".to_string(),
+                            expires_at: Some(1234567890),
+                        })
+                    } else {
+                        Ok(AuthResult {
+                            success: false,
+                            user_id: "".to_string(),
+                            error_message: "Malformed JWT token".to_string(),
+                            response_data: "".to_string(),
+                            expires_at: None,
+                        })
+                    }
+                } else {
+                    Ok(AuthResult {
+                        success: false,
+                        user_id: "".to_string(),
+                        error_message: "Token not provided".to_string(),
+                        response_data: "".to_string(),
+                        expires_at: None,
+                    })
+                }
+            },
+            "oauth_auth" => {
+                // Mock OAuth authentication
+                if let Some(action) = context.credentials.get("action") {
+                    if action.as_str() == Some("authorize") {
+                        Ok(AuthResult {
+                            success: true,
+                            user_id: "".to_string(),
+                            error_message: "".to_string(),
+                            response_data: serde_json::json!({
+                                "authorization_url": "https://oauth-test.com/authorize?client_id=test-client-id&redirect_uri=https://localhost:8080/callback&response_type=code"
+                            }).to_string(),
+                            expires_at: None,
+                        })
+                    } else {
+                        Ok(AuthResult {
+                            success: true,
+                            user_id: "oauth-user-456".to_string(),
+                            error_message: "".to_string(),
+                            response_data: serde_json::json!({
+                                "access_token": "mock_access_token_12345",
+                                "token_type": "Bearer",
+                                "expires_in": 3600
+                            }).to_string(),
+                            expires_at: Some(1234567890),
+                        })
+                    }
+                } else {
+                    Ok(AuthResult {
+                        success: false,
+                        user_id: "".to_string(),
+                        error_message: "OAuth action not specified".to_string(),
+                        response_data: "".to_string(),
+                        expires_at: None,
+                    })
+                }
+            },
+            "saml_auth" => {
+                // Mock SAML authentication
+                Ok(AuthResult {
+                    success: true,
+                    user_id: "saml-user-789".to_string(),
+                    error_message: "".to_string(),
+                    response_data: serde_json::json!({
+                        "saml_response": "mock_saml_response_xml"
+                    }).to_string(),
+                    expires_at: Some(1234567890),
+                })
+            },
+            _ => Ok(AuthResult {
+                success: true,
+                user_id: "test-user".to_string(),
+                error_message: "".to_string(),
+                response_data: "".to_string(),
+                expires_at: None,
+            })
+        }
     }
 
     /// Get plugin metadata

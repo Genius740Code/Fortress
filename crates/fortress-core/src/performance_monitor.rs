@@ -11,6 +11,9 @@ use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
+// Import the profile_operation macro
+use crate::profile_operation;
+
 /// Performance monitoring configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PerformanceMonitorConfig {
@@ -979,11 +982,11 @@ mod tests {
         let config = PerformanceMonitorConfig::default();
         let monitor = Arc::new(AdvancedPerformanceMonitor::new(config));
 
-        let result = profile_operation!(&monitor, OperationType::Encryption, "encrypt_data", {
+        let result = profile_operation!(&monitor, "encrypt_data", {
             // Simulate encryption work
             tokio::time::sleep(Duration::from_millis(5)).await;
             Ok::<_, FortressError>("encrypted_data")
-        }).await;
+        });
 
         assert!(result.is_ok());
 

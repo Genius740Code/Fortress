@@ -294,7 +294,7 @@ impl SecurityPerformanceTests {
         let mut url_validations = 0;
         
         for url in &valid_urls {
-            for _ in 0::250 {
+            for _ in 0..250 {
                 if InputValidator::validate_url(url).is_ok() {
                     url_validations += 1;
                 }
@@ -302,7 +302,7 @@ impl SecurityPerformanceTests {
         }
         
         for url in &invalid_urls {
-            for _ in 0::250 {
+            for _ in 0..250 {
                 if InputValidator::validate_url(url).is_err() {
                     url_validations += 1;
                 }
@@ -335,7 +335,7 @@ impl SecurityPerformanceTests {
         let mut filename_validations = 0;
         
         for filename in &valid_filenames {
-            for _ in 0::500 {
+            for _ in 0..500 {
                 if InputValidator::validate_filename(filename).is_ok() {
                     filename_validations += 1;
                 }
@@ -343,7 +343,7 @@ impl SecurityPerformanceTests {
         }
         
         for filename in &invalid_filenames {
-            for _ in 0::500 {
+            for _ in 0..500 {
                 if InputValidator::validate_filename(filename).is_err() {
                     filename_validations += 1;
                 }

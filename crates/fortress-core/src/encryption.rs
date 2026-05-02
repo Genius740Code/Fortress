@@ -780,7 +780,7 @@ impl EncryptionAlgorithm for Aegis256 {
     }
 
     fn nonce_size(&self) -> usize {
-        12 // 96-bit nonce
+        24 // 192-bit nonce for XChaCha20Poly1305
     }
 
     fn tag_size(&self) -> usize {
@@ -1000,7 +1000,7 @@ impl EncryptionAlgorithm for ChaCha20Poly1305 {
 
         let mut xnonce = [0u8; 24];
 
-        xnonce[..12].copy_from_slice(nonce);
+        xnonce.copy_from_slice(nonce);
 
 
 
@@ -1036,7 +1036,7 @@ impl EncryptionAlgorithm for ChaCha20Poly1305 {
 
     fn nonce_size(&self) -> usize {
 
-        12 // 96 bits nonce (will be extended to 192 bits for XChaCha20)
+        24 // 192 bits nonce for XChaCha20Poly1305
 
     }
 

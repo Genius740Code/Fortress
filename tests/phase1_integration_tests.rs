@@ -91,7 +91,9 @@ mod seal_tests {
     #[tokio::test]
     async fn test_seal_unseal_complete_workflow() {
         // Create seal manager
-        let config = SealConfig::new(3, 5); // 3 of 5 shares required
+        let mut config = SealConfig::default(); // 3 of 5 shares required
+        config.threshold = 3;
+        config.shares = 5;
         let mut seal_manager = SealManager::new(config);
 
         // Initialize with master key
@@ -203,7 +205,7 @@ mod token_tests {
             policies: vec!["default".to_string()],
             ttl: Duration::hours(1),
             entity_id: "user123".to_string(),
-            metadata: HashMap::new(),
+            metadata: Some(HashMap::new()),
         };
 
         let token_info = token_manager.create_token(request).await.unwrap();
@@ -230,7 +232,7 @@ mod token_tests {
             policies: vec!["default".to_string()],
             ttl: Duration::hours(1),
             entity_id: "service123".to_string(),
-            metadata: HashMap::new(),
+            metadata: Some(HashMap::new()),
         };
 
         let token_info = token_manager.create_token(request).await.unwrap();
@@ -275,7 +277,7 @@ mod token_tests {
             policies: vec!["default".to_string()],
             ttl: Duration::hours(1),
             entity_id: "user456".to_string(),
-            metadata: HashMap::new(),
+            metadata: Some(HashMap::new()),
         };
 
         let token_info = token_manager.create_token(request).await.unwrap();
@@ -306,7 +308,7 @@ mod token_tests {
             policies: vec!["default".to_string()],
             ttl: Duration::minutes(30),
             entity_id: "user789".to_string(),
-            metadata: HashMap::new(),
+            metadata: Some(HashMap::new()),
         };
 
         let token_info = token_manager.create_token(request).await.unwrap();
@@ -333,7 +335,7 @@ mod token_tests {
                 policies: vec!["default".to_string()],
                 ttl: Duration::hours(1),
                 entity_id: format!("user{}", i),
-                metadata: HashMap::new(),
+                metadata: Some(HashMap::new()),
             };
             token_manager.create_token(request).await.unwrap();
         }
@@ -592,7 +594,7 @@ mod integration_tests {
             policies: vec!["admin-policy".to_string()],
             ttl: Duration::hours(2),
             entity_id: "admin_user".to_string(),
-            metadata: HashMap::new(),
+            metadata: Some(HashMap::new()),
         };
 
         let user_request = CreateTokenRequest {
@@ -601,7 +603,7 @@ mod integration_tests {
             policies: vec!["user-policy".to_string()],
             ttl: Duration::hours(1),
             entity_id: "regular_user".to_string(),
-            metadata: HashMap::new(),
+            metadata: Some(HashMap::new()),
         };
 
         let admin_token = token_manager.create_token(admin_request).await.unwrap();
@@ -694,7 +696,7 @@ mod integration_tests {
             policies: vec!["default".to_string()],
             ttl: Duration::hours(1),
             entity_id: "fake_user".to_string(),
-            metadata: HashMap::new(),
+            metadata: Some(HashMap::new()),
         }).await.unwrap();
 
         token_manager.revoke_token(&fake_token.token.id, "Test").await.unwrap();
@@ -713,7 +715,7 @@ mod integration_tests {
             policies: vec!["default".to_string()],
             ttl: Duration::hours(1),
             entity_id: "test_user".to_string(),
-            metadata: HashMap::new(),
+            metadata: Some(HashMap::new()),
         }).await.unwrap();
 
         let context = PolicyContext::new(token, "unknown/path".to_string(), "read".to_string());
@@ -748,7 +750,7 @@ mod integration_tests {
                 policies: vec![format!("policy-{}", i % 10)],
                 ttl: Duration::hours(1),
                 entity_id: format!("user{}", i),
-                metadata: HashMap::new(),
+                metadata: Some(HashMap::new()),
             };
             let token = token_manager.create_token(request).await.unwrap();
             tokens.push(token);

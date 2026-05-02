@@ -7,6 +7,7 @@
 use crate::error::{FortressError, Result};
 use crate::plugin::PluginInput;
 use crate::plugin::PluginMetadata;
+use crate::auth::AuthToken;
 // use crate::wasm_runtime::WasmPluginConfig; // Temporarily disabled
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -104,6 +105,8 @@ pub struct AuthResult {
 pub struct AuthUserInfo {
     /// Unique user identifier
     pub id: String,
+    /// User ID (alias for id)
+    pub user_id: String,
     /// Username
     pub username: String,
     /// Email address
@@ -118,6 +121,8 @@ pub struct AuthUserInfo {
     pub tenant_id: Option<String>,
     /// Additional user attributes
     pub attributes: HashMap<String, serde_json::Value>,
+    /// Additional metadata
+    pub metadata: HashMap<String, serde_json::Value>,
 }
 
 /// Authentication plugin trait
@@ -593,6 +598,91 @@ impl AuthPluginManager {
     pub fn set_default_method(&mut self, method: AuthMethod) {
         self.default_method = method;
     }
+
+    /// Authenticate a user using the specified plugin
+    pub async fn authenticate_user(
+        &self,
+        plugin_name: &str,
+        username: &str,
+        password: &str,
+        context: &AuthContext,
+    ) -> Result<AuthToken> {
+        let plugins = self.plugins.read().await;
+        
+        if let Some(plugin) = plugins.get(plugin_name) {
+            let credentials = AuthCredentials {
+                username: Some(username.to_string()),
+                password: Some(password.to_string()),
+                token: None,
+                authorization_code: None,
+                state: None,
+                redirect_uri: None,
+                saml_assertion: None,
+                api_key: None,
+                additional_data: HashMap::new(),
+            };
+            
+            let auth_request = AuthRequest {
+                method: AuthMethod::Basic,
+                credentials,
+                context: context.clone(),
+            };
+            
+            let auth_result = plugin.authenticate(auth_request).await?;
+            
+            // Convert AuthResult to AuthToken
+            if let Some(token_str) = auth_result.token {
+                let now = chrono::Utc::now().timestamp() as u64;
+                Ok(AuthToken {
+                    token: token_str,
+                    user_id: auth_result.user_info.as_ref().map(|u| u.id.clone()).unwrap_or_default(),
+                    issued_at: now,
+                    expires_at: auth_result.expires_at.unwrap_or(now + 3600), // Default 1 hour
+                    permissions: vec![],
+                })
+            } else {
+                Err(FortressError::authentication("Authentication failed: no token returned", None))
+            }
+        } else {
+            Err(FortressError::plugin(format!("Plugin not found: {}", plugin_name)))
+        }
+    }
+
+    /// Get plugin statistics (placeholder implementation)
+    pub async fn get_plugin_statistics(&self, plugin_name: &str) -> Result<serde_json::Value> {
+        let plugins = self.plugins.read().await;
+        
+        if let Some(plugin) = plugins.get(plugin_name) {
+            let metadata = plugin.metadata();
+            Ok(serde_json::json!({
+                "name": metadata.name,
+                "version": metadata.version,
+                "status": "loaded",
+                "auth_methods": metadata.supported_methods
+            }))
+        } else {
+            Err(FortressError::plugin(format!("Plugin not found: {}", plugin_name)))
+        }
+    }
+
+    /// Restart a plugin (unload and reload)
+    pub async fn restart_plugin(&self, plugin_name: &str) -> Result<()> {
+        // For now, just perform health check as restart simulation
+        let plugins = self.plugins.read().await;
+        
+        if let Some(plugin) = plugins.get(plugin_name) {
+            plugin.health_check().await?;
+            tracing::info!("Restarted authentication plugin: {}", plugin_name);
+            Ok(())
+        } else {
+            Err(FortressError::plugin(format!("Plugin not found: {}", plugin_name)))
+        }
+    }
+
+    /// Shutdown a plugin (alias for unload_plugin)
+    pub async fn shutdown_plugin(&self, plugin_name: &str) -> Result<()> {
+        self.unload_plugin(plugin_name).await
+    }
 }
 
 #[cfg(test)]
@@ -825,11 +915,15 @@ mod tests {
         let result = AuthResult {
             success: true,
             user_info: Some(AuthUserInfo {
+                id: "user_123".to_string(),
                 user_id: "user_123".to_string(),
                 username: "testuser".to_string(),
-                email: "testuser@example.com".to_string(),
+                email: Some("testuser@example.com".to_string()),
+                display_name: Some("Test User".to_string()),
                 roles: vec!["user".to_string()],
                 permissions: vec!["read".to_string()],
+                tenant_id: None,
+                attributes: HashMap::new(),
                 metadata: HashMap::new(),
             }),
             token: Some("jwt_token_abc123".to_string()),
@@ -1015,11 +1109,15 @@ mod tests {
         user_metadata.insert("last_login".to_string(), serde_json::Value::Number(serde_json::Number::from(1234567890)));
 
         let user_info = AuthUserInfo {
+            id: "user_456".to_string(),
             user_id: "user_456".to_string(),
             username: "john.doe".to_string(),
-            email: "john.doe@example.com".to_string(),
+            email: Some("john.doe@example.com".to_string()),
+            display_name: Some("John Doe".to_string()),
             roles: vec!["admin".to_string(), "developer".to_string()],
             permissions: vec!["read".to_string(), "write".to_string(), "delete".to_string()],
+            tenant_id: None,
+            attributes: HashMap::new(),
             metadata: user_metadata,
         };
 

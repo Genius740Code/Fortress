@@ -2,10 +2,9 @@
 
 pub mod integration_tests;
 
-use fortress_auth_plugins::*;
-
 #[cfg(test)]
 pub mod test_utils {
+    use fortress_auth_plugins::{AuthContext, AuthResult};
     use std::collections::HashMap;
     use serde_json::{json, Value};
     

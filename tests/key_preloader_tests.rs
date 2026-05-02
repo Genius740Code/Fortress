@@ -6,7 +6,8 @@
 
 use fortress_core::key_preloader::{KeyPreloader, KeyPreloadConfig, PreloadStrategy};
 use fortress_core::key_database::{KeyDatabase, KeyDatabaseConfig, KeyDatabaseBackend, SqliteKeyDatabase};
-use fortress_core::key::{KeyId, KeyMetadata, SecureKey};
+use fortress_core::key::{KeyId, KeyMetadata, SecureKey, KeyVersion};
+use fortress_core::performance_profile::PerformanceProfile;
 use fortress_core::encryption::Aegis256;
 use fortress_core::error::Result;
 use chrono::{Utc, Duration};
@@ -27,15 +28,18 @@ mod tests {
 
     /// Helper function to create test key metadata
     fn create_test_metadata(algorithm_name: &str, purpose: &str, performance_profile: &str) -> KeyMetadata {
-        let mut metadata = KeyMetadata::new(&Aegis256::new());
-        metadata.algorithm = algorithm_name.to_string();
-        metadata.purpose = Some(purpose.to_string());
-        metadata.performance_profile = Some(performance_profile.to_string());
-        metadata.created_at = Utc::now();
-        metadata.expires_at = Some(Utc::now() + Duration::hours(24));
-        metadata.tags.insert("test".to_string(), "true".to_string());
-        metadata.tags.insert("preloader".to_string(), "test".to_string());
-        metadata.custom.insert("access_frequency".to_string(), "high".to_string());
+        let key_id = KeyId::new();
+        let version = KeyVersion::new();
+        let now = Utc::now();
+        let metadata = KeyMetadata::new(
+            key_id,
+            algorithm_name.to_string(),
+            version,
+            now,
+            now + Duration::hours(24),
+            purpose.to_string(),
+            PerformanceProfile::HighPerformance,
+        );
         metadata
     }
 

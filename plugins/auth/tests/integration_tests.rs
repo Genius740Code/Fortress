@@ -211,9 +211,21 @@ async fn test_plugin_configuration_validation() {
 
     // Test configuration validation
     let test_configs = vec![
-        ("jwt_auth", json!({"jwt_secret": "test-secret"})),
-        ("oauth_auth", json!({"client_id": "test-client"})),
-        ("saml_auth", json!({"entity_id": "https://test.com"})),
+        ("jwt_auth", json!({
+            "jwt_secret": "test-secret-key",
+            "token_expiration": 3600
+        })),
+        ("oauth_auth", json!({
+            "client_id": "test-client-id",
+            "client_secret": "test-client-secret",
+            "authorization_endpoint": "https://oauth-test.com/oauth/authorize",
+            "token_endpoint": "https://oauth-test.com/oauth/token"
+        })),
+        ("saml_auth", json!({
+            "entity_id": "https://test.com/saml",
+            "sso_url": "https://idp-test.com/sso",
+            "certificate": "-----BEGIN CERTIFICATE-----\nTEST_CERT\n-----END CERTIFICATE-----"
+        })),
     ];
     
     for (plugin_name, config) in test_configs {

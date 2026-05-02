@@ -50,10 +50,13 @@ pub struct BenchmarkResults {
     pub average_duration: Duration,
     pub p95_duration: Duration,
     pub p99_duration: Duration,
+    pub min_duration: Duration,
+    pub max_duration: Duration,
     pub operations_per_second: f64,
     pub cache_hit_rate: f64,
     pub memory_usage_mb: f64,
     pub error_rate: f64,
+    pub throughput_mbps: f64,
 }
 
 /// Performance benchmark suite
@@ -131,6 +134,10 @@ impl PerformanceBenchmark {
             sorted.sort();
             sorted
         };
+        
+        let min_duration = sorted_durations.first().copied().unwrap_or_default();
+        let max_duration = sorted_durations.last().copied().unwrap_or_default();
+        let throughput_mbps = self.estimate_throughput_mbps(config.num_operations, total_duration);
 
         BenchmarkResults {
             operation_type: "Standard Queries".to_string(),
@@ -141,10 +148,13 @@ impl PerformanceBenchmark {
             ),
             p95_duration: sorted_durations[(sorted_durations.len() as f64 * 0.95) as usize],
             p99_duration: sorted_durations[(sorted_durations.len() as f64 * 0.99) as usize],
+            min_duration,
+            max_duration,
             operations_per_second: config.num_operations as f64 / total_duration.as_secs_f64(),
             cache_hit_rate: 0.0, // Standard queries don't use cache
             memory_usage_mb: self.estimate_memory_usage(),
             error_rate: errors as f64 / config.num_operations as f64,
+            throughput_mbps,
         }
     }
 
@@ -179,6 +189,10 @@ impl PerformanceBenchmark {
             sorted.sort();
             sorted
         };
+        
+        let min_duration = sorted_durations.first().copied().unwrap_or_default();
+        let max_duration = sorted_durations.last().copied().unwrap_or_default();
+        let throughput_mbps = self.estimate_throughput_mbps(config.num_operations, total_duration);
 
         BenchmarkResults {
             operation_type: "Optimized Queries".to_string(),
@@ -189,10 +203,13 @@ impl PerformanceBenchmark {
             ),
             p95_duration: sorted_durations[(sorted_durations.len() as f64 * 0.95) as usize],
             p99_duration: sorted_durations[(sorted_durations.len() as f64 * 0.99) as usize],
+            min_duration,
+            max_duration,
             operations_per_second: config.num_operations as f64 / total_duration.as_secs_f64(),
             cache_hit_rate: cache_hits as f64 / config.num_operations as f64,
             memory_usage_mb: self.estimate_memory_usage(),
             error_rate: errors as f64 / config.num_operations as f64,
+            throughput_mbps,
         }
     }
 
@@ -232,6 +249,10 @@ impl PerformanceBenchmark {
             sorted.sort();
             sorted
         };
+        
+        let min_duration = sorted_durations.first().copied().unwrap_or_default();
+        let max_duration = sorted_durations.last().copied().unwrap_or_default();
+        let throughput_mbps = self.estimate_throughput_mbps(config.num_operations / 10, total_duration);
 
         BenchmarkResults {
             operation_type: "Bulk Operations".to_string(),
@@ -242,10 +263,13 @@ impl PerformanceBenchmark {
             ),
             p95_duration: sorted_durations[(sorted_durations.len() as f64 * 0.95) as usize],
             p99_duration: sorted_durations[(sorted_durations.len() as f64 * 0.99) as usize],
+            min_duration,
+            max_duration,
             operations_per_second: (config.num_operations / 10) as f64 / total_duration.as_secs_f64(),
             cache_hit_rate: 0.0,
             memory_usage_mb: self.estimate_memory_usage(),
             error_rate: errors as f64 / (config.num_operations / 10) as f64,
+            throughput_mbps,
         }
     }
 
@@ -291,6 +315,10 @@ impl PerformanceBenchmark {
             sorted.sort();
             sorted
         };
+        
+        let min_duration = sorted_durations.first().copied().unwrap_or_default();
+        let max_duration = sorted_durations.last().copied().unwrap_or_default();
+        let throughput_mbps = self.estimate_throughput_mbps(config.num_operations, total_duration);
 
         BenchmarkResults {
             operation_type: "Cache Operations".to_string(),
@@ -301,10 +329,13 @@ impl PerformanceBenchmark {
             ),
             p95_duration: sorted_durations[(sorted_durations.len() as f64 * 0.95) as usize],
             p99_duration: sorted_durations[(sorted_durations.len() as f64 * 0.99) as usize],
+            min_duration,
+            max_duration,
             operations_per_second: config.num_operations as f64 / total_duration.as_secs_f64(),
             cache_hit_rate: cache_hits as f64 / config.num_operations as f64,
             memory_usage_mb: self.estimate_memory_usage(),
             error_rate: 0.0,
+            throughput_mbps,
         }
     }
 
@@ -366,6 +397,19 @@ impl PerformanceBenchmark {
         cache_memory + operation_memory
     }
 
+    /// Estimate throughput in MB/s
+    fn estimate_throughput_mbps(&self, num_operations: usize, duration: Duration) -> f64 {
+        // Assume average operation size of 1KB
+        let total_bytes = num_operations * 1024;
+        let duration_seconds = duration.as_secs_f64();
+        
+        if duration_seconds > 0.0 {
+            (total_bytes as f64) / (1024.0 * 1024.0) / duration_seconds
+        } else {
+            0.0
+        }
+    }
+
     /// Generate performance report
     pub fn generate_report(&self, results: &[BenchmarkResults]) -> String {
         let mut report = String::new();
@@ -420,33 +464,6 @@ impl PerformanceBenchmark {
         
         report
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_performance_benchmark() {
-        let benchmark = PerformanceBenchmark::new();
-        let config = BenchmarkConfig {
-            num_operations: 100,
-            concurrent_requests: 5,
-            data_size_per_request: 50,
-            complexity_level: ComplexityLevel::Medium,
-        };
-        
-        let results = benchmark.run_benchmark(config).await;
-        
-        // Verify we have results for all operation types
-        assert!(results.len() >= 5);
-        
-        // Verify performance metrics are reasonable
-        for result in &results {
-            assert!(result.operations_per_second > 0.0);
-            assert!(result.error_rate < 0.1); // Less than 10% error rate
-        }
-    }
 
     /// Benchmark standard GraphQL mutations
     pub async fn benchmark_standard_mutations(&self, config: &BenchmarkConfig) -> BenchmarkResults {
@@ -471,6 +488,10 @@ mod tests {
             sorted.sort();
             sorted
         };
+        
+        let min_duration = sorted_durations.first().copied().unwrap_or_default();
+        let max_duration = sorted_durations.last().copied().unwrap_or_default();
+        let throughput_mbps = self.estimate_throughput_mbps(config.num_operations, total_duration);
 
         BenchmarkResults {
             operation_type: "Standard Mutations".to_string(),
@@ -481,12 +502,13 @@ mod tests {
             ),
             p95_duration: sorted_durations[(sorted_durations.len() as f64 * 0.95) as usize],
             p99_duration: sorted_durations[(sorted_durations.len() as f64 * 0.99) as usize],
-            min_duration: *sorted_durations.first().unwrap_or(&Duration::from_nanos(0)),
-            max_duration: *sorted_durations.last().unwrap_or(&Duration::from_nanos(0)),
+            min_duration,
+            max_duration,
             operations_per_second: config.num_operations as f64 / total_duration.as_secs_f64(),
+            cache_hit_rate: 0.0,
+            memory_usage_mb: self.estimate_memory_usage(),
             error_rate: errors as f64 / config.num_operations as f64,
-            cache_hit_rate: 0.0, // Mutations typically don't use cache
-            throughput_mbps: self.calculate_mutation_throughput(&config, total_duration),
+            throughput_mbps,
         }
     }
 
@@ -494,13 +516,21 @@ mod tests {
     pub async fn benchmark_optimized_mutations(&self, config: &BenchmarkConfig) -> BenchmarkResults {
         let start_time = Instant::now();
         let mut durations = Vec::new();
+        let mut cache_hits = 0;
         let mut errors = 0;
 
-        for _ in 0..config.num_operations {
+        let optimized_mutation = OptimizedMutation::new(self.cache_manager.clone());
+
+        for i in 0..config.num_operations {
             let op_start = Instant::now();
             
             // Simulate optimized mutation execution
-            if let Err(_) = self.simulate_optimized_mutation(&config).await {
+            if let Ok(_) = self.simulate_optimized_mutation(&optimized_mutation, &config, i).await {
+                // Simulate cache hit after first few operations
+                if i > 10 && i % 3 == 0 {
+                    cache_hits += 1;
+                }
+            } else {
                 errors += 1;
             }
             
@@ -513,6 +543,10 @@ mod tests {
             sorted.sort();
             sorted
         };
+        
+        let min_duration = sorted_durations.first().copied().unwrap_or_default();
+        let max_duration = sorted_durations.last().copied().unwrap_or_default();
+        let throughput_mbps = self.estimate_throughput_mbps(config.num_operations, total_duration);
 
         BenchmarkResults {
             operation_type: "Optimized Mutations".to_string(),
@@ -523,20 +557,18 @@ mod tests {
             ),
             p95_duration: sorted_durations[(sorted_durations.len() as f64 * 0.95) as usize],
             p99_duration: sorted_durations[(sorted_durations.len() as f64 * 0.99) as usize],
-            min_duration: *sorted_durations.first().unwrap_or(&Duration::from_nanos(0)),
-            max_duration: *sorted_durations.last().unwrap_or(&Duration::from_nanos(0)),
+            min_duration,
+            max_duration,
             operations_per_second: config.num_operations as f64 / total_duration.as_secs_f64(),
+            cache_hit_rate: cache_hits as f64 / config.num_operations as f64,
+            memory_usage_mb: self.estimate_memory_usage(),
             error_rate: errors as f64 / config.num_operations as f64,
-            cache_hit_rate: 0.0, // Mutations typically don't use cache
-            throughput_mbps: self.calculate_mutation_throughput(&config, total_duration),
+            throughput_mbps,
         }
     }
 
     /// Simulate standard mutation execution
     async fn simulate_standard_mutation(&self, config: &BenchmarkConfig) -> Result<(), Box<dyn std::error::Error>> {
-        // Simulate database write operation
-        tokio::time::sleep(Duration::from_millis(5)).await; // Simulate I/O delay
-        
         // Simulate data validation
         let validation_data = vec![0u8; config.data_size_per_request];
         let _checksum = self.calculate_checksum(&validation_data);
@@ -551,7 +583,7 @@ mod tests {
     }
 
     /// Simulate optimized mutation execution
-    async fn simulate_optimized_mutation(&self, config: &BenchmarkConfig) -> Result<(), Box<dyn std::error::Error>> {
+    async fn simulate_optimized_mutation(&self, _optimized_mutation: &OptimizedMutation, config: &BenchmarkConfig, _i: usize) -> Result<(), Box<dyn std::error::Error>> {
         // Optimized mutations use batching and parallel processing
         
         // Simulate batch validation
@@ -586,6 +618,40 @@ mod tests {
         }
     }
 
+    /// Calculate checksum for data validation
+    fn calculate_checksum(&self, data: &[u8]) -> u64 {
+        // Simple checksum calculation for simulation
+        data.iter().fold(0u64, |acc, &byte| acc.wrapping_mul(31).wrapping_add(byte as u64))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_performance_benchmark() {
+        let benchmark = PerformanceBenchmark::new();
+        let config = BenchmarkConfig {
+            num_operations: 100,
+            concurrent_requests: 5,
+            data_size_per_request: 50,
+            complexity_level: ComplexityLevel::Medium,
+        };
+        
+        let results = benchmark.run_benchmark(config).await;
+        
+        // Verify we have results for all operation types
+        assert!(results.len() >= 5);
+        
+        // Verify performance metrics are reasonable
+        for result in &results {
+            assert!(result.operations_per_second > 0.0);
+            assert!(result.error_rate < 0.1); // Less than 10% error rate
+        }
+    }
+
+    
     #[tokio::test]
     async fn test_cache_performance() {
         let benchmark = PerformanceBenchmark::new();

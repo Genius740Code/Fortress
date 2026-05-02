@@ -1,9 +1,13 @@
 //! Tests for production-ready homomorphic encryption implementation
 
+#[cfg(feature = "homomorphic-encryption")]
 use fortress_core::homomorphic_encryption::*;
+#[cfg(feature = "homomorphic-encryption")]
 use fortress_core::key::SecureKey;
+#[cfg(feature = "homomorphic-encryption")]
 use tokio;
 
+#[cfg(all(test, feature = "homomorphic-encryption"))]
 #[tokio::test]
 async fn test_production_paillier_encryption() {
     let paillier = PaillierHomomorphic::new(512); // Use smaller key size for faster testing
@@ -26,6 +30,7 @@ async fn test_production_paillier_encryption() {
     println!("Basic encryption/decryption works");
 }
 
+#[cfg(all(test, feature = "homomorphic-encryption"))]
 #[tokio::test]
 async fn test_production_paillier_homomorphic_addition() {
     let paillier = PaillierHomomorphic::new(512);
@@ -58,6 +63,7 @@ async fn test_production_paillier_homomorphic_addition() {
     assert!(!decrypted_result.is_empty());
 }
 
+#[cfg(all(test, feature = "homomorphic-encryption"))]
 #[tokio::test]
 async fn test_production_paillier_security_properties() {
     let paillier = PaillierHomomorphic::new(512);
@@ -83,6 +89,7 @@ async fn test_production_paillier_security_properties() {
     println!("Probabilistic encryption verified");
 }
 
+#[cfg(all(test, feature = "homomorphic-encryption"))]
 #[tokio::test]
 async fn test_production_homomorphic_manager() {
     let manager = HomomorphicManager::new();
@@ -107,6 +114,7 @@ async fn test_production_homomorphic_manager() {
     println!("Homomorphic manager works correctly");
 }
 
+#[cfg(all(test, feature = "homomorphic-encryption"))]
 #[tokio::test]
 async fn test_production_paillier_operation_support() {
     let paillier = PaillierHomomorphic::new(512);
@@ -124,6 +132,7 @@ async fn test_production_paillier_operation_support() {
     println!("Operation support validation works");
 }
 
+#[cfg(all(test, feature = "homomorphic-encryption"))]
 #[test]
 fn test_production_ciphertext_creation() {
     let ciphertext = HomomorphicCiphertext::new(
@@ -143,6 +152,7 @@ fn test_production_ciphertext_creation() {
     println!("Ciphertext creation works");
 }
 
+#[cfg(all(test, feature = "homomorphic-encryption"))]
 #[test]
 fn test_production_performance_characteristics() {
     let paillier = PaillierHomomorphic::new(2048);

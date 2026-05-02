@@ -328,7 +328,7 @@ pub struct RiskAssessment {
 }
 
 /// Risk levels
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, PartialOrd, Ord, Eq)]
 pub enum RiskLevel {
     Low,
     Medium,
@@ -440,6 +440,22 @@ pub struct AuthConfig {
     pub lockout_config: AccountLockoutConfig,
 }
 
+impl Default for AuthConfig {
+    fn default() -> Self {
+        Self {
+            token_expiration: 3600, // 1 hour
+            session_timeout: 86400, // 24 hours
+            max_sessions_per_user: 5,
+            enable_device_fingerprinting: true,
+            password_policy: PasswordPolicy::default(),
+            mfa_config: MfaConfig::default(),
+            risk_config: RiskAuthConfig::default(),
+            device_fingerprint_config: DeviceFingerprintConfig::default(),
+            lockout_config: AccountLockoutConfig::default(),
+        }
+    }
+}
+
 /// Password policy configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PasswordPolicy {
@@ -455,6 +471,19 @@ pub struct PasswordPolicy {
     pub require_special_chars: bool,
     /// Maximum password age in seconds
     pub max_age_seconds: u64,
+}
+
+impl Default for PasswordPolicy {
+    fn default() -> Self {
+        Self {
+            min_length: 8,
+            require_uppercase: true,
+            require_lowercase: true,
+            require_numbers: true,
+            require_special_chars: true,
+            max_age_seconds: 7776000, // 90 days
+        }
+    }
 }
 
 /// Multi-factor authentication configuration
@@ -474,6 +503,19 @@ pub struct MfaConfig {
     pub risk_based_methods: RiskBasedMfaMethods,
 }
 
+impl Default for MfaConfig {
+    fn default() -> Self {
+        Self {
+            required: false,
+            totp_config: TotpConfig::default(),
+            hardware_token_config: HardwareTokenConfig::default(),
+            backup_codes_config: BackupCodesConfig::default(),
+            adaptive_auth: false,
+            risk_based_methods: RiskBasedMfaMethods::default(),
+        }
+    }
+}
+
 /// TOTP configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TotpConfig {
@@ -489,6 +531,18 @@ pub struct TotpConfig {
     pub secret_length: usize,
 }
 
+impl Default for TotpConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            issuer: "Fortress".to_string(),
+            window: 1,
+            require_for_new_devices: true,
+            secret_length: 32,
+        }
+    }
+}
+
 /// Hardware token configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HardwareTokenConfig {
@@ -498,6 +552,16 @@ pub struct HardwareTokenConfig {
     pub supported_types: Vec<HardwareTokenType>,
     /// Require hardware token for admin access
     pub require_for_admin: bool,
+}
+
+impl Default for HardwareTokenConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            supported_types: vec![HardwareTokenType::YubiKey, HardwareTokenType::RSASecurId],
+            require_for_admin: true,
+        }
+    }
 }
 
 /// Hardware token types
@@ -523,6 +587,17 @@ pub struct BackupCodesConfig {
     pub valid_for_seconds: u64,
 }
 
+impl Default for BackupCodesConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            code_count: 10,
+            code_length: 8,
+            valid_for_seconds: 604800, // 7 days
+        }
+    }
+}
+
 /// Risk-based MFA methods
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RiskBasedMfaMethods {
@@ -534,6 +609,17 @@ pub struct RiskBasedMfaMethods {
     pub high_risk: Vec<MfaMethod>,
     /// Methods for critical risk
     pub critical_risk: Vec<MfaMethod>,
+}
+
+impl Default for RiskBasedMfaMethods {
+    fn default() -> Self {
+        Self {
+            low_risk: vec![MfaMethod::Password],
+            medium_risk: vec![MfaMethod::Password, MfaMethod::Totp],
+            high_risk: vec![MfaMethod::Password, MfaMethod::Totp, MfaMethod::HardwareToken],
+            critical_risk: vec![MfaMethod::Password, MfaMethod::Totp, MfaMethod::HardwareToken, MfaMethod::BackupCode],
+        }
+    }
 }
 
 impl RiskBasedMfaMethods {
@@ -574,6 +660,17 @@ pub struct RiskAuthConfig {
     pub adaptive_auth: bool,
 }
 
+impl Default for RiskAuthConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            risk_scoring: RiskScoringConfig::default(),
+            thresholds: RiskThresholds::default(),
+            adaptive_auth: false,
+        }
+    }
+}
+
 /// Risk scoring configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RiskScoringConfig {
@@ -585,6 +682,17 @@ pub struct RiskScoringConfig {
     pub behavioral_risk: BehavioralRiskConfig,
     /// Time-based risk scoring
     pub time_risk: TimeRiskConfig,
+}
+
+impl Default for RiskScoringConfig {
+    fn default() -> Self {
+        Self {
+            ip_risk: IpRiskConfig::default(),
+            device_risk: DeviceRiskConfig::default(),
+            behavioral_risk: BehavioralRiskConfig::default(),
+            time_risk: TimeRiskConfig::default(),
+        }
+    }
 }
 
 /// IP address risk configuration
@@ -600,6 +708,17 @@ pub struct IpRiskConfig {
     pub geolocation_restrictions: GeolocationRestrictions,
 }
 
+impl Default for IpRiskConfig {
+    fn default() -> Self {
+        Self {
+            malicious_networks: vec![],
+            trusted_networks: vec!["127.0.0.0/8".to_string(), "10.0.0.0/8".to_string(), "172.16.0.0/12".to_string(), "192.168.0.0/16".to_string()],
+            detect_proxies: true,
+            geolocation_restrictions: GeolocationRestrictions::default(),
+        }
+    }
+}
+
 /// Geolocation restrictions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GeolocationRestrictions {
@@ -611,6 +730,17 @@ pub struct GeolocationRestrictions {
     pub blocked_countries: Vec<String>,
     /// Require VPN for certain countries
     pub require_vpn_countries: Vec<String>,
+}
+
+impl Default for GeolocationRestrictions {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            allowed_countries: vec!["US".to_string(), "CA".to_string(), "GB".to_string(), "AU".to_string()],
+            blocked_countries: vec![],
+            require_vpn_countries: vec!["CN".to_string(), "RU".to_string(), "IR".to_string(), "KP".to_string()],
+        }
+    }
 }
 
 /// Device risk configuration
@@ -626,6 +756,17 @@ pub struct DeviceRiskConfig {
     pub require_verification_new: bool,
 }
 
+impl Default for DeviceRiskConfig {
+    fn default() -> Self {
+        Self {
+            compromised_devices: vec![],
+            trusted_devices: vec![],
+            trust_period_seconds: 86400 * 30, // 30 days
+            require_verification_new: true,
+        }
+    }
+}
+
 /// Behavioral risk configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BehavioralRiskConfig {
@@ -639,6 +780,17 @@ pub struct BehavioralRiskConfig {
     pub unusual_patterns: bool,
 }
 
+impl Default for BehavioralRiskConfig {
+    fn default() -> Self {
+        Self {
+            typing_patterns: false,
+            mouse_movement: false,
+            login_time_patterns: true,
+            unusual_patterns: true,
+        }
+    }
+}
+
 /// Time-based risk configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimeRiskConfig {
@@ -648,6 +800,16 @@ pub struct TimeRiskConfig {
     pub unusual_time_detection: bool,
     /// Timezone-based restrictions
     pub timezone_restrictions: Vec<String>,
+}
+
+impl Default for TimeRiskConfig {
+    fn default() -> Self {
+        Self {
+            business_hours: BusinessHoursConfig::default(),
+            unusual_time_detection: true,
+            timezone_restrictions: vec!["UTC".to_string(), "America/New_York".to_string(), "Europe/London".to_string()],
+        }
+    }
 }
 
 /// Business hours configuration
@@ -667,6 +829,19 @@ pub struct BusinessHoursConfig {
     pub require_mfa_outside_hours: bool,
 }
 
+impl Default for BusinessHoursConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            start_time: "09:00".to_string(),
+            end_time: "17:00".to_string(),
+            timezone: "UTC".to_string(),
+            days_of_week: vec![1, 2, 3, 4, 5], // Monday to Friday
+            require_mfa_outside_hours: true,
+        }
+    }
+}
+
 /// Risk thresholds
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RiskThresholds {
@@ -680,6 +855,17 @@ pub struct RiskThresholds {
     pub critical_threshold: u8,
 }
 
+impl Default for RiskThresholds {
+    fn default() -> Self {
+        Self {
+            low_threshold: 25,
+            medium_threshold: 50,
+            high_threshold: 75,
+            critical_threshold: 90,
+        }
+    }
+}
+
 /// Device fingerprinting configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceFingerprintConfig {
@@ -691,6 +877,22 @@ pub struct DeviceFingerprintConfig {
     pub storage: FingerprintStorageConfig,
     /// Trust duration for known devices
     pub trust_duration_seconds: u64,
+}
+
+impl Default for DeviceFingerprintConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            methods: vec![
+                FingerprintMethod::UserAgent,
+                FingerprintMethod::ScreenResolution,
+                FingerprintMethod::Timezone,
+                FingerprintMethod::Language,
+            ],
+            storage: FingerprintStorageConfig::default(),
+            trust_duration_seconds: 86400 * 30, // 30 days
+        }
+    }
 }
 
 /// Fingerprinting methods
@@ -724,6 +926,16 @@ pub struct FingerprintStorageConfig {
     pub retention_seconds: u64,
 }
 
+impl Default for FingerprintStorageConfig {
+    fn default() -> Self {
+        Self {
+            backend: FingerprintStorageBackend::Memory,
+            encrypt_fingerprints: true,
+            retention_seconds: 86400 * 365, // 1 year
+        }
+    }
+}
+
 /// Fingerprint storage backend
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum FingerprintStorageBackend {
@@ -748,6 +960,19 @@ pub struct AccountLockoutConfig {
     pub reset_on_success: bool,
     /// Permanent lockout threshold
     pub permanent_lockout_threshold: Option<u32>,
+}
+
+impl Default for AccountLockoutConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_attempts: 5,
+            lockout_duration_seconds: 900, // 15 minutes
+            progressive_lockout: false,
+            reset_on_success: true,
+            permanent_lockout_threshold: None,
+        }
+    }
 }
 
 /// Session manager for handling user sessions
@@ -1010,6 +1235,10 @@ impl AccountLockoutManager {
     }
 
     pub fn reset_failed_attempts(&mut self, _username: &str) -> Result<(), FortressError> {
+        self.clear_failed_attempts(_username)
+    }
+
+    pub fn reset_failed_attempt(&mut self, _username: &str) -> Result<(), FortressError> {
         self.clear_failed_attempts(_username)
     }
 

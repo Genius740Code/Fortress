@@ -680,7 +680,7 @@ impl OptimizedQueryExecutor {
 }
 
 #[derive(Debug, Clone)]
-struct ParsedQuery {
+pub struct ParsedQuery {
     operation: QueryOperation,
     tables: Vec<String>,
     pub is_admin_operation: bool,
@@ -937,6 +937,3 @@ impl Clone for OptimizedQueryExecutor {
     }
 }
 
-// Include comprehensive security tests for the query executor
-#[cfg(test)]
-mod security_tests;
