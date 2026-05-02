@@ -8,14 +8,6 @@
 
 A comprehensive security platform that provides enterprise-grade cryptography, key management, distributed caching, clustering, and compliance features with simplicity of modern APIs.
 
-## Current Status: **v1.0.1 - PRODUCTION RELEASE**
-> **Official production release with enterprise-grade security**
-> - ✓ All core security features implemented and tested
-> - ✓ Zero-downtime key rotation and clustering operational
-> - ✓ Compliance frameworks implemented (GDPR, HIPAA, PCI-DSS)
-> - ✓ GraphQL API with enterprise-grade security features
-> - ✓ Quantum-resistant cryptography available
-> - **Download v1.0.1 from [GitHub Releases](https://github.com/fortress-security/fortress/releases/tag/v1.0.1)**
 
 ## Key Features
 
@@ -171,10 +163,10 @@ pkg-config --modversion openssl
 **Download from GitHub Releases**
 ```bash
 # Download latest release for your platform
-# Visit: https://github.com/fortress-security/fortress/releases
+# Visit: https://github.com/Genius740Code/Fortress/releases
 
 # Example for Linux AMD64
-curl -L "https://github.com/fortress-security/fortress/releases/latest/download/fortress-linux-amd64-latest" -o fortress
+curl -L "https://github.com/Genius740Code/Fortress/releases/latest/download/fortress-linux-amd64-latest" -o fortress
 chmod +x fortress
 sudo mv fortress /usr/local/bin/
 
@@ -209,15 +201,15 @@ cargo install fortress-cli
 cargo install fortress-server
 
 # Or build from source
-git clone https://github.com/fortress-security/fortress.git
-cd fortress
+git clone https://github.com/Genius740Code/Fortress.git
+cd Fortress
 cargo install --path crates/fortress-cli
 ```
 
 **Go**
 ```bash
 # Install CLI tool
-go install github.com/fortress-security/fortress/fortress-go/cmd/fortress-cli@latest
+go install github.com/Genius740Code/Fortress/fortress-go/cmd/fortress-cli@latest
 ```
 
 #### Docker
@@ -225,8 +217,8 @@ go install github.com/fortress-security/fortress/fortress-go/cmd/fortress-cli@la
 **Build from Source (Recommended)**
 ```bash
 # Clone and build
-git clone https://github.com/fortress-security/fortress.git
-cd fortress
+git clone https://github.com/Genius740Code/Fortress.git
+cd Fortress
 docker build -t fortress .
 
 # Run with default configuration
@@ -344,7 +336,7 @@ import (
     "fmt"
     "log"
     
-    "github.com/fortress-security/fortress/fortress-go"
+    "github.com/Genius740Code/Fortress/fortress-go"
 )
 
 func main() {
