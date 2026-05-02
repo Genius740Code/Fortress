@@ -47,11 +47,11 @@ pub mod test_utils {
     pub fn assert_auth_result_success(result: &AuthResult) {
         assert!(result.success, "Authentication should succeed");
         assert!(!result.user_id.is_empty(), "User ID should not be empty");
-        assert!(result.error_message.is_empty(), "Error message should be empty for success");
+        assert!(result.error_message.is_empty(), "Error message should be empty");
     }
     
     pub fn assert_auth_result_failure(result: &AuthResult) {
         assert!(!result.success, "Authentication should fail");
-        assert!(!result.error_message.is_empty(), "Error message should not be empty for failure");
+        assert!(!result.error_message.is_empty(), "Error message should not be empty");
     }
 }

@@ -5,7 +5,7 @@
 
 use fortress_core::prelude::*;
 
-fn main() -> Result<()> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Fortress Performance Profiles Demo\n");
 
     // Initialize profile manager

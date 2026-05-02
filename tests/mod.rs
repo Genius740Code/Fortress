@@ -56,6 +56,13 @@ pub mod test_new_algorithms;
 pub mod test_new_encryption;
 pub mod test_phase1_infrastructure;
 pub mod test_plugin_end_to_end;
+pub mod wasm_runtime_security_tests;
+pub mod hsm_tests;
+pub mod hsm_pkcs11_tests;
+pub mod mpc_manager_tests;
+pub mod mpc_party_tests;
+pub mod plugin_tests;
+pub mod lib_integration_tests;
 
 // Re-export main test runners for easy access
 pub use performance_optimization_suite::PerformanceOptimizationSuite;

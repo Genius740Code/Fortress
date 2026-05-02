@@ -9,7 +9,7 @@ use fortress_core::encryption::PerformanceProfile;
 use chrono::{Utc, Duration};
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
     tracing_subscriber::fmt::init();
 

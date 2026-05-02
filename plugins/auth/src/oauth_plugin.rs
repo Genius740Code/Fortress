@@ -134,7 +134,8 @@ struct CachedToken {
     user_info: Option<OAuthUserInfo>,
 }
 
-// WASM host function declarations
+// WASM host function declarations - only compile when not testing
+#[cfg(not(test))]
 #[allow(dead_code)]
 extern "C" {
     fn auth_log(level: i32, ptr: *const u8, len: usize);
@@ -147,6 +148,8 @@ extern "C" {
     fn get_config(key_ptr: *const u8, key_len: usize, out_ptr: *mut u8, out_len: usize) -> i32;
     fn get_timestamp() -> i64;
 }
+
+// Mock implementations are provided in lib.rs::mock_host_functions for testing
 
 // Helper functions for WASM memory operations
 fn write_string_to_wasm(s: &str, ptr: *mut u8, len: usize) -> usize {

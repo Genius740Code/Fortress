@@ -257,7 +257,7 @@ impl SecureWalletStorage {
     /// ```rust
     /// storage.rotate_wallet_key("wallet_solana_123").await?;
     /// ```
-    pub async fn rotate_wallet_key(&self, wallet_id: &str) -> Result<()> {
+    pub async fn rotate_wallet_key(&self, wallet_id: &str) -> Result<(), Box<dyn std::error::Error>> {
         println!("🔄 Rotating encryption key for wallet: {}", wallet_id);
         
         // Create key ID
@@ -325,7 +325,7 @@ impl SecureWalletStorage {
     /// ```rust
     /// storage.delete_wallet("wallet_solana_123").await?;
     /// ```
-    pub async fn delete_wallet(&self, wallet_id: &str) -> Result<()> {
+    pub async fn delete_wallet(&self, wallet_id: &str) -> Result<(), Box<dyn std::error::Error>> {
         println!("🗑️  Deleting wallet: {}", wallet_id);
         
         // Create key ID
@@ -417,7 +417,7 @@ impl SecureWalletStorage {
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Fortress Secure Wallet Storage Demo");
     println!("======================================\n");
     

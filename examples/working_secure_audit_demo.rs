@@ -14,7 +14,7 @@ use serde_json::json;
 use chrono::Utc;
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Fortress Cryptographically Secure Audit Logging Demo\n");
 
     // 1. Initialize the secure audit logger

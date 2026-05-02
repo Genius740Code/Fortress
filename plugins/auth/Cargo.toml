@@ -34,6 +34,8 @@ saml = []
 
 # Profile configurations should be set at workspace root, not here
 
+# Exclude WASM plugin modules from testing since they require host functions
+# Only test the plugin registry and management functionality
 [[test]]
 name = "integration_tests"
 path = "tests/integration_tests.rs"

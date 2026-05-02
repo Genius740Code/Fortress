@@ -9,6 +9,7 @@ use fortress_core::observability::*;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
+use ::tracing::{info, warn, error, debug, trace};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -124,7 +125,7 @@ fn create_observability_config() -> ObservabilityConfig {
 }
 
 /// Register health checks
-async fn register_health_checks(health_checker: &HealthChecker) -> Result<()> {
+async fn register_health_checks(health_checker: &HealthChecker) -> Result<(), Box<dyn std::error::Error>> {
     // Database health check
     let db_config = ComponentHealthConfig {
         enabled: true,
@@ -161,7 +162,7 @@ async fn register_health_checks(health_checker: &HealthChecker) -> Result<()> {
 }
 
 /// Register alert rules
-async fn register_alert_rules(alert_manager: &AlertManager, metrics_provider: Arc<MockMetricsProvider>) -> Result<()> {
+async fn register_alert_rules(alert_manager: &AlertManager, metrics_provider: Arc<MockMetricsProvider>) -> Result<(), Box<dyn std::error::Error>> {
     // High CPU usage alert
     let cpu_alert_rule = AlertRule {
         id: "high_cpu_usage".to_string(),
@@ -242,7 +243,7 @@ async fn register_alert_rules(alert_manager: &AlertManager, metrics_provider: Ar
 }
 
 /// Create a sample dashboard
-async fn create_sample_dashboard(dashboard_manager: &DashboardManager) -> Result<()> {
+async fn create_sample_dashboard(dashboard_manager: &DashboardManager) -> Result<(), Box<dyn std::error::Error>> {
     // Create dashboard
     let dashboard = Dashboard {
         id: "fortress-overview".to_string(),
@@ -468,7 +469,7 @@ fn create_widget_positions() -> HashMap<String, WidgetPosition> {
 async fn run_demo(
     observability_manager: &ObservabilityManager,
     metrics_provider: Arc<MockMetricsProvider>,
-) -> Result<()> {
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("\nStarting observability demo...\n");
     
     // Demo duration in seconds
@@ -521,7 +522,7 @@ async fn simulate_system_metrics(metrics_provider: &MockMetricsProvider) {
 }
 
 /// Demonstrate distributed tracing
-async fn demonstrate_tracing(tracer: &ObservabilityTracer) -> Result<()> {
+async fn demonstrate_tracing(tracer: &ObservabilityTracer) -> Result<(), Box<dyn std::error::Error>> {
     // Start a parent span
     let parent_context = tracer
         .start_span("database_operation", None, {
@@ -556,7 +557,7 @@ async fn demonstrate_tracing(tracer: &ObservabilityTracer) -> Result<()> {
 }
 
 /// Demonstrate metrics collection
-async fn demonstrate_metrics(metrics: &AdvancedMetricsCollector) -> Result<()> {
+async fn demonstrate_metrics(metrics: &AdvancedMetricsCollector) -> Result<(), Box<dyn std::error::Error>> {
     // Register some metrics if not already registered
     let counter_def = MetricDefinition {
         name: "requests_total".to_string(),
@@ -600,27 +601,27 @@ async fn demonstrate_metrics(metrics: &AdvancedMetricsCollector) -> Result<()> {
 }
 
 /// Demonstrate structured logging
-async fn demonstrate_logging(logger: &StructuredLogger) -> Result<()> {
+async fn demonstrate_logging(logger: &StructuredLogger) -> Result<(), Box<dyn std::error::Error>> {
     // Add some context
     logger.add_global_context("demo_run", "observability_demo").await?;
     logger.add_global_context("version", "0.1.0").await?;
     
     // Log some structured events
-    tracing::info!(
+    ::tracing::info!(
         user_id = "user_123",
         action = "login",
         ip_address = "192.168.1.100",
         "User successfully authenticated"
     );
     
-    tracing::warn!(
+    ::tracing::warn!(
         component = "database",
         query_time_ms = 1500,
         threshold_ms = 1000,
         "Slow database query detected"
     );
     
-    tracing::error!(
+    ::tracing::error!(
         error_code = "DB_CONNECTION_FAILED",
         retry_count = 3,
         component = "database",
@@ -631,7 +632,7 @@ async fn demonstrate_logging(logger: &StructuredLogger) -> Result<()> {
 }
 
 /// Show system status
-async fn show_system_status(observability_manager: &ObservabilityManager) -> Result<()> {
+async fn show_system_status(observability_manager: &ObservabilityManager) -> Result<(), Box<dyn std::error::Error>> {
     let status = observability_manager.get_system_status().await;
     
     println!("📈 System Status:");
@@ -646,7 +647,7 @@ async fn show_system_status(observability_manager: &ObservabilityManager) -> Res
 }
 
 /// Print final summary
-async fn print_final_summary(observability_manager: &ObservabilityManager) -> Result<()> {
+async fn print_final_summary(observability_manager: &ObservabilityManager) -> Result<(), Box<dyn std::error::Error>> {
     // Get final metrics summary
     let metrics_summary = observability_manager.metrics().get_summary().await;
     
