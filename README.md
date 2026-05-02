@@ -1,7 +1,7 @@
 # Fortress
 
 ![CI](https://github.com/Genius740Code/Fortress/workflows/CI/badge.svg)
-![Security Audit](https://github.com/Genius740Code/Fortress/workflows/Security%20Audit/badge.svg)
+![Security Audit](https://github.com/Genius740Code/Fortress/workflows/Security%20Scan/badge.svg)
 ![Documentation](https://github.com/Genius740Code/Fortress/workflows/Documentation/badge.svg)
 
 **Fortress** - Enterprise Security Platform
@@ -166,7 +166,7 @@ pkg-config --modversion openssl
 # Visit: https://github.com/Genius740Code/Fortress/releases
 
 # Example for Linux AMD64
-curl -L "https://github.com/Genius740Code/Fortress/releases/latest/download/fortress-linux-amd64-latest" -o fortress
+curl -L "https://github.com/Genius740Code/Fortress" -o fortress
 chmod +x fortress
 sudo mv fortress /usr/local/bin/
 
@@ -667,51 +667,13 @@ ws.onmessage = (event) => {
     console.log('Event:', message);
 };
 ```
-
-## 🤝 Community
-
-- 📖 [Documentation](https://github.com/Genius740Code/Fortress/blob/main/docs)
-- 🐛 [Issue Tracker](https://github.com/Genius740Code/Fortress/issues)
-- 💬 [Discussions](https://github.com/Genius740Code/Fortress/discussions)
-
-## 📄 License
-
-This project is licensed under the Server Side Public License (SSPL) - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- **HashiCorp Vault** - Inspiration for security-first design
-- **AEGIS** - High-performance encryption algorithm
-- **Raft** - Consensus algorithm for clustering
-- **Rust Community** - Excellent ecosystem and tools
-
-## 🗺️ Roadmap
-
-### Version 1.1.0 (Q2 2026)
-- [x] GraphQL API completion
-- [ ] Advanced plugin marketplace
-- [ ] Machine learning integration `[Depends: Real homomorphic encryption implementation]`
-- [ ] Mobile SDKs (iOS/Android)
-
-### Version 1.2.0 (Q3 2026)
-- [ ] Distributed SQL queries
-- [ ] Advanced analytics engine
-- [ ] WebAssembly plugin support
-- [ ] Edge computing support
-
-### Version 2.0.0 (Q4 2026)
-- [ ] Production-ready stability
-- [ ] Full compliance certification
-- [ ] Enterprise features
-- [ ] Managed cloud service
-
 ## Metrics
 
 - **CI Status**: [![CI](https://github.com/Genius740Code/Fortress/workflows/CI/badge.svg)](https://github.com/Genius740Code/Fortress/actions)
 - **GitHub Stars**: [![GitHub stars](https://img.shields.io/github/stars/Genius740Code/Fortress)](https://github.com/Genius740Code/Fortress/stargazers)
 - **GitHub Forks**: [![GitHub forks](https://img.shields.io/github/forks/Genius740Code/Fortress)](https://github.com/Genius740Code/Fortress/network)
 - **GitHub Issues**: [![GitHub issues](https://img.shields.io/github/issues/Genius740Code/Fortress)](https://github.com/Genius740Code/Fortress/issues)
-- **License**: [![License: SSPL-1.0](https://img.shields.io/badge/License-SSPL--1.0-blue.svg)](https://opensource.org/licenses/SSPL-1.0)
+- **License**: [![License: MIT](https://img.shields.io/badge/License-MIT--1.0-blue.svg)](https://opensource.org/licenses/MIT)
 
 ---
 
