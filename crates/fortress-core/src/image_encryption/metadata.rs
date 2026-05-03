@@ -24,6 +24,8 @@ use crate::encryption::{EncryptionAlgorithm, SecureKey, EncryptedData};
 
 use crate::image_encryption::ImageFormat;
 
+use bytes::Bytes;
+
 use crate::image_encryption::{ColorSpace, CompressionInfo};
 
 use serde::{Deserialize, Serialize};
@@ -31,8 +33,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
-
-use bytes::Bytes;
 
 
 
@@ -2654,7 +2654,7 @@ mod tests {
 
             encrypted_data: EncryptedData::new(
 
-                crate::bytes::Bytes::from("test_data"),
+                Bytes::from("test_data"),
 
                 "test_algorithm".to_string(),
 

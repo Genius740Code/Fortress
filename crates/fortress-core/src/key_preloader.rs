@@ -626,7 +626,8 @@ impl std::fmt::Debug for KeyPreloader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::encryption::{Aes256GcmEncryption, EncryptionAlgorithm};
+    use crate::aes256gcm_wrapper::Aes256GcmWrapper;
+use crate::encryption::EncryptionAlgorithm;
     use crate::error::{FortressError, Result, StorageErrorCode};
     use crate::key::{KeyId, KeyMetadata, KeyPurpose, PerformanceProfile};
     use crate::key_database::{KeyDatabase, KeyDatabaseConfig, KeyDatabaseBackend, SqliteKeyDatabase, create_key_database};
@@ -657,12 +658,12 @@ mod tests {
         db.initialize().await?;
         
         // Add test keys with different characteristics
-        let algorithm = Aes256GcmEncryption::new();
+        let algorithm = Aes256GcmWrapper::new();
         
         // Key for encryption purpose
         let key1 = SecureKey::generate(algorithm.key_size()).expect("Failed to generate test key");
         let metadata1 = KeyMetadata::new(
-            KeyId::new("encryption_key"),
+            "encryption_key".to_string(),
             algorithm.name().to_string(),
             1,
             Utc::now(),
@@ -670,12 +671,12 @@ mod tests {
             KeyPurpose::DataEncryption,
             PerformanceProfile::Balanced,
         );
-        db.store_key(&KeyId::new("encryption_key"), &key1, &metadata1).await?;
+        db.store_key(&"encryption_key".to_string(), &key1, &metadata1).await?;
         
         // Key for authentication purpose
         let key2 = SecureKey::generate(algorithm.key_size()).expect("Failed to generate test key");
         let metadata2 = KeyMetadata::new(
-            KeyId::new("auth_key"),
+            "auth_key".to_string(),
             algorithm.name().to_string(),
             1,
             Utc::now(),
@@ -683,12 +684,12 @@ mod tests {
             KeyPurpose::Authentication,
             PerformanceProfile::Lightning,
         );
-        db.store_key(&KeyId::new("auth_key"), &key2, &metadata2).await?;
+        db.store_key(&"auth_key".to_string(), &key2, &metadata2).await?;
         
         // Key for session purpose
         let key3 = SecureKey::generate(algorithm.key_size()).expect("Failed to generate test key");
         let metadata3 = KeyMetadata::new(
-            KeyId::new("session_key"),
+            "session_key".to_string(),
             algorithm.name().to_string(),
             1,
             Utc::now(),
@@ -696,12 +697,12 @@ mod tests {
             KeyPurpose::SessionManagement,
             PerformanceProfile::HighPerformance,
         );
-        db.store_key(&KeyId::new("session_key"), &key3, &metadata3).await?;
+        db.store_key(&"session_key".to_string(), &key3, &metadata3).await?;
         
         // Key with custom purpose
         let key4 = SecureKey::generate(algorithm.key_size()).expect("Failed to generate test key");
         let metadata4 = KeyMetadata::new(
-            KeyId::new("custom_key"),
+            "custom_key".to_string(),
             algorithm.name().to_string(),
             1,
             Utc::now(),
@@ -709,7 +710,7 @@ mod tests {
             KeyPurpose::KeyEncryption,
             PerformanceProfile::Balanced,
         );
-        db.store_key(&KeyId::new("custom_key"), &key4, &metadata4).await?;
+        db.store_key(&"custom_key".to_string(), &key4, &metadata4).await?;
         
         Ok(db)
     }
@@ -788,7 +789,7 @@ mod tests {
         assert!(stats.total_preloaded_keys > 0);
         
         // Verify encryption key is preloaded (it's in priority purposes)
-        let preloaded_key = preloader.get_preloaded_key(&KeyId::new("encryption_key")).await;
+        let preloaded_key = preloader.get_preloaded_key(&"encryption_key".to_string()).await;
         assert!(preloaded_key.is_some());
         
         Ok(())
@@ -810,7 +811,7 @@ mod tests {
         assert!(stats.total_preloaded_keys > 0);
         
         // Verify session key (expires in 6 hours) is preloaded
-        let preloaded_key = preloader.get_preloaded_key(&KeyId::new("session_key")).await;
+        let preloaded_key = preloader.get_preloaded_key(&"session_key".to_string()).await;
         assert!(preloaded_key.is_some());
         
         Ok(())
@@ -824,7 +825,7 @@ mod tests {
         preloader.initialize().await?;
         
         // Force preload a specific key
-        let key_id = KeyId::new("custom_key");
+        let key_id = "custom_key".to_string();
         let preloaded = preloader.force_preload_key(&key_id).await?;
         assert!(preloaded);
         
@@ -833,7 +834,7 @@ mod tests {
         assert!(preloaded_key.is_some());
         
         // Try to preload non-existent key
-        let non_existent_id = KeyId::new("non_existent");
+        let non_existent_id = "non_existent".to_string();
         let not_preloaded = preloader.force_preload_key(&non_existent_id).await?;
         assert!(!not_preloaded);
         
@@ -850,7 +851,7 @@ mod tests {
         preloader.initialize().await?;
         
         // Verify key is preloaded
-        let key_id = KeyId::new("encryption_key");
+        let key_id = "encryption_key".to_string();
         let preloaded_before = preloader.get_preloaded_key(&key_id).await;
         assert!(preloaded_before.is_some());
         
@@ -863,7 +864,7 @@ mod tests {
         assert!(preloaded_after.is_none());
         
         // Try to evict non-existent key
-        let non_existent_id = KeyId::new("non_existent");
+        let non_existent_id = "non_existent".to_string();
         let not_evicted = preloader.evict_key(&non_existent_id).await?;
         assert!(!not_evicted);
         
@@ -905,7 +906,7 @@ mod tests {
         preloader.initialize().await?;
         
         // Simulate key access
-        let key_id = KeyId::new("encryption_key");
+        let key_id = "encryption_key".to_string();
         preloader.record_key_access(&key_id).await?;
         
         // Get access stats
@@ -940,7 +941,7 @@ mod tests {
         preloader.initialize().await?;
         
         // Record frequent access to a specific key
-        let key_id = KeyId::new("custom_key");
+        let key_id = "custom_key".to_string();
         for _ in 0..10 {
             preloader.record_key_access(&key_id).await?;
         }
@@ -1173,7 +1174,7 @@ mod tests {
         preloader.initialize().await?;
         
         // Perform known operations
-        let key_id = KeyId::new("encryption_key");
+        let key_id = "encryption_key".to_string();
         
         // Force preload (should increment hits if already preloaded)
         let _ = preloader.force_preload_key(&key_id).await?;
@@ -1183,7 +1184,7 @@ mod tests {
         let _ = preloader.get_preloaded_key(&key_id).await;
         
         // Get non-existent key (should increment misses)
-        let _ = preloader.get_preloaded_key(&KeyId::new("non_existent")).await;
+        let _ = preloader.get_preloaded_key(&"non_existent".to_string()).await;
         
         // Record access
         preloader.record_key_access(&key_id).await?;

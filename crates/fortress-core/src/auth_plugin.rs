@@ -8,6 +8,7 @@ use crate::error::{FortressError, Result};
 use crate::plugin::PluginInput;
 use crate::plugin::PluginMetadata;
 use crate::auth::AuthToken;
+use crate::auth::{HardwareTokenType, BiometricType};
 // use crate::wasm_runtime::WasmPluginConfig; // Temporarily disabled
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

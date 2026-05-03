@@ -19,5 +19,5 @@ pub use revocation::{RevocationList, RevocationReason, RevocationEntry};
 pub use types::{
     Token, TokenInfo, TokenMetadata, TokenType, TokenRole,
     CreateTokenRequest, RenewTokenRequest, RevokeTokenRequest,
-    TokenValidationResult, TokenLookupResult,
+    TokenValidationResult, TokenLookupResult, TokenUsageStats, TokenCreationContext,
 };

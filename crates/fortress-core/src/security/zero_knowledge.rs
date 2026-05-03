@@ -783,35 +783,35 @@ mod tests {
 
     #[test]
     fn test_schnorr_proof() {
-        let statement = b"test statement";
+        let statement = b"test statement".to_vec();
         let witness = SecureKey::new(vec![1, 2, 3, 4, 5]);
         
-        let proof = SchnorrProof::prove(statement, &witness).unwrap();
-        let verified = SchnorrProof::verify(statement, &proof).unwrap();
+        let proof = SchnorrProof::prove(&statement, &witness).unwrap();
+        let verified = SchnorrProof::verify(&statement, &proof).unwrap();
         
         assert!(verified);
         
         // Test with wrong statement
-        let wrong_statement = b"wrong statement";
-        let not_verified = SchnorrProof::verify(wrong_statement, &proof).unwrap();
+        let wrong_statement = b"wrong statement".to_vec();
+        let not_verified = SchnorrProof::verify(&wrong_statement, &proof).unwrap();
         assert!(!not_verified);
     }
 
     #[test]
     fn test_access_control_proof() {
         let user_key = SecureKey::generate_random(32).unwrap();
-        let resource_policy = b"admin_access_required";
-        let permissions = b"read,write,admin";
+        let resource_policy = b"admin_access_required".to_vec();
+        let permissions = b"read,write,admin".to_vec();
         
-        let proof = AccessControlProof::create_proof(&user_key, resource_policy, permissions).unwrap();
-        let verified = proof.verify_proof(resource_policy).unwrap();
+        let proof = AccessControlProof::create_proof(&user_key, &resource_policy, &permissions).unwrap();
+        let verified = proof.verify_proof(&resource_policy).unwrap();
         
         assert!(verified);
         assert!(proof.is_valid(3600)); // Valid for 1 hour
         
         // Test with wrong policy
-        let wrong_policy = b"read_only_required";
-        let not_verified = proof.verify_proof(wrong_policy).unwrap();
+        let wrong_policy = b"read_only_required".to_vec();
+        let not_verified = proof.verify_proof(&wrong_policy).unwrap();
         assert!(!not_verified);
     }
 

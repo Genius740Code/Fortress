@@ -45,6 +45,21 @@ pub type KeyId = String;
 
 pub type KeyVersion = u32;
 
+/// Key usage purposes
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum KeyPurpose {
+    /// Data encryption
+    DataEncryption,
+    /// Key encryption (key wrapping)
+    KeyEncryption,
+    /// Signature generation
+    Signature,
+    /// Authentication
+    Authentication,
+    /// MAC generation
+    MacGeneration,
+}
+
 
 
 /// Key manager trait for different key storage backends

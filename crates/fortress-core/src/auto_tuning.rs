@@ -10,7 +10,7 @@
 
 use crate::error::{FortressError, Result};
 
-use crate::performance_monitor::{AdvancedPerformanceMonitor as PerformanceMonitor, TuningRecommendation, RecommendationType};
+use crate::performance_monitor::{AdvancedPerformanceMonitor as PerformanceMonitor, TuningRecommendation, RecommendationType, ImplementationComplexity, RecommendationPriority};
 
 use serde::{Deserialize, Serialize};
 
@@ -1988,7 +1988,7 @@ mod tests {
 
             &tuner.config,
 
-        ).await.unwrap();
+        ).unwrap();
 
 
 

@@ -954,7 +954,7 @@ impl CacheInvalidation for CacheInvalidationManager {
 
 mod tests {
 
-    // ... (rest of the code remains the same)
+    use super::*;
 
     use tokio::time::{sleep, Duration};
 
@@ -972,19 +972,19 @@ mod tests {
 
         // Add dependencies: key1 -> key2 -> key3
 
-        manager.add_dependency("key1", "key2").await.unwrap();
+        manager.add_dependency("key1", "key2").unwrap();
 
-        manager.add_dependency("key2", "key3").await.unwrap();
+        manager.add_dependency("key2", "key3").unwrap();
 
 
 
         // Invalidate key3 should cascade to key1 and key2
 
-        manager.invalidate_key("key3", InvalidationReason::Manual).await.unwrap();
+        manager.invalidate_key("key3", InvalidationReason::Manual).unwrap();
 
 
 
-        let stats = manager.get_invalidation_stats().await.unwrap();
+        let stats = manager.get_invalidation_stats().unwrap();
 
         assert!(stats.cascaded_invalidations > 0);
 
@@ -1004,17 +1004,17 @@ mod tests {
 
         // Add tags to keys
 
-        manager.add_tags("key1", &["user".to_string(), "active".to_string()]).await.unwrap();
+        manager.add_tags("key1", &["user".to_string(), "active".to_string()]).unwrap();
 
-        manager.add_tags("key2", &["user".to_string()]).await.unwrap();
+        manager.add_tags("key2", &["user".to_string()]).unwrap();
 
-        manager.add_tags("key3", &["session".to_string()]).await.unwrap();
+        manager.add_tags("key3", &["session".to_string()]).unwrap();
 
 
 
         // Invalidate by tag
 
-        let count = manager.invalidate_by_tag("user", InvalidationReason::Manual).await.unwrap();
+        let count = manager.invalidate_by_tag("user", InvalidationReason::Manual).unwrap();
 
         assert_eq!(count, 2);
 
@@ -1048,7 +1048,7 @@ mod tests {
 
         // Invalidate a key
 
-        manager.invalidate_key("test_key", InvalidationReason::Manual).await.unwrap();
+        manager.invalidate_key("test_key", InvalidationReason::Manual).unwrap();
 
 
 
@@ -1102,15 +1102,15 @@ mod tests {
 
         // Perform invalidations
 
-        manager.invalidate_key("key1", InvalidationReason::Manual).await.unwrap();
+        manager.invalidate_key("key1", InvalidationReason::Manual).unwrap();
 
-        manager.invalidate_key("key2", InvalidationReason::TTLExpired).await.unwrap();
+        manager.invalidate_key("key2", InvalidationReason::TTLExpired).unwrap();
 
-        manager.invalidate_key("key3", InvalidationReason::KeyRotation).await.unwrap();
+        manager.invalidate_key("key3", InvalidationReason::KeyRotation).unwrap();
 
 
 
-        let stats = manager.get_invalidation_stats().await.unwrap();
+        let stats = manager.get_invalidation_stats().unwrap();
 
         assert_eq!(stats.total_invalidations, 3);
 

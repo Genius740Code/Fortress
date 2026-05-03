@@ -20,6 +20,8 @@ use crate::error::{FortressError, Result};
 
 use crate::encryption::{EncryptionAlgorithm, SecureKey, EncryptedData};
 
+use bytes::Bytes;
+
 use crate::image_encryption::{
 
     ImageFormat, EncryptionOptions, EncryptionMode, ImageEncryptionError,
@@ -31,8 +33,6 @@ use crate::image_encryption::{
     metadata::{MetadataProcessor, DefaultMetadataExtractor, MetadataExtractor}, ImageFormatDetector,
 
 };
-
-use bytes::Bytes;
 
 use std::collections::HashMap;
 
@@ -1454,7 +1454,7 @@ mod tests {
 
             encrypted_data: EncryptedData::new(
 
-                crate::bytes::Bytes::from("encrypted_data"),
+                Bytes::from("encrypted_data"),
 
                 "chacha20poly1305".to_string(),
 
@@ -1530,7 +1530,7 @@ mod tests {
 
             encrypted_data: EncryptedData::new(
 
-                crate::bytes::Bytes::from("encrypted_data"),
+                Bytes::from("encrypted_data"),
 
                 "chacha20poly1305".to_string(),
 
@@ -1578,7 +1578,7 @@ mod tests {
 
         let mut invalid_image = valid_image.clone();
 
-        invalid_image.encrypted_data.ciphertext = crate::bytes::Bytes::new();
+        invalid_image.encrypted_data.ciphertext = Bytes::new();
 
         assert!(!encryptor.verify_integrity(&invalid_image).unwrap());
 

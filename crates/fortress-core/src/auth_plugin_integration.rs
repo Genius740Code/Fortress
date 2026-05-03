@@ -924,7 +924,7 @@ mod tests {
         
         // Should handle empty plugin name gracefully
         // In real implementation, this would return an error
-        assert!(!result.is_empty());
+        assert!(result.is_err());
         
         // Test authentication with invalid credentials format
         let invalid_credentials = serde_json::json!({
@@ -962,7 +962,7 @@ mod tests {
         
         // All deployments should succeed
         for result in results {
-            let deployment_id = result.expect("Deployment task panicked");
+            let deployment_id = result.expect("Deployment task panicked").unwrap();
             assert!(!deployment_id.is_empty());
         }
         

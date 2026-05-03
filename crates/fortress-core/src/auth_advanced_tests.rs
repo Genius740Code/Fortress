@@ -148,7 +148,7 @@ mod tests {
             device_info: None,
         };
 
-        let assessment = risk_engine.assess_risk(&low_risk_context).unwrap();
+        let assessment = risk_engine.assess_risk(&low_risk_context);
         assert!(assessment.risk_score < 25);
         assert!(matches!(assessment.risk_level, RiskLevel::Low));
 
@@ -170,7 +170,7 @@ mod tests {
             device_info: None,
         };
 
-        let assessment = risk_engine.assess_risk(&high_risk_context).unwrap();
+        let assessment = risk_engine.assess_risk(&high_risk_context);
         assert!(assessment.risk_score >= 75);
         assert!(matches!(assessment.risk_level, RiskLevel::High));
     }

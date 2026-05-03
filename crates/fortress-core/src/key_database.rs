@@ -828,7 +828,8 @@ pub async fn create_key_database(config: KeyDatabaseConfig) -> Result<Box<dyn Ke
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::encryption::{Aes256GcmEncryption, EncryptionAlgorithm};
+    use crate::aes256gcm_wrapper::Aes256GcmWrapper;
+use crate::encryption::EncryptionAlgorithm;
     use crate::error::{FortressError, Result, StorageErrorCode};
     use crate::key::{KeyId, KeyMetadata, KeyPurpose, PerformanceProfile};
     use chrono::Utc;
@@ -859,7 +860,7 @@ mod tests {
 
     /// Create test key data
     fn create_test_key_data(id: &str, version: u32) -> (SecureKey, KeyMetadata) {
-        let algorithm = Aes256GcmEncryption::new();
+        let algorithm = Aes256GcmWrapper::new();
         let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate test key");
         let metadata = KeyMetadata::new(
             KeyId::new(id),
@@ -1345,7 +1346,7 @@ mod tests {
         db.initialize().await?;
         
         // Create metadata with complex values
-        let algorithm = Aes256GcmEncryption::new();
+        let algorithm = Aes256GcmWrapper::new();
         let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate test key");
         
         let metadata = KeyMetadata::new(

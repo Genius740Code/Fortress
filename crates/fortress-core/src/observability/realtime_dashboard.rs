@@ -1814,9 +1814,7 @@ mod tests {
 
             }
 
-            _ => assert!(matches!(message_type, MessageType::SystemMetrics), 
-
-             "Expected SystemMetrics message, got {:?}", message_type),
+            _ => panic!("Expected SystemMetrics message, got {:?}", deserialized),
 
         }
 

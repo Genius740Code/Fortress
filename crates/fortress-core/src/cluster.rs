@@ -1177,7 +1177,7 @@ mod tests {
         let manager2 = ClusterManager::new(config2).unwrap();
 
         // Test node discovery
-        let discovered_nodes = manager1.discover_nodes().await;
+        let discovered_nodes = manager1.discover_nodes().await.unwrap();
         assert!(!discovered_nodes.is_empty());
         
         // Test cluster joining

@@ -2637,13 +2637,13 @@ mod tests {
         // Test role permissions
         let reader_perms = auth.get_role_permissions(&reader_role);
         assert_eq!(reader_perms.len(), 1);
-        assert!(reader_perms.contains(&perm2));
+        assert!(reader_perms.iter().any(|p| p.id == perm2));
         
         let editor_perms = auth.get_role_permissions(&editor_role);
         assert_eq!(editor_perms.len(), 3);
-        assert!(editor_perms.contains(&perm1));
-        assert!(editor_perms.contains(&perm2));
-        assert!(editor_perms.contains(&perm3));
+        assert!(editor_perms.iter().any(|p| p.id == perm1));
+        assert!(editor_perms.iter().any(|p| p.id == perm2));
+        assert!(editor_perms.iter().any(|p| p.id == perm3));
         
         let admin_perms = auth.get_role_permissions(&admin_role);
         assert_eq!(admin_perms.len(), 4);

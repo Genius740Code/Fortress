@@ -65,6 +65,7 @@
 
 
 use crate::error::{FortressError, Result};
+use crate::auth::Role;
 
 use serde::{Deserialize, Serialize};
 

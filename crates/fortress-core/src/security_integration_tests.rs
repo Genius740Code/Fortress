@@ -480,7 +480,7 @@ impl SecurityIntegrationTests {
 
         
 
-        let auth_manager = std::sync::Arc::new(auth_manager);
+        let auth_manager = std::sync::Arc::new(AuthManager::new(auth_config));
 
         
 

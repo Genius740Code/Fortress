@@ -24,6 +24,8 @@ use sha2::Digest;
 
 use std::collections::HashMap;
 
+use uuid::Uuid;
+
 
 
 /// Universal record format for data transfer
@@ -2114,7 +2116,7 @@ mod tests {
 
         assert!(result.success);
 
-        assert_eq!(result.operation_type, OperationType::Push);
+        assert_eq!(result.operation_type, PushPullOperationType::Push);
 
     }
 
@@ -2158,7 +2160,7 @@ mod tests {
 
         assert!(result.success);
 
-        assert_eq!(result.operation_type, OperationType::Pull);
+        assert_eq!(result.operation_type, PushPullOperationType::Pull);
 
     }
 

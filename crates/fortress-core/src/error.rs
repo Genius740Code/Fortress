@@ -932,6 +932,12 @@ pub enum StorageErrorCode {
 
     OperationCancelled,
 
+    /// I/O error
+
+    #[error("I/O error")]
+
+    IoError,
+
 }
 
 

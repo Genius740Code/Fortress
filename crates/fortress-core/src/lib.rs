@@ -529,8 +529,8 @@ pub mod cross_region_replication;
 
 
 /// Simple backup manager for testing
-
-pub mod simple_backup_manager;
+// Note: Module temporarily removed - add back when implementation is ready
+// pub mod simple_backup_manager;
 
 
 
@@ -1085,6 +1085,8 @@ pub mod prelude {
 
 
 
+    pub use crate::error::{FortressError, Result}; // Added Result type here
+
     pub use crate::encryption::{
 
 
@@ -1099,7 +1101,7 @@ pub mod prelude {
 
 
 
-    pub use crate::key::{KeyManager, KeyId, KeyMetadata, SmartKeyRotationScheduler, RotationInterval, RotationMetrics};
+    pub use crate::key::{KeyManager, KeyId, KeyMetadata, KeyPurpose, SmartKeyRotationScheduler, RotationInterval, RotationMetrics};
 
     pub use crate::key_management::UnifiedKeyManager;
 
@@ -1217,7 +1219,7 @@ pub mod prelude {
 
 
 
-    pub use crate::simple_backup_manager::{SimpleBackupManager};
+    // pub use crate::simple_backup_manager::{SimpleBackupManager};
 
 
     #[cfg(feature = "discovery")]

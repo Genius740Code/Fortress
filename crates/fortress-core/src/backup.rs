@@ -182,7 +182,7 @@ pub struct RecoveryStep {
 }
 
 /// Recovery priority levels
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum RecoveryPriority {
     /// Critical - immediate recovery required
     Critical,

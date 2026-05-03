@@ -3,6 +3,7 @@
 use super::*;
 use crate::error::FortressError;
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use chrono::Utc;
@@ -14,34 +15,34 @@ mod schnorr_proof_tests {
 
     #[test]
     fn test_schnorr_basic_proof() {
-        let statement = b"test_statement_123";
+        let statement = b"test_statement_123".to_vec();
         let witness = SecureKey::new(vec![1, 2, 3, 4, 5]);
         
         // Generate proof
-        let proof = SchnorrProof::prove(statement, &witness).unwrap();
+        let proof = SchnorrProof::prove(&statement, &witness).unwrap();
         
         // Verify with correct statement
-        let verified = SchnorrProof::verify(statement, &proof).unwrap();
+        let verified = SchnorrProof::verify(&statement, &proof).unwrap();
         assert!(verified);
         
         // Verify with wrong statement
-        let wrong_statement = b"wrong_statement_456";
-        let not_verified = SchnorrProof::verify(wrong_statement, &proof).unwrap();
+        let wrong_statement = b"wrong_statement_456".to_vec();
+        let not_verified = SchnorrProof::verify(&wrong_statement, &proof).unwrap();
         assert!(!not_verified);
     }
 
     #[test]
     fn test_schnorr_different_witnesses() {
-        let statement = b"constant_statement";
+        let statement = b"constant_statement".to_vec();
         let witness1 = SecureKey::new(vec![1, 2, 3, 4, 5]);
         let witness2 = SecureKey::new(vec![5, 4, 3, 2, 1]);
         
-        let proof1 = SchnorrProof::prove(statement, &witness1).unwrap();
-        let proof2 = SchnorrProof::prove(statement, &witness2).unwrap();
+        let proof1 = SchnorrProof::prove(&statement, &witness1).unwrap();
+        let proof2 = SchnorrProof::prove(&statement, &witness2).unwrap();
         
         // Both proofs should verify with the same statement
-        assert!(SchnorrProof::verify(statement, &proof1).unwrap());
-        assert!(SchnorrProof::verify(statement, &proof2).unwrap());
+        assert!(SchnorrProof::verify(&statement, &proof1).unwrap());
+        assert!(SchnorrProof::verify(&statement, &proof2).unwrap());
         
         // But proofs should be different
         assert_ne!(proof1.commitment, proof2.commitment);
@@ -75,10 +76,10 @@ mod access_control_tests {
     #[test]
     fn test_access_control_proof_creation() {
         let user_key = SecureKey::generate_random(32).unwrap();
-        let resource_policy = b"admin_access_required";
-        let permissions = b"read,write,admin";
+        let resource_policy = b"admin_access_required".to_vec();
+        let permissions = b"read,write,admin".to_vec();
         
-        let proof = AccessControlProof::create_proof(&user_key, resource_policy, permissions).unwrap();
+        let proof = AccessControlProof::create_proof(&user_key, &resource_policy, &permissions).unwrap();
         
         // Verify basic structure
         assert!(!proof.user_id_hash.is_empty());
@@ -91,28 +92,28 @@ mod access_control_tests {
     #[test]
     fn test_access_control_proof_verification() {
         let user_key = SecureKey::generate_random(32).unwrap();
-        let resource_policy = b"admin_access_required";
-        let permissions = b"read,write,admin";
+        let resource_policy = b"admin_access_required".to_vec();
+        let permissions = b"read,write,admin".to_vec();
         
-        let proof = AccessControlProof::create_proof(&user_key, resource_policy, permissions).unwrap();
+        let proof = AccessControlProof::create_proof(&user_key, &resource_policy, &permissions).unwrap();
         
         // Verify with correct policy
-        let verified = proof.verify_proof(resource_policy).unwrap();
+        let verified = proof.verify_proof(&resource_policy).unwrap();
         assert!(verified);
         
         // Verify with wrong policy
-        let wrong_policy = b"read_only_required";
-        let not_verified = proof.verify_proof(wrong_policy).unwrap();
+        let wrong_policy = b"read_only_required".to_vec();
+        let not_verified = proof.verify_proof(&wrong_policy).unwrap();
         assert!(!not_verified);
     }
 
     #[test]
     fn test_access_control_proof_expiration() {
         let user_key = SecureKey::generate_random(32).unwrap();
-        let resource_policy = b"test_policy";
-        let permissions = b"read";
+        let resource_policy = b"test_policy".to_vec();
+        let permissions = b"read".to_vec();
         
-        let proof = AccessControlProof::create_proof(&user_key, resource_policy, permissions).unwrap();
+        let proof = AccessControlProof::create_proof(&user_key, &resource_policy, &permissions).unwrap();
         
         // Should be valid for reasonable time
         assert!(proof.is_valid(3600)); // 1 hour
@@ -125,20 +126,20 @@ mod access_control_tests {
     #[test]
     fn test_access_control_different_permissions() {
         let user_key = SecureKey::generate_random(32).unwrap();
-        let resource_policy = b"test_policy";
+        let resource_policy = b"test_policy".to_vec();
         
-        let permissions1 = b"read,write,admin";
-        let permissions2 = b"read,write";
-        let permissions3 = b"read";
+        let permissions1 = b"read,write,admin".to_vec();
+        let permissions2 = b"read,write".to_vec();
+        let permissions3 = b"read".to_vec();
         
-        let proof1 = AccessControlProof::create_proof(&user_key, resource_policy, permissions1).unwrap();
-        let proof2 = AccessControlProof::create_proof(&user_key, resource_policy, permissions2).unwrap();
-        let proof3 = AccessControlProof::create_proof(&user_key, resource_policy, permissions3).unwrap();
+        let proof1 = AccessControlProof::create_proof(&user_key, &resource_policy, &permissions1).unwrap();
+        let proof2 = AccessControlProof::create_proof(&user_key, &resource_policy, &permissions2).unwrap();
+        let proof3 = AccessControlProof::create_proof(&user_key, &resource_policy, &permissions3).unwrap();
         
         // All should verify with same policy
-        assert!(proof1.verify_proof(resource_policy).unwrap());
-        assert!(proof2.verify_proof(resource_policy).unwrap());
-        assert!(proof3.verify_proof(resource_policy).unwrap());
+        assert!(proof1.verify_proof(&resource_policy).unwrap());
+        assert!(proof2.verify_proof(&resource_policy).unwrap());
+        assert!(proof3.verify_proof(&resource_policy).unwrap());
         
         // But permission hashes should be different
         assert_ne!(proof1.permissions_hash, proof2.permissions_hash);
@@ -736,7 +737,7 @@ mod error_tests {
         let resource_policy = b"";
         let permissions = b"";
         
-        let proof = AccessControlProof::create_proof(&user_key, resource_policy, permissions).unwrap();
+        let proof = AccessControlProof::create_proof(&user_key, &resource_policy, &permissions).unwrap();
         assert!(proof.verify_proof(resource_policy).unwrap());
     }
 

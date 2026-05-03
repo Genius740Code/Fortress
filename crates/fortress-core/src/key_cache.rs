@@ -626,7 +626,8 @@ impl std::fmt::Debug for KeyCache {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::encryption::{Aes256GcmEncryption, EncryptionAlgorithm};
+    use crate::aes256gcm_wrapper::Aes256GcmWrapper;
+use crate::encryption::EncryptionAlgorithm;
     use crate::key::{KeyId, KeyMetadata, KeyPurpose, PerformanceProfile};
     use chrono::{DateTime, Utc};
     use std::time::Duration;
@@ -650,15 +651,15 @@ mod tests {
 
     /// Create test key data
     fn create_test_key_data(id: &str, version: u32) -> (SecureKey, KeyMetadata) {
-        let algorithm = Aes256GcmEncryption::new();
+        let algorithm = Aes256GcmWrapper::new();
         let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate test key");
         let metadata = KeyMetadata::new(
-            KeyId::new(id),
+            id.to_string(),
             algorithm.name().to_string(),
             version,
             Utc::now(),
             Utc::now() + chrono::Duration::days(30),
-            KeyPurpose::DataEncryption,
+            "DataEncryption".to_string(),
             PerformanceProfile::Balanced,
         );
         (key, metadata)
@@ -683,7 +684,7 @@ mod tests {
     async fn test_cache_put_and_get() -> Result<()> {
         let cache = create_test_cache();
         let (key, metadata) = create_test_key_data("test_key_1", 1);
-        let key_id = KeyId::new("test_key_1");
+        let key_id = "test_key_1".to_string();
         
         // Put key in cache
         cache.put(key_id.clone(), key.clone(), metadata.clone()).await?;
@@ -699,7 +700,7 @@ mod tests {
         
         // Verify stats updated
         let stats = cache.get_stats().await;
-        assert_eq!(stats.total_keys, 1);
+        assert_eq!(stats.current_keys, 1);
         assert!(stats.current_memory_bytes > 0);
         
         Ok(())
@@ -708,7 +709,7 @@ mod tests {
     #[tokio::test]
     async fn test_cache_miss() -> Result<()> {
         let cache = create_test_cache();
-        let non_existent_id = KeyId::new("non_existent_key");
+        let non_existent_id = "non_existent_key".to_string();
         
         // Try to get non-existent key
         let result = cache.get(&non_existent_id).await;
@@ -726,16 +727,16 @@ mod tests {
     async fn test_cache_hit_ratio() -> Result<()> {
         let cache = create_test_cache();
         let (key, metadata) = create_test_key_data("hit_ratio_test", 1);
-        let key_id = KeyId::new("hit_ratio_test");
+        let key_id = "hit_ratio_test".to_string();
         
         // Put key in cache
         cache.put(key_id.clone(), key.clone(), metadata.clone()).await?;
         
         // Generate some hits and misses
         let _ = cache.get(&key_id).await; // Hit
-        let _ = cache.get(&KeyId::new("non_existent_1")).await; // Miss
+        let _ = cache.get(&"non_existent_1".to_string()).await; // Miss
         let _ = cache.get(&key_id).await; // Hit
-        let _ = cache.get(&KeyId::new("non_existent_2")).await; // Miss
+        let _ = cache.get(&"non_existent_2".to_string()).await; // Miss
         let _ = cache.get(&key_id).await; // Hit
         
         // Check hit ratio
@@ -1027,7 +1028,7 @@ mod tests {
                 } else {
                     // Put operation with different key
                     let (new_key, new_metadata) = create_test_key_data(&format!("concurrent_new_{}", i), i);
-                    let new_key_id = KeyId::new(&format!("concurrent_new_{}", i));
+                    let new_key_id = format!("concurrent_new_{}", i);
                     let _ = cache_clone.put(new_key_id, new_key, new_metadata).await;
                 }
             });
@@ -1063,7 +1064,7 @@ mod tests {
         
         // Verify cache is empty after shutdown
         let stats = cache.get_stats().await;
-        assert_eq!(stats.total_keys, 0);
+        assert_eq!(stats.current_keys, 0);
         
         Ok(())
     }
@@ -1073,19 +1074,19 @@ mod tests {
         let cache = create_test_cache();
         
         // Test operations with invalid data
-        let empty_key = SecureKey::from_bytes(&[]).expect("Failed to create empty key");
+        let empty_key = SecureKey::from_bytes(&[]);
         let metadata = KeyMetadata::new(
-            KeyId::new("error_test"),
+            "error_test".to_string(),
             "test_algorithm".to_string(),
             1,
             Utc::now(),
             Utc::now() + chrono::Duration::days(30),
-            KeyPurpose::DataEncryption,
+            "DataEncryption".to_string(),
             PerformanceProfile::Balanced,
         );
         
         // Try to put empty key (should be handled gracefully)
-        let result = cache.put(KeyId::new("empty_key_test"), empty_key, metadata).await;
+        let result = cache.put("empty_key_test".to_string(), empty_key, metadata).await;
         // Result depends on implementation - empty keys might be rejected or accepted
         
         Ok(())
@@ -1111,8 +1112,8 @@ mod tests {
         let _ = cache.get(&key_id1).await; // Second hit for key1
         
         // Get operations (misses)
-        let _ = cache.get(&KeyId::new("non_existent_1")).await;
-        let _ = cache.get(&KeyId::new("non_existent_2")).await;
+        let _ = cache.get(&"non_existent_1".to_string()).await;
+        let _ = cache.get(&"non_existent_2".to_string()).await;
         
         // Remove operation
         let _ = cache.remove(&key_id2).await;
@@ -1121,7 +1122,7 @@ mod tests {
         let stats = cache.get_stats().await;
         assert_eq!(stats.cache_hits, 3);
         assert_eq!(stats.cache_misses, 2);
-        assert_eq!(stats.total_keys, 1); // One key removed
+        assert_eq!(stats.current_keys, 1); // One key removed
         assert!(stats.current_memory_bytes > 0);
         assert_eq!(stats.hit_ratio, 0.6); // 3 hits / 5 total accesses
         

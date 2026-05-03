@@ -16,8 +16,9 @@ use crate::cache_memcached::{MemcachedCache, MemcachedConfig};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use std::collections::HashMap;
 use tokio::sync::RwLock;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Utc, Duration};
 
 #[cfg(feature = "performance-optimization")]
 use dashmap::DashMap;
@@ -1021,6 +1022,164 @@ impl CacheManager for FortressCacheManager {
 pub async fn create_cache_manager(config: CacheManagerConfig) -> Result<Box<dyn CacheManager>> {
     let manager = FortressCacheManager::new(config).await?;
     Ok(Box::new(manager))
+}
+
+/// Fallback factory function for when distributed-cache feature is not enabled
+#[cfg(not(feature = "distributed-cache"))]
+pub async fn create_cache_manager(_config: CacheManagerConfig) -> Result<Box<dyn CacheManager>> {
+    // Return a simple mock cache manager for testing
+    Ok(Box::new(MockCacheManager::new()))
+}
+
+/// Simple mock cache manager for testing when distributed-cache feature is not enabled
+#[cfg(not(feature = "distributed-cache"))]
+#[derive(Debug)]
+pub struct MockCacheManager {
+    cache: Arc<RwLock<HashMap<String, Vec<u8>>>>,
+}
+
+#[cfg(not(feature = "distributed-cache"))]
+impl MockCacheManager {
+    pub fn new() -> Self {
+        Self {
+            cache: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+}
+
+#[cfg(not(feature = "distributed-cache"))]
+#[async_trait]
+impl CacheManager for MockCacheManager {
+    async fn get(&self, key: &str) -> Result<Option<Vec<u8>>> {
+        let cache = self.cache.read().await;
+        Ok(cache.get(key).cloned())
+    }
+
+    async fn set(&self, key: &str, value: Vec<u8>, _ttl: Option<u64>) -> Result<()> {
+        let mut cache = self.cache.write().await;
+        cache.insert(key.to_string(), value);
+        Ok(())
+    }
+
+    async fn delete(&self, key: &str) -> Result<bool> {
+        let mut cache = self.cache.write().await;
+        Ok(cache.remove(key).is_some())
+    }
+
+    async fn clear(&self) -> Result<()> {
+        let mut cache = self.cache.write().await;
+        cache.clear();
+        Ok(())
+    }
+
+    async fn exists(&self, key: &str) -> Result<bool> {
+        let cache = self.cache.read().await;
+        Ok(cache.contains_key(key))
+    }
+
+    async fn mget(&self, keys: &[&str]) -> Result<Vec<Option<Vec<u8>>>> {
+        let cache = self.cache.read().await;
+        let mut results = Vec::new();
+        for key in keys {
+            results.push(cache.get(*key).cloned());
+        }
+        Ok(results)
+    }
+
+    async fn mset(&self, entries: &[(&str, Vec<u8>, Option<u64>)]) -> Result<()> {
+        let mut cache = self.cache.write().await;
+        for (key, value, _ttl) in entries {
+            cache.insert(key.to_string(), value.clone());
+        }
+        Ok(())
+    }
+
+    async fn increment(&self, key: &str, delta: i64) -> Result<i64> {
+        let mut cache = self.cache.write().await;
+        let current_value = cache.get(key).map(|bytes| {
+            String::from_utf8_lossy(bytes).parse::<i64>().unwrap_or(0)
+        }).unwrap_or(0);
+        let new_value = current_value + delta;
+        cache.insert(key.to_string(), new_value.to_string().as_bytes().to_vec());
+        Ok(new_value)
+    }
+
+    async fn get_statistics(&self) -> Result<CacheManagerStatistics> {
+        Ok(CacheManagerStatistics {
+            #[cfg(feature = "distributed-cache")]
+            cache_stats: crate::distributed_cache::CacheStatistics {
+                total_operations: 0,
+                cache_hits: 0,
+                cache_misses: 0,
+                hit_rate: 0.0,
+                memory_usage_bytes: 0,
+                eviction_count: 0,
+                avg_response_time_us: 0.0,
+                p95_response_time_us: 0.0,
+                p99_response_time_us: 0.0,
+                throughput_ops_per_sec: 0.0,
+                error_rate: 0.0,
+                efficiency_score: 1.0,
+            },
+            invalidation_stats: crate::cache_invalidation::InvalidationStats {
+                total_invalidations: 0,
+                invalidations_by_reason: std::collections::HashMap::new(),
+                avg_invalidation_time_us: 0.0,
+                failed_invalidations: 0,
+                cascaded_invalidations: 0,
+                dependencies_tracked: 0,
+                last_invalidation: None,
+            },
+            performance_metrics: PerformanceMetrics {
+                avg_response_time_us: 0.0,
+                p95_response_time_us: 0.0,
+                p99_response_time_us: 0.0,
+                throughput_ops_per_sec: 0.0,
+                error_rate: 0.0,
+                efficiency_score: 1.0,
+            },
+            health_status: HealthStatus {
+                healthy: true,
+                last_health_check: chrono::Utc::now(),
+                issues: vec![],
+                warnings: vec![],
+            },
+            recommendations: vec![],
+        })
+    }
+
+    async fn reset_statistics(&self) -> Result<()> {
+        Ok(())
+    }
+
+    async fn health_check(&self) -> Result<HealthStatus> {
+        Ok(HealthStatus {
+            healthy: true,
+            last_health_check: Utc::now(),
+            issues: vec![],
+            warnings: vec![],
+        })
+    }
+
+    async fn add_tags(&self, _key: &str, _tags: &[String]) -> Result<()> {
+        Ok(())
+    }
+
+    async fn remove_tags(&self, _key: &str, _tags: &[String]) -> Result<()> {
+        Ok(())
+    }
+
+    async fn invalidate_by_tag(&self, _tag: &str) -> Result<usize> {
+        Ok(0)
+    }
+
+    async fn warm_up(&self, keys: Vec<String>) -> Result<usize> {
+        Ok(keys.len())
+    }
+
+    async fn get_performance_recommendations(&self) -> Result<Vec<String>> {
+        Ok(vec!["Mock cache needs no optimization".to_string()])
+    }
 }
 
 #[cfg(test)]

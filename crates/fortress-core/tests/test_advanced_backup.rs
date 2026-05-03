@@ -6,7 +6,7 @@
 
 use fortress_core::prelude::*;
 use fortress_core::backup_manager::DefaultBackupManager;
-use fortress_core::backup::BackupManager;
+use fortress_core::backup::{BackupManager, RetentionPolicy};
 use fortress_core::disaster_recovery::DefaultDisasterRecoveryManager;
 use fortress_core::backup_scheduler::BackupScheduler;
 use fortress_core::cross_region_replication::CrossRegionReplicationManager;

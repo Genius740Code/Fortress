@@ -8,6 +8,7 @@
 
 use crate::error::{FortressError, Result, KeyErrorCode};
 use crate::key::{KeyId, KeyMetadata};
+use crate::aes256gcm_wrapper::Aes256GcmWrapper;
 use crate::encryption::EncryptionAlgorithm;
 
 use async_trait::async_trait;
@@ -3334,7 +3335,7 @@ impl HsmProvider for GoogleCloudHsmProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::encryption::{EncryptionAlgorithm, Aes256GcmWrapper};
+    use crate::encryption::{EncryptionAlgorithm, Aes256Gcm};
     
     /// Test HSM configuration creation and validation
     #[tokio::test]
@@ -3504,7 +3505,7 @@ mod tests {
             key_settings: HsmKeySettings::default(),
         };
         
-        let manager = HsmKeyManagerInner::new(config).await.expect("HSM manager should create");
+        let manager = HsmKeyManagerInner::new(config.clone()).await.expect("HSM manager should create");
         let provider = manager.provider();
         
         // Initialize provider
@@ -3569,7 +3570,7 @@ mod tests {
             key_settings: HsmKeySettings::default(),
         };
         
-        let manager = HsmKeyManagerInner::new(config).await.expect("HSM manager should create");
+        let manager = HsmKeyManagerInner::new(config.clone()).await.expect("HSM manager should create");
         let provider = manager.provider();
         
         // Initialize provider
@@ -3637,7 +3638,7 @@ mod tests {
             key_settings: HsmKeySettings::default(),
         };
         
-        let manager = HsmKeyManagerInner::new(config).await.expect("HSM manager should create");
+        let manager = HsmKeyManagerInner::new(config.clone()).await.expect("HSM manager should create");
         let provider = manager.provider();
         
         // Initialize provider
@@ -3671,7 +3672,7 @@ mod tests {
             key_settings: HsmKeySettings::default(),
         };
         
-        let manager = HsmKeyManagerInner::new(config).await.expect("HSM manager should create");
+        let manager = HsmKeyManagerInner::new(config.clone()).await.expect("HSM manager should create");
         let provider = manager.provider();
         
         // Initialize provider
@@ -3705,7 +3706,7 @@ mod tests {
             key_settings: HsmKeySettings::default(),
         };
         
-        let manager = HsmKeyManagerInner::new(config).await.expect("HSM manager should create");
+        let manager = HsmKeyManagerInner::new(config.clone()).await.expect("HSM manager should create");
         let provider = manager.provider();
         
         // Initialize provider
@@ -3739,7 +3740,7 @@ mod tests {
             key_settings: HsmKeySettings::default(),
         };
         
-        let manager = HsmKeyManagerInner::new(config).await.expect("HSM manager should create");
+        let manager = HsmKeyManagerInner::new(config.clone()).await.expect("HSM manager should create");
         let provider = manager.provider();
         
         // Initialize provider
@@ -3773,7 +3774,7 @@ mod tests {
             key_settings: HsmKeySettings::default(),
         };
         
-        let manager = HsmKeyManagerInner::new(config).await.expect("HSM manager should create");
+        let manager = HsmKeyManagerInner::new(config.clone()).await.expect("HSM manager should create");
         let provider = manager.provider();
         
         // Initialize provider
@@ -3835,11 +3836,10 @@ mod tests {
             key_settings: HsmKeySettings::default(),
         };
         
-        let manager = HsmKeyManagerInner::new(config).await.expect("HSM manager should create");
-        let provider = manager.provider();
+        let manager = HsmKeyManagerInner::new(config.clone()).await.expect("HSM manager should create");
         
         // Initialize provider
-        let init_result = provider.initialize(&config).await;
+        let init_result = manager.provider().initialize(&config).await;
         assert!(init_result.is_ok(), "Provider should initialize");
         
         // Test multiple operations to exercise connection pool
@@ -3850,9 +3850,10 @@ mod tests {
         let mut handles = Vec::new();
         for i in 0..5 {
             let key_id_clone = KeyId::from(format!("test-pool-key-{}", i));
+            let algorithm_clone = algorithm.clone();
             let provider_ref = provider as &dyn HsmProvider;
             let handle = tokio::spawn(async move {
-                provider_ref.generate_key(&key_id_clone, &algorithm).await
+                provider_ref.generate_key(&key_id_clone, &algorithm_clone).await
             });
             handles.push(handle);
         }
@@ -3880,7 +3881,7 @@ mod tests {
             key_settings: HsmKeySettings::default(),
         };
         
-        let manager = HsmKeyManagerInner::new(config).await.expect("HSM manager should create");
+        let manager = HsmKeyManagerInner::new(config.clone()).await.expect("HSM manager should create");
         let provider = manager.provider();
         
         // Initialize provider

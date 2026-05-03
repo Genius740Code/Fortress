@@ -437,7 +437,7 @@ mod tests {
     #[test]
     fn test_access_permissions_default() {
         let perms = AccessPermissions::default();
-        assert_eq!(perms.classification, DataClassification::Internal);
+        assert_eq!(perms.classification, ImageDataClassification::Internal);
         assert_eq!(perms.viewers, vec!["owner"]);
         assert_eq!(perms.editors, vec!["owner"]);
         assert_eq!(perms.sharers, vec!["owner"]);

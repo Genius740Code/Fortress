@@ -10,7 +10,7 @@
 
 use crate::backup::{
 
-    BackupManager, CrossRegionConfig, ReplicationStrategy, 
+    BackupManager, BackupConfig, CrossRegionConfig, ReplicationStrategy, 
 
     ReplicationResult
 

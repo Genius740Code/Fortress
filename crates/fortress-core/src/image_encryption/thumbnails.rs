@@ -20,6 +20,8 @@ use crate::error::{FortressError, Result};
 
 use crate::encryption::{EncryptionAlgorithm, SecureKey, EncryptedData};
 
+use bytes::Bytes;
+
 use crate::image_encryption::{
 
     ImageFormat, encryptor::ImageEncryptorFactory,
@@ -31,8 +33,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
-
-use bytes::Bytes;
 
 
 
@@ -1520,7 +1520,7 @@ mod tests {
 
             encrypted_data: EncryptedData::new(
 
-                crate::bytes::Bytes::from("thumbnail_data"),
+                Bytes::from("thumbnail_data"),
 
                 "chacha20poly1305".to_string(),
 
@@ -1556,7 +1556,7 @@ mod tests {
 
         let mut invalid_thumbnail = valid_thumbnail.clone();
 
-        invalid_thumbnail.encrypted_data.ciphertext = crate::bytes::Bytes::new();
+        invalid_thumbnail.encrypted_data.ciphertext = Bytes::new();
 
         assert!(!generator.verify_thumbnail_integrity(&invalid_thumbnail).unwrap());
 

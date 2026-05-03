@@ -474,7 +474,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_memory_monitor() {
-        let monitor = MemoryMonitor::new(80.0, Duration::from_millis(100));
+        let mut monitor = MemoryMonitor::new(80.0, Duration::from_millis(100));
         
         // Add a cleanup callback
         let cleanup_called = Arc::new(Mutex::new(false));

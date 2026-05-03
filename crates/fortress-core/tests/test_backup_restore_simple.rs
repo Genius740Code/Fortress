@@ -1,7 +1,7 @@
 //! Integration tests for backup and disaster recovery system
 
 use fortress_core::backup::*;
-use fortress_core::simple_backup_manager::SimpleBackupManager;
+use fortress_core::backup_manager::DefaultBackupManager;
 use fortress_core::storage::{InMemoryStorage, StorageBackend};
 use std::sync::Arc;
 
@@ -15,7 +15,7 @@ async fn test_simple_backup_and_restore() {
     source_storage.put("test.txt", b"test data").await.unwrap();
     source_storage.put("data.json", b"{\"key\": \"value\"}").await.unwrap();
 
-    let manager = SimpleBackupManager::new(backup_storage.clone());
+    let manager = DefaultBackupManager::new(backup_storage.clone());
     let config = BackupConfig::default();
 
     // Create backup
@@ -43,7 +43,7 @@ async fn test_backup_verification() {
     source_storage.put("key1", b"data1").await.unwrap();
     source_storage.put("key2", b"data2").await.unwrap();
 
-    let manager = SimpleBackupManager::new(backup_storage.clone());
+    let manager = DefaultBackupManager::new(backup_storage.clone());
     let config = BackupConfig::default();
 
     let backup = manager.create_backup(&*source_storage, &config).await.unwrap();
@@ -64,7 +64,7 @@ async fn test_backup_list_and_delete() {
 
     source_storage.put("key1", b"data1").await.unwrap();
 
-    let manager = SimpleBackupManager::new(backup_storage.clone());
+    let manager = DefaultBackupManager::new(backup_storage.clone());
     let config = BackupConfig::default();
 
     // Create backup
@@ -96,7 +96,7 @@ async fn test_storage_stats() {
     source_storage.put("key1", b"data1").await.unwrap();
     source_storage.put("key2", b"data2").await.unwrap();
 
-    let manager = SimpleBackupManager::new(backup_storage.clone());
+    let manager = DefaultBackupManager::new(backup_storage.clone());
     let config = BackupConfig::default();
 
     // Create backup
@@ -115,7 +115,7 @@ async fn test_empty_backup() {
     let source_storage = Arc::new(InMemoryStorage::new());
     let backup_storage = Arc::new(InMemoryStorage::new());
 
-    let manager = SimpleBackupManager::new(backup_storage.clone());
+    let manager = DefaultBackupManager::new(backup_storage.clone());
     let config = BackupConfig::default();
 
     // Create backup of empty storage
@@ -139,7 +139,7 @@ async fn test_large_data_backup() {
     let large_data = vec![0u8; 1024 * 1024];
     source_storage.put("large_file", &large_data).await.unwrap();
 
-    let manager = SimpleBackupManager::new(backup_storage.clone());
+    let manager = DefaultBackupManager::new(backup_storage.clone());
     let config = BackupConfig::default();
 
     // Create backup
@@ -180,7 +180,7 @@ async fn test_special_characters_in_keys() {
         source_storage.put(key, format!("data for {}", key).as_bytes()).await.unwrap();
     }
 
-    let manager = SimpleBackupManager::new(backup_storage.clone());
+    let manager = DefaultBackupManager::new(backup_storage.clone());
     let config = BackupConfig::default();
 
     // Create backup
@@ -206,7 +206,7 @@ async fn test_multiple_backups() {
     let source_storage = Arc::new(InMemoryStorage::new());
     let backup_storage = Arc::new(InMemoryStorage::new());
 
-    let manager = SimpleBackupManager::new(backup_storage.clone());
+    let manager = DefaultBackupManager::new(backup_storage.clone());
     let config = BackupConfig::default();
 
     // Create first backup

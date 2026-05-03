@@ -1026,9 +1026,9 @@ mod tests {
             }
         }
         
-        assert!updated_user_permissions.contains(&"read:own".to_string()), 
+        assert!(updated_user_permissions.contains(&"read:own".to_string()), 
                "User should still have permissions from active role");
-        assert!updated_user_permissions.contains(&"read:all".to_string()), 
+        assert!(updated_user_permissions.contains(&"read:all".to_string()), 
                "User should lose permissions from inactive role");
     }
 
@@ -1430,7 +1430,7 @@ mod tests {
     }
 
     /// Test 14: Concurrent authentication operations
-    #[tokio::concurrent_auth_operations
+    #[tokio::test]
     async fn test_concurrent_authentication_operations() {
         use std::sync::Arc;
         
@@ -1438,7 +1438,7 @@ mod tests {
         let users = Arc::new(std::sync::RwLock::new(HashMap::new()));
         
         // Create shared session store
-        let sessions = Arc::new(std::sim::RwLock::new(HashMap::new()));
+        let sessions = Arc::new(std::sync::RwLock::new(HashMap::new()));
         
         // Create test users
         let mut user_handles = Vec::new();
@@ -1632,7 +1632,7 @@ mod tests {
     }
 
     /// Test 15: Authentication error handling and logging
-    #[tokio::try>
+    #[tokio::test]
     async fn test_authentication_error_handling_logging() {
         // Create authentication logger
         let mut auth_logs: Vec<String> = Vec::new();

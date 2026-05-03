@@ -585,7 +585,7 @@ mod tests {
         policy.add_capability("read".to_string());
         
         // Add IP constraint
-        let constraint = super::PolicyConstraint {
+        let constraint = super::types::PolicyConstraint {
             field: "ip".to_string(),
             operator: ConstraintOperator::Equals,
             value: serde_json::Value::String("192.168.1.1".to_string()),

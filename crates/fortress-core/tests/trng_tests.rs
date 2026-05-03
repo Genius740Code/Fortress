@@ -388,7 +388,7 @@ fn test_integration_with_encryption() {
     let _trng = init_global_trng();
     
     let algorithm = ChaCha20Poly1305::new();
-    let key = fortress_core::encryption::SecureKey::generate(algorithm.key_size());
+    let key = fortress_core::encryption::SecureKey::generate(algorithm.key_size()).unwrap();
     
     let plaintext = b"Hello, Fortress with TRNG!";
     let ciphertext = algorithm.encrypt(plaintext, key.as_bytes()).unwrap();

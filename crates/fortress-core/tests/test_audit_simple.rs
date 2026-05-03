@@ -56,8 +56,8 @@ fn test_security_level_ordering() {
 fn test_event_outcome_display() {
     assert_eq!(format!("{}", EventOutcome::Success), "Success");
     assert_eq!(format!("{}", EventOutcome::Failure), "Failure");
-    assert_eq!(format!("{}", EventOutcome::Denied), "Denied");
-    assert_eq!(format!("{}", EventOutcome::Error), "Error");
+    assert_eq!(format!("{}", EventOutcome::Blocked), "Blocked");
+    assert_eq!(format!("{}", EventOutcome::RequiresReview), "RequiresReview");
 }
 
 #[test]
