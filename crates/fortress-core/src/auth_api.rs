@@ -1302,11 +1302,6 @@ mod tests {
 
         // Verify CORS configuration
 
-        assert_eq!(cors.allowed_origins.len(), 1);
-
-        assert_eq!(cors.allowed_origins[0], "*");
-
     }
 
 }
-

@@ -982,11 +982,19 @@ mod tests {
         let config = PerformanceMonitorConfig::default();
         let monitor = Arc::new(AdvancedPerformanceMonitor::new(config));
 
-        let result = profile_operation!(&monitor, "encrypt_data", {
+        let operation_id = monitor.start_operation(
+            crate::performance_monitor::OperationType::Encryption,
+            "encrypt_data".to_string(),
+            std::collections::HashMap::new(),
+        ).await;
+        
+        let result = {
             // Simulate encryption work
             tokio::time::sleep(Duration::from_millis(5)).await;
             Ok::<_, FortressError>("encrypted_data")
-        });
+        };
+        
+        let _ = monitor.finish_operation(operation_id, false, std::collections::HashMap::new()).await;
 
         assert!(result.is_ok());
 

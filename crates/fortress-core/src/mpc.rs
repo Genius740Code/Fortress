@@ -670,7 +670,7 @@ mod tests {
         assert_eq!(shares.len(), 3);
 
         // Reconstruct secret
-        let reconstructed = shamir.reconstruct_secret(&shares[..2], &config).await.unwrap();
+        let reconstructed = MpcProtocol::reconstruct_secret(&shamir, &shares[..2], &config).await.unwrap();
         assert_eq!(reconstructed, secret);
     }
 }

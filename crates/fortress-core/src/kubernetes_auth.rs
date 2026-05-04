@@ -949,10 +949,10 @@ mod tests {
         
         auth.configure(config).await.unwrap();
         
-        let permissions = auth.map_permissions("default", "my-service", &["system:serviceaccounts"]);
+        let permissions = auth.map_permissions("default", "my-service", &["system:serviceaccounts"]).await;
         assert_eq!(permissions, vec!["read", "write"]);
         
-        let admin_permissions = auth.map_permissions("production", "admin-service", &["system:masters"]);
+        let admin_permissions = auth.map_permissions("production", "admin-service", &["system:masters"]).await;
         assert_eq!(admin_permissions, vec!["admin"]);
     }
 

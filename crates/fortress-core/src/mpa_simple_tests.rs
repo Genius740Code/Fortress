@@ -410,7 +410,7 @@ mod tests {
 
             2,
 
-            vec![OperationType::UserManagement],
+            vec![OperationType::SystemOperation],
 
             3600,
 
@@ -474,7 +474,7 @@ mod tests {
 
             2,
 
-            vec![OperationType::AuditLogModification],
+            vec![OperationType::BackgroundTask],
 
             3600,
 
@@ -506,7 +506,7 @@ mod tests {
 
             group_id.clone(),
 
-            OperationType::AuditLogModification,
+            OperationType::BackgroundTask,
 
             "Modify audit log".to_string(),
 

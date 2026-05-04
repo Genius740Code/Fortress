@@ -812,6 +812,10 @@ pub struct KeyMetadata {
 
     pub key_id: KeyId,
 
+    /// Compatibility alias for key_id (for test compatibility)
+
+    pub id: KeyId,
+
     /// Algorithm used for this key
 
     pub algorithm: String,
@@ -868,7 +872,9 @@ impl KeyMetadata {
 
         Self {
 
-            key_id,
+            key_id: key_id.clone(),
+
+            id: key_id,
 
             algorithm,
 
@@ -887,8 +893,6 @@ impl KeyMetadata {
         }
 
     }
-
-
 
     /// Check if the key is currently active
 

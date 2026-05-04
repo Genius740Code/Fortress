@@ -11,9 +11,9 @@ use regex::Regex;
 use serde::{Serialize, Deserialize};
 
 use crate::error::{FortressError, Result};
-use super::types::{
+use crate::policy_hcl::types::{
     ParsedPolicy, PolicyContext, PolicyResult, PolicyEvaluationResult,
-    ConstraintOperator, RoleStore, PolicyFunction,
+    ConstraintOperator, ParameterType, PolicyConstraint, RoleStore, PolicyFunction,
 };
 use super::builtin_functions::register_builtin_functions;
 
@@ -266,22 +266,22 @@ impl HclPolicyEngine {
     }
 
     /// Validate parameter type
-    fn validate_parameter_type(&self, value: &serde_json::Value, param_type: &super::ParameterType) -> bool {
+    fn validate_parameter_type(&self, value: &serde_json::Value, param_type: &ParameterType) -> bool {
         match param_type {
-            super::ParameterType::String => value.is_string(),
-            super::ParameterType::Number => value.is_number(),
-            super::ParameterType::Boolean => value.is_boolean(),
-            super::ParameterType::Array => value.is_array(),
-            super::ParameterType::Object => value.is_object(),
-            super::ParameterType::Time => value.is_number(),
-            super::ParameterType::Duration => value.is_number() || value.is_string(),
+            ParameterType::String => value.is_string(),
+            ParameterType::Number => value.is_number(),
+            ParameterType::Boolean => value.is_boolean(),
+            ParameterType::Array => value.is_array(),
+            ParameterType::Object => value.is_object(),
+            ParameterType::Time => value.is_number(),
+            ParameterType::Duration => value.is_number() || value.is_string(),
         }
     }
 
     /// Evaluate a constraint
     async fn evaluate_constraint(
         &self,
-        constraint: &super::PolicyConstraint,
+        constraint: &PolicyConstraint,
         context: &PolicyContext,
         functions: &HashMap<String, Box<dyn PolicyFunction>>,
     ) -> Result<bool> {
@@ -291,23 +291,37 @@ impl HclPolicyEngine {
         // Evaluate the constraint
         match constraint.operator {
             ConstraintOperator::Equals => self.evaluate_equals(&field_value, &constraint.value),
-            ConstraintOperator::NotEquals => Ok(!self.evaluate_equals(&field_value, &constraint.value)?),
+            ConstraintOperator::NotEquals => {
+                let result = self.evaluate_equals(&field_value, &constraint.value)?;
+                Ok(!result)
+            },
             ConstraintOperator::Contains => self.evaluate_contains(&field_value, &constraint.value),
-            ConstraintOperator::NotContains => Ok(!self.evaluate_contains(&field_value, &constraint.value)?),
+            ConstraintOperator::NotContains => {
+                let result = self.evaluate_contains(&field_value, &constraint.value)?;
+                Ok(!result)
+            },
             ConstraintOperator::GreaterThan => self.evaluate_greater_than(&field_value, &constraint.value),
             ConstraintOperator::LessThan => self.evaluate_less_than(&field_value, &constraint.value),
-            ConstraintOperator::GreaterThanOrEqual => Ok(
-                self.evaluate_equals(&field_value, &constraint.value)? ||
-                self.evaluate_greater_than(&field_value, &constraint.value)?
-            ),
-            ConstraintOperator::LessThanOrEqual => Ok(
-                self.evaluate_equals(&field_value, &constraint.value)? ||
-                self.evaluate_less_than(&field_value, &constraint.value)?
-            ),
+            ConstraintOperator::GreaterThanOrEqual => {
+                let equals = self.evaluate_equals(&field_value, &constraint.value)?;
+                let greater = self.evaluate_greater_than(&field_value, &constraint.value)?;
+                Ok(equals || greater)
+            },
+            ConstraintOperator::LessThanOrEqual => {
+                let equals = self.evaluate_equals(&field_value, &constraint.value)?;
+                let less = self.evaluate_less_than(&field_value, &constraint.value)?;
+                Ok(equals || less)
+            },
             ConstraintOperator::In => self.evaluate_in(&field_value, &constraint.value),
-            ConstraintOperator::NotIn => Ok(!self.evaluate_in(&field_value, &constraint.value)?),
+            ConstraintOperator::NotIn => {
+                let result = self.evaluate_in(&field_value, &constraint.value)?;
+                Ok(!result)
+            },
             ConstraintOperator::Matches => self.evaluate_matches(&field_value, &constraint.value),
-            ConstraintOperator::NotMatches => Ok(!self.evaluate_matches(&field_value, &constraint.value)?),
+            ConstraintOperator::NotMatches => {
+                let result = self.evaluate_matches(&field_value, &constraint.value)?;
+                Ok(!result)
+            },
             ConstraintOperator::StartsWith => self.evaluate_starts_with(&field_value, &constraint.value),
             ConstraintOperator::EndsWith => self.evaluate_ends_with(&field_value, &constraint.value),
         }
@@ -549,7 +563,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_policy_engine_creation() {
-        let role_store = Arc::new(super::types::InMemoryRoleStore::new());
+        let role_store = Arc::new(crate::policy_hcl::types::InMemoryRoleStore::new());
         let engine = HclPolicyEngine::new(role_store);
         
         let stats = engine.get_statistics().await;
@@ -559,7 +573,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_load_and_evaluate_policy() {
-        let role_store = Arc::new(super::types::InMemoryRoleStore::new());
+        let role_store = Arc::new(crate::policy_hcl::types::InMemoryRoleStore::new());
         let engine = HclPolicyEngine::new(role_store);
         
         let mut policy = ParsedPolicy::new("test-policy".to_string(), "secret/*".to_string());
@@ -578,14 +592,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_policy_constraints() {
-        let role_store = Arc::new(super::types::InMemoryRoleStore::new());
+        let role_store = Arc::new(crate::policy_hcl::types::InMemoryRoleStore::new());
         let engine = HclPolicyEngine::new(role_store);
         
         let mut policy = ParsedPolicy::new("test-policy".to_string(), "secret/*".to_string());
         policy.add_capability("read".to_string());
         
         // Add IP constraint
-        let constraint = super::types::PolicyConstraint {
+        let constraint = crate::policy_hcl::types::PolicyConstraint {
             field: "ip".to_string(),
             operator: ConstraintOperator::Equals,
             value: serde_json::Value::String("192.168.1.1".to_string()),
@@ -610,12 +624,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_policy_with_parameters() {
-        let role_store = Arc::new(super::types::InMemoryRoleStore::new());
+        let role_store = Arc::new(crate::policy_hcl::types::InMemoryRoleStore::new());
         let engine = HclPolicyEngine::new(role_store);
         
         let mut policy = ParsedPolicy::new("test-policy".to_string(), "secret/*".to_string());
         policy.add_capability("read".to_string());
-        policy.add_required_parameter("environment".to_string(), super::ParameterType::String);
+        policy.add_required_parameter("environment".to_string(), ParameterType::String);
         policy.add_allowed_parameter("environment".to_string(), vec!["production".to_string(), "staging".to_string()]);
         
         engine.load_policy(policy).await.unwrap();
@@ -642,7 +656,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_multiple_policies() {
-        let role_store = Arc::new(super::types::InMemoryRoleStore::new());
+        let role_store = Arc::new(crate::policy_hcl::types::InMemoryRoleStore::new());
         let engine = HclPolicyEngine::new(role_store);
         
         // Add first policy
@@ -670,7 +684,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_policy_statistics() {
-        let role_store = Arc::new(super::types::InMemoryRoleStore::new());
+        let role_store = Arc::new(crate::policy_hcl::types::InMemoryRoleStore::new());
         let engine = HclPolicyEngine::new(role_store);
         
         let mut policy = ParsedPolicy::new("test-policy".to_string(), "secret/*".to_string());
@@ -696,7 +710,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_custom_function_registration() {
-        let role_store = Arc::new(super::types::InMemoryRoleStore::new());
+        let role_store = Arc::new(crate::policy_hcl::types::InMemoryRoleStore::new());
         let engine = HclPolicyEngine::new(role_store);
         
         // Register a custom function
@@ -711,7 +725,7 @@ mod tests {
             
             fn name(&self) -> &str { "custom" }
             fn description(&self) -> &str { "Custom test function" }
-            fn parameter_types(&self) -> Vec<super::ParameterType> { vec![super::ParameterType::String] }
+            fn parameter_types(&self) -> Vec<ParameterType> { vec![ParameterType::String] }
         }
         
         engine.register_function(Box::new(CustomFunction)).await.unwrap();
@@ -720,7 +734,7 @@ mod tests {
         policy.add_capability("read".to_string());
         
         // Add constraint using custom function
-        let constraint = super::PolicyConstraint {
+        let constraint = PolicyConstraint {
             field: "custom(\"test\")".to_string(),
             operator: ConstraintOperator::Equals,
             value: serde_json::Value::String("test".to_string()),
@@ -737,7 +751,7 @@ mod tests {
 
     #[test]
     fn test_constraint_evaluation() {
-        let role_store = Arc::new(super::types::InMemoryRoleStore::new());
+        let role_store = Arc::new(crate::policy_hcl::types::InMemoryRoleStore::new());
         let engine = HclPolicyEngine::new(role_store);
         
         // Test equals
@@ -786,41 +800,41 @@ mod tests {
 
     #[test]
     fn test_parameter_validation() {
-        let role_store = Arc::new(super::types::InMemoryRoleStore::new());
+        let role_store = Arc::new(crate::policy_hcl::types::InMemoryRoleStore::new());
         let engine = HclPolicyEngine::new(role_store);
         
         // Test string validation
         let value = serde_json::Value::String("test".to_string());
-        assert!(engine.validate_parameter_type(&value, &super::ParameterType::String));
-        assert!(!engine.validate_parameter_type(&value, &super::ParameterType::Number));
+        assert!(engine.validate_parameter_type(&value, &ParameterType::String));
+        assert!(!engine.validate_parameter_type(&value, &ParameterType::Number));
         
         // Test number validation
         let value = serde_json::Value::Number(42.into());
-        assert!(engine.validate_parameter_type(&value, &super::ParameterType::Number));
-        assert!(!engine.validate_parameter_type(&value, &super::ParameterType::String));
+        assert!(engine.validate_parameter_type(&value, &ParameterType::Number));
+        assert!(!engine.validate_parameter_type(&value, &ParameterType::String));
         
         // Test boolean validation
         let value = serde_json::Value::Bool(true);
-        assert!(engine.validate_parameter_type(&value, &super::ParameterType::Boolean));
-        assert!(!engine.validate_parameter_type(&value, &super::ParameterType::String));
+        assert!(engine.validate_parameter_type(&value, &ParameterType::Boolean));
+        assert!(!engine.validate_parameter_type(&value, &ParameterType::String));
         
         // Test array validation
         let value = serde_json::Value::Array(vec![serde_json::Value::String("test".to_string())]);
-        assert!(engine.validate_parameter_type(&value, &super::ParameterType::Array));
-        assert!(!engine.validate_parameter_type(&value, &super::ParameterType::String));
+        assert!(engine.validate_parameter_type(&value, &ParameterType::Array));
+        assert!(!engine.validate_parameter_type(&value, &ParameterType::String));
         
         // Test object validation
         let value = serde_json::Value::Object(serde_json::Map::new());
-        assert!(engine.validate_parameter_type(&value, &super::ParameterType::Object));
-        assert!(!engine.validate_parameter_type(&value, &super::ParameterType::String));
+        assert!(engine.validate_parameter_type(&value, &ParameterType::Object));
+        assert!(!engine.validate_parameter_type(&value, &ParameterType::String));
     }
 
     #[tokio::test]
     async fn test_path_matching() {
-        let role_store = Arc::new(super::types::InMemoryRoleStore::new());
+        let role_store = Arc::new(crate::policy_hcl::types::InMemoryRoleStore::new());
         let engine = HclPolicyEngine::new(role_store);
         
-        let policies = HashMap::new();
+        let policies: std::collections::HashMap<String, ParsedPolicy> = HashMap::new();
         
         // Test exact match
         let policy = ParsedPolicy::new("exact".to_string(), "secret/data".to_string());

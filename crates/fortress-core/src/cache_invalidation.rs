@@ -656,7 +656,7 @@ impl CacheInvalidationManager {
 
     /// Match pattern against keys
 
-    fn matches_pattern(&self, key: &str, pattern: &str) -> bool {
+    pub fn matches_pattern(&self, key: &str, pattern: &str) -> bool {
 
         // Simple glob pattern matching
 
@@ -1004,11 +1004,11 @@ mod tests {
 
         // Add tags to keys
 
-        manager.add_tags("key1", &["user".to_string(), "active".to_string()]).unwrap();
+        manager.add_tags("key1", &["user".to_string(), "active".to_string()]).await.unwrap();
 
-        manager.add_tags("key2", &["user".to_string()]).unwrap();
+        manager.add_tags("key2", &["user".to_string()]).await.unwrap();
 
-        manager.add_tags("key3", &["session".to_string()]).unwrap();
+        manager.add_tags("key3", &["session".to_string()]).await.unwrap();
 
 
 
@@ -1042,7 +1042,7 @@ mod tests {
 
         // Subscribe to events
 
-        let mut receiver = manager.subscribe_events().await;
+        let mut receiver = manager.subscribe_events();
 
 
 

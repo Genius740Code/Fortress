@@ -116,7 +116,7 @@ pub struct PluginDeployment {
 }
 
 /// Deployment strategy for plugins
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum DeploymentStrategy {
     /// Rolling deployment (zero downtime)
     Rolling,

@@ -772,6 +772,8 @@ impl Default for SecureAuditLogger {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::FortressError;
+    use crate::secrets::SecretsEngine;
     use serde_json::json;
 
     #[tokio::test]

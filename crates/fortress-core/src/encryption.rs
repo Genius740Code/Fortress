@@ -639,6 +639,11 @@ impl SecureKey {
         })?;
         Ok(Self::new(key))
     }
+
+    /// Generate a random key and panic on failure (for test compatibility)
+    pub fn generate_panic(length: usize) -> Self {
+        Self::generate(length).expect("Failed to generate secure key")
+    }
 }
 
 impl Drop for SecureKey {

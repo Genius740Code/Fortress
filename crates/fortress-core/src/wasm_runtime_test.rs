@@ -17,7 +17,8 @@ async fn test_wasm_runtime_basic() {
         description: "Test plugin for WASM runtime verification".to_string(),
         author: "Fortress Team".to_string(),
         capabilities: vec![PluginCapability::Authentication],
-        config_schema: serde_json::Value::Null,
+        config_schema: Some(serde_json::Value::Null),
+        wasm_module: None,
     };
     
     // Load plugin
@@ -74,7 +75,8 @@ async fn test_wasm_config_validation() {
         description: "Test plugin for config validation".to_string(),
         author: "Fortress Team".to_string(),
         capabilities: vec![PluginCapability::Authentication],
-        config_schema: serde_json::Value::Null,
+        config_schema: Some(serde_json::Value::Null),
+        wasm_module: None,
     };
     
     let plugin = loader.load_from_bytes(&[0x00, 0x61, 0x73, 0x6d], metadata)

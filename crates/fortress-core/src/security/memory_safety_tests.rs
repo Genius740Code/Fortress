@@ -1,7 +1,6 @@
 //! Comprehensive tests for memory safety and zero-knowledge proof features
 
 use super::*;
-use crate::error::FortressError;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;

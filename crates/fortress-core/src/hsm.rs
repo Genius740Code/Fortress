@@ -732,7 +732,7 @@ impl HsmProvider for AwsCloudHsmProvider {
         let _conn_id = self.get_connection().await?;
         
         // Generate expected signature using the same deterministic method
-        let mut expected_signature = vec![0u8; 256];
+        let mut expected_signature: Vec<u8> = vec![0u8; 256];
         
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
@@ -1570,7 +1570,7 @@ impl HsmProvider for Pkcs11Provider {
         let _conn_id = self.get_connection().await?;
         
         // Generate expected signature using the same deterministic method
-        let mut expected_signature = vec![0u8; 256];
+        let mut expected_signature: Vec<u8> = vec![0u8; 256];
         
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
@@ -2328,7 +2328,7 @@ impl HsmProvider for AzureDedicatedHsmProvider {
         let _conn_id = self.get_connection().await?;
         
         // Generate expected signature
-        let mut expected_signature = vec![0u8; 256];
+        let mut expected_signature: Vec<u8> = vec![0u8; 256];
         
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
@@ -3083,7 +3083,7 @@ impl HsmProvider for GoogleCloudHsmProvider {
         let _conn_id = self.get_connection().await?;
         
         // Generate expected signature
-        let mut expected_signature = vec![0u8; 256];
+        let mut expected_signature: Vec<u8> = vec![0u8; 256];
         
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
@@ -3851,7 +3851,7 @@ mod tests {
         for i in 0..5 {
             let key_id_clone = KeyId::from(format!("test-pool-key-{}", i));
             let algorithm_clone = algorithm.clone();
-            let provider_ref = provider as &dyn HsmProvider;
+            let provider_ref = manager.provider() as &dyn HsmProvider;
             let handle = tokio::spawn(async move {
                 provider_ref.generate_key(&key_id_clone, &algorithm_clone).await
             });

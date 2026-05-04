@@ -8,7 +8,7 @@ use serde_json::Value;
 use std::net::IpAddr;
 
 use crate::error::{FortressError, Result};
-use super::types::{PolicyContext, PolicyFunction, ParameterType};
+use crate::policy_hcl::types::{PolicyContext, PolicyFunction, ParameterType};
 
 /// Time function - returns current timestamp
 pub struct TimeFunction;
@@ -583,8 +583,8 @@ impl PolicyFunction for EndsWithFunction {
 }
 
 /// Register all built-in functions
-pub fn register_builtin_functions() -> std::collections::HashMap<String, Box<dyn super::types::PolicyFunction>> {
-    let mut registry: std::collections::HashMap<String, Box<dyn super::types::PolicyFunction>> = std::collections::HashMap::new();
+pub fn register_builtin_functions() -> std::collections::HashMap<String, Box<dyn crate::policy_hcl::types::PolicyFunction>> {
+    let mut registry: std::collections::HashMap<String, Box<dyn crate::policy_hcl::types::PolicyFunction>> = std::collections::HashMap::new();
     
     // Time and date functions
     registry.insert("time".to_string(), Box::new(TimeFunction));
@@ -716,11 +716,11 @@ mod tests {
 
     #[test]
     fn test_policy_function() {
-        let func = super::PolicyFunction;
+        let func = super::RoleFunction;
         let context = create_test_context();
         
         // Test with existing policy
-        let result = func.evaluate(&[Value::String("default".to_string())], &context).unwrap();
+        let result = func.evaluate(&[Value::String("admin".to_string())], &context).unwrap();
         assert_eq!(result, Value::Bool(true));
         
         // Test with non-existing policy
@@ -887,7 +887,7 @@ mod tests {
         
         // Test with string argument for time function
         let func = RoleFunction;
-        let result = func.evaluate(&[Value::Number(42.0)], &context);
+        let result = func.evaluate(&[Value::Number(serde_json::Number::from(42))], &context);
         assert!(result.is_err());
     }
 

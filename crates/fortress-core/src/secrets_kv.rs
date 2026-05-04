@@ -434,6 +434,37 @@ impl KvEngine {
         Ok(decrypted_json)
     }
 
+    /// Encrypt secret data (backward compatibility method)
+    async fn encrypt_secret_data(&self, data: &serde_json::Value) -> Result<(serde_json::Value, String)> {
+        let config = self.config.read().await;
+        
+        if !config.encryption_at_rest {
+            return Ok((data.clone(), "".to_string()));
+        }
+        
+        let master_key = self.master_key.read().await;
+        
+        // Serialize the data
+        let data_bytes = serde_json::to_vec(data)
+            .map_err(|e| FortressError::secrets(format!("Failed to serialize secret data: {}", e)))?;
+        
+        // Encrypt the data
+        let encrypted_bytes = self.encryption.encrypt(&data_bytes, &master_key)
+            .map_err(|e| FortressError::secrets(format!("Failed to encrypt secret data: {}", e)))?;
+        
+        // Generate a nonce (in a real implementation, this would be more sophisticated)
+        let nonce = hex::encode(crate::trng::random_bytes(16).unwrap_or_else(|_| vec![0u8; 16]));
+        
+        // Create encrypted data format
+        let encrypted_data = serde_json::json!({
+            "data": hex::encode(encrypted_bytes),
+            "nonce": nonce,
+            "algorithm": "aes-256-gcm"
+        });
+        
+        Ok((encrypted_data, nonce))
+    }
+
     /// Read a specific version of a secret using Barrier pattern
     pub async fn read_version(&self, path: &str, version: u64) -> Result<Option<Secret>> {
         self.record_operation("read_version").await;

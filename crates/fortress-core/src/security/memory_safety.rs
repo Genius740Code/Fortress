@@ -178,6 +178,17 @@ impl SecureKey {
         general_purpose::STANDARD.encode(&self.data)
     }
 
+    /// Convert to Vec<u8> (for cryptographic operations)
+    /// 
+    /// # Returns
+    /// * `Vec<u8>` - Clone of key data
+    /// 
+    /// # Security
+    /// This creates a copy of the key data. Use with care in performance-critical code.
+    pub fn to_vec(&self) -> Vec<u8> {
+        self.data.clone()
+    }
+
     /// Create secure key from hex string
     /// 
     /// # Arguments

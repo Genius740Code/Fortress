@@ -1812,7 +1812,7 @@ mod tests {
 
         
 
-        let tuner = AutomaticPerformanceTuner::new(config, performance_monitor);
+        let tuner = AutomaticPerformanceTuner::new(config, performance_monitor).await;
 
 
 
@@ -1848,7 +1848,7 @@ mod tests {
 
         
 
-        let tuner = AutomaticPerformanceTuner::new(config, performance_monitor);
+        let tuner = AutomaticPerformanceTuner::new(config, performance_monitor).await;
 
 
 
@@ -1876,7 +1876,7 @@ mod tests {
 
         
 
-        let tuner = AutomaticPerformanceTuner::new(config, performance_monitor);
+        let tuner = AutomaticPerformanceTuner::new(config, performance_monitor).await;
 
 
 
@@ -1928,7 +1928,7 @@ mod tests {
 
         
 
-        let tuner = AutomaticPerformanceTuner::new(config, performance_monitor);
+        let tuner = AutomaticPerformanceTuner::new(config, performance_monitor).await;
 
 
 

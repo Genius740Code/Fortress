@@ -629,7 +629,8 @@ mod tests {
     use crate::aes256gcm_wrapper::Aes256GcmWrapper;
 use crate::encryption::EncryptionAlgorithm;
     use crate::error::{FortressError, Result, StorageErrorCode};
-    use crate::key::{KeyId, KeyMetadata, KeyPurpose, PerformanceProfile};
+    use crate::key::{KeyId, KeyMetadata, KeyPurpose};
+use crate::encryption::PerformanceProfile;
     use crate::key_database::{KeyDatabase, KeyDatabaseConfig, KeyDatabaseBackend, SqliteKeyDatabase, create_key_database};
     use chrono::{DateTime, Utc, Duration as ChronoDuration};
     use std::sync::Arc;

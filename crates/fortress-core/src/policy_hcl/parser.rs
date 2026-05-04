@@ -8,7 +8,7 @@ use serde_json::Value;
 use regex::Regex;
 
 use crate::error::{FortressError, Result};
-use super::types::{
+use crate::policy_hcl::types::{
     ParsedPolicy, PolicyConstraint, ConstraintOperator, ParameterType,
     PolicyCompilationError, PolicyErrorType, PolicyValidationResult,
 };

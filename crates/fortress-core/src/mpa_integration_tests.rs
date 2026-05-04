@@ -9,7 +9,6 @@
 
 
 use crate::multi_person_auth::*;
-
 use crate::mpa_service::MpaService;
 
 use crate::auth::{AuthManager, UserId};
@@ -86,7 +85,7 @@ async fn test_complete_mpa_workflow() {
 
         vec![
 
-            OperationType::KeyGeneration,
+            OperationType::CertificateSigning,
 
             OperationType::KeyStorage,
 
@@ -138,7 +137,7 @@ async fn test_complete_mpa_workflow() {
 
         group_id.clone(),
 
-        OperationType::KeyGeneration,
+        OperationType::CertificateSigning,
 
         "Generate new master encryption key for production database".to_string(),
 
@@ -652,7 +651,7 @@ async fn test_control_group_management() {
 
         2,
 
-        vec![OperationType::UserManagement],
+        vec![OperationType::SystemOperation],
 
         3600,
 
@@ -748,7 +747,7 @@ async fn test_permission_validation() {
 
         1,
 
-        vec![OperationType::KeyGeneration], // Only allow key generation
+        vec![OperationType::CertificateSigning], // Only allow key generation
 
         3600,
 
@@ -784,7 +783,7 @@ async fn test_permission_validation() {
 
         group_id.clone(),
 
-        OperationType::KeyGeneration, // Authorized
+        OperationType::CertificateSigning, // Authorized
 
         "Generate key".to_string(),
 
@@ -1074,7 +1073,7 @@ async fn test_custom_operation_types() {
 
         group_id.clone(),
 
-        OperationType::Custom("DatabaseMigration".to_string()),
+        OperationType::DatabaseQuery,
 
         "Execute database migration".to_string(),
 

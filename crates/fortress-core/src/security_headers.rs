@@ -963,6 +963,8 @@ mod tests {
 
         assert!(response.headers().contains_key(header::CONTENT_SECURITY_POLICY));
 
+        assert!(response.headers().contains_key("Strict-Transport-Security"));
+
         assert!(response.headers().contains_key("X-Frame-Options"));
 
         assert!(response.headers().contains_key("X-Content-Type-Options"));
@@ -992,12 +994,12 @@ mod tests {
             .unwrap();
 
         // Call middleware directly with config
-        let response = security_headers_middleware_with_config(config, request, Next::new(|_| async {
+        let response = security_headers_middleware_with_config(config, request, |request| async move {
             Response::builder()
                 .status(StatusCode::OK)
                 .body(Body::from("Hello, World!"))
                 .unwrap()
-        })).await;
+        }).await;
 
 
 
@@ -1024,18 +1026,30 @@ mod tests {
             .build();
 
         // Create a test request
+
         let request = Request::builder()
+
             .uri("/")
+
             .body(Body::empty())
+
             .unwrap();
 
+        
+
         // Call middleware directly with config
-        let response = security_headers_middleware_with_config(config, request, Next::new(|_| async {
+
+        let response = security_headers_middleware_with_config(config, request, |request| async move {
+
             Response::builder()
+
                 .status(StatusCode::OK)
+
                 .body(Body::from("Hello, World!"))
+
                 .unwrap()
-        })).await;
+
+        }).await;
 
 
 
@@ -1059,17 +1073,22 @@ mod tests {
 
         // Create a test request
         let request = Request::builder()
-            .uri("/")
+            .uri("/frame-options-test")
             .body(Body::empty())
             .unwrap();
 
         // Call middleware directly with config
-        let response = security_headers_middleware_with_config(config, request, Next::new(|_| async {
+        let response = security_headers_middleware_with_config(config, request, |request| async move {
+
             Response::builder()
+
                 .status(StatusCode::OK)
+
                 .body(Body::from("Hello, World!"))
+
                 .unwrap()
-        })).await;
+
+        }).await;
 
 
 
@@ -1091,13 +1110,14 @@ mod tests {
             .body(Body::empty())
             .unwrap();
 
-        // Call middleware directly
-        let response = security_headers_middleware(request, Next::new(|_| async {
+        // Call middleware with config instead
+        let config = SecurityHeadersConfig::default();
+        let response = security_headers_middleware_with_config(config, request, |request| async move {
             Response::builder()
                 .status(StatusCode::OK)
                 .body(Body::from("Hello, World!"))
                 .unwrap()
-        })).await;
+        }).await;
 
 
 

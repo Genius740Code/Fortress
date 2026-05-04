@@ -162,6 +162,8 @@ pub struct CacheManagerStatistics {
     /// Overall cache statistics
     #[cfg(feature = "distributed-cache")]
     pub cache_stats: crate::distributed_cache::CacheStatistics,
+    /// Compatibility cache statistics (always available for tests)
+    pub cache_stats_compat: CacheStatsCompat,
     /// Invalidation statistics
     pub invalidation_stats: crate::cache_invalidation::InvalidationStats,
     /// Performance metrics
@@ -170,6 +172,17 @@ pub struct CacheManagerStatistics {
     pub health_status: HealthStatus,
     /// Recommendations
     pub recommendations: Vec<String>,
+}
+
+/// Compatibility cache statistics for tests
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CacheStatsCompat {
+    /// Number of cache sets
+    pub sets: u64,
+    /// Number of cache hits
+    pub hits: u64,
+    /// Number of cache misses
+    pub misses: u64,
 }
 
 /// Performance metrics
@@ -802,6 +815,11 @@ impl CacheManager for FortressCacheManager {
 
         Ok(CacheManagerStatistics {
             cache_stats,
+            cache_stats_compat: CacheStatsCompat {
+                sets: cache_stats.sets,
+                hits: cache_stats.hits,
+                misses: cache_stats.misses,
+            },
             invalidation_stats,
             performance_metrics,
             health_status,
@@ -899,6 +917,11 @@ impl CacheManager for FortressCacheManager {
         let health_status = self.health_status.read().await.clone();
         
         Ok(CacheManagerStatistics {
+            cache_stats_compat: CacheStatsCompat {
+                sets: 0,
+                hits: 0,
+                misses: 0,
+            },
             invalidation_stats: crate::cache_invalidation::InvalidationStats {
                 total_invalidations: 0,
                 invalidations_by_reason: std::collections::HashMap::new(),
@@ -1120,6 +1143,11 @@ impl CacheManager for MockCacheManager {
                 throughput_ops_per_sec: 0.0,
                 error_rate: 0.0,
                 efficiency_score: 1.0,
+            },
+            cache_stats_compat: CacheStatsCompat {
+                sets: 0,
+                hits: 0,
+                misses: 0,
             },
             invalidation_stats: crate::cache_invalidation::InvalidationStats {
                 total_invalidations: 0,

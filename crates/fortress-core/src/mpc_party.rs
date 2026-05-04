@@ -411,13 +411,14 @@ mod tests {
         assert_eq!(metadata.get("version"), Some(&"1.0".to_string()));
     }
 
-    #[test]
-    fn test_mpc_party_builder() {
+    #[tokio::test]
+    async fn test_mpc_party_builder() {
         let party = MpcPartyBuilder::new()
             .with_party_id("party1".to_string())
             .with_role(PartyRole::Initiator)
             .with_metadata("region", "us-west-2")
             .build()
+            .await
             .unwrap();
         
         assert_eq!(party.party_id(), "party1");

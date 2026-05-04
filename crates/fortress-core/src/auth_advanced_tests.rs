@@ -4,7 +4,6 @@
 //! including MFA, risk assessment, device fingerprinting, and account lockout.
 
 use crate::auth::*;
-use crate::error::FortressError;
 
 #[cfg(test)]
 mod tests {
@@ -194,7 +193,7 @@ mod tests {
             trust_duration_seconds: 2592000, // 30 days
         };
 
-        let mut device_manager = DeviceFingerprintManager::new(config);
+        let device_manager = DeviceFingerprintManager::new(config);
 
         let user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
         let ip = "192.168.1.100";
@@ -227,7 +226,7 @@ mod tests {
         let username = "testuser";
 
         // Record failed attempts
-        for i in 1..=3 {
+        for _i in 1..=3 {
             lockout_manager.record_failed_attempt(username).unwrap();
         }
 

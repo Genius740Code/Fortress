@@ -266,6 +266,7 @@ impl WasmAuthPlugin {
             author: metadata.author.clone(),
             capabilities: vec![], // Will be populated from auth capabilities
             config_schema: None,
+            wasm_module: None, // Will be populated when WASM runtime is ready
         };
 
         Ok(Self {
@@ -287,6 +288,8 @@ impl WasmAuthPlugin {
             action: "authenticate".to_string(),
             data: serde_json::to_value(input)?,
             parameters: HashMap::new(),
+            operation: Some("authenticate".to_string()),
+            timestamp: Some(chrono::Utc::now()),
         };
 
         // SECURE: Execute with proper sandboxing when runtime is ready
@@ -875,10 +878,10 @@ mod tests {
     fn test_custom_authentication_request() {
         let mut additional_data = HashMap::new();
         additional_data.insert("custom_field".to_string(), serde_json::Value::String("custom_value".to_string()));
-        additional_data.insert("metadata".to_string(), serde_json::Value::Object(serde_json::json!({
+        additional_data.insert("metadata".to_string(), serde_json::json!({
             "version": "1.0",
             "provider": "custom_auth_provider"
-        })));
+        }));
 
         let request = AuthRequest {
             method: AuthMethod::Custom("biometric_auth".to_string()),

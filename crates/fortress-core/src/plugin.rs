@@ -7,6 +7,7 @@
 
 use crate::error::{FortressError, Result};
 use async_trait::async_trait;
+use chrono;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -29,6 +30,8 @@ pub struct PluginMetadata {
     pub capabilities: Vec<PluginCapability>,
     /// Configuration schema for the plugin
     pub config_schema: Option<serde_json::Value>,
+    /// WASM module for the plugin (optional)
+    pub wasm_module: Option<Vec<u8>>,
 }
 
 /// Plugin capabilities that define what actions a plugin can perform
@@ -50,6 +53,8 @@ pub enum PluginCapability {
     ApiIntegration,
     /// Can manage secrets
     SecretManagement,
+    /// Can authenticate users
+    Authentication,
     /// Custom capability
     Custom(String),
 }
@@ -65,6 +70,12 @@ pub struct PluginContext {
     pub encryption_access: bool,
     /// Access to Fortress storage system
     pub storage_access: bool,
+    /// User ID for the current operation
+    pub user_id: Option<String>,
+    /// Session ID for the current operation
+    pub session_id: Option<String>,
+    /// Request ID for tracking
+    pub request_id: Option<String>,
 }
 
 /// Plugin execution result
@@ -128,6 +139,10 @@ pub struct PluginInput {
     pub data: serde_json::Value,
     /// Additional parameters
     pub parameters: HashMap<String, serde_json::Value>,
+    /// Operation type
+    pub operation: Option<String>,
+    /// Timestamp for the operation
+    pub timestamp: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// Plugin health status
@@ -310,6 +325,9 @@ impl PluginManager {
             metadata: plugin.metadata().clone(),
             encryption_access: true,
             storage_access: true,
+            user_id: None,
+            session_id: None,
+            request_id: None,
         };
         
         // Store plugin context in registry

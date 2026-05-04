@@ -1,7 +1,6 @@
 //! Comprehensive tests for zero-knowledge proof features
 
 use super::*;
-use crate::error::FortressError;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread;
@@ -494,13 +493,15 @@ mod performance_tests {
         let start = Instant::now();
         let mut proofs = Vec::new();
         for _ in 0..iterations {
-            proofs.push(SchnorrProof::prove(statement, &witness).unwrap());
+            let statement_vec = statement.to_vec();
+            proofs.push(SchnorrProof::prove(&statement_vec, &witness).unwrap());
         }
         let generation_duration = start.elapsed();
         
         let start = Instant::now();
         for proof in &proofs {
-            SchnorrProof::verify(statement, proof).unwrap();
+            let statement_vec = statement.to_vec();
+            SchnorrProof::verify(&statement_vec, proof).unwrap();
         }
         let verification_duration = start.elapsed();
         
@@ -596,12 +597,13 @@ mod integration_tests {
         
         // Create Schnorr proof
         let statement = b"integration_statement";
-        let schnorr_proof = SchnorrProof::prove(statement, &user_key).unwrap();
+        let statement_vec = statement.to_vec();
+        let schnorr_proof = SchnorrProof::prove(&statement_vec, &user_key).unwrap();
         
         // Verify all proofs
         assert!(access_proof.verify_proof(resource_policy).unwrap());
         assert!(auth.verify_anonymous(&anon_proof, challenge).unwrap());
-        assert!(SchnorrProof::verify(statement, &schnorr_proof).unwrap());
+        assert!(SchnorrProof::verify(&statement_vec, &schnorr_proof).unwrap());
         
         // All proofs should be different
         assert_ne!(access_proof.proof_id, anon_proof.proof_id);
@@ -629,7 +631,8 @@ mod integration_tests {
                 
                 // Generate Schnorr proof
                 let statement = format!("statement_{}", i);
-                let schnorr_proof = SchnorrProof::prove(statement.as_bytes(), &key_clone).unwrap();
+                let statement_vec = statement.as_bytes().to_vec();
+                let schnorr_proof = SchnorrProof::prove(&statement_vec, &key_clone).unwrap();
                 
                 (access_proof.proof_id, schnorr_proof.commitment)
             });
@@ -727,8 +730,9 @@ mod error_tests {
         let witness = SecureKey::new(vec![]);
         
         // Should still work with empty witness
-        let proof = SchnorrProof::prove(statement, &witness).unwrap();
-        assert!(SchnorrProof::verify(statement, &proof).unwrap());
+        let statement_vec = statement.to_vec();
+        let proof = SchnorrProof::prove(&statement_vec, &witness).unwrap();
+        assert!(SchnorrProof::verify(&statement_vec, &proof).unwrap());
     }
 
     #[test]

@@ -4,7 +4,8 @@
 //! and that the system remains efficient under security constraints.
 
 use crate::error::{FortressError, Result};
-use crate::websocket::auth::{AuthManager, AuthConfig};
+use crate::auth::AuthManager;
+use crate::websocket::auth::AuthConfig;
 use crate::security_fixes::{SecureSessionGenerator, CsrfProtection, InputValidator};
 use std::time::{Duration, Instant};
 use std::sync::Arc;

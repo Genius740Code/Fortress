@@ -628,7 +628,7 @@ mod tests {
             }
         ];
 
-        let pool = AdvancedConnectionPool::new(config, endpoints);
+        let pool = AdvancedConnectionPool::new(config, endpoints).await;
 
         // Test getting a connection
         let connection = pool.get_connection().await.unwrap();
@@ -671,7 +671,7 @@ mod tests {
             },
         ];
 
-        let pool = AdvancedConnectionPool::new(config, endpoints);
+        let pool = AdvancedConnectionPool::new(config, endpoints).await;
 
         // Test round-robin selection
         let conn1 = pool.get_connection().await.unwrap();
@@ -685,7 +685,7 @@ mod tests {
         let config = ConnectionPoolConfig::default();
         let endpoints = vec![];
 
-        let pool = AdvancedConnectionPool::new(config, endpoints);
+        let pool = AdvancedConnectionPool::new(config, endpoints).await;
 
         // Add endpoint
         let new_endpoint = ServerEndpoint {
@@ -728,7 +728,7 @@ mod tests {
             }
         ];
 
-        let pool = AdvancedConnectionPool::new(config, endpoints);
+        let pool = AdvancedConnectionPool::new(config, endpoints).await;
 
         // Perform some operations
         let conn1 = pool.get_connection().await.unwrap();

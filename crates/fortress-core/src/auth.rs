@@ -166,7 +166,7 @@ pub struct BiometricData {
 }
 
 /// Biometric types
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum BiometricType {
     Fingerprint,
     Face,
@@ -565,7 +565,7 @@ impl Default for HardwareTokenConfig {
 }
 
 /// Hardware token types
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum HardwareTokenType {
     YubiKey,
     RSASecurId,
@@ -2181,7 +2181,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_password_validation() {
-        let mut auth = AuthManager::new();
+        let auth = AuthManager::new();
         
         // Test valid password
         assert!(auth.validate_password("Password123!").is_ok());

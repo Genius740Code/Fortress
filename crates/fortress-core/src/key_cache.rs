@@ -120,9 +120,41 @@ pub struct CacheStats {
     pub lru_keys: Vec<KeyId>,
     /// Last cleanup time
     pub last_cleanup_time: Option<DateTime<Utc>>,
+    // Compatibility fields for tests
+    /// Alias for hits (test compatibility)
+    pub cache_hits: u64,
+    /// Alias for misses (test compatibility)
+    pub cache_misses: u64,
+    /// Alias for current_keys (test compatibility)
+    pub total_keys: usize,
+    /// Total evictions (test compatibility)
+    pub evictions: u64,
+}
+
+impl CacheStats {
+    /// Alias for hits to maintain compatibility with tests
+    pub fn cache_hits(&self) -> u64 {
+        self.hits
+    }
+    
+    /// Alias for misses to maintain compatibility with tests  
+    pub fn cache_misses(&self) -> u64 {
+        self.misses
+    }
+    
+    /// Alias for current_keys to maintain compatibility with tests
+    pub fn total_keys(&self) -> usize {
+        self.current_keys
+    }
+    
+    /// Total evictions (both size and time based)
+    pub fn evictions(&self) -> u64 {
+        self.size_evictions + self.time_evictions
+    }
 }
 
 /// High-performance LRU cache for keys
+#[derive(Clone)]
 pub struct KeyCache {
     config: KeyCacheConfig,
     /// Main cache storage
@@ -154,6 +186,11 @@ impl KeyCache {
                 most_accessed_keys: Vec::new(),
                 lru_keys: Vec::new(),
                 last_cleanup_time: None,
+                // Compatibility fields
+                cache_hits: 0,
+                cache_misses: 0,
+                total_keys: 0,
+                evictions: 0,
             })),
             cleanup_task: Arc::new(RwLock::new(None)),
         }
@@ -189,12 +226,14 @@ impl KeyCache {
             
             // Update statistics
             stats.hits += 1;
+            stats.cache_hits += 1; // Update compatibility field
             let elapsed_us = start_time.elapsed().as_micros() as f64;
             stats.avg_access_time_us = (stats.avg_access_time_us * (stats.hits - 1) as f64 + elapsed_us) / stats.hits as f64;
             
             Some((entry.key.clone(), entry.metadata.clone()))
         } else {
             stats.misses += 1;
+            stats.cache_misses += 1; // Update compatibility field
             stats.hit_ratio = stats.hits as f64 / (stats.hits + stats.misses) as f64;
             None
         }
@@ -356,6 +395,7 @@ impl KeyCache {
             
             let mut stats = self.stats.write().await;
             stats.size_evictions += 1;
+            stats.evictions += 1; // Update compatibility field
         }
 
         Ok(())
@@ -380,6 +420,7 @@ impl KeyCache {
             
             let mut stats = self.stats.write().await;
             stats.size_evictions += 1;
+            stats.evictions += 1; // Update compatibility field
         }
 
         Ok(())
@@ -410,6 +451,7 @@ impl KeyCache {
             
             let mut stats = self.stats.write().await;
             stats.time_evictions += 1;
+            stats.evictions += 1; // Update compatibility field
         }
 
         Ok(expired_count)
@@ -440,6 +482,12 @@ impl KeyCache {
         // Update LRU keys
         stats.lru_keys = lru_order.iter().rev().take(10).cloned().collect();
         stats.last_cleanup_time = Some(Utc::now());
+        
+        // Update compatibility fields
+        stats.cache_hits = stats.hits;
+        stats.cache_misses = stats.misses;
+        stats.total_keys = stats.current_keys;
+        stats.evictions = stats.size_evictions + stats.time_evictions;
     }
 
     /// Start background cleanup task
@@ -480,6 +528,7 @@ impl KeyCache {
                         cache_write.remove(key_id);
                         lru_order_write.retain(|id| id != key_id);
                         stats_write.time_evictions += 1;
+                        stats_write.evictions += 1; // Update compatibility field
                     }
 
                     // Update statistics
@@ -503,6 +552,11 @@ impl KeyCache {
             self.update_stats().await;
         }
         self.stats.read().await.clone()
+    }
+
+    /// Get detailed cache statistics (alias for get_stats for test compatibility)
+    pub async fn get_detailed_stats(&self) -> CacheStats {
+        self.get_stats().await
     }
 
     /// Clear all cached keys
@@ -628,7 +682,8 @@ mod tests {
     use super::*;
     use crate::aes256gcm_wrapper::Aes256GcmWrapper;
 use crate::encryption::EncryptionAlgorithm;
-    use crate::key::{KeyId, KeyMetadata, KeyPurpose, PerformanceProfile};
+    use crate::key::{KeyId, KeyMetadata, KeyPurpose};
+use crate::encryption::PerformanceProfile;
     use chrono::{DateTime, Utc};
     use std::time::Duration;
 

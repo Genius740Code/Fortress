@@ -831,7 +831,8 @@ mod tests {
     use crate::aes256gcm_wrapper::Aes256GcmWrapper;
 use crate::encryption::EncryptionAlgorithm;
     use crate::error::{FortressError, Result, StorageErrorCode};
-    use crate::key::{KeyId, KeyMetadata, KeyPurpose, PerformanceProfile};
+    use crate::key::{KeyId, KeyMetadata, KeyPurpose};
+use crate::encryption::PerformanceProfile;
     use chrono::Utc;
     use tempfile::tempdir;
     use std::path::Path;

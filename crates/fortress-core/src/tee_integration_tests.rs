@@ -8,6 +8,7 @@ use crate::tee_aws_nitro::AwsNitroProvider;
 use crate::tee_intel_sgx::IntelSgxProvider;
 use crate::tee_communication::SecureProtocolHandler;
 use crate::tee_attestation::AttestationVerifier;
+use std::collections::HashMap;
 use crate::tee_key_management::TeeAwareKeyManager;
 use std::sync::Arc;
 use tokio::time::{sleep, Duration};

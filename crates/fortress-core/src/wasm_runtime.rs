@@ -379,7 +379,7 @@ mod tests {
                 "username": "valid_user",
                 "password": "test_password"
             }),
-            timestamp: chrono::Utc::now(),
+            timestamp: Some(chrono::Utc::now()),
         };
         
         let result = plugin.execute(input).await;
@@ -396,7 +396,7 @@ mod tests {
                 "resource": "public_data",
                 "action": "read"
             }),
-            timestamp: chrono::Utc::now(),
+            timestamp: Some(chrono::Utc::now()),
         };
         
         let result = plugin.execute(input).await;
