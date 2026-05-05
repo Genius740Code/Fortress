@@ -449,6 +449,9 @@ macro_rules! fortress_plugin {
                     metadata: self.metadata.clone(),
                     encryption_access: false,
                     storage_access: false,
+                    user_id: None,
+                    session_id: None,
+                    request_id: None,
                 }).await
             }
             
@@ -485,6 +488,7 @@ mod tests {
                     author: "Test Author".to_string(),
                     capabilities,
                     config_schema: None,
+                    wasm_module: None,
                 },
                 initialized: std::sync::Arc::new(tokio::sync::RwLock::new(false)),
                 execution_count: std::sync::Arc::new(tokio::sync::RwLock::new(0)),
@@ -591,6 +595,9 @@ mod tests {
             metadata: plugin.metadata().clone(),
             encryption_access: true,
             storage_access: false,
+            user_id: None,
+            session_id: None,
+            request_id: None,
         };
         
         plugin.initialize(context).await?;
@@ -601,6 +608,8 @@ mod tests {
             action: "test_action".to_string(),
             data: serde_json::json!({"test": "data"}),
             parameters: HashMap::new(),
+            operation: None,
+            timestamp: None,
         };
 
         let result = plugin.execute(input).await?;
@@ -658,6 +667,9 @@ mod tests {
             metadata: plugin_arc.metadata().clone(),
             encryption_access: true,
             storage_access: false,
+            user_id: None,
+            session_id: None,
+            request_id: None,
         };
 
         registry.set_plugin_context("registry-test", context.clone()).await;
@@ -702,6 +714,8 @@ mod tests {
             action: "encrypt".to_string(),
             data: serde_json::json!({"data": "test_data"}),
             parameters: HashMap::new(),
+            operation: None,
+            timestamp: None,
         };
 
         let result = manager.execute_plugin("manager-test", input).await?;
@@ -738,6 +752,9 @@ mod tests {
             metadata: plugin.metadata().clone(),
             encryption_access: true,
             storage_access: true,
+            user_id: None,
+            session_id: None,
+            request_id: None,
         };
 
         let result = plugin.execute_with_context(input, &context).await?;
@@ -766,6 +783,7 @@ mod tests {
                         author: "Test Author".to_string(),
                         capabilities: vec![PluginCapability::SignTransaction],
                         config_schema: None,
+                        wasm_module: None,
                     },
                 }
             }
@@ -836,6 +854,7 @@ mod tests {
                     "api_key": {"type": "string"}
                 }
             })),
+            wasm_module: None,
         };
 
         // Test serialization
@@ -950,6 +969,8 @@ mod tests {
                 params.insert("param2".to_string(), serde_json::json!(42));
                 params
             },
+            operation: None,
+            timestamp: None,
         };
 
         assert_eq!(input.action, "test_action");
@@ -971,9 +992,13 @@ mod tests {
                 author: "Test".to_string(),
                 capabilities: vec![],
                 config_schema: None,
+                wasm_module: None,
             },
             encryption_access: true,
             storage_access: false,
+            user_id: None,
+            session_id: None,
+            request_id: None,
         };
 
         let context2 = PluginContext {
@@ -986,9 +1011,13 @@ mod tests {
                 author: "Test".to_string(),
                 capabilities: vec![],
                 config_schema: None,
+                wasm_module: None,
             },
             encryption_access: false,
             storage_access: true,
+            user_id: None,
+            session_id: None,
+            request_id: None,
         };
 
         assert!(context1.encryption_access);
@@ -1045,6 +1074,7 @@ mod tests {
             author: "Test".to_string(),
             capabilities: vec![custom_cap1.clone(), custom_cap2.clone()],
             config_schema: None,
+            wasm_module: None,
         };
 
         let json = serde_json::to_string(&metadata).expect("Failed to serialize");
@@ -1106,6 +1136,8 @@ mod tests {
                 action: "test".to_string(),
                 data: serde_json::json!({"plugin_id": plugin_id}),
                 parameters: HashMap::new(),
+                operation: None,
+                timestamp: None,
             };
 
             let result = manager.execute_plugin(plugin_id, input).await?;

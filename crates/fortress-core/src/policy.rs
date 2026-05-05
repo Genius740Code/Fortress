@@ -38,7 +38,7 @@
 
 //! // Create a role with read-only access
 
-//! let readonly_role = Role::new("readonly")
+//! let readonly_role = PolicyRole::new("readonly")
 
 //!     .with_permission(Permission::Read, Resource::Database("users"))
 
@@ -65,7 +65,6 @@
 
 
 use crate::error::{FortressError, Result};
-use crate::auth::Role;
 
 use serde::{Deserialize, Serialize};
 
@@ -2341,7 +2340,7 @@ mod tests {
 
     async fn test_role_creation() {
 
-        let role = Role::new("test")
+        let role = PolicyRole::new("test")
 
             .with_description("Test role")
 
@@ -2367,7 +2366,7 @@ mod tests {
 
         
 
-        let role = Role::new("readonly")
+        let role = PolicyRole::new("readonly")
 
             .with_permission(Permission::Read, Resource::Database("users".to_string()));
 
@@ -2401,7 +2400,7 @@ mod tests {
 
         
 
-        let role = Role::new("db_access")
+        let role = PolicyRole::new("db_access")
 
             .with_permission(Permission::Read, Resource::Database("users".to_string()));
 
@@ -2467,7 +2466,7 @@ mod tests {
 
         
 
-        let role = Role::new("time_restricted")
+        let role = PolicyRole::new("time_restricted")
 
             .with_permission_conditions(
 
@@ -2515,7 +2514,7 @@ mod tests {
 
         
 
-        let role = Role::new("ip_restricted")
+        let role = PolicyRole::new("ip_restricted")
 
             .with_permission_conditions(
 
@@ -2579,7 +2578,7 @@ mod tests {
 
         
 
-        let role = Role::new("attr_restricted")
+        let role = PolicyRole::new("attr_restricted")
 
             .with_permission_conditions(
 

@@ -52,25 +52,25 @@ impl TeeIntegrationTests {
         let mut results = TestResults::new();
         
         // Test 1: TEE Manager with AWS Nitro
-        results.add_result("tee_manager_aws_nitro", self.test_tee_manager_aws_nitro().await);
+        results.add_result("tee_manager_aws_nitro".to_string(), self.test_tee_manager_aws_nitro().await);
         
         // Test 2: TEE Manager with Intel SGX
-        results.add_result("tee_manager_intel_sgx", self.test_tee_manager_intel_sgx().await);
+        results.add_result("tee_manager_intel_sgx".to_string(), self.test_tee_manager_intel_sgx().await);
         
         // Test 3: Secure Communication Protocol
-        results.add_result("secure_communication", self.test_secure_communication().await);
+        results.add_result("secure_communication".to_string(), self.test_secure_communication().await);
         
         // Test 4: Attestation Verification
-        results.add_result("attestation_verification", self.test_attestation_verification().await);
+        results.add_result("attestation_verification".to_string(), self.test_attestation_verification().await);
         
         // Test 5: TEE-Aware Key Management
-        results.add_result("tee_key_management", self.test_tee_key_management().await);
+        results.add_result("tee_key_management".to_string(), self.test_tee_key_management().await);
         
         // Test 6: End-to-End Workflow
-        results.add_result("end_to_end_workflow", self.test_end_to_end_workflow().await);
+        results.add_result("end_to_end_workflow".to_string(), self.test_end_to_end_workflow().await);
         
         // Test 7: Error Handling and Recovery
-        results.add_result("error_handling", self.test_error_handling().await);
+        results.add_result("error_handling".to_string(), self.test_error_handling().await);
         
         // Test 8: Performance and Scalability
         results.add_result("performance_scalability".to_string(), self.test_performance_scalability().await);

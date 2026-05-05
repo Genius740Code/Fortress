@@ -831,6 +831,8 @@ impl WasmAuthProvider {
             data: serde_json::to_value(&context)
                 .map_err(|e| FortressError::plugin(format!("Failed to serialize auth context: {}", e)))?,
             parameters: HashMap::new(),
+            operation: None,
+            timestamp: None,
         };
 
         // This would integrate with the WASM runtime

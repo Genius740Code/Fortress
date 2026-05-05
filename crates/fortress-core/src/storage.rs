@@ -1775,6 +1775,9 @@ mod tests {
         let config = StorageConfig {
             backend_type: StorageBackendType::InMemory,
             config: HashMap::new(),
+            connection_pool_size: 10,
+            connection_timeout: 30,
+            max_connections: 100,
         };
 
         let storage = create_storage_backend(config).await.unwrap();
@@ -1791,6 +1794,9 @@ mod tests {
                 base_path: temp_dir.path().to_string_lossy().to_string(),
             },
             config: HashMap::new(),
+            connection_pool_size: 10,
+            connection_timeout: 30,
+            max_connections: 100,
         };
 
         let storage = create_storage_backend(config).await.unwrap();
@@ -1806,6 +1812,9 @@ mod tests {
                 base_path: "/tmp/test".to_string(),
             },
             config: HashMap::new(),
+            connection_pool_size: 10,
+            connection_timeout: 30,
+            max_connections: 100,
         };
 
         let json = serde_json::to_string(&config)
@@ -1843,6 +1852,9 @@ mod tests {
                 prefix: Some("fortress".to_string()),
             },
             config: HashMap::new(),
+            connection_pool_size: 10,
+            connection_timeout: 30,
+            max_connections: 100,
         };
 
         let json = serde_json::to_string(&s3_config)
@@ -1874,6 +1886,9 @@ mod tests {
                 account: "testaccount".to_string(),
             },
             config: HashMap::new(),
+            connection_pool_size: 10,
+            connection_timeout: 30,
+            max_connections: 100,
         };
 
         let json = serde_json::to_string(&azure_config)

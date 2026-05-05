@@ -283,7 +283,7 @@ impl DefaultDisasterRecoveryManager {
             let policy = RetentionPolicy {
                 max_full_backups: 10,
                 max_incremental_backups: 50,
-                max_age_days,
+                max_age_days: 30,
                 auto_cleanup: true,
             };
 

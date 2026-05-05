@@ -365,6 +365,9 @@ mod tests {
         // Initialize plugin
         let context = PluginContext {
             config: HashMap::new(),
+            metadata: plugin.metadata().clone(),
+            encryption_access: false,
+            storage_access: false,
             user_id: Some("test_user".to_string()),
             session_id: Some("test_session".to_string()),
             request_id: Some("test_request".to_string()),
@@ -374,11 +377,13 @@ mod tests {
         
         // Test authentication operation
         let input = PluginInput {
-            operation: "authenticate".to_string(),
-            parameters: serde_json::json!({
+            action: "authenticate".to_string(),
+            data: serde_json::json!({
                 "username": "valid_user",
                 "password": "test_password"
             }),
+            parameters: std::collections::HashMap::new(),
+            operation: Some("authenticate".to_string()),
             timestamp: Some(chrono::Utc::now()),
         };
         
@@ -391,11 +396,13 @@ mod tests {
         
         // Test policy check operation
         let input = PluginInput {
-            operation: "policy_check".to_string(),
-            parameters: serde_json::json!({
+            action: "policy_check".to_string(),
+            data: serde_json::json!({
                 "resource": "public_data",
                 "action": "read"
             }),
+            parameters: std::collections::HashMap::new(),
+            operation: Some("policy_check".to_string()),
             timestamp: Some(chrono::Utc::now()),
         };
         

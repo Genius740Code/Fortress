@@ -22,7 +22,7 @@ async fn test_wasm_runtime_basic() {
     };
     
     // Load plugin
-    let plugin = loader.load_from_bytes(&[0x00, 0x61, 0x73, 0x6d], metadata)
+    let plugin = loader.load_from_bytes(&[0x00, 0x61, 0x73, 0x6d], metadata.clone())
         .expect("Failed to load WASM plugin");
     
     // Verify plugin metadata
@@ -32,9 +32,12 @@ async fn test_wasm_runtime_basic() {
     // Initialize plugin
     let context = PluginContext {
         config: std::collections::HashMap::new(),
-        metadata: metadata.clone(),
+        metadata: metadata,
         encryption_access: false,
         storage_access: false,
+        user_id: None,
+        session_id: None,
+        request_id: None,
     };
     
     plugin.initialize(context).await.expect("Failed to initialize plugin");
@@ -47,6 +50,8 @@ async fn test_wasm_runtime_basic() {
             "password": "test_password"
         }),
         parameters: std::collections::HashMap::new(),
+        operation: None,
+        timestamp: None,
     };
     
     let result = plugin.execute(input).await.expect("Failed to execute plugin");

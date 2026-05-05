@@ -1226,7 +1226,7 @@ mod tests {
 
             2,
 
-            vec![OperationType::KeyGeneration],
+            vec![MultiPersonOperationType::KeyGeneration],
 
             3600,
 
@@ -1262,7 +1262,7 @@ mod tests {
 
             2,
 
-            vec![OperationType::KeyGeneration],
+            vec![MultiPersonOperationType::KeyGeneration],
 
             3600,
 
@@ -1310,7 +1310,7 @@ mod tests {
 
             2,
 
-            vec![OperationType::KeyGeneration],
+            vec![MultiPersonOperationType::KeyGeneration],
 
             3600,
 
@@ -1354,7 +1354,7 @@ mod tests {
 
             group_id,
 
-            OperationType::KeyGeneration,
+            MultiPersonOperationType::KeyGeneration,
 
             "Generate new encryption key".to_string(),
 
@@ -1390,7 +1390,7 @@ mod tests {
 
             2,
 
-            vec![OperationType::KeyGeneration],
+            vec![MultiPersonOperationType::KeyGeneration],
 
             3600,
 
@@ -1434,7 +1434,7 @@ mod tests {
 
             group_id,
 
-            OperationType::KeyGeneration,
+            MultiPersonOperationType::KeyGeneration,
 
             "Generate new encryption key".to_string(),
 
@@ -1518,7 +1518,7 @@ mod tests {
 
             2,
 
-            vec![OperationType::KeyGeneration],
+            vec![MultiPersonOperationType::KeyGeneration],
 
             3600,
 
@@ -1576,7 +1576,7 @@ mod tests {
 
             group_id,
 
-            OperationType::KeyGeneration,
+            MultiPersonOperationType::KeyGeneration,
 
             "Generate new encryption key".to_string(),
 

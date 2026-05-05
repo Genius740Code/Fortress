@@ -841,6 +841,7 @@ use crate::encryption::PerformanceProfile;
     async fn create_test_database() -> Result<SqliteKeyDatabase> {
         let temp_dir = tempdir().map_err(|e| FortressError::storage(
             format!("Failed to create temp dir: {}", e),
+            "tempdir",
             StorageErrorCode::IoError
         ))?;
         

@@ -626,7 +626,7 @@ mod tests {
         let deployment_id = service.deploy_plugin(
             "test_plugin",
             "./test_plugin.wasm",
-            DeploymentStrategy::Canary { percentage: 10 },
+            DeploymentStrategy::Canary { percentage: 10.0 },
         ).await.unwrap();
         
         assert!(!deployment_id.is_empty());
@@ -637,7 +637,7 @@ mod tests {
         let deployment = deployment.unwrap();
         
         if let DeploymentStrategy::Canary { percentage } = deployment.strategy {
-            assert_eq!(percentage, 10);
+            assert_eq!(percentage, 10.0);
         } else {
             panic!("Expected Canary deployment strategy");
         }
@@ -873,7 +873,7 @@ mod tests {
         let deployment_id = service.deploy_plugin(
             "complex_plugin",
             "./complex_plugin.wasm",
-            DeploymentStrategy::Canary { percentage: 25 },
+            DeploymentStrategy::Canary { percentage: 25.0 },
         ).await.unwrap();
         
         // Verify deployment

@@ -28,7 +28,7 @@ mod tests {
 
     async fn setup_test() -> (MpaService, Vec<String>) {
 
-        let auth_manager = Arc::new(RwLock::new(AuthManager::new(AuthConfig::default())));
+        let auth_manager = Arc::new(RwLock::new(AuthManager::new()));
 
         let mpa_service = MpaService::new(auth_manager.clone());
 
@@ -88,7 +88,7 @@ mod tests {
 
             2, // Require 2 approvals
 
-            vec![OperationType::KeyGeneration],
+            vec![MultiPersonOperationType::KeyGeneration],
 
             3600, // 1 hour timeout
 
@@ -134,7 +134,7 @@ mod tests {
 
             group_id.clone(),
 
-            OperationType::KeyGeneration,
+            MultiPersonOperationType::KeyGeneration,
 
             "Generate new master encryption key".to_string(),
 
@@ -244,7 +244,7 @@ mod tests {
 
             2,
 
-            vec![OperationType::KeyStorage],
+            vec![MultiPersonOperationType::KeyDeletion],
 
             3600,
 
@@ -276,7 +276,7 @@ mod tests {
 
             group_id.clone(),
 
-            OperationType::KeyStorage,
+            MultiPersonOperationType::KeyDeletion,
 
             "Delete old key".to_string(),
 
@@ -342,7 +342,7 @@ mod tests {
 
             2,
 
-            vec![OperationType::SystemOperation],
+            vec![MultiPersonOperationType::SystemConfiguration],
 
             3600,
 
@@ -358,7 +358,7 @@ mod tests {
 
             group_id.clone(),
 
-            OperationType::SystemOperation,
+            MultiPersonOperationType::SystemConfiguration,
 
             "Update system config".to_string(),
 
@@ -410,7 +410,7 @@ mod tests {
 
             2,
 
-            vec![OperationType::SystemOperation],
+            vec![MultiPersonOperationType::SystemConfiguration],
 
             3600,
 
@@ -474,7 +474,7 @@ mod tests {
 
             2,
 
-            vec![OperationType::BackgroundTask],
+            vec![MultiPersonOperationType::AuditLogModification],
 
             3600,
 
@@ -506,7 +506,7 @@ mod tests {
 
             group_id.clone(),
 
-            OperationType::BackgroundTask,
+            MultiPersonOperationType::AuditLogModification,
 
             "Modify audit log".to_string(),
 

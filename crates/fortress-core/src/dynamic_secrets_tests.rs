@@ -82,8 +82,8 @@ mod tests {
         assert!(secret.data.get("lease_id").is_some());
         
         // Verify lease information
-        assert!(secret.metadata.lease.is_some());
-        let lease = secret.metadata.lease.unwrap();
+        assert!(secret.lease.is_some());
+        let lease = secret.lease.unwrap();
         assert_eq!(lease.ttl, 3600);
         assert!(lease.renewable);
         assert!(lease.lease_id.starts_with("aws:myapp:"));
@@ -121,8 +121,8 @@ mod tests {
         assert!(permissions.iter().any(|p| p.as_str().unwrap() == "INSERT"));
         
         // Verify lease information
-        assert!(secret.metadata.lease.is_some());
-        let lease = secret.metadata.lease.unwrap();
+        assert!(secret.lease.is_some());
+        let lease = secret.lease.unwrap();
         assert_eq!(lease.ttl, 1800);
         assert!(lease.renewable);
         assert!(lease.lease_id.starts_with("db:myapp:"));
@@ -248,7 +248,7 @@ mod tests {
         });
         
         let write_secret = engine.write("aws/myapp", &credential_request).await.unwrap();
-        let lease_id = write_secret.metadata.lease.unwrap().lease_id.clone();
+        let lease_id = write_secret.lease.unwrap().lease_id.clone();
         
         // Retrieve the credential
         let read_secret = engine.read(&lease_id).await.unwrap();
@@ -327,7 +327,7 @@ mod tests {
         });
         
         let secret = engine.write("aws/myapp", &credential_request).await.unwrap();
-        let lease_id = secret.metadata.lease.unwrap().lease_id.clone();
+        let lease_id = secret.lease.unwrap().lease_id.clone();
         
         // Verify credential exists
         let read_secret = engine.read(&lease_id).await.unwrap();

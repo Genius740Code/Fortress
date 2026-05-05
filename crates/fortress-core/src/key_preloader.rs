@@ -640,6 +640,7 @@ use crate::encryption::PerformanceProfile;
     async fn create_test_database_with_keys() -> Result<Arc<dyn KeyDatabase>> {
         let temp_dir = tempdir().map_err(|e| FortressError::storage(
             format!("Failed to create temp dir: {}", e),
+            "tempdir",
             StorageErrorCode::IoError
         ))?;
         
@@ -669,7 +670,7 @@ use crate::encryption::PerformanceProfile;
             1,
             Utc::now(),
             Utc::now() + ChronoDuration::days(30),
-            KeyPurpose::DataEncryption,
+            "DataEncryption".to_string(),
             PerformanceProfile::Balanced,
         );
         db.store_key(&"encryption_key".to_string(), &key1, &metadata1).await?;
@@ -682,7 +683,7 @@ use crate::encryption::PerformanceProfile;
             1,
             Utc::now(),
             Utc::now() + ChronoDuration::days(7), // Expires soon
-            KeyPurpose::Authentication,
+            "Authentication".to_string(),
             PerformanceProfile::Lightning,
         );
         db.store_key(&"auth_key".to_string(), &key2, &metadata2).await?;
@@ -695,8 +696,8 @@ use crate::encryption::PerformanceProfile;
             1,
             Utc::now(),
             Utc::now() + ChronoDuration::hours(6), // Expires very soon
-            KeyPurpose::SessionManagement,
-            PerformanceProfile::HighPerformance,
+            "SessionManagement".to_string(),
+            PerformanceProfile::Lightning,
         );
         db.store_key(&"session_key".to_string(), &key3, &metadata3).await?;
         
@@ -708,7 +709,7 @@ use crate::encryption::PerformanceProfile;
             1,
             Utc::now(),
             Utc::now() + ChronoDuration::days(90),
-            KeyPurpose::KeyEncryption,
+            "KeyEncryption".to_string(),
             PerformanceProfile::Balanced,
         );
         db.store_key(&"custom_key".to_string(), &key4, &metadata4).await?;

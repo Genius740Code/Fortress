@@ -2251,7 +2251,7 @@ mod tests {
 
             assert!(secret.data.get("connection_string").is_some());
 
-            assert!(secret.metadata.lease.is_some());
+            assert!(secret.lease.is_some());
 
         }
 

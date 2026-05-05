@@ -85,11 +85,11 @@ async fn test_complete_mpa_workflow() {
 
         vec![
 
-            OperationType::CertificateSigning,
+            MultiPersonOperationType::CertificateSigning,
 
-            OperationType::KeyStorage,
+            MultiPersonOperationType::KeyDeletion,
 
-            OperationType::DatabaseQuery,
+            MultiPersonOperationType::HsmOperation,
 
         ],
 
@@ -137,7 +137,7 @@ async fn test_complete_mpa_workflow() {
 
         group_id.clone(),
 
-        OperationType::CertificateSigning,
+        MultiPersonOperationType::CertificateSigning,
 
         "Generate new master encryption key for production database".to_string(),
 
@@ -295,7 +295,7 @@ async fn test_rejection_workflow() {
 
         2, // Require 2 approvals
 
-        vec![OperationType::KeyStorage],
+        vec![MultiPersonOperationType::KeyDeletion],
 
         3600,
 
@@ -331,7 +331,7 @@ async fn test_rejection_workflow() {
 
         group_id.clone(),
 
-        OperationType::KeyStorage,
+        MultiPersonOperationType::KeyDeletion,
 
         "Delete old encryption key".to_string(),
 
@@ -427,7 +427,7 @@ async fn test_request_cancellation() {
 
         2,
 
-        vec![OperationType::SystemOperation],
+        vec![MultiPersonOperationType::SystemConfiguration],
 
         3600,
 
@@ -459,7 +459,7 @@ async fn test_request_cancellation() {
 
         group_id.clone(),
 
-        OperationType::SystemOperation,
+        MultiPersonOperationType::SystemConfiguration,
 
         "Update system configuration".to_string(),
 
@@ -543,7 +543,7 @@ async fn test_request_expiration() {
 
         1, // Only need 1 approval
 
-        vec![OperationType::CertificateSigning],
+        vec![MultiPersonOperationType::CertificateSigning],
 
         2, // 2 second timeout
 
@@ -575,7 +575,7 @@ async fn test_request_expiration() {
 
         group_id.clone(),
 
-        OperationType::CertificateSigning,
+        MultiPersonOperationType::CertificateSigning,
 
         "Sign certificate".to_string(),
 
@@ -651,7 +651,7 @@ async fn test_control_group_management() {
 
         2,
 
-        vec![OperationType::SystemOperation],
+        vec![MultiPersonOperationType::SystemConfiguration],
 
         3600,
 
@@ -747,7 +747,7 @@ async fn test_permission_validation() {
 
         1,
 
-        vec![OperationType::CertificateSigning], // Only allow key generation
+        vec![MultiPersonOperationType::CertificateSigning], // Only allow key generation
 
         3600,
 
@@ -763,7 +763,7 @@ async fn test_permission_validation() {
 
         group_id.clone(),
 
-        OperationType::KeyStorage, // Not authorized
+        MultiPersonOperationType::KeyDeletion, // Not authorized
 
         "Delete key".to_string(),
 
@@ -783,7 +783,7 @@ async fn test_permission_validation() {
 
         group_id.clone(),
 
-        OperationType::CertificateSigning, // Authorized
+        MultiPersonOperationType::CertificateSigning, // Authorized
 
         "Generate key".to_string(),
 
@@ -799,7 +799,7 @@ async fn test_permission_validation() {
 
     let request = mpa_service.get_approval_request(&request_id, requester_id.clone()).await.unwrap().unwrap();
 
-    assert_eq!(request.operation_type, OperationType::KeyGeneration);
+    assert_eq!(request.operation_type, MultiPersonOperationType::KeyGeneration);
 
 }
 
@@ -831,7 +831,7 @@ async fn test_duplicate_decisions() {
 
         2,
 
-        vec![OperationType::AuditLogModification],
+        vec![MultiPersonOperationType::AuditLogModification],
 
         3600,
 
@@ -863,7 +863,7 @@ async fn test_duplicate_decisions() {
 
         group_id.clone(),
 
-        OperationType::AuditLogModification,
+        MultiPersonOperationType::AuditLogModification,
 
         "Modify audit log".to_string(),
 
@@ -951,7 +951,7 @@ async fn test_cleanup_expired_requests() {
 
         1,
 
-        vec![OperationType::HsmOperation],
+        vec![MultiPersonOperationType::HsmOperation],
 
         1, // 1 second timeout
 
@@ -971,7 +971,7 @@ async fn test_cleanup_expired_requests() {
 
             group_id.clone(),
 
-            OperationType::HsmOperation,
+            MultiPersonOperationType::HsmOperation,
 
             format!("HSM operation {}", i),
 
@@ -1041,7 +1041,7 @@ async fn test_custom_operation_types() {
 
         1,
 
-        vec![OperationType::Custom("DatabaseMigration".to_string())],
+        vec![MultiPersonOperationType::Custom("DatabaseMigration".to_string())],
 
         3600,
 
@@ -1073,7 +1073,7 @@ async fn test_custom_operation_types() {
 
         group_id.clone(),
 
-        OperationType::DatabaseQuery,
+        MultiPersonOperationType::HsmOperation,
 
         "Execute database migration".to_string(),
 
@@ -1099,7 +1099,7 @@ async fn test_custom_operation_types() {
 
     match request.operation_type {
 
-        OperationType::Custom(name) => assert_eq!(name, "DatabaseMigration"),
+        MultiPersonOperationType::Custom(name) => assert_eq!(name, "DatabaseMigration"),
 
         _ => assert!(false, "Expected custom operation type, got {:?}", request.operation_type),
 

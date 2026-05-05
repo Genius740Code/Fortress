@@ -696,7 +696,7 @@ mod tests {
     use crate::encryption::create_algorithm;
 
     #[tokio::test]
-    async fn test_optimized_rotation_performance() -> Result<(), Box<dyn std::error::Error>> {
+    async fn test_optimized_rotation_performance() -> Result<()> {
         let key_manager = Arc::new(InMemoryKeyManager::new());
         let config = OptimizedRotationConfig::default();
         let rotation_manager = OptimizedKeyRotationManager::new(key_manager, config);
@@ -704,7 +704,7 @@ mod tests {
         let algorithm = create_algorithm("aegis256")?;
         let security_context = SecurityContext {
             requestor_id: "test_user".to_string(),
-            security_level: SecurityLevel::Standard,
+            security_level: SecurityLevel::Medium,
             required_permissions: vec!["key.rotate".to_string()],
             ip_address: Some("127.0.0.1".to_string()),
             user_agent: Some("test_client".to_string()),
@@ -742,7 +742,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_bulk_rotation() -> Result<(), Box<dyn std::error::Error>> {
+    async fn test_bulk_rotation() -> Result<()> {
         let key_manager = Arc::new(InMemoryKeyManager::new());
         let mut config = OptimizedRotationConfig::default();
         config.batch_size = 3;
@@ -751,7 +751,7 @@ mod tests {
         let algorithm = create_algorithm("aegis256")?;
         let security_context = SecurityContext {
             requestor_id: "test_user".to_string(),
-            security_level: SecurityLevel::Standard,
+            security_level: SecurityLevel::Medium,
             required_permissions: vec!["key.rotate".to_string()],
             ip_address: None,
             user_agent: None,

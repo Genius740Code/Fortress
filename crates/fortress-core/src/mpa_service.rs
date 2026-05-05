@@ -4,7 +4,6 @@
 //! integrating with the authentication and authorization systems.
 
 use crate::error::FortressError;
-use crate::performance_monitor::OperationType;
 use crate::multi_person_auth::{
     MultiPersonAuthManager, ControlGroup, ControlGroupId, ApprovalRequest,
     ApprovalRequestId, MultiPersonOperationType, ControlGroupRole, Decision
@@ -36,7 +35,7 @@ impl MpaService {
         name: String,
         description: String,
         required_approvals: usize,
-        authorized_operations: Vec<OperationType>,
+        authorized_operations: Vec<MultiPersonOperationType>,
         approval_timeout: u64,
         creator_id: UserId,
     ) -> Result<ControlGroupId, FortressError> {
@@ -66,18 +65,7 @@ impl MpaService {
             name,
             description,
             required_approvals,
-            authorized_operations.into_iter().map(|op| match op {
-                crate::performance_monitor::OperationType::KeyGeneration => crate::multi_person_auth::MultiPersonOperationType::KeyGeneration,
-                crate::performance_monitor::OperationType::KeyStorage => crate::multi_person_auth::MultiPersonOperationType::KeyDeletion,
-                crate::performance_monitor::OperationType::KeyRetrieval => crate::multi_person_auth::MultiPersonOperationType::AccessControlModification,
-                crate::performance_monitor::OperationType::Encryption => crate::multi_person_auth::MultiPersonOperationType::SystemConfiguration,
-                crate::performance_monitor::OperationType::Decryption => crate::multi_person_auth::MultiPersonOperationType::CertificateSigning,
-                crate::performance_monitor::OperationType::DatabaseQuery => crate::multi_person_auth::MultiPersonOperationType::HsmOperation,
-                crate::performance_monitor::OperationType::CacheOperation => crate::multi_person_auth::MultiPersonOperationType::AuditLogModification,
-                crate::performance_monitor::OperationType::NetworkRequest => crate::multi_person_auth::MultiPersonOperationType::UserManagement,
-                crate::performance_monitor::OperationType::BackgroundTask => crate::multi_person_auth::MultiPersonOperationType::Custom("BackgroundTask".to_string()),
-                crate::performance_monitor::OperationType::SystemOperation => crate::multi_person_auth::MultiPersonOperationType::Custom("SystemOperation".to_string()),
-            }).collect(),
+            authorized_operations,
             approval_timeout,
             creator_id,
         )
@@ -465,7 +453,7 @@ mod tests {
             "Test Group".to_string(),
             "Test Description".to_string(),
             2,
-            vec![OperationType::KeyGeneration],
+            vec![MultiPersonOperationType::KeyGeneration],
             3600,
             "admin".to_string(),
         ).await.unwrap();
@@ -493,7 +481,7 @@ mod tests {
             "Test Group".to_string(),
             "Test Description".to_string(),
             2,
-            vec![OperationType::KeyGeneration],
+            vec![MultiPersonOperationType::KeyGeneration],
             3600,
             "admin".to_string(),
         ).await.unwrap();
@@ -516,7 +504,7 @@ mod tests {
         // Create approval request
         let request_id = service.create_approval_request(
             group_id,
-            OperationType::KeyGeneration,
+            MultiPersonOperationType::KeyGeneration,
             "Generate new encryption key".to_string(),
             serde_json::json!({"key_type": "AES-256"}).to_string(),
             "requester".to_string(),
@@ -563,7 +551,7 @@ mod tests {
             "Test Group".to_string(),
             "Test Description".to_string(),
             2,
-            vec![OperationType::KeyGeneration],
+            vec![MultiPersonOperationType::KeyGeneration],
             3600,
             "admin".to_string(),
         ).await.unwrap();
@@ -579,7 +567,7 @@ mod tests {
         // Create approval request
         let request_id = service.create_approval_request(
             group_id,
-            OperationType::KeyGeneration,
+            MultiPersonOperationType::KeyGeneration,
             "Generate new encryption key".to_string(),
             "{}".to_string(),
             "requester".to_string(),
