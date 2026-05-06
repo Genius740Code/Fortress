@@ -332,7 +332,7 @@ mod tests {
             author: "Fortress Team".to_string(),
             capabilities: vec![PluginCapability::Authentication],
             wasm_module: None,
-            config_schema: serde_json::Value::Null,
+            config_schema: None,
         };
         
         // Test loading with dummy WASM bytes
@@ -357,10 +357,10 @@ mod tests {
             author: "Fortress Team".to_string(),
             capabilities: vec![PluginCapability::Authentication],
             wasm_module: None,
-            config_schema: serde_json::Value::Null,
+            config_schema: None,
         };
         
-        let mut plugin = loader.load_from_bytes(&[0x00, 0x61, 0x73, 0x6d], metadata).unwrap();
+        let mut plugin = loader.load_from_bytes(&[0x00, 0x61, 0x73, 0x6d], metadata.clone()).unwrap();
         
         // Initialize plugin
         let context = PluginContext {
@@ -392,7 +392,7 @@ mod tests {
         
         let plugin_result = result.unwrap();
         assert!(plugin_result.success);
-        assert_eq!(plugin_result.data["authenticated"], true);
+        assert_eq!(plugin_result.data.unwrap_or(serde_json::Value::Null)["authenticated"], true);
         
         // Test policy check operation
         let input = PluginInput {
@@ -411,7 +411,7 @@ mod tests {
         
         let plugin_result = result.unwrap();
         assert!(plugin_result.success);
-        assert_eq!(plugin_result.data["allowed"], true);
+        assert_eq!(plugin_result.data.unwrap_or(serde_json::Value::Null)["allowed"], true);
         
         // Test statistics
         let stats = plugin.get_stats().await;

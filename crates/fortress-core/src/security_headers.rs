@@ -1080,16 +1080,13 @@ mod tests {
             .unwrap();
 
         // Call middleware directly with config
-        let response = security_headers_middleware_with_config(config, request, |request| async move {
-
-            Response::builder()
-
-                .status(StatusCode::OK)
-
-                .body(Body::from("Hello, World!"))
-
-                .unwrap()
-
+        let response = security_headers_middleware_with_config(config)(request, |request| {
+            Box::pin(async move {
+                Response::builder()
+                    .status(StatusCode::OK)
+                    .body(Body::from("Hello, World!"))
+                    .unwrap()
+            })
         }).await;
 
 

@@ -121,6 +121,7 @@ pub struct RequestVoteResponse {
 }
 
 /// Raft consensus engine
+#[derive(Clone)]
 pub struct RaftEngine {
     /// Node ID
     node_id: NodeId,

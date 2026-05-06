@@ -212,6 +212,10 @@ pub enum PerformanceProfile {
 
     Hardware,
 
+    /// High-performance mode optimized for speed
+
+    HighPerformance,
+
     /// Quantum-resistant encryption
 
     Quantum,
@@ -242,6 +246,8 @@ impl PerformanceProfile {
             Self::Streaming => std::time::Duration::from_secs(14 * 24 * 3600), // 14 days
 
             Self::Hardware => std::time::Duration::from_secs(3 * 24 * 3600), // 3 days
+
+            Self::HighPerformance => std::time::Duration::from_secs(1 * 24 * 3600), // 1 day
 
             Self::Quantum => std::time::Duration::from_secs(90 * 24 * 3600), // 90 days
 

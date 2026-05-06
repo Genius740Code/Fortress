@@ -39,6 +39,8 @@ pub struct KeyPreloadConfig {
     pub background_preload_interval: Duration,
     /// Preload statistics tracking
     pub track_preload_stats: bool,
+    /// Enable access tracking for preloaded keys
+    pub enable_access_tracking: bool,
 }
 
 impl Default for KeyPreloadConfig {
@@ -63,6 +65,7 @@ impl Default for KeyPreloadConfig {
             enable_background_preload: true,
             background_preload_interval: Duration::minutes(30),
             track_preload_stats: true,
+            enable_access_tracking: false,
         }
     }
 }
@@ -105,6 +108,8 @@ pub struct KeyAccessStats {
     pub access_count: u64,
     /// Last access time
     pub last_accessed: DateTime<Utc>,
+    /// Last access time (alias for compatibility)
+    pub last_access_time: DateTime<Utc>,
     /// First access time
     pub first_accessed: DateTime<Utc>,
     /// Average access frequency (accesses per hour)
@@ -122,6 +127,10 @@ pub struct PreloadStats {
     pub total_preloaded_keys: usize,
     /// Total memory used for preloaded keys
     pub total_memory_usage_bytes: usize,
+    /// Number of cache hits
+    pub preload_hits: usize,
+    /// Number of cache misses
+    pub preload_misses: usize,
     /// Number of keys that couldn't be preloaded due to limits
     pub skipped_keys_due_to_limits: usize,
     /// Preloading success rate
@@ -137,6 +146,7 @@ pub struct PreloadStats {
 }
 
 /// Advanced key preloader with configurable strategies
+#[derive(Clone)]
 pub struct KeyPreloader {
     database: Arc<dyn KeyDatabase>,
     config: KeyPreloadConfig,
@@ -159,6 +169,8 @@ impl KeyPreloader {
             stats: Arc::new(RwLock::new(PreloadStats {
                 total_preloaded_keys: 0,
                 total_memory_usage_bytes: 0,
+                preload_hits: 0,
+                preload_misses: 0,
                 skipped_keys_due_to_limits: 0,
                 preload_success_rate: 0.0,
                 avg_preload_time_ms: 0.0,
@@ -352,6 +364,7 @@ impl KeyPreloader {
         let stats = access_stats.entry(key_id.clone()).or_insert(KeyAccessStats {
             access_count: 0,
             last_accessed: Utc::now(),
+            last_access_time: Utc::now(),
             first_accessed: Utc::now(),
             access_frequency: 0.0,
             key_size_bytes: metadata.algorithm.len(), // Approximate size
@@ -397,8 +410,9 @@ impl KeyPreloader {
         
         let entry = stats.entry(key_id.clone()).or_insert(KeyAccessStats {
             access_count: 0,
-            last_accessed: now,
-            first_accessed: now,
+            last_accessed: Utc::now(),
+            last_access_time: Utc::now(),
+            first_accessed: Utc::now(),
             access_frequency: 0.0,
             key_size_bytes: 0,
             is_preloaded: false,
@@ -611,6 +625,70 @@ impl KeyPreloader {
 
         Ok(())
     }
+
+    /// Apply a specific preload strategy
+    pub async fn apply_preload_strategy(&self, strategy: &PreloadStrategy) -> Result<()> {
+        match strategy {
+            PreloadStrategy::All => {
+                self.preload_all_keys().await?;
+                Ok(())
+            },
+            PreloadStrategy::FrequentlyUsed => {
+                self.preload_frequently_used_keys().await?;
+                Ok(())
+            },
+            PreloadStrategy::ByPurpose => {
+                self.preload_keys_by_purpose().await?;
+                Ok(())
+            },
+            PreloadStrategy::ExpiringSoon => {
+                self.preload_expiring_keys().await?;
+                Ok(())
+            },
+            PreloadStrategy::ByPerformanceProfile => {
+                // For now, treat as same as frequently used
+                self.preload_frequently_used_keys().await?;
+                Ok(())
+            },
+            PreloadStrategy::Custom(_) => {
+                // For now, treat as same as frequently used
+                self.preload_frequently_used_keys().await?;
+                Ok(())
+            },
+        }
+    }
+
+    /// Get performance recommendations based on current statistics
+    pub async fn get_performance_recommendations(&self) -> Vec<String> {
+        let stats = self.get_stats().await;
+        let mut recommendations = Vec::new();
+
+        // Memory usage recommendations
+        if stats.total_memory_usage_bytes > 50 * 1024 * 1024 { // 50MB
+            recommendations.push("Consider reducing max_keys_to_preload to lower memory usage".to_string());
+        }
+
+        // Hit rate recommendations
+        let total_requests = stats.preload_hits + stats.preload_misses;
+        if total_requests > 0 {
+            let hit_rate = stats.preload_hits as f64 / total_requests as f64;
+            if hit_rate < 0.8 {
+                recommendations.push("Low cache hit rate detected. Consider adjusting preload strategies.".to_string());
+            }
+        }
+
+        // Success rate recommendations
+        if stats.preload_success_rate < 0.9 {
+            recommendations.push("Low preload success rate. Check key accessibility and configuration.".to_string());
+        }
+
+        // Performance recommendations
+        if stats.avg_preload_time_ms > 100.0 {
+            recommendations.push("High preload time detected. Consider optimizing key database queries.".to_string());
+        }
+
+        recommendations
+    }
 }
 
 impl std::fmt::Debug for KeyPreloader {
@@ -640,7 +718,7 @@ use crate::encryption::PerformanceProfile;
     async fn create_test_database_with_keys() -> Result<Arc<dyn KeyDatabase>> {
         let temp_dir = tempdir().map_err(|e| FortressError::storage(
             format!("Failed to create temp dir: {}", e),
-            "tempdir",
+            "tempdir".to_string(),
             StorageErrorCode::IoError
         ))?;
         
@@ -739,6 +817,7 @@ use crate::encryption::PerformanceProfile;
             enable_background_preload: false, // Disable for testing
             background_preload_interval: ChronoDuration::minutes(30),
             track_preload_stats: true,
+            enable_access_tracking: false,
         }
     }
 
@@ -909,7 +988,7 @@ use crate::encryption::PerformanceProfile;
         
         // Simulate key access
         let key_id = "encryption_key".to_string();
-        preloader.record_key_access(&key_id).await?;
+        preloader.record_key_access(&key_id).await;
         
         // Get access stats
         let access_stats = preloader.get_access_stats().await;
@@ -921,7 +1000,7 @@ use crate::encryption::PerformanceProfile;
         
         // Record multiple accesses
         for _ in 0..5 {
-            preloader.record_key_access(&key_id).await?;
+            preloader.record_key_access(&key_id).await;
         }
         
         let updated_stats = preloader.get_access_stats().await;
@@ -945,7 +1024,7 @@ use crate::encryption::PerformanceProfile;
         // Record frequent access to a specific key
         let key_id = "custom_key".to_string();
         for _ in 0..10 {
-            preloader.record_key_access(&key_id).await?;
+            preloader.record_key_access(&key_id).await;
         }
         
         // Trigger frequently used preloading
@@ -1045,19 +1124,18 @@ use crate::encryption::PerformanceProfile;
         for i in 0..10 {
             let preloader_clone = preloader.clone();
             let handle = tokio::spawn(async move {
-                let key_id = KeyId::new(&format!("concurrent_test_{}", i));
+                let key_id = format!("concurrent_test_{}", i);
                 
                 // Force preload key
                 let preload_result = preloader_clone.force_preload_key(&key_id).await;
                 assert!(preload_result.is_ok());
                 
                 // Record access
-                let access_result = preloader_clone.record_key_access(&key_id).await;
-                assert!(access_result.is_ok());
+                preloader_clone.record_key_access(&key_id).await;
                 
                 // Get preloaded key
                 let get_result = preloader_clone.get_preloaded_key(&key_id).await;
-                assert!(get_result.is_ok());
+                assert!(get_result.is_some());
             });
             
             handles.push(handle);
@@ -1088,8 +1166,8 @@ use crate::encryption::PerformanceProfile;
         
         // Add some access patterns and get new recommendations
         for i in 0..5 {
-            let key_id = KeyId::new(&format!("rec_test_{}", i));
-            preloader.record_key_access(&key_id).await?;
+            let key_id = format!("rec_test_{}", i);
+            preloader.record_key_access(&key_id).await;
         }
         
         let updated_recommendations = preloader.get_performance_recommendations().await;
@@ -1103,6 +1181,7 @@ use crate::encryption::PerformanceProfile;
         // Create empty database
         let temp_dir = tempdir().map_err(|e| FortressError::storage(
             format!("Failed to create temp dir: {}", e),
+            "tempdir".to_string(),
             crate::error::StorageErrorCode::IoError
         ))?;
         
@@ -1148,7 +1227,7 @@ use crate::encryption::PerformanceProfile;
         preloader.initialize().await?;
         
         // Test operations with non-existent keys
-        let non_existent_id = KeyId::new("non_existent_key");
+        let non_existent_id = "non_existent_key".to_string();
         
         // Try to get non-existent preloaded key
         let result = preloader.get_preloaded_key(&non_existent_id).await;
@@ -1159,8 +1238,7 @@ use crate::encryption::PerformanceProfile;
         assert!(!evicted);
         
         // Try to record access for non-existent key (should handle gracefully)
-        let access_result = preloader.record_key_access(&non_existent_id).await;
-        assert!(access_result.is_ok()); // Should not error
+        preloader.record_key_access(&non_existent_id).await; // Should not error
         
         Ok(())
     }
@@ -1189,7 +1267,7 @@ use crate::encryption::PerformanceProfile;
         let _ = preloader.get_preloaded_key(&"non_existent".to_string()).await;
         
         // Record access
-        preloader.record_key_access(&key_id).await?;
+        preloader.record_key_access(&key_id).await;
         
         // Verify statistics
         let stats = preloader.get_stats().await;

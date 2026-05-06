@@ -54,11 +54,6 @@ impl DefaultBackupManager {
         })
     }
 
-    /// Get current configuration
-    async fn get_config(&self) -> BackupConfig {
-        self.config.read().await.clone()
-    }
-
     /// Update configuration
     async fn update_config(&self, config: BackupConfig) -> Result<()> {
         utils::validate_backup_config(&config)?;
@@ -572,6 +567,11 @@ impl DefaultBackupManager {
 
         self.backup_storage.put(&manifest_key, &manifest_data).await?;
         Ok(())
+    }
+
+    /// Get the current configuration
+    pub async fn get_config(&self) -> BackupConfig {
+        self.config.read().await.clone()
     }
 }
 

@@ -741,6 +741,8 @@ mod tests {
             action: "test_action".to_string(),
             data: serde_json::json!({"test": "data"}),
             parameters: HashMap::new(),
+            operation: Some("test_operation".to_string()),
+            timestamp: Some(chrono::Utc::now()),
         };
 
         let context = PluginContext {
@@ -820,7 +822,7 @@ mod tests {
             }
         }
 
-        let plugin = FailingPlugin();
+        let plugin = FailingPlugin::new();
         let plugin_arc = Arc::new(plugin);
         let registry = PluginRegistry::new();
 
@@ -922,7 +924,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_concurrent_plugin_access() -> Result<()> {
-        let registry = PluginRegistry::new();
+        let registry = Arc::new(PluginRegistry::new());
         
         // Create and register multiple plugins
         for i in 0..5 {

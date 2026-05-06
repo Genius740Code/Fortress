@@ -185,7 +185,7 @@ impl TeeIntegrationTests {
         let channel = SecureChannel {
             channel_id: "test-channel".to_string(),
             enclave_id: "test-enclave".to_string(),
-            session_key: crate::key::SecureKey::generate(32),
+            session_key: crate::key::SecureKey::generate(32).expect("Failed to generate session key"),
             created_at: chrono::Utc::now(),
             is_active: true,
         };

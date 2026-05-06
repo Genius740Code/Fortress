@@ -29,15 +29,17 @@ impl SecurityPerformanceTests {
             enable_ip_lockout: true,
         };
         
-        let auth_manager = Arc::new(AuthManager::new());
+        let mut auth_manager = Arc::new(AuthManager::new());
         
         // Test 1: Single authentication performance
         let start_time = Instant::now();
         let login_request = LoginRequest {
             username: "test_user".to_string(),
             password: "test_password".to_string(),
+            device_fingerprint: Some("test_device_fp".to_string()),
             ip_address: Some("127.0.0.1".to_string()),
             user_agent: Some("test_agent".to_string()),
+            mfa_data: None,
             risk_context: None,
         };
         let result = auth_manager.authenticate(login_request).await?;
@@ -57,8 +59,10 @@ impl SecurityPerformanceTests {
                 let login_request = LoginRequest {
                     username: format!("user_{}", i),
                     password: "test_password".to_string(),
+                    device_fingerprint: Some(format!("device_fp_{}", i)),
                     ip_address: Some(client_ip),
                     user_agent: Some("test_agent".to_string()),
+                    mfa_data: None,
                     risk_context: None,
                 };
                 let start = Instant::now();
@@ -456,7 +460,7 @@ impl SecurityPerformanceTests {
         println!("Testing memory usage of security components...");
         
         // Test 1: Session generator memory usage
-        let session_generator = SecureSessionGenerator::new();
+        let mut session_generator = SecureSessionGenerator::new();
         let mut session_ids = vec![];
         
         // Generate many sessions to test memory usage
@@ -494,7 +498,7 @@ impl SecurityPerformanceTests {
             enable_ip_lockout: true,
         };
         
-        let auth_manager = AuthManager::new();
+        let mut auth_manager = AuthManager::new();
         
         // Create many rate limit entries
         for i in 0..1000 {
@@ -502,8 +506,10 @@ impl SecurityPerformanceTests {
             let login_request = LoginRequest {
                 username: format!("invalid_user_{}", i),
                 password: "invalid_password".to_string(),
+                device_fingerprint: Some(format!("device_fp_{}", i)),
                 ip_address: Some(client_ip),
                 user_agent: Some("test_agent".to_string()),
+                mfa_data: None,
                 risk_context: None,
             };
             let _result = auth_manager.authenticate(login_request).await;

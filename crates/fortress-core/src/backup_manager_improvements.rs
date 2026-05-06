@@ -13,7 +13,7 @@ use tokio::sync::RwLock;
 
 /// Enhanced backup manager with additional safety checks and monitoring
 pub struct EnhancedBackupManager {
-    inner: crate::backup_manager::DefaultBackupManager,
+    pub inner: crate::backup_manager::DefaultBackupManager,
     /// Track backup operations for monitoring
     operation_history: Arc<RwLock<Vec<BackupOperation>>>,
     /// Configuration validation cache
@@ -375,6 +375,11 @@ impl EnhancedBackupManager {
             validation_duration: Utc::now() - start_time,
         })
     }
+
+    /// Get the current configuration
+    pub async fn get_config(&self) -> BackupConfig {
+        self.inner.get_config().await
+    }
 }
 
 /// Health metrics for backup operations
@@ -441,6 +446,7 @@ mod tests {
             max_full_backups: 0,
             max_incremental_backups: 10,
             max_age_days: 30,
+            auto_cleanup: true,
         });
         
         let result = EnhancedBackupManager::new(storage.clone(), None, config);

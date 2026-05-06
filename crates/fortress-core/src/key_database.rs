@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Row, Sqlite, SqlitePool};
 #[cfg(feature = "postgres")]
 use sqlx::{Postgres, PgPool};
+use tempfile::tempdir;
 
 /// Configuration for key database backends
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -88,7 +89,7 @@ pub struct KeyDatabaseStats {
 }
 
 /// SQLite implementation of key database
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SqliteKeyDatabase {
     pool: Pool<Sqlite>,
     encrypt_at_rest: bool,
@@ -865,7 +866,7 @@ use crate::encryption::PerformanceProfile;
         let algorithm = Aes256GcmWrapper::new();
         let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate test key");
         let metadata = KeyMetadata::new(
-            KeyId::new(id),
+            id.to_string(),
             algorithm.name().to_string(),
             version,
             Utc::now(),
@@ -901,7 +902,7 @@ use crate::encryption::PerformanceProfile;
         db.initialize().await?;
         
         let (key, metadata) = create_test_key_data("test_key_1", 1);
-        let key_id = KeyId::new("test_key_1");
+        let key_id = "test_key_1".to_string();
         
         // Store key
         db.store_key(&key_id, &key, &metadata).await?;
@@ -925,7 +926,7 @@ use crate::encryption::PerformanceProfile;
         db.initialize().await?;
         
         let (key, metadata) = create_test_key_data("exists_test", 1);
-        let key_id = KeyId::new("exists_test");
+        let key_id = String::from("exists_test");
         
         // Key should not exist initially
         assert!(!db.key_exists(&key_id).await?);
@@ -937,7 +938,7 @@ use crate::encryption::PerformanceProfile;
         assert!(db.key_exists(&key_id).await?);
         
         // Non-existent key should not exist
-        assert!(!db.key_exists(&KeyId::new("non_existent")).await?);
+        assert!(!db.key_exists(&String::from("non_existent")).await?);
         
         Ok(())
     }
@@ -948,7 +949,7 @@ use crate::encryption::PerformanceProfile;
         db.initialize().await?;
         
         let (key, metadata) = create_test_key_data("delete_test", 1);
-        let key_id = KeyId::new("delete_test");
+        let key_id = String::from("delete_test");
         
         // Store key
         db.store_key(&key_id, &key, &metadata).await?;
@@ -973,7 +974,7 @@ use crate::encryption::PerformanceProfile;
         // Store multiple keys
         for i in 1..=5 {
             let (key, metadata) = create_test_key_data(&format!("list_test_{}", i), i);
-            let key_id = KeyId::new(&format!("list_test_{}", i));
+            let key_id = String::from(&format!("list_test_{}", i));
             db.store_key(&key_id, &key, &metadata).await?;
         }
         
@@ -1002,7 +1003,7 @@ use crate::encryption::PerformanceProfile;
         db.initialize().await?;
         
         let (key, metadata) = create_test_key_data("metadata_test", 1);
-        let key_id = KeyId::new("metadata_test");
+        let key_id = String::from("metadata_test");
         
         // Store key
         db.store_key(&key_id, &key, &metadata).await?;
@@ -1018,7 +1019,7 @@ use crate::encryption::PerformanceProfile;
         assert_eq!(metadata.created_at, retrieved_metadata.created_at);
         
         // Get metadata for non-existent key
-        let non_existent_metadata = db.get_key_metadata(&KeyId::new("non_existent")).await?;
+        let non_existent_metadata = db.get_key_metadata(&String::from("non_existent")).await?;
         assert!(non_existent_metadata.is_none());
         
         Ok(())
@@ -1032,7 +1033,7 @@ use crate::encryption::PerformanceProfile;
         // Store multiple keys
         for i in 1..=5 {
             let (key, metadata) = create_test_key_data(&format!("preload_test_{}", i), i);
-            let key_id = KeyId::new(&format!("preload_test_{}", i));
+            let key_id = String::from(&format!("preload_test_{}", i));
             db.store_key(&key_id, &key, &metadata).await?;
         }
         
@@ -1063,7 +1064,7 @@ use crate::encryption::PerformanceProfile;
         // Store some keys
         for i in 1..=3 {
             let (key, metadata) = create_test_key_data(&format!("stats_test_{}", i), i);
-            let key_id = KeyId::new(&format!("stats_test_{}", i));
+            let key_id = String::from(&format!("stats_test_{}", i));
             db.store_key(&key_id, &key, &metadata).await?;
         }
         
@@ -1083,7 +1084,7 @@ use crate::encryption::PerformanceProfile;
         
         let (key1, metadata1) = create_test_key_data("update_test", 1);
         let (key2, metadata2) = create_test_key_data("update_test", 2);
-        let key_id = KeyId::new("update_test");
+        let key_id = String::from("update_test");
         
         // Store initial key
         db.store_key(&key_id, &key1, &metadata1).await?;
@@ -1119,7 +1120,7 @@ use crate::encryption::PerformanceProfile;
             let db_clone = db.clone();
             let handle = tokio::spawn(async move {
                 let (key, metadata) = create_test_key_data(&format!("concurrent_test_{}", i), i);
-                let key_id = KeyId::new(&format!("concurrent_test_{}", i));
+                let key_id = String::from(&format!("concurrent_test_{}", i));
                 
                 // Store key
                 let store_result = db_clone.store_key(&key_id, &key, &metadata).await;
@@ -1158,10 +1159,10 @@ use crate::encryption::PerformanceProfile;
         
         // Create a large key
         let large_key_data = vec![0u8; 1024 * 1024]; // 1MB key
-        let large_key = SecureKey::from_bytes(&large_key_data).expect("Failed to create large key");
+        let large_key = SecureKey::from_bytes(&large_key_data);
         
         let metadata = KeyMetadata::new(
-            KeyId::new("large_key_test"),
+            String::from("large_key_test"),
             "test_algorithm".to_string(),
             1,
             Utc::now(),
@@ -1171,10 +1172,10 @@ use crate::encryption::PerformanceProfile;
         );
         
         // Store large key
-        db.store_key(&KeyId::new("large_key_test"), &large_key, &metadata).await?;
+        db.store_key(&String::from("large_key_test"), &large_key, &metadata).await?;
         
         // Retrieve large key
-        let result = db.retrieve_key(&KeyId::new("large_key_test")).await?;
+        let result = db.retrieve_key(&String::from("large_key_test")).await?;
         assert!(result.is_some());
         
         let (retrieved_key, _) = result.unwrap();
@@ -1204,7 +1205,7 @@ use crate::encryption::PerformanceProfile;
         
         for (i, special_id) in special_ids.iter().enumerate() {
             let (key, metadata) = create_test_key_data(special_id, i as u32 + 1);
-            let key_id = KeyId::new(special_id);
+            let key_id = String::from(special_id);
             
             // Store key
             db.store_key(&key_id, &key, &metadata).await?;
@@ -1249,7 +1250,7 @@ use crate::encryption::PerformanceProfile;
             db.initialize().await?;
             
             let (key, metadata) = create_test_key_data("persistence_test", 1);
-            let key_id = KeyId::new("persistence_test");
+            let key_id = String::from("persistence_test");
             db.store_key(&key_id, &key, &metadata).await?;
             
             // Return path for second database instance
@@ -1271,8 +1272,8 @@ use crate::encryption::PerformanceProfile;
         db2.initialize().await?;
         
         // Verify data persists
-        assert!(db2.key_exists(&KeyId::new("persistence_test")).await?);
-        let result = db2.retrieve_key(&KeyId::new("persistence_test")).await?;
+        assert!(db2.key_exists(&String::from("persistence_test")).await?);
+        let result = db2.retrieve_key(&String::from("persistence_test")).await?;
         assert!(result.is_some());
         
         Ok(())
@@ -1284,15 +1285,15 @@ use crate::encryption::PerformanceProfile;
         db.initialize().await?;
         
         // Test retrieving non-existent key
-        let result = db.retrieve_key(&KeyId::new("non_existent")).await?;
+        let result = db.retrieve_key(&String::from("non_existent")).await?;
         assert!(result.is_none());
         
         // Test deleting non-existent key (should not error)
-        let delete_result = db.delete_key(&KeyId::new("non_existent")).await;
+        let delete_result = db.delete_key(&String::from("non_existent")).await;
         assert!(delete_result.is_ok()); // Delete operations are typically idempotent
         
         // Test getting metadata for non-existent key
-        let metadata_result = db.get_key_metadata(&KeyId::new("non_existent")).await?;
+        let metadata_result = db.get_key_metadata(&String::from("non_existent")).await?;
         assert!(metadata_result.is_none());
         
         Ok(())
@@ -1308,7 +1309,7 @@ use crate::encryption::PerformanceProfile;
         // Store many keys
         for i in 1..=100 {
             let (key, metadata) = create_test_key_data(&format!("perf_test_{}", i), i);
-            let key_id = KeyId::new(&format!("perf_test_{}", i));
+            let key_id = String::from(&format!("perf_test_{}", i));
             db.store_key(&key_id, &key, &metadata).await?;
         }
         
@@ -1317,7 +1318,7 @@ use crate::encryption::PerformanceProfile;
         // Retrieve all keys
         let retrieve_start = std::time::Instant::now();
         for i in 1..=100 {
-            let key_id = KeyId::new(&format!("perf_test_{}", i));
+            let key_id = String::from(&format!("perf_test_{}", i));
             let result = db.retrieve_key(&key_id).await?;
             assert!(result.is_some());
         }
@@ -1352,7 +1353,7 @@ use crate::encryption::PerformanceProfile;
         let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate test key");
         
         let metadata = KeyMetadata::new(
-            KeyId::new("complex_metadata_test"),
+            String::from("complex_metadata_test"),
             algorithm.name().to_string(),
             1,
             Utc::now(),
@@ -1364,10 +1365,10 @@ use crate::encryption::PerformanceProfile;
          .with_metadata("json_field".to_string(), r#"{"key": "value"}"#.to_string());
         
         // Store key with complex metadata
-        db.store_key(&KeyId::new("complex_metadata_test"), &key, &metadata).await?;
+        db.store_key(&String::from("complex_metadata_test"), &key, &metadata).await?;
         
         // Retrieve and verify complex metadata
-        let result = db.retrieve_key(&KeyId::new("complex_metadata_test")).await?;
+        let result = db.retrieve_key(&String::from("complex_metadata_test")).await?;
         assert!(result.is_some());
         
         let (_, retrieved_metadata) = result.unwrap();

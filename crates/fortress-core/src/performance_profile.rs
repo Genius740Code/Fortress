@@ -18,6 +18,8 @@ pub enum PerformanceProfile {
     Balanced,
     /// Fortress mode - Maximum security, accepting performance trade-offs
     Fortress,
+    /// High-performance mode optimized for speed
+    HighPerformance,
     /// Custom profile with user-defined settings
     Custom,
 }
@@ -28,6 +30,7 @@ impl fmt::Display for PerformanceProfile {
             PerformanceProfile::Lightning => write!(f, "Lightning"),
             PerformanceProfile::Balanced => write!(f, "Balanced"),
             PerformanceProfile::Fortress => write!(f, "Fortress"),
+            PerformanceProfile::HighPerformance => write!(f, "HighPerformance"),
             PerformanceProfile::Custom => write!(f, "Custom"),
         }
     }

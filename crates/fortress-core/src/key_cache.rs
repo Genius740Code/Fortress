@@ -807,7 +807,7 @@ use crate::encryption::PerformanceProfile;
     async fn test_cache_contains() -> Result<()> {
         let cache = create_test_cache();
         let (key, metadata) = create_test_key_data("contains_test", 1);
-        let key_id = KeyId::new("contains_test");
+        let key_id = String::from("contains_test");
         
         // Key should not exist initially
         assert!(!cache.contains(&key_id).await);
@@ -819,7 +819,7 @@ use crate::encryption::PerformanceProfile;
         assert!(cache.contains(&key_id).await);
         
         // Non-existent key should not exist
-        assert!(!cache.contains(&KeyId::new("non_existent")).await);
+        assert!(!cache.contains(&String::from("non_existent")).await);
         
         Ok(())
     }
@@ -828,7 +828,7 @@ use crate::encryption::PerformanceProfile;
     async fn test_cache_remove() -> Result<()> {
         let cache = create_test_cache();
         let (key, metadata) = create_test_key_data("remove_test", 1);
-        let key_id = KeyId::new("remove_test");
+        let key_id = String::from("remove_test");
         
         // Put key in cache
         cache.put(key_id.clone(), key.clone(), metadata.clone()).await?;
@@ -840,7 +840,7 @@ use crate::encryption::PerformanceProfile;
         assert!(!cache.contains(&key_id).await);
         
         // Try to remove non-existent key
-        let non_existent_id = KeyId::new("non_existent");
+        let non_existent_id = String::from("non_existent");
         let not_removed = cache.remove(&non_existent_id).await?;
         assert!(!not_removed);
         
@@ -854,7 +854,7 @@ use crate::encryption::PerformanceProfile;
         // Add multiple keys
         for i in 1..=5 {
             let (key, metadata) = create_test_key_data(&format!("clear_test_{}", i), i);
-            let key_id = KeyId::new(&format!("clear_test_{}", i));
+            let key_id = String::from(&format!("clear_test_{}", i));
             cache.put(key_id, key, metadata).await?;
         }
         
@@ -886,23 +886,23 @@ use crate::encryption::PerformanceProfile;
         // Add keys up to the limit
         for i in 1..=3 {
             let (key, metadata) = create_test_key_data(&format!("lru_test_{}", i), i);
-            let key_id = KeyId::new(&format!("lru_test_{}", i));
+            let key_id = format!("lru_test_{}", i);
             cache.put(key_id, key, metadata).await?;
         }
         
         // Access first key to make it most recently used
-        let _ = cache.get(&KeyId::new("lru_test_1")).await;
+        let _ = cache.get(&"lru_test_1".to_string()).await;
         
         // Add one more key to trigger eviction
         let (key, metadata) = create_test_key_data("lru_test_4", 4);
-        let key_id = KeyId::new("lru_test_4");
+        let key_id = "lru_test_4".to_string();
         cache.put(key_id, key, metadata).await?;
         
         // Verify LRU key was evicted (should be lru_test_2 since we accessed lru_test_1)
-        assert!(!cache.contains(&KeyId::new("lru_test_2")).await);
-        assert!(cache.contains(&KeyId::new("lru_test_1")).await);
-        assert!(cache.contains(&KeyId::new("lru_test_3")).await);
-        assert!(cache.contains(&KeyId::new("lru_test_4")).await);
+        assert!(!cache.contains(&"lru_test_2".to_string()).await);
+        assert!(cache.contains(&"lru_test_1".to_string()).await);
+        assert!(cache.contains(&"lru_test_3".to_string()).await);
+        assert!(cache.contains(&"lru_test_4".to_string()).await);
         
         // Verify eviction count
         let stats = cache.get_stats().await;
@@ -922,7 +922,7 @@ use crate::encryption::PerformanceProfile;
         
         // Add a key
         let (key, metadata) = create_test_key_data("time_evict_test", 1);
-        let key_id = KeyId::new("time_evict_test");
+        let key_id = String::from("time_evict_test");
         cache.put(key_id.clone(), key, metadata).await?;
         
         // Key should exist initially
@@ -949,13 +949,14 @@ use crate::encryption::PerformanceProfile;
         config.enable_lru_eviction = true;
         config.enable_time_eviction = false;
         
+        let max_memory_bytes = config.max_memory_bytes;
         let cache = KeyCache::new(config);
         
         // Add keys until memory limit is reached
         let mut added_keys = 0;
         for i in 1..=10 {
             let (key, metadata) = create_test_key_data(&format!("memory_test_{}", i), i);
-            let key_id = KeyId::new(&format!("memory_test_{}", i));
+            let key_id = String::from(&format!("memory_test_{}", i));
             
             if cache.put(key_id, key, metadata).await.is_ok() {
                 added_keys += 1;
@@ -966,7 +967,7 @@ use crate::encryption::PerformanceProfile;
         
         // Verify memory usage is within limits
         let stats = cache.get_stats().await;
-        assert!(stats.current_memory_bytes <= config.max_memory_bytes);
+        assert!(stats.current_memory_bytes <= max_memory_bytes);
         
         Ok(())
     }
@@ -980,7 +981,7 @@ use crate::encryption::PerformanceProfile;
         let cache = KeyCache::new(config);
         
         let (key, metadata) = create_test_key_data("freq_test", 1);
-        let key_id = KeyId::new("freq_test");
+        let key_id = String::from("freq_test");
         cache.put(key_id.clone(), key, metadata).await?;
         
         // Access key multiple times
@@ -1010,7 +1011,7 @@ use crate::encryption::PerformanceProfile;
         // Add some keys and get recommendations
         for i in 1..=5 {
             let (key, metadata) = create_test_key_data(&format!("rec_test_{}", i), i);
-            let key_id = KeyId::new(&format!("rec_test_{}", i));
+            let key_id = String::from(&format!("rec_test_{}", i));
             cache.put(key_id, key, metadata).await?;
         }
         
@@ -1047,7 +1048,7 @@ use crate::encryption::PerformanceProfile;
         
         // Add a key
         let (key, metadata) = create_test_key_data("cleanup_test", 1);
-        let key_id = KeyId::new("cleanup_test");
+        let key_id = String::from("cleanup_test");
         cache.put(key_id.clone(), key, metadata).await?;
         
         // Wait for cleanup interval
@@ -1065,7 +1066,7 @@ use crate::encryption::PerformanceProfile;
         
         // Add a key
         let (key, metadata) = create_test_key_data("concurrent_test", 1);
-        let key_id = KeyId::new("concurrent_test");
+        let key_id = String::from("concurrent_test");
         cache.put(key_id.clone(), key.clone(), metadata.clone()).await?;
         
         // Spawn multiple concurrent tasks
@@ -1110,7 +1111,7 @@ use crate::encryption::PerformanceProfile;
         // Add some keys
         for i in 1..=3 {
             let (key, metadata) = create_test_key_data(&format!("shutdown_test_{}", i), i);
-            let key_id = KeyId::new(&format!("shutdown_test_{}", i));
+            let key_id = String::from(&format!("shutdown_test_{}", i));
             cache.put(key_id, key, metadata).await?;
         }
         
@@ -1154,8 +1155,8 @@ use crate::encryption::PerformanceProfile;
         // Perform known operations
         let (key1, metadata1) = create_test_key_data("stats_test_1", 1);
         let (key2, metadata2) = create_test_key_data("stats_test_2", 2);
-        let key_id1 = KeyId::new("stats_test_1");
-        let key_id2 = KeyId::new("stats_test_2");
+        let key_id1 = String::from("stats_test_1");
+        let key_id2 = String::from("stats_test_2");
         
         // Put operations
         cache.put(key_id1.clone(), key1, metadata1).await?;
@@ -1190,25 +1191,25 @@ use crate::encryption::PerformanceProfile;
         
         // Create a large key (if supported)
         let large_key_data = vec![0u8; 1024 * 1024]; // 1MB key
-        let large_key = SecureKey::from_bytes(&large_key_data).expect("Failed to create large key");
+        let large_key = SecureKey::from_bytes(&large_key_data);
         
         let metadata = KeyMetadata::new(
-            KeyId::new("large_key_test"),
+            String::from("large_key_test"),
             "test_algorithm".to_string(),
             1,
             Utc::now(),
             Utc::now() + chrono::Duration::days(30),
-            KeyPurpose::DataEncryption,
+            "DataEncryption".to_string(),
             PerformanceProfile::Balanced,
         );
         
         // Try to store large key
-        let result = cache.put(KeyId::new("large_key_test"), large_key, metadata).await;
+        let result = cache.put(String::from("large_key_test"), large_key, metadata).await;
         
         // Result depends on memory limits and implementation
         if result.is_ok() {
             // If accepted, verify it can be retrieved
-            let retrieved = cache.get(&KeyId::new("large_key_test")).await;
+            let retrieved = cache.get(&String::from("large_key_test")).await;
             assert!(retrieved.is_some());
             
             let (retrieved_key, _) = retrieved.unwrap();

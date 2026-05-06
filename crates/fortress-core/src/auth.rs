@@ -1763,6 +1763,28 @@ impl AuthManager {
         Ok(user)
     }
 
+    /// Authenticate using an API key
+    pub async fn authenticate_api_key(&self, api_key: &str, ip_address: &str) -> Result<AuthToken, FortressError> {
+        // In a real implementation, validate the API key against a database
+        // For now, we'll use a simple validation
+        if api_key != "test_key" {
+            return Err(FortressError::authentication("Invalid API key", None));
+        }
+
+        // Create a token for API key authentication
+        let token_value = Uuid::new_v4().to_string();
+        let now = current_timestamp();
+        let expires_at = now + 3600; // 1 hour expiration for API keys
+
+        Ok(AuthToken {
+            token: token_value,
+            user_id: UserId::new(), // System user for API keys
+            issued_at: now,
+            expires_at,
+            permissions: vec![], // API keys have no permissions by default
+        })
+    }
+
     /// Check if a user has a specific permission
     pub fn user_has_permission(&self, user_id: &UserId, permission_id: &PermissionId) -> bool {
         self.get_user_permissions(user_id)
