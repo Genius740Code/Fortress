@@ -287,11 +287,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_async_encryption() {
-        let algorithm = Aegis256::new();
+        let algorithm = Arc::new(Aegis256::new()) as Arc<dyn EncryptionAlgorithm>;
         let data = vec![1u8; 1024];
         let key = vec![0u8; 32];
         
-        let result = encrypt_data_async(&data, &key, &algorithm).await;
+        let result = encrypt_data_async(&data, &key, algorithm.clone()).await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap().len(), data.len());
     }
@@ -299,7 +299,7 @@ mod tests {
     #[tokio::test]
     async fn test_batch_encryptor() {
         let encryptor = BatchEncryptor::new(4);
-        let algorithm = Aegis256::new();
+        let algorithm = Arc::new(Aegis256::new()) as Arc<dyn EncryptionAlgorithm>;
         let key = vec![0u8; 32];
         
         let data_batch: Vec<&[u8]> = vec![
@@ -309,7 +309,7 @@ mod tests {
             &[4u8; 512],
         ];
         
-        let results = encryptor.encrypt_batch(&data_batch, &key, &algorithm).await;
+        let results = encryptor.encrypt_batch(&data_batch, &key, algorithm.clone()).await;
         assert!(results.is_ok());
         assert_eq!(results.unwrap().len(), 4);
     }
@@ -336,7 +336,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_async_encryption_service() {
-        let algorithm = Box::new(Aegis256::new());
+        let algorithm = Arc::new(Aegis256::new()) as Arc<dyn EncryptionAlgorithm>;
         let service = AsyncEncryptionService::new(
             algorithm,
             5,

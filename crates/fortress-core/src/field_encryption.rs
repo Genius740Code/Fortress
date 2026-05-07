@@ -387,6 +387,7 @@ impl FieldAlgorithmSelector for DefaultAlgorithmSelector {
                 PerformanceProfile::Balanced => "xchacha20poly1305",
                 PerformanceProfile::Fortress => "argon2idencrypt",
                 PerformanceProfile::Streaming => "aes256ctr",
+                PerformanceProfile::HighPerformance => "aegis256",
                 PerformanceProfile::Hardware => "blake3encrypt",
                 PerformanceProfile::Quantum => "compositeencrypt",
             }.to_string()),

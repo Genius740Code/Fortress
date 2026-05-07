@@ -842,7 +842,7 @@ use crate::encryption::PerformanceProfile;
     async fn create_test_database() -> Result<SqliteKeyDatabase> {
         let temp_dir = tempdir().map_err(|e| FortressError::storage(
             format!("Failed to create temp dir: {}", e),
-            "tempdir",
+            "tempdir".to_string(),
             StorageErrorCode::IoError
         ))?;
         
@@ -871,7 +871,7 @@ use crate::encryption::PerformanceProfile;
             version,
             Utc::now(),
             Utc::now() + chrono::Duration::days(30),
-            KeyPurpose::DataEncryption,
+            format!("{:?}", KeyPurpose::DataEncryption),
             PerformanceProfile::Balanced,
         );
         (key, metadata)
@@ -1162,12 +1162,12 @@ use crate::encryption::PerformanceProfile;
         let large_key = SecureKey::from_bytes(&large_key_data);
         
         let metadata = KeyMetadata::new(
-            String::from("large_key_test"),
-            "test_algorithm".to_string(),
+            "test_key_2".to_string(),
+            "AES-256-GCM".to_string(),
             1,
             Utc::now(),
             Utc::now() + chrono::Duration::days(30),
-            KeyPurpose::DataEncryption,
+            format!("{:?}", KeyPurpose::DataEncryption),
             PerformanceProfile::Balanced,
         );
         
@@ -1205,7 +1205,7 @@ use crate::encryption::PerformanceProfile;
         
         for (i, special_id) in special_ids.iter().enumerate() {
             let (key, metadata) = create_test_key_data(special_id, i as u32 + 1);
-            let key_id = String::from(special_id);
+            let key_id = (*special_id).to_string();
             
             // Store key
             db.store_key(&key_id, &key, &metadata).await?;
@@ -1230,6 +1230,7 @@ use crate::encryption::PerformanceProfile;
         let db_path = {
             let temp_dir = tempdir().map_err(|e| FortressError::storage(
                 format!("Failed to create temp dir: {}", e),
+                "tempdir".to_string(),
                 crate::error::StorageErrorCode::IoError
             ))?;
             
@@ -1358,7 +1359,7 @@ use crate::encryption::PerformanceProfile;
             1,
             Utc::now(),
             Utc::now() + chrono::Duration::days(365), // Long expiration
-            KeyPurpose::KeyEncryption, // Different purpose
+            format!("{:?}", KeyPurpose::KeyEncryption), // Different purpose
             PerformanceProfile::HighPerformance, // Different profile
         ).with_metadata("custom_field".to_string(), "custom_value".to_string())
          .with_metadata("number_field".to_string(), "42".to_string())
@@ -1372,7 +1373,7 @@ use crate::encryption::PerformanceProfile;
         assert!(result.is_some());
         
         let (_, retrieved_metadata) = result.unwrap();
-        assert_eq!(retrieved_metadata.purpose, KeyPurpose::KeyEncryption);
+        assert_eq!(retrieved_metadata.purpose, format!("{:?}", KeyPurpose::KeyEncryption));
         assert_eq!(retrieved_metadata.performance_profile, PerformanceProfile::HighPerformance);
         assert!(retrieved_metadata.metadata.contains_key("custom_field"));
         assert_eq!(retrieved_metadata.metadata.get("custom_field"), Some(&"custom_value".to_string()));

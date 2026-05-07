@@ -423,6 +423,7 @@ async fn generate_new_key() -> Result<String> {
     let key_id = Uuid::new_v4().to_string();
     let metadata = KeyMetadata {
         key_id: key_id.clone(),
+        id: key_id.clone(),
         version: 1,
         algorithm: "aegis256".to_string(),
         created_at: Utc::now(),
@@ -772,6 +773,7 @@ async fn execute_rollback(key_id: &str, target_version: u32) -> Result<()> {
     // Create new metadata for rolled back key
     let _rolled_back_metadata = fortress_core::key::KeyMetadata {
         key_id: key_id.to_string(),
+        id: key_id.to_string(),
         version: target_version,
         algorithm: backup_metadata.algorithm,
         created_at: backup_metadata.created_at,

@@ -442,12 +442,12 @@ mod tests {
         
         // Test invalid retention policy
         let mut config = BackupConfig::default();
-        config.retention_policy = Some(crate::backup::RetentionPolicy {
+        config.retention_policy = crate::backup::RetentionPolicy {
             max_full_backups: 0,
             max_incremental_backups: 10,
             max_age_days: 30,
             auto_cleanup: true,
-        });
+        };
         
         let result = EnhancedBackupManager::new(storage.clone(), None, config);
         assert!(result.is_err());

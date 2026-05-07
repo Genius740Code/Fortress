@@ -9,6 +9,7 @@ use crate::websocket::auth::AuthConfig;
 use crate::security_fixes::{SecureSessionGenerator, CsrfProtection, InputValidator};
 use std::time::{Duration, Instant};
 use std::sync::Arc;
+use tokio::sync::Mutex;
 use tokio::time::timeout;
 
 /// Security performance test suite
@@ -29,7 +30,7 @@ impl SecurityPerformanceTests {
             enable_ip_lockout: true,
         };
         
-        let mut auth_manager = Arc::new(AuthManager::new());
+        let auth_manager = Arc::new(Mutex::new(AuthManager::new()));
         
         // Test 1: Single authentication performance
         let start_time = Instant::now();
@@ -42,7 +43,10 @@ impl SecurityPerformanceTests {
             mfa_data: None,
             risk_context: None,
         };
-        let result = auth_manager.authenticate(login_request).await?;
+        let result = {
+            let mut manager = auth_manager.lock().await;
+            manager.authenticate(login_request).await
+        }?;
         let single_auth_time = start_time.elapsed();
         
         assert!(single_auth_time < Duration::from_millis(10), 
@@ -66,7 +70,11 @@ impl SecurityPerformanceTests {
                     risk_context: None,
                 };
                 let start = Instant::now();
-                let _result = auth_manager.authenticate(login_request).await;
+                let result = {
+                    let mut manager = auth_manager.lock().await;
+                    manager.authenticate(login_request).await
+                };
+                let _auth_result = result;
                 start.elapsed()
             });
             handles.push(handle);

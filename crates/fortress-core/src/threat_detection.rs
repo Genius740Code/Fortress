@@ -1066,7 +1066,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_threat_detection_engine() {
-        let audit_logger = Arc::new(DefaultAuditLogger::new(Default::default()));
+        let audit_logger = Box::new(DefaultAuditLogger::new(Default::default()).unwrap());
         let engine = DefaultThreatDetectionEngine::new(audit_logger);
 
         // Create a detection rule
@@ -1111,7 +1111,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_threat_response_system() {
-        let audit_logger = Arc::new(DefaultAuditLogger::new(Default::default()));
+        let audit_logger = Box::new(DefaultAuditLogger::new(Default::default()).unwrap());
         let response_system = DefaultThreatResponseSystem::new(audit_logger);
 
         // Create a threat detection

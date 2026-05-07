@@ -1684,7 +1684,7 @@ mod tests {
 
         ));
 
-        let metrics_collector = Arc::new(AdvancedMetricsCollector::new(metrics_config));
+        let metrics_collector = Arc::new(AdvancedMetricsCollector::new(metrics_config).unwrap());
 
         
 
@@ -1732,7 +1732,7 @@ mod tests {
 
         ));
 
-        let metrics_collector = Arc::new(AdvancedMetricsCollector::new(metrics_config));
+        let metrics_collector = Arc::new(AdvancedMetricsCollector::new(metrics_config).unwrap());
 
         
 

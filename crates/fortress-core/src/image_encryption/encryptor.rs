@@ -1374,7 +1374,7 @@ mod tests {
 
         let encryptor = ImageEncryptor::new(algorithm);
 
-        let key = SecureKey::generate(32);
+        let key = SecureKey::generate(32).unwrap();
 
         
 

@@ -1532,7 +1532,7 @@ mod tests {
 
         async fn generate_key(&self, _algorithm: &str) -> Result<SecureKey> {
 
-            Ok(SecureKey::generate(32))
+            Ok(SecureKey::generate(32).unwrap())
 
         }
 
@@ -1540,7 +1540,7 @@ mod tests {
 
         async fn get_key(&self, _key_id: &str) -> Result<SecureKey> {
 
-            Ok(SecureKey::generate(32))
+            Ok(SecureKey::generate(32).unwrap())
 
         }
 

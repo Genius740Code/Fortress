@@ -2097,7 +2097,7 @@ mod tests {
 
         assert_eq!(engine.name(), "database");
 
-        assert_eq!(engine.engine_type(), EngineType::Database);
+        assert!(matches!(engine.engine_type(), EngineType::Database));
 
     }
 

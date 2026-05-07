@@ -668,7 +668,7 @@ mod tests {
             proof_parameters: HashMap::new(),
         };
         
-        let proof = generator.generate_membership_proof("event_hash_123", membership_params, metadata).unwrap();
+        let proof = generator.generate_membership_proof("event_hash_123", &[], membership_params, metadata).unwrap();
         
         assert_eq!(proof.proof_type, ZkProofType::MembershipProof);
         assert!(!proof.proof_data.is_empty());

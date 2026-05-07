@@ -739,9 +739,9 @@ mod error_tests {
     fn test_access_control_empty_inputs() {
         let user_key = SecureKey::new(vec![]);
         let resource_policy = b"";
-        let permissions = b"";
+        let permissions = b"".to_vec();
         
-        let proof = AccessControlProof::create_proof(&user_key, &resource_policy, &permissions).unwrap();
+        let proof = AccessControlProof::create_proof(&user_key, resource_policy, &permissions).unwrap();
         assert!(proof.verify_proof(resource_policy).unwrap());
     }
 

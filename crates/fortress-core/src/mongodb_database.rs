@@ -680,7 +680,7 @@ mod tests {
                 meta.insert("type".to_string(), "text".to_string());
                 meta
             }),
-            ("doc2".to_string(), "data".to_string(), {
+            ("doc2".to_string(), b"data".to_vec(), {
                 let mut meta = HashMap::new();
                 meta.insert("type".to_string(), "binary".to_string());
                 meta

@@ -384,7 +384,7 @@ mod tests {
 
         let scheduler = BackupScheduler::new(backup_manager, source_storage);
         
-        assert!(!scheduler.schedules.try_read().is_some_and_then(|guard| Some(!guard.is_empty())).unwrap_or(false));
+        assert!(!scheduler.schedules.try_read().map(|guard| !guard.is_empty()).unwrap_or(false));
     }
 
     #[tokio::test]

@@ -1566,11 +1566,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_alert_notification() {
-        let channels = vec![
-            AlertChannel::Email("test@example.com".to_string()),
-            AlertChannel::SMS("+1234567890".to_string()),
-        ];
-        let notifier = AlertNotifier::new(channels);
+        let channel = AlertChannel::Email("test@example.com".to_string());
+        let notifier = AlertNotifier::new(channel);
         
         let alert = TamperAlert {
             alert_id: "test_alert".to_string(),

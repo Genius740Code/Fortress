@@ -234,15 +234,15 @@ pub struct ClusterManager {
     /// Quorum manager
     quorum_manager: RwLock<QuorumManager>,
     /// Communication channels
-    channels: Arc<ClusterChannels>,
+    channels: ClusterChannels,
 }
 
 /// Communication channels for cluster
 pub struct ClusterChannels {
     /// Incoming messages
-    pub incoming: mpsc::UnboundedReceiver<ClusterCommand>,
+    pub outgoing: mpsc::UnboundedReceiver<ClusterCommand>,
     /// Outgoing messages
-    pub outgoing: mpsc::UnboundedSender<(NodeId, ClusterCommand)>,
+    pub incoming: mpsc::UnboundedSender<(NodeId, ClusterCommand)>,
 }
 
 impl ClusterManager {
@@ -264,8 +264,8 @@ impl ClusterManager {
         let (tx_out, _rx_out) = mpsc::unbounded_channel();
 
         let channels = ClusterChannels {
-            incoming: rx_in,
-            outgoing: tx_out,
+            outgoing: rx_in,
+            incoming: tx_out,
         };
 
         let mut members = HashMap::new();
@@ -290,7 +290,7 @@ impl ClusterManager {
             members: RwLock::new(members.clone()),
             raft_engine,
             quorum_manager: RwLock::new(QuorumManager::new(members.len())),
-            channels: Arc::new(channels),
+            channels,
         })
     }
 
@@ -456,7 +456,7 @@ impl ClusterManager {
     async fn start_heartbeat_loop(&self) -> Result<()> {
         let interval = self.config.heartbeat_interval;
         let local_node_id = self.local_node.id;
-        let _outgoing_tx = self.channels.outgoing.clone();
+        let _outgoing_tx = self.channels.incoming.clone();
 
         tokio::spawn(async move {
             let mut ticker = tokio::time::interval(interval);
@@ -488,7 +488,7 @@ impl ClusterManager {
     /// Start message processing loop
     async fn start_message_processing(&mut self) -> Result<()> {
         loop {
-            match self.channels.incoming.recv().await {
+            match self.channels.outgoing.recv().await {
                 Some(command) => {
                     if let Err(e) = self.handle_cluster_command(command).await {
                         tracing::error!("Error handling cluster command: {}", e);
@@ -575,7 +575,7 @@ impl ClusterManager {
             vote_granted: response.vote_granted,
         };
         
-        if let Err(_) = self.channels.outgoing.send((candidate_id, cluster_response)) {
+        if let Err(_) = self.channels.incoming.send((candidate_id, cluster_response)) {
             tracing::warn!("Failed to send vote response to candidate {}", candidate_id);
         }
         
@@ -990,19 +990,25 @@ impl ClusterManager {
         }
     }
 
-    /// Clone the cluster manager
-    pub fn clone(&self) -> Self {
-        Self {
+    /// Clone cluster manager (without channels)
+    pub fn clone_without_channels(&self) -> Result<Self> {
+        let (_, outgoing) = mpsc::unbounded_channel::<ClusterCommand>();
+        let (incoming, _) = mpsc::unbounded_channel::<(NodeId, ClusterCommand)>();
+        let members_map = match self.members.try_read() {
+            Ok(guard) => (*guard).clone(),
+            Err(_) => HashMap::new(), // If lock is poisoned, fall back to empty map
+        };
+        Ok(Self {
             config: self.config.clone(),
             local_node: self.local_node.clone(),
-            members: Arc::new(RwLock::new(self.members.try_read().unwrap_or_else(|_| {
-                // If lock is poisoned, fall back to empty map
-                HashMap::new()
-            }).clone())),
+            members: RwLock::new(members_map),
             raft_engine: self.raft_engine.clone(),
-            quorum_manager: Arc::new(RwLock::new(QuorumManager::new(self.config.min_nodes))),
-            channels: self.channels.clone(),
-        }
+            quorum_manager: RwLock::new(QuorumManager::new(self.config.min_nodes)),
+            channels: ClusterChannels {
+                outgoing,
+                incoming,
+            },
+        })
     }
 
     /// Join a cluster
@@ -1413,8 +1419,10 @@ mod tests {
         
         // Verify replication status
         let replication_status = manager.get_replication_status().await;
-        assert!(replication_status.successful);
-        assert!(replication_status.replicated_nodes >= 1);
+        assert!(replication_status.is_ok());
+        let status = replication_status.unwrap();
+        assert!(status.is_replicating);
+        assert_eq!(status.lag_bytes, 0);
     }
 
     #[tokio::test]
@@ -1573,7 +1581,7 @@ mod tests {
         let new_config = ClusterConfig {
             node_id: current_config.node_id,
             bind_address: current_config.bind_address,
-            seed_nodes: current_config.seed_nodes,
+            seed_nodes: current_config.seed_nodes.clone(),
             min_nodes: 5,
             heartbeat_interval: Duration::from_millis(2000),
             election_timeout: Duration::from_millis(15000),
@@ -1686,7 +1694,7 @@ mod tests {
         let mut handles = Vec::new();
         
         for i in 0..5 {
-            let manager_clone = manager.clone();
+            let manager_clone = manager.clone_without_channels().unwrap();
             let handle = tokio::spawn(async move {
                 // Concurrent health checks
                 manager_clone.get_health_status().await
@@ -1703,7 +1711,7 @@ mod tests {
         // Test concurrent node additions
         let mut add_handles = Vec::new();
         for i in 0..3 {
-            let mut manager_clone = manager.clone();
+            let mut manager_clone = manager.clone_without_channels().unwrap();
             let handle = tokio::spawn(async move {
                 let node = ClusterNode {
                     id: Uuid::new_v4(),

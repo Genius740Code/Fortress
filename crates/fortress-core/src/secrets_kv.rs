@@ -1158,7 +1158,7 @@ mod tests {
         assert!(status.is_ok(), "Failed to get status: {:?}", status.err());
         
         if let Ok(status) = status {
-            assert_eq!(status.engine_type, EngineType::Kv);
+            assert!(matches!(status.engine_type, EngineType::Kv));
             assert_eq!(status.stats.total_secrets, 1);
             println!("✓ Engine status verified");
         }

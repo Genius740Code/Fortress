@@ -1127,7 +1127,7 @@ mod tests {
 
         assert_eq!(user_info.user_id, "user_456");
         assert_eq!(user_info.username, "john.doe");
-        assert_eq!(user_info.email, "john.doe@example.com");
+        assert_eq!(user_info.email, Some("john.doe@example.com".to_string()));
         assert_eq!(user_info.roles.len(), 2);
         assert_eq!(user_info.permissions.len(), 3);
         assert!(user_info.metadata.contains_key("department"));

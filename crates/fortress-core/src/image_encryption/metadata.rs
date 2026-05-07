@@ -2480,7 +2480,7 @@ mod tests {
 
         let processor = MetadataProcessor::new(algorithm);
 
-        let key = SecureKey::generate(32); // 256-bit key
+        let key = SecureKey::generate(32).unwrap(); // 256-bit key
 
 
 
