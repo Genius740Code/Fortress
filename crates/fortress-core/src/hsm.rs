@@ -8,7 +8,6 @@
 
 use crate::error::{FortressError, Result, KeyErrorCode};
 use crate::key::{KeyId, KeyMetadata};
-use crate::aes256gcm_wrapper::Aes256GcmWrapper;
 use crate::encryption::EncryptionAlgorithm;
 
 use async_trait::async_trait;

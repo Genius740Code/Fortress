@@ -2,7 +2,7 @@ use color_eyre::eyre::{Result, Context};
 use console::style;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde_json::{json, Value};
-use fortress_core::config::{DatabaseConfig, EncryptionConfig, ApiConfig, MonitoringConfig, TransactionConfig, StreamingConfig, BackupConfig, AuditConfig, KeyDerivationConfig, Config};
+use fortress_core::config::{DatabaseConfig, EncryptionConfig, ApiConfig, MonitoringConfig, TransactionConfig, StreamingConfig, BackupConfig, AuditConfig, KeyDerivationConfig};
 use std::path::PathBuf;
 use tracing::{info, debug, warn, error};
 use std::process::Command;
@@ -174,53 +174,7 @@ pub async fn handle_migrate(
     Ok(())
 }
 
-fn create_fortress_config(name: &str, data_dir: &PathBuf) -> Result<Config> {
-    Ok(Config {
-        database: DatabaseConfig {
-            path: format!("{}/{}.db", data_dir.to_string_lossy(), name),
-            max_size: Some(10 * 1024 * 1024 * 1024), // 10GB
-            cache_size: Some(256 * 1024 * 1024), // 256MB
-            enable_wal: true,
-            pool_size: 20,
-        },
-        encryption: EncryptionConfig {
-            default_algorithm: "aegis256".to_string(),
-            key_rotation_interval: std::time::Duration::from_secs(7 * 24 * 3600), // 7 days
-            master_key_rotation_interval: std::time::Duration::from_secs(30 * 24 * 3600), // 30 days
-            profiles: std::collections::HashMap::new(),
-            key_derivation: KeyDerivationConfig::default(),
-        },
-        storage: fortress_core::config::StorageConfig {
-            backend: "filesystem".to_string(),
-            base_path: Some(data_dir.to_string_lossy().to_string()),
-            s3: None,
-            azure_blob: None,
-            gcs: None,
-            compression: true,
-            checksum: "sha256".to_string(),
-        },
-        api: Some(ApiConfig {
-            rest_port: 8080,
-            grpc_port: 50051,
-            enable_cors: true,
-            enable_wasm: true,
-            rate_limit: None,
-            authentication: None,
-        }),
-        monitoring: Some(MonitoringConfig {
-            enable_metrics: true,
-            metrics_port: 9090,
-            enable_tracing: true,
-            jaeger_endpoint: None,
-            log_level: "info".to_string(),
-        }),
-        transactions: Some(TransactionConfig::default()),
-        streaming: Some(StreamingConfig::default()),
-        backup: Some(BackupConfig::default()),
-        audit: Some(AuditConfig::default()),
-    })
-}
-
+            
 async fn list_postgres_tables(source: &str) -> Result<Vec<String>> {
     let output = Command::new("psql")
         .arg(source)

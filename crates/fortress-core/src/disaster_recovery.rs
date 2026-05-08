@@ -273,7 +273,7 @@ impl DefaultDisasterRecoveryManager {
                 ));
             }
 
-            let max_age_days = parts[1].parse::<u32>()
+            let _max_age_days = parts[1].parse::<u32>()
                 .map_err(|_| FortressError::configuration(
                     "Invalid max age days".to_string(),
                     Some("command".to_string()),

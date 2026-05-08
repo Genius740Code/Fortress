@@ -223,8 +223,8 @@ impl DataSubscription {
         &self, 
         ctx: &Context<'_>, 
         table_id: String,
-        #[graphql(desc = "Filter by operation type")] operation: Option<DataOperation>,
-        #[graphql(desc = "Filter by user ID")] user_id: Option<String>
+        #[graphql(desc = "Filter by operation type")] _operation: Option<DataOperation>,
+        #[graphql(desc = "Filter by user ID")] _user_id: Option<String>
     ) -> Result<impl Stream<Item = DataChangeEvent>> {
         let event_bus = ctx.data::<Arc<EventBus>>()
             .map_err(|_| async_graphql::Error::new("Event bus not available"))?;
@@ -238,7 +238,7 @@ impl DataSubscription {
         }
         
         let subscription_rx = event_bus.subscribe_data_changes();
-        let table_id_filter = table_id;
+        let _table_id_filter = table_id;
         let stream = BroadcastStream::new(subscription_rx)
             .filter_map(|result| async move {
                 match result {
@@ -254,8 +254,8 @@ impl DataSubscription {
     async fn security_events(
         &self, 
         ctx: &Context<'_>,
-        #[graphql(desc = "Filter by severity")] severity: Option<SecuritySeverity>,
-        #[graphql(desc = "Filter by event type")] event_type: Option<String>
+        #[graphql(desc = "Filter by severity")] _severity: Option<SecuritySeverity>,
+        #[graphql(desc = "Filter by event type")] _event_type: Option<String>
     ) -> Result<impl Stream<Item = SecurityEvent>> {
         let event_bus = ctx.data::<Arc<EventBus>>()
             .map_err(|_| async_graphql::Error::new("Event bus not available"))?;
@@ -284,7 +284,7 @@ impl DataSubscription {
     async fn performance_metrics(
         &self, 
         ctx: &Context<'_>,
-        #[graphql(desc = "Update interval in seconds")] interval: Option<i32>
+        #[graphql(desc = "Update interval in seconds")] _interval: Option<i32>
     ) -> Result<impl Stream<Item = PerformanceMetrics>> {
         let event_bus = ctx.data::<Arc<EventBus>>()
             .map_err(|_| async_graphql::Error::new("Event bus not available"))?;
@@ -313,8 +313,8 @@ impl DataSubscription {
     async fn cluster_events(
         &self, 
         ctx: &Context<'_>,
-        #[graphql(desc = "Filter by event type")] event_type: Option<ClusterEventType>,
-        #[graphql(desc = "Filter by node ID")] node_id: Option<String>
+        #[graphql(desc = "Filter by event type")] _event_type: Option<ClusterEventType>,
+        #[graphql(desc = "Filter by node ID")] _node_id: Option<String>
     ) -> Result<impl Stream<Item = ClusterEvent>> {
         let event_bus = ctx.data::<Arc<EventBus>>()
             .map_err(|_| async_graphql::Error::new("Event bus not available"))?;
@@ -343,8 +343,8 @@ impl DataSubscription {
     async fn compliance_events(
         &self, 
         ctx: &Context<'_>,
-        #[graphql(desc = "Filter by compliance framework")] framework: Option<String>,
-        #[graphql(desc = "Filter by event type")] event_type: Option<ComplianceEventType>
+        #[graphql(desc = "Filter by compliance framework")] _framework: Option<String>,
+        #[graphql(desc = "Filter by event type")] _event_type: Option<ComplianceEventType>
     ) -> Result<impl Stream<Item = ComplianceEvent>> {
         let event_bus = ctx.data::<Arc<EventBus>>()
             .map_err(|_| async_graphql::Error::new("Event bus not available"))?;

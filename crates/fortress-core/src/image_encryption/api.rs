@@ -20,7 +20,6 @@ use crate::error::{FortressError, Result};
 
 use crate::encryption::{EncryptionAlgorithm, SecureKey};
 
-use uuid::Uuid;
 
 use crate::image_encryption::{
 

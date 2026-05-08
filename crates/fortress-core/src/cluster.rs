@@ -12,7 +12,6 @@ use crate::error::{FortressError, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{RwLock, mpsc};
 use uuid::Uuid;
@@ -938,7 +937,7 @@ impl ClusterManager {
     }
 
     /// Authenticate a node attempting to join
-    pub async fn authenticate_node(&self, node_id: NodeId, credentials: &str) -> Result<bool> {
+    pub async fn authenticate_node(&self, node_id: NodeId, _credentials: &str) -> Result<bool> {
         // In a real implementation, would verify credentials
         // For now, accept all nodes
         tracing::info!("Authenticating node {} with credentials", node_id);
@@ -955,7 +954,7 @@ impl ClusterManager {
     }
 
     /// Update cluster configuration
-    pub async fn update_config(&self, new_config: ClusterConfig) -> Result<()> {
+    pub async fn update_config(&self, _new_config: ClusterConfig) -> Result<()> {
         // In a real implementation, would validate and apply new config
         tracing::info!("Updating cluster configuration");
         Ok(())

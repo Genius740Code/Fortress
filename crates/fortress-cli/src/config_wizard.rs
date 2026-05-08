@@ -119,7 +119,7 @@ impl ConfigurationWizard {
             _ => return Err(FortressError::configuration_error("database_selection", "invalid_choice", "valid database choice")),
         }.to_string();
         
-        let (host, port, database_name) = match backend.as_str() {
+        let (host, port, _database_name) = match backend.as_str() {
             "sqlite" => {
                 let path = Input::<String>::new()
                     .with_prompt("SQLite database file path")

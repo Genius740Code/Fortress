@@ -11,7 +11,6 @@ use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Row, Sqlite, SqlitePool};
 #[cfg(feature = "postgres")]
 use sqlx::{Postgres, PgPool};
-use tempfile::tempdir;
 
 /// Configuration for key database backends
 #[derive(Debug, Clone, Serialize, Deserialize)]

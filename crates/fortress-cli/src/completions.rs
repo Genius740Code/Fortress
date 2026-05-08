@@ -728,7 +728,7 @@ pub mod dynamic_completions {
     
     /// Complete keys by algorithm type (e.g., "aes", "aegis", "chacha")
     pub async fn complete_keys_by_algorithm(algorithm_hint: &str) -> Result<Vec<String>, FortressError> {
-        let key_manager = InMemoryKeyManager::new();
+        let _key_manager = InMemoryKeyManager::new();
         
         // For now, return example values since the advanced filtering isn't implemented
         let key_ids = Vec::new();
@@ -747,7 +747,7 @@ pub mod dynamic_completions {
     
     /// Complete only active (non-expired) keys
     pub async fn complete_active_keys() -> Result<Vec<String>, FortressError> {
-        let key_manager = InMemoryKeyManager::new();
+        let _key_manager = InMemoryKeyManager::new();
         
         // For now, return example values since the active filtering isn't implemented
         let key_ids = Vec::new();

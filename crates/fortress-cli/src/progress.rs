@@ -202,8 +202,8 @@ pub async fn process_files_with_progress(
 }
 
 pub async fn download_file_with_progress(
-    url: &str,
-    output_path: &std::path::Path,
+    _url: &str,
+    _output_path: &std::path::Path,
     total_size: Option<u64>
 ) -> Result<(), FortressError> {
     let progress_manager = ProgressManager::new();
@@ -243,7 +243,7 @@ pub async fn download_file_with_progress(
 
 pub async fn upload_file_with_progress(
     file_path: &std::path::Path,
-    url: &str
+    _url: &str
 ) -> Result<(), FortressError> {
     let progress_manager = ProgressManager::new();
     

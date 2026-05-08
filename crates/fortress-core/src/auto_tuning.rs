@@ -10,7 +10,7 @@
 
 use crate::error::{FortressError, Result};
 
-use crate::performance_monitor::{AdvancedPerformanceMonitor as PerformanceMonitor, TuningRecommendation, RecommendationType, ImplementationComplexity, RecommendationPriority};
+use crate::performance_monitor::{AdvancedPerformanceMonitor as PerformanceMonitor, TuningRecommendation, RecommendationType};
 
 use serde::{Deserialize, Serialize};
 

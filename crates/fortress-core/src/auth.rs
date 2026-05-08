@@ -1764,7 +1764,7 @@ impl AuthManager {
     }
 
     /// Authenticate using an API key
-    pub async fn authenticate_api_key(&self, api_key: &str, ip_address: &str) -> Result<AuthToken, FortressError> {
+    pub async fn authenticate_api_key(&self, api_key: &str, _ip_address: &str) -> Result<AuthToken, FortressError> {
         // In a real implementation, validate the API key against a database
         // For now, we'll use a simple validation
         if api_key != "test_key" {

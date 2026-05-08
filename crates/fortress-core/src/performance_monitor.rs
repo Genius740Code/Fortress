@@ -11,8 +11,6 @@ use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-// Import the profile_operation macro
-use crate::profile_operation;
 
 /// Performance monitoring configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]

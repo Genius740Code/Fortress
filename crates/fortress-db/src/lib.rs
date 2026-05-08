@@ -116,8 +116,10 @@ impl Fortress {
 
 /// Database interface
 pub struct Database {
+    #[allow(dead_code)]
     name: String,
     storage: std::sync::Arc<dyn fortress_core::storage::StorageBackend>,
+    #[allow(dead_code)]
     key_manager: std::sync::Arc<InMemoryKeyManager>,
 }
 

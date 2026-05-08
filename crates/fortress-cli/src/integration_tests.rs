@@ -6,8 +6,7 @@
 use crate::enhanced_error::{FortressError, ErrorAnalyzer, ErrorDocumentation};
 use crate::config_wizard::{ConfigurationWizard, FortressConfig};
 use crate::progress::{ProgressManager, ProgressTracker};
-use crate::completions::{build_cli, install_completions};
-use crate::types::Commands;
+use crate::completions::build_cli;
 use std::collections::HashMap;
 
 pub async fn test_configuration_wizard_complete_flow() {

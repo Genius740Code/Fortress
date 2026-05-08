@@ -14,7 +14,6 @@ use serde::{Serialize, Deserialize};
 use chrono::{DateTime, Utc};
 use std::time::{Duration, Instant};
 use futures::future::try_join_all;
-use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueryMetrics {
