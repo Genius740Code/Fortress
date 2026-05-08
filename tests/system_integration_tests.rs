@@ -164,44 +164,60 @@ impl TestMpcProtocol {
 
 #[async_trait::async_trait]
 impl MpcProtocol for TestMpcProtocol {
-    fn protocol_id(&self) -> &str {
+    fn name(&self) -> &str {
         &self.protocol_id
     }
 
-    async fn initialize_computation(
-        &self,
-        _config: &ComputationConfig,
-        _parties: &[PartyId],
-    ) -> Result<SessionId> {
+    async fn initialize(&self, _config: &ComputationConfig) -> Result<()> {
         // Simulate protocol initialization
-        let session_id = Uuid::new_v4().to_string();
-        tracing::info!("Initializing computation {} for session {}", self.protocol_id, session_id);
-        Ok(session_id)
+        tracing::info!("Initializing MPC protocol {}", self.protocol_id);
+        Ok(())
     }
 
-    async fn process_message(&self, session_id: &SessionId, message: fortress_core::mpc::MpcMessage) -> Result<Option<fortress_core::mpc::MpcMessage>> {
-        // Simulate message processing
-        match message.message_type.as_str() {
-            "share_exchange" => {
-                Ok(Some(fortress_core::mpc::MpcMessage {
-                    message_id: Uuid::new_v4().to_string(),
-                    session_id: session_id.clone(),
-                    sender_id: message.recipient_id,
-                    recipient_id: message.sender_id,
-                    message_type: "share_response".to_string(),
-                    payload: serde_json::json!({"status": "processed"}),
-                    timestamp: Utc::now(),
-                }))
+    async fn share_secret(
+        &self,
+        _secret: &[u8],
+        _config: &ComputationConfig,
+    ) -> Result<Vec<fortress_core::mpc::SecretShare>> {
+        // Simulate secret sharing
+        let shares = vec![
+            fortress_core::mpc::SecretShare {
+                id: Uuid::new_v4().to_string(),
+                party_id: "party1".to_string(),
+                session_id: "test-session".to_string(),
+                share_data: vec![1, 2, 3, 4],
+                share_index: Some(1),
+                verification_data: None,
             },
-            _ => Ok(None),
-        }
+            fortress_core::mpc::SecretShare {
+                id: Uuid::new_v4().to_string(),
+                party_id: "party2".to_string(),
+                session_id: "test-session".to_string(),
+                share_data: vec![5, 6, 7, 8],
+                share_index: Some(2),
+                verification_data: None,
+            },
+        ];
+        Ok(shares)
     }
 
-    async fn finalize_computation(&self, session_id: &SessionId) -> Result<fortress_core::mpc::ComputationResult> {
-        // Simulate computation finalization
-        tracing::info!("Finalizing computation {} for session {}", self.protocol_id, session_id);
+    async fn reconstruct_secret(
+        &self,
+        _shares: &[fortress_core::mpc::SecretShare],
+        _config: &ComputationConfig,
+    ) -> Result<Vec<u8>> {
+        // Simulate secret reconstruction
+        Ok(vec![9, 10, 11, 12])
+    }
+
+    async fn compute(
+        &self,
+        _inputs: HashMap<PartyId, Vec<u8>>,
+        _config: &ComputationConfig,
+    ) -> Result<fortress_core::mpc::ComputationResult> {
+        // Simulate MPC computation
         Ok(fortress_core::mpc::ComputationResult {
-            session_id: session_id.clone(),
+            session_id: "test-session".to_string(),
             success: true,
             result_data: Some(serde_json::json!({
                 "final_result": "computation_complete",
@@ -210,6 +226,15 @@ impl MpcProtocol for TestMpcProtocol {
             error_message: None,
             computation_time_ms: 150,
         })
+    }
+
+    async fn verify_result(
+        &self,
+        _result: &fortress_core::mpc::ComputationResult,
+        _config: &ComputationConfig,
+    ) -> Result<bool> {
+        // Simulate result verification
+        Ok(true)
     }
 }
 

@@ -20,18 +20,10 @@ use crate::error::{FortressError, Result};
 
 use crate::encryption::{EncryptionAlgorithm, SecureKey};
 
+use crate::image_encryption::{EncryptedImage, EncryptionOptions, ImageFormatInfo};
 
-use crate::image_encryption::{
 
-    ImageEncryptor, encryptor::ImageEncryptorFactory, EncryptedImage, EncryptionOptions,
-
-    ThumbnailGenerator, thumbnails::ThumbnailOptions, EncryptedThumbnail,
-
-    StreamingImageEncryptor, ChunkConfig, streaming::{StreamingState, StreamingResult, StreamingImageDecryptor}, AccessPermissions, ImageFilter, ImageSearchResult, ImageInfo,
-
-    ImageMetadata, ImageFormatInfo,
-
-};
+use crate::image_encryption::{ImageEncryptor, encryptor::ImageEncryptorFactory, ThumbnailGenerator, thumbnails::ThumbnailOptions, EncryptedThumbnail, StreamingImageEncryptor, ChunkConfig, streaming::{StreamingState, StreamingResult, StreamingImageDecryptor}, AccessPermissions, ImageFilter, ImageSearchResult, ImageInfo, ImageMetadata};
 
 use serde::{Deserialize, Serialize};
 

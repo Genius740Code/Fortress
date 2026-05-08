@@ -3,7 +3,7 @@
 //! This test suite provides comprehensive coverage for the Fortress plugin system core functionality,
 //! ensuring secure, reliable, and efficient plugin operations, lifecycle management, and security controls.
 
-use fortress_core::plugin::{Plugin, PluginMetadata, PluginCapability, PluginConfig, PluginManager};
+use fortress_core::plugin::{Plugin, PluginMetadata, PluginCapability, PluginManager};
 use fortress_core::plugin_registry::PluginRegistry;
 use fortress_core::error::{FortressError, PluginErrorCode};
 use std::time::Instant;
@@ -33,12 +33,12 @@ mod tests {
             supported_algorithms: vec!["AES-256-GCM".to_string(), "RSA-2048".to_string()],
         };
 
-        let config = PluginConfig {
-            max_execution_time_ms: 5000,
-            max_memory_mb: 100,
-            enable_logging: true,
-            security_policy: "strict".to_string(),
-        };
+        let config = std::collections::HashMap::from([
+            ("max_execution_time_ms".to_string(), serde_json::Value::Number(5000.into())),
+            ("max_memory_mb".to_string(), serde_json::Value::Number(100.into())),
+            ("enable_logging".to_string(), serde_json::Value::Bool(true)),
+            ("security_policy".to_string(), serde_json::Value::String("strict".to_string())),
+        ]);
 
         let plugin = TestPlugin::new(metadata, config);
         assert!(plugin.initialize().await.is_ok(), "Plugin should initialize successfully");
@@ -77,12 +77,12 @@ mod tests {
             ],
         };
 
-        let config = PluginConfig {
-            max_execution_time_ms: 10000,
-            max_memory_mb: 200,
-            enable_logging: true,
-            security_policy: "high_security".to_string(),
-        };
+        let config = std::collections::HashMap::from([
+            ("max_execution_time_ms".to_string(), serde_json::Value::Number(10000.into())),
+            ("max_memory_mb".to_string(), serde_json::Value::Number(200.into())),
+            ("enable_logging".to_string(), serde_json::Value::Bool(true)),
+            ("security_policy".to_string(), serde_json::Value::String("high_security".to_string())),
+        ]);
 
         let plugin = TestPlugin::new(metadata, config);
         plugin.initialize().await.expect("Plugin should initialize");
@@ -123,7 +123,7 @@ mod tests {
             supported_algorithms: vec!["RSA-2048".to_string()],
         };
 
-        let config = PluginConfig {
+        let config = std::collections::HashMap::from([
             max_execution_time_ms: 5000,
             max_memory_mb: 100,
             enable_logging: true,
@@ -168,7 +168,7 @@ mod tests {
             supported_algorithms: vec!["AES-256-GCM".to_string()],
         };
 
-        let config = PluginConfig {
+        let config = std::collections::HashMap::from([
             max_execution_time_ms: 1000, // Short timeout for testing
             max_memory_mb: 10,
             enable_logging: true,
@@ -206,7 +206,7 @@ mod tests {
             supported_algorithms: vec!["SHA-256".to_string()],
         };
 
-        let config = PluginConfig {
+        let config = std::collections::HashMap::from([
             max_execution_time_ms: 10000,
             max_memory_mb: 100,
             enable_logging: true,
@@ -251,7 +251,7 @@ mod tests {
             supported_algorithms: vec!["RSA-1024".to_string()], // Weak algorithm
         };
 
-        let config = PluginConfig {
+        let config = std::collections::HashMap::from([
             max_execution_time_ms: 5000,
             max_memory_mb: 100,
             enable_logging: true,
@@ -275,7 +275,7 @@ mod tests {
             supported_algorithms: vec!["RSA-4096".to_string()], // Strong algorithm
         };
 
-        let secure_config = PluginConfig {
+        let secure_config = std::collections::HashMap::from([
             max_execution_time_ms: 5000,
             max_memory_mb: 100,
             enable_logging: true,
@@ -302,7 +302,7 @@ mod tests {
             supported_algorithms: vec!["AES-256-GCM".to_string()],
         };
 
-        let config = PluginConfig {
+        let config = std::collections::HashMap::from([
             max_execution_time_ms: 5000,
             max_memory_mb: 100,
             enable_logging: true,
@@ -355,19 +355,19 @@ mod tests {
 
         // Test with different configurations
         let configs = vec![
-            PluginConfig {
+            std::collections::HashMap::from([
                 max_execution_time_ms: 1000,
                 max_memory_mb: 50,
                 enable_logging: false,
                 security_policy: "minimal".to_string(),
             },
-            PluginConfig {
+            std::collections::HashMap::from([
                 max_execution_time_ms: 5000,
                 max_memory_mb: 100,
                 enable_logging: true,
                 security_policy: "standard".to_string(),
             },
-            PluginConfig {
+            std::collections::HashMap::from([
                 max_execution_time_ms: 10000,
                 max_memory_mb: 200,
                 enable_logging: true,
@@ -407,7 +407,7 @@ mod tests {
             supported_algorithms: vec!["RSA-2048".to_string()],
         };
 
-        let config = PluginConfig {
+        let config = std::collections::HashMap::from([
             max_execution_time_ms: 5000,
             max_memory_mb: 100,
             enable_logging: true,
@@ -523,7 +523,7 @@ mod tests {
             supported_algorithms: vec!["RSA-4096".to_string(), "AES-256-GCM".to_string()],
         };
 
-        let config = PluginConfig {
+        let config = std::collections::HashMap::from([
             max_execution_time_ms: 5000,
             max_memory_mb: 100,
             enable_logging: true,
@@ -598,7 +598,7 @@ mod tests {
             supported_algorithms: vec!["RSA-2048".to_string(), "AES-256-GCM".to_string()],
         };
 
-        let config = PluginConfig {
+        let config = std::collections::HashMap::from([
             max_execution_time_ms: 5000,
             max_memory_mb: 100,
             enable_logging: true,
@@ -612,13 +612,13 @@ mod tests {
 /// Test implementation of the Plugin trait for testing purposes
 struct TestPlugin {
     metadata: PluginMetadata,
-    config: PluginConfig,
+    config: std::collections::HashMap<String, serde_json::Value>,
     initialized: bool,
     execution_count: std::sync::atomic::AtomicU64,
 }
 
 impl TestPlugin {
-    fn new(metadata: PluginMetadata, config: PluginConfig) -> Self {
+    fn new(metadata: PluginMetadata, config: std::collections::HashMap<String, serde_json::Value>) -> Self {
         Self {
             metadata,
             config,
@@ -652,7 +652,7 @@ impl Plugin for TestPlugin {
         self.metadata.capabilities.clone()
     }
 
-    async fn get_config(&self) -> PluginConfig {
+    async fn get_config(&self) -> std::collections::HashMap<String, serde_json::Value> {
         self.config.clone()
     }
 

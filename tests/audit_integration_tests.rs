@@ -27,12 +27,12 @@ mod tests {
     fn test_audit_with_encryption_integration() {
         // Test audit logging with encryption operations
         let mut config = AuditConfig::default();
-        config.hmac_key = Some(base64::encode("test_hmac_key_32_bytes_long_1234"));
+        config.hmac_key = Some(base64::engine::general_purpose::STANDARD.encode("test_hmac_key_32_bytes_long_1234"));
         config.log_path = Some("test_audit_encryption.log".to_string());
         
         let mut audit_logger = DefaultAuditLogger::new(config).unwrap();
         let algorithm = Aegis256::new();
-        let key_manager = Box::new(KeyManager::new()) as Box<dyn KeyManager>;
+        let key_manager = Box::new(fortress_core::key::InMemoryKeyManager::new()) as Box<dyn KeyManager>;
         
         // Generate key
         let key_result = key_manager.generate_key(&algorithm);
@@ -125,15 +125,14 @@ mod tests {
         
         // Log retrieval operation
         let mut metadata = HashMap::new();
-        metadata.insert("table".to_string(), table_name.to_string());
-        metadata.insert("record_id".to_string(), record_id.to_string());
+        metadata.insert("key".to_string(), key.to_string());
         metadata.insert("operation".to_string(), "retrieve".to_string());
         
         let audit_entry = audit_logger.create_entry(
             AuditEventType::DataAccess,
             SecurityLevel::Low,
             Some("system".to_string()),
-            Some(format!("table/{}", table_name)),
+            Some(format!("key/{}", key)),
             "retrieve_record".to_string(),
             EventOutcome::Success,
             metadata,
@@ -149,7 +148,7 @@ mod tests {
     fn test_audit_integrity_verification() {
         // Test audit log integrity verification
         let mut config = AuditConfig::default();
-        config.hmac_key = Some(base64::encode("test_hmac_key_32_bytes_long_1234"));
+        config.hmac_key = Some(base64::engine::general_purpose::STANDARD.encode("test_hmac_key_32_bytes_long_1234"));
         config.tamper_evident = true;
         config.log_path = Some("test_audit_integrity.log".to_string());
         
@@ -616,7 +615,7 @@ mod tests {
     fn test_audit_security_integration() {
         // Test security aspects of audit integration
         let mut config = AuditConfig::default();
-        config.hmac_key = Some(base64::encode("test_hmac_key_32_bytes_long_1234"));
+        config.hmac_key = Some(base64::engine::general_purpose::STANDARD.encode("test_hmac_key_32_bytes_long_1234"));
         config.tamper_evident = true;
         config.min_security_level = SecurityLevel::Medium;
         config.log_path = Some("test_audit_security.log".to_string());

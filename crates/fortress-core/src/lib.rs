@@ -1242,6 +1242,8 @@ pub mod prelude {
 
 
 
+    pub use crate::aes256gcm_wrapper::{Aes256GcmWrapper};
+
     pub use crate::key_database::{
 
         KeyDatabase, KeyDatabaseConfig, KeyDatabaseStats, KeyDatabaseBackend,
@@ -1420,7 +1422,9 @@ pub mod prelude {
 
     pub use crate::performance_monitor::{
 
-        AdvancedPerformanceMonitor, PerformanceMonitorConfig, ProfileSample, AggregatedMetrics, PerformanceAlert, TuningRecommendation
+        AdvancedPerformanceMonitor, PerformanceMonitorConfig, ProfileSample, AggregatedMetrics, PerformanceAlert, TuningRecommendation,
+
+        ImplementationComplexity, RecommendationPriority
 
     };
 

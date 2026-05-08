@@ -6,9 +6,7 @@
 
 use crate::error::{FortressError, Result};
 use crate::plugin::PluginInput;
-use crate::plugin::PluginMetadata;
 use crate::auth::AuthToken;
-// use crate::wasm_runtime::WasmPluginConfig; // Temporarily disabled
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -257,7 +255,7 @@ impl WasmAuthPlugin {
 
         // Note: WASM plugin integration will be completed when runtime is ready
         // For now, use placeholder implementation
-        let _plugin_metadata = PluginMetadata {
+        let _plugin_metadata = crate::plugin::PluginMetadata {
             id: Uuid::new_v4().to_string(),
             name: metadata.name.clone(),
             version: metadata.version.clone(),

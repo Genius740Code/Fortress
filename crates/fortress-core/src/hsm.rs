@@ -3335,6 +3335,7 @@ impl HsmProvider for GoogleCloudHsmProvider {
 mod tests {
     use super::*;
     use crate::encryption::{EncryptionAlgorithm, Aes256Gcm};
+    use crate::prelude::Aes256GcmWrapper;
     
     /// Test HSM configuration creation and validation
     #[tokio::test]

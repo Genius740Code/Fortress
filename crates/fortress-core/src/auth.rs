@@ -176,6 +176,8 @@ pub enum BiometricType {
     Behavioral,
 }
 
+// Types are defined locally in this module, no need for re-exports
+
 /// Risk assessment context
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RiskContext {

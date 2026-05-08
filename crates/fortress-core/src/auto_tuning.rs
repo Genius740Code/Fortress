@@ -10,7 +10,7 @@
 
 use crate::error::{FortressError, Result};
 
-use crate::performance_monitor::{AdvancedPerformanceMonitor as PerformanceMonitor, TuningRecommendation, RecommendationType};
+use crate::performance_monitor::{AdvancedPerformanceMonitor as PerformanceMonitor, RecommendationType as PmRecommendationType, ImplementationComplexity as PmImplementationComplexity, RecommendationPriority as PmRecommendationPriority};
 
 use serde::{Deserialize, Serialize};
 
@@ -266,65 +266,6 @@ pub enum ImpactLevel {
 
 
 
-/// Applied tuning change
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-
-pub struct AppliedChange {
-
-    /// Change ID
-
-    pub id: String,
-
-    /// Parameter that was changed
-
-    pub parameter_name: String,
-
-    /// Previous value
-
-    pub previous_value: serde_json::Value,
-
-    /// New value
-
-    pub new_value: serde_json::Value,
-
-    /// Reason for change
-
-    pub reason: String,
-
-    /// Expected improvement
-
-    pub expected_improvement: String,
-
-    /// Confidence score (0.0 to 1.0)
-
-    pub confidence: f64,
-
-    /// Timestamp when change was applied
-
-    pub applied_at: chrono::DateTime<chrono::Utc>,
-
-    /// Impact level
-
-    pub impact_level: ImpactLevel,
-
-    /// Performance metrics before change
-
-    pub metrics_before: HashMap<String, f64>,
-
-    /// Performance metrics after change
-
-    pub metrics_after: Option<HashMap<String, f64>>,
-
-    /// Change status
-
-    pub status: ChangeStatus,
-
-    /// Rollback information
-
-    pub rollback_info: Option<RollbackInfo>,
-
-}
 
 
 
@@ -490,45 +431,6 @@ pub struct AutomaticPerformanceTuner {
 
 
 
-/// Current system state
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-
-pub struct SystemState {
-
-    /// Current performance metrics
-
-    pub performance_metrics: HashMap<String, f64>,
-
-    /// System load
-
-    pub system_load: f64,
-
-    /// Active connections
-
-    pub active_connections: u32,
-
-    /// Memory usage percentage
-
-    pub memory_usage_percent: f64,
-
-    /// CPU usage percentage
-
-    pub cpu_usage_percent: f64,
-
-    /// Cache hit ratio
-
-    pub cache_hit_ratio: f64,
-
-    /// Error rate
-
-    pub error_rate: f64,
-
-    /// Last updated timestamp
-
-    pub last_updated: chrono::DateTime<chrono::Utc>,
-
-}
 
 
 
@@ -918,7 +820,71 @@ impl AutomaticPerformanceTuner {
 
         // Get current recommendations
 
-        let recommendations = performance_monitor.get_recommendations().await?;
+        let pm_recommendations = performance_monitor.get_recommendations().await?;
+
+        // Convert to auto_tuning::TuningRecommendation
+
+        let recommendations: Vec<TuningRecommendation> = pm_recommendations.into_iter().map(|pm_rec| {
+
+            // Map the recommendation type
+
+            let recommendation_type = match pm_rec.recommendation_type {
+
+                PmRecommendationType::IncreaseCacheSize => RecommendationType::IncreaseCacheSize,
+
+                PmRecommendationType::AdjustConnectionPool => RecommendationType::AdjustConnectionPool,
+
+                PmRecommendationType::OptimizeQueries => RecommendationType::IncreaseCacheSize, // Map to closest
+
+                _ => RecommendationType::IncreaseCacheSize, // Default
+
+            };
+
+            // Map complexity
+
+            let complexity = match pm_rec.complexity {
+
+                PmImplementationComplexity::Low => ImplementationComplexity::Low,
+
+                PmImplementationComplexity::Medium => ImplementationComplexity::Medium,
+
+                PmImplementationComplexity::High => ImplementationComplexity::High,
+
+            };
+
+            // Map priority
+
+            let priority = match pm_rec.priority {
+
+                PmRecommendationPriority::Low => RecommendationPriority::Low,
+
+                PmRecommendationPriority::Medium => RecommendationPriority::Medium,
+
+                PmRecommendationPriority::High => RecommendationPriority::High,
+
+                PmRecommendationPriority::Critical => RecommendationPriority::Critical,
+
+            };
+
+            TuningRecommendation {
+
+                id: pm_rec.id,
+
+                recommendation_type,
+
+                description: pm_rec.description,
+
+                expected_improvement: pm_rec.expected_improvement,
+
+                complexity,
+
+                priority,
+
+                parameters: pm_rec.parameters,
+
+            }
+
+        }).collect();
 
         
 
@@ -1789,6 +1755,221 @@ pub struct TuningStatus {
 }
 
 
+/// System state
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+
+pub struct SystemState {
+
+    /// Performance metrics
+
+    pub performance_metrics: HashMap<String, f64>,
+
+    /// System load
+
+    pub system_load: f64,
+
+    /// Active connections
+
+    pub active_connections: u32,
+
+    /// Memory usage percent
+
+    pub memory_usage_percent: f64,
+
+    /// CPU usage percent
+
+    pub cpu_usage_percent: f64,
+
+    /// Cache hit ratio
+
+    pub cache_hit_ratio: f64,
+
+    /// Error rate
+
+    pub error_rate: f64,
+
+    /// Last updated timestamp
+
+    pub last_updated: chrono::DateTime<chrono::Utc>,
+
+}
+
+/// Applied change
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+
+pub struct AppliedChange {
+
+    /// Change ID
+
+    pub id: String,
+
+    /// Parameter name
+
+    pub parameter_name: String,
+
+    /// Previous value
+
+    pub previous_value: serde_json::Value,
+
+    /// New value
+
+    pub new_value: serde_json::Value,
+
+    /// Reason
+
+    pub reason: String,
+
+    /// Expected improvement
+
+    pub expected_improvement: String,
+
+    /// Confidence
+
+    pub confidence: f64,
+
+    /// Applied at timestamp
+
+    pub applied_at: chrono::DateTime<chrono::Utc>,
+
+    /// Impact level
+
+    pub impact_level: ImpactLevel,
+
+    /// Metrics before
+
+    pub metrics_before: HashMap<String, f64>,
+
+    /// Metrics after
+
+    pub metrics_after: Option<HashMap<String, f64>>,
+
+    /// Status
+
+    pub status: ChangeStatus,
+
+    /// Rollback info
+
+    pub rollback_info: Option<RollbackInfo>,
+
+}
+
+/// Change status
+
+
+
+/// Recommendation type
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+
+pub enum RecommendationType {
+
+    /// Increase cache size
+
+    IncreaseCacheSize,
+
+    /// Decrease cache size
+
+    DecreaseCacheSize,
+
+    /// Increase max connections
+
+    IncreaseMaxConnections,
+
+    /// Decrease max connections
+
+    DecreaseMaxConnections,
+
+    /// Adjust connection pool
+
+    AdjustConnectionPool,
+
+    /// Adjust timeouts
+
+    AdjustTimeouts,
+
+}
+
+/// Implementation complexity
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+
+pub enum ImplementationComplexity {
+
+    /// Low
+
+    Low,
+
+    /// Medium
+
+    Medium,
+
+    /// High
+
+    High,
+
+}
+
+/// Recommendation priority
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+
+pub enum RecommendationPriority {
+
+    /// Low
+
+    Low,
+
+    /// Medium
+
+    Medium,
+
+    /// High
+
+    High,
+
+    /// Critical
+
+    Critical,
+
+}
+
+/// Tuning recommendation
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+
+pub struct TuningRecommendation {
+
+    /// ID
+
+    pub id: String,
+
+    /// Recommendation type
+
+    pub recommendation_type: RecommendationType,
+
+    /// Description
+
+    pub description: String,
+
+    /// Expected improvement
+
+    pub expected_improvement: String,
+
+    /// Complexity
+
+    pub complexity: ImplementationComplexity,
+
+    /// Priority
+
+    pub priority: RecommendationPriority,
+
+    /// Parameters
+
+    pub parameters: HashMap<String, serde_json::Value>,
+
+}
 
 #[cfg(test)]
 
@@ -1798,7 +1979,7 @@ mod tests {
 
     use crate::performance_monitor::PerformanceMonitorConfig;
 
-
+    use crate::prelude::{ImplementationComplexity, RecommendationPriority};
 
     #[tokio::test]
 

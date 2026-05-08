@@ -508,3 +508,4 @@ mod tests {
         assert!(post_shutdown_result.is_err(), "Operations after shutdown should fail");
     }
 }
+}
