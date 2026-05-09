@@ -3,7 +3,7 @@
 //! This example demonstrates how to set up and run a basic Fortress server
 //! with the REST API for secure data storage and retrieval.
 
-use fortress_server::prelude::*;
+use fortress_api_server::{FortressServer, ServerConfig};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]

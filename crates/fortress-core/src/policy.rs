@@ -98,8 +98,6 @@ pub struct PolicyEngine {
 
     /// Policy storage
 
-    #[allow(dead_code)]
-
     policies: RwLock<HashMap<String, Policy>>,
 
     /// Optimized cache with TTL and memory management
@@ -2211,6 +2209,86 @@ impl PolicyEngine {
             entry.evaluation_time_ms,
 
         ).await
+
+    }
+
+    /// Add a new policy to the system
+
+    pub async fn add_policy(&self, policy: Policy) -> Result<()> {
+
+        let mut policies = self.policies.write().await;
+
+        policies.insert(policy.name.clone(), policy);
+
+        self.clear_cache().await;
+
+        Ok(())
+
+    }
+
+    
+
+    /// Remove a policy from the system
+
+    pub async fn remove_policy(&self, policy_name: &str) -> Result<()> {
+
+        let mut policies = self.policies.write().await;
+
+        policies.remove(policy_name);
+
+        self.clear_cache().await;
+
+        Ok(())
+
+    }
+
+    
+
+    /// Get a policy by name
+
+    pub async fn get_policy(&self, policy_name: &str) -> Result<Option<Policy>> {
+
+        let policies = self.policies.read().await;
+
+        Ok(policies.get(policy_name).cloned())
+
+    }
+
+    
+
+    /// List all policies
+
+    pub async fn list_policies(&self) -> Result<Vec<Policy>> {
+
+        let policies = self.policies.read().await;
+
+        Ok(policies.values().cloned().collect())
+
+    }
+
+    
+
+    /// Update an existing policy
+
+    pub async fn update_policy(&self, policy: Policy) -> Result<()> {
+
+        let mut policies = self.policies.write().await;
+
+        if policies.contains_key(&policy.name) {
+
+            policies.insert(policy.name.clone(), policy);
+
+            self.clear_cache().await;
+
+            Ok(())
+
+        } else {
+
+            Err(FortressError::policy(
+                format!("Policy '{}' not found", policy.name)
+            ))
+
+        }
 
     }
 

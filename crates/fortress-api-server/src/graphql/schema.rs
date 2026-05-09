@@ -22,8 +22,7 @@ pub type FortressSchema = Schema<Query, Mutation, Subscription>;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use async_graphql::Value;
-
+    
     #[tokio::test]
     async fn test_schema_creation() {
         let schema = create_schema();

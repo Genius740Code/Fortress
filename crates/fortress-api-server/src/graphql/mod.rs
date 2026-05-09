@@ -19,7 +19,9 @@ pub mod security;
 pub mod auth;
 pub mod encryption;
 pub mod query_executor;
+#[cfg(test)]
 pub mod security_tests;
+#[cfg(test)]
 pub mod integration_test;
 
 // Include tests when running tests
@@ -39,8 +41,6 @@ pub use benchmark::{PerformanceBenchmark, BenchmarkConfig, BenchmarkResults};
 pub use security::{SecurityManager, SecurityConfig, SecurityRequest, SecurityValidationResult, RateLimiter, InputValidator, QueryComplexityAnalyzer, SecurityAuditLogger, SecurityStats};
 pub use auth::{AuthManager, AuthConfig, AuthenticatedUser, Claims, Role, Permission, Session, AuthResult, TokenVerificationResult, TokenRefreshResult, SessionStats, SecurityPolicy, PolicyEvaluationResult};
 pub use encryption::{DataEncryptionManager, EncryptionConfig, FieldEncryptionConfig, EncryptedField, DecryptedField, EncryptedRecord, EncryptionStats, DataProtectionPolicyManager, DataProtectionPolicy, PolicyEvaluationResult as DataPolicyEvaluationResult, UserContext};
-pub use security_tests::{SecurityTestSuite, SecurityTestResults, TestResult};
-pub use integration_test::{IntegrationTestSuite, IntegrationTestResults};
 
 // GraphQL HTTP handlers
 use axum::{

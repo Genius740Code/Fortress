@@ -1296,7 +1296,7 @@ mod tests {
 
         let config = AuthApiConfig::default();
 
-        let cors = create_cors_config(&config);
+        let _cors = create_cors_config(&config);
 
         
 

@@ -248,8 +248,6 @@ pub struct ReplicationManager {
     /// Completed operations (for cleanup)
     completed_operations: Arc<RwLock<HashMap<ReplicationId, ReplicationOperation>>>,
     /// Communication channels
-    /// Communication channels
-    #[allow(dead_code)]
     channels: ReplicationChannels,
     /// Cluster nodes
     cluster_nodes: Arc<RwLock<HashMap<NodeId, ClusterNode>>>,

@@ -118,7 +118,7 @@ sha2 = "0.10"
 
 # Web framework
 
-warp = "0.3"
+warp = "0.3.7"
 
 axum = "0.7"
 

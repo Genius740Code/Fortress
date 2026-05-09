@@ -820,7 +820,7 @@ mod tests {
         let mut auth = AnonymousAuth::new(SecurityLevel::Level128);
         
         let user_id = UserId::from_string("test_user");
-        let credential = auth.register_user(user_id.clone(), 30).unwrap();
+        let _credential = auth.register_user(user_id.clone(), 30).unwrap();
         
         let challenge = b"authentication_challenge";
         let proof = auth.authenticate_anonymously(&user_id, challenge).unwrap();

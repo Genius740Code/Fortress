@@ -111,6 +111,7 @@ static PLUGIN_CONFIG: OnceLock<JwtConfig> = OnceLock::new();
 static PLUGIN_INITIALIZED: OnceLock<bool> = OnceLock::new();
 
 // Mock host function declarations - these will be linked from lib.rs
+#[allow(dead_code)]
 extern "C" {
     fn auth_log(level: i32, ptr: *const u8, len: usize);
     fn auth_store_session(session_id_ptr: *const u8, session_id_len: usize, user_data_ptr: *const u8, user_data_len: usize) -> i32;
@@ -250,6 +251,7 @@ struct UserRecord {
 }
 
 #[allow(dead_code)]
+#[allow(static_mut_refs)]
 fn initialize_user_database() {
     unsafe {
         if USER_DATABASE.is_none() {

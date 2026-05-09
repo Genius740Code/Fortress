@@ -834,7 +834,7 @@ mod tests {
         let role_store = Arc::new(crate::policy_hcl::types::InMemoryRoleStore::new());
         let engine = HclPolicyEngine::new(role_store);
         
-        let policies: std::collections::HashMap<String, ParsedPolicy> = HashMap::new();
+        let _policies: std::collections::HashMap<String, ParsedPolicy> = HashMap::new();
         
         // Test exact match
         let policy = ParsedPolicy::new("exact".to_string(), "secret/data".to_string());

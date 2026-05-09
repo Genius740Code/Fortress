@@ -846,7 +846,7 @@ mod tests {
         
         // Now there should be a previous version (in real implementation)
         // For this test, we're testing the logic structure
-        let prev_version = service.get_previous_version("test_plugin").await;
+        let _prev_version = service.get_previous_version("test_plugin").await;
         // Note: This would return Some(version) in a real implementation
         // with actual deployment history tracking
     }
@@ -931,7 +931,7 @@ mod tests {
             "invalid_field": "invalid_value"
         });
         
-        let result = service.test_authentication("jwt", invalid_credentials).await;
+        let _result = service.test_authentication("jwt", invalid_credentials).await;
         // Should handle invalid credentials gracefully
         // The result depends on the plugin implementation
         // This test verifies the integration layer doesn't panic

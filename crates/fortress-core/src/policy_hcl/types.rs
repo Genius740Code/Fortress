@@ -600,7 +600,7 @@ mod tests {
 
     #[test]
     fn test_parsed_policy_creation() {
-        let mut policy = ParsedPolicy::new("test-policy".to_string(), "secret/*".to_string());
+        let policy = ParsedPolicy::new("test-policy".to_string(), "secret/*".to_string());
         
         assert_eq!(policy.name, "test-policy");
         assert_eq!(policy.path, "secret/*");

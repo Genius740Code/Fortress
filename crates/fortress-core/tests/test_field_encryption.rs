@@ -7,7 +7,7 @@ use fortress_core::{
     field_encryption::*,
     field_encryption_manager::*,
     key::InMemoryKeyManager,
-    encryption::{EncryptionAlgorithm, PerformanceProfile},
+    encryption::PerformanceProfile,
 };
 use std::collections::HashMap;
 
@@ -295,7 +295,7 @@ async fn test_algorithm_selector() {
         .unwrap();
     assert_eq!(algorithm, "aegis256");
 
-    let algorithm = selector
+    let _algorithm = selector
         .recommend_algorithm_for_type("text", FieldSensitivity::Public)
         .unwrap_err(); // Should error for public data
 }

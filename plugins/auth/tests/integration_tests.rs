@@ -252,14 +252,14 @@ async fn test_error_handling() {
 
 #[cfg(test)]
 mod test_helpers {
-    use super::*;
     
+    #[allow(dead_code)]
     pub fn create_test_jwt_token(user_id: &str) -> String {
         // Create a simple test JWT token (in real implementation, use proper JWT library)
         use base64::{Engine as _, engine::general_purpose::STANDARD};
         format!("header.{}.signature", STANDARD.encode(user_id))
     }
-    
+    #[allow(dead_code)]
     pub fn create_test_saml_assertion(user_id: &str) -> String {
         // Create a simple test SAML assertion (in real implementation, use proper XML)
         format!("<saml:Assertion><saml:Subject>{}</saml:Subject></saml:Assertion>", user_id)

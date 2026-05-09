@@ -369,8 +369,8 @@ mod utility_tests {
 
     #[test]
     fn test_string_wiping() {
-        let mut s = String::from("sensitive_data_12345");
-        let original_ptr = s.as_ptr();
+        let s = String::from("sensitive_data_12345");
+        let _original_ptr = s.as_ptr();
         
         utils::wipe_string(s);
         
@@ -600,8 +600,8 @@ mod integration_tests {
         ).unwrap();
         
         // Use memory pool for temporary data
-        let pool = &global_pool.get_all_stats()[0];
-        let temp_buffer = vec![0u8; 1024];
+        let _pool = &global_pool.get_all_stats()[0];
+        let _temp_buffer = vec![0u8; 1024];
         
         // Verify keys are different
         assert!(!encryption_key.equals_secure(&auth_key));
@@ -621,7 +621,7 @@ mod integration_tests {
         let mut handles = Vec::new();
         
         // Spawn threads performing various secure operations
-        for i in 0..10 {
+        for _i in 0..10 {
             let pool_clone = Arc::clone(&pool);
             let handle = thread::spawn(move || {
                 // Generate secure key

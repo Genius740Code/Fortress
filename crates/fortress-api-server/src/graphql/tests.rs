@@ -5,12 +5,12 @@
 #[cfg(test)]
 mod tests {
     use super::*;
-    use async_graphql::{Request, Response};
     use serde_json::json;
+    use async_graphql::Request;
 
     #[tokio::test]
     async fn test_graphql_schema_creation() {
-        let schema = crate::graphql::create_schema();
+        let _schema = crate::graphql::create_schema();
         
         // Test that schema can be created without panicking
         assert!(true, "Schema creation should not panic");

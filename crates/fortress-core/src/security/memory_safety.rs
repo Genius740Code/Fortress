@@ -627,7 +627,7 @@ mod tests {
         assert!(!utils::verify_password_secure("password123", "wrong"));
 
         // Test string wiping
-        let mut s = String::from("sensitive data");
+        let s = String::from("sensitive data");
         utils::wipe_string(s);
 
         // Test nonce generation

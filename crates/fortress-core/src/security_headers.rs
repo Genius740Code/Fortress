@@ -1082,7 +1082,7 @@ mod tests {
 
         // Call middleware directly with config
         // Create a simple handler function
-        let handler = |request: Request<Body>| async move {
+        let handler = |_request: Request<Body>| async move {
             Response::builder()
                 .status(StatusCode::OK)
                 .body(Body::from("Hello, World!"))
@@ -1112,9 +1112,9 @@ mod tests {
 
         // Call middleware with config instead
         let config = SecurityHeadersConfig::default();
-        let middleware = security_headers_middleware_with_config(config);
+        let _middleware = security_headers_middleware_with_config(config);
         // Create a simple handler function
-        let handler = |request: Request<Body>| async move {
+        let handler = |_request: Request<Body>| async move {
             Response::builder()
                 .status(StatusCode::OK)
                 .body(Body::from("Hello, World!"))

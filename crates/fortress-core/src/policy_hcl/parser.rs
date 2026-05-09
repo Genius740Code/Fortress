@@ -538,7 +538,7 @@ mod tests {
 
     #[test]
     fn test_parse_simple_policy() {
-        let mut parser = HclPolicyParser::new();
+        let parser = HclPolicyParser::new();
         let hcl_content = r#"
 name = "test-policy"
 path = "secret/*"
@@ -558,7 +558,7 @@ max_ttl = 86400
 
     #[test]
     fn test_parse_policy_with_parameters() {
-        let mut parser = HclPolicyParser::new();
+        let parser = HclPolicyParser::new();
         let hcl_content = r#"
 name = "test-policy"
 path = "secret/*"
@@ -583,7 +583,7 @@ parameters {
 
     #[test]
     fn test_parse_policy_with_constraints() {
-        let mut parser = HclPolicyParser::new();
+        let parser = HclPolicyParser::new();
         let hcl_content = r#"
 name = "test-policy"
 path = "secret/*"
@@ -615,7 +615,7 @@ constraints {
 
     #[test]
     fn test_parse_duration_values() {
-        let mut parser = HclPolicyParser::new();
+        let parser = HclPolicyParser::new();
         
         assert_eq!(parser.parse_duration_value("3600").unwrap(), 3600);
         assert_eq!(parser.parse_duration_value("1h").unwrap(), 3600);
@@ -626,7 +626,7 @@ constraints {
 
     #[test]
     fn test_parse_string_arrays() {
-        let mut parser = HclPolicyParser::new();
+        let parser = HclPolicyParser::new();
         
         let array = parser.parse_string_array("[\"read\", \"write\", \"list\"]").unwrap();
         assert_eq!(array, vec!["read", "write", "list"]);
@@ -680,7 +680,7 @@ path = "secret/*"
 
     #[test]
     fn test_constraint_operators() {
-        let mut parser = HclPolicyParser::new();
+        let parser = HclPolicyParser::new();
         
         // Test string constraint
         let result = parser.parse_constraint_value("\"test\"", &ConstraintOperator::Equals).unwrap();
@@ -701,7 +701,7 @@ path = "secret/*"
 
     #[test]
     fn test_policy_validation() {
-        let mut parser = HclPolicyParser::new();
+        let parser = HclPolicyParser::new();
         
         // Valid policy
         let valid_policy = ParsedPolicy::new("test".to_string(), "secret/*".to_string());
@@ -718,7 +718,7 @@ path = "secret/*"
 
     #[test]
     fn test_complex_policy() {
-        let mut parser = HclPolicyParser::new();
+        let parser = HclPolicyParser::new();
         let hcl_content = r#"
 name = "complex-policy"
 path = "secret/data/*"

@@ -534,7 +534,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_share_validation() {
-        let seal_manager = SealManager::new();
+        let _seal_manager = SealManager::new();
         
         let valid_share = SecretShare::new(1, vec![1, 2, 3, 4], 3, 5);
         assert!(valid_share.is_valid());

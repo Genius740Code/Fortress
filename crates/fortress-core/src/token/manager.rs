@@ -962,7 +962,7 @@ mod tests {
         let mut token_manager = TokenManager::new();
         
         // Create multiple tokens for same entity
-        for i in 0..3 {
+        for _i in 0..3 {
             let request = CreateTokenRequest {
                 token_type: TokenType::User,
                 role: TokenRole::Operator,
@@ -1062,7 +1062,7 @@ mod tests {
         let mut token_manager = TokenManager::new();
         
         // Create token with IP restrictions
-        let mut request = CreateTokenRequest {
+        let request = CreateTokenRequest {
             token_type: TokenType::User,
             role: TokenRole::Admin,
             policies: vec![],

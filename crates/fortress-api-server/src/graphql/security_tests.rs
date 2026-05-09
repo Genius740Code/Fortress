@@ -9,10 +9,10 @@ use serde_json;
 use serde::{Serialize, Deserialize};
 use crate::graphql::{
     security::{SecurityManager, SecurityRequest, SecurityConfig},
-    auth::{AuthManager, AuthenticatedUser},
+    auth::{AuthManager, AuthenticatedUser, AuthConfig},
     encryption::{DataEncryptionManager, UserContext, EncryptionConfig},
     performance::PerformanceMonitor,
-    query_executor::{QueryPlanner, QueryResult, QueryExplanation, PreparedStatement},
+    query_executor::{QueryPlanner, QueryResult, QueryExplanation, PreparedStatement, ExecutorConfig, OptimizedQueryExecutor, ConnectionInfo, Cache, CacheStats, OptimizedPlan, ConnectionPool, DatabaseConnection, PoolStats, BatchQuery},
 };
 
 /// Security test suite

@@ -23,7 +23,6 @@ pub struct DefaultFieldEncryptionManager {
     /// Key manager for encryption keys
     key_manager: Arc<dyn KeyManager>,
     /// Algorithm selector for choosing algorithms
-    #[allow(dead_code)]
     algorithm_selector: Arc<dyn FieldAlgorithmSelector>,
     /// Field configurations
     configs: Arc<RwLock<HashMap<String, FieldEncryptionConfig>>>,
@@ -92,9 +91,18 @@ impl DefaultFieldEncryptionManager {
 
     /// Get algorithm instance for a configuration
     async fn get_algorithm(&self, config: &FieldEncryptionConfig) -> Result<Box<dyn EncryptionAlgorithm>> {
-        let algorithm_name = config.algorithm_name()
+        let _algorithm_name = config.algorithm_name()
             .unwrap_or(&self.default_algorithm);
-        create_algorithm(algorithm_name)
+        
+        // Use the algorithm selector to choose the best algorithm for this field
+        let selected_algorithm = self.algorithm_selector.select_algorithm(
+            &config.field,
+            &config.strategy,
+            config.performance_profile,
+            &config.compliance_tags,
+        )?;
+        
+        create_algorithm(&selected_algorithm)
     }
 
     /// Generate nonce for algorithms that need it

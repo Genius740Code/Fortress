@@ -988,9 +988,9 @@ mod tests {
     #[test]
     fn test_legacy_password_hashing() {
         let password = "test123";
-        let hash = hash_password_legacy(password);
-        assert!(verify_password_legacy(password, &hash));
-        assert!(!verify_password_legacy("wrong", &hash));
+        let hash = hash_password_secure(password).unwrap();
+        assert!(verify_password_secure(password, &hash).unwrap());
+        assert!(!verify_password_secure("wrong", &hash).unwrap());
     }
 
     #[tokio::test]

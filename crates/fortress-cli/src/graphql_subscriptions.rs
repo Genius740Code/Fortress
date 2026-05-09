@@ -559,7 +559,7 @@ pub fn create_schema(event_bus: Arc<EventBus>) -> FortressSchema {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use futures::StreamExt;
+    
     
     #[tokio::test]
     async fn test_data_change_subscription() {
