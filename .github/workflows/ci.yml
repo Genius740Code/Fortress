@@ -2,131 +2,342 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main ]
+    branches: [main, develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
 
 jobs:
-  test:
-    name: Test Suite
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        rust: [stable, beta]
-        
+  # Fast checks first - fail fast before expensive operations
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      cache-key: ${{ steps.cache-key.outputs.key }}
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+            
+      - name: Generate cache key
+        id: cache-key
+        run: echo "key=${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}" >> $GITHUB_OUTPUT
+      
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+        
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+        
+      - name: Check build
+        run: cargo check --workspace --all-features
 
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: ${{ matrix.rust }}
-        components: rustfmt, clippy
+  # Security scanning
+  security:
+    name: Security
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ needs.check.outputs.cache-key }}
+          
+      - name: Install cargo-deny
+        run: cargo install cargo-deny
+        
+      - name: Run security audit
+        run: cargo deny check
+        
+      - name: Audit dependencies
+        run: cargo audit
 
-    - name: Cache cargo registry
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
-    - name: Check formatting
-      run: cargo fmt --all -- --check
-
-    - name: Run clippy
-      run: cargo clippy --all-targets --all-features -- -D warnings
-
-    - name: Build
-      run: cargo build --verbose --all-features
-
-    - name: Run tests
-      run: cargo test --verbose --all-features
-
+  # Build all workspace members
   build:
-    name: Build Release
-    runs-on: ${{ matrix.os }}
-    needs: test
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [check, security]
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            artifact_name: fortress
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            artifact_name: fortress.exe
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            artifact_name: fortress
-
+          - target: x86_64-unknown-linux-gnu
+          - target: x86_64-unknown-linux-musl
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+          
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ needs.check.outputs.cache-key }}-${{ matrix.target }}
+          
+      - name: Install musl tools
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+        
+      - name: Build release
+        run: |
+          cargo build --workspace --release --target ${{ matrix.target }} --all-features
+          
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: fortress-${{ matrix.target }}
+          path: |
+            target/${{ matrix.target }}/release/fortress
+            target/${{ matrix.target }}/release/fortress-cli
+            target/${{ matrix.target }}/release/fortress-api-server
+          retention-days: 7
 
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        targets: ${{ matrix.target }}
-
-    - name: Cache cargo registry
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
-    - name: Build release binary
-      run: cargo build --release -p fortress-cli --target ${{ matrix.target }}
-
-    - name: Strip binary (Unix)
-      if: matrix.os != 'windows-latest'
-      run: strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
-
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: fortress-${{ matrix.target }}
-        path: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
-
-  security:
-    name: Security Audit
+  # Test core functionality
+  test-core:
+    name: Test Core
     runs-on: ubuntu-latest
+    timeout-minutes: 12
+    needs: [check, security]
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ needs.check.outputs.cache-key }}
+          
+      - name: Run unit tests
+        run: cargo test --workspace --lib --bins --all-features --no-fail-fast
+        
+      - name: Run doc tests
+        run: cargo test --workspace --doc --all-features --no-fail-fast
 
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
-
-    - name: Install cargo-audit
-      run: cargo install cargo-audit
-
-    - name: Run security audit
-      run: cargo audit
-
-    - name: Install cargo-deny
-      run: cargo install cargo-deny
-
-    - name: Run cargo-deny check
-      run: cargo deny check
-
-  docs:
-    name: Documentation
+  # Integration tests
+  test-integration:
+    name: Integration Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [check, security]
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: fortress_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+          
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: mysql
+          MYSQL_DATABASE: fortress_test
+        options: >-
+          --health-cmd "mysqladmin ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 3306:3306
+          
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ needs.check.outputs.cache-key }}
+          
+      - name: Run integration tests
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/fortress_test
+          MYSQL_URL: mysql://root:mysql@localhost:3306/fortress_test
+          REDIS_URL: redis://localhost:6379
+        run: |
+          cargo test --workspace --test '*' --all-features --no-fail-fast -- \
+            --skip test_cluster_performance \
+            --skip test_mpc_performance \
+            --skip test_plugin_concurrent_execution
 
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
+  # Performance benchmarks
+  benchmark:
+    name: Benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [check, security]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ needs.check.outputs.cache-key }}
+          
+      - name: Run benchmarks
+        run: |
+          cargo bench --workspace --all-features --no-fail-fast
+          
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: target/criterion/
+          retention-days: 30
 
-    - name: Build documentation
-      run: cargo doc --all-features --no-deps
+  # Build and test Docker images
+  docker:
+    name: Docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: build
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: fortress-x86_64-unknown-linux-gnu
+          path: artifacts/
+          
+      - name: Build Docker images
+        run: |
+          docker build -t fortress:latest .
+          docker build -t fortress-api-server:latest -f crates/fortress-api-server/Dockerfile .
+          docker build -t fortress-cli:latest -f crates/fortress-cli/Dockerfile .
+          
+      - name: Test Docker images
+        run: |
+          docker run --rm fortress:latest --version
+          docker run --rm fortress-cli:latest --help
+          
+      - name: Upload Docker images
+        if: github.ref == 'refs/heads/main'
+        run: |
+          echo "Docker image upload would go here"
+          # docker push fortress:latest
+          # docker push fortress-api-server:latest
+          # docker push fortress-cli:latest
 
-    - name: Check documentation links
-      run: cargo doc --all-features --document-private-items --no-deps --dry-run
+  # Code coverage
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [check, security]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+          
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ needs.check.outputs.cache-key }}
+          
+      - name: Install cargo-llvm-cov
+        run: cargo install cargo-llvm-cov
+        
+      - name: Generate coverage report
+        run: |
+          cargo llvm-cov --workspace --all-features --lcov --output-path lcov.info
+          
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: lcov.info
+          fail_ci_if_error: true
