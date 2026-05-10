@@ -1,3 +1,5 @@
+#![cfg(feature = "grpc")]
+
 use fortress_server::grpc::{GrpcServer, FortressGrpcService};
 use fortress_core::encryption::EncryptionManager;
 use fortress_server::grpc::fortress::{

@@ -13,7 +13,7 @@ use crate::handlers::AppState;
 use crate::auth::{AuthManager, OidcProviderConfig, OidcUserStore, InMemoryUserStore};
 use axum::{
     Router,
-    routing::get,
+    routing::{get, post, put, delete},
 };
 use tracing::info;
 use fortress_core::storage::StorageBackend;
@@ -107,6 +107,13 @@ impl FortressServer {
         })
     }
 
+    /// Create the application router.
+    ///
+    /// This is exposed for integration tests and programmatic embedding.
+    pub async fn router(&self) -> ServerResult<Router> {
+        self.create_router().await
+    }
+
     /// Start the server
     pub async fn listen(self, bind_addr: &str) -> ServerResult<()> {
         let addr: SocketAddr = bind_addr.parse()
@@ -142,16 +149,36 @@ impl FortressServer {
     async fn create_router(&self) -> ServerResult<Router> {
         let network_config = self.config.network.clone();
 
-        // Create base router with basic routes
+        // Create router with API endpoints
         let mut router = Router::new()
-            // Health check only - no handlers that require AppState
-            .route("/health", get(|| async { axum::Json(serde_json::json!({"status": "ok"})) }))
+            // Health
+            .route("/health", get(crate::handlers::health_check))
+
+            // Metrics
+            .route("/metrics", get(crate::handlers::get_prometheus_metrics))
+            .route("/api/v1/metrics", get(crate::handlers::get_metrics))
+
+            // Auth
+            .route("/api/v1/auth/login", post(crate::handlers::authenticate))
+            .route("/api/v1/auth/refresh", post(crate::handlers::refresh_token))
+
+            // Data
+            .route("/api/v1/data", post(crate::handlers::store_data))
+            .route("/api/v1/data", get(crate::handlers::list_data))
+            .route("/api/v1/data/:key", get(crate::handlers::retrieve_data))
+            .route("/api/v1/data/:key", put(crate::handlers::update_data))
+            .route("/api/v1/data/:key", delete(crate::handlers::delete_data))
+
+            // Key management
+            .route("/api/v1/keys", post(crate::handlers::generate_key))
+
+            // Attach state
+            .with_state(self.app_state.clone())
+            // Middleware
             .layer(create_timeout_layer(30))
             .layer(create_cors_layer(&self.config.security.cors));
 
-        // Apply global middleware
-        router = router
-            .layer(create_timeout_layer(network_config.request_timeout));
+        router = router.layer(create_timeout_layer(network_config.request_timeout));
 
         Ok(router)
     }

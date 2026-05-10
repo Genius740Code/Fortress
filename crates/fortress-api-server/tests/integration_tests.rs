@@ -3,25 +3,40 @@
 //! This module tests the complete API functionality including
 //! authentication, data storage, retrieval, and key management.
 
-use axum_test::TestServer;
-use fortress_server::prelude::*;
+use fortress_api_server::prelude::*;
 use serde_json::json;
-use std::collections::HashMap;
-use futures::future;
+use axum::body::Body;
+use http::{Request, StatusCode};
+use tower::ServiceExt;
+
+async fn request_json(app: axum::Router, req: Request<Body>) -> (StatusCode, serde_json::Value) {
+    let resp = app.oneshot(req).await.unwrap();
+    let status = resp.status();
+    let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    (status, json)
+}
+
+async fn request_text(app: axum::Router, req: Request<Body>) -> (StatusCode, String) {
+    let resp = app.oneshot(req).await.unwrap();
+    let status = resp.status();
+    let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+    (status, String::from_utf8(bytes.to_vec()).unwrap())
+}
 
 #[tokio::test]
 async fn test_health_check() {
     let config = ServerConfig::default();
     let server = FortressServer::new(config).await.unwrap();
-    let router = server.create_router().await.unwrap();
-    
-    let test_server = TestServer::new(router).unwrap();
-    
-    let response = test_server.get("/health").await;
-    
-    assert_eq!(response.status_code(), 200);
-    
-    let body: serde_json::Value = response.json();
+    let router = server.router().await.unwrap();
+
+    let (status, body) = request_json(
+        router,
+        Request::builder().method("GET").uri("/health").body(Body::empty()).unwrap(),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
     assert!(body["success"].as_bool().unwrap());
     assert!(body["data"].is_object());
 }
@@ -30,9 +45,7 @@ async fn test_health_check() {
 async fn test_store_and_retrieve_data() {
     let config = ServerConfig::default();
     let server = FortressServer::new(config).await.unwrap();
-    let router = server.create_router().await.unwrap();
-    
-    let test_server = TestServer::new(router).unwrap();
+    let router = server.router().await.unwrap();
     
     // Test data to store
     let test_data = json!({
@@ -56,27 +69,37 @@ async fn test_store_and_retrieve_data() {
         "algorithm": "aegis256"
     });
     
-    let store_response = test_server
-        .post("/data")
-        .json(&store_request)
-        .await;
-    
-    assert_eq!(store_response.status_code(), 200);
-    
-    let store_body: serde_json::Value = store_response.json();
+
+    let (status, store_body) = request_json(
+        router.clone(),
+        Request::builder()
+            .method("POST")
+            .uri("/api/v1/data")
+            .header("content-type", "application/json")
+            .body(Body::from(store_request.to_string()))
+            .unwrap(),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
     assert!(store_body["success"].as_bool().unwrap());
     
     let data_id = store_body["data"]["id"].as_str().unwrap();
     let key_id = store_body["data"]["key_id"].as_str().unwrap();
     
     // Retrieve data
-    let retrieve_response = test_server
-        .get(&format!("/data/{}", data_id))
-        .await;
-    
-    assert_eq!(retrieve_response.status_code(), 200);
-    
-    let retrieve_body: serde_json::Value = retrieve_response.json();
+
+    let (status, retrieve_body) = request_json(
+        router,
+        Request::builder()
+            .method("GET")
+            .uri(format!("/api/v1/data/{data_id}"))
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
     assert!(retrieve_body["success"].as_bool().unwrap());
     
     let retrieved_data = &retrieve_body["data"]["data"];
@@ -93,9 +116,7 @@ async fn test_store_and_retrieve_data() {
 async fn test_list_data() {
     let config = ServerConfig::default();
     let server = FortressServer::new(config).await.unwrap();
-    let router = server.create_router().await.unwrap();
-    
-    let test_server = TestServer::new(router).unwrap();
+    let router = server.router().await.unwrap();
     
     // Store multiple items
     for i in 1..=3 {
@@ -109,20 +130,28 @@ async fn test_list_data() {
             "algorithm": "aegis256"
         });
         
-        let store_response = test_server
-            .post("/data")
-            .json(&store_request)
-            .await;
-        
-        assert_eq!(store_response.status_code(), 200);
+        let (status, _body) = request_json(
+            router.clone(),
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/data")
+                .header("content-type", "application/json")
+                .body(Body::from(store_request.to_string()))
+                .unwrap(),
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::OK);
     }
     
     // List data
-    let list_response = test_server.get("/data").await;
-    
-    assert_eq!(list_response.status_code(), 200);
-    
-    let list_body: serde_json::Value = list_response.json();
+    let (status, list_body) = request_json(
+        router,
+        Request::builder().method("GET").uri("/api/v1/data").body(Body::empty()).unwrap(),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
     assert!(list_body["success"].as_bool().unwrap());
     
     let items = list_body["data"]["items"].as_array().unwrap();
@@ -142,9 +171,7 @@ async fn test_list_data() {
 async fn test_delete_data() {
     let config = ServerConfig::default();
     let server = FortressServer::new(config).await.unwrap();
-    let router = server.create_router().await.unwrap();
-    
-    let test_server = TestServer::new(router).unwrap();
+    let router = server.router().await.unwrap();
     
     // Store data first
     let test_data = json!({
@@ -157,14 +184,19 @@ async fn test_delete_data() {
         "algorithm": "aegis256"
     });
     
-    let store_response = test_server
-        .post("/data")
-        .json(&store_request)
-        .await;
-    
-    assert_eq!(store_response.status_code(), 200);
-    
-    let store_body: serde_json::Value = store_response.json();
+
+    let (status, store_body) = request_json(
+        router.clone(),
+        Request::builder()
+            .method("POST")
+            .uri("/api/v1/data")
+            .header("content-type", "application/json")
+            .body(Body::from(store_request.to_string()))
+            .unwrap(),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
     let data_id = store_body["data"]["id"].as_str().unwrap();
     
     // Delete data
@@ -173,33 +205,43 @@ async fn test_delete_data() {
         "soft_delete": false
     });
     
-    let delete_response = test_server
-        .delete(&format!("/data/{}", data_id))
-        .json(&delete_request)
-        .await;
-    
-    assert_eq!(delete_response.status_code(), 200);
-    
-    let delete_body: serde_json::Value = delete_response.json();
+
+    let (status, delete_body) = request_json(
+        router.clone(),
+        Request::builder()
+            .method("DELETE")
+            .uri(format!("/api/v1/data/{data_id}"))
+            .header("content-type", "application/json")
+            .body(Body::from(delete_request.to_string()))
+            .unwrap(),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
     assert!(delete_body["success"].as_bool().unwrap());
     assert_eq!(delete_body["data"]["id"], data_id);
     assert_eq!(delete_body["data"]["soft_delete"], false);
     
     // Verify data is gone
-    let retrieve_response = test_server
-        .get(&format!("/data/{}", data_id))
-        .await;
-    
-    assert_eq!(retrieve_response.status_code(), 404);
+
+    let (status, _body) = request_json(
+        router,
+        Request::builder()
+            .method("GET")
+            .uri(format!("/api/v1/data/{data_id}"))
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
 async fn test_generate_key() {
     let config = ServerConfig::default();
     let server = FortressServer::new(config).await.unwrap();
-    let router = server.create_router().await.unwrap();
-    
-    let test_server = TestServer::new(router).unwrap();
+    let router = server.router().await.unwrap();
     
     // Generate key request
     let key_request = json!({
@@ -211,14 +253,19 @@ async fn test_generate_key() {
         }
     });
     
-    let response = test_server
-        .post("/keys")
-        .json(&key_request)
-        .await;
-    
-    assert_eq!(response.status_code(), 200);
-    
-    let body: serde_json::Value = response.json();
+
+    let (status, body) = request_json(
+        router,
+        Request::builder()
+            .method("POST")
+            .uri("/api/v1/keys")
+            .header("content-type", "application/json")
+            .body(Body::from(key_request.to_string()))
+            .unwrap(),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
     assert!(body["success"].as_bool().unwrap());
     
     let key_data = &body["data"];
@@ -237,9 +284,7 @@ async fn test_generate_key() {
 async fn test_field_level_encryption() {
     let config = ServerConfig::default();
     let server = FortressServer::new(config).await.unwrap();
-    let router = server.create_router().await.unwrap();
-    
-    let test_server = TestServer::new(router).unwrap();
+    let router = server.router().await.unwrap();
     
     // Test data with sensitive fields
     let test_data = json!({
@@ -268,15 +313,19 @@ async fn test_field_level_encryption() {
         "field_encryption": field_config,
         "algorithm": "aegis256"
     });
-    
-    let store_response = test_server
-        .post("/data")
-        .json(&store_request)
-        .await;
-    
-    assert_eq!(store_response.status_code(), 200);
-    
-    let store_body: serde_json::Value = store_response.json();
+
+    let (status, store_body) = request_json(
+        router.clone(),
+        Request::builder()
+            .method("POST")
+            .uri("/api/v1/data")
+            .header("content-type", "application/json")
+            .body(Body::from(store_request.to_string()))
+            .unwrap(),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
     assert!(store_body["success"].as_bool().unwrap());
     
     // Verify field metadata is present
@@ -289,13 +338,18 @@ async fn test_field_level_encryption() {
     let data_id = store_body["data"]["id"].as_str().unwrap();
     
     // Retrieve and verify data integrity
-    let retrieve_response = test_server
-        .get(&format!("/data/{}", data_id))
-        .await;
-    
-    assert_eq!(retrieve_response.status_code(), 200);
-    
-    let retrieve_body: serde_json::Value = retrieve_response.json();
+
+    let (status, retrieve_body) = request_json(
+        router,
+        Request::builder()
+            .method("GET")
+            .uri(format!("/api/v1/data/{data_id}"))
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
     assert!(retrieve_body["success"].as_bool().unwrap());
     
     let retrieved_data = &retrieve_body["data"]["data"];
@@ -309,9 +363,7 @@ async fn test_authentication_flow() {
     config.features.auth_enabled = true;
     
     let server = FortressServer::new(config).await.unwrap();
-    let router = server.create_router().await.unwrap();
-    
-    let test_server = TestServer::new(router).unwrap();
+    let router = server.router().await.unwrap();
     
     // Test login with valid credentials
     let auth_request = json!({
@@ -320,17 +372,22 @@ async fn test_authentication_flow() {
         "tenant_id": "test_tenant"
     });
     
-    let auth_response = test_server
-        .post("/auth/login")
-        .json(&auth_request)
-        .await;
-    
-    // This might fail if user doesn't exist, but the endpoint should be accessible
-    // The exact behavior depends on the auth implementation
-    assert!(auth_response.status_code().is_success() || auth_response.status_code() == 401);
-    
-    if auth_response.status_code().is_success() {
-        let body: serde_json::Value = auth_response.json();
+
+    let (status, body) = request_json(
+        router,
+        Request::builder()
+            .method("POST")
+            .uri("/api/v1/auth/login")
+            .header("content-type", "application/json")
+            .body(Body::from(auth_request.to_string()))
+            .unwrap(),
+    )
+    .await;
+
+    // This might fail if user doesn't exist, but the endpoint should be accessible.
+    assert!(status.is_success() || status == StatusCode::UNAUTHORIZED);
+
+    if status.is_success() {
         if body["success"].as_bool().unwrap_or(false) {
             assert!(body["data"]["access_token"].is_string());
             assert!(body["data"]["token_type"].is_string());
@@ -343,27 +400,28 @@ async fn test_authentication_flow() {
 async fn test_metrics_endpoint() {
     let config = ServerConfig::default();
     let server = FortressServer::new(config).await.unwrap();
-    let router = server.create_router().await.unwrap();
-    
-    let test_server = TestServer::new(router).unwrap();
-    
-    // Test metrics endpoint
-    let response = test_server.get("/metrics").await;
-    
-    assert_eq!(response.status_code(), 200);
-    
-    let body: serde_json::Value = response.json();
+    let router = server.router().await.unwrap();
+
+    // JSON metrics are exposed at /api/v1/metrics
+    let (status, body) = request_json(
+        router.clone(),
+        Request::builder().method("GET").uri("/api/v1/metrics").body(Body::empty()).unwrap(),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
     assert!(body["metrics"].is_object());
     assert!(body["timestamp"].is_string());
-    
-    // Test prometheus metrics endpoint
-    let prometheus_response = test_server.get("/metrics/prometheus").await;
-    
-    assert_eq!(prometheus_response.status_code(), 200);
-    
-    let prometheus_body = prometheus_response.text();
+
+    // Prometheus exposition is served as plain text on /metrics
+    let (status, prometheus_body) = request_text(
+        router,
+        Request::builder().method("GET").uri("/metrics").body(Body::empty()).unwrap(),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
     assert!(!prometheus_body.is_empty());
-    // Should contain some prometheus-style metrics
     assert!(prometheus_body.contains('#') || prometheus_body.contains('_'));
 }
 
@@ -371,14 +429,12 @@ async fn test_metrics_endpoint() {
 async fn test_storage_backend_integration() {
     // Test with different storage backends
     let mut config = ServerConfig::default();
-    
+
     // Test in-memory storage
-    config.storage.backend_type = fortress_core::storage::StorageBackendType::InMemory;
+    config.core.storage.backend = "in_memory".to_string();
     
     let server = FortressServer::new(config).await.unwrap();
-    let router = server.create_router().await.unwrap();
-    
-    let test_server = TestServer::new(router).unwrap();
+    let router = server.router().await.unwrap();
     
     // Store and retrieve data
     let test_data = json!({
@@ -389,24 +445,34 @@ async fn test_storage_backend_integration() {
     let store_request = json!({
         "data": test_data
     });
-    
-    let store_response = test_server
-        .post("/data")
-        .json(&store_request)
-        .await;
-    
-    assert_eq!(store_response.status_code(), 200);
-    
-    let store_body: serde_json::Value = store_response.json();
+
+    let (status, store_body) = request_json(
+        router.clone(),
+        Request::builder()
+            .method("POST")
+            .uri("/api/v1/data")
+            .header("content-type", "application/json")
+            .body(Body::from(store_request.to_string()))
+            .unwrap(),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
     let data_id = store_body["data"]["id"].as_str().unwrap();
     
     // Retrieve the data
-    let retrieve_response = test_server
-        .get(&format!("/data/{}", data_id))
-        .await;
-    
-    assert_eq!(retrieve_response.status_code(), 200);
-    let retrieve_body: serde_json::Value = retrieve_response.json();
+
+    let (status, retrieve_body) = request_json(
+        router,
+        Request::builder()
+            .method("GET")
+            .uri(format!("/api/v1/data/{data_id}"))
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
     assert_eq!(retrieve_body["data"]["data"]["test"], "storage_backend_integration");
 }
 
@@ -414,15 +480,19 @@ async fn test_storage_backend_integration() {
 async fn test_error_handling() {
     let config = ServerConfig::default();
     let server = FortressServer::new(config).await.unwrap();
-    let router = server.create_router().await.unwrap();
-    
-    let test_server = TestServer::new(router).unwrap();
-    
-    // Test retrieving non-existent data
-    let response = test_server.get("/data/non-existent-id").await;
-    assert_eq!(response.status_code(), 404);
-    
-    let body: serde_json::Value = response.json();
+    let router = server.router().await.unwrap();
+
+    let (status, body) = request_json(
+        router,
+        Request::builder()
+            .method("GET")
+            .uri("/api/v1/data/non-existent-id")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
     assert!(!body["success"].as_bool().unwrap());
     assert!(body["error"].is_string());
 }
@@ -431,15 +501,13 @@ async fn test_error_handling() {
 async fn test_concurrent_requests() {
     let config = ServerConfig::default();
     let server = FortressServer::new(config).await.unwrap();
-    let router = server.create_router().await.unwrap();
-    
-    let test_server = TestServer::new(router).unwrap();
+    let router = server.router().await.unwrap();
     
     // Create multiple concurrent requests
     let mut handles = Vec::new();
     
     for i in 0..10 {
-        let test_server = test_server.clone();
+        let router = router.clone();
         let handle = tokio::spawn(async move {
             let test_data = json!({
                 "id": i,
@@ -450,10 +518,16 @@ async fn test_concurrent_requests() {
                 "data": test_data
             });
             
-            test_server
-                .post("/data")
-                .json(&store_request)
-                .await
+            request_json(
+                router,
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/data")
+                    .header("content-type", "application/json")
+                    .body(Body::from(store_request.to_string()))
+                    .unwrap(),
+            )
+            .await
         });
         handles.push(handle);
     }
@@ -463,8 +537,8 @@ async fn test_concurrent_requests() {
     
     // All requests should succeed
     for result in results {
-        let response = result.unwrap();
-        assert_eq!(response.status_code(), 200);
+        let (status, _body) = result.unwrap();
+        assert_eq!(status, StatusCode::OK);
     }
 }
 
@@ -472,9 +546,7 @@ async fn test_concurrent_requests() {
 async fn test_large_data_handling() {
     let config = ServerConfig::default();
     let server = FortressServer::new(config).await.unwrap();
-    let router = server.create_router().await.unwrap();
-    
-    let test_server = TestServer::new(router).unwrap();
+    let router = server.router().await.unwrap();
     
     // Create large test data (1MB)
     let large_data = json!({
@@ -485,24 +557,33 @@ async fn test_large_data_handling() {
     let store_request = json!({
         "data": large_data
     });
-    
-    let store_response = test_server
-        .post("/data")
-        .json(&store_request)
-        .await;
-    
-    assert_eq!(store_response.status_code(), 200);
-    
-    let store_body: serde_json::Value = store_response.json();
+
+    let (status, store_body) = request_json(
+        router.clone(),
+        Request::builder()
+            .method("POST")
+            .uri("/api/v1/data")
+            .header("content-type", "application/json")
+            .body(Body::from(store_request.to_string()))
+            .unwrap(),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
     let data_id = store_body["data"]["id"].as_str().unwrap();
     
     // Retrieve the large data
-    let retrieve_response = test_server
-        .get(&format!("/data/{}", data_id))
-        .await;
-    
-    assert_eq!(retrieve_response.status_code(), 200);
-    let retrieve_body: serde_json::Value = retrieve_response.json();
+    let (status, retrieve_body) = request_json(
+        router,
+        Request::builder()
+            .method("GET")
+            .uri(format!("/api/v1/data/{data_id}"))
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
     let retrieved_size = retrieve_body["data"]["data"]["size"].as_u64().unwrap();
     assert_eq!(retrieved_size, 1024 * 1024);
 }

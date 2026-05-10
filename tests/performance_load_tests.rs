@@ -13,14 +13,14 @@ use std::sync::atomic::{AtomicUsize, AtomicU64, Ordering};
 
 use tokio::sync::{Semaphore, RwLock, Mutex};
 use tokio::task::JoinSet;
+use tokio::task::JoinError;
 
-use fortress_core::error::Result;
+use fortress_core::error::{Result, FortressError};
+
 use fortress_core::encryption::{Aegis256, EncryptionAlgorithm};
-use fortress_core::websocket::auth::{AuthManager, AuthConfig};
-use fortress_core::security_fixes::{SecureSessionGenerator, CsrfProtection, InputValidator};
+use fortress_core::auth::AuthManager;
+use fortress_core::websocket::auth::AuthConfig;
 use fortress_core::cache::{CacheManager, CacheConfig};
-use fortress_core::storage::{StorageManager, StorageConfig};
-use fortress_core::key::{KeyManager, KeyConfig};
 use fortress_core::audit::{AuditManager, AuditConfig};
 
 /// Comprehensive performance and load test suite
@@ -105,7 +105,7 @@ impl PerformanceLoadTests {
             token_expiration_seconds: 3600,
         };
 
-        let auth_manager = Arc::new(AuthManager::new_with_config(auth_config));
+        let auth_manager = Arc::new(AuthManager::new());
         let concurrent_levels = vec![100, 500, 1000, 2000, 5000];
         let mut test_results = Vec::new();
 
@@ -138,13 +138,19 @@ impl PerformanceLoadTests {
             let mut min_response_time = Duration::MAX;
 
             for handle in handles {
-                let (success, response_time) = handle.await?;
-                if success {
-                    successful_auths += 1;
+                match handle.await {
+                    Ok((success, response_time)) => {
+                        if success {
+                            successful_auths += 1;
+                        }
+                    }
+                    Err(_) => {
+                        // Handle join error - count as failure
+                    }
                 }
-                total_response_time += response_time;
-                max_response_time = max_response_time.max(response_time);
-                min_response_time = min_response_time.min(response_time);
+                total_response_time += op_response_time;
+                max_response_time = max_response_time.max(op_response_time);
+                min_response_time = min_response_time.min(op_response_time);
             }
 
             let total_time = start.elapsed();
@@ -186,16 +192,16 @@ impl PerformanceLoadTests {
         let mut test_results = Vec::new();
 
         for data_size in data_sizes {
-            for concurrent_count in concurrent_levels {
+            for concurrent_count in &concurrent_levels {
                 let test_data = vec![42u8; data_size];
                 let key = vec![0u8; 32];
                 let algorithm = algorithm.clone();
-                let semaphore = Arc::new(Semaphore::new(concurrent_count));
+                let semaphore = Arc::new(Semaphore::new(*concurrent_count));
                 let mut handles = Vec::new();
 
                 let start = Instant::now();
 
-                for _i in 0..concurrent_count {
+                for _i in 0..*concurrent_count {
                     let semaphore = semaphore.clone();
                     let algorithm = algorithm.clone();
                     let test_data = test_data.clone();
@@ -222,20 +228,26 @@ impl PerformanceLoadTests {
                 let mut min_operation_time = Duration::MAX;
 
                 for handle in handles {
-                    let operation_time = handle.await?;
-                    total_operation_time += operation_time;
-                    max_operation_time = max_operation_time.max(operation_time);
-                    min_operation_time = min_operation_time.min(operation_time);
+                    match handle.await {
+                        Ok(operation_time) => {
+                            total_operation_time += operation_time;
+                            max_operation_time = max_operation_time.max(operation_time);
+                            min_operation_time = min_operation_time.min(operation_time);
+                        }
+                        Err(_) => {
+                            // Handle join error - continue with current values
+                        }
+                    }
                 }
 
                 let total_time = start.elapsed();
-                let avg_operation_time = total_operation_time / concurrent_count as u32;
-                let operations_per_second = concurrent_count as f64 / total_time.as_secs_f64();
+                let avg_operation_time = total_operation_time / (*concurrent_count) as u32;
+                let operations_per_second = (*concurrent_count) as f64 / total_time.as_secs_f64();
                 let throughput_mbps = (data_size as f64 * 2.0) / (1024.0 * 1024.0) / avg_operation_time.as_secs_f64();
 
                 test_results.push(EncryptionConcurrencyTest {
                     data_size,
-                    concurrent_count,
+                    concurrent_count: *concurrent_count,
                     total_time,
                     avg_operation_time,
                     min_operation_time,
@@ -299,22 +311,20 @@ impl PerformanceLoadTests {
                 let mut min_response_time = Duration::MAX;
 
                 for handle in handles {
-                    let (success, response_time) = handle.await?;
-                    if success {
-                        successful_ops += 1;
+                    match handle.await {
+                        Ok((success, response_time)) => {
+                            if success {
+                                successful_ops += 1;
+                            }
+                        }
+                        Err(_) => {
+                            // Handle join error - count as failure
+                        }
                     }
-                    total_response_time += response_time;
-                    max_response_time = max_response_time.max(response_time);
-                    min_response_time = min_response_time.min(response_time);
-                }
-
-                let total_time = start.elapsed();
-                let avg_response_time = total_response_time / concurrent_count as u32;
-                let operations_per_second = concurrent_count as f64 / total_time.as_secs_f64();
                 let success_rate = successful_ops as f64 / concurrent_count as f64;
 
                 test_results.push(DatabaseConcurrencyTest {
-                    operation_type: operation_type.clone(),
+                    operation_type: operation_type.to_string(),
                     concurrent_count,
                     successful_operations: successful_ops,
                     total_time,
@@ -397,13 +407,22 @@ impl PerformanceLoadTests {
             let mut min_response_time = Duration::MAX;
 
             for handle in handles {
-                let (success, response_time) = handle.await?;
+                let (success, op_response_time) = match handle.await {
+                    Ok(result) => result,
+                    Err(_) => (false, Duration::ZERO),
+                };
                 if success {
                     successful_ops += 1;
                 }
-                total_response_time += response_time;
-                max_response_time = max_response_time.max(response_time);
-                min_response_time = min_response_time.min(response_time);
+                total_response_time += op_response_time;
+                max_response_time = max_response_time.max(op_response_time);
+                min_response_time = min_response_time.min(op_response_time);
+                if success {
+                    successful_ops += 1;
+                }
+                total_response_time += op_response_time;
+                max_response_time = max_response_time.max(op_response_time);
+                min_response_time = min_response_time.min(op_response_time);
             }
 
             let total_time = start.elapsed();
@@ -439,9 +458,15 @@ impl PerformanceLoadTests {
         println!("  📋 Testing concurrent audit logging...");
 
         let audit_config = AuditConfig {
-            batch_size: 100,
-            flush_interval_seconds: 5,
+            enabled: true,
+            min_security_level: fortress_core::audit::SecurityLevel::Low,
             retention_days: 90,
+            tamper_evident: true,
+            hmac_key: None,
+            log_path: None,
+            enable_rotation: false,
+            max_file_size: 1024 * 1024 * 100, // 100MB
+            max_rotated_files: 10,
         };
         let audit_manager = Arc::new(AuditManager::new_with_config(audit_config));
         let concurrent_levels = vec![100, 500, 1000, 5000];
@@ -484,13 +509,22 @@ impl PerformanceLoadTests {
             let mut min_response_time = Duration::MAX;
 
             for handle in handles {
-                let (success, response_time) = handle.await?;
+                let (success, op_response_time) = match handle.await {
+                    Ok(result) => result,
+                    Err(_) => (false, Duration::ZERO),
+                };
+                if success {
+                    successful_ops += 1;
+                }
+                total_response_time += op_response_time;
+                max_response_time = max_response_time.max(op_response_time);
+                min_response_time = min_response_time.min(op_response_time);
                 if success {
                     successful_logs += 1;
                 }
-                total_response_time += response_time;
-                max_response_time = max_response_time.max(response_time);
-                min_response_time = min_response_time.min(response_time);
+                total_response_time += op_response_time;
+                max_response_time = max_response_time.max(op_response_time);
+                min_response_time = min_response_time.min(op_response_time);
             }
 
             let total_time = start.elapsed();
@@ -563,13 +597,22 @@ impl PerformanceLoadTests {
             let mut min_response_time = Duration::MAX;
 
             for handle in handles {
-                let (success, response_time) = handle.await?;
+                let (success, op_response_time) = match handle.await {
+                    Ok(result) => result,
+                    Err(_) => (false, Duration::ZERO),
+                };
+                if success {
+                    successful_ops += 1;
+                }
+                total_response_time += op_response_time;
+                max_response_time = max_response_time.max(op_response_time);
+                min_response_time = min_response_time.min(op_response_time);
                 if success {
                     successful_requests += 1;
                 }
-                total_response_time += response_time;
-                max_response_time = max_response_time.max(response_time);
-                min_response_time = min_response_time.min(response_time);
+                total_response_time += op_response_time;
+                max_response_time = max_response_time.max(op_response_time);
+                min_response_time = min_response_time.min(op_response_time);
             }
 
             let total_time = start.elapsed();
@@ -649,13 +692,22 @@ impl PerformanceLoadTests {
             let mut min_response_time = Duration::MAX;
 
             for handle in handles {
-                let (success, response_time) = handle.await?;
+                let (success, op_response_time) = match handle.await {
+                    Ok(result) => result,
+                    Err(_) => (false, Duration::ZERO),
+                };
                 if success {
                     successful_ops += 1;
                 }
-                total_response_time += response_time;
-                max_response_time = max_response_time.max(response_time);
-                min_response_time = min_response_time.min(response_time);
+                total_response_time += op_response_time;
+                max_response_time = max_response_time.max(op_response_time);
+                min_response_time = min_response_time.min(op_response_time);
+                if success {
+                    successful_ops += 1;
+                }
+                total_response_time += op_response_time;
+                max_response_time = max_response_time.max(op_response_time);
+                min_response_time = min_response_time.min(op_response_time);
             }
 
             let total_time = start.elapsed();
@@ -728,13 +780,22 @@ impl PerformanceLoadTests {
             let mut min_response_time = Duration::MAX;
 
             for handle in handles {
-                let (success, response_time) = handle.await?;
+                let (success, op_response_time) = match handle.await {
+                    Ok(result) => result,
+                    Err(_) => (false, Duration::ZERO),
+                };
                 if success {
                     successful_ops += 1;
                 }
-                total_response_time += response_time;
-                max_response_time = max_response_time.max(response_time);
-                min_response_time = min_response_time.min(response_time);
+                total_response_time += op_response_time;
+                max_response_time = max_response_time.max(op_response_time);
+                min_response_time = min_response_time.min(op_response_time);
+                if success {
+                    successful_ops += 1;
+                }
+                total_response_time += op_response_time;
+                max_response_time = max_response_time.max(op_response_time);
+                min_response_time = min_response_time.min(op_response_time);
             }
 
             let total_time = start.elapsed();
@@ -1393,13 +1454,22 @@ impl PerformanceLoadTests {
             let mut min_response_time = Duration::MAX;
 
             for handle in handles {
-                let (success, response_time) = handle.await?;
+                let (success, op_response_time) = match handle.await {
+                    Ok(result) => result,
+                    Err(_) => (false, Duration::ZERO),
+                };
+                if success {
+                    successful_ops += 1;
+                }
+                total_response_time += op_response_time;
+                max_response_time = max_response_time.max(op_response_time);
+                min_response_time = min_response_time.min(op_response_time);
                 if success {
                     successful_requests += 1;
                 }
-                total_response_time += response_time;
-                max_response_time = max_response_time.max(response_time);
-                min_response_time = min_response_time.min(response_time);
+                total_response_time += op_response_time;
+                max_response_time = max_response_time.max(op_response_time);
+                min_response_time = min_response_time.min(op_response_time);
             }
 
             let total_time = start.elapsed();
@@ -1472,7 +1542,7 @@ impl PerformanceLoadTests {
                             .map(|(j, &x)| (x as u64).wrapping_mul((j as u64).wrapping_add(1)))
                             .sum();
 
-                        work_start.elapsed()
+                        (true, work_start.elapsed())
                     });
 
                     handles.push(handle);
@@ -1483,10 +1553,14 @@ impl PerformanceLoadTests {
                 let mut min_work_time = Duration::MAX;
 
                 for handle in handles {
-                    let work_time = handle.await?;
-                    total_work_time += work_time;
-                    max_work_time = max_work_time.max(work_time);
-                    min_work_time = min_work_time.min(work_time);
+                    match handle.await {
+                        Ok((success, response_time)) => {
+                            total_work_time += response_time;
+                            max_work_time = max_work_time.max(response_time);
+                            min_work_time = min_work_time.min(response_time);
+                        }
+                        Err(_) => continue,
+                    }
                 }
 
                 let total_time = start.elapsed();
@@ -1575,13 +1649,22 @@ impl PerformanceLoadTests {
             let mut min_response_time = Duration::MAX;
 
             for handle in handles {
-                let (success, response_time) = handle.await?;
+                let (success, op_response_time) = match handle.await {
+                    Ok(result) => result,
+                    Err(_) => (false, Duration::ZERO),
+                };
+                if success {
+                    successful_ops += 1;
+                }
+                total_response_time += op_response_time;
+                max_response_time = max_response_time.max(op_response_time);
+                min_response_time = min_response_time.min(op_response_time);
                 if success {
                     successful_requests += 1;
                 }
-                total_response_time += response_time;
-                max_response_time = max_response_time.max(response_time);
-                min_response_time = min_response_time.min(response_time);
+                total_response_time += op_response_time;
+                max_response_time = max_response_time.max(op_response_time);
+                min_response_time = min_response_time.min(op_response_time);
             }
 
             let total_time = start.elapsed();
@@ -1732,7 +1815,16 @@ impl PerformanceLoadTests {
             let mut total_response_time = Duration::ZERO;
 
             for handle in handles {
-                let (success, response_time) = handle.await?;
+                let (success, op_response_time) = match handle.await {
+                    Ok(result) => result,
+                    Err(_) => (false, Duration::ZERO),
+                };
+                if success {
+                    successful_ops += 1;
+                }
+                total_response_time += op_response_time;
+                max_response_time = max_response_time.max(op_response_time);
+                min_response_time = min_response_time.min(op_response_time);
                 if success {
                     successful_ops += 1;
                 }
@@ -1746,6 +1838,7 @@ impl PerformanceLoadTests {
 
             // Get resource utilization metrics
             let resource_metrics = resource_manager.get_utilization_metrics();
+            let resource_metrics_clone = resource_metrics.clone();
 
             test_results.push(ResourceScalingTest {
                 config_name: config_name.to_string(),
@@ -1761,8 +1854,8 @@ impl PerformanceLoadTests {
 
             println!("    {}: {:.2} ops/sec, {:.1}% CPU, {:.1}% RAM", 
                 config_name, operations_per_second, 
-                resource_metrics.cpu_utilization * 100.0,
-                resource_metrics.memory_utilization * 100.0);
+                resource_metrics_clone.cpu_utilization * 100.0,
+                resource_metrics_clone.memory_utilization * 100.0);
         }
 
         // Calculate scaling efficiency
@@ -1833,13 +1926,22 @@ impl PerformanceLoadTests {
             let mut min_response_time = Duration::MAX;
 
             for handle in handles {
-                let (success, response_time) = handle.await?;
+                let (success, op_response_time) = match handle.await {
+                    Ok(result) => result,
+                    Err(_) => (false, Duration::ZERO),
+                };
                 if success {
                     successful_ops += 1;
                 }
-                total_response_time += response_time;
-                max_response_time = max_response_time.max(response_time);
-                min_response_time = min_response_time.min(response_time);
+                total_response_time += op_response_time;
+                max_response_time = max_response_time.max(op_response_time);
+                min_response_time = min_response_time.min(op_response_time);
+                if success {
+                    successful_ops += 1;
+                }
+                total_response_time += op_response_time;
+                max_response_time = max_response_time.max(op_response_time);
+                min_response_time = min_response_time.min(op_response_time);
             }
 
             let total_time = start.elapsed();
@@ -1850,6 +1952,7 @@ impl PerformanceLoadTests {
 
             // Get tenant isolation metrics
             let isolation_metrics = tenant_manager.get_isolation_metrics();
+            let isolation_metrics_clone = isolation_metrics.clone();
 
             test_results.push(MultiTenantScalabilityTest {
                 tenant_count,
@@ -1866,7 +1969,7 @@ impl PerformanceLoadTests {
 
             println!("    {} tenants: {:.2} ops/sec, {:.1}% success, {:.1}% isolation", 
                 tenant_count, operations_per_second, success_rate * 100.0,
-                isolation_metrics.isolation_score * 100.0);
+                isolation_metrics_clone.isolation_score * 100.0);
         }
 
         // Calculate multi-tenant scaling efficiency
@@ -2230,7 +2333,7 @@ impl PerformanceLoadTests {
         ];
         
         for (success, weight) in tests {
-            if **success {
+            if *success {
                 score += weight;
             }
             total_weight += weight;
@@ -2257,7 +2360,7 @@ impl PerformanceLoadTests {
         ];
         
         for (success, weight) in tests {
-            if **success {
+            if *success {
                 score += weight;
             }
             total_weight += weight;
@@ -2284,7 +2387,7 @@ impl PerformanceLoadTests {
         ];
         
         for (success, weight) in tests {
-            if **success {
+            if *success {
                 score += weight;
             }
             total_weight += weight;
@@ -2433,7 +2536,7 @@ impl SharedResource {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct ConnectionPoolConfig {
     max_connections: usize,
     min_connections: usize,
@@ -2451,7 +2554,7 @@ struct ConnectionPool {
 impl ConnectionPool {
     fn new_with_config(config: ConnectionPoolConfig) -> Self {
         Self {
-            config,
+            config: config.clone(),
             active_connections: AtomicUsize::new(config.min_connections),
             total_operations: AtomicU64::new(0),
         }
@@ -2544,7 +2647,7 @@ impl ResourceManager {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct ResourceMetrics {
     cpu_utilization: f64,
     memory_utilization: f64,
@@ -2577,7 +2680,11 @@ impl TenantManager {
             tokio::time::sleep(Duration::from_micros(100 + (operation_id % 100) as u64)).await;
             Ok(format!("tenant:{}:op:{}", tenant_id, operation_id))
         } else {
-            Err(fortress_core::error::FortressError::tenant("Tenant not found"))
+            Err(fortress_core::error::FortressError::key_management(
+                "Tenant not found".to_string(),
+                Some(tenant_id.to_string()),
+                fortress_core::error::KeyErrorCode::KeyNotFound
+            ))
         }
     }
 
@@ -2606,7 +2713,7 @@ impl TenantInfo {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct IsolationMetrics {
     isolation_score: f64,
     cross_tenant_leaks: usize,
@@ -3157,7 +3264,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_high_concurrency_only() {
-        let results = PerformanceLoadTests::test_high_concurrency_scenarios().await.unwrap();
+        let tests = PerformanceLoadTests;
+        let results = tests.test_high_concurrency_scenarios().await.unwrap();
         
         assert!(!results.concurrent_auth.test_results.is_empty(), 
                 "Should have concurrent auth results");
@@ -3167,7 +3275,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_memory_usage_only() {
-        let results = PerformanceLoadTests::test_memory_usage_scenarios().await.unwrap();
+        let tests = PerformanceLoadTests;
+        let results = tests.test_memory_usage_scenarios().await.unwrap();
         
         assert!(!results.allocation_patterns.test_results.is_empty(), 
                 "Should have memory allocation results");
@@ -3177,11 +3286,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_scalability_only() {
-        let results = PerformanceLoadTests::test_scalability_scenarios().await.unwrap();
+        let tests = PerformanceLoadTests;
+        let results = tests.test_scalability_scenarios().await.unwrap();
         
         assert!(!results.horizontal.test_results.is_empty(), 
                 "Should have horizontal scalability results");
         assert!(!results.vertical.test_results.is_empty(), 
                 "Should have vertical scalability results");
+        }
     }
 }

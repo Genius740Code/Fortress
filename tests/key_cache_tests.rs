@@ -647,14 +647,13 @@ mod tests {
             let key = create_test_key(32);
             let metadata = create_test_metadata(&format!("lru_config_{}", i));
             
-            lru_cache.put(&key_id, &key, &metadata).await
+            lru_cache.put(key_id, key, metadata).await
                 .expect(&format!("LRU config key {} storage should succeed", i));
             
             lru_key_ids.push(key_id);
         }
         
-        let lru_stats = lru_cache.get_stats().await
-            .expect("LRU stats should succeed");
+        let lru_stats = lru_cache.get_stats().await;
         assert_eq!(lru_stats.total_keys, 5, "LRU cache should respect max_keys");
         
         // Test time-only configuration
@@ -671,23 +670,21 @@ mod tests {
         let time_key = create_test_key(32);
         let time_metadata = create_test_metadata("time_config_test");
         
-        time_cache.put(&time_key_id, &time_key, &time_metadata).await
+        time_cache.put(time_key_id, time_key, time_metadata).await
             .expect("Time config key storage should succeed");
         
         // Verify it's cached
-        let contains_immediately = time_cache.contains(&time_key_id).await
-            .expect("Time cache contains should succeed");
+        let contains_immediately = time_cache.contains(&time_key_id).await;
         assert!(contains_immediately, "Key should be cached immediately");
         
         // Wait for eviction
         sleep(tokio::time::Duration::from_secs(2)).await;
         
         // Trigger cleanup
-        let _ = time_cache.cleanup_expired().await;
+        let _ = time_cache.cleanup().await;
         
         // Verify eviction
-        let contains_after_ttl = time_cache.contains(&time_key_id).await
-            .expect("Time cache contains after TTL should succeed");
+        let contains_after_ttl = time_cache.contains(&time_key_id).await;
         assert!(!contains_after_ttl, "Key should be evicted by time");
         
         // Test disabled eviction
@@ -704,12 +701,11 @@ mod tests {
             let key = create_test_key(32);
             let metadata = create_test_metadata(&format!("no_eviction_{}", i));
             
-            no_eviction_cache.put(&key_id, &key, &metadata).await
+            no_eviction_cache.put(key_id, key, metadata).await
                 .expect(&format!("No eviction key {} storage should succeed", i));
         }
         
-        let no_eviction_stats = no_eviction_cache.get_stats().await
-            .expect("No eviction stats should succeed");
+        let no_eviction_stats = no_eviction_cache.get_stats().await;
         // With eviction disabled, cache might grow beyond max_keys
         assert!(no_eviction_stats.total_keys >= 3, "Cache should hold keys without eviction");
     }
@@ -724,12 +720,10 @@ mod tests {
         let non_existent_id = KeyId::new();
         
         let get_result = cache.get(&non_existent_id).await;
-        assert!(get_result.is_ok(), "Get non-existent key should not error");
-        assert!(get_result.unwrap().is_none(), "Non-existent key should return None");
+        assert!(get_result.is_none(), "Non-existent key should return None");
         
         let contains_result = cache.contains(&non_existent_id).await;
-        assert!(contains_result.is_ok(), "Contains non-existent key should not error");
-        assert!(!contains_result.unwrap(), "Non-existent key should not be contained");
+        assert!(!contains_result, "Non-existent key should not be contained");
         
         let remove_result = cache.remove(&non_existent_id).await;
         assert!(remove_result.is_ok(), "Remove non-existent key should not error");
@@ -738,8 +732,7 @@ mod tests {
         cache.clear().await
             .expect("Clear empty cache should succeed");
         
-        let empty_stats = cache.get_stats().await
-            .expect("Empty cache stats should succeed");
+        let empty_stats = cache.get_stats().await;
         assert_eq!(empty_stats.total_keys, 0, "Empty cache should have 0 keys");
         
         // Test very large keys
@@ -747,15 +740,14 @@ mod tests {
         let large_key = create_test_key(1024 * 1024); // 1MB key
         let large_metadata = create_test_metadata("large_key");
         
-        let large_put_result = cache.put(&large_key_id, &large_key, &large_metadata).await;
+        let large_put_result = cache.put(large_key_id.clone(), large_key.clone(), large_metadata.clone()).await;
         // This might succeed or fail depending on memory limits
         match large_put_result {
             Ok(_) => {
                 // If successful, verify retrieval
                 let large_get_result = cache.get(&large_key_id).await;
-                assert!(large_get_result.is_ok(), "Large key retrieval should not error");
                 
-                if let Some((retrieved_key, _)) = large_get_result.unwrap() {
+                if let Some((retrieved_key, _)) = large_get_result {
                     assert_eq!(retrieved_key.to_vec(), large_key.to_vec(), "Large key should match");
                 }
             }
@@ -769,17 +761,16 @@ mod tests {
         let key1 = create_test_key(32);
         let metadata1 = create_test_metadata("duplicate_1");
         
-        cache.put(&duplicate_key_id, &key1, &metadata1).await
+        cache.put(duplicate_key_id.clone(), key1.clone(), metadata1.clone()).await
             .expect("First duplicate key storage should succeed");
         
         let key2 = create_test_key(64);
         let metadata2 = create_test_metadata("duplicate_2");
         
-        cache.put(&duplicate_key_id, &key2, &metadata2).await
+        cache.put(duplicate_key_id.clone(), key2.clone(), metadata2.clone()).await
             .expect("Second duplicate key storage should succeed");
         
-        let duplicate_result = cache.get(&duplicate_key_id).await
-            .expect("Duplicate key retrieval should succeed");
+        let duplicate_result = cache.get(&duplicate_key_id).await;
         assert!(duplicate_result.is_some(), "Duplicate key should be retrievable");
         
         let (retrieved_key, retrieved_metadata) = duplicate_result.unwrap();

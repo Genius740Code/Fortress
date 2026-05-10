@@ -12,6 +12,8 @@ keywords = ["database", "encryption", "security", "cryptography", "privacy"]
 categories = ["database", "cryptography"]
 rust-version = "1.70"
 
+autoexamples = false
+
 [workspace]
 members = [
     "crates/fortress-core",

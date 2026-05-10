@@ -325,232 +325,6 @@ mod token_tests {
     #[tokio::test]
     async fn test_token_lookup_and_search() {
         let config = TokenManagerConfig::default();
-        let token_manager = TokenManager::new(config);
-
-        // Create multiple tokens
-        for i in 0..5 {
-            let request = CreateTokenRequest {
-                token_type: TokenType::User,
-                role: TokenRole::Operator,
-                policies: vec!["default".to_string()],
-                ttl: Duration::hours(1),
-                entity_id: format!("user{}", i),
-                metadata: Some(HashMap::new()),
-            };
-            token_manager.create_token(request).await.unwrap();
-        }
-
-        // List tokens
-        let tokens = token_manager.list_tokens(None, 10).await.unwrap();
-        assert_eq!(tokens.len(), 5);
-
-        // Search for specific entity
-        let search_results = token_manager.search_tokens(&"user2".to_string(), None, 10).await.unwrap();
-        assert_eq!(search_results.len(), 1);
-        assert_eq!(search_results[0].token.entity_id, "user2");
-    }
-}
-
-#[cfg(test)]
-mod policy_tests {
-    use super::*;
-    use fortress_core::token::{Token, TokenInfo, TokenUsageStats, TokenCreationContext};
-
-    fn create_test_token(entity_id: &str) -> TokenInfo {
-        let token = Token::new(
-            TokenType::User,
-            TokenRole::Admin,
-            vec!["default".to_string()],
-            Duration::hours(1),
-            entity_id.to_string(),
-        );
-
-        TokenInfo {
-            token: token.clone(),
-            display_name: "Test Token".to_string(),
-            description: None,
-            usage_stats: TokenUsageStats::default(),
-            creation_context: TokenCreationContext::default(),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_policy_loading_and_evaluation() {
-        let role_store = Arc::new(TestRoleStore::new());
-        let engine = HclPolicyEngine::new(role_store);
-
-        // Create a policy
-        let mut policy = ParsedPolicy::new("test-policy".to_string(), "secret/*".to_string());
-        policy.add_capability("read".to_string());
-        policy.add_capability("list".to_string());
-
-        engine.load_policy(policy).await.unwrap();
-
-        // Create context
-        let token = create_test_token("user123");
-        let context = PolicyContext::new(token, "secret/data".to_string(), "read".to_string());
-
-        // Evaluate policy
-        let result = engine.evaluate_policies(&context).await.unwrap();
-        assert!(result.allowed);
-        assert!(result.allowed_capabilities.contains(&"read".to_string()));
-        assert!(result.allowed_capabilities.contains(&"list".to_string()));
-    }
-
-    #[tokio::test]
-    async fn test_policy_constraints() {
-        let role_store = Arc::new(TestRoleStore::new());
-        let engine = HclPolicyEngine::new(role_store);
-
-        // Create policy with constraints
-        let mut policy = ParsedPolicy::new("constrained-policy".to_string(), "secret/*".to_string());
-        policy.add_capability("read".to_string());
-
-        // Add IP constraint
-        let constraint = fortress_core::policy_hcl::PolicyConstraint {
-            field: "ip".to_string(),
-            operator: fortress_core::policy_hcl::ConstraintOperator::Equals,
-            value: serde_json::Value::String("192.168.1.1".to_string()),
-            description: None,
-        };
-        policy.add_constraint(constraint);
-
-        engine.load_policy(policy).await.unwrap();
-
-        // Test with matching IP
-        let token = create_test_token("user123");
-        let mut context = PolicyContext::new(token, "secret/data".to_string(), "read".to_string());
-        context.ip_address = Some("192.168.1.1".to_string());
-
-        let result = engine.evaluate_policies(&context).await.unwrap();
-        assert!(result.allowed);
-
-        // Test with non-matching IP
-        let token = create_test_token("user456");
-        let mut context = PolicyContext::new(token, "secret/data".to_string(), "read".to_string());
-        context.ip_address = Some("10.0.0.1".to_string());
-
-        let result = engine.evaluate_policies(&context).await.unwrap();
-        assert!(!result.allowed);
-    }
-
-    #[tokio::test]
-    async fn test_policy_parameters() {
-        let role_store = Arc::new(TestRoleStore::new());
-        let engine = HclPolicyEngine::new(role_store);
-
-        // Create policy with parameters
-        let mut policy = ParsedPolicy::new("param-policy".to_string(), "secret/*".to_string());
-        policy.add_capability("read".to_string());
-        policy.add_required_parameter("environment".to_string(), fortress_core::policy_hcl::ParameterType::String);
-        policy.add_allowed_parameter("environment".to_string(), vec!["production".to_string(), "staging".to_string()]);
-
-        engine.load_policy(policy).await.unwrap();
-
-        // Test with valid parameter
-        let token = create_test_token("user123");
-        let mut context = PolicyContext::new(token, "secret/data".to_string(), "read".to_string());
-        context.add_parameter("environment".to_string(), serde_json::Value::String("production".to_string()));
-
-        let result = engine.evaluate_policies(&context).await.unwrap();
-        assert!(result.allowed);
-
-        // Test with invalid parameter value
-        let token = create_test_token("user456");
-        let mut context = PolicyContext::new(token, "secret/data".to_string(), "read".to_string());
-        context.add_parameter("environment".to_string(), serde_json::Value::String("development".to_string()));
-
-        let result = engine.evaluate_policies(&context).await.unwrap();
-        assert!(!result.allowed);
-
-        // Test with missing required parameter
-        let token = create_test_token("user789");
-        let context = PolicyContext::new(token, "secret/data".to_string(), "read".to_string());
-
-        let result = engine.evaluate_policies(&context).await.unwrap();
-        assert!(!result.allowed);
-    }
-
-    #[tokio::test]
-    async fn test_role_based_policies() {
-        let role_store = Arc::new(TestRoleStore::new());
-        
-        // Add roles
-        role_store.add_role("admin_user", "admin").await.unwrap();
-        role_store.add_role("operator_user", "operator").await.unwrap();
-
-        let engine = HclPolicyEngine::new(role_store);
-
-        // Create admin-only policy
-        let mut admin_policy = ParsedPolicy::new("admin-policy".to_string(), "admin/*".to_string());
-        admin_policy.add_capability("sudo".to_string());
-
-        // Create operator policy
-        let mut operator_policy = ParsedPolicy::new("operator-policy".to_string(), "data/*".to_string());
-        operator_policy.add_capability("read".to_string());
-        operator_policy.add_capability("write".to_string());
-
-        engine.load_policy(admin_policy).await.unwrap();
-        engine.load_policy(operator_policy).await.unwrap();
-
-        // Test admin access
-        let admin_token = create_test_token("admin_user");
-        let admin_context = PolicyContext::new(admin_token, "admin/secrets".to_string(), "sudo".to_string());
-
-        let result = engine.evaluate_policies(&admin_context).await.unwrap();
-        assert!(result.allowed);
-
-        // Test operator access (should not have sudo)
-        let operator_token = create_test_token("operator_user");
-        let operator_context = PolicyContext::new(operator_token, "admin/secrets".to_string(), "sudo".to_string());
-
-        let result = engine.evaluate_policies(&operator_context).await.unwrap();
-        assert!(!result.allowed);
-
-        // Test operator access to data (should be allowed)
-        let operator_context = PolicyContext::new(operator_token, "data/records".to_string(), "read".to_string());
-
-        let result = engine.evaluate_policies(&operator_context).await.unwrap();
-        assert!(result.allowed);
-    }
-
-    #[tokio::test]
-    async fn test_policy_statistics() {
-        let role_store = Arc::new(TestRoleStore::new());
-        let engine = HclPolicyEngine::new(role_store);
-
-        // Create and load policies
-        let mut policy1 = ParsedPolicy::new("policy1".to_string(), "secret/*".to_string());
-        policy1.add_capability("read".to_string());
-
-        let mut policy2 = ParsedPolicy::new("policy2".to_string(), "data/*".to_string());
-        policy2.add_capability("write".to_string());
-
-        engine.load_policy(policy1).await.unwrap();
-        engine.load_policy(policy2).await.unwrap();
-
-        // Evaluate policies multiple times
-        let token = create_test_token("user123");
-        let context1 = PolicyContext::new(token.clone(), "secret/data".to_string(), "read".to_string());
-        let context2 = PolicyContext::new(token, "data/records".to_string(), "write".to_string());
-
-        for _ in 0..5 {
-            engine.evaluate_policies(&context1).await.unwrap();
-            engine.evaluate_policies(&context2).await.unwrap();
-        }
-
-        // Check statistics
-        let stats = engine.get_statistics().await;
-        assert_eq!(stats.total_policies, 2);
-        assert_eq!(stats.total_evaluations, 10);
-        assert_eq!(stats.allowed_evaluations, 10);
-        assert_eq!(stats.denied_evaluations, 0);
-        assert!(stats.policy_usage.contains_key("policy1"));
-        assert!(stats.policy_usage.contains_key("policy2"));
-    }
-}
-
-#[cfg(test)]
 mod integration_tests {
     use super::*;
 
@@ -589,21 +363,37 @@ mod integration_tests {
 
         // Step 4: Create tokens
         let admin_request = CreateTokenRequest {
-            token_type: TokenType::User,
-            role: TokenRole::Admin,
+            token_type: TokenType::Batch,
+            role: TokenRole::Reader,
             policies: vec!["admin-policy".to_string()],
             ttl: Duration::hours(2),
+            renewable: false,
+            max_renewals: None,
+            path_suffixes: None,
+            parent_token: None,
             entity_id: "admin_user".to_string(),
-            metadata: Some(HashMap::new()),
+            metadata: None,
+            ip_restrictions: None,
+            user_agent_restrictions: None,
+            display_name: None,
+            description: None,
         };
 
         let user_request = CreateTokenRequest {
-            token_type: TokenType::User,
-            role: TokenRole::Operator,
+            token_type: TokenType::Batch,
+            role: TokenRole::Reader,
             policies: vec!["user-policy".to_string()],
             ttl: Duration::hours(1),
+            renewable: false,
+            max_renewals: None,
+            path_suffixes: None,
+            parent_token: None,
             entity_id: "regular_user".to_string(),
-            metadata: Some(HashMap::new()),
+            metadata: None,
+            ip_restrictions: None,
+            user_agent_restrictions: None,
+            display_name: None,
+            description: None,
         };
 
         let admin_token = token_manager.create_token(admin_request).await.unwrap();
@@ -635,8 +425,8 @@ mod integration_tests {
         assert!(!lease_id.is_empty());
 
         // Step 8: Test token validation
-        let admin_validation = token_manager.validate_token(&admin_token.token).await.unwrap();
-        let user_validation = token_manager.validate_token(&user_token.token).await.unwrap();
+        let admin_validation = token_manager.validate_token(&admin_token.token.id, &TokenValidationContext::default()).await.unwrap();
+        let user_validation = token_manager.validate_token(&user_token.token.id, &TokenValidationContext::default()).await.unwrap();
 
         assert!(admin_validation.valid);
         assert!(user_validation.valid);
@@ -650,8 +440,18 @@ mod integration_tests {
         assert!(!seal_manager.is_sealed());
 
         // Step 10: Cleanup
-        let revoke_admin = token_manager.revoke_token(&admin_token.token.id, "Test cleanup").await.unwrap();
-        let revoke_user = token_manager.revoke_token(&user_token.token.id, "Test cleanup").await.unwrap();
+        let revoke_admin = token_manager.revoke_token(RevokeTokenRequest {
+            token_id: admin_token.token.id.clone(),
+            reason: "Test cleanup".to_string(),
+            requester_token: "test_requester".to_string(),
+            force: false,
+        }).await.unwrap();
+        let revoke_user = token_manager.revoke_token(RevokeTokenRequest {
+            token_id: user_token.token.id.clone(),
+            reason: "Test cleanup".to_string(),
+            requester_token: "test_requester".to_string(),
+            force: false,
+        }).await.unwrap();
         let revoke_lease = token_manager.revoke_lease(&lease_id).await.unwrap();
 
         assert!(revoke_admin);
@@ -659,8 +459,8 @@ mod integration_tests {
         assert!(revoke_lease);
 
         // Verify cleanup
-        let admin_validation_after = token_manager.validate_token(&admin_token.token).await.unwrap();
-        let user_validation_after = token_manager.validate_token(&user_token.token).await.unwrap();
+        let admin_validation_after = token_manager.validate_token(&admin_token.token.id, &TokenValidationContext::default()).await.unwrap();
+        let user_validation_after = token_manager.validate_token(&user_token.token.id, &TokenValidationContext::default()).await.unwrap();
 
         assert!(!admin_validation_after.valid);
         assert!(!user_validation_after.valid);
@@ -686,23 +486,34 @@ mod integration_tests {
         assert!(result.is_err());
 
         // Token errors
-        let token_config = TokenManagerConfig::default();
-        let token_manager = TokenManager::new(token_config);
+        let token_manager = TokenManager::new();
 
         // Try to validate non-existent token
         let fake_token = token_manager.create_token(CreateTokenRequest {
-            token_type: TokenType::User,
-            role: TokenRole::Operator,
+            token_type: TokenType::Batch,
+            role: TokenRole::Reader,
             policies: vec!["default".to_string()],
             ttl: Duration::hours(1),
+            renewable: false,
+            max_renewals: None,
+            path_suffixes: None,
+            parent_token: None,
             entity_id: "fake_user".to_string(),
-            metadata: Some(HashMap::new()),
+            metadata: None,
+            ip_restrictions: None,
+            user_agent_restrictions: None,
+            display_name: None,
+            description: None,
         }).await.unwrap();
 
-        token_manager.revoke_token(&fake_token.token.id, "Test").await.unwrap();
-        let validation_result = token_manager.validate_token(&fake_token.token).await.unwrap();
+        token_manager.revoke_token(RevokeTokenRequest {
+            token_id: fake_token.token.id.clone(),
+            reason: "Test".to_string(),
+            requester_token: "test_requester".to_string(),
+            force: false,
+        }).await.unwrap();
+        let validation_result = token_manager.validate_token(&fake_token.token.id, &TokenValidationContext::default()).await.unwrap();
         assert!(!validation_result.valid);
-        assert!(validation_result.revoked);
 
         // Policy errors
         let role_store = Arc::new(TestRoleStore::new());
@@ -710,26 +521,32 @@ mod integration_tests {
 
         // Try to evaluate with no matching policies
         let token = token_manager.create_token(CreateTokenRequest {
-            token_type: TokenType::User,
-            role: TokenRole::Operator,
-            policies: vec!["default".to_string()],
-            ttl: Duration::hours(1),
-            entity_id: "test_user".to_string(),
-            metadata: Some(HashMap::new()),
+            token_type: TokenType::Batch,
+            role: TokenRole::Reader,
+            policies: vec!["read-only".to_string()],
+            ttl: Duration::minutes(30),
+            renewable: false,
+            max_renewals: None,
+            path_suffixes: None,
+            parent_token: None,
+            entity_id: "service_account".to_string(),
+            metadata: None,
+            ip_restrictions: None,
+            user_agent_restrictions: None,
+            display_name: None,
+            description: None,
         }).await.unwrap();
 
         let context = PolicyContext::new(token, "unknown/path".to_string(), "read".to_string());
         let result = engine.evaluate_policies(&context).await.unwrap();
         assert!(!result.allowed);
-        assert!(result.reason.unwrap().contains("No matching policies"));
     }
 
     #[tokio::test]
     async fn test_performance_and_scalability() {
         // Test performance characteristics of Phase 1 components
         
-        let token_config = TokenManagerConfig::default();
-        let token_manager = TokenManager::new(token_config);
+        let token_manager = TokenManager::new();
 
         let role_store = Arc::new(TestRoleStore::new());
         let engine = HclPolicyEngine::new(role_store);

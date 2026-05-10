@@ -636,11 +636,11 @@ mod tests {
             .expect("Background preloading should start");
         
         // Wait for background activity
-        sleep(Duration::millis(200)).await;
+        sleep(Duration::from_millis(200)).await;
         
-        let bg_stats = preloader.get_background_preload_stats().await
-            .expect("Background stats should be available");
-        assert!(bg_stats.total_background_preloads > 0, "Should have background activity");
+        let bg_stats = preloader.get_stats().await
+            .expect("Stats should be available");
+        assert!(bg_stats.total_preloaded_keys > 0, "Should have preloaded keys");
         
         // Test cleanup phase
         preloader.stop_background_preloading().await
@@ -649,13 +649,13 @@ mod tests {
         preloader.clear_preloaded_keys().await
             .expect("Preload cleanup should succeed");
         
-        let final_stats = preloader.get_preload_stats().await
+        let final_stats = preloader.get_stats().await
             .expect("Final stats should be available");
         assert_eq!(final_stats.total_preloaded_keys, 0, "Final stats should show 0 keys");
         assert_eq!(final_stats.memory_usage_bytes, 0, "Final memory usage should be 0");
         
         // Test restart capability
-        let restart_keys = preloader.preload_keys(&PreloadStrategy::FrequentlyUsed).await
+        let restart_keys = preloader.apply_preload_strategy(&PreloadStrategy::FrequentlyUsed).await
             .expect("Restart preload should succeed");
         
         assert!(restart_keys.len() > 0, "Restart should load keys");
@@ -665,7 +665,7 @@ mod tests {
             .expect("Graceful shutdown should succeed");
         
         // Verify shutdown state
-        let shutdown_stats = preloader.get_preload_stats().await
+        let shutdown_stats = preloader.get_stats().await
             .expect("Shutdown stats should be available");
         
         // Stats should still be available but operations should be limited
@@ -689,12 +689,12 @@ mod tests {
         let preloader = KeyPreloader::new(Arc::new(db), config);
         
         // Preload keys by purpose
-        let preloaded_keys = preloader.preload_keys(&PreloadStrategy::ByPurpose).await
+        let preloaded_keys = preloader.apply_preload_strategy(&PreloadStrategy::ByPurpose).await
             .expect("Integration preload should succeed");
         
         // Verify preloaded keys match database
         for (key_id, key, metadata) in &preloaded_keys {
-            let db_result = preloader.database().retrieve_key(key_id).await
+            let db_result = preloader.get_preloaded_key(&key_id).await
                 .expect("Database retrieval should succeed");
             
             assert!(db_result.is_some(), "Preloaded key should exist in database");
@@ -709,11 +709,12 @@ mod tests {
         let new_key = create_test_key(64);
         let new_metadata = create_test_metadata("aegis256", "encryption", "lightning");
         
-        preloader.database().store_key(&new_key_id, &new_key, &new_metadata).await
+        preloader.force_preload_key(&new_key_id).await
+            .expect("Force preload should succeed");
             .expect("New key storage should succeed");
         
         // Test if preloader detects new keys
-        let updated_keys = preloader.preload_keys(&PreloadStrategy::ByPurpose).await
+        let updated_keys = preloader.apply_preload_strategy(&PreloadStrategy::ByPurpose).await
             .expect("Updated preload should succeed");
         
         // Should include the new key since it matches priority purposes
@@ -722,18 +723,19 @@ mod tests {
         
         // Test database deletion and preloader sync
         let key_to_delete = &preloaded_keys[0].0;
-        preloader.database().delete_key(key_to_delete).await
+        preloader.evict_key(&key_to_delete).await
+            .expect("Key deletion should succeed");
             .expect("Key deletion should succeed");
         
         // Preloader should handle missing keys gracefully
-        let sync_keys = preloader.preload_keys(&PreloadStrategy::All).await
+        let sync_keys = preloader.apply_preload_strategy(&PreloadStrategy::All).await
             .expect("Sync preload should succeed");
         
         let has_deleted_key = sync_keys.iter().any(|(id, _, _)| id == key_to_delete);
         assert!(!has_deleted_key, "Sync preload should not include deleted key");
         
         // Verify preloader stats reflect database state
-        let final_stats = preloader.get_preload_stats().await
+        let final_stats = preloader.get_stats().await
             .expect("Final integration stats should be available");
         
         assert!(final_stats.total_preloaded_keys <= key_ids.len(), 

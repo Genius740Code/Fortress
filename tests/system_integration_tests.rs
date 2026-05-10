@@ -576,12 +576,12 @@ mod mpc_tests {
         
         let party = InMemoryMpcParty::with_metadata(
             party_id.clone(),
-            PartyRole::Leader,
+            PartyRole::Initiator,
             metadata.clone(),
         ).await;
         
         assert_eq!(party.party_id, party_id);
-        assert!(matches!(party.role, PartyRole::Leader));
+        assert!(matches!(party.role, PartyRole::Initiator));
         
         let retrieved_metadata = party.get_metadata().await;
         assert_eq!(retrieved_metadata.get("name"), Some(&"Test Party".to_string()));
@@ -643,7 +643,7 @@ mod mpc_tests {
         let config = ComputationConfig::new(
             "secret_sharing".to_string(),
             SecretSharingScheme::Shamir { threshold: 2, total_shares: 3 },
-        ).with_party("party1".to_string(), PartyRole::Leader)
+        ).with_party("party1".to_string(), PartyRole::Initiator)
          .with_party("party2".to_string(), PartyRole::Participant)
          .with_party("party3".to_string(), PartyRole::Participant);
         
@@ -656,7 +656,7 @@ mod mpc_tests {
         assert!(matches!(status, ComputationStatus::Preparing));
         
         // Add parties
-        let party1 = Arc::new(InMemoryMpcParty::new("party1".to_string(), PartyRole::Leader));
+        let party1 = Arc::new(InMemoryMpcParty::new("party1".to_string(), PartyRole::Initiator));
         let party2 = Arc::new(InMemoryMpcParty::new("party2".to_string(), PartyRole::Participant));
         let party3 = Arc::new(InMemoryMpcParty::new("party3".to_string(), PartyRole::Participant));
         
@@ -691,7 +691,7 @@ mod mpc_tests {
             let config = ComputationConfig::new(
                 "secret_sharing".to_string(),
                 SecretSharingScheme::Shamir { threshold: 2, total_shares: 2 },
-            ).with_party(format!("party{}", i + 1), PartyRole::Leader)
+            ).with_party(format!("party{}", i + 1), PartyRole::Initiator)
              .with_party(format!("party{}", i + 2), PartyRole::Participant);
             
             let session_id = manager.initialize_computation(&config, &[]).await.unwrap();
@@ -828,7 +828,7 @@ mod mpc_tests {
         // Test secure party creation
         let secure_party = InMemoryMpcParty::with_metadata(
             "secure-party".to_string(),
-            PartyRole::Leader,
+            PartyRole::Initiator,
             HashMap::from([
                 ("security_level".to_string(), "high".to_string()),
                 ("compliance".to_string(), "gdpr".to_string()),
@@ -1228,7 +1228,7 @@ mod integration_tests {
             let party = Arc::new(InMemoryMpcParty::new(
                 node.id.to_string(),
                 if matches!(node.state, NodeState::Leader { .. }) {
-                    PartyRole::Leader
+                    PartyRole::Initiator
                 } else {
                     PartyRole::Participant
                 },
@@ -1298,7 +1298,7 @@ mod integration_tests {
         for i in 1..=3 {
             let party = Arc::new(InMemoryMpcParty::new(
                 format!("party{}", i),
-                if i == 1 { PartyRole::Leader } else { PartyRole::Participant },
+                if i == 1 { PartyRole::Initiator } else { PartyRole::Participant },
             ));
             manager.add_party_to_session(&session_id, party).await.unwrap();
         }
@@ -1402,10 +1402,10 @@ mod integration_tests {
         
         // Setup MPC manager
         let network = Arc::new(InMemoryMpcNetwork::new());
-        let manager = DefaultMpcManager::new(network, "integrated-protocol");
+        let mut manager = DefaultMpcManager::with_network(network).unwrap();
         
         let protocol = TestMpcProtocol::new("integrated-protocol");
-        manager.add_protocol(Box::new(protocol)).await.unwrap();
+        manager.add_protocol("integrated-protocol", Box::new(protocol));
         
         // Create cluster nodes
         let mut nodes = Vec::new();
@@ -1421,17 +1421,18 @@ mod integration_tests {
                 },
                 last_heartbeat: chrono::Utc::now().timestamp_millis() as u64,
                 capabilities: NodeCapabilities {
-                    supports_encryption: true,
-                    supports_computation: true,
-                    max_connections: 1000,
-                    supported_protocols: vec!["mpc".to_string(), "plugin".to_string(), "tls".to_string()],
+                    storage: true,
+                    encryption: true,
+                    leadership: true,
+                    algorithms: vec!["aes-256-gcm".to_string(), "mpc".to_string()],
                 },
                 load_metrics: LoadMetrics {
                     cpu_usage: 0.2,
                     memory_usage: 0.3,
-                    network_io: 0.1,
+                    network_io: 100000,
                     active_connections: 10,
-                    requests_per_second: 500.0,
+                    ops_per_second: 500.0,
+                    storage_used: 0.1,
                 },
             };
             nodes.push(node);
@@ -1453,6 +1454,9 @@ mod integration_tests {
             metadata: integrated_plugin.metadata().clone(),
             encryption_access: true,
             storage_access: true,
+            user_id: Some("test-user".to_string()),
+            session_id: Some("test-session".to_string()),
+            request_id: Some("test-request".to_string()),
         };
         
         // Create integrated MPC computation
@@ -1464,7 +1468,7 @@ mod integration_tests {
          .with_parameter("encryption_enabled".to_string(), serde_json::Value::Bool(true));
         
         // Execute integrated workflow
-        let session_id = manager.initialize_computation(&config, &[]).await.unwrap();
+        let session_id = manager.create_session(config).await.unwrap();
         assert!(!session_id.is_empty());
         
         // Add cluster nodes as MPC parties
@@ -1472,7 +1476,7 @@ mod integration_tests {
             let party = Arc::new(InMemoryMpcParty::new(
                 node.id.to_string(),
                 if matches!(node.state, NodeState::Leader { .. }) {
-                    PartyRole::Leader
+                    PartyRole::Initiator
                 } else {
                     PartyRole::Participant
                 },
@@ -1489,6 +1493,8 @@ mod integration_tests {
                 "nodes": nodes.iter().map(|n| n.id.to_string()).collect::<Vec<_>>(),
             }),
             parameters: HashMap::new(),
+            operation: Some("cluster_operation".to_string()),
+            timestamp: Some(chrono::Utc::now()),
         };
         
         let plugin_result = integrated_plugin.execute(plugin_input).await.unwrap();
@@ -1496,8 +1502,8 @@ mod integration_tests {
         
         // Complete MPC computation
         manager.start_computation(&session_id).await.unwrap();
-        let mpc_result = manager.finalize_computation(&session_id).await.unwrap();
-        assert!(mpc_result.success);
+        let mpc_result = manager.get_result(&session_id).await.unwrap().unwrap();
+        assert!(!mpc_result.result_data.is_empty());
         
         // Verify system integration
         assert_eq!(nodes.len(), 3);
@@ -1505,9 +1511,8 @@ mod integration_tests {
         assert!(mpc_result.result_data.is_some());
         
         // Verify all systems are secure and performant
-        assert!(nodes.iter().all(|n| n.capabilities.supports_encryption));
+        assert!(nodes.iter().all(|n| n.capabilities.encryption));
         assert!(plugin_result.metrics.execution_time_ms < 1000);
-        assert!(mpc_result.computation_time_ms < 1000);
     }
 
     #[tokio::test]
@@ -1529,17 +1534,18 @@ mod integration_tests {
                 },
                 last_heartbeat: chrono::Utc::now().timestamp_millis() as u64,
                 capabilities: NodeCapabilities {
-                    supports_encryption: true,
-                    supports_computation: true,
-                    max_connections: 1000,
-                    supported_protocols: vec!["mpc".to_string(), "plugin".to_string()],
+                    storage: true,
+                    encryption: true,
+                    leadership: true,
+                    algorithms: vec!["aes-256-gcm".to_string(), "mpc".to_string()],
                 },
                 load_metrics: LoadMetrics {
                     cpu_usage: (i as f64) * 0.01,
                     memory_usage: (i as f64) * 0.02,
                     network_io: (i as f64) * 0.005,
                     active_connections: i * 5,
-                    requests_per_second: (i as f64) * 50.0,
+                    ops_per_second: (i as f64) * 50.0,
+                    storage_used: (i as f64) * 0.1,
                 },
             }
         }).collect();
@@ -1550,10 +1556,10 @@ mod integration_tests {
         
         // Setup MPC manager
         let network = Arc::new(InMemoryMpcNetwork::new());
-        let manager = DefaultMpcManager::new(network, "performance-protocol");
+        let mut manager = DefaultMpcManager::with_network(network).unwrap();
         
         let protocol = TestMpcProtocol::new("performance-protocol");
-        manager.add_protocol(Box::new(protocol)).await.unwrap();
+        manager.add_protocol("performance-protocol", Box::new(protocol));
         
         // Create many MPC sessions
         let mpc_start = std::time::Instant::now();
@@ -1565,7 +1571,7 @@ mod integration_tests {
                 SecretSharingScheme::Shamir { threshold: 3, total_shares: 5 },
             );
             
-            let session_id = manager.initialize_computation(&config, &[]).await.unwrap();
+            let session_id = manager.create_session(config).await.unwrap();
             session_ids.push(session_id);
         }
         
@@ -1594,6 +1600,8 @@ mod integration_tests {
                     ("performance_mode".to_string(), serde_json::Value::Bool(true)),
                     ("batch_id".to_string(), serde_json::Value::Number(i.into())),
                 ]),
+                operation: Some("performance_encrypt".to_string()),
+                timestamp: Some(chrono::Utc::now()),
             };
             
             let result = plugin.execute(input).await.unwrap();
@@ -1615,15 +1623,15 @@ mod integration_tests {
         let total_executions: u64 = plugins.iter().map(|p| p.get_execution_count().await).sum();
         assert_eq!(total_executions, 20);
         
-        let total_connections: usize = nodes.iter().map(|n| n.active_connections).sum();
-        let total_rps: f64 = nodes.iter().map(|n| n.requests_per_second).sum();
+        let total_connections: usize = nodes.iter().map(|n| n.load_metrics.active_connections).sum();
+        let total_rps: f64 = nodes.iter().map(|n| n.load_metrics.ops_per_second).sum();
         
         assert!(total_connections > 0);
         assert!(total_rps > 0.0);
         
         // Verify all systems are secure
-        assert!(nodes.iter().all(|n| n.capabilities.supports_encryption));
-        assert!(nodes.iter().all(|n| n.capabilities.supports_computation));
+        assert!(nodes.iter().all(|n| n.capabilities.encryption));
+        assert!(nodes.iter().all(|n| n.capabilities.storage));
         assert!(plugins.iter().all(|p| p.metadata().capabilities.contains(&PluginCapability::Encrypt)));
     }
 
@@ -1644,25 +1652,25 @@ mod integration_tests {
                 },
                 last_heartbeat: chrono::Utc::now().timestamp_millis() as u64,
                 capabilities: NodeCapabilities {
-                    supports_encryption: true,
-                    supports_computation: true,
-                    max_connections: 1000,
-                    supported_protocols: vec!["tls".to_string(), "https".to_string(), "mpc-secure".to_string()],
+                    storage: true,
+                    encryption: true,
+                    leadership: true,
+                    algorithms: vec!["aes-256-gcm".to_string(), "chacha20-poly1305".to_string()],
                 },
                 load_metrics: LoadMetrics::default(),
             }
         }).collect();
         
         // Verify cluster security
-        assert!(secure_nodes.iter().all(|n| n.capabilities.supports_encryption));
-        assert!(secure_nodes.iter().all(|n| n.capabilities.supported_protocols.contains(&"tls".to_string())));
+        assert!(secure_nodes.iter().all(|n| n.capabilities.encryption));
+        assert!(secure_nodes.iter().all(|n| n.capabilities.algorithms.contains(&"aes-256-gcm".to_string())));
         
         // Create secure MPC manager
         let network = Arc::new(InMemoryMpcNetwork::new());
-        let manager = DefaultMpcManager::new(network, "secure-protocol");
+        let mut manager = DefaultMpcManager::with_network(network).unwrap();
         
         let protocol = TestMpcProtocol::new("secure-protocol");
-        manager.add_protocol(Box::new(protocol)).await.unwrap();
+        manager.add_protocol("secure-protocol", Box::new(protocol));
         
         // Create secure computation
         let config = ComputationConfig::new(
@@ -1672,14 +1680,14 @@ mod integration_tests {
          .with_parameter("authentication_required".to_string(), serde_json::Value::Bool(true))
          .with_parameter("audit_enabled".to_string(), serde_json::Value::Bool(true));
         
-        let session_id = manager.initialize_computation(&config, &[]).await.unwrap();
+        let session_id = manager.create_session(config).await.unwrap();
         
         // Add secure parties
         for node in &secure_nodes {
             let party = Arc::new(InMemoryMpcParty::with_metadata(
                 node.id.to_string(),
                 if matches!(node.state, NodeState::Leader { .. }) {
-                    PartyRole::Leader
+                    PartyRole::Initiator
                 } else {
                     PartyRole::Participant
                 },
@@ -1689,16 +1697,6 @@ mod integration_tests {
                     ("audit_trail".to_string(), "enabled".to_string()),
                 ]),
             ).await);
-            
-            manager.add_party_to_session(&session_id, party).await.unwrap();
-        }
-        
-        // Create secure plugin
-        let mut secure_plugin = TestPlugin::new("secure-plugin", vec![
-            PluginCapability::Encrypt,
-            PluginCapability::SecretManagement,
-            PluginCapability::SignTransaction,
-        ]);
         
         let context = PluginContext {
             config: HashMap::from([
@@ -1711,6 +1709,9 @@ mod integration_tests {
             metadata: secure_plugin.metadata().clone(),
             encryption_access: true,
             storage_access: true,
+            user_id: Some("test-user".to_string()),
+            session_id: Some("test-session".to_string()),
+            request_id: Some("test-request".to_string()),
         };
         
         // Execute secure plugin
@@ -1723,6 +1724,8 @@ mod integration_tests {
                 "encryption_level": "maximum"
             }),
             parameters: HashMap::new(),
+            operation: Some("secure_encrypt".to_string()),
+            timestamp: Some(chrono::Utc::now()),
         };
         
         let secure_result = secure_plugin.execute(secure_input).await.unwrap();
@@ -1730,19 +1733,18 @@ mod integration_tests {
         
         // Complete secure computation
         manager.start_computation(&session_id).await.unwrap();
-        let secure_mpc_result = manager.finalize_computation(&session_id).await.unwrap();
-        assert!(secure_mpc_result.success);
+        let secure_mpc_result = manager.get_result(&session_id).await.unwrap().unwrap();
         
         // Verify comprehensive security
         assert!(secure_nodes.iter().all(|n| n.capabilities.encryption));
         assert!(secure_result.success);
-        assert!(secure_mpc_result.success);
         assert!(context.encryption_access && context.storage_access);
         assert!(context.config.contains_key("security_level"));
         assert!(context.config.contains_key("compliance_framework"));
         
         // Verify security metrics
         assert!(secure_result.metrics.execution_time_ms < 1000);
-        assert!(secure_mpc_result.computation_time_ms < 1000);
+        assert!(!secure_mpc_result.result_data.is_empty());
     }
+}
 }

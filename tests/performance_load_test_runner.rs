@@ -14,7 +14,7 @@ pub struct PerformanceLoadTestRunner;
 
 impl PerformanceLoadTestRunner {
     /// Run all performance and load tests for section 4.2
-    pub async fn run_section_4_2_tests() -> Result<Section4_2TestResults> {
+    pub async fn run_section_4_2_tests(&self) -> Result<Section4_2TestResults> {
         println!("🚀 Starting Section 4.2: Performance & Load Tests");
         println!("================================================");
         println!("Running comprehensive performance and load testing suite...\n");
@@ -52,19 +52,19 @@ impl PerformanceLoadTestRunner {
     /// Run high-concurrency tests only
     async fn run_high_concurrency_tests(&self) -> Result<performance_load_tests::HighConcurrencyResults> {
         let tests = PerformanceLoadTests;
-        tests.test_high_concurrency_scenarios().await
+        tests.test_high_concurrency_scenarios(&tests).await
     }
 
     /// Run memory usage tests only
     async fn run_memory_usage_tests(&self) -> Result<performance_load_tests::MemoryUsageResults> {
         let tests = PerformanceLoadTests;
-        tests.test_memory_usage_scenarios().await
+        tests.test_memory_usage_scenarios(&tests).await
     }
 
     /// Run scalability tests only
     async fn run_scalability_tests(&self) -> Result<performance_load_tests::ScalabilityResults> {
         let tests = PerformanceLoadTests;
-        tests.test_scalability_scenarios().await
+        tests.test_scalability_scenarios(&tests).await
     }
 
     /// Generate comprehensive section 4.2 report
@@ -497,9 +497,9 @@ impl Section4_2TestResults {
     }
 
     pub fn overall_success_rate(&self) -> f64 {
-        let high_concurrency_score = PerformanceLoadTestRunner::calculate_high_concurrency_score(&self.high_concurrency);
-        let memory_usage_score = PerformanceLoadTestRunner::calculate_memory_usage_score(&self.memory_usage);
-        let scalability_score = PerformanceLoadTestRunner::calculate_scalability_score(&self.scalability);
+        let high_concurrency_score = PerformanceLoadTestRunner::calculate_high_concurrency_score(self, &self.high_concurrency);
+        let memory_usage_score = PerformanceLoadTestRunner::calculate_memory_usage_score(self, &self.memory_usage);
+        let scalability_score = PerformanceLoadTestRunner::calculate_scalability_score(self, &self.scalability);
         
         (high_concurrency_score + memory_usage_score + scalability_score) / 3.0
     }
@@ -518,7 +518,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_section_4_2_complete_suite() {
-        let results = PerformanceLoadTestRunner::run_section_4_2_tests().await.unwrap();
+        let runner = PerformanceLoadTestRunner;
+        let results = runner.run_section_4_2_tests().await.unwrap();
         
         // Verify that all test sections have results
         assert!(!results.high_concurrency.concurrent_auth.test_results.is_empty(), 
@@ -536,7 +537,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_high_concurrency_section_only() {
-        let results = PerformanceLoadTestRunner::run_high_concurrency_tests().await.unwrap();
+        let runner = PerformanceLoadTestRunner;
+        let results = runner.run_high_concurrency_tests().await.unwrap();
         
         assert!(!results.concurrent_auth.test_results.is_empty(), 
                 "Should have concurrent auth results");
@@ -548,7 +550,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_memory_usage_section_only() {
-        let results = PerformanceLoadTestRunner::run_memory_usage_tests().await.unwrap();
+        let runner = PerformanceLoadTestRunner;
+        let results = runner.run_memory_usage_tests().await.unwrap();
         
         assert!(!results.allocation_patterns.test_results.is_empty(), 
                 "Should have memory allocation results");
@@ -560,7 +563,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_scalability_section_only() {
-        let results = PerformanceLoadTestRunner::run_scalability_tests().await.unwrap();
+        let runner = PerformanceLoadTestRunner;
+        let results = runner.run_scalability_tests().await.unwrap();
         
         assert!(!results.horizontal.test_results.is_empty(), 
                 "Should have horizontal scalability results");

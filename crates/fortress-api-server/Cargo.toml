@@ -129,3 +129,4 @@ criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
 [features]
 default = []
 dev = ["tracing-subscriber/env-filter"]
+grpc = []
