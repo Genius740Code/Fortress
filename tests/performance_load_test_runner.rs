@@ -52,19 +52,19 @@ impl PerformanceLoadTestRunner {
     /// Run high-concurrency tests only
     async fn run_high_concurrency_tests(&self) -> Result<performance_load_tests::HighConcurrencyResults> {
         let tests = PerformanceLoadTests;
-        tests.test_high_concurrency_scenarios(&tests).await
+        tests.test_high_concurrency_scenarios().await
     }
 
     /// Run memory usage tests only
     async fn run_memory_usage_tests(&self) -> Result<performance_load_tests::MemoryUsageResults> {
         let tests = PerformanceLoadTests;
-        tests.test_memory_usage_scenarios(&tests).await
+        tests.test_memory_usage_scenarios().await
     }
 
     /// Run scalability tests only
     async fn run_scalability_tests(&self) -> Result<performance_load_tests::ScalabilityResults> {
         let tests = PerformanceLoadTests;
-        tests.test_scalability_scenarios(&tests).await
+        tests.test_scalability_scenarios().await
     }
 
     /// Generate comprehensive section 4.2 report
@@ -79,9 +79,9 @@ impl PerformanceLoadTestRunner {
         println!("Test sections completed: 3/3");
         
         // Calculate section scores
-        let high_concurrency_score = self.calculate_high_concurrency_score(&results.high_concurrency);
-        let memory_usage_score = self.calculate_memory_usage_score(&results.memory_usage);
-        let scalability_score = self.calculate_scalability_score(&results.scalability);
+        let high_concurrency_score = Self::calculate_high_concurrency_score(&results.high_concurrency);
+        let memory_usage_score = Self::calculate_memory_usage_score(&results.memory_usage);
+        let scalability_score = Self::calculate_scalability_score(&results.scalability);
         
         let section_score = (high_concurrency_score + memory_usage_score + scalability_score) / 3.0;
         
@@ -114,33 +114,33 @@ impl PerformanceLoadTestRunner {
         println!("==========================");
         
         println!("\n⚡ High-Concurrency Tests: {:.1}/100", high_concurrency_score);
-        self.print_high_concurrency_summary(&results.high_concurrency);
+        Self::print_high_concurrency_summary(&results.high_concurrency);
         
         println!("\n💾 Memory Usage Tests: {:.1}/100", memory_usage_score);
-        self.print_memory_usage_summary(&results.memory_usage);
+        Self::print_memory_usage_summary(&results.memory_usage);
         
         println!("\n📈 Scalability Tests: {:.1}/100", scalability_score);
-        self.print_scalability_summary(&results.scalability);
+        Self::print_scalability_summary(&results.scalability);
 
         // Performance Metrics Summary
         println!("\n📈 PERFORMANCE METRICS SUMMARY");
         println!("============================");
-        self.print_performance_metrics_summary(results);
+        Self::print_performance_metrics_summary(results);
 
         // Critical Performance Indicators
         println!("\n🎯 CRITICAL PERFORMANCE INDICATORS");
         println!("=================================");
-        self.print_critical_performance_indicators(results);
+        Self::print_critical_performance_indicators(results);
 
         // Recommendations
         println!("\n💡 PERFORMANCE OPTIMIZATION RECOMMENDATIONS");
         println!("==========================================");
-        self.print_performance_recommendations(results, section_score);
+        Self::print_performance_recommendations(results, section_score);
 
         // Production Readiness Assessment
         println!("\n🚀 PRODUCTION READINESS ASSESSMENT");
         println!("==================================");
-        self.print_production_readiness_assessment(results, section_score);
+        Self::print_production_readiness_assessment(results, section_score);
 
         println!("\n🎉 SECTION 4.2: PERFORMANCE & LOAD TESTS COMPLETED!");
         println!("Fortress performance characteristics have been thoroughly evaluated.");
@@ -191,7 +191,7 @@ impl PerformanceLoadTestRunner {
         (passed_categories as f64 / total_categories as f64) * 100.0
     }
 
-    fn print_high_concurrency_summary(&self, results: &performance_load_tests::HighConcurrencyResults) {
+    fn print_high_concurrency_summary(results: &performance_load_tests::HighConcurrencyResults) {
         println!("  Concurrent Authentication: {}", 
             if results.concurrent_auth.overall_success { "✅ PASSED" } else { "❌ FAILED" });
         println!("  Concurrent Encryption: {}", 
@@ -227,7 +227,7 @@ impl PerformanceLoadTestRunner {
         }
     }
 
-    fn print_memory_usage_summary(&self, results: &performance_load_tests::MemoryUsageResults) {
+    fn print_memory_usage_summary(results: &performance_load_tests::MemoryUsageResults) {
         println!("  Memory Allocation Patterns: {}", 
             if results.allocation_patterns.overall_success { "✅ PASSED" } else { "❌ FAILED" });
         println!("  Memory Leak Detection: {}", 
@@ -259,7 +259,7 @@ impl PerformanceLoadTestRunner {
         }
     }
 
-    fn print_scalability_summary(&self, results: &performance_load_tests::ScalabilityResults) {
+    fn print_scalability_summary(results: &performance_load_tests::ScalabilityResults) {
         println!("  Horizontal Scalability: {}", 
             if results.horizontal.overall_success { "✅ PASSED" } else { "❌ FAILED" });
         println!("  Vertical Scalability: {}", 
@@ -291,7 +291,7 @@ impl PerformanceLoadTestRunner {
         }
     }
 
-    fn print_performance_metrics_summary(&self, results: &Section4_2TestResults) {
+    fn print_performance_metrics_summary(results: &Section4_2TestResults) {
         println!("Key Performance Metrics:");
         
         // High-concurrency metrics
@@ -323,7 +323,7 @@ impl PerformanceLoadTestRunner {
         }
     }
 
-    fn print_critical_performance_indicators(&self, results: &Section4_2TestResults) {
+    fn print_critical_performance_indicators(results: &Section4_2TestResults) {
         println!("Critical Performance Indicators:");
         
         // Concurrency indicators
@@ -351,7 +351,7 @@ impl PerformanceLoadTestRunner {
         }
     }
 
-    fn print_performance_recommendations(&self, results: &Section4_2TestResults, section_score: f64) {
+    fn print_performance_recommendations(results: &Section4_2TestResults, section_score: f64) {
         if section_score >= 90.0 {
             println!("🎉 Excellent Performance! No immediate optimization needed.");
             println!("   Continue monitoring performance metrics in production.");
@@ -414,7 +414,7 @@ impl PerformanceLoadTestRunner {
         }
     }
 
-    fn print_production_readiness_assessment(&self, results: &Section4_2TestResults, section_score: f64) {
+    fn print_production_readiness_assessment(results: &Section4_2TestResults, section_score: f64) {
         println!("Production Readiness Assessment:");
         
         let mut readiness_factors = Vec::new();
@@ -497,9 +497,9 @@ impl Section4_2TestResults {
     }
 
     pub fn overall_success_rate(&self) -> f64 {
-        let high_concurrency_score = PerformanceLoadTestRunner::calculate_high_concurrency_score(self, &self.high_concurrency);
-        let memory_usage_score = PerformanceLoadTestRunner::calculate_memory_usage_score(self, &self.memory_usage);
-        let scalability_score = PerformanceLoadTestRunner::calculate_scalability_score(self, &self.scalability);
+        let high_concurrency_score = Self::calculate_high_concurrency_score(&self.high_concurrency);
+        let memory_usage_score = Self::calculate_memory_usage_score(&self.memory_usage);
+        let scalability_score = Self::calculate_scalability_score(&self.scalability);
         
         (high_concurrency_score + memory_usage_score + scalability_score) / 3.0
     }
@@ -576,7 +576,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_production_readiness_assessment() {
-        let results = PerformanceLoadTestRunner::run_section_4_2_tests().await.unwrap();
+        let runner = PerformanceLoadTestRunner;
+        let results = runner.run_section_4_2_tests().await.unwrap();
         
         // Test production readiness logic
         let is_ready = results.is_production_ready();

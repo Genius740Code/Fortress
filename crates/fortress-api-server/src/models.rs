@@ -197,11 +197,12 @@ impl From<CoreFieldEncryptionMetadata> for FieldEncryptionMetadata {
 
 pub struct RetrieveRequest {
     /// ID of the data to retrieve
-    pub id: String,
+    #[serde(default)]
+    pub id: Option<String>,
     /// Key ID for decryption (optional, uses stored key if not specified)
     pub key_id: Option<String>,
-    /// Tenant ID (for multi-tenant setups)
-    pub tenant_id: Option<String>,
+    /// Include metadata in response
+    pub include_metadata: Option<bool>,
     /// Include raw encrypted data
     pub include_encrypted: Option<bool>,
 }

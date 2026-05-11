@@ -1,7 +1,7 @@
 //! Tests for advanced rate limiting and DDoS protection
 
-use fortress_server::prelude::*;
-use fortress_server::middleware::{AdvancedRateLimiter, RateLimitAlgorithm};
+use fortress_api_server::prelude::*;
+use fortress_api_server::middleware::{AdvancedRateLimiter, RateLimitAlgorithm};
 use axum::{
     body::Body,
     http::{Request, StatusCode},

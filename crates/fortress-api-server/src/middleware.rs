@@ -823,12 +823,16 @@ pub async fn security_headers_middleware(
 /// Create CORS layer with optimized parsing
 pub fn create_cors_layer(config: &crate::config::CorsConfig) -> CorsLayer {
     use tower_http::cors::CorsLayer;
+    use tower_http::cors::Any;
     use http::{HeaderName, Method};
     
     // Parse and cache CORS configuration once per function call
     // This avoids repeated parsing on every request while staying thread-safe
     // For even better performance, consider caching at application startup
+    let allow_any_origin = config.allowed_origins.iter().any(|s| s == "*");
+
     let origins: Vec<_> = config.allowed_origins.iter()
+        .filter(|s| s.as_str() != "*")
         .filter_map(|s| s.as_str().parse().ok())
         .collect();
     
@@ -841,9 +845,14 @@ pub fn create_cors_layer(config: &crate::config::CorsConfig) -> CorsLayer {
         .collect();
 
     let mut cors_layer = CorsLayer::new()
-        .allow_origin(origins)
         .allow_methods(methods)
         .allow_headers(headers);
+
+    cors_layer = if allow_any_origin {
+        cors_layer.allow_origin(Any)
+    } else {
+        cors_layer.allow_origin(origins)
+    };
     
     if config.allow_credentials {
         cors_layer = cors_layer.allow_credentials(true);

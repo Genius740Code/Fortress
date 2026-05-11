@@ -64,7 +64,7 @@ pub mod prelude {
     pub use crate::health::HealthChecker;
     pub use crate::metrics::MetricsCollector;
     pub use crate::middleware::AdvancedRateLimiter;
-    pub use crate::config::RateLimitAlgorithm;
+    pub use crate::config::{RateLimitAlgorithm, RateLimitConfig, DdosProtectionConfig};
     pub use crate::middleware::RateLimitMetricsSnapshot;
     pub use crate::grpc::server::GrpcServer;
     pub use crate::grpc::service::FortressGrpcService;

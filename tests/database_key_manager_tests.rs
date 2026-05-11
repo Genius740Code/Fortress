@@ -4,14 +4,12 @@
 //! testing lifecycle operations, metadata management, key rotation, database
 //! transaction handling, and error recovery.
 
-use fortress_core::key_database::{KeyDatabase, KeyDatabaseConfig, KeyDatabaseBackend, KeyDatabaseStats, SqliteKeyDatabase};
+use fortress_core::key_database::{KeyDatabase, KeyDatabaseConfig, KeyDatabaseBackend, SqliteKeyDatabase};
 use fortress_core::key::{KeyId, KeyMetadata, SecureKey};
-use fortress_core::encryption::Aegis256;
-use fortress_core::error::{FortressError, Result, KeyErrorCode};
+use fortress_core::encryption::PerformanceProfile;
 use chrono::{Utc, Duration};
-use std::collections::HashMap;
 use tempfile::NamedTempFile;
-use tokio::fs;
+use uuid::Uuid;
 
 #[cfg(test)]
 mod tests {
@@ -26,12 +24,20 @@ mod tests {
 
     /// Helper function to create test key metadata
     fn create_test_metadata(algorithm_name: &str) -> KeyMetadata {
-        let mut metadata = KeyMetadata::new(&Aegis256::new());
-        metadata.algorithm = algorithm_name.to_string();
-        metadata.created_at = Utc::now();
-        metadata.expires_at = Some(Utc::now() + Duration::hours(24));
-        metadata.tags.insert("test".to_string(), "true".to_string());
-        metadata.tags.insert("environment".to_string(), "test".to_string());
+        let key_id = Uuid::new_v4().to_string();
+        let version = 1u32;
+        let now = Utc::now();
+        let mut metadata = KeyMetadata::new(
+            key_id,
+            algorithm_name.to_string(),
+            version,
+            now,
+            now + Duration::hours(24),
+            "test".to_string(),
+            fortress_core::encryption::PerformanceProfile::Balanced,
+        );
+        metadata.metadata.insert("test".to_string(), "true".to_string());
+        metadata.metadata.insert("environment".to_string(), "test".to_string());
         metadata
     }
 
@@ -94,7 +100,7 @@ mod tests {
             .expect("Schema initialization should succeed");
         
         // Test key creation
-        let key_id = KeyId::new();
+        let key_id = Uuid::new_v4().to_string();
         let key = create_test_key();
         let metadata = create_test_metadata("aegis256");
         
@@ -125,7 +131,8 @@ mod tests {
         let updated_key = SecureKey::new(vec![99u8; 32]);
         let mut updated_metadata = metadata;
         updated_metadata.version += 1;
-        updated_metadata.updated_at = Some(Utc::now());
+        // updated_at field doesn't exist - using created_at instead
+        updated_metadata.created_at = Utc::now();
         
         db.store_key(&key_id, &updated_key, &updated_metadata).await
             .expect("Key update should succeed");
@@ -171,18 +178,18 @@ mod tests {
             .expect("Schema initialization should succeed");
         
         // Create key with comprehensive metadata
-        let key_id = KeyId::new();
+        let key_id = Uuid::new_v4().to_string();
         let key = create_test_key();
         let mut metadata = create_test_metadata("aegis256");
         
         // Add comprehensive metadata
-        metadata.description = Some("Test key for metadata validation".to_string());
-        metadata.purpose = Some("encryption".to_string());
-        metadata.tags.insert("environment".to_string(), "production".to_string());
-        metadata.tags.insert("owner".to_string(), "security-team".to_string());
-        metadata.tags.insert("criticality".to_string(), "high".to_string());
-        metadata.custom.insert("rotation_policy".to_string(), "90-days".to_string());
-        metadata.custom.insert("compliance".to_string(), "gdpr".to_string());
+        metadata.metadata.insert("description".to_string(), "Test key for metadata validation".to_string());
+        metadata.metadata.insert("environment".to_string(), "production".to_string());
+        metadata.metadata.insert("owner".to_string(), "security-team".to_string());
+        metadata.metadata.insert("criticality".to_string(), "high".to_string());
+        metadata.metadata.insert("rotation_policy".to_string(), "90-days".to_string());
+        metadata.metadata.insert("compliance".to_string(), "gdpr".to_string());
+        metadata.purpose = "encryption".to_string();
         
         db.store_key(&key_id, &key, &metadata).await
             .expect("Key storage with metadata should succeed");
@@ -194,27 +201,20 @@ mod tests {
         
         let retrieved = retrieved_metadata.unwrap();
         assert_eq!(retrieved.algorithm, metadata.algorithm);
-        assert_eq!(retrieved.description, metadata.description);
         assert_eq!(retrieved.purpose, metadata.purpose);
-        assert_eq!(retrieved.tags.len(), metadata.tags.len());
-        assert_eq!(retrieved.custom.len(), metadata.custom.len());
+        assert_eq!(retrieved.metadata.len(), metadata.metadata.len());
         
-        // Verify tags
-        for (key, value) in &metadata.tags {
-            assert_eq!(retrieved.tags.get(key), Some(value));
-        }
-        
-        // Verify custom fields
-        for (key, value) in &metadata.custom {
-            assert_eq!(retrieved.custom.get(key), Some(value));
+        // Verify metadata fields
+        for (key, value) in &metadata.metadata {
+            assert_eq!(retrieved.metadata.get(key), Some(value));
         }
         
         // Test metadata updates
         let mut updated_metadata = metadata;
         updated_metadata.version += 1;
-        updated_metadata.updated_at = Some(Utc::now());
-        updated_metadata.tags.insert("status".to_string(), "rotated".to_string());
-        updated_metadata.custom.insert("last_rotation".to_string(), Utc::now().to_rfc3339());
+        // updated_at field doesn't exist
+        updated_metadata.metadata.insert("status".to_string(), "rotated".to_string());
+        updated_metadata.metadata.insert("last_rotation".to_string(), Utc::now().to_rfc3339());
         
         db.store_key(&key_id, &key, &updated_metadata).await
             .expect("Metadata update should succeed");
@@ -225,8 +225,8 @@ mod tests {
         
         let updated = updated_retrieved.unwrap();
         assert_eq!(updated.version, updated_metadata.version);
-        assert_eq!(updated.tags.get("status"), Some(&"rotated".to_string()));
-        assert!(updated.custom.contains_key("last_rotation"));
+        assert_eq!(updated.metadata.get("status"), Some(&"rotated".to_string()));
+        assert!(updated.metadata.contains_key("last_rotation"));
     }
 
     /// Test key rotation operations
@@ -249,12 +249,12 @@ mod tests {
             .expect("Schema initialization should succeed");
         
         // Create initial key
-        let key_id = KeyId::new();
+        let key_id = Uuid::new_v4().to_string();
         let initial_key = create_test_key();
         let mut initial_metadata = create_test_metadata("aegis256");
         initial_metadata.version = 1;
         initial_metadata.created_at = Utc::now();
-        initial_metadata.expires_at = Some(Utc::now() + Duration::days(90));
+        initial_metadata.expires_at = Utc::now() + Duration::days(90);
         
         db.store_key(&key_id, &initial_key, &initial_metadata).await
             .expect("Initial key storage should succeed");
@@ -263,10 +263,10 @@ mod tests {
         let rotated_key = SecureKey::new(vec![123u8; 32]);
         let mut rotated_metadata = initial_metadata.clone();
         rotated_metadata.version = 2;
-        rotated_metadata.updated_at = Some(Utc::now());
-        rotated_metadata.expires_at = Some(Utc::now() + Duration::days(90));
-        rotated_metadata.tags.insert("rotated".to_string(), "true".to_string());
-        rotated_metadata.custom.insert("rotation_reason".to_string(), "scheduled".to_string());
+        // updated_at field doesn't exist
+        rotated_metadata.expires_at = Utc::now() + Duration::days(90);
+        rotated_metadata.metadata.insert("rotated".to_string(), "true".to_string());
+        rotated_metadata.metadata.insert("rotation_reason".to_string(), "scheduled".to_string());
         
         // Store rotated key
         db.store_key(&key_id, &rotated_key, &rotated_metadata).await
@@ -280,7 +280,7 @@ mod tests {
         let (retrieved_key, retrieved_metadata) = retrieved.unwrap();
         assert_eq!(retrieved_key.to_vec(), rotated_key.to_vec(), "Retrieved key should be rotated key");
         assert_eq!(retrieved_metadata.version, 2, "Version should be updated");
-        assert_eq!(retrieved_metadata.tags.get("rotated"), Some(&"true".to_string()));
+        assert_eq!(retrieved_metadata.metadata.get("rotated"), Some(&"true".to_string()));
         
         // Test multiple rotations
         let mut current_key = rotated_key;
@@ -290,8 +290,8 @@ mod tests {
             let new_key = SecureKey::new(vec![rotation_num as u8; 32]);
             let mut new_metadata = current_metadata.clone();
             new_metadata.version = rotation_num;
-            new_metadata.updated_at = Some(Utc::now());
-            new_metadata.expires_at = Some(Utc::now() + Duration::days(90));
+            // updated_at field doesn't exist
+            new_metadata.created_at = Utc::now();
             
             db.store_key(&key_id, &new_key, &new_metadata).await
                 .expect(&format!("Rotation {} should succeed", rotation_num));
@@ -437,7 +437,7 @@ mod tests {
         
         // Test error handling for invalid database operations
         // Create a key first
-        let key_id = KeyId::new();
+        let key_id = Uuid::new_v4().to_string();
         let key = create_test_key();
         let metadata = create_test_metadata("test");
         
@@ -575,7 +575,7 @@ mod tests {
             .expect("Schema initialization should succeed");
         
         // Test key storage with encryption
-        let key_id = KeyId::new();
+        let key_id = Uuid::new_v4().to_string();
         let key = SecureKey::new(vec![42u8; 32]);
         let metadata = create_test_metadata("encrypted");
         
@@ -669,7 +669,7 @@ mod tests {
         let mut key_ids = Vec::new();
         
         for i in 0..num_keys {
-            let key_id = KeyId::new();
+            let key_id = Uuid::new_v4().to_string();
             let key = SecureKey::new(vec![i as u8; 32]);
             let metadata = create_test_metadata(&format!("preload_key_{}", i));
             
@@ -814,7 +814,7 @@ mod tests {
         for i in 0..num_concurrent {
             let db_clone = std::sync::Arc::clone(&db);
             let handle = tokio::spawn(async move {
-                let key_id = KeyId::new();
+                let key_id = Uuid::new_v4().to_string();
                 let key = SecureKey::new(vec![i as u8; 32]);
                 let metadata = create_test_metadata(&format!("concurrent_{}", i));
                 
@@ -866,7 +866,7 @@ mod tests {
         
         for i in 0..10 {
             let db_clone = std::sync::Arc::clone(&db);
-            let key_id = KeyId::new();
+            let key_id = Uuid::new_v4().to_string();
             
             let handle = tokio::spawn(async move {
                 // Write

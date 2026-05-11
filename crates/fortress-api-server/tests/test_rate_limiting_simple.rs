@@ -1,8 +1,8 @@
 //! Simple test for rate limiting functionality
 
-use fortress_server::middleware::{AdvancedRateLimiter, RateLimitAlgorithm};
-use fortress_server::config::{RateLimitConfig, DdosProtectionConfig};
-use fortress_server::error::ServerError;
+use fortress_api_server::middleware::{AdvancedRateLimiter, RateLimitAlgorithm};
+use fortress_api_server::config::{RateLimitConfig, DdosProtectionConfig};
+use fortress_api_server::error::ServerError;
 
 #[tokio::test]
 async fn test_basic_rate_limiting() {

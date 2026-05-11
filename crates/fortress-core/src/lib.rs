@@ -1695,9 +1695,7 @@ pub mod prelude {
     pub use crate::auth::{
 
         AuthManager, User, UserId, AuthPermission, AuthToken, AuthConfig,
-
-        LoginRequest, LoginResponse, TokenClaims, SessionManager,
-
+        LoginRequest, LoginResponse, TokenClaims, SessionManager, HardwareTokenType, BiometricType,
     };
 
 

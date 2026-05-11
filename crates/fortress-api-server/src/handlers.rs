@@ -211,14 +211,41 @@ pub async fn store_data(
     let data_id = Uuid::new_v4().to_string();
 
     // Get or generate encryption key
-    let key_id = request.key_id.clone().unwrap_or_else(|| {
-        // Generate a new key ID since we can't use async here
-        format!("key_{}", Uuid::new_v4())
-    });
+    let key_id = request.key_id.clone().unwrap_or_else(|| format!("key_{}", Uuid::new_v4()));
+
+    // Ensure the key exists; if not, generate and store it.
+    // This keeps the API usable without requiring a prior key-generation call.
+    if !state.key_manager.key_exists(&key_id).await.map_err(ServerError::Core)? {
+        let algorithm = Aegis256::new();
+        let new_key = state
+            .key_manager
+            .generate_key(&algorithm)
+            .await
+            .map_err(ServerError::Core)?;
+
+        let metadata = fortress_core::key::KeyMetadata::new(
+            key_id.clone(),
+            algorithm.name().to_string(),
+            1,
+            Utc::now(),
+            Utc::now() + chrono::Duration::days(90),
+            "data_encryption".to_string(),
+            fortress_core::encryption::PerformanceProfile::Balanced,
+        );
+
+        state
+            .key_manager
+            .store_key(&key_id, &new_key, &metadata)
+            .await
+            .map_err(ServerError::Core)?;
+    }
 
     // Get the key
-    let key = state.key_manager.retrieve_key(&key_id).await
-        .map_err(|e| ServerError::Core(e))?;
+    let key = state
+        .key_manager
+        .retrieve_key(&key_id)
+        .await
+        .map_err(ServerError::Core)?;
     let key_bytes = key.0.as_bytes();
 
     // Encrypt data
@@ -342,7 +369,6 @@ pub async fn retrieve_data(
     
     // Validate data ID
     validator.validate_uuid(&data_id)?;
-    validator.validate_string(&data_id, "data_id")?;
 
     // Retrieve the storage record
     let record_bytes = state.storage.get(&data_id).await

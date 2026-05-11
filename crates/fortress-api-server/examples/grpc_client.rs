@@ -1,4 +1,4 @@
-use fortress_server::grpc::fortress::{
+use fortress_api_server::grpc::fortress::{
     fortress_service_client::FortressServiceClient,
     CreateDatabaseRequest, DatabaseConfig, EncryptRequest, DecryptRequest,
 };

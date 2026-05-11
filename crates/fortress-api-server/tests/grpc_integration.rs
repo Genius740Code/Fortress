@@ -1,8 +1,9 @@
 #![cfg(feature = "grpc")]
 
-use fortress_server::grpc::{GrpcServer, FortressGrpcService};
-use fortress_core::encryption::EncryptionManager;
-use fortress_server::grpc::fortress::{
+use fortress_api_server::grpc::{GrpcServer, FortressGrpcService};
+use fortress_core::field_encryption::FieldEncryptionManager;
+use fortress_core::key::InMemoryKeyManager;
+use fortress_api_server::grpc::fortress::{
     fortress_service_client::FortressServiceClient,
     CreateDatabaseRequest, DatabaseConfig, EncryptRequest, DecryptRequest,
     HealthCheckRequest,
@@ -13,7 +14,8 @@ use tonic::transport::Channel;
 use tonic::Request;
 
 async fn setup_test_server() -> (String, FortressGrpcService) {
-    let encryption_manager = Arc::new(EncryptionManager::default());
+    let key_manager = Arc::new(InMemoryKeyManager::new());
+    let encryption_manager = Arc::new(DefaultFieldEncryptionManager::new(key_manager));
     let service = FortressGrpcService::new(encryption_manager);
     
     // Start server on a random port

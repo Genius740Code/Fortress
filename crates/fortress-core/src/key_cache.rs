@@ -129,6 +129,10 @@ pub struct CacheStats {
     pub total_keys: usize,
     /// Total evictions (test compatibility)
     pub evictions: u64,
+    /// Total requests (test compatibility)
+    pub total_requests: u64,
+    /// Alias for current_memory_bytes (test compatibility)
+    pub memory_usage_bytes: usize,
 }
 
 impl CacheStats {
@@ -191,6 +195,8 @@ impl KeyCache {
                 cache_misses: 0,
                 total_keys: 0,
                 evictions: 0,
+                total_requests: 0,
+                memory_usage_bytes: 0,
             })),
             cleanup_task: Arc::new(RwLock::new(None)),
         }
@@ -488,6 +494,8 @@ impl KeyCache {
         stats.cache_misses = stats.misses;
         stats.total_keys = stats.current_keys;
         stats.evictions = stats.size_evictions + stats.time_evictions;
+        stats.total_requests = stats.hits + stats.misses;
+        stats.memory_usage_bytes = stats.current_memory_bytes;
     }
 
     /// Start background cleanup task
