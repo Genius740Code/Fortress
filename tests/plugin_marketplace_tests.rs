@@ -11,7 +11,6 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
 use tokio::fs;
-use tokio::time::sleep;
 
 /// Test helper to create a mock plugin package
 fn create_mock_package(id: &str, name: &str, version: &str) -> PluginPackage {
@@ -122,7 +121,7 @@ async fn test_plugin_compatibility_checking() {
     let repository = PluginRepository::new("https://test.example.com");
     let installer = PluginInstaller::new(temp_dir.clone(), repository).unwrap();
     
-    let package = create_mock_package("compatible-plugin", "Compatible Plugin", "1.0.0");
+    let _package = create_mock_package("compatible-plugin", "Compatible Plugin", "1.0.0");
     
     // Test compatibility checking through public interface
     // Note: verify_compatibility is called internally during install
@@ -309,7 +308,7 @@ async fn test_plugin_categories_and_tags() {
     
     assert_eq!(tagged_package.tags.len(), 4);
     assert!(tagged_package.tags.contains(&"authentication".to_string()));
-    assert!(tagged_plugin.tags.contains(&"encryption".to_string()));
+    assert!(tagged_package.tags.contains(&"encryption".to_string()));
 }
 
 #[tokio::test]
@@ -342,8 +341,8 @@ async fn test_plugin_download_tracking() {
     
     // Test download count increment (simulation)
     let mut tracked_package = package.clone();
-    tracked_plugin.download_count += 1;
-    assert_eq!(tracked_plugin.download_count, package.download_count + 1);
+    tracked_package.download_count += 1;
+    assert_eq!(tracked_package.download_count, package.download_count + 1);
 }
 
 #[tokio::test]
@@ -361,9 +360,9 @@ async fn test_plugin_size_validation() {
     let test_sizes = vec![1024, 1024 * 1024, 10 * 1024 * 1024]; // 1KB, 1MB, 10MB
     for size in test_sizes {
         let mut test_package = package.clone();
-        test_plugin.size_bytes = size;
-        assert!(test_plugin.size_bytes > 0);
-        assert!(test_plugin.size_bytes <= max_size);
+        test_package.size_bytes = size;
+        assert!(test_package.size_bytes > 0);
+        assert!(test_package.size_bytes <= max_size);
     }
 }
 

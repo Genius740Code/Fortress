@@ -6,7 +6,6 @@
 
 use fortress_core::key_database::{KeyDatabase, KeyDatabaseConfig, KeyDatabaseBackend, SqliteKeyDatabase};
 use fortress_core::key::{KeyId, KeyMetadata, SecureKey};
-use fortress_core::encryption::PerformanceProfile;
 use chrono::{Utc, Duration};
 use tempfile::NamedTempFile;
 use uuid::Uuid;
@@ -283,7 +282,6 @@ mod tests {
         assert_eq!(retrieved_metadata.metadata.get("rotated"), Some(&"true".to_string()));
         
         // Test multiple rotations
-        let mut current_key = rotated_key;
         let mut current_metadata = rotated_metadata;
         
         for rotation_num in 3..=5 {
@@ -304,7 +302,6 @@ mod tests {
             assert_eq!(retrieved_key.to_vec(), new_key.to_vec(), "Key should match after rotation {}", rotation_num);
             assert_eq!(retrieved_metadata.version, rotation_num, "Version should be {} after rotation", rotation_num);
             
-            current_key = new_key;
             current_metadata = new_metadata;
         }
         
@@ -596,7 +593,7 @@ mod tests {
         
         // Test with different master key (should fail)
         let wrong_master_key = "wrong_master_key_12345678901234567890123456789012";
-        let mut wrong_config = KeyDatabaseConfig {
+        let wrong_config = KeyDatabaseConfig {
             backend: KeyDatabaseBackend::Sqlite,
             connection_string: db_path.clone(),
             max_connections: 5,
@@ -611,7 +608,7 @@ mod tests {
             .expect("Schema initialization should succeed");
         
         // Try to retrieve with wrong master key
-        let wrong_retrieval = wrong_db.retrieve_key(&key_id).await;
+        let _wrong_retrieval = wrong_db.retrieve_key(&key_id).await;
         // This might succeed or fail depending on implementation
         // The key point is that the system handles encryption/decryption
         
@@ -745,7 +742,7 @@ mod tests {
             .expect("Initial stats retrieval should succeed");
         assert_eq!(initial_stats.total_keys, 0, "Initial stats should show 0 keys");
         assert_eq!(initial_stats.active_connections, 1, "Should have 1 active connection");
-        assert!(initial_stats.database_size_bytes >= 0, "Database size should be non-negative");
+        // Database size is always non-negative for u64 type
         
         // Store keys and check stats updates
         let num_keys = 50;

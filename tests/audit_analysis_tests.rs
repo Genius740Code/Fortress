@@ -518,7 +518,7 @@ mod tests {
         let analysis_start = std::time::Instant::now();
         let analyzer = AuditAnalyzer::new(entries);
         let insights = analyzer.generate_insights().unwrap();
-        let anomalies = analyzer.detect_anomalies().unwrap();
+        let _anomalies = analyzer.detect_anomalies().unwrap();
         let analysis_time = analysis_start.elapsed();
         
         println!("Analyzed 10k entries in {:?}", analysis_time);
@@ -591,6 +591,7 @@ mod tests {
             create_test_entry("2", 2000, AuditEventType::DataAccess, SecurityLevel::Low, Some("user1"), Some("/data"), "read", EventOutcome::Success),
         ];
         
+        let analyzer = AuditAnalyzer::new(entries);
         let analyzer = Arc::new(analyzer);
         let mut handles = vec![];
         

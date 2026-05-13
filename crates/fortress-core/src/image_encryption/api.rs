@@ -17,6 +17,7 @@
 
 
 use crate::error::{FortressError, Result};
+use uuid::Uuid;
 
 use crate::encryption::{EncryptionAlgorithm, SecureKey};
 

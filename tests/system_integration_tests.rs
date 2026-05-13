@@ -869,6 +869,8 @@ mod plugin_tests {
                 "algorithm": "AES-256-GCM"
             }),
             parameters: HashMap::new(),
+            operation: Some("encrypt".to_string()),
+            timestamp: Some(chrono::Utc::now()),
         };
         
         let result = plugin.execute(input).await.unwrap();
@@ -899,6 +901,8 @@ mod plugin_tests {
             action: "encrypt".to_string(),
             data: serde_json::json!({"test": "data"}),
             parameters: HashMap::new(),
+            operation: Some("encrypt".to_string()),
+            timestamp: Some(chrono::Utc::now()),
         };
         
         // Test execution with multiple capabilities
@@ -920,6 +924,9 @@ mod plugin_tests {
             metadata: plugin.metadata().clone(),
             encryption_access: false,
             storage_access: false,
+            user_id: Some("test-user".to_string()),
+            session_id: Some("test-session".to_string()),
+            request_id: Some("test-request".to_string()),
         };
         
         // Test initialization
@@ -931,6 +938,8 @@ mod plugin_tests {
             action: "hash".to_string(),
             data: serde_json::json!({"data": "hash-me"}),
             parameters: HashMap::new(),
+            operation: Some("hash".to_string()),
+            timestamp: Some(chrono::Utc::now()),
         };
         let exec_result = plugin.execute(input).await.unwrap();
         assert!(exec_result.success);
@@ -958,6 +967,8 @@ mod plugin_tests {
             action: "invalid".to_string(),
             data: serde_json::json!({"invalid": "data"}),
             parameters: HashMap::new(),
+            operation: Some("invalid".to_string()),
+            timestamp: Some(chrono::Utc::now()),
         };
         let result = plugin.execute(input).await.unwrap();
         
@@ -974,6 +985,8 @@ mod plugin_tests {
             action: "encrypt".to_string(),
             data: serde_json::json!({"data": "performance-test-data"}),
             parameters: HashMap::new(),
+            operation: Some("encrypt".to_string()),
+            timestamp: Some(chrono::Utc::now()),
         };
         
         let start_time = std::time::Instant::now();
@@ -1022,6 +1035,8 @@ mod plugin_tests {
                 "encryption_required": true
             }),
             parameters: HashMap::new(),
+            operation: Some("encrypt".to_string()),
+            timestamp: Some(chrono::Utc::now()),
         };
         
         let result = plugin.execute(input).await.unwrap();
@@ -1089,6 +1104,8 @@ mod plugin_tests {
             action: "encrypt".to_string(),
             data: serde_json::json!({"test": "config"}),
             parameters: HashMap::new(),
+            operation: Some("encrypt".to_string()),
+            timestamp: Some(chrono::Utc::now()),
         };
         let result = plugin.execute(input).await.unwrap();
         assert!(result.success);
@@ -1107,6 +1124,8 @@ mod plugin_tests {
             action: "hash".to_string(),
             data: serde_json::json!({"data": "concurrent-test"}),
             parameters: HashMap::new(),
+            operation: Some("hash".to_string()),
+            timestamp: Some(chrono::Utc::now()),
         };
         
         // Execute plugin concurrently
@@ -1152,6 +1171,8 @@ mod plugin_tests {
                 action: "encrypt".to_string(),
                 data: serde_json::json!({"test": "capability"}),
                 parameters: HashMap::new(),
+                operation: Some("encrypt".to_string()),
+                timestamp: Some(chrono::Utc::now()),
             };
             let result = plugin.execute(input).await.unwrap();
             
@@ -1269,6 +1290,9 @@ mod integration_tests {
             metadata: crypto_plugin.metadata().clone(),
             encryption_access: true,
             storage_access: false,
+            user_id: Some("test-user".to_string()),
+            session_id: Some("test-session".to_string()),
+            request_id: Some("test-request".to_string()),
         };
         
         // Test plugin execution for key generation
@@ -1279,6 +1303,8 @@ mod integration_tests {
                 "key_type": "symmetric"
             }),
             parameters: HashMap::new(),
+            operation: Some("generate_key".to_string()),
+            timestamp: Some(chrono::Utc::now()),
         };
         
         let key_result = crypto_plugin.execute(key_input).await.unwrap();
@@ -1333,6 +1359,9 @@ mod integration_tests {
             metadata: security_plugin.metadata().clone(),
             encryption_access: true,
             storage_access: true,
+            user_id: Some("test-user".to_string()),
+            session_id: Some("test-session".to_string()),
+            request_id: Some("test-request".to_string()),
         };
         
         // Create cluster with security capabilities
@@ -1375,6 +1404,8 @@ mod integration_tests {
                 "timestamp": chrono::Utc::now().timestamp()
             }),
             parameters: HashMap::new(),
+            operation: Some("sign_cluster_transaction".to_string()),
+            timestamp: Some(chrono::Utc::now()),
         };
         
         let leader_result = security_plugin.execute(leader_input).await.unwrap();
@@ -1452,11 +1483,6 @@ mod integration_tests {
                 ("security_level".to_string(), serde_json::Value::String("high".to_string())),
             ]),
             metadata: integrated_plugin.metadata().clone(),
-            encryption_access: true,
-            storage_access: true,
-            user_id: Some("test-user".to_string()),
-            session_id: Some("test-session".to_string()),
-            request_id: Some("test-request".to_string()),
         };
         
         // Create integrated MPC computation

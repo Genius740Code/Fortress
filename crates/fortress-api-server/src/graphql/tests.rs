@@ -4,8 +4,6 @@
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use serde_json::json;
     use async_graphql::Request;
 
     #[tokio::test]

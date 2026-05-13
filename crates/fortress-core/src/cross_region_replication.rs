@@ -16,7 +16,7 @@ use crate::backup::{
 
 };
 
-use crate::storage::StorageBackend;
+use crate::storage::{StorageBackend, BackupConfig};
 
 use crate::error::{FortressError, Result};
 
@@ -1316,9 +1316,9 @@ mod tests {
 
             None,
 
-            BackupConfig::default(),
+            BackupConfig::default()
 
-        ).unwrap());
+        )?);
 
 
 
@@ -1356,9 +1356,9 @@ mod tests {
 
             None,
 
-            BackupConfig::default(),
+            BackupConfig::default()
 
-        ).unwrap());
+        )?);
 
 
 

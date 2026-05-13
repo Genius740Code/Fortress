@@ -486,7 +486,7 @@ mod tests {
         let health_checker = HealthChecker::new(features);
         
         // Test failed check
-        health_checker.check_component("failing_component", || async {
+        let _ = health_checker.check_component("failing_component", || async {
             Err(ServerError::internal("Test failure"))
         }).await;
         

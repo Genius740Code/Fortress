@@ -2071,9 +2071,9 @@ mod tests {
 
             expected_improvement: "10% improvement".to_string(),
 
-            complexity: ImplementationComplexity::Low,
+            complexity: PmImplementationComplexity::Low,
 
-            priority: RecommendationPriority::Medium,
+            priority: PmRecommendationPriority::Medium,
 
             parameters: HashMap::new(),
 

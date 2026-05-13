@@ -500,11 +500,13 @@ mod hsm_integration_tests {
 #[cfg(test)]
 mod hsm_mock_tests {
     use fortress_core::{
-        hsm::{HsmProvider, HsmKeyManager},
+        hsm::HsmProvider,
         key::{KeyId, KeyMetadata},
         encryption::{EncryptionAlgorithm, PerformanceProfile},
-        error::{FortressError, Result},
+        Result,
     };
+    use async_trait::async_trait;
+    use fortress_core::prelude::Aes256GcmWrapper;
     use std::time::Duration;
 
     /// Mock HSM provider for testing
@@ -519,7 +521,7 @@ mod hsm_mock_tests {
         }
     }
 
-    #[async_trait::async_trait]
+    #[async_trait]
     impl HsmProvider for MockHsmProvider {
         async fn initialize(&self, _config: &fortress_core::hsm::HsmConfig) -> Result<()> {
             tokio::time::sleep(self.latency).await;
@@ -556,7 +558,7 @@ mod hsm_mock_tests {
             }
         }
 
-        async fn delete_key(&self, key_id: &KeyId) -> Result<()> {
+        async fn delete_key(&self, _key_id: &KeyId) -> Result<()> {
             tokio::time::sleep(self.latency).await;
             if self.healthy {
                 Ok(())
@@ -574,7 +576,7 @@ mod hsm_mock_tests {
             }
         }
 
-        async fn sign(&self, key_id: &KeyId, data: &[u8]) -> Result<Vec<u8>> {
+        async fn sign(&self, _key_id: &KeyId, data: &[u8]) -> Result<Vec<u8>> {
             tokio::time::sleep(self.latency).await;
             if self.healthy {
                 Ok(data.to_vec()) // Mock signature
@@ -583,7 +585,7 @@ mod hsm_mock_tests {
             }
         }
 
-        async fn verify(&self, key_id: &KeyId, data: &[u8], signature: &[u8]) -> Result<bool> {
+        async fn verify(&self, _key_id: &KeyId, data: &[u8], signature: &[u8]) -> Result<bool> {
             tokio::time::sleep(self.latency).await;
             if self.healthy {
                 Ok(data == signature) // Mock verification
@@ -592,7 +594,7 @@ mod hsm_mock_tests {
             }
         }
 
-        async fn encrypt(&self, key_id: &KeyId, plaintext: &[u8]) -> Result<Vec<u8>> {
+        async fn encrypt(&self, _key_id: &KeyId, plaintext: &[u8]) -> Result<Vec<u8>> {
             tokio::time::sleep(self.latency).await;
             if self.healthy {
                 Ok(plaintext.to_vec()) // Mock encryption
@@ -601,7 +603,7 @@ mod hsm_mock_tests {
             }
         }
 
-        async fn decrypt(&self, key_id: &KeyId, ciphertext: &[u8]) -> Result<Vec<u8>> {
+        async fn decrypt(&self, _key_id: &KeyId, ciphertext: &[u8]) -> Result<Vec<u8>> {
             tokio::time::sleep(self.latency).await;
             if self.healthy {
                 Ok(ciphertext.to_vec()) // Mock decryption
@@ -625,7 +627,7 @@ mod hsm_mock_tests {
     async fn test_mock_hsm_provider() {
         let provider = MockHsmProvider::new(true, Duration::from_millis(10));
         let key_id = "test-key".to_string();
-        let algorithm = fortress_core::encryption::Aes256GcmWrapper::new();
+        let algorithm = Aes256GcmWrapper::new();
 
         // Test all operations
         assert!(provider.generate_key(&key_id, &algorithm).await.is_ok());
@@ -646,7 +648,7 @@ mod hsm_mock_tests {
         let key_id = "test-key".to_string();
 
         // Test all operations fail when unhealthy
-        assert!(provider.generate_key(&key_id, &fortress_core::encryption::Aes256GcmWrapper::new()).await.is_err());
+        assert!(provider.generate_key(&key_id, &Aes256GcmWrapper::new()).await.is_err());
         assert!(provider.get_key_metadata(&key_id).await.is_err());
         assert!(provider.delete_key(&key_id).await.is_err());
         assert!(provider.list_keys().await.is_err());
@@ -664,7 +666,7 @@ mod hsm_mock_tests {
         let key_id = "test-key".to_string();
 
         let start = std::time::Instant::now();
-        let result = provider.generate_key(&key_id, &fortress_core::encryption::Aes256GcmWrapper::new()).await;
+        let result = provider.generate_key(&key_id, &Aes256GcmWrapper::new()).await;
         let elapsed = start.elapsed();
 
         assert!(result.is_ok());

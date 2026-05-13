@@ -1,6 +1,6 @@
 // Simple gRPC example to test our implementation
-use fortress_api_server::grpc::{GrpcServer, FortressGrpcService};
-use fortress_core::field_encryption::{FieldEncryptionManager, DefaultFieldEncryptionManager};
+use fortress_api_server::prelude::{GrpcServer, FortressGrpcService};
+use fortress_core::prelude::{FieldEncryptionManager, DefaultFieldEncryptionManager};
 use fortress_core::key::InMemoryKeyManager;
 use std::sync::Arc;
 

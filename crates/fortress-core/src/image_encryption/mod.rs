@@ -177,6 +177,19 @@ pub enum ImageDataClassification {
     TopSecret,
 }
 
+impl ImageDataClassification {
+    /// Get the security level (1-5, higher is more sensitive)
+    pub fn security_level(&self) -> u8 {
+        match self {
+            Self::Public => 1,
+            Self::Internal => 2,
+            Self::Confidential => 3,
+            Self::Secret => 4,
+            Self::TopSecret => 5,
+        }
+    }
+}
+
 impl DataClassification {
     /// Get the security level (1-5, higher is more sensitive)
     pub fn security_level(&self) -> u8 {

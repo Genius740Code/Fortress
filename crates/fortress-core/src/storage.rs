@@ -1399,6 +1399,20 @@ pub struct BackupConfig {
     pub metadata: HashMap<String, String>,
 }
 
+impl Default for BackupConfig {
+    fn default() -> Self {
+        Self {
+            name: "default_backup".to_string(),
+            backup_type: BackupType::Full,
+            compression: None,
+            encryption: None,
+            retention_policy: None,
+            filters: Vec::new(),
+            metadata: HashMap::new(),
+        }
+    }
+}
+
 /// Backup type
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum BackupType {

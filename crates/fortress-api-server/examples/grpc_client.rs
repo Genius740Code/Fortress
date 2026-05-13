@@ -1,8 +1,8 @@
-use fortress_api_server::grpc::fortress::{
-    fortress_service_client::FortressServiceClient,
-    CreateDatabaseRequest, DatabaseConfig, EncryptRequest, DecryptRequest,
+use fortress_api_server::prelude::{
+    FortressServiceClient, CreateDatabaseRequest, DatabaseConfig, EncryptRequest, DecryptRequest,
 };
 use tonic::transport::Channel;
+use tonic::Request;
 use tracing::{info, error};
 
 #[derive(Clone)]
@@ -21,7 +21,7 @@ impl FortressGrpcClient {
         name: String,
         description: String,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let request = tonic::Request::new(CreateDatabaseRequest {
+        let request = Request::new(CreateDatabaseRequest {
             name,
             description,
             config: Some(DatabaseConfig {
@@ -50,7 +50,7 @@ impl FortressGrpcClient {
         database_id: String,
         plaintext: Vec<u8>,
     ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-        let request = tonic::Request::new(EncryptRequest {
+        let request = Request::new(EncryptRequest {
             database_id,
             plaintext,
             key_id: "".to_string(),
@@ -76,7 +76,7 @@ impl FortressGrpcClient {
         ciphertext: Vec<u8>,
         key_id: String,
     ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-        let request = tonic::Request::new(DecryptRequest {
+        let request = Request::new(DecryptRequest {
             database_id,
             ciphertext,
             key_id,

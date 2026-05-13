@@ -6,7 +6,7 @@
 
 use crate::error::{FortressError, Result};
 use crate::plugin::PluginInput;
-use crate::auth::AuthToken;
+use crate::auth::{AuthToken, HardwareTokenType, BiometricType};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;

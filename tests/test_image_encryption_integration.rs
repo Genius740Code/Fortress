@@ -10,8 +10,12 @@
 
 use fortress_core::{
     image_encryption::*,
-    encryption::{ChaCha20Poly1305, EncryptionAlgorithm, SecureKey},
+    encryption::{ChaCha20Poly1305, SecureKey},
     error::Result,
+    image_encryption::ImageDataClassification,
+    image_encryption::thumbnails::{ThumbnailFormat, ThumbnailOptions},
+    image_encryption::streaming::{StreamingResult, StreamingStatus},
+    image_encryption::SortOrder,
 };
 use std::collections::HashMap;
 use tokio::time::{sleep, Duration};
@@ -50,7 +54,7 @@ impl ImageStore for MockImageStore {
         Ok(images.remove(image_id).is_some())
     }
 
-    async fn store_thumbnail(&self, image_id: &str, thumbnail: &EncryptedThumbnail) -> Result<String> {
+    async fn store_thumbnail(&self, _image_id: &str, thumbnail: &EncryptedThumbnail) -> Result<String> {
         let id = uuid::Uuid::new_v4().to_string();
         let mut thumbnails = self.thumbnails.write().await;
         thumbnails.insert(id.clone(), thumbnail.clone());
@@ -95,8 +99,8 @@ impl MockKeyManager {
 
 #[async_trait::async_trait]
 impl KeyManager for MockKeyManager {
-    async fn generate_key(&self, algorithm: &str) -> Result<SecureKey> {
-        let key = SecureKey::generate(32);
+    async fn generate_key(&self, _algorithm: &str) -> Result<SecureKey> {
+        let key = SecureKey::generate(32)?;
         let id = uuid::Uuid::new_v4().to_string();
         let mut keys = self.keys.write().await;
         keys.insert(id.clone(), key.clone());
@@ -107,10 +111,10 @@ impl KeyManager for MockKeyManager {
         let keys = self.keys.read().await;
         keys.get(key_id)
             .cloned()
-            .ok_or_else(|| fortress_core::error::FortressError::encryption(
+            .ok_or_else(|| fortress_core::error::FortressError::key_management(
                 format!("Key not found: {}", key_id),
-                "mock_key_manager",
-                fortress_core::error::EncryptionErrorCode::KeyNotFound,
+                Some("mock_key_manager".to_string()),
+                fortress_core::error::KeyErrorCode::KeyNotFound,
             ))
     }
 
@@ -184,7 +188,7 @@ async fn test_complete_image_encryption_workflow() -> Result<()> {
             },
         ],
         permissions: Some(AccessPermissions {
-            classification: DataClassification::Internal,
+            classification: ImageDataClassification::Internal,
             viewers: vec!["test_user".to_string()],
             editors: vec!["test_user".to_string()],
             sharers: vec!["test_user".to_string()],
@@ -363,13 +367,13 @@ async fn test_image_search_workflow() -> Result<()> {
     
     // Encrypt multiple images with different properties
     let images = vec![
-        (create_test_jpeg(), ImageFormat::Jpeg, DataClassification::Public),
-        (create_test_png(), ImageFormat::Png, DataClassification::Internal),
-        (create_test_jpeg(), ImageFormat::Jpeg, DataClassification::Confidential),
+        (create_test_jpeg(), ImageFormat::Jpeg, ImageDataClassification::Public),
+        (create_test_png(), ImageFormat::Png, ImageDataClassification::Internal),
+        (create_test_jpeg(), ImageFormat::Jpeg, ImageDataClassification::Confidential),
     ];
     
     let mut image_ids = Vec::new();
-    for (data, expected_format, classification) in images {
+    for (data, _expected_format, classification) in images {
         let encrypt_request = EncryptImageRequest {
             image_data: data,
             options: EncryptionOptions::default(),
@@ -394,7 +398,7 @@ async fn test_image_search_workflow() -> Result<()> {
             offset: Some(0),
             limit: Some(10),
             sort_by: Some("created_at".to_string()),
-            sort_order: Some(crate::image_encryption::SortOrder::Descending),
+            sort_order: Some(SortOrder::Descending),
             criteria: SearchCriteria {
                 text_query: None,
                 format_filter: Some(ImageFormat::Jpeg),
@@ -635,7 +639,7 @@ async fn test_thumbnail_size_and_format_variations() -> Result<()> {
     ];
     
     for size in sizes {
-        for format in formats {
+        for format in &formats {
             let encrypt_request = EncryptImageRequest {
                 image_data: jpeg_data.clone(),
                 options: EncryptionOptions::default(),
@@ -643,7 +647,7 @@ async fn test_thumbnail_size_and_format_variations() -> Result<()> {
                 thumbnail_options: vec![
                     ThumbnailOptions {
                         size,
-                        format,
+                        format: *format,
                         quality: if format.supports_transparency() { None } else { Some(75) },
                         ..Default::default()
                     },
@@ -688,11 +692,11 @@ fn test_thumbnail_size_properties() {
 #[test]
 fn test_data_classification_levels() {
     // Test security levels
-    assert_eq!(DataClassification::Public.security_level(), 1);
-    assert_eq!(DataClassification::Internal.security_level(), 2);
-    assert_eq!(DataClassification::Confidential.security_level(), 3);
-    assert_eq!(DataClassification::Secret.security_level(), 4);
-    assert_eq!(DataClassification::TopSecret.security_level(), 5);
+    assert_eq!(ImageDataClassification::Public.security_level(), 1);
+    assert_eq!(ImageDataClassification::Internal.security_level(), 2);
+    assert_eq!(ImageDataClassification::Confidential.security_level(), 3);
+    assert_eq!(ImageDataClassification::Secret.security_level(), 4);
+    assert_eq!(ImageDataClassification::TopSecret.security_level(), 5);
 }
 
 #[test]
