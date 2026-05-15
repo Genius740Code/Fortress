@@ -4,10 +4,9 @@
 //! testing database connection management, query optimization, data integrity validation,
 //! backup and restore operations, and migration testing.
 
-use fortress_core::key_database::{KeyDatabase, KeyDatabaseConfig, KeyDatabaseBackend, KeyDatabaseStats, SqliteKeyDatabase};
+use fortress_core::key_database::{KeyDatabase, KeyDatabaseConfig, KeyDatabaseBackend, SqliteKeyDatabase};
 use fortress_core::key::{KeyId, KeyMetadata, SecureKey};
-use fortress_core::encryption::Aegis256;
-use fortress_core::error::{FortressError, Result, KeyErrorCode};
+use fortress_core::encryption::{Aegis256, PerformanceProfile};
 use chrono::{Utc, Duration};
 use tempfile::NamedTempFile;
 use tokio::fs;
@@ -26,14 +25,21 @@ mod tests {
 
     /// Helper function to create test key metadata
     fn create_test_metadata(algorithm_name: &str, version: u32) -> KeyMetadata {
-        let mut metadata = KeyMetadata::new(&Aegis256::new());
-        metadata.algorithm = algorithm_name.to_string();
-        metadata.version = version;
-        metadata.created_at = Utc::now();
-        metadata.expires_at = Some(Utc::now() + Duration::hours(24));
-        metadata.tags.insert("test".to_string(), "true".to_string());
-        metadata.tags.insert("database".to_string(), "test".to_string());
-        metadata.custom.insert("purpose".to_string(), "testing".to_string());
+        let key_id = KeyId::new();
+        let created_at = Utc::now();
+        let expires_at = Utc::now() + Duration::hours(24);
+        let mut metadata = KeyMetadata::new(
+            key_id.clone(),
+            algorithm_name.to_string(),
+            version,
+            created_at,
+            expires_at,
+            "testing".to_string(),
+            PerformanceProfile::default(),
+        );
+        metadata.metadata.insert("test".to_string(), "true".to_string());
+        metadata.metadata.insert("database".to_string(), "test".to_string());
+        metadata.metadata.insert("purpose".to_string(), "testing".to_string());
         metadata
     }
 
@@ -288,10 +294,10 @@ mod tests {
             assert!(metadata.created_at <= Utc::now(), "Created at should be valid");
             assert!(metadata.version > 0, "Version should be positive");
             
-            // Verify tags and custom fields
-            assert!(metadata.tags.contains_key("test"), "Should have test tag");
-            assert!(metadata.tags.contains_key("database"), "Should have database tag");
-            assert!(metadata.custom.contains_key("purpose"), "Should have purpose custom field");
+            // Verify metadata fields
+            assert!(metadata.metadata.contains_key("test"), "Should have test tag");
+            assert!(metadata.metadata.contains_key("database"), "Should have database tag");
+            assert!(metadata.metadata.contains_key("purpose"), "Should have purpose metadata field");
         }
         
         // Test data consistency after multiple operations
@@ -308,15 +314,14 @@ mod tests {
             .expect("Original retrieval should succeed");
         assert!(original_retrieved.is_some(), "Original should be retrievable");
         
-        let (orig_key, orig_metadata) = original_retrieved.unwrap();
+        let (orig_key, _orig_metadata) = original_retrieved.unwrap();
         assert_eq!(orig_key.to_vec(), original_key.to_vec(), "Original key should match");
         
         // Update with new data
         let updated_key = create_test_key(128);
         let mut updated_metadata = original_metadata.clone();
         updated_metadata.version = 2;
-        updated_metadata.updated_at = Some(Utc::now());
-        updated_metadata.tags.insert("updated".to_string(), "true".to_string());
+        updated_metadata.metadata.insert("updated".to_string(), "true".to_string());
         
         db.store_key(&test_key_id, &updated_key, &updated_metadata).await
             .expect("Updated key storage should succeed");
@@ -329,7 +334,7 @@ mod tests {
         let (upd_key, upd_metadata) = updated_retrieved.unwrap();
         assert_eq!(upd_key.to_vec(), updated_key.to_vec(), "Updated key should match");
         assert_eq!(upd_metadata.version, 2, "Updated version should match");
-        assert!(upd_metadata.tags.contains_key("updated"), "Should have updated tag");
+        assert!(upd_metadata.metadata.contains_key("updated"), "Should have updated tag");
         
         // Ensure old data is gone
         assert_ne!(upd_key.to_vec(), original_key.to_vec(), "Old key data should be replaced");
@@ -453,7 +458,7 @@ mod tests {
         let v1_key_id = KeyId::new();
         let v1_key = create_test_key(32);
         let mut v1_metadata = create_test_metadata("v1_algorithm", 1);
-        v1_metadata.custom.insert("schema_version".to_string(), "1".to_string());
+        v1_metadata.metadata.insert("schema_version".to_string(), "1".to_string());
         
         db_v1.store_key(&v1_key_id, &v1_key, &v1_metadata).await
             .expect("V1 key storage should succeed");
@@ -465,7 +470,7 @@ mod tests {
         
         let (v1_key_data, v1_meta_data) = v1_retrieved.unwrap();
         assert_eq!(v1_key_data.to_vec(), v1_key.to_vec(), "V1 key data should match");
-        assert_eq!(v1_meta_data.custom.get("schema_version"), Some(&"1".to_string()), "V1 schema version should match");
+        assert_eq!(v1_meta_data.metadata.get("schema_version"), Some(&"1".to_string()), "V1 schema version should match");
         
         // Simulate migration to version 2
         // In a real migration, you would:
@@ -478,9 +483,9 @@ mod tests {
         let v2_key_id = KeyId::new();
         let v2_key = create_test_key(64);
         let mut v2_metadata = create_test_metadata("v2_algorithm", 2);
-        v2_metadata.custom.insert("schema_version".to_string(), "2".to_string());
-        v2_metadata.custom.insert("migration_date".to_string(), Utc::now().to_rfc3339());
-        v2_metadata.tags.insert("migrated".to_string(), "true".to_string());
+        v2_metadata.metadata.insert("schema_version".to_string(), "2".to_string());
+        v2_metadata.metadata.insert("migration_date".to_string(), Utc::now().to_rfc3339());
+        v2_metadata.metadata.insert("migrated".to_string(), "true".to_string());
         
         db_v1.store_key(&v2_key_id, &v2_key, &v2_metadata).await
             .expect("V2 key storage should succeed");
@@ -492,9 +497,9 @@ mod tests {
         
         let (v2_key_data, v2_meta_data) = v2_retrieved.unwrap();
         assert_eq!(v2_key_data.to_vec(), v2_key.to_vec(), "V2 key data should match");
-        assert_eq!(v2_meta_data.custom.get("schema_version"), Some(&"2".to_string()), "V2 schema version should match");
-        assert!(v2_meta_data.custom.contains_key("migration_date"), "V2 should have migration date");
-        assert!(v2_meta_data.tags.contains_key("migrated"), "V2 should have migrated tag");
+        assert_eq!(v2_meta_data.metadata.get("schema_version"), Some(&"2".to_string()), "V2 schema version should match");
+        assert!(v2_meta_data.metadata.contains_key("migration_date"), "V2 should have migration date");
+        assert!(v2_meta_data.metadata.contains_key("migrated"), "V2 should have migrated tag");
         
         // Test backward compatibility
         let v1_retrieved_after_migration = db_v1.retrieve_key(&v1_key_id).await
@@ -516,8 +521,8 @@ mod tests {
             
             // "Migrate" to V2 by updating metadata
             metadata.version = 2;
-            metadata.custom.insert("schema_version".to_string(), "2".to_string());
-            metadata.custom.insert("migrated_at".to_string(), Utc::now().to_rfc3339());
+            metadata.metadata.insert("schema_version".to_string(), "2".to_string());
+            metadata.metadata.insert("migrated_at".to_string(), Utc::now().to_rfc3339());
             
             db_v1.store_key(&key_id, &key, &metadata).await
                 .expect(&format!("Migration V2 key {} storage should succeed", i));
@@ -534,7 +539,7 @@ mod tests {
             
             let (_, metadata) = retrieved.unwrap();
             assert_eq!(metadata.version, 2, "Migrated key {} should have version 2", i);
-            assert_eq!(metadata.custom.get("schema_version"), Some(&"2".to_string()), 
+            assert_eq!(metadata.metadata.get("schema_version"), Some(&"2".to_string()), 
                      "Migrated key {} should have schema version 2", i);
         }
     }
@@ -739,7 +744,7 @@ mod tests {
         // Verify database integrity after concurrent operations
         let final_stats = db.get_stats().await
             .expect("Final stats should succeed");
-        assert_eq!(final_stats.total_keys, num_concurrent_writes, "Should have original concurrent write keys");
+        assert_eq!(final_stats.total_keys, num_concurrent_writes as u64, "Should have original concurrent write keys");
     }
 
     /// Test database performance under load

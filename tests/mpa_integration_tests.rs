@@ -6,9 +6,7 @@
 use fortress_core::multi_person_auth::*;
 use fortress_core::mpa_service::MpaService;
 use fortress_core::auth::{AuthManager, UserId};
-use fortress_core::performance_monitor::OperationType;
 use std::sync::{Arc, RwLock};
-use std::collections::HashMap;
 use tokio::time::{sleep, Duration};
 use serde_json;
 use fortress_core::error::Result;
@@ -30,7 +28,7 @@ async fn setup_comprehensive_mpa_test() -> (MpaService, Vec<UserId>) {
         ("requester_user", "Req_Password123", "Regular User"),
     ];
     
-    for (i, (username, password, _role)) in user_configs.iter().enumerate() {
+    for (_i, (username, password, _role)) in user_configs.iter().enumerate() {
         let mut auth = auth_manager.write().unwrap();
         let user_id = auth.create_user(
             username.to_string(), 
@@ -49,7 +47,7 @@ async fn create_control_group_with_approvers(
     approver_ids: &[UserId],
     group_name: &str,
     required_approvals: usize,
-    operation_types: Vec<OperationType>,
+    operation_types: Vec<MultiPersonOperationType>,
 ) -> Result<String> {
     // Create control group
     let group_id = mpa_service.create_control_group(
@@ -81,7 +79,7 @@ async fn test_complete_critical_operations_workflow() {
     let admin_id = users[0].clone();
     let security_lead_id = users[1].clone();
     let compliance_officer_id = users[2].clone();
-    let devops_engineer_id = users[3].clone();
+    let _devops_engineer_id = users[3].clone();
     let auditor_id = users[4].clone();
     let requester_id = users[6].clone();
     
@@ -93,9 +91,9 @@ async fn test_complete_critical_operations_workflow() {
         &approvers,
         "Critical Security Operations",
         3, // Require all 3 approvals
-        vec![OperationType::KeyGeneration,
-            OperationType::KeyStorage,
-            OperationType::DatabaseQuery,],
+        vec![MultiPersonOperationType::KeyGeneration,
+            MultiPersonOperationType::Custom("KeyStorage".to_string()),
+            MultiPersonOperationType::Custom("DatabaseQuery".to_string()),],
     ).await.unwrap();
     
     // Test 1: Critical key generation request
@@ -200,8 +198,8 @@ async fn test_emergency_approval_workflow() {
         &approvers,
         "Emergency Operations",
         1, // Only need 1 approval for emergencies
-        vec![OperationType::SystemOperation,
-            OperationType::DatabaseQuery,],
+        vec![MultiPersonOperationType::SystemConfiguration,
+            MultiPersonOperationType::Custom("DatabaseQuery".to_string()),],
     ).await.unwrap();
     
     // Create emergency request
@@ -253,7 +251,7 @@ async fn test_complex_rejection_scenarios() {
         &approvers,
         "Security Review Group",
         2,
-        vec![OperationType::KeyStorage],
+        vec![MultiPersonOperationType::Custom("KeyStorage".to_string())],
     ).await.unwrap();
     
     // Scenario 1: Single rejection prevents approval
@@ -337,7 +335,7 @@ async fn test_concurrent_approval_requests() {
         &approvers,
         "Concurrent Test Group",
         2,
-        vec![OperationType::CacheOperation],
+        vec![MultiPersonOperationType::Custom("CacheOperation".to_string())],
     ).await.unwrap();
     
     // Create multiple concurrent requests
@@ -412,7 +410,7 @@ async fn test_time_sensitive_operations() {
         "Time-Sensitive Operations".to_string(),
         "Group with short timeout for time-sensitive testing".to_string(),
         1, // Only need 1 approval
-        vec![OperationType::SystemOperation],
+        vec![MultiPersonOperationType::SystemConfiguration],
         2, // 2 second timeout
         admin_id.clone(),
     ).await.unwrap();
@@ -467,7 +465,7 @@ async fn test_role_based_permissions() {
         "Role-Based Test Group".to_string(),
         "Testing role-based permissions".to_string(),
         2,
-        vec![OperationType::NetworkRequest],
+        vec![MultiPersonOperationType::Custom("NetworkRequest".to_string())],
         3600,
         admin_id.clone(),
     ).await.unwrap();
@@ -532,9 +530,9 @@ async fn test_custom_operation_types() {
         "Group for custom operation types".to_string(),
         1,
         vec![
-            OperationType::SystemOperation,
-            OperationType::SystemOperation,
-            OperationType::DatabaseQuery,
+            MultiPersonOperationType::SystemConfiguration,
+            MultiPersonOperationType::SystemConfiguration,
+            MultiPersonOperationType::Custom("DatabaseQuery".to_string()),
         ],
         3600,
         admin_id.clone(),
@@ -615,7 +613,7 @@ async fn test_audit_trail_and_compliance() {
         "Audit Trail Test Group".to_string(),
         "Testing audit trail functionality".to_string(),
         1,
-        vec![OperationType::CacheOperation],
+        vec![MultiPersonOperationType::Custom("CacheOperation".to_string())],
         3600,
         admin_id.clone(),
     ).await.unwrap();
@@ -692,7 +690,7 @@ async fn test_performance_under_load() {
         "Performance Test Group".to_string(),
         "Testing performance under load".to_string(),
         1,
-        vec![OperationType::SystemOperation],
+        vec![MultiPersonOperationType::SystemConfiguration],
         3600,
         admin_id.clone(),
     ).await.unwrap();
@@ -808,7 +806,7 @@ async fn test_error_handling_and_recovery() {
         "Error Test Group".to_string(),
         "Testing error handling".to_string(),
         1,
-        vec![OperationType::SystemOperation],
+        vec![MultiPersonOperationType::SystemConfiguration],
         3600,
         admin_id.clone(),
     ).await.unwrap();
@@ -885,7 +883,7 @@ async fn test_cleanup_and_maintenance() {
         "Cleanup Test Group".to_string(),
         "Testing cleanup functionality".to_string(),
         1,
-        vec![OperationType::SystemOperation],
+        vec![MultiPersonOperationType::SystemConfiguration],
         1, // 1 second timeout
         admin_id.clone(),
     ).await.unwrap();
@@ -930,7 +928,7 @@ async fn test_multi_group_operations() {
         "Group 1 - Key Operations".to_string(),
         "First control group".to_string(),
         1,
-        vec![OperationType::KeyGeneration],
+        vec![MultiPersonOperationType::KeyGeneration],
         3600,
         admin_id.clone(),
     ).await.unwrap();
@@ -939,7 +937,7 @@ async fn test_multi_group_operations() {
         "Group 2 - System Operations".to_string(),
         "Second control group".to_string(),
         1,
-        vec![OperationType::SystemOperation],
+        vec![MultiPersonOperationType::SystemConfiguration],
         3600,
         admin_id.clone(),
     ).await.unwrap();
