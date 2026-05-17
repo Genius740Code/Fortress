@@ -198,7 +198,7 @@ pub struct RateLimitConfig {
 }
 
 /// Rate limiting algorithms
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum RateLimitAlgorithm {
     /// Token bucket algorithm (default)
     TokenBucket,

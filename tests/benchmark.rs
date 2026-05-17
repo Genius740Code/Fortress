@@ -8,20 +8,20 @@ use std::sync::Arc;
 use tokio::sync::Semaphore;
 use fortress_core::benchmark::{AegisBenchmark, BenchmarkResults};
 use fortress_core::encryption::{Aegis256, EncryptionAlgorithm, AES256GCM, ChaCha20Poly1305};
-use fortress_core::storage::{StorageEngine, MemoryStorage};
+use fortress_core::storage::{StorageBackend, InMemoryStorage};
 use fortress_core::key_management::{KeyManager, KeyConfig};
 use fortress_core::error::Result;
 
 /// Comprehensive benchmark test suite
 pub struct BenchmarkSuite {
-    storage: Arc<dyn StorageEngine>,
+    storage: Arc<dyn StorageBackend>,
     key_manager: Arc<KeyManager>,
 }
 
 impl BenchmarkSuite {
     /// Create new benchmark suite
     pub async fn new() -> Result<Self> {
-        let storage = Arc::new(MemoryStorage::new());
+        let storage = Arc::new(InMemoryStorage::new());
         let key_config = KeyConfig::default();
         let key_manager = Arc::new(KeyManager::new(key_config).await?);
         

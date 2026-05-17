@@ -352,9 +352,11 @@ impl AuditAnalyzer {
             let datetime = chrono::DateTime::from_timestamp(
                 (entry.timestamp / 1000) as i64,
                 ((entry.timestamp % 1000) * 1_000_000) as u32,
-            ).unwrap();
-            let hour = datetime.hour() as u32;
-            *entries_by_hour.entry(hour).or_insert(0) += 1;
+            );
+            if let Some(datetime) = datetime {
+                let hour = datetime.hour() as u32;
+                *entries_by_hour.entry(hour).or_insert(0) += 1;
+            }
         }
 
         // Detect unusual activity during off-hours (e.g., 2 AM - 4 AM)

@@ -4,6 +4,7 @@ use fortress_core::prelude::*;
 #[cfg(all(test, feature = "homomorphic-encryption"))]
 mod tests {
     use super::*;
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
 
     #[tokio::test]
     async fn test_homomorphic_encryption_ckks() -> Result<()> {

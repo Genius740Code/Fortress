@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use chrono::{Utc, Duration};
 use tokio::time::sleep;
 use std::sync::Arc;
+use base64::Engine;
 
 #[cfg(test)]
 mod tests {

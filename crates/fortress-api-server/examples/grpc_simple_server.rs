@@ -12,7 +12,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let encryption_manager = Arc::new(DefaultFieldEncryptionManager::new(key_manager));
     let addr = "127.0.0.1:50051".parse()?;
 
-    let server = GrpcServer::new(addr, encryption_manager);
+    let server = GrpcServer::new(addr);
     
     println!("Starting gRPC-compatible server on {}", addr);
     server.start().await?;
