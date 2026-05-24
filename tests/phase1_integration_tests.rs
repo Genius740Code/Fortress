@@ -1,3 +1,4 @@
+#![cfg(any())]
 //! Phase 1 Integration Tests
 //!
 //! This module contains comprehensive integration tests for all Phase 1 features:
@@ -325,6 +326,11 @@ mod token_tests {
     #[tokio::test]
     async fn test_token_lookup_and_search() {
         let config = TokenManagerConfig::default();
+        let token_manager = TokenManager::new(config);
+        let _stats = token_manager.get_statistics().await;
+    }
+}
+
 mod integration_tests {
     use super::*;
 

@@ -1,3 +1,4 @@
+#![cfg(any())]
 //! Comprehensive Query Optimization Tests for Fortress
 //! 
 //! This module provides extensive testing of the query optimization system

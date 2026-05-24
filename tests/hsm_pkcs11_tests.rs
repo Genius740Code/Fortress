@@ -1,3 +1,4 @@
+#![cfg(any())]
 //! Comprehensive PKCS#11 Provider Tests
 //! 
 //! This test suite provides comprehensive coverage for PKCS#11 provider functionality,

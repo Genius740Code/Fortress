@@ -17,7 +17,6 @@ use crate::mongodb_database::{MongoKeyDatabase, MongoPullFilter};
 use crate::postgres_database::{PostgresKeyDatabase, PostgresQuery, PostgresBulkEntry};
 
 use chrono::{DateTime, Utc, Duration};
-use uuid::Uuid;
 
 use serde::{Deserialize, Serialize};
 

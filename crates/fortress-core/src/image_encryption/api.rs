@@ -17,7 +17,6 @@
 
 
 use crate::error::{FortressError, Result};
-use uuid::Uuid;
 
 use crate::encryption::{EncryptionAlgorithm, SecureKey};
 
@@ -1429,6 +1428,7 @@ mod tests {
     use super::*;
 
     use crate::encryption::ChaCha20Poly1305;
+    use uuid::Uuid;
 
 
 

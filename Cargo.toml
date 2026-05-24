@@ -4,7 +4,7 @@ version = "1.0.1"
 edition = "2021"
 authors = ["Genius740Code"]
 license = "MIT"
-description = "Fortress -  + Enterprise Security. A highly customizable, secure database system with multi-layer encryption."
+description = "Fortress - + Enterprise Security. A highly customizable, secure database system with multi-layer encryption."
 readme = "README.md"
 repository = "https://github.com/Genius740Code/Fortress"
 documentation = "https://github.com/Genius740Code/Fortress/blob/main/docs"
@@ -193,6 +193,7 @@ k8s = ["k8s-openapi", "kube"]
 # Security features
 hsm = ["fortress-core/hsm"]
 fips = []
+homomorphic-encryption = ["fortress-core/homomorphic-encryption"]
 
 # Development features
 dev = ["tracing-subscriber/env-filter"]

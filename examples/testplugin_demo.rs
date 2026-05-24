@@ -10,7 +10,8 @@ use std::sync::Arc;
 // Since we can't directly import the testplugin due to workspace structure,
 // we'll create a compatible plugin implementation that matches the testplugin interface
 
-use fortress_core::prelude::*;
+use async_trait::async_trait;
+use fortress_core::error::{FortressError, Result};
 use fortress_core::plugin::*;
 
 // Create a plugin that matches the testplugin interface
@@ -30,6 +31,7 @@ impl DemoPlugin {
                 author: "Fortress Team".to_string(),
                 capabilities: vec![PluginCapability::Custom("custom".to_string())],
                 config_schema: None,
+                wasm_module: None,
             },
         }
     }
@@ -147,6 +149,8 @@ async fn main() -> color_eyre::eyre::Result<()> {
             "name": "Fortress Developer"
         }),
         parameters: HashMap::new(),
+        operation: None,
+        timestamp: None,
     };
 
     let hello_result = plugin_manager.execute_plugin("TestPlugin", hello_input).await
@@ -175,6 +179,8 @@ async fn main() -> color_eyre::eyre::Result<()> {
             }
         }),
         parameters: HashMap::new(),
+        operation: None,
+        timestamp: None,
     };
 
     let echo_result = plugin_manager.execute_plugin("TestPlugin", echo_input).await
@@ -196,6 +202,8 @@ async fn main() -> color_eyre::eyre::Result<()> {
         action: "invalid_action".to_string(),
         data: serde_json::json!({"test": "data"}),
         parameters: HashMap::new(),
+        operation: None,
+        timestamp: None,
     };
 
     let invalid_result = plugin_manager.execute_plugin("TestPlugin", invalid_input).await

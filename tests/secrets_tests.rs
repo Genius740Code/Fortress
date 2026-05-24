@@ -4,15 +4,12 @@
 //! testing creation, storage, retrieval, rotation, expiration, cleanup, and integration
 //! with key management systems.
 
-use fortress_core::secrets::{SecretsEngine, SecretsEngineManager, Secret, SecretMetadata, LeaseInfo, EngineType, EngineStatus, SecretsConfig};
+use fortress_core::secrets::{SecretsEngine, SecretsEngineManager, EngineType, SecretsConfig};
 use fortress_core::secrets_kv::KvEngine;
-use fortress_core::error::{FortressError, Result};
-use serde_json::{json, Value};
-use std::collections::HashMap;
-use chrono::{Utc, Duration};
+use serde_json::json;
+use chrono::Utc;
 use tokio::time::sleep;
 use std::sync::Arc;
-use base64::Engine;
 
 #[cfg(test)]
 mod tests {
@@ -134,13 +131,13 @@ mod tests {
             .expect("Secret storage should succeed");
         
         let lease = secret.lease.unwrap();
-        let original_expires_at = lease.expires_at;
+        let _original_expires_at = lease.expires_at;
         
         // Wait for expiration
         sleep(tokio::time::Duration::from_secs(3)).await;
         
         // Try to renew the lease (should fail if expired)
-        let renew_result = engine.renew(&lease.lease_id, Some(3600)).await;
+        let _renew_result = engine.renew(&lease.lease_id, Some(3600)).await;
         // Note: This might succeed or fail depending on implementation
         // We're mainly testing that the system handles expiration gracefully
         
@@ -165,7 +162,7 @@ mod tests {
             "api_secret": "sk_live_1234567890abcdef"
         });
         
-        let secret = engine.write("secret/keys", &sensitive_data).await
+        let _secret = engine.write("secret/keys", &sensitive_data).await
             .expect("Sensitive data storage should succeed");
         
         // Verify the data is stored (encryption should be transparent)
@@ -238,7 +235,7 @@ mod tests {
         let status = engine.status().await
             .expect("Engine status should be available");
         assert_eq!(status.name, "kv");
-        assert_eq!(status.engine_type, EngineType::Kv);
+        assert!(matches!(status.engine_type, EngineType::Kv));
         assert!(status.initialized, "Engine should be initialized");
         assert!(status.active, "Engine should be active");
     }
@@ -254,7 +251,7 @@ mod tests {
             .expect("Secret storage should succeed");
         
         let lease = secret.lease.unwrap();
-        let original_ttl = lease.ttl;
+        let _original_ttl = lease.ttl;
         let original_renewal_count = lease.renewal_count;
         
         // Test lease renewal

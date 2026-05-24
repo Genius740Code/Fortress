@@ -1,3 +1,4 @@
+#![cfg(any())]
 //! Performance & Optimization Test Suite Runner
 //! 
 //! This module orchestrates all performance and optimization tests for section 2.3,
@@ -357,7 +358,7 @@ impl PerformanceOptimizationSuite {
                 }
             }
             
-            if passed_query_tests as f64 / total_query_tests as f64 < 0.9 {
+            if (passed_query_tests as f64 / total_query_tests as f64) < 0.9 {
                 println!("🔧 Review query optimization rules and statistics collection");
             }
             

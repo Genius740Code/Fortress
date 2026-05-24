@@ -9,11 +9,9 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
     use fortress_core::audit::{
         AuditConfig, AuditEntry, AuditEventType, SecurityLevel, EventOutcome,
-        DefaultAuditLogger, AuditLogger, AuditQuery, IntegrityReport,
-        IntegrityViolationType, AuditStatistics,
+        AuditLogger, DefaultAuditLogger,
     };
-    use fortress_core::error::{FortressError, Result};
-    use base64;
+    use base64::Engine as _;
 
     #[test]
     fn test_audit_event_creation_all_types() {
@@ -237,7 +235,7 @@ mod tests {
     fn test_audit_event_with_hmac() {
         // Test audit event with HMAC signature
         let mut config = AuditConfig::default();
-        config.hmac_key = Some(base64::encode("test_hmac_key_32_bytes_long_1234"));
+        config.hmac_key = Some(base64::engine::general_purpose::STANDARD.encode("test_hmac_key_32_bytes_long_1234"));
         config.tamper_evident = true;
         
         let mut logger = DefaultAuditLogger::new(config).unwrap();
@@ -256,7 +254,7 @@ mod tests {
         assert!(!entry.signature.is_empty());
         
         // Verify signature is base64 encoded
-        assert!(base64::decode(&entry.signature).is_ok());
+        assert!(base64::engine::general_purpose::STANDARD.decode(&entry.signature).is_ok());
     }
 
     #[test]
@@ -392,7 +390,7 @@ mod tests {
         }
         
         // Verify all events were created successfully
-        let logger_guard = logger.lock().unwrap();
+        let _logger_guard = logger.lock().unwrap();
         // Note: We can't easily verify the count without accessing internal state,
         // but the fact that no panics occurred is a good sign
     }

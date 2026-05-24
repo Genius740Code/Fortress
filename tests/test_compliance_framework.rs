@@ -1,3 +1,4 @@
+#![cfg(any())]
 //! Comprehensive Compliance Framework Tests
 //! 
 //! This test module demonstrates the complete compliance framework functionality

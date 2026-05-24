@@ -3,12 +3,10 @@
 //! This module contains comprehensive security tests for the WASM runtime,
 //! testing sandbox isolation, memory safety, resource limits, and attack prevention.
 
-use fortress_core::wasm_runtime::{WasmPlugin, WasmPluginConfig, WasmPluginLoader};
-use fortress_core::plugin::{Plugin, PluginContext, PluginInput, PluginResult, PluginMetadata, PluginCapability};
-use fortress_core::error::{FortressError, Result};
+use fortress_core::wasm_runtime::{WasmPluginConfig, WasmPluginLoader};
+use fortress_core::plugin::{Plugin, PluginContext, PluginInput, PluginMetadata, PluginCapability};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
-use tokio::time::sleep;
 use futures;
 
 /// Test helper to create a secure WASM plugin configuration
@@ -47,7 +45,7 @@ fn create_test_metadata(id: &str, name: &str) -> PluginMetadata {
         author: "Fortress Security Team".to_string(),
         capabilities: vec![PluginCapability::Authentication],
         wasm_module: None,
-        config_schema: serde_json::Value::Null,
+        config_schema: None,
     }
 }
 
@@ -82,6 +80,9 @@ async fn test_wasm_sandbox_isolation() {
         metadata: plugin.metadata().clone(),
         encryption_access: false,
         storage_access: false,
+        user_id: None,
+        session_id: None,
+        request_id: None,
     };
     
     // Initialize should work within sandbox
@@ -93,6 +94,8 @@ async fn test_wasm_sandbox_isolation() {
         action: "test_operation".to_string(),
         data: serde_json::json!({"test": "value"}),
         parameters: HashMap::new(),
+        operation: None,
+        timestamp: None,
     };
     
     let exec_result = plugin.execute(input).await;
@@ -114,6 +117,9 @@ async fn test_memory_limits_enforcement() {
         metadata: plugin.metadata().clone(),
         encryption_access: false,
         storage_access: false,
+        user_id: None,
+        session_id: None,
+        request_id: None,
     };
     
     plugin.initialize(context).await.unwrap();
@@ -123,6 +129,8 @@ async fn test_memory_limits_enforcement() {
         action: "memory_intensive_operation".to_string(),
         data: serde_json::json!({"large_data": "x".repeat(10 * 1024 * 1024)}), // 10MB string
         parameters: HashMap::new(),
+        operation: None,
+        timestamp: None,
     };
     
     let start_time = Instant::now();
@@ -159,6 +167,9 @@ async fn test_execution_time_limits() {
         metadata: plugin.metadata().clone(),
         encryption_access: false,
         storage_access: false,
+        user_id: None,
+        session_id: None,
+        request_id: None,
     };
     
     plugin.initialize(context).await.unwrap();
@@ -171,6 +182,8 @@ async fn test_execution_time_limits() {
             "delay_ms": 1
         }),
         parameters: HashMap::new(),
+        operation: None,
+        timestamp: None,
     };
     
     let start_time = Instant::now();
@@ -204,6 +217,9 @@ async fn test_fuel_metering_enforcement() {
         metadata: plugin.metadata().clone(),
         encryption_access: false,
         storage_access: false,
+        user_id: None,
+        session_id: None,
+        request_id: None,
     };
     
     plugin.initialize(context).await.unwrap();
@@ -216,6 +232,8 @@ async fn test_fuel_metering_enforcement() {
             "iterations": 10000
         }),
         parameters: HashMap::new(),
+        operation: None,
+        timestamp: None,
     };
     
     let result = plugin.execute(fuel_intensive_input).await;
@@ -251,6 +269,9 @@ async fn test_host_function_access_control() {
         metadata: plugin.metadata().clone(),
         encryption_access: false,
         storage_access: false,
+        user_id: None,
+        session_id: None,
+        request_id: None,
     };
     
     plugin.initialize(context).await.unwrap();
@@ -262,6 +283,8 @@ async fn test_host_function_access_control() {
             "functions": ["fortress_log", "fortress_config_get", "fortress_timestamp"]
         }),
         parameters: HashMap::new(),
+        operation: None,
+        timestamp: None,
     };
     
     let result = plugin.execute(allowed_input).await;
@@ -287,6 +310,9 @@ async fn test_host_function_access_control() {
         metadata: plugin2.metadata().clone(),
         encryption_access: false,
         storage_access: false,
+        user_id: None,
+        session_id: None,
+        request_id: None,
     };
     
     plugin2.initialize(context2).await.unwrap();
@@ -298,6 +324,8 @@ async fn test_host_function_access_control() {
             "functions": ["fortress_file_access", "fortress_network_call", "fortress_system_exec"]
         }),
         parameters: HashMap::new(),
+        operation: None,
+        timestamp: None,
     };
     
     let result = plugin2.execute(disallowed_input).await;
@@ -350,6 +378,9 @@ async fn test_plugin_isolation_between_instances() {
         metadata: plugin1.metadata().clone(),
         encryption_access: false,
         storage_access: false,
+        user_id: None,
+        session_id: None,
+        request_id: None,
     };
     
     let context2 = PluginContext {
@@ -357,6 +388,9 @@ async fn test_plugin_isolation_between_instances() {
         metadata: plugin2.metadata().clone(),
         encryption_access: false,
         storage_access: false,
+        user_id: None,
+        session_id: None,
+        request_id: None,
     };
     
     let context3 = PluginContext {
@@ -364,7 +398,17 @@ async fn test_plugin_isolation_between_instances() {
         metadata: plugin3.metadata().clone(),
         encryption_access: false,
         storage_access: false,
+        user_id: None,
+        session_id: None,
+        request_id: None,
     };
+
+    assert!(plugin1.initialize(context1).await.is_ok());
+    assert!(plugin2.initialize(context2).await.is_ok());
+    assert!(plugin3.initialize(context3).await.is_ok());
+
+    assert_ne!(plugin1.metadata().id, plugin2.metadata().id);
+    assert_ne!(plugin2.metadata().id, plugin3.metadata().id);
 }
 
 #[tokio::test]
@@ -380,6 +424,9 @@ async fn test_resource_cleanup_on_error() {
         metadata: plugin.metadata().clone(),
         encryption_access: false,
         storage_access: false,
+        user_id: None,
+        session_id: None,
+        request_id: None,
     };
     
     plugin.initialize(context).await.unwrap();
@@ -389,9 +436,11 @@ async fn test_resource_cleanup_on_error() {
         action: "cause_error".to_string(),
         data: serde_json::json!({"error_type": "runtime_error"}),
         parameters: HashMap::new(),
+        operation: None,
+        timestamp: None,
     };
     
-    let result = plugin.execute(error_input).await;
+    let _ = plugin.execute(error_input).await;
     
     // Even if execution fails, cleanup should work
     let cleanup_result = plugin.cleanup().await;
@@ -411,10 +460,13 @@ async fn test_concurrent_plugin_execution() {
         let plugin = loader.load_from_bytes(&create_valid_wasm_bytes(), metadata).unwrap();
         
         let context = PluginContext {
-            config: HashMap::from([("instance_id".to_string(), serde_json::Value::String(i.to_string())]),
+            config: HashMap::from([("instance_id".to_string(), serde_json::Value::String(i.to_string()))]),
             metadata: plugin.metadata().clone(),
             encryption_access: false,
             storage_access: false,
+            user_id: None,
+            session_id: None,
+            request_id: None,
         };
         
         plugins.push(plugin);
@@ -438,6 +490,8 @@ async fn test_concurrent_plugin_execution() {
             action: "concurrent_test".to_string(),
             data: serde_json::json!({"plugin_index": i}),
             parameters: HashMap::new(),
+            operation: None,
+            timestamp: None,
         };
         plugin.execute(input)
     }).collect();
@@ -511,6 +565,9 @@ async fn test_plugin_health_monitoring() {
         metadata: plugin.metadata().clone(),
         encryption_access: false,
         storage_access: false,
+        user_id: None,
+        session_id: None,
+        request_id: None,
     };
     
     plugin.initialize(context).await.unwrap();
@@ -525,6 +582,8 @@ async fn test_plugin_health_monitoring() {
             action: "health_test_operation".to_string(),
             data: serde_json::json!({"iteration": i}),
             parameters: HashMap::new(),
+            operation: None,
+            timestamp: None,
         };
         
         let _ = plugin.execute(input).await;
@@ -553,6 +612,9 @@ async fn test_attack_vector_prevention() {
         metadata: plugin.metadata().clone(),
         encryption_access: false,
         storage_access: false,
+        user_id: None,
+        session_id: None,
+        request_id: None,
     };
     
     plugin.initialize(context).await.unwrap();
@@ -565,6 +627,8 @@ async fn test_attack_vector_prevention() {
             "target": "stack"
         }),
         parameters: HashMap::new(),
+        operation: None,
+        timestamp: None,
     };
     
     let result = plugin.execute(buffer_overflow_input).await;
@@ -576,6 +640,8 @@ async fn test_attack_vector_prevention() {
         action: "infinite_loop".to_string(),
         data: serde_json::json!({"type": "while_true"}),
         parameters: HashMap::new(),
+        operation: None,
+        timestamp: None,
     };
     
     let start_time = Instant::now();
@@ -594,6 +660,8 @@ async fn test_attack_vector_prevention() {
             "allocation_count": 1000
         }),
         parameters: HashMap::new(),
+        operation: None,
+        timestamp: None,
     };
     
     let result = plugin.execute(memory_exhaustion_input).await;
@@ -608,6 +676,8 @@ async fn test_attack_vector_prevention() {
             "injected_args": ["rm -rf /"]
         }),
         parameters: HashMap::new(),
+        operation: None,
+        timestamp: None,
     };
     
     let result = plugin.execute(injection_input).await;
@@ -633,6 +703,9 @@ async fn test_plugin_lifecycle_security() {
         metadata: plugin.metadata().clone(),
         encryption_access: false,
         storage_access: false,
+        user_id: None,
+        session_id: None,
+        request_id: None,
     };
     
     let init_result = plugin.initialize(secure_context).await;
@@ -646,6 +719,8 @@ async fn test_plugin_lifecycle_security() {
             "validation_required": true
         }),
         parameters: HashMap::new(),
+        operation: None,
+        timestamp: None,
     };
     
     let exec_result = plugin.execute(secure_input).await;
@@ -673,6 +748,9 @@ async fn test_performance_under_security_constraints() {
         metadata: plugin.metadata().clone(),
         encryption_access: false,
         storage_access: false,
+        user_id: None,
+        session_id: None,
+        request_id: None,
     };
     
     plugin.initialize(context).await.unwrap();
@@ -690,6 +768,8 @@ async fn test_performance_under_security_constraints() {
                 "sandbox_active": true
             }),
             parameters: HashMap::new(),
+            operation: None,
+            timestamp: None,
         };
         
         operations.push(plugin.execute(input));
@@ -734,6 +814,9 @@ async fn test_error_handling_and_recovery() {
         metadata: plugin.metadata().clone(),
         encryption_access: false,
         storage_access: false,
+        user_id: None,
+        session_id: None,
+        request_id: None,
     };
     
     plugin.initialize(context).await.unwrap();
@@ -743,6 +826,8 @@ async fn test_error_handling_and_recovery() {
         action: "non_existent_operation".to_string(),
         data: serde_json::json!({}),
         parameters: HashMap::new(),
+        operation: None,
+        timestamp: None,
     };
     
     let result = plugin.execute(invalid_input).await;
@@ -753,6 +838,8 @@ async fn test_error_handling_and_recovery() {
         action: "valid_operation".to_string(),
         data: serde_json::json!({"invalid": "data"}),
         parameters: HashMap::new(),
+        operation: None,
+        timestamp: None,
     };
     
     let result = plugin.execute(malformed_input).await;
@@ -763,6 +850,8 @@ async fn test_error_handling_and_recovery() {
         action: "valid_operation".to_string(),
         data: serde_json::json!({"test": "recovery"}),
         parameters: HashMap::new(),
+        operation: None,
+        timestamp: None,
     };
     
     let result = plugin.execute(recovery_input).await;

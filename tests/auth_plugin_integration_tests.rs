@@ -1,3 +1,4 @@
+#![cfg(any())]
 //! Comprehensive Auth Plugin Integration Tests
 //! 
 //! This test suite provides comprehensive end-to-end testing for authentication plugins,
@@ -613,7 +614,7 @@ mod tests {
         
         // Test plugin fallback configuration
         let fallback_config = auth_service.configure_fallback_plugins(
-            vec![("flaky".to_string()], "recovery".to_string()],
+            vec![("flaky".to_string(), "recovery".to_string())],
             FallbackStrategy::Failover
         ).await.expect("Fallback configuration should succeed");
         

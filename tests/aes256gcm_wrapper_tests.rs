@@ -138,7 +138,7 @@ mod tests {
         }
         
         // Test invalid ciphertext (correct length but invalid content)
-        let mut invalid_ciphertext = vec![0u8; 28]; // 12 nonce + 16 tag
+        let invalid_ciphertext = vec![0u8; 28]; // 12 nonce + 16 tag
         let result = aes.decrypt(&invalid_ciphertext, &key);
         assert!(result.is_err(), "Should reject invalid ciphertext");
         
@@ -409,7 +409,7 @@ mod tests {
         let aes = Aes256GcmWrapper::new();
         let plaintext = b"Avalanche test - small key changes should produce completely different ciphertexts";
         
-        let mut base_key = [0u8; 32];
+        let base_key = [0u8; 32];
         
         // Test that flipping one bit in the key produces completely different ciphertext
         for byte_pos in 0..32 {

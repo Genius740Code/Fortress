@@ -5,11 +5,9 @@
 //! Rego policy integration, PKCE support, client management, and security scenarios.
 
 use fortress_core::oidc_provider::*;
-use fortress_core::auth::{AuthManager, User, Role, AuthPermission};
-use fortress_core::error::FortressError;
+use fortress_core::auth::AuthManager;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
-use std::sync::Arc;
 use sha2::Digest;
 use base64::Engine;
 
@@ -131,6 +129,7 @@ mod tests {
     }
 
     /// Helper function to get current timestamp
+    #[allow(dead_code)]
     fn current_timestamp() -> u64 {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)

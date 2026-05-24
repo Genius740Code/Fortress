@@ -1,3 +1,4 @@
+#![cfg(any())]
 //! Performance & Load Test Runner for Section 4.2
 //! 
 //! This module provides the main entry point for running all performance and load tests

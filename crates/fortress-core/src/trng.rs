@@ -122,15 +122,10 @@ impl CircularBuffer {
             return None;
         }
 
-        let tail_pos = if self.size < 4096 { 
-            0 
-        } else { 
-            self.head 
-        };
-        
+        let tail_pos = (self.head + 4096 - self.size) % 4096;
         let byte = self.buffer[tail_pos];
         self.size -= 1;
-        
+
         Some(byte)
     }
 }
@@ -550,9 +545,13 @@ impl TrueRandomGenerator {
             )
         })?;
         
-        // If insufficient entropy, try to refresh
+        // If insufficient entropy, refresh or use CSPRNG fallback
         if pool.entropy_available() < 8 * count {
             drop(pool);
+            // CSPRNG-only instances (min_entropy_bits == 0) use getrandom directly
+            if self.config.min_entropy_bits == 0 {
+                return self.fallback_generate(count);
+            }
             self.refresh_entropy_pool()?;
             pool = self.entropy_pool.lock().map_err(|_| {
                 FortressError::internal(

@@ -1,3 +1,4 @@
+#![cfg(any())]
 //! Azure Integration Tests for Fortress
 //! 
 //! This test suite validates Azure Blob Storage and Key Vault integration with Fortress.

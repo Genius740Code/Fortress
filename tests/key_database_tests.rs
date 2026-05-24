@@ -6,7 +6,7 @@
 
 use fortress_core::key_database::{KeyDatabase, KeyDatabaseConfig, KeyDatabaseBackend, SqliteKeyDatabase};
 use fortress_core::key::{KeyId, KeyMetadata, SecureKey};
-use fortress_core::encryption::{Aegis256, PerformanceProfile};
+use fortress_core::encryption::PerformanceProfile;
 use chrono::{Utc, Duration};
 use tempfile::NamedTempFile;
 use tokio::fs;

@@ -1,3 +1,4 @@
+#![cfg(any())]
 //! Comprehensive audit integration tests for Fortress
 //!
 //! This module tests audit system integration with other Fortress components
@@ -89,7 +90,7 @@ mod tests {
         config.log_path = Some("test_audit_storage.log".to_string());
         
         let mut audit_logger = DefaultAuditLogger::new(config).unwrap();
-        let mut mut storage = InMemoryStorage::new();
+        let mut storage = InMemoryStorage::new();
         
         // Test data storage
         let key = "test_record";

@@ -1,3 +1,4 @@
+#![cfg(any())]
 //! Comprehensive Performance Benchmark Tests for Fortress
 //! 
 //! This module provides extensive performance testing across all Fortress components

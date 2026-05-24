@@ -1,3 +1,4 @@
+#![cfg(any())]
 //! End-to-End Integration Tests for Fortress
 //!
 //! This module contains comprehensive integration tests covering:

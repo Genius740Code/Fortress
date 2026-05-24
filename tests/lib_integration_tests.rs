@@ -3,12 +3,9 @@
 //! This test suite provides comprehensive coverage for Fortress library integration functionality,
 //! ensuring all components work together seamlessly and maintain proper interoperability.
 
-use fortress_core::prelude::*;
-use fortress_core::encryption::{Aes256Gcm, ChaCha20Poly1305};
-use fortress_core::key::{KeyManager, SecureKey, InMemoryKeyManager};
+use fortress_core::encryption::{Aes256Gcm, ChaCha20Poly1305, EncryptionAlgorithm};
+use fortress_core::key::{KeyManager, InMemoryKeyManager};
 use std::time::Instant;
-use std::collections::HashMap;
-use uuid::Uuid;
 
 #[cfg(test)]
 mod tests {
@@ -168,6 +165,7 @@ mod tests {
 
 // Mock structures and implementations for testing
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 struct FortressConfig {
     security_level: SecurityLevel,
@@ -193,6 +191,7 @@ impl Default for FortressConfig {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 enum SecurityLevel {
     Low,
@@ -200,6 +199,7 @@ enum SecurityLevel {
     High,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 struct ClusterConfig {
     node_id: String,
@@ -210,6 +210,7 @@ struct ClusterConfig {
     replication_factor: usize,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 struct StorageConfig {
     backend_type: String,

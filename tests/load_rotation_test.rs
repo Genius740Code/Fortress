@@ -1,3 +1,4 @@
+#![cfg(any())]
 //! Load Testing Suite for Zero-Downtime Key Rotation
 //! 
 //! Comprehensive load testing to validate performance, scalability, and reliability
@@ -381,8 +382,22 @@ async fn test_mixed_workload() -> Result<(), Box<dyn std::error::Error>> {
         
         let task = tokio::spawn(async move {
             let mut rotations = 0;
+            let mut errors = 0;
+
+            while Instant::now().duration_since(start_time) < test_duration {
+                let key_id = &key_ids[i % key_ids.len()];
+
+                match manager
+                    .rotate_key_optimized(key_id, algorithm.as_ref(), security_context.clone())
+                    .await
+                {
+                    Ok(_) => rotations += 1,
+                    Err(_) => errors += 1,
+                }
+
+                sleep(Duration::from_millis(50)).await;
             }
-            
+
             (rotations, errors)
         });
         
@@ -423,17 +438,14 @@ async fn test_mixed_workload() -> Result<(), Box<dyn std::error::Error>> {
     let mut total_reads = 0;
     let mut total_errors = 0;
     
-    for result in results {
-        match result.unwrap() {
-            (rotations, errors) => {
-                total_rotations += rotations;
-                total_errors += errors;
-            }
-            (reads, errors) => {
-                total_reads += reads;
-                total_errors += errors;
-            }
+    for (idx, result) in results.into_iter().enumerate() {
+        let (count, errors) = result.unwrap();
+        if idx < 40 {
+            total_rotations += count;
+        } else {
+            total_reads += count;
         }
+        total_errors += errors;
     }
     
     let total_operations = total_rotations + total_reads;

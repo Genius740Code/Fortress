@@ -9,11 +9,10 @@
 //! NOTE: This example is temporarily disabled due to missing module dependencies.
 //! Core plugin functionality is available in the main fortress-core library.
 
-use fortress_core::prelude::*;
 use tracing::info;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)

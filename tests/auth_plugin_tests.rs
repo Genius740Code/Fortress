@@ -8,9 +8,9 @@ use fortress_core::auth_plugin::{
     AuthPlugin, AuthPluginManager, AuthPluginManagerConfig, AuthContext, AuthRequest, 
     AuthCredentials, AuthResult, AuthUserInfo, AuthPluginMetadata, AuthPluginCapabilities
 };
-use fortress_core::auth::{User, AuthToken, TokenClaims};
+use fortress_core::auth::User;
 use fortress_core::error::{FortressError, Result};
-use serde_json::{json, Value};
+use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -21,6 +21,7 @@ mod tests {
     use super::*;
 
     /// Helper function to create test user
+    #[allow(dead_code)]
     fn create_test_user(username: &str, email: &str) -> User {
         let now = Utc::now().timestamp() as u64;
         User {
@@ -89,14 +90,14 @@ mod tests {
     #[tokio::test]
     async fn test_plugin_execution_validation() {
         let config = AuthPluginManagerConfig::default();
-        let manager = AuthPluginManager::new(config);
+        let _manager = AuthPluginManager::new(config);
         
         // Create test authentication context
-        let context = create_test_auth_context();
+        let _context = create_test_auth_context();
         
         // Test plugin execution with mock plugin
         let mock_plugin = MockAuthPlugin::new();
-        let plugin_name = "mock_auth".to_string();
+        let _plugin_name = "mock_auth".to_string();
         
         // Since we can't register plugins directly, test with basic functionality
         // Test plugin metadata
@@ -166,7 +167,7 @@ mod tests {
     #[tokio::test]
     async fn test_plugin_performance_concurrency() {
         let config = AuthPluginManagerConfig::default();
-        let manager = AuthPluginManager::new(config);
+        let _manager = AuthPluginManager::new(config);
         
         // Test with multiple performance plugins directly
         let plugin_names: Vec<String> = (0..5).map(|i| format!("perf_plugin_{}", i)).collect();
@@ -244,7 +245,7 @@ mod tests {
     #[tokio::test]
     async fn test_plugin_security_validation() {
         let config = AuthPluginManagerConfig::default();
-        let manager = AuthPluginManager::new(config);
+        let _manager = AuthPluginManager::new(config);
         
         // Test plugin signature validation
         let secure_plugin = SecureAuthPlugin::new();
@@ -301,7 +302,7 @@ mod tests {
         }
         
         // Test context security validation
-        let mut malicious_context = context.clone();
+        let malicious_context = context.clone();
         let mut malicious_additional_data = HashMap::new();
         malicious_additional_data.insert("sql_injection".to_string(), json!("'; DROP TABLE users; --"));
         
@@ -726,7 +727,7 @@ mod tests {
             }
         }
         
-        async fn validate_token(&self, token: &str) -> Result<AuthUserInfo> {
+        async fn validate_token(&self, _token: &str) -> Result<AuthUserInfo> {
             Ok(AuthUserInfo {
                 id: Uuid::new_v4().to_string(),
                 user_id: Uuid::new_v4().to_string(),
@@ -826,7 +827,7 @@ mod tests {
             })
         }
         
-        async fn validate_token(&self, token: &str) -> Result<AuthUserInfo> {
+        async fn validate_token(&self, _token: &str) -> Result<AuthUserInfo> {
             // Simulate some work
             tokio::time::sleep(tokio::time::Duration::from_millis(1)).await;
             
@@ -1081,7 +1082,7 @@ mod tests {
             })
         }
         
-        async fn validate_token(&self, token: &str) -> Result<AuthUserInfo> {
+        async fn validate_token(&self, _token: &str) -> Result<AuthUserInfo> {
             if !self.initialized.load(std::sync::atomic::Ordering::SeqCst) {
                 return Err(FortressError::authentication("Plugin not initialized".to_string(), None));
             }

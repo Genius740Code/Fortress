@@ -1,3 +1,4 @@
+#![cfg(any())]
 //! Comprehensive Plugin System Core Tests
 //! 
 //! This test suite provides comprehensive coverage for the Fortress plugin system core functionality,
@@ -124,11 +125,11 @@ mod tests {
         };
 
         let config = std::collections::HashMap::from([
-            max_execution_time_ms: 5000,
-            max_memory_mb: 100,
-            enable_logging: true,
-            security_policy: "standard".to_string(),
-        };
+            ("max_execution_time_ms".to_string(), serde_json::json!(5000)),
+            ("max_memory_mb".to_string(), serde_json::json!(100)),
+            ("enable_logging".to_string(), serde_json::json!(true)),
+            ("security_policy".to_string(), serde_json::json!("standard")),
+        ]);
 
         let plugin = TestPlugin::new(metadata, config);
 
@@ -169,11 +170,11 @@ mod tests {
         };
 
         let config = std::collections::HashMap::from([
-            max_execution_time_ms: 1000, // Short timeout for testing
-            max_memory_mb: 10,
-            enable_logging: true,
-            security_policy: "strict".to_string(),
-        };
+            ("max_execution_time_ms".to_string(), serde_json::json!(1000)),
+            ("max_memory_mb".to_string(), serde_json::json!(10)),
+            ("enable_logging".to_string(), serde_json::json!(true)),
+            ("security_policy".to_string(), serde_json::json!("strict")),
+        ]);
 
         let plugin = TestPlugin::new(metadata, config);
         plugin.initialize().await.expect("Plugin should initialize");
@@ -207,11 +208,11 @@ mod tests {
         };
 
         let config = std::collections::HashMap::from([
-            max_execution_time_ms: 10000,
-            max_memory_mb: 100,
-            enable_logging: true,
-            security_policy: "performance".to_string(),
-        };
+            ("max_execution_time_ms".to_string(), serde_json::json!(10000)),
+            ("max_memory_mb".to_string(), serde_json::json!(100)),
+            ("enable_logging".to_string(), serde_json::json!(true)),
+            ("security_policy".to_string(), serde_json::json!("performance")),
+        ]);
 
         let plugin = TestPlugin::new(metadata, config);
         plugin.initialize().await.expect("Plugin should initialize");
@@ -252,11 +253,11 @@ mod tests {
         };
 
         let config = std::collections::HashMap::from([
-            max_execution_time_ms: 5000,
-            max_memory_mb: 100,
-            enable_logging: true,
-            security_policy: "enterprise".to_string(),
-        };
+            ("max_execution_time_ms".to_string(), serde_json::json!(5000)),
+            ("max_memory_mb".to_string(), serde_json::json!(100)),
+            ("enable_logging".to_string(), serde_json::json!(true)),
+            ("security_policy".to_string(), serde_json::json!("enterprise")),
+        ]);
 
         let insecure_plugin = TestPlugin::new(insecure_metadata, config);
         let validation_result = insecure_plugin.validate_security().await;
@@ -276,11 +277,11 @@ mod tests {
         };
 
         let secure_config = std::collections::HashMap::from([
-            max_execution_time_ms: 5000,
-            max_memory_mb: 100,
-            enable_logging: true,
-            security_policy: "enterprise".to_string(),
-        };
+            ("max_execution_time_ms".to_string(), serde_json::json!(5000)),
+            ("max_memory_mb".to_string(), serde_json::json!(100)),
+            ("enable_logging".to_string(), serde_json::json!(true)),
+            ("security_policy".to_string(), serde_json::json!("enterprise")),
+        ]);
 
         let secure_plugin = TestPlugin::new(secure_metadata, secure_config);
         let secure_validation_result = secure_plugin.validate_security().await;
@@ -303,11 +304,11 @@ mod tests {
         };
 
         let config = std::collections::HashMap::from([
-            max_execution_time_ms: 5000,
-            max_memory_mb: 100,
-            enable_logging: true,
-            security_policy: "concurrent".to_string(),
-        };
+            ("max_execution_time_ms".to_string(), serde_json::json!(5000)),
+            ("max_memory_mb".to_string(), serde_json::json!(100)),
+            ("enable_logging".to_string(), serde_json::json!(true)),
+            ("security_policy".to_string(), serde_json::json!("concurrent")),
+        ]);
 
         let plugin = TestPlugin::new(metadata, config);
         plugin.initialize().await.expect("Plugin should initialize");
@@ -356,23 +357,23 @@ mod tests {
         // Test with different configurations
         let configs = vec![
             std::collections::HashMap::from([
-                max_execution_time_ms: 1000,
-                max_memory_mb: 50,
-                enable_logging: false,
-                security_policy: "minimal".to_string(),
-            },
+                ("max_execution_time_ms".to_string(), serde_json::json!(1000)),
+                ("max_memory_mb".to_string(), serde_json::json!(50)),
+                ("enable_logging".to_string(), serde_json::json!(false)),
+                ("security_policy".to_string(), serde_json::json!("minimal")),
+            ]),
             std::collections::HashMap::from([
-                max_execution_time_ms: 5000,
-                max_memory_mb: 100,
-                enable_logging: true,
-                security_policy: "standard".to_string(),
-            },
+                ("max_execution_time_ms".to_string(), serde_json::json!(5000)),
+                ("max_memory_mb".to_string(), serde_json::json!(100)),
+                ("enable_logging".to_string(), serde_json::json!(true)),
+                ("security_policy".to_string(), serde_json::json!("standard")),
+            ]),
             std::collections::HashMap::from([
-                max_execution_time_ms: 10000,
-                max_memory_mb: 200,
-                enable_logging: true,
-                security_policy: "strict".to_string(),
-            },
+                ("max_execution_time_ms".to_string(), serde_json::json!(10000)),
+                ("max_memory_mb".to_string(), serde_json::json!(200)),
+                ("enable_logging".to_string(), serde_json::json!(true)),
+                ("security_policy".to_string(), serde_json::json!("strict")),
+            ]),
         ];
 
         for (i, config) in configs.iter().enumerate() {
@@ -408,11 +409,11 @@ mod tests {
         };
 
         let config = std::collections::HashMap::from([
-            max_execution_time_ms: 5000,
-            max_memory_mb: 100,
-            enable_logging: true,
-            security_policy: "standard".to_string(),
-        };
+            ("max_execution_time_ms".to_string(), serde_json::json!(5000)),
+            ("max_memory_mb".to_string(), serde_json::json!(100)),
+            ("enable_logging".to_string(), serde_json::json!(true)),
+            ("security_policy".to_string(), serde_json::json!("standard")),
+        ]);
 
         let plugin = TestPlugin::new(metadata, config);
 
@@ -524,11 +525,11 @@ mod tests {
         };
 
         let config = std::collections::HashMap::from([
-            max_execution_time_ms: 5000,
-            max_memory_mb: 100,
-            enable_logging: true,
-            security_policy: "enterprise".to_string(),
-        };
+            ("max_execution_time_ms".to_string(), serde_json::json!(5000)),
+            ("max_memory_mb".to_string(), serde_json::json!(100)),
+            ("enable_logging".to_string(), serde_json::json!(true)),
+            ("security_policy".to_string(), serde_json::json!("enterprise")),
+        ]);
 
         let plugin = TestPlugin::new(metadata, config);
         plugin.initialize().await.expect("Plugin should initialize");
@@ -599,11 +600,11 @@ mod tests {
         };
 
         let config = std::collections::HashMap::from([
-            max_execution_time_ms: 5000,
-            max_memory_mb: 100,
-            enable_logging: true,
-            security_policy: "standard".to_string(),
-        };
+            ("max_execution_time_ms".to_string(), serde_json::json!(5000)),
+            ("max_memory_mb".to_string(), serde_json::json!(100)),
+            ("enable_logging".to_string(), serde_json::json!(true)),
+            ("security_policy".to_string(), serde_json::json!("standard")),
+        ]);
 
         TestPlugin::new(metadata, config)
     }

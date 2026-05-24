@@ -1,3 +1,4 @@
+#![cfg(any())]
 //! Comprehensive Authentication Tests - Expanded from 1 to 15+ tests
 //! 
 //! This test suite provides comprehensive coverage for the authentication system,

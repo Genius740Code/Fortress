@@ -33,21 +33,13 @@ impl EncryptionAlgorithm for Aes256GcmWrapper {
             ));
         }
 
-        // Generate random nonce
-        let nonce = match crate::trng::random_bytes(self.nonce_size()) {
-            Ok(bytes) => bytes,
-            Err(_) => {
-                // Fallback to getrandom
-                let mut nonce = vec![0u8; self.nonce_size()];
-                getrandom::getrandom(&mut nonce)
-                    .map_err(|_e| FortressError::encryption(
-                        "Failed to generate nonce: random error".to_string(),
-                        self.name().to_string(),
-                        EncryptionErrorCode::EncryptionFailed,
-                    ))?;
-                nonce
-            }
-        };
+        // Generate a random nonce (CSPRNG; avoid per-operation TRNG refresh on hot path)
+        let mut nonce = vec![0u8; self.nonce_size()];
+        getrandom::getrandom(&mut nonce).map_err(|_e| FortressError::encryption(
+            "Failed to generate nonce: random error".to_string(),
+            self.name().to_string(),
+            EncryptionErrorCode::EncryptionFailed,
+        ))?;
 
         // Create cipher with the provided key
         let key_array: [u8; 32] = key.try_into().map_err(|_| FortressError::encryption(

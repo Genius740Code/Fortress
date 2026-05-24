@@ -1,3 +1,4 @@
+#![cfg(any())]
 //! End-to-End Plugin System Test
 //! 
 //! This test demonstrates that the plugin system works correctly

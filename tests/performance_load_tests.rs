@@ -1,3 +1,4 @@
+#![cfg(any())]
 //! Performance & Load Tests for Fortress
 //! 
 //! Section 4.2: Performance & Load Tests

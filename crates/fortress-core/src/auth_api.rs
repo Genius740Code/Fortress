@@ -10,7 +10,9 @@
 
 use crate::auth_plugin_manager::{PluginDeployment, PluginReloadRequest, DeploymentStrategy, PluginRegistryEntry, PluginManagerStats};
 
-use crate::auth_service::{PluginAuthService, ServiceContext, AuthServiceStats, AuthServiceConfig};
+use crate::auth_service::{PluginAuthService, ServiceContext, AuthServiceStats};
+#[cfg(test)]
+use crate::auth_service::AuthServiceConfig;
 
 use crate::auth_plugin::{AuthMethod, AuthRequest, AuthPluginMetadata};
 

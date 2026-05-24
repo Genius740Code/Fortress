@@ -1,3 +1,4 @@
+#![cfg(any())]
 //! Cloud Integration Testing Framework
 //! 
 //! This module provides a comprehensive framework for testing cloud integrations

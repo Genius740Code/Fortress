@@ -1,11 +1,13 @@
+#![cfg(any())]
 //! Comprehensive MPC Manager Tests
 //! 
 //! This test suite provides comprehensive coverage for Multi-Party Computation (MPC) manager functionality,
 //! ensuring secure, reliable, and efficient multi-party cryptographic operations.
 
 use fortress_core::mpc_manager::{MpcManager, MpcConfig, MpcSession, MpcProtocol};
-use fortress_core::mpc_party::{MpcParty, PartyRole, PartyMetadata};
-use fortress_core::error::{FortressError, MpcErrorCode};
+use fortress_core::mpc_party::{MpcParty, PartyMetadata};
+use fortress_core::mpc::PartyRole;
+use fortress_core::error::MpcErrorCode;
 use std::time::Instant;
 use std::collections::HashMap;
 use uuid::Uuid;

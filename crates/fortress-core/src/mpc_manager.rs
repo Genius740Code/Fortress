@@ -20,7 +20,6 @@ use crate::mpc::{
 
 
 use crate::mpc_network::InMemoryMpcNetwork;
-use crate::mpc_party::InMemoryMpcParty;
 
 
 

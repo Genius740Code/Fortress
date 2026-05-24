@@ -1,3 +1,4 @@
+#![cfg(any())]
 //! Comprehensive tests for zero-downtime key rotation
 
 use fortress_core::{

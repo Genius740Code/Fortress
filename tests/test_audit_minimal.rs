@@ -5,15 +5,15 @@ mod tests {
     use std::collections::HashMap;
     use fortress_core::audit::{
         AuditConfig, AuditEntry, AuditEventType, SecurityLevel, EventOutcome,
-        DefaultAuditLogger, AuditLogger,
+        DefaultAuditLogger,
     };
-    use base64;
+    use base64::Engine as _;
 
     #[test]
     fn test_basic_audit_functionality() {
         // Create audit configuration
         let mut config = AuditConfig::default();
-        config.hmac_key = Some(base64::encode("test_hmac_key_32_bytes_long_1234"));
+        config.hmac_key = Some(base64::engine::general_purpose::STANDARD.encode("test_hmac_key_32_bytes_long_1234"));
         config.log_path = Some("test_audit.log".to_string());
 
         // Create audit logger

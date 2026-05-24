@@ -6,10 +6,8 @@
 
 use fortress_core::key_preloader::{KeyPreloader, KeyPreloadConfig, PreloadStrategy};
 use fortress_core::key_database::{KeyDatabase, KeyDatabaseConfig, KeyDatabaseBackend, SqliteKeyDatabase};
-use fortress_core::key::{KeyId, KeyMetadata, SecureKey, KeyVersion};
+use fortress_core::key::{KeyId, KeyMetadata, SecureKey};
 use fortress_core::encryption::PerformanceProfile;
-use fortress_core::encryption::Aegis256;
-use fortress_core::error::Result;
 use chrono::{Utc, Duration as ChronoDuration};
 use tempfile::NamedTempFile;
 use std::sync::Arc;
@@ -28,7 +26,7 @@ mod tests {
     }
 
     /// Helper function to create test key metadata
-    fn create_test_metadata(algorithm_name: &str, purpose: &str, performance_profile: &str) -> KeyMetadata {
+    fn create_test_metadata(algorithm_name: &str, purpose: &str, _performance_profile: &str) -> KeyMetadata {
         let key_id = Uuid::new_v4().to_string();
         let version = 1u32;
         let now = Utc::now();
@@ -134,7 +132,7 @@ mod tests {
         let purpose_keys = preloader.get_preloaded_keys().await;
         
         // Verify purpose filtering
-        for (key_id, _, metadata) in &purpose_keys {
+        for (_key_id, _, metadata) in &purpose_keys {
             assert!(config.priority_purposes.contains(&metadata.purpose), 
                    "Purpose {} should be in priority list", metadata.purpose);
         }
@@ -158,7 +156,7 @@ mod tests {
         let profile_keys = preloader.get_preloaded_keys().await;
         
         // Verify profile filtering
-        for (key_id, _, metadata) in &profile_keys {
+        for (_key_id, _, _metadata) in &profile_keys {
             // Note: performance_profile is not an Option, but we can't easily convert it to string for comparison
             // This test may need adjustment based on actual PerformanceProfile implementation
         }
@@ -252,7 +250,7 @@ mod tests {
     /// Test memory efficiency testing
     #[tokio::test]
     async fn test_memory_efficiency_testing() {
-        let (db, key_ids) = create_test_database_with_keys(50).await;
+        let (db, _key_ids) = create_test_database_with_keys(50).await;
         
         // Test with strict memory limits
         let config = KeyPreloadConfig {
@@ -340,7 +338,7 @@ mod tests {
     /// Test background task management
     #[tokio::test]
     async fn test_background_task_management() {
-        let (db, key_ids) = create_test_database_with_keys(30).await;
+        let (db, _key_ids) = create_test_database_with_keys(30).await;
         
         let config = KeyPreloadConfig {
             enable_preload: true,
@@ -414,7 +412,7 @@ mod tests {
     /// Test error handling and retry logic
     #[tokio::test]
     async fn test_error_handling_retry_logic() {
-        let (db, key_ids) = create_test_database_with_keys(20).await;
+        let (db, _key_ids) = create_test_database_with_keys(20).await;
         
         let config = KeyPreloadConfig {
             enable_preload: true,
@@ -539,7 +537,7 @@ mod tests {
     /// Test preloader lifecycle management
     #[tokio::test]
     async fn test_preloader_lifecycle_management() {
-        let (db, key_ids) = create_test_database_with_keys(15).await;
+        let (db, _key_ids) = create_test_database_with_keys(15).await;
         
         let config = KeyPreloadConfig {
             enable_preload: true,
@@ -570,7 +568,7 @@ mod tests {
         assert!(after_preload_stats.total_memory_usage_bytes > 0, "Memory usage should be positive");
         
         // Test background phase
-        preloader.start_background_preloading().await;
+        let _ = preloader.start_background_preloading().await;
         
         // Wait for background activity
         sleep(TokioDuration::from_millis(200)).await;
@@ -579,7 +577,7 @@ mod tests {
         assert!(bg_stats.total_preloaded_keys > 0, "Should have preloaded keys");
         
         // Test cleanup phase
-        preloader.stop_background_preloading().await;
+        let _ = preloader.stop_background_preloading().await;
         
         preloader.clear_preloaded_keys().await
             .expect("Preload cleanup should succeed");

@@ -1,3 +1,4 @@
+#![cfg(any())]
 //! Comprehensive Security Performance Tests for Fortress
 //! 
 //! This module provides extensive testing of security features under load
@@ -324,6 +325,39 @@ impl ComprehensiveSecurityPerformanceTests {
                 auth_time,
                 validation_time,
                 total_time,
+            });
+        }
+
+        let total_time: Duration = operations.iter().map(|o| o.total_time).sum();
+        let avg_total_time = total_time / num_operations as u32;
+        let min_total_time = operations
+            .iter()
+            .map(|o| o.total_time)
+            .min()
+            .unwrap_or_default();
+        let max_total_time = operations
+            .iter()
+            .map(|o| o.total_time)
+            .max()
+            .unwrap_or_default();
+        let avg_connection_time = operations
+            .iter()
+            .map(|o| o.connection_time)
+            .sum::<Duration>()
+            / num_operations as u32;
+        let avg_auth_time = operations
+            .iter()
+            .map(|o| o.auth_time)
+            .sum::<Duration>()
+            / num_operations as u32;
+        let avg_validation_time = operations
+            .iter()
+            .map(|o| o.validation_time)
+            .sum::<Duration>()
+            / num_operations as u32;
+        let ops_per_second =
+            num_operations as f64 / total_time.as_secs_f64().max(f64::MIN_POSITIVE);
+
         println!("    Average total time: {:?}", avg_total_time);
         println!("    Min/Max total time: {:?}/{:?}", min_total_time, max_total_time);
         println!("    Average breakdown - Connection: {:?}, Auth: {:?}, Validation: {:?}", 

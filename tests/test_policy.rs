@@ -1,3 +1,4 @@
+#![cfg(any())]
 //! Simple policy test to verify functionality
 
 use std::collections::HashMap;

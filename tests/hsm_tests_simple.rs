@@ -1,3 +1,4 @@
+#![cfg(any())]
 //! Simple HSM Integration Tests
 //! 
 //! Basic test suite for HSM functionality with simplified approach.

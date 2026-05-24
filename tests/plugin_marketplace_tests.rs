@@ -337,7 +337,7 @@ async fn test_plugin_download_tracking() {
     let package = create_mock_package("popular-plugin", "Popular Plugin", "1.0.0");
     
     // Test download count
-    assert!(package.download_count >= 0, "Download count should be non-negative");
+    assert_eq!(package.download_count, 100, "Download count should match fixture");
     
     // Test download count increment (simulation)
     let mut tracked_package = package.clone();

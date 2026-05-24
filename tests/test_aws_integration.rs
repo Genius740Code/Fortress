@@ -14,9 +14,9 @@ mod aws_integration_tests {
 
     /// Test configuration for AWS integration
     struct AwsTestConfig {
-        bucket_name: String,
+        _bucket_name: String,
         region: String,
-        test_prefix: String,
+        _test_prefix: String,
         access_key_id: String,
         secret_access_key: String,
         session_token: Option<String>,
@@ -26,9 +26,9 @@ mod aws_integration_tests {
         /// Load configuration from environment variables
         fn from_env() -> Option<Self> {
             Some(Self {
-                bucket_name: env::var("FORTRESS_TEST_S3_BUCKET").ok()?,
+                _bucket_name: env::var("FORTRESS_TEST_S3_BUCKET").ok()?,
                 region: env::var("FORTRESS_TEST_AWS_REGION").unwrap_or_else(|_| "us-east-1".to_string()),
-                test_prefix: format!("fortress-test-{}", uuid::Uuid::new_v4()),
+                _test_prefix: format!("fortress-test-{}", uuid::Uuid::new_v4()),
                 access_key_id: env::var("FORTRESS_TEST_AWS_ACCESS_KEY_ID").ok()?,
                 secret_access_key: env::var("FORTRESS_TEST_AWS_SECRET_ACCESS_KEY").ok()?,
                 session_token: env::var("FORTRESS_TEST_AWS_SESSION_TOKEN").ok(),
@@ -380,7 +380,7 @@ mod aws_integration_tests {
         let storage: Box<dyn StorageBackend> = Box::new(InMemoryStorage::new());
 
         // Create Fortress encryption profile with correct constructor
-        let encryption_profile = EncryptionProfile::new(
+        let _encryption_profile = EncryptionProfile::new(
             "test-profile".to_string(),
             "aegis256".to_string(),
             std::time::Duration::from_secs(86400), // 24 hours
