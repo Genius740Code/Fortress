@@ -60,7 +60,7 @@ pub mod prelude {
     pub use crate::error::{ServerError, ServerResult};
     pub use crate::server::FortressServer;
     pub use crate::models::*;
-    pub use crate::auth::{AuthManager, TokenClaims};
+    pub use crate::auth::{AuthManager, TokenClaims, require_jwt_middleware};
     pub use crate::health::HealthChecker;
     pub use crate::metrics::MetricsCollector;
     pub use crate::middleware::AdvancedRateLimiter;

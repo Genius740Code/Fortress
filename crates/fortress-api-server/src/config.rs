@@ -320,9 +320,13 @@ pub struct FeatureFlags {
     
     /// Enable OIDC/OAuth2 authentication
     pub oidc_enabled: bool,
-    
+
     /// OIDC provider configuration
     pub oidc_config: Option<OidcConfig>,
+
+    /// Bootstrap `admin` / `admin123` in the in-memory user store (development and tests only).
+    #[serde(default)]
+    pub bootstrap_default_admin: bool,
 }
 
 impl Default for FeatureFlags {
@@ -336,6 +340,7 @@ impl Default for FeatureFlags {
             field_encryption: true,
             oidc_enabled: false,
             oidc_config: None,
+            bootstrap_default_admin: false,
         }
     }
 }

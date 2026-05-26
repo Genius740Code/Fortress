@@ -906,34 +906,38 @@ fn hash_password_legacy_test(password: &str) -> String {
     hash_password_legacy(password)
 }
 
-/// Authentication middleware
-pub async fn auth_middleware(
-    State(auth_manager): State<Arc<AuthManager>>,
+/// Extract a Bearer token from the `Authorization` header.
+pub fn extract_bearer_token(headers: &axum::http::HeaderMap) -> Option<&str> {
+    headers
+        .get(header::AUTHORIZATION)
+        .and_then(|h| h.to_str().ok())
+        .and_then(|h| h.strip_prefix("Bearer "))
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+}
+
+/// Middleware that requires a valid JWT and injects `TokenClaims` into request extensions.
+pub async fn require_jwt_middleware(
+    State(state): State<Arc<crate::handlers::AppState>>,
     mut request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
-    // Extract Authorization header
-    let auth_header = request
-        .headers()
-        .get(header::AUTHORIZATION)
-        .and_then(|h| h.to_str().ok());
+    let token = extract_bearer_token(request.headers()).ok_or(StatusCode::UNAUTHORIZED)?;
+    let claims = state
+        .auth_manager
+        .validate_token(token)
+        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+    request.extensions_mut().insert(claims);
+    Ok(next.run(request).await)
+}
 
-    if let Some(auth_header) = auth_header {
-        if let Some(token) = auth_header.strip_prefix("Bearer ") {
-            match auth_manager.validate_token(token) {
-                Ok(claims) => {
-                    // Add claims to request extensions
-                    request.extensions_mut().insert(claims);
-                    return Ok(next.run(request).await);
-                }
-                Err(_) => {
-                    return Err(StatusCode::UNAUTHORIZED);
-                }
-            }
-        }
-    }
-
-    Err(StatusCode::UNAUTHORIZED)
+/// Authentication middleware (alias for [`require_jwt_middleware`]).
+pub async fn auth_middleware(
+    state: State<Arc<crate::handlers::AppState>>,
+    request: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    require_jwt_middleware(state, request, next).await
 }
 
 /// Role-based authorization middleware

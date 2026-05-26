@@ -13,8 +13,10 @@ use crate::handlers::AppState;
 use crate::auth::{AuthManager, OidcProviderConfig, OidcUserStore, InMemoryUserStore};
 use axum::{
     Router,
+    middleware::from_fn_with_state,
     routing::{get, post, put, delete},
 };
+use crate::auth::require_jwt_middleware;
 use tracing::info;
 use fortress_core::storage::StorageBackend;
 use std::net::SocketAddr;
@@ -149,32 +151,29 @@ impl FortressServer {
     async fn create_router(&self) -> ServerResult<Router> {
         let network_config = self.config.network.clone();
 
-        // Create router with API endpoints
-        let mut router = Router::new()
-            // Health
-            .route("/health", get(crate::handlers::health_check))
+        let state = self.app_state.clone();
 
-            // Metrics
+        // Public routes (no JWT required)
+        let public_routes = Router::new()
+            .route("/health", get(crate::handlers::health_check))
             .route("/metrics", get(crate::handlers::get_prometheus_metrics))
             .route("/api/v1/metrics", get(crate::handlers::get_metrics))
-
-            // Auth
             .route("/api/v1/auth/login", post(crate::handlers::authenticate))
-            .route("/api/v1/auth/refresh", post(crate::handlers::refresh_token))
+            .route("/api/v1/auth/refresh", post(crate::handlers::refresh_token));
 
-            // Data
+        // Protected routes (valid JWT required)
+        let protected_routes = Router::new()
             .route("/api/v1/data", post(crate::handlers::store_data))
             .route("/api/v1/data", get(crate::handlers::list_data))
             .route("/api/v1/data/:key", get(crate::handlers::retrieve_data))
             .route("/api/v1/data/:key", put(crate::handlers::update_data))
             .route("/api/v1/data/:key", delete(crate::handlers::delete_data))
-
-            // Key management
             .route("/api/v1/keys", post(crate::handlers::generate_key))
+            .layer(from_fn_with_state(state.clone(), require_jwt_middleware));
 
-            // Attach state
-            .with_state(self.app_state.clone())
-            // Middleware
+        let mut router = public_routes
+            .merge(protected_routes)
+            .with_state(state)
             .layer(create_timeout_layer(30))
             .layer(create_cors_layer(&self.config.security.cors));
 
@@ -204,6 +203,8 @@ impl FortressServer {
             } else {
                 return Err(ServerError::internal("OIDC enabled but no configuration provided"));
             }
+        } else if config.features.bootstrap_default_admin {
+            Arc::new(InMemoryUserStore::with_default_admin())
         } else {
             Arc::new(InMemoryUserStore::new())
         };

@@ -30,6 +30,8 @@ use warp::Filter;
 
 use serde::{Serialize, Deserialize};
 
+use subtle::ConstantTimeEq;
+
 
 
 /// API response wrapper
@@ -106,6 +108,10 @@ pub struct AuthApiManager {
 
     plugins: Arc<RwLock<HashMap<String, String>>>,
 
+    /// Bearer token for protected management routes (when `require_auth` is enabled).
+
+    management_token: Option<Arc<str>>,
+
 }
 
 
@@ -123,6 +129,12 @@ pub struct AuthApiConfig {
     /// API authentication required
 
     pub require_auth: bool,
+
+    /// Bearer token for protected management routes. Falls back to `FORTRESS_AUTH_API_TOKEN`.
+
+    #[serde(default)]
+
+    pub api_token: Option<String>,
 
     /// Allowed origins for CORS
 
@@ -218,7 +230,12 @@ impl Default for AuthApiConfig {
 
             require_auth: true,
 
-            allowed_origins: vec!["*".to_string()],
+            api_token: None,
+
+            allowed_origins: vec![
+                "http://localhost:3000".to_string(),
+                "http://localhost:8080".to_string(),
+            ],
 
             rate_limiting: ApiRateLimitConfig {
 
@@ -244,6 +261,26 @@ impl AuthApiManager {
 
     pub fn new(auth_service: Arc<PluginAuthService>, config: AuthApiConfig) -> Self {
 
+        let management_token = if config.require_auth {
+
+            config
+
+                .api_token
+
+                .clone()
+
+                .or_else(|| std::env::var("FORTRESS_AUTH_API_TOKEN").ok())
+
+                .filter(|t| !t.is_empty())
+
+                .map(|t| Arc::<str>::from(t.into_boxed_str()))
+
+        } else {
+
+            None
+
+        };
+
         Self {
 
             auth_service,
@@ -251,6 +288,8 @@ impl AuthApiManager {
             config,
 
             plugins: Arc::new(RwLock::new(HashMap::new())),
+
+            management_token,
 
         }
 
@@ -866,9 +905,9 @@ pub fn create_auth_api_routes(
 
 
 
-    // Combine all routes
+    let require_auth = require_management_auth(api_manager_clone.clone());
 
-    list_plugins
+    let protected_routes = list_plugins
 
         .or(list_loaded)
 
@@ -886,9 +925,11 @@ pub fn create_auth_api_routes(
 
         .or(get_plugin_stats)
 
-        .or(health_check)
-
         .or(get_available_methods)
+
+        .and(require_auth);
+
+    let public_routes = health_check
 
         .or(authenticate)
 
@@ -896,11 +937,85 @@ pub fn create_auth_api_routes(
 
         .or(refresh_token)
 
-        .or(logout)
+        .or(logout);
+
+    public_routes.or(protected_routes)
 
 }
 
 
+
+#[derive(Debug)]
+
+struct ApiUnauthorized;
+
+impl warp::reject::Reject for ApiUnauthorized {}
+
+#[derive(Debug)]
+
+struct ApiAuthNotConfigured;
+
+impl warp::reject::Reject for ApiAuthNotConfigured {}
+
+/// Require a valid management Bearer token when `require_auth` is enabled.
+
+fn require_management_auth(
+
+    api_manager: Arc<AuthApiManager>,
+
+) -> impl Filter<Extract = (), Error = warp::Rejection> + Clone {
+
+    warp::header::optional::<String>("authorization")
+
+        .and(with_auth_api_manager(api_manager))
+
+        .and_then(
+
+            |authorization: Option<String>, manager: Arc<AuthApiManager>| async move {
+
+                if !manager.config.require_auth {
+
+                    return Ok(());
+
+                }
+
+                let expected = manager
+
+                    .management_token
+
+                    .as_ref()
+
+                    .ok_or_else(|| warp::reject::custom(ApiAuthNotConfigured))?;
+
+                let provided = authorization
+
+                    .as_deref()
+
+                    .and_then(|h| h.strip_prefix("Bearer "))
+
+                    .map(str::trim)
+
+                    .filter(|t| !t.is_empty())
+
+                    .ok_or_else(|| warp::reject::custom(ApiUnauthorized))?;
+
+                if provided.as_bytes().ct_eq(expected.as_bytes()).into() {
+
+                    Ok(())
+
+                } else {
+
+                    Err(warp::reject::custom(ApiUnauthorized))
+
+                }
+
+            },
+
+        )
+
+        .untuple_one()
+
+}
 
 /// Warp filter to inject the API manager
 
@@ -918,11 +1033,23 @@ fn with_auth_api_manager(
 
 /// Create CORS configuration for API
 
-pub fn create_cors_config(_config: &AuthApiConfig) -> warp::cors::Builder {
+pub fn create_cors_config(config: &AuthApiConfig) -> warp::cors::Builder {
+
+    let allow_any_origin = config.allowed_origins.iter().any(|o| o == "*");
+
+    let origins: Vec<&str> = config
+
+        .allowed_origins
+
+        .iter()
+
+        .map(String::as_str)
+
+        .filter(|o| *o != "*")
+
+        .collect();
 
     let cors = warp::cors()
-
-        .allow_any_origin()
 
         .allow_methods(vec![
 
@@ -946,13 +1073,30 @@ pub fn create_cors_config(_config: &AuthApiConfig) -> warp::cors::Builder {
 
             warp::http::header::CONTENT_TYPE,
 
-        ])
+        ]);
 
-        .allow_credentials(true);
+    if allow_any_origin {
+        // If '*' is specified, allow any origin but do NOT allow credentials.
+        // This is a security-conscious choice, as allow_any_origin + allow_credentials(true)
+        // is generally an invalid and unsafe configuration per CORS spec.
+        cors.allow_any_origin()
+    } else if !origins.is_empty() {
+        // If specific origins are provided, allow them and credentials.
+        // `allow_origins` handles dynamic reflection for multiple origins when allow_credentials is true.
+        let allowed_headers: Vec<warp::http::HeaderValue> = origins
+            .into_iter()
+            .map(|s| s.parse::<warp::http::HeaderValue>().expect("Invalid CORS origin"))
+            .collect();
 
-    
-
-    cors
+        cors.allow_origins(allowed_headers)
+            .allow_credentials(true)
+    } else {
+        // If no specific origins are provided and '*' is not used,
+        // default to disallowing CORS to maintain a secure posture.
+        // Alternatively, could log a warning or return an error if this state is unexpected.
+        // For now, we'll return a CORS builder that effectively disallows everything by default.
+        warp::cors()
+    }
 
 }
 

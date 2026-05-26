@@ -3,7 +3,7 @@
 //! This module contains all the request handlers for various API endpoints,
 //! including data storage, retrieval, key management, and authentication.
 
-use crate::auth::{AuthManager, OptionalTokenClaims};
+use crate::auth::{AuthManager, RequiredTokenClaims};
 use crate::error::{ServerError, ServerResult};
 use crate::models::*;
 use crate::metrics::MetricsCollector;
@@ -166,13 +166,13 @@ pub struct AppState {
 )]
 pub async fn store_data(
     State(state): State<Arc<AppState>>,
-    OptionalTokenClaims(claims): OptionalTokenClaims,
+    RequiredTokenClaims(claims): RequiredTokenClaims,
     Json(request): Json<StoreRequest>,
 ) -> ServerResult<Json<ApiResponse<StoreDataResponse>>> {
     let start_time = std::time::Instant::now();
     
     info!(
-        user_id = ?claims.as_ref().map(|c| &c.sub),
+        user_id = %claims.sub,
         tenant_id = ?request.tenant_id,
         "Store data request received"
     );
@@ -184,11 +184,8 @@ pub async fn store_data(
     if let Some(ref tenant_id) = request.tenant_id {
         validator.validate_string(tenant_id, "tenant_id")?;
         
-        // Validate tenant access if multi-tenant
-        if let Some(ref claims) = claims {
-            if !state.auth_manager.has_tenant_access(claims, tenant_id) {
-                return Err(ServerError::access_denied("Access denied to tenant"));
-            }
+        if !state.auth_manager.has_tenant_access(&claims, tenant_id) {
+            return Err(ServerError::access_denied("Access denied to tenant"));
         }
     }
     
@@ -352,14 +349,14 @@ pub async fn store_data(
 )]
 pub async fn retrieve_data(
     State(state): State<Arc<AppState>>,
-    OptionalTokenClaims(claims): OptionalTokenClaims,
+    RequiredTokenClaims(claims): RequiredTokenClaims,
     Path(data_id): Path<String>,
     Query(_params): Query<RetrieveRequest>,
 ) -> ServerResult<Json<ApiResponse<RetrieveDataResponse>>> {
     let start_time = std::time::Instant::now();
     
     info!(
-        user_id = ?claims.as_ref().map(|c| &c.sub),
+        user_id = %claims.sub,
         data_id = %data_id,
         "Retrieve data request received"
     );
@@ -378,12 +375,9 @@ pub async fn retrieve_data(
     let storage_record: StorageRecord = serde_json::from_slice(&record_bytes)
         .map_err(|e| ServerError::serialization(e.to_string()))?;
 
-    // Validate tenant access if multi-tenant
     if let Some(ref tenant_id) = storage_record.tenant_id {
-        if let Some(ref claims) = claims {
-            if !state.auth_manager.has_tenant_access(claims, tenant_id) {
-                return Err(ServerError::access_denied("Access denied to tenant"));
-            }
+        if !state.auth_manager.has_tenant_access(&claims, tenant_id) {
+            return Err(ServerError::access_denied("Access denied to tenant"));
         }
     }
 
@@ -440,14 +434,14 @@ pub async fn retrieve_data(
 /// Delete data handler
 pub async fn delete_data(
     State(state): State<Arc<AppState>>,
-    OptionalTokenClaims(claims): OptionalTokenClaims,
+    RequiredTokenClaims(claims): RequiredTokenClaims,
     Path(data_id): Path<String>,
     Json(request): Json<DeleteRequest>,
 ) -> ServerResult<Json<ApiResponse<DeleteResponse>>> {
     let start_time = std::time::Instant::now();
     
     info!(
-        user_id = ?claims.as_ref().map(|c| &c.sub),
+        user_id = %claims.sub,
         data_id = %data_id,
         "Delete data request received"
     );
@@ -460,12 +454,9 @@ pub async fn delete_data(
     let storage_record: StorageRecord = serde_json::from_slice(&record_bytes)
         .map_err(|e| ServerError::serialization(e.to_string()))?;
 
-    // Validate tenant access if multi-tenant
     if let Some(ref tenant_id) = storage_record.tenant_id {
-        if let Some(ref claims) = claims {
-            if !state.auth_manager.has_tenant_access(claims, tenant_id) {
-                return Err(ServerError::access_denied("Access denied to tenant"));
-            }
+        if !state.auth_manager.has_tenant_access(&claims, tenant_id) {
+            return Err(ServerError::access_denied("Access denied to tenant"));
         }
     }
 
@@ -501,13 +492,13 @@ pub async fn delete_data(
 /// List data handler
 pub async fn list_data(
     State(state): State<Arc<AppState>>,
-    OptionalTokenClaims(claims): OptionalTokenClaims,
+    RequiredTokenClaims(claims): RequiredTokenClaims,
     Query(request): Query<ListRequest>,
 ) -> ServerResult<Json<ApiResponse<ListResponse>>> {
     let start_time = std::time::Instant::now();
     
     info!(
-        user_id = ?claims.as_ref().map(|c| &c.sub),
+        user_id = %claims.sub,
         tenant_id = ?request.tenant_id,
         "List data request received"
     );
@@ -628,23 +619,20 @@ pub async fn list_data(
 /// Generate key handler
 pub async fn generate_key(
     State(state): State<Arc<AppState>>,
-    OptionalTokenClaims(claims): OptionalTokenClaims,
+    RequiredTokenClaims(claims): RequiredTokenClaims,
     Json(request): Json<KeyRequest>,
 ) -> ServerResult<Json<ApiResponse<KeyResponse>>> {
     let start_time = std::time::Instant::now();
     
     info!(
-        user_id = ?claims.as_ref().map(|c| &c.sub),
+        user_id = %claims.sub,
         algorithm = %request.algorithm,
         "Generate key request received"
     );
 
-    // Validate tenant access if multi-tenant
     if let Some(ref tenant_id) = request.tenant_id {
-        if let Some(ref claims) = claims {
-            if !state.auth_manager.has_tenant_access(claims, tenant_id) {
-                return Err(ServerError::access_denied("Access denied to tenant"));
-            }
+        if !state.auth_manager.has_tenant_access(&claims, tenant_id) {
+            return Err(ServerError::access_denied("Access denied to tenant"));
         }
     }
 
@@ -1702,16 +1690,11 @@ pub struct TenantResponse {
 )]
 pub async fn create_tenant(
     State(state): State<Arc<AppState>>,
-    OptionalTokenClaims(claims): OptionalTokenClaims,
+    RequiredTokenClaims(claims): RequiredTokenClaims,
     Json(request): Json<CreateTenantRequest>,
 ) -> ServerResult<Json<ApiResponse<TenantResponse>>> {
-    // Only admin users can create tenants
-    if let Some(ref claims) = claims {
-        if !claims.roles.contains(&"admin".to_string()) {
-            return Err(ServerError::access_denied("Admin access required"));
-        }
-    } else {
-        return Err(ServerError::auth("Authentication required"));
+    if !claims.roles.contains(&"admin".to_string()) {
+        return Err(ServerError::access_denied("Admin access required"));
     }
 
     let tenant_request = fortress_core::tenant::CreateTenantRequest {
@@ -1761,15 +1744,10 @@ pub async fn create_tenant(
 )]
 pub async fn list_tenants(
     State(state): State<Arc<AppState>>,
-    OptionalTokenClaims(claims): OptionalTokenClaims,
+    RequiredTokenClaims(claims): RequiredTokenClaims,
 ) -> ServerResult<Json<ApiResponse<Vec<TenantResponse>>>> {
-    // Only admin users can list all tenants
-    if let Some(ref claims) = claims {
-        if !claims.roles.contains(&"admin".to_string()) {
-            return Err(ServerError::access_denied("Admin access required"));
-        }
-    } else {
-        return Err(ServerError::auth("Authentication required"));
+    if !claims.roles.contains(&"admin".to_string()) {
+        return Err(ServerError::access_denied("Admin access required"));
     }
 
     match state.tenant_manager.list_tenants().await {
@@ -1811,15 +1789,10 @@ pub async fn list_tenants(
 pub async fn get_tenant_stats(
     State(state): State<Arc<AppState>>,
     Path(tenant_id): Path<String>,
-    OptionalTokenClaims(claims): OptionalTokenClaims,
+    RequiredTokenClaims(claims): RequiredTokenClaims,
 ) -> ServerResult<Json<ApiResponse<fortress_core::tenant::TenantStats>>> {
-    // Only admin users can view tenant stats
-    if let Some(ref claims) = claims {
-        if !claims.roles.contains(&"admin".to_string()) {
-            return Err(ServerError::access_denied("Admin access required"));
-        }
-    } else {
-        return Err(ServerError::auth("Authentication required"));
+    if !claims.roles.contains(&"admin".to_string()) {
+        return Err(ServerError::access_denied("Admin access required"));
     }
 
     let tenant_uuid = Uuid::parse_str(&tenant_id)
@@ -1847,15 +1820,10 @@ pub async fn get_tenant_stats(
 )]
 pub async fn admin_list_data(
     State(state): State<Arc<AppState>>,
-    OptionalTokenClaims(claims): OptionalTokenClaims,
+    RequiredTokenClaims(claims): RequiredTokenClaims,
 ) -> ServerResult<Json<ApiResponse<Vec<StorageRecord>>>> {
-    // Only admin users can access all data
-    if let Some(ref claims) = claims {
-        if !claims.roles.contains(&"admin".to_string()) {
-            return Err(ServerError::access_denied("Admin access required"));
-        }
-    } else {
-        return Err(ServerError::auth("Authentication required"));
+    if !claims.roles.contains(&"admin".to_string()) {
+        return Err(ServerError::access_denied("Admin access required"));
     }
 
     // List all data without tenant filtering

@@ -5,6 +5,7 @@
 
 use axum::{
     Router,
+    middleware::from_fn_with_state,
     routing::{get, post, put, delete},
     Json,
 };
@@ -25,9 +26,9 @@ use fortress_api_server::handlers::{
     detailed_health_check, security_health_check,
     get_prometheus_metrics, get_security_events, get_blocked_requests,
     store_data, retrieve_data, update_data, delete_data, list_data,
-    generate_key, create_tenant, list_tenants
+    generate_key, create_tenant, list_tenants, authenticate, refresh_token,
 };
-use fortress_api_server::auth::{AuthManager, InMemoryUserStore};
+use fortress_api_server::auth::{AuthManager, InMemoryUserStore, require_jwt_middleware};
 use fortress_api_server::metrics::MetricsCollector;
 use fortress_api_server::health::HealthChecker;
 use fortress_api_server::graphql::{graphql_handler, graphql_playground};
@@ -40,8 +41,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create OpenAPI specification
     let openapi = create_openapi();
 
-    // Create router with OpenAPI endpoints
-    let app = create_router(openapi).await?;
+    let state = create_app_state().await?;
+    let app = create_router_with_state(state, openapi).await?;
 
     // Start server
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
@@ -59,6 +60,13 @@ async fn create_router(_openapi: utoipa::openapi::OpenApi) -> Result<Router, Box
     // Create application state
     let state = create_app_state().await?;
 
+    create_router_with_state(state, _openapi).await
+}
+
+async fn create_router_with_state(
+    state: Arc<AppState>,
+    _openapi: utoipa::openapi::OpenApi,
+) -> Result<Router, Box<dyn std::error::Error>> {
     // Get allowed origins from environment or use secure defaults
     let allowed_origins_str = std::env::var("FORTRESS_ALLOWED_ORIGINS")
         .unwrap_or_else(|_| "https://fortress.example.com,http://localhost:3000,http://localhost:8080".to_string());
@@ -67,42 +75,34 @@ async fn create_router(_openapi: utoipa::openapi::OpenApi) -> Result<Router, Box
         .map(|s| s.trim().to_string())
         .collect::<Vec<_>>();
 
-    // Create base router with all endpoints
-    let app = Router::new()
-        // Health and API documentation
+    let public_routes = Router::new()
         .route("/health", get(health_check))
         .route("/health/detailed", get(detailed_health_check))
         .route("/health/security", get(security_health_check))
         .route("/openapi.json", get(openapi_handler))
-        
-        // Metrics and monitoring
         .route("/metrics", get(get_prometheus_metrics))
-        
-        // Security endpoints
         .route("/security/events", get(get_security_events))
         .route("/security/blocked-requests", get(get_blocked_requests))
-        
-        // GraphQL API
         .route("/graphql", get(graphql_handler).post(graphql_handler))
         .route("/graphql/playground", get(graphql_playground))
-        
-        // Data operations
+        .route("/api/v1/auth/login", post(authenticate))
+        .route("/api/v1/auth/refresh", post(refresh_token));
+
+    let protected_routes = Router::new()
         .route("/api/v1/data", post(store_data))
         .route("/api/v1/data/:key", get(retrieve_data))
         .route("/api/v1/data/:key", put(update_data))
         .route("/api/v1/data/:key", delete(delete_data))
         .route("/api/v1/data", get(list_data))
-        
-        // Key management
         .route("/api/v1/keys", post(generate_key))
-        
-        // Tenant management (admin only)
         .route("/api/v1/tenants", post(create_tenant))
         .route("/api/v1/tenants", get(list_tenants))
         .route("/api/v1/tenants/:tenant_id/stats", get(get_tenant_stats))
-        
-        // Admin operations
         .route("/api/v1/admin/data", get(admin_list_data))
+        .layer(from_fn_with_state(state.clone(), require_jwt_middleware));
+
+    let app = public_routes
+        .merge(protected_routes)
         // Middleware with restricted CORS
         .layer(
             ServiceBuilder::new()
@@ -156,10 +156,15 @@ async fn create_app_state() -> Result<Arc<AppState>, Box<dyn std::error::Error>>
         return Err("FORTRESS_JWT_SECRET must be at least 32 characters long".into());
     }
     
+    let user_store = if std::env::var("FORTRESS_BOOTSTRAP_DEFAULT_ADMIN").ok().as_deref() == Some("1") {
+        InMemoryUserStore::with_default_admin()
+    } else {
+        InMemoryUserStore::new()
+    };
     let auth_manager = Arc::new(AuthManager::new(
         &jwt_secret,
-        Duration::seconds(3600), 
-        Arc::new(InMemoryUserStore::new())
+        Duration::seconds(3600),
+        Arc::new(user_store),
     ));
     let metrics = Arc::new(MetricsCollector::new());
     let key_manager = Arc::new(fortress_core::key::InMemoryKeyManager::new());

@@ -13,7 +13,79 @@ use uuid::Uuid;
 fn default_test_config() -> ServerConfig {
     let mut config = ServerConfig::default();
     config.core.storage.backend = "in_memory".to_string();
+    config.features.bootstrap_default_admin = true;
     config
+}
+
+async fn login_access_token(app: &axum::Router) -> String {
+    let body = serde_json::json!({
+        "username": "admin",
+        "password": "admin123"
+    });
+    let (status, json) = request_json(
+        app.clone(),
+        Request::builder()
+            .method("POST")
+            .uri("/api/v1/auth/login")
+            .header("content-type", "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "login response: {json}");
+    json["data"]["access_token"]
+        .as_str()
+        .expect("access_token in login response")
+        .to_string()
+}
+
+fn auth_request(builder: http::request::Builder, token: &str) -> Request<Body> {
+    builder
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::empty())
+        .unwrap()
+}
+
+struct AuthedRouter {
+    router: axum::Router,
+    token: String,
+}
+
+impl AuthedRouter {
+    async fn new() -> Self {
+        let config = default_test_config();
+        let server = FortressServer::new(config).await.unwrap();
+        let router = server.router().await.unwrap();
+        let token = login_access_token(&router).await;
+        Self { router, token }
+    }
+
+    fn get(&self, uri: impl AsRef<str>) -> Request<Body> {
+        auth_request(
+            Request::builder().method("GET").uri(uri.as_ref()),
+            &self.token,
+        )
+    }
+
+    fn post_json(&self, uri: impl AsRef<str>, body: String) -> Request<Body> {
+        Request::builder()
+            .method("POST")
+            .uri(uri.as_ref())
+            .header("content-type", "application/json")
+            .header("authorization", format!("Bearer {}", self.token))
+            .body(Body::from(body))
+            .unwrap()
+    }
+
+    fn delete_json(&self, uri: impl AsRef<str>, body: String) -> Request<Body> {
+        Request::builder()
+            .method("DELETE")
+            .uri(uri.as_ref())
+            .header("content-type", "application/json")
+            .header("authorization", format!("Bearer {}", self.token))
+            .body(Body::from(body))
+            .unwrap()
+    }
 }
 
 async fn request_json(app: axum::Router, req: Request<Body>) -> (StatusCode, serde_json::Value) {
@@ -58,9 +130,7 @@ async fn test_health_check() {
 
 #[tokio::test]
 async fn test_store_and_retrieve_data() {
-    let config = default_test_config();
-    let server = FortressServer::new(config).await.unwrap();
-    let router = server.router().await.unwrap();
+    let app = AuthedRouter::new().await;
     
     // Test data to store
     let test_data = json!({
@@ -86,13 +156,8 @@ async fn test_store_and_retrieve_data() {
     
 
     let (status, store_body) = request_json(
-        router.clone(),
-        Request::builder()
-            .method("POST")
-            .uri("/api/v1/data")
-            .header("content-type", "application/json")
-            .body(Body::from(store_request.to_string()))
-            .unwrap(),
+        app.router.clone(),
+        app.post_json("/api/v1/data", store_request.to_string()),
     )
     .await;
 
@@ -105,12 +170,8 @@ async fn test_store_and_retrieve_data() {
     // Retrieve data
 
     let (status, retrieve_body) = request_json(
-        router,
-        Request::builder()
-            .method("GET")
-            .uri(format!("/api/v1/data/{data_id}"))
-            .body(Body::empty())
-            .unwrap(),
+        app.router,
+        app.get(format!("/api/v1/data/{data_id}")),
     )
     .await;
 
@@ -129,9 +190,7 @@ async fn test_store_and_retrieve_data() {
 
 #[tokio::test]
 async fn test_list_data() {
-    let config = default_test_config();
-    let server = FortressServer::new(config).await.unwrap();
-    let router = server.router().await.unwrap();
+    let app = AuthedRouter::new().await;
     
     // Store multiple items
     for i in 1..=3 {
@@ -146,13 +205,8 @@ async fn test_list_data() {
         });
         
         let (status, _body) = request_json(
-            router.clone(),
-            Request::builder()
-                .method("POST")
-                .uri("/api/v1/data")
-                .header("content-type", "application/json")
-                .body(Body::from(store_request.to_string()))
-                .unwrap(),
+            app.router.clone(),
+            app.post_json("/api/v1/data", store_request.to_string()),
         )
         .await;
 
@@ -160,11 +214,7 @@ async fn test_list_data() {
     }
     
     // List data
-    let (status, list_body) = request_json(
-        router,
-        Request::builder().method("GET").uri("/api/v1/data").body(Body::empty()).unwrap(),
-    )
-    .await;
+    let (status, list_body) = request_json(app.router, app.get("/api/v1/data")).await;
 
     assert_eq!(status, StatusCode::OK);
     assert!(list_body["success"].as_bool().unwrap());
@@ -184,9 +234,7 @@ async fn test_list_data() {
 
 #[tokio::test]
 async fn test_delete_data() {
-    let config = default_test_config();
-    let server = FortressServer::new(config).await.unwrap();
-    let router = server.router().await.unwrap();
+    let app = AuthedRouter::new().await;
     
     // Store data first
     let test_data = json!({
@@ -201,13 +249,8 @@ async fn test_delete_data() {
     
 
     let (status, store_body) = request_json(
-        router.clone(),
-        Request::builder()
-            .method("POST")
-            .uri("/api/v1/data")
-            .header("content-type", "application/json")
-            .body(Body::from(store_request.to_string()))
-            .unwrap(),
+        app.router.clone(),
+        app.post_json("/api/v1/data", store_request.to_string()),
     )
     .await;
 
@@ -222,13 +265,8 @@ async fn test_delete_data() {
     
 
     let (status, delete_body) = request_json(
-        router.clone(),
-        Request::builder()
-            .method("DELETE")
-            .uri(format!("/api/v1/data/{data_id}"))
-            .header("content-type", "application/json")
-            .body(Body::from(delete_request.to_string()))
-            .unwrap(),
+        app.router.clone(),
+        app.delete_json(format!("/api/v1/data/{data_id}"), delete_request.to_string()),
     )
     .await;
 
@@ -240,12 +278,8 @@ async fn test_delete_data() {
     // Verify data is gone
 
     let (status, _body) = request_json(
-        router,
-        Request::builder()
-            .method("GET")
-            .uri(format!("/api/v1/data/{data_id}"))
-            .body(Body::empty())
-            .unwrap(),
+        app.router,
+        app.get(format!("/api/v1/data/{data_id}")),
     )
     .await;
 
@@ -254,9 +288,7 @@ async fn test_delete_data() {
 
 #[tokio::test]
 async fn test_generate_key() {
-    let config = default_test_config();
-    let server = FortressServer::new(config).await.unwrap();
-    let router = server.router().await.unwrap();
+    let app = AuthedRouter::new().await;
     
     // Generate key request
     let key_request = json!({
@@ -270,13 +302,8 @@ async fn test_generate_key() {
     
 
     let (status, body) = request_json(
-        router,
-        Request::builder()
-            .method("POST")
-            .uri("/api/v1/keys")
-            .header("content-type", "application/json")
-            .body(Body::from(key_request.to_string()))
-            .unwrap(),
+        app.router,
+        app.post_json("/api/v1/keys", key_request.to_string()),
     )
     .await;
 
@@ -301,6 +328,7 @@ async fn test_field_level_encryption() {
     config.features.field_encryption = true;
     let server = FortressServer::new(config).await.unwrap();
     let router = server.router().await.unwrap();
+    let token = login_access_token(&router).await;
     
     // Test data with sensitive fields
     let test_data = json!({
@@ -336,6 +364,7 @@ async fn test_field_level_encryption() {
             .method("POST")
             .uri("/api/v1/data")
             .header("content-type", "application/json")
+            .header("authorization", format!("Bearer {token}"))
             .body(Body::from(store_request.to_string()))
             .unwrap(),
     )
@@ -357,11 +386,12 @@ async fn test_field_level_encryption() {
 
     let (status, retrieve_body) = request_json(
         router,
-        Request::builder()
-            .method("GET")
-            .uri(format!("/api/v1/data/{data_id}"))
-            .body(Body::empty())
-            .unwrap(),
+        auth_request(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/api/v1/data/{data_id}")),
+            &token,
+        ),
     )
     .await;
 
@@ -381,11 +411,10 @@ async fn test_authentication_flow() {
     let server = FortressServer::new(config).await.unwrap();
     let router = server.router().await.unwrap();
     
-    // Test login with valid credentials
+    // Test login with bootstrapped admin credentials
     let auth_request = json!({
-        "username": "test_user",
-        "password": "test_password",
-        "tenant_id": "test_tenant"
+        "username": "admin",
+        "password": "admin123"
     });
     
 
@@ -400,16 +429,11 @@ async fn test_authentication_flow() {
     )
     .await;
 
-    // This might fail if user doesn't exist, but the endpoint should be accessible.
-    assert!(status.is_success() || status == StatusCode::UNAUTHORIZED);
-
-    if status.is_success() {
-        if body["success"].as_bool().unwrap_or(false) {
-            assert!(body["data"]["access_token"].is_string());
-            assert!(body["data"]["token_type"].is_string());
-            assert!(body["data"]["expires_in"].is_number());
-        }
-    }
+    assert_eq!(status, StatusCode::OK);
+    assert!(body["success"].as_bool().unwrap_or(false));
+    assert!(body["data"]["access_token"].is_string());
+    assert!(body["data"]["token_type"].is_string());
+    assert!(body["data"]["expires_in"].is_number());
 }
 
 #[tokio::test]
@@ -443,11 +467,7 @@ async fn test_metrics_endpoint() {
 
 #[tokio::test]
 async fn test_storage_backend_integration() {
-    // Test with different storage backends
-    let config = default_test_config();
-    
-    let server = FortressServer::new(config).await.unwrap();
-    let router = server.router().await.unwrap();
+    let app = AuthedRouter::new().await;
     
     // Store and retrieve data
     let test_data = json!({
@@ -460,13 +480,8 @@ async fn test_storage_backend_integration() {
     });
 
     let (status, store_body) = request_json(
-        router.clone(),
-        Request::builder()
-            .method("POST")
-            .uri("/api/v1/data")
-            .header("content-type", "application/json")
-            .body(Body::from(store_request.to_string()))
-            .unwrap(),
+        app.router.clone(),
+        app.post_json("/api/v1/data", store_request.to_string()),
     )
     .await;
 
@@ -476,12 +491,8 @@ async fn test_storage_backend_integration() {
     // Retrieve the data
 
     let (status, retrieve_body) = request_json(
-        router,
-        Request::builder()
-            .method("GET")
-            .uri(format!("/api/v1/data/{data_id}"))
-            .body(Body::empty())
-            .unwrap(),
+        app.router,
+        app.get(format!("/api/v1/data/{data_id}")),
     )
     .await;
 
@@ -491,19 +502,13 @@ async fn test_storage_backend_integration() {
 
 #[tokio::test]
 async fn test_error_handling() {
-    let config = default_test_config();
-    let server = FortressServer::new(config).await.unwrap();
-    let router = server.router().await.unwrap();
+    let app = AuthedRouter::new().await;
 
     let non_existent_id = Uuid::new_v4().to_string();
 
     let (status, body) = request_json(
-        router,
-        Request::builder()
-            .method("GET")
-            .uri(format!("/api/v1/data/{non_existent_id}"))
-            .body(Body::empty())
-            .unwrap(),
+        app.router,
+        app.get(format!("/api/v1/data/{non_existent_id}")),
     )
     .await;
 
@@ -515,15 +520,14 @@ async fn test_error_handling() {
 
 #[tokio::test]
 async fn test_concurrent_requests() {
-    let config = default_test_config();
-    let server = FortressServer::new(config).await.unwrap();
-    let router = server.router().await.unwrap();
+    let app = AuthedRouter::new().await;
     
     // Create multiple concurrent requests
     let mut handles = Vec::new();
     
     for i in 0..10 {
-        let router = router.clone();
+        let router = app.router.clone();
+        let token = app.token.clone();
         let handle = tokio::spawn(async move {
             let test_data = json!({
                 "id": i,
@@ -540,6 +544,7 @@ async fn test_concurrent_requests() {
                     .method("POST")
                     .uri("/api/v1/data")
                     .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {token}"))
                     .body(Body::from(store_request.to_string()))
                     .unwrap(),
             )
@@ -560,9 +565,7 @@ async fn test_concurrent_requests() {
 
 #[tokio::test]
 async fn test_large_data_handling() {
-    let config = default_test_config();
-    let server = FortressServer::new(config).await.unwrap();
-    let router = server.router().await.unwrap();
+    let app = AuthedRouter::new().await;
     
     // Create large test data (within the API limit)
     // The API currently validates JSON payloads with a 100KB max size.
@@ -576,13 +579,8 @@ async fn test_large_data_handling() {
     });
 
     let (status, store_body) = request_json(
-        router.clone(),
-        Request::builder()
-            .method("POST")
-            .uri("/api/v1/data")
-            .header("content-type", "application/json")
-            .body(Body::from(store_request.to_string()))
-            .unwrap(),
+        app.router.clone(),
+        app.post_json("/api/v1/data", store_request.to_string()),
     )
     .await;
 
@@ -591,16 +589,31 @@ async fn test_large_data_handling() {
     
     // Retrieve the large data
     let (status, retrieve_body) = request_json(
-        router,
-        Request::builder()
-            .method("GET")
-            .uri(format!("/api/v1/data/{data_id}"))
-            .body(Body::empty())
-            .unwrap(),
+        app.router,
+        app.get(format!("/api/v1/data/{data_id}")),
     )
     .await;
 
     assert_eq!(status, StatusCode::OK, "retrieve response: {retrieve_body}");
     let retrieved_size = retrieve_body["data"]["data"]["size"].as_u64().unwrap();
     assert_eq!(retrieved_size, 80 * 1024);
+}
+
+#[tokio::test]
+async fn test_unauthenticated_data_access_rejected() {
+    let config = default_test_config();
+    let server = FortressServer::new(config).await.unwrap();
+    let router = server.router().await.unwrap();
+
+    let (status, _) = request_json(
+        router,
+        Request::builder()
+            .method("GET")
+            .uri("/api/v1/data")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
 }
