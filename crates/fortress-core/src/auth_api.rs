@@ -1083,12 +1083,7 @@ pub fn create_cors_config(config: &AuthApiConfig) -> warp::cors::Builder {
     } else if !origins.is_empty() {
         // If specific origins are provided, allow them and credentials.
         // `allow_origins` handles dynamic reflection for multiple origins when allow_credentials is true.
-        let allowed_headers: Vec<warp::http::HeaderValue> = origins
-            .into_iter()
-            .map(|s| s.parse::<warp::http::HeaderValue>().expect("Invalid CORS origin"))
-            .collect();
-
-        cors.allow_origins(allowed_headers)
+        cors.allow_origins(origins)
             .allow_credentials(true)
     } else {
         // If no specific origins are provided and '*' is not used,

@@ -54,14 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Create an application router with all endpoints
-async fn create_router(_openapi: utoipa::openapi::OpenApi) -> Result<Router, Box<dyn std::error::Error>> {
-    
-    // Create application state
-    let state = create_app_state().await?;
 
-    create_router_with_state(state, _openapi).await
-}
 
 async fn create_router_with_state(
     state: Arc<AppState>,

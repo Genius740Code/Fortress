@@ -29,125 +29,28 @@ impl SimdEncryptor {
     #[cfg(target_feature = "avx2")]
     #[target_feature(enable = "avx2")]
     unsafe fn encrypt_avx2(&self, plaintext: &[u8]) -> Result<Vec<u8>, FortressError> {
-        if plaintext.len() < 32 {
-            return self.algorithm.encrypt(plaintext, &self.keys);
-        }
-
-        let mut result = vec![0u8; plaintext.len()];
-        let chunks = plaintext.chunks_exact(32);
-        let remainder = chunks.remainder();
-        
-        // Process 32-byte chunks with AVX2
-        for (i, chunk) in chunks.enumerate() {
-            let data = std::arch::x86_64::_mm256_loadu_si256(
-                chunk.as_ptr() as *const std::arch::x86_64::__m256i
-            );
-            let key = std::arch::x86_64::_mm256_loadu_si256(
-                self.keys.as_ptr() as *const std::arch::x86_64::__m256i
-            );
-            
-            // Simulated AES encryption using AVX2
-            // In a real implementation, this would use _mm256_aesenc_si256
-            let encrypted = self.simulate_aes_avx2(data, key);
-            std::arch::x86_64::_mm256_storeu_si256(
-                result.as_mut_ptr().add(i * 32) as *mut std::arch::x86_64::__m256i,
-                encrypted
-            );
-        }
-
-        // Process remainder with standard encryption
-        if !remainder.is_empty() {
-            let remainder_start = plaintext.len() - remainder.len();
-            let encrypted_remainder = self.algorithm.encrypt(remainder, &self.keys)?;
-            result[remainder_start..].copy_from_slice(&encrypted_remainder);
-        }
-
-        SIMD_OPERATIONS.fetch_add(1, Ordering::Relaxed);
-        Ok(result)
+        // Fallback to the provided algorithm for secure encryption.
+        // The simulated AVX2 encryption (XOR) is insecure and has been removed.
+        self.algorithm.encrypt(plaintext, &self.keys)
     }
 
     /// Encrypt data using AVX-512 instructions (64-byte chunks)
     #[cfg(target_feature = "avx512f")]
     #[target_feature(enable = "avx512f")]
     unsafe fn encrypt_avx512(&self, plaintext: &[u8]) -> Result<Vec<u8>, FortressError> {
-        if plaintext.len() < 64 {
-            return self.algorithm.encrypt(plaintext, &self.keys);
-        }
-
-        let mut result = vec![0u8; plaintext.len()];
-        let chunks = plaintext.chunks_exact(64);
-        let remainder = chunks.remainder();
-        
-        // Process 64-byte chunks with AVX-512
-        for (i, chunk) in chunks.enumerate() {
-            let data = std::arch::x86_64::_mm512_loadu_si512(
-                chunk.as_ptr() as *const std::arch::x86_64::__m512i
-            );
-            let key = std::arch::x86_64::_mm512_loadu_si512(
-                self.keys.as_ptr() as *const std::arch::x86_64::__m512i
-            );
-            
-            // Simulated AES encryption using AVX-512
-            // In a real implementation, this would use _mm512_aesenc_epi128
-            let encrypted = self.simulate_aes_avx512(data, key);
-            std::arch::x86_64::_mm512_storeu_si512(
-                result.as_mut_ptr().add(i * 64) as *mut std::arch::x86_64::__m512i,
-                encrypted
-            );
-        }
-
-        // Process remainder with standard encryption
-        if !remainder.is_empty() {
-            let remainder_start = plaintext.len() - remainder.len();
-            let encrypted_remainder = self.algorithm.encrypt(remainder, &self.keys)?;
-            result[remainder_start..].copy_from_slice(&encrypted_remainder);
-        }
-
-        SIMD_OPERATIONS.fetch_add(1, Ordering::Relaxed);
-        Ok(result)
+        // Fallback to the provided algorithm for secure encryption.
+        // The simulated AVX-512 encryption (XOR) is insecure and has been removed.
+        self.algorithm.encrypt(plaintext, &self.keys)
     }
 
-    /// Simulate AES encryption with AVX2 (placeholder implementation)
-    #[cfg(target_feature = "avx2")]
-    #[target_feature(enable = "avx2")]
-    unsafe fn simulate_aes_avx2(
-        &self, 
-        data: std::arch::x86_64::__m256i, 
-        key: std::arch::x86_64::__m256i
-    ) -> std::arch::x86_64::__m256i {
-        // Simple XOR-based simulation for demonstration
-        // In production, this would use actual AES-NI instructions
-        std::arch::x86_64::_mm256_xor_si256(data, key)
-    }
 
-    /// Simulate AES encryption with AVX-512 (placeholder implementation)
-    #[cfg(target_feature = "avx512f")]
-    #[target_feature(enable = "avx512f")]
-    unsafe fn simulate_aes_avx512(
-        &self, 
-        data: std::arch::x86_64::__m512i, 
-        key: std::arch::x86_64::__m512i
-    ) -> std::arch::x86_64::__m512i {
-        // Simple XOR-based simulation for demonstration
-        // In production, this would use actual AES-NI instructions
-        std::arch::x86_64::_mm512_xor_epi64(data, key)
-    }
 
     /// Encrypt data using the best available SIMD instruction set
     pub fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>, FortressError> {
-        if Self::is_avx512_supported() && plaintext.len() >= 64 {
-            #[cfg(target_feature = "avx512f")]
-            unsafe { self.encrypt_avx512(plaintext) }
-            #[cfg(not(target_feature = "avx512f"))]
-            self.algorithm.encrypt(plaintext, &self.keys)
-        } else if Self::is_avx2_supported() && plaintext.len() >= 32 {
-            #[cfg(target_feature = "avx2")]
-            unsafe { self.encrypt_avx2(plaintext) }
-            #[cfg(not(target_feature = "avx2"))]
-            self.algorithm.encrypt(plaintext, &self.keys)
-        } else {
-            self.algorithm.encrypt(plaintext, &self.keys)
-        }
+        // Since `encrypt_avx2` and `encrypt_avx512` now defer to `self.algorithm.encrypt`,
+        // and for simplicity and to ensure correct encryption, we directly use the algorithm here.
+        // The SIMD methods can be re-enabled once proper AES-NI implementations are added.
+        self.algorithm.encrypt(plaintext, &self.keys)
     }
 
     /// Check if AVX2 is supported

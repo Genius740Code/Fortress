@@ -4,6 +4,7 @@
 //! including token generation, validation, and refresh capabilities.
 
 use serde::{Deserialize, Serialize};
+use subtle::ConstantTimeEq;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -207,7 +208,7 @@ fn validate_jwt_token(token: &str, config: &JwtConfig) -> Result<JwtClaims, Stri
     let expected_signature = create_signature(&signing_input, &config.secret)?;
     let provided_signature = parts[2];
     
-    if expected_signature != provided_signature {
+    if !bool::from(provided_signature.as_bytes().ct_eq(expected_signature.as_bytes())) {
         return Err("Invalid signature".to_string());
     }
     
@@ -224,19 +225,17 @@ fn base64url_decode(data: &str) -> Result<Vec<u8>, base64::DecodeError> {
 }
 
 fn create_signature(data: &str, secret: &str) -> Result<String, String> {
-    // Simple HMAC-SHA256 implementation (in production, use proper crypto)
-    use sha2::{Sha256, Digest};
-    let mut hasher = Sha256::new();
-    hasher.update(data.as_bytes());
-    hasher.update(secret.as_bytes());
-    let result = hasher.finalize();
+    use hmac::{Hmac, Mac};
+    use sha2::Sha256;
+
+    let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())
+        .map_err(|e| format!("Failed to create HMAC key: {}", e))?;
+    mac.update(data.as_bytes());
+    let result = mac.finalize().into_bytes();
     Ok(base64url_encode(&result))
 }
 
-// User database (simplified - in production, use proper user store)
-#[allow(dead_code)]
-#[allow(static_mut_refs)]
-static mut USER_DATABASE: Option<HashMap<String, UserRecord>> = None;
+
 
 #[derive(Debug, Clone)]
 struct UserRecord {
@@ -250,29 +249,7 @@ struct UserRecord {
     active: bool,
 }
 
-#[allow(dead_code)]
-#[allow(static_mut_refs)]
-fn initialize_user_database() {
-    unsafe {
-        if USER_DATABASE.is_none() {
-            let mut db = HashMap::new();
-            
-            // Add test user
-            db.insert("admin".to_string(), UserRecord {
-                id: "user-1".to_string(),
-                username: "admin".to_string(),
-                password_hash: hash_password("admin123").unwrap(),
-                email: Some("admin@fortress.com".to_string()),
-                roles: vec!["admin".to_string(), "user".to_string()],
-                permissions: vec!["*".to_string()],
-                tenant_id: None,
-                active: true,
-            });
-            
-            USER_DATABASE = Some(db);
-        }
-    }
-}
+
 
 fn get_user(username: &str) -> Option<UserRecord> {
     use std::sync::{Mutex, OnceLock};

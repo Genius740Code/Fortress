@@ -414,20 +414,10 @@ impl Default for GlobalSecureMemoryPool {
 pub mod utils {
     use super::*;
 
-    /// Securely compare two passwords using constant-time comparison
-    /// 
-    /// # Arguments
-    /// * `password` - User-provided password
-    /// * `stored_hash` - Stored password hash
-    /// 
-    /// # Returns
-    /// * `bool` - true if passwords match
-    /// 
-    /// # Security
-    /// Uses constant-time comparison to prevent timing attacks on password verification.
-    pub fn verify_password_secure(password: &str, stored_hash: &str) -> bool {
-        ConstantTimeOps::compare_strings_secure(password, stored_hash)
-    }
+    // The original `verify_password_secure` function was removed because it performed
+    // a constant-time string comparison, which is NOT suitable for cryptographic
+    // password verification (e.g., against a hash).
+    // Proper password verification should use secure hashing algorithms like Argon2.
 
     /// Securely wipe a string
     /// 
@@ -622,10 +612,6 @@ mod tests {
 
     #[test]
     fn test_utils() {
-        // Test password verification
-        assert!(utils::verify_password_secure("password123", "password123"));
-        assert!(!utils::verify_password_secure("password123", "wrong"));
-
         // Test string wiping
         let s = String::from("sensitive data");
         utils::wipe_string(s);

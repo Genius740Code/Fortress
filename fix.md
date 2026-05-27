@@ -127,3 +127,4 @@ InMemoryUserStore stores refresh tokens in a HashMap with no TTL/eviction in the
 16. Auth API + plugin surface area
 Unauthenticated plugin deploy/reload is effectively remote code loading if plugins are dynamic libraries/WASM without strict sandboxing review.
 
+ye
