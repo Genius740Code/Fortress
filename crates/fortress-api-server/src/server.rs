@@ -204,7 +204,21 @@ impl FortressServer {
                 return Err(ServerError::internal("OIDC enabled but no configuration provided"));
             }
         } else if config.features.bootstrap_default_admin {
-            Arc::new(InMemoryUserStore::with_default_admin())
+            let user_store = InMemoryUserStore::new();
+            let admin_password = "admin123"; // For bootstrapping purposes in dev/test
+            let admin_user = crate::auth::UserRecord {
+                id: "admin".to_string(),
+                username: "admin".to_string(),
+                password_hash: crate::auth::hash_password_secure(admin_password)
+                    .expect("Failed to hash admin password for default user"),
+                email: Some("admin@fortress-db.com".to_string()),
+                roles: vec!["admin".to_string(), "user".to_string()],
+                tenant_id: None,
+                failed_login_attempts: 0,
+                locked_until: None,
+            };
+            user_store.add_user(admin_user);
+            Arc::new(user_store)
         } else {
             Arc::new(InMemoryUserStore::new())
         };

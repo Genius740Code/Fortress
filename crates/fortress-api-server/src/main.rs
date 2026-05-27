@@ -149,11 +149,23 @@ async fn create_app_state() -> Result<Arc<AppState>, Box<dyn std::error::Error>>
         return Err("FORTRESS_JWT_SECRET must be at least 32 characters long".into());
     }
     
-    let user_store = if std::env::var("FORTRESS_BOOTSTRAP_DEFAULT_ADMIN").ok().as_deref() == Some("1") {
-        InMemoryUserStore::with_default_admin()
-    } else {
-        InMemoryUserStore::new()
-    };
+    let user_store = InMemoryUserStore::new();
+
+    if std::env::var("FORTRESS_BOOTSTRAP_DEFAULT_ADMIN").ok().as_deref() == Some("1") {
+        let admin_password = "admin123"; // This is for development purposes only!
+        let admin_user = fortress_api_server::auth::UserRecord {
+            id: "admin".to_string(),
+            username: "admin".to_string(),
+            password_hash: fortress_api_server::auth::hash_password_secure(admin_password)
+                .expect("Failed to hash admin password for default user"),
+            email: Some("admin@fortress-db.com".to_string()),
+            roles: vec!["admin".to_string(), "user".to_string()],
+            tenant_id: None,
+            failed_login_attempts: 0,
+            locked_until: None,
+        };
+        user_store.add_user(admin_user);
+    }
     let auth_manager = Arc::new(AuthManager::new(
         &jwt_secret,
         Duration::seconds(3600),

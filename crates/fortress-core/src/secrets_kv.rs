@@ -152,19 +152,15 @@ struct KvSecretEntry {
 
 impl KvEngine {
     /// Create new KV engine
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self> {
         Self::with_config(KvConfig::default())
     }
-
     /// Create KV engine with custom configuration
-    pub fn with_config(config: KvConfig) -> Self {
+    pub fn with_config(config: KvConfig) -> Result<Self> {
         // Initialize master key
         let master_key = if let Some(key_str) = &config.master_key {
             base64::engine::general_purpose::STANDARD.decode(key_str)
-                .unwrap_or_else(|_| {
-                    // Generate new key if decoding fails
-                    Self::generate_master_key()
-                })
+                .map_err(|e| FortressError::secrets(format!("Failed to decode master key from base64: {}", e)))?
         } else {
             Self::generate_master_key()
         };
@@ -173,13 +169,9 @@ impl KvEngine {
         let storage: Arc<dyn StorageBackend> = match config.storage_backend.as_deref() {
             Some("memory") => Arc::new(InMemoryStorage::new()),
             Some("file") => {
-                match FileSystemStorage::new("data/secrets") {
-                    Ok(fs) => Arc::new(fs),
-                    Err(e) => {
-                        log::warn!("Failed to create file storage, falling back to memory: {}", e);
-                        Arc::new(InMemoryStorage::new())
-                    }
-                }
+                FileSystemStorage::new("data/secrets")
+                    .map(|fs| Arc::new(fs) as Arc<dyn StorageBackend>)
+                    .map_err(|e| FortressError::secrets(format!("Failed to create file storage: {}", e)))?
             },
             #[cfg(feature = "cloud-storage")]
             Some("s3") => {
@@ -194,7 +186,7 @@ impl KvEngine {
             _ => Arc::new(InMemoryStorage::new()),
         };
 
-        Self {
+        Ok(Self {
             config: Arc::new(RwLock::new(config)),
             secret_metadata: Arc::new(RwLock::new(HashMap::new())),
             leases: Arc::new(RwLock::new(HashMap::new())),
@@ -214,14 +206,15 @@ impl KvEngine {
             master_key: Arc::new(RwLock::new(master_key)),
             barrier_cache: Arc::new(RwLock::new(HashMap::new())), // Simple HashMap cache
             audit_logger: Arc::new(SecureAuditLogger::new()),
-        }
+        })
     }
 
     /// Generate a secure master key
     fn generate_master_key() -> Vec<u8> {
         use rand::RngCore;
+        use rand::rngs::OsRng;
         let mut key = vec![0u8; 32]; // 256-bit key for AEGIS-256
-        rand::thread_rng().fill_bytes(&mut key);
+        OsRng.fill_bytes(&mut key);
         key
     }
 
@@ -974,11 +967,7 @@ impl SecretsEngine for KvEngine {
     }
 }
 
-impl Default for KvEngine {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+
 
 #[cfg(test)]
 mod tests {

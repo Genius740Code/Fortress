@@ -534,14 +534,14 @@ pub struct InMemoryUserStore {
 /// User record for in-memory store
 #[derive(Clone)]
 pub struct UserRecord {
-    id: String,
-    username: String,
-    password_hash: String,
-    email: Option<String>,
-    roles: Vec<String>,
-    tenant_id: Option<String>,
-    failed_login_attempts: u32,
-    locked_until: Option<chrono::DateTime<chrono::Utc>>,
+    pub id: String,
+    pub username: String,
+    pub password_hash: String,
+    pub email: Option<String>,
+    pub roles: Vec<String>,
+    pub tenant_id: Option<String>,
+    pub failed_login_attempts: u32,
+    pub locked_until: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[async_trait::async_trait]
@@ -735,31 +735,7 @@ impl InMemoryUserStore {
         }
     }
 
-    /// Create a new in-memory user store with default admin user
-    /// WARNING: Only for development/testing - change default password in production!
-    pub fn with_default_admin() -> Self {
-        let store = Self::new();
-        
-        // Create default admin user with secure password hashing
-        let admin_password = "admin123"; // Change this in production!
-        let admin_user = UserRecord {
-            id: "admin".to_string(),
-            username: "admin".to_string(),
-            password_hash: hash_password_secure(admin_password).expect("Failed to hash admin password"),
-            email: Some("admin@fortress-db.com".to_string()),
-            roles: vec!["admin".to_string(), "user".to_string()],
-            tenant_id: None,
-            failed_login_attempts: 0,
-            locked_until: None,
-        };
-        
-        {
-            let mut users = store.users.write();
-            users.insert("admin".to_string(), admin_user);
-        }
-        
-        store
-    }
+
 
     /// Add a user to the store
     pub fn add_user(&self, user: UserRecord) {
@@ -866,7 +842,7 @@ impl UserStore for InMemoryUserStore {
 
 /// Secure password hashing using Argon2id
 /// This is the recommended password hashing algorithm for production use
-fn hash_password_secure(password: &str) -> Result<String, argon2::password_hash::Error> {
+pub fn hash_password_secure(password: &str) -> Result<String, argon2::password_hash::Error> {
     let salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();
     
@@ -999,8 +975,22 @@ mod tests {
 
     #[tokio::test]
     async fn test_in_memory_user_store() {
-        let store = InMemoryUserStore::with_default_admin();
+        let store = InMemoryUserStore::new();
         
+        // Manually add admin user for the test
+        let admin_password = "admin123";
+        let admin_user = UserRecord {
+            id: "admin".to_string(),
+            username: "admin".to_string(),
+            password_hash: hash_password_secure(admin_password).expect("Failed to hash admin password"),
+            email: Some("admin@fortress-db.com".to_string()),
+            roles: vec!["admin".to_string(), "user".to_string()],
+            tenant_id: None,
+            failed_login_attempts: 0,
+            locked_until: None,
+        };
+        store.add_user(admin_user);
+
         let auth_request = AuthRequest {
             username: "admin".to_string(),
             password: "admin123".to_string(),

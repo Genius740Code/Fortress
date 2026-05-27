@@ -29,7 +29,21 @@ mod auth_tests {
         let store = InMemoryUserStore::new();
         assert!(store.users.read().is_empty());
         
-        let store_with_admin = InMemoryUserStore::with_default_admin();
+        let store_with_admin = InMemoryUserStore::new();
+        // Manually add admin user for the test
+        let admin_password = "admin123";
+        let admin_user = crate::auth::UserRecord {
+            id: "admin".to_string(),
+            username: "admin".to_string(),
+            password_hash: hash_password_secure(admin_password).expect("Failed to hash admin password"),
+            email: Some("admin@fortress-db.com".to_string()),
+            roles: vec!["admin".to_string(), "user".to_string()],
+            tenant_id: None,
+            failed_login_attempts: 0,
+            locked_until: None,
+        };
+        store_with_admin.add_user(admin_user);
+
         assert_eq!(store_with_admin.users.read().len(), 1);
         
         let admin = store_with_admin.users.read().get("admin").unwrap();
