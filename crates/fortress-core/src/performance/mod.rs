@@ -17,6 +17,7 @@ pub use async_ops::{encrypt_data_async, decrypt_data_async, BatchEncryptor, Asyn
 pub use memory::{MemoryPool, PooledBuffer, MemoryMonitor, MemoryStats, allocation_tracker};
 pub use metrics::{PerformanceMetrics, PerformanceTimer, PerformanceProfiler, global_metrics, global_profiler};
 
+use crate::key::SecureKey;
 use crate::error::FortressError;
 use crate::encryption::EncryptionAlgorithm;
 use std::sync::Arc;
@@ -73,19 +74,18 @@ pub struct HighPerformanceEncryptor {
     memory_monitor: Option<MemoryMonitor>,
     metrics: Arc<PerformanceMetrics>,
     profiler: Arc<PerformanceProfiler>,
+    key: SecureKey,
 }
 
 impl HighPerformanceEncryptor {
     /// Create a new high-performance encryptor
-    pub fn new(algorithm: Box<dyn EncryptionAlgorithm>, config: PerformanceConfig) -> Result<Self, FortressError> {
+    pub fn new(algorithm: Box<dyn EncryptionAlgorithm>, config: PerformanceConfig, key: SecureKey) -> Result<Self, FortressError> {
         let algorithm: Arc<dyn EncryptionAlgorithm> = Arc::from(algorithm);
         let metrics = Arc::new(PerformanceMetrics::new());
         let profiler = Arc::new(PerformanceProfiler::new());
 
         let adaptive_encryptor = if config.enable_simd {
-            // For now, we'll create a new algorithm instance for SIMD
-            // In a real implementation, this would need proper algorithm cloning
-            None // Disable SIMD for now to avoid cloning issues
+            Some(AdaptiveEncryptor::new(algorithm.clone(), &key.as_bytes()))
         } else {
             None
         };
@@ -107,8 +107,8 @@ impl HighPerformanceEncryptor {
             // Add cleanup callbacks
             let metrics_clone = metrics.clone();
             monitor.add_cleanup_callback(move || {
-                // Clear caches
-                tracing::info!("Clearing performance caches");
+                // Clear performance caches and metrics
+                tracing::info!("Clearing performance caches and metrics");
                 metrics_clone.reset();
             });
             
@@ -125,6 +125,7 @@ impl HighPerformanceEncryptor {
             memory_monitor,
             metrics,
             profiler,
+            key,
         })
     }
 
@@ -144,8 +145,7 @@ impl HighPerformanceEncryptor {
                 Ok(adaptive_encryptor.encrypt(data)?)
             } else {
                 // Use standard encryption
-                let key = &[0u8; 32]; // Default key
-                self.algorithm.encrypt(data, key)
+                self.algorithm.encrypt(data, &self.key.as_bytes())
             }
         } else if let Some(adaptive_encryptor) = &self.adaptive_encryptor {
             // Use SIMD-optimized encryptor
@@ -153,16 +153,14 @@ impl HighPerformanceEncryptor {
             Ok(adaptive_encryptor.encrypt(data)?)
         } else {
             // Use standard encryption
-            let key = &[0u8; 32]; // Default key
-            self.algorithm.encrypt(data, key)
+            self.algorithm.encrypt(data, &self.key.as_bytes())
         }
     }
 
     /// Encrypt multiple items with batch processing
     pub async fn encrypt_batch(&self, data_batch: &[&[u8]]) -> Result<Vec<Vec<u8>>, FortressError> {
         if let Some(async_service) = &self.async_service {
-            let key = &[0u8; 32]; // Default key
-            async_service.encrypt_batch(data_batch, key).await
+            async_service.encrypt_batch(data_batch, &self.key.as_bytes()).await
         } else {
             // Fallback to individual encryption
             let mut results = Vec::with_capacity(data_batch.len());
@@ -295,15 +293,17 @@ pub struct PerformanceUtils;
 impl PerformanceUtils {
     /// Create an optimized encryptor with default configuration
     pub fn create_optimized_encryptor(algorithm: Box<dyn EncryptionAlgorithm>) -> Result<HighPerformanceEncryptor, FortressError> {
-        HighPerformanceEncryptor::new(algorithm, PerformanceConfig::default())
+        let key = crate::key::SecureKey::generate(32)?; // Generate a random 32-byte key
+        HighPerformanceEncryptor::new(algorithm, PerformanceConfig::default(), key)
     }
 
     /// Create an optimized encryptor with custom configuration
     pub fn create_optimized_encryptor_with_config(
         algorithm: Box<dyn EncryptionAlgorithm>, 
-        config: PerformanceConfig
+        config: PerformanceConfig,
+        key: SecureKey
     ) -> Result<HighPerformanceEncryptor, FortressError> {
-        HighPerformanceEncryptor::new(algorithm, config)
+        HighPerformanceEncryptor::new(algorithm, config, key)
     }
 
     /// Run a comprehensive performance test
@@ -459,7 +459,8 @@ mod tests {
     async fn test_high_performance_encryptor() {
         let algorithm = Box::new(Aegis256::new());
         let config = PerformanceConfig::default();
-        let mut encryptor = HighPerformanceEncryptor::new(algorithm, config).unwrap();
+        let key = crate::key::SecureKey::generate_random(32).unwrap();
+        let mut encryptor = HighPerformanceEncryptor::new(algorithm, config, key).unwrap();
         
         // Start monitoring
         encryptor.start_monitoring().await.unwrap();
@@ -486,7 +487,8 @@ mod tests {
     #[tokio::test]
     async fn test_benchmark() {
         let algorithm = Box::new(Aegis256::new());
-        let encryptor = HighPerformanceEncryptor::new(algorithm, PerformanceConfig::default()).unwrap();
+        let key = crate::key::SecureKey::generate_random(32).unwrap();
+        let encryptor = HighPerformanceEncryptor::new(algorithm, PerformanceConfig::default(), key).unwrap();
         
         let results = encryptor.benchmark(1024, 10).await;
         assert!(results.is_ok());

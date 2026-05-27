@@ -6,6 +6,7 @@
 use crate::error::FortressError;
 use crate::encryption::EncryptionAlgorithm;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 /// Performance metrics for SIMD operations
 static SIMD_OPERATIONS: AtomicU64 = AtomicU64::new(0);
@@ -13,12 +14,12 @@ static SIMD_OPERATIONS: AtomicU64 = AtomicU64::new(0);
 /// SIMD-optimized encryptor with AVX2 and AVX-512 support
 pub struct SimdEncryptor {
     keys: Vec<u8>,
-    algorithm: Box<dyn EncryptionAlgorithm>,
+    algorithm: Arc<dyn EncryptionAlgorithm>,
 }
 
 impl SimdEncryptor {
     /// Create a new SIMD encryptor with the given algorithm
-    pub fn new(algorithm: Box<dyn EncryptionAlgorithm>, key: &[u8]) -> Self {
+    pub fn new(algorithm: Arc<dyn EncryptionAlgorithm>, key: &[u8]) -> Self {
         Self {
             keys: key.to_vec(),
             algorithm,
@@ -71,13 +72,13 @@ impl SimdEncryptor {
 
 /// Adaptive encryptor that automatically selects the best encryption method
 pub struct AdaptiveEncryptor {
-    algorithm: Box<dyn EncryptionAlgorithm>,
+    algorithm: Arc<dyn EncryptionAlgorithm>,
     key: Vec<u8>,
 }
 
 impl AdaptiveEncryptor {
     /// Create a new adaptive encryptor
-    pub fn new(algorithm: Box<dyn EncryptionAlgorithm>, key: &[u8]) -> Self {
+    pub fn new(algorithm: Arc<dyn EncryptionAlgorithm>, key: &[u8]) -> Self {
         Self {
             algorithm,
             key: key.to_vec(),
@@ -134,7 +135,7 @@ mod tests {
 
     #[test]
     fn test_adaptive_encryptor() {
-        let algorithm = Box::new(Aegis256::new());
+        let algorithm = Arc::new(Aegis256::new());
         let key = vec![0u8; 32];
         let encryptor = AdaptiveEncryptor::new(algorithm, &key);
 
@@ -148,7 +149,7 @@ mod tests {
     fn test_simd_operation_counting() {
         let initial_count = SimdEncryptor::simd_operation_count();
         
-        let algorithm = Box::new(Aegis256::new());
+        let algorithm = Arc::new(Aegis256::new());
         let key = vec![0u8; 32];
         let encryptor = SimdEncryptor::new(algorithm, &key);
 

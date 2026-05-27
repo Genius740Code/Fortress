@@ -1766,25 +1766,11 @@ impl AuthManager {
     }
 
     /// Authenticate using an API key
-    pub async fn authenticate_api_key(&self, api_key: &str, _ip_address: &str) -> Result<AuthToken, FortressError> {
-        // In a real implementation, validate the API key against a database
-        // For now, we'll use a simple validation
-        if api_key != "test_key" {
-            return Err(FortressError::authentication("Invalid API key", None));
-        }
-
-        // Create a token for API key authentication
-        let token_value = Uuid::new_v4().to_string();
-        let now = current_timestamp();
-        let expires_at = now + 3600; // 1 hour expiration for API keys
-
-        Ok(AuthToken {
-            token: token_value,
-            user_id: UserId::new(), // System user for API keys
-            issued_at: now,
-            expires_at,
-            permissions: vec![], // API keys have no permissions by default
-        })
+    pub async fn authenticate_api_key(&self, _api_key: &str, _ip_address: &str) -> Result<AuthToken, FortressError> {
+        // TODO: In a real implementation, validate the API key securely against a database
+        // For now, API key authentication is not implemented for security reasons.
+        // It should involve a secure lookup of the provided api_key against stored, hashed API keys.
+        Err(FortressError::authentication("API key authentication not implemented", None))
     }
 
     /// Check if a user has a specific permission
