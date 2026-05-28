@@ -6,7 +6,7 @@
 use crate::error::FortressError;
 use subtle::ConstantTimeEq;
 use zeroize::{Zeroize, ZeroizeOnDrop};
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, Serializer, Deserializer};
 use std::sync::{Arc, Mutex};
 use std::collections::VecDeque;
 
@@ -68,9 +68,34 @@ impl ConstantTimeOps {
 }
 
 /// Secure key with automatic zeroization
-#[derive(Debug, Clone, ZeroizeOnDrop, Serialize, Deserialize)]
+#[derive(Debug, ZeroizeOnDrop)]
 pub struct SecureKey {
     data: Vec<u8>,
+}
+
+impl Serialize for SecureKey {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str("<REDACTED>")
+    }
+}
+
+impl<'de> Deserialize<'de> for SecureKey {
+    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Err(serde::de::Error::custom("SecureKey cannot be deserialized"))
+    }
+}
+
+impl Clone for SecureKey {
+    // NOTE: Cloning SecureKey duplicates sensitive bytes in memory. Use only when necessary.
+    fn clone(&self) -> Self {
+        Self::new(self.data.clone())
+    }
 }
 
 impl SecureKey {

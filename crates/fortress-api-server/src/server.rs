@@ -205,11 +205,12 @@ impl FortressServer {
             }
         } else if config.features.bootstrap_default_admin {
             let user_store = InMemoryUserStore::new();
-            let admin_password = "admin123"; // For bootstrapping purposes in dev/test
+            let admin_password = std::env::var("FORTRESS_BOOTSTRAP_ADMIN_PASSWORD") // Password for default admin user
+                .map_err(|_| ServerError::config("FORTRESS_BOOTSTRAP_ADMIN_PASSWORD environment variable not set for default admin bootstrap"))?;
             let admin_user = crate::auth::UserRecord {
                 id: "admin".to_string(),
                 username: "admin".to_string(),
-                password_hash: crate::auth::hash_password_secure(admin_password)
+                password_hash: crate::auth::hash_password_secure(&admin_password)
                     .expect("Failed to hash admin password for default user"),
                 email: Some("admin@fortress-db.com".to_string()),
                 roles: vec!["admin".to_string(), "user".to_string()],

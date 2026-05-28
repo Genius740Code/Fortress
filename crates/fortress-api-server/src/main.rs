@@ -152,11 +152,12 @@ async fn create_app_state() -> Result<Arc<AppState>, Box<dyn std::error::Error>>
     let user_store = InMemoryUserStore::new();
 
     if std::env::var("FORTRESS_BOOTSTRAP_DEFAULT_ADMIN").ok().as_deref() == Some("1") {
-        let admin_password = "admin123"; // This is for development purposes only!
+        let admin_password = std::env::var("FORTRESS_BOOTSTRAP_ADMIN_PASSWORD") // Password for default admin user
+            .map_err(|_| "FORTRESS_BOOTSTRAP_ADMIN_PASSWORD environment variable not set for default admin bootstrap")?;
         let admin_user = fortress_api_server::auth::UserRecord {
             id: "admin".to_string(),
             username: "admin".to_string(),
-            password_hash: fortress_api_server::auth::hash_password_secure(admin_password)
+            password_hash: fortress_api_server::auth::hash_password_secure(&admin_password)
                 .expect("Failed to hash admin password for default user"),
             email: Some("admin@fortress-db.com".to_string()),
             roles: vec!["admin".to_string(), "user".to_string()],

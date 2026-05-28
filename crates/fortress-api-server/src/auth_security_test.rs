@@ -31,7 +31,7 @@ mod auth_tests {
         
         let store_with_admin = InMemoryUserStore::new();
         // Manually add admin user for the test
-        let admin_password = "admin123";
+        let admin_password = std::env::var("FORTRESS_TEST_ADMIN_PASSWORD").unwrap_or_else(|_| "test_admin_password".to_string()); // Using environment variable for test password, fallback to default
         let admin_user = crate::auth::UserRecord {
             id: "admin".to_string(),
             username: "admin".to_string(),

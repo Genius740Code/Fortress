@@ -978,7 +978,7 @@ mod tests {
         let store = InMemoryUserStore::new();
         
         // Manually add admin user for the test
-        let admin_password = "admin123";
+        let admin_password = std::env::var("ADMIN_PASSWORD").unwrap_or_else(|_| "admin123".to_string());
         let admin_user = UserRecord {
             id: "admin".to_string(),
             username: "admin".to_string(),

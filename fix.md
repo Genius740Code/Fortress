@@ -1,37 +1,3 @@
- 8
-High
-8. Default admin credentials (admin / admin123)
-
-auth.rs
-Lines 740-748
-    pub fn with_default_admin() -> Self {
-        // ...
-        let admin_password = "admin123"; // Change this in production!
-Only used in tests today (main uses InMemoryUserStore::new()), but easy to enable by mistake.
-
-9. Secrets KV: silent master-key mishandling and storage fallback
-
-secrets_kv.rs
-Lines 162-167
-        let master_key = if let Some(key_str) = &config.master_key {
-            base64::engine::general_purpose::STANDARD.decode(key_str)
-                .unwrap_or_else(|_| {
-                    Self::generate_master_key()
-                })
-Invalid base64 → new random key without failing — existing secrets become undecryptable; operators may not notice.
-
-File storage failure silently falls back to in-memory storage (data loss on restart). Duplicate Some("s3") match arms (one behind cloud-storage feature) is a logic/maintenance bug.
-
-Master key generation uses rand::thread_rng() instead of getrandom/OsRng.
-
-10. SecureKey is Serialize, Deserialize, and Clone
-
-memory_safety.rs
-Lines 71-74
-#[derive(Debug, Clone, ZeroizeOnDrop, Serialize, Deserialize)]
-pub struct SecureKey {
-    data: Vec<u8>,
-Serialization can leak key material into logs, caches, or JSON APIs. Clone duplicates sensitive bytes in memory.
 
 11. Security regression tests are stubs (always pass)
 

@@ -167,7 +167,7 @@ impl KvEngine {
 
         // Initialize storage backend
         let storage: Arc<dyn StorageBackend> = match config.storage_backend.as_deref() {
-            Some("memory") => Arc::new(InMemoryStorage::new()),
+            Some("memory") | None => Arc::new(InMemoryStorage::new()),
             Some("file") => {
                 FileSystemStorage::new("data/secrets")
                     .map(|fs| Arc::new(fs) as Arc<dyn StorageBackend>)
@@ -180,10 +180,11 @@ impl KvEngine {
                 Arc::new(InMemoryStorage::new())
             },
             Some("s3") => {
-                log::warn!("S3 storage requested but cloud-storage feature not enabled, falling back to memory");
-                Arc::new(InMemoryStorage::new())
+                return Err(FortressError::secrets("S3 storage requested but cloud-storage feature not enabled".to_string()));
             },
-            _ => Arc::new(InMemoryStorage::new()),
+            Some(backend) => {
+                return Err(FortressError::secrets(format!("Unknown storage backend: {}", backend)));
+            }
         };
 
         Ok(Self {
