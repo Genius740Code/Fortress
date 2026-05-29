@@ -711,7 +711,7 @@ mod tests {
     fn test_default_config() {
         let config = Config::default();
         assert!(config.validate().is_ok());
-        assert_eq!(config.encryption.default_algorithm, "aegis256");
+        assert_eq!(config.encryption.default_algorithm, "kyber1024");
         assert_eq!(config.database.path, "./fortress.db");
     }
 

@@ -390,7 +390,13 @@ impl DefaultAuditLogger {
 
         // Update last hash for chain integrity
         {
-            let mut last_hash_guard = self.last_hash.lock().unwrap();
+            let mut last_hash_guard = self.last_hash.lock().map_err(|_| {
+                FortressError::audit(
+                    "Audit system lock poisoned - possible concurrent access issue",
+                    Some("audit_lock".to_string()),
+                    crate::error::AuditErrorCode::SystemError
+                )
+            })?;
             *last_hash_guard = Some(entry.current_hash.clone());
         }
 

@@ -791,7 +791,7 @@ impl EncryptionAlgorithm for Aegis256 {
     }
 
     fn nonce_size(&self) -> usize {
-        24 // 192-bit nonce for XChaCha20Poly1305
+        12 // 96-bit nonce for AES-256-GCM
     }
 
     fn tag_size(&self) -> usize {

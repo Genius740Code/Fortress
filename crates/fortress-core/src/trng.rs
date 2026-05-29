@@ -794,7 +794,7 @@ pub fn global_trng() -> Result<Arc<EntropySeededRng>> {
 
 /// Convenience function to generate random bytes using global TRNG
 pub fn random_bytes(count: usize) -> Result<Vec<u8>> {
-    global_trng()?.fallback_generate(count)
+    global_trng()?.generate_bytes(count)
 }
 
 /// Convenience function to generate random u64 using global TRNG
