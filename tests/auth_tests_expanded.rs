@@ -648,7 +648,7 @@ mod tests {
         ip_attempts.insert(blocked_ip.to_string(), (max_ip_attempts_per_hour, now));
         
         let (blocked_attempts, _) = ip_attempts.get(blocked_ip).unwrap();
-        let is_blocked = blocked_attempts >= max_ip_per_hour_per_hour;
+        let is_blocked = blocked_attempts >= max_ip_attempts_per_hour;
         assert!(is_blocked, "IP should be blocked at threshold");
         
         // Test IP block expiration

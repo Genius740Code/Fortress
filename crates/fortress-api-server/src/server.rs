@@ -88,6 +88,9 @@ impl FortressServer {
         // Initialize dynamic secrets engine
         let dynamic_secrets = Arc::new(fortress_core::dynamic_secrets::DynamicSecretsEngine::new());
 
+        // Initialize in-memory user store for direct access
+        let in_memory_user_store = Arc::new(crate::auth::InMemoryUserStore::new());
+
         // Create application state
         let app_state = Arc::new(AppState {
             auth_manager,
@@ -98,6 +101,7 @@ impl FortressServer {
             health_checker: health_checker.clone(),
             tenant_manager,
             dynamic_secrets,
+            in_memory_user_store,
         });
 
         Ok(Self {

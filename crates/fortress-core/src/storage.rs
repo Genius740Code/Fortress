@@ -476,7 +476,7 @@ impl FileSystemStorage {
                     // Use spawn_blocking to offload synchronous I/O to blocking thread pool
                     let metadata_data = tokio::task::spawn_blocking(move || {
                         std::fs::read(&meta_path_clone)
-                    }).await.ok()??;
+                    }).await.ok()?.ok()?;
 
                     if let Ok(metadata) = serde_json::from_slice::<FileMetadata>(&metadata_data) {
                         return Some(metadata.key);

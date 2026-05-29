@@ -86,10 +86,10 @@ async fn test_concurrent_rotation_protection() -> Result<(), Box<dyn std::error:
     
     // Wait for both rotations to complete
     let (result1, result2) = tokio::join!(rotation1, rotation2);
-    
+
     // At least one should succeed, other might fail due to concurrent access
-    let success_count = (result1.is_ok() && result1.is_ok()) as u8 + 
-                       (result2.is_ok() && result2.is_ok()) as u8;
+    let success_count = (result1.is_ok()) as u8 +
+                       (result2.is_ok()) as u8;
     
     assert!(success_count >= 1, "At least one rotation should succeed");
     

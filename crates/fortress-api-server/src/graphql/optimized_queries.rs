@@ -5,7 +5,7 @@
 
 use crate::graphql::{
     context::from_context,
-    types::{self, FilterConditionInput, QueryOperator, *},
+    types::{FilterConditionInput, QueryOperator, *},
     cache::{GraphQLCacheManager, QueryHasher, DatabaseCacheEntry},
 };
 use async_graphql::{Result, Context};

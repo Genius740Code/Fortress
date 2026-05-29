@@ -27,7 +27,6 @@ use uuid::Uuid;
 use base64::{Engine as _, engine::general_purpose};
 use percent_encoding;
 use sha2;
-use rand::rngs::OsRng;
 use rand::RngCore;
 
 /// JWT claims structure
@@ -577,11 +576,11 @@ impl UserStore for OidcUserStore {
     }
     
     async fn validate_refresh_token(&self, refresh_token: &str) -> ServerResult<UserInfo> {
-        let user_id = {
+        let _user_id = {
             let refresh_tokens = self.refresh_tokens.read();
             let entry = refresh_tokens.get(refresh_token)
                 .ok_or_else(|| ServerError::auth("Invalid refresh token"))?;
-                
+
             if entry.expiry < chrono::Utc::now() {
                 return Err(ServerError::auth("Refresh token expired"));
             }
