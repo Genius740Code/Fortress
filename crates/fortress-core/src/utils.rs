@@ -363,17 +363,15 @@ pub fn sanitize_for_logging(s: &str) -> String {
 pub fn generate_password(length: usize) -> String {
     const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
     
-    // Try to use TRNG first, fallback to thread_rng if not available
+    // Try to use TRNG first, fallback to OsRng if not available
     let random_bytes = match crate::trng::random_bytes(length) {
         Ok(bytes) => bytes,
         Err(_) => {
-            // Fallback to thread_rng
-            use rand::Rng;
-            let mut rng = rand::thread_rng();
+            // Fallback to OsRng for cryptographic security
+            use rand::RngCore;
+            use rand::rngs::OsRng;
             let mut bytes = vec![0u8; length];
-            for byte in &mut bytes {
-                *byte = rng.gen();
-            }
+            OsRng.fill_bytes(&mut bytes);
             bytes
         }
     };

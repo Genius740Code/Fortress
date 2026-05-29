@@ -711,9 +711,10 @@ impl ClusterManager {
                 }
             }
             Err(_) => {
-                // Fallback to thread_rng
+                // Fallback to OsRng for cryptographic security
                 use rand::seq::SliceRandom;
-                target_nodes.shuffle(&mut rand::thread_rng());
+                use rand::rngs::OsRng;
+                target_nodes.shuffle(&mut OsRng);
             }
         }
         target_nodes.truncate(replication_factor);

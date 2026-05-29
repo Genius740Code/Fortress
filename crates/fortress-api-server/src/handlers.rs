@@ -146,6 +146,8 @@ pub struct AppState {
     pub tenant_manager: Arc<InMemoryTenantManager>,
     /// Dynamic secrets engine
     pub dynamic_secrets: Arc<DynamicSecretsEngine>,
+    /// In-memory user store for direct access (for cleanup)
+    pub in_memory_user_store: Arc<crate::auth::InMemoryUserStore>,
 }
 
 /// Store data handler

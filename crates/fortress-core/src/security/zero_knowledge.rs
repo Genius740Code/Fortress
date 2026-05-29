@@ -93,13 +93,12 @@ impl ZeroKnowledgeProof for SchnorrProof {
 
     fn prove(statement: &Self::Statement, witness: &Self::Witness) -> Result<Self::Proof, FortressError> {
         use rand::RngCore;
+        use rand::rngs::OsRng;
         use sha2::{Sha256, Digest};
         
-        let mut rng = rand::thread_rng();
-        
-        // Generate random nonce
+        // Generate random nonce using OsRng for cryptographic security
         let mut nonce_bytes = vec![0u8; 32];
-        rng.fill_bytes(&mut nonce_bytes);
+        OsRng.fill_bytes(&mut nonce_bytes);
         let nonce = SecureKey::new(nonce_bytes);
         
         // Compute commitment (simplified for demonstration)
@@ -417,12 +416,12 @@ impl AnonymousAuth {
     /// * `Self` - New anonymous auth system
     pub fn new(security_level: SecurityLevel) -> Self {
         use rand::RngCore;
+        use rand::rngs::OsRng;
         
-        let mut rng = rand::thread_rng();
         let mut generator = vec![0u8; 32];
         let mut order = vec![0u8; 32];
-        rng.fill_bytes(&mut generator);
-        rng.fill_bytes(&mut order);
+        OsRng.fill_bytes(&mut generator);
+        OsRng.fill_bytes(&mut order);
         
         Self {
             group_params: GroupParameters {
@@ -444,14 +443,13 @@ impl AnonymousAuth {
     /// * `Result<Credential, FortressError>` - Generated credential
     pub fn register_user(&mut self, user_id: UserId, valid_days: i64) -> Result<Credential, FortressError> {
         use rand::RngCore;
+        use rand::rngs::OsRng;
         
-        let mut rng = rand::thread_rng();
-        
-        // Generate key pair
+        // Generate key pair using OsRng for cryptographic security
         let mut public_key = vec![0u8; 32];
         let mut secret_key_bytes = vec![0u8; 32];
-        rng.fill_bytes(&mut public_key);
-        rng.fill_bytes(&mut secret_key_bytes);
+        OsRng.fill_bytes(&mut public_key);
+        OsRng.fill_bytes(&mut secret_key_bytes);
         
         let secret_key = SecureKey::new(secret_key_bytes);
         

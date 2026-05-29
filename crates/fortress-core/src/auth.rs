@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
+use argon2::password_hash::rand_core::OsRng;
 
 /// Unique identifier for a user
 pub type UserId = String;
@@ -1425,7 +1426,7 @@ impl AuthManager {
         self.validate_password(&password)?;
 
         // Hash password using Argon2
-        let salt = SaltString::generate(&mut rand::thread_rng());
+        let salt = SaltString::generate(&mut OsRng);
         let argon2 = Argon2::default();
         let password_hash = argon2
             .hash_password(password.as_bytes(), &salt)
@@ -1986,7 +1987,7 @@ impl AuthManager {
         }
         
         // Hash new password
-        let salt = SaltString::generate(&mut rand::thread_rng());
+        let salt = SaltString::generate(&mut OsRng);
         let argon2 = Argon2::default();
         let password_hash = argon2
             .hash_password(new_password.as_bytes(), &salt)
@@ -2049,6 +2050,24 @@ impl AuthManager {
         } else {
             Err(FortressError::authentication("Invalid token", None))
         }
+    }
+
+    /// Clean up expired tokens to prevent memory accumulation
+    /// This should be called periodically (e.g., via a background task)
+    pub fn cleanup_expired_tokens(&mut self) -> usize {
+        let now = current_timestamp();
+        let mut expired_count = 0;
+
+        self.tokens.retain(|_, token| {
+            if token.expires_at < now {
+                expired_count += 1;
+                false
+            } else {
+                true
+            }
+        });
+
+        expired_count
     }
 }
 

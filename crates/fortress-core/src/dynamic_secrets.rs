@@ -304,26 +304,20 @@ pub struct DynamicSecretsEngine {
 
 /// Validation functions for dynamic secrets
 
-impl DynamicSecretsEngine {
+use rand::rngs::OsRng;
 
+impl DynamicSecretsEngine {
     /// Validate AWS configuration parameters
 
     fn validate_aws_config(&self, config: &serde_json::Value) -> Result<()> {
-
         // Check access key ID
 
         let access_key_id = config.get("access_key_id")
-
             .and_then(|v| v.as_str())
-
             .ok_or_else(|| FortressError::validation(
-
                 "AWS access_key_id is required and must be a string".to_string(),
-
                 Some("access_key_id".to_string()),
-
                 None
-
             ))?;
 
 
@@ -331,17 +325,11 @@ impl DynamicSecretsEngine {
         // Validate access key ID format (should start with AKIA and be 20 chars)
 
         if !access_key_id.starts_with("AKIA") || access_key_id.len() != 20 {
-
             return Err(FortressError::validation(
-
                 "AWS access_key_id must start with 'AKIA' and be 20 characters long".to_string(),
-
                 Some("access_key_id".to_string()),
-
                 Some(access_key_id.to_string())
-
             ));
-
         }
 
 
@@ -349,17 +337,11 @@ impl DynamicSecretsEngine {
         // Check secret access key
 
         let secret_access_key = config.get("secret_access_key")
-
             .and_then(|v| v.as_str())
-
             .ok_or_else(|| FortressError::validation(
-
                 "AWS secret_access_key is required and must be a string".to_string(),
-
                 Some("secret_access_key".to_string()),
-
                 None
-
             ))?;
 
 
@@ -367,17 +349,11 @@ impl DynamicSecretsEngine {
         // Validate secret access key format (should be 40 chars)
 
         if secret_access_key.len() != 40 {
-
             return Err(FortressError::validation(
-
                 "AWS secret_access_key must be 40 characters long".to_string(),
-
                 Some("secret_access_key".to_string()),
-
                 Some(secret_access_key.to_string())
-
             ));
-
         }
 
 
@@ -385,25 +361,17 @@ impl DynamicSecretsEngine {
         // Validate region format
 
         let region = config.get("region")
-
             .and_then(|v| v.as_str())
-
             .unwrap_or("us-east-1");
 
 
 
         if !self.is_valid_aws_region(region) {
-
             return Err(FortressError::validation(
-
                 format!("Invalid AWS region: {}", region),
-
                 Some("region".to_string()),
-
                 Some(region.to_string())
-
             ));
-
         }
 
 
@@ -411,21 +379,13 @@ impl DynamicSecretsEngine {
         // Validate session token if provided
 
         if let Some(session_token) = config.get("session_token").and_then(|v| v.as_str()) {
-
             if session_token.len() < 1 {
-
                 return Err(FortressError::validation(
-
                     "AWS session token cannot be empty".to_string(),
-
                     Some("session_token".to_string()),
-
                     Some(session_token.to_string())
-
                 ));
-
             }
-
         }
 
 
@@ -439,37 +399,24 @@ impl DynamicSecretsEngine {
     /// Validate database configuration parameters
 
     fn validate_database_config(&self, config: &serde_json::Value) -> Result<()> {
-
         // Check database type
 
         let db_type = config.get("database_type")
-
             .and_then(|v| v.as_str())
-
             .ok_or_else(|| FortressError::validation(
-
                 "database_type is required and must be a string".to_string(),
-
                 Some("database_type".to_string()),
-
                 None
-
             ))?;
 
 
 
         if !self.is_valid_database_type(db_type) {
-
             return Err(FortressError::validation(
-
                 format!("Unsupported database type: {}. Supported types: postgresql, mysql, sqlserver", db_type),
-
                 Some("database_type".to_string()),
-
                 Some(db_type.to_string())
-
             ));
-
         }
 
 
@@ -477,33 +424,21 @@ impl DynamicSecretsEngine {
         // Check connection string
 
         let connection_string = config.get("connection_string")
-
             .and_then(|v| v.as_str())
-
             .ok_or_else(|| FortressError::validation(
-
                 "connection_string is required and must be a string".to_string(),
-
                 Some("connection_string".to_string()),
-
                 None
-
             ))?;
 
 
 
         if connection_string.is_empty() {
-
             return Err(FortressError::validation(
-
                 "connection_string cannot be empty".to_string(),
-
                 Some("connection_string".to_string()),
-
                 None
-
             ));
-
         }
 
 
@@ -517,57 +452,35 @@ impl DynamicSecretsEngine {
         // Validate permissions if provided
 
         if let Some(permissions) = config.get("permissions").and_then(|v| v.as_array()) {
-
             if permissions.is_empty() {
-
                 return Err(FortressError::validation(
-
                     "permissions array cannot be empty".to_string(),
-
                     Some("permissions".to_string()),
-
                     None
-
                 ));
-
             }
 
 
 
             for permission in permissions {
-
                 let perm_str = permission.as_str().ok_or_else(|| {
-
                     FortressError::validation(
-
                         "All permissions must be strings".to_string(),
-
                         Some("permissions".to_string()),
-
                         None
-
                     )
-
                 })?;
 
 
 
                 if !self.is_valid_permission(db_type, perm_str) {
-
                     return Err(FortressError::validation(
-
                         format!("Invalid permission '{}' for database type {}", perm_str, db_type),
-
                         Some("permissions".to_string()),
-
                         Some(perm_str.to_string())
-
                     ));
-
                 }
-
             }
-
         }
 
 
@@ -581,51 +494,32 @@ impl DynamicSecretsEngine {
     /// Validate TTL parameters
 
     fn validate_ttl(&self, ttl: u64, max_ttl: u64) -> Result<()> {
-
         if ttl == 0 {
-
             return Err(FortressError::validation(
-
                 "TTL cannot be zero".to_string(),
-
                 Some("ttl".to_string()),
-
                 Some(ttl.to_string())
-
             ));
-
         }
 
 
 
         if ttl > max_ttl {
-
             return Err(FortressError::validation(
-
                 format!("TTL {} exceeds maximum allowed TTL {}", ttl, max_ttl),
-
                 Some("ttl".to_string()),
-
                 Some(ttl.to_string())
-
             ));
-
         }
 
 
 
         if ttl < 60 {
-
             return Err(FortressError::validation(
-
                 "TTL must be at least 60 seconds".to_string(),
-
                 Some("ttl".to_string()),
-
                 Some(ttl.to_string())
-
             ));
-
         }
 
 
@@ -639,21 +533,13 @@ impl DynamicSecretsEngine {
     /// Validate AWS region
 
     fn is_valid_aws_region(&self, region: &str) -> bool {
-
         let valid_regions = [
-
             "us-east-1", "us-east-2", "us-west-1", "us-west-2",
-
             "ca-central-1", "eu-west-1", "eu-west-2", "eu-west-3",
-
             "eu-central-1", "eu-central-2", "eu-north-1",
-
             "ap-south-1", "ap-southeast-1", "ap-southeast-2",
-
             "ap-northeast-1", "ap-northeast-2", "sa-east-1"
-
         ];
-
         valid_regions.contains(&region)
 
     }
@@ -663,7 +549,6 @@ impl DynamicSecretsEngine {
     /// Validate database type
 
     fn is_valid_database_type(&self, db_type: &str) -> bool {
-
         matches!(db_type, "postgresql" | "mysql" | "sqlserver")
 
     }
@@ -673,31 +558,18 @@ impl DynamicSecretsEngine {
     /// Validate database permission
 
     fn is_valid_permission(&self, db_type: &str, permission: &str) -> bool {
-
         match db_type {
-
             "postgresql" | "mysql" => {
-
                 matches!(permission.to_uppercase().as_str(),
-
                     "SELECT" | "INSERT" | "UPDATE" | "DELETE" | "CREATE" | "DROP" | "ALTER" | "INDEX" | "ALL"
-
                 )
-
             }
-
             "sqlserver" => {
-
                 matches!(permission.to_uppercase().as_str(),
-
                     "SELECT" | "INSERT" | "UPDATE" | "DELETE" | "CREATE" | "DROP" | "ALTER" | "EXECUTE" | "ALL"
-
                 )
-
             }
-
             _ => false,
-
         }
 
     }
@@ -707,75 +579,40 @@ impl DynamicSecretsEngine {
     /// Validate connection string format
 
     fn validate_connection_string_format(&self, db_type: &str, connection_string: &str) -> Result<()> {
-
         match db_type {
-
             "postgresql" => {
-
                 if !connection_string.starts_with("postgresql://") && !connection_string.starts_with("postgres://") {
-
                     return Err(FortressError::validation(
-
                         "PostgreSQL connection string must start with 'postgresql://' or 'postgres://'".to_string(),
-
                         Some("database_type".to_string()),
-
                         Some(db_type.to_string())
-
                     ));
-
                 }
-
             }
-
             "mysql" => {
-
                 if !connection_string.starts_with("mysql://") {
-
                     return Err(FortressError::validation(
-
                         "MySQL connection string must start with 'mysql://'".to_string(),
-
                         Some("database_type".to_string()),
-
                         Some(db_type.to_string())
-
                     ));
-
                 }
-
             }
-
             "sqlserver" => {
-
                 if !connection_string.starts_with("sqlserver://") {
-
                     return Err(FortressError::validation(
-
                         "SQL Server connection string must start with 'sqlserver://'".to_string(),
-
                         Some("database_type".to_string()),
-
                         Some(db_type.to_string())
-
                     ));
-
                 }
-
             }
-
             _ => return Err(FortressError::validation(
-
                 format!("Unsupported database type: {}", db_type),
-
                 Some("database_type".to_string()),
-
                 Some(db_type.to_string())
-
             ))
-
         }
-
         Ok(())
 
     }
@@ -785,35 +622,22 @@ impl DynamicSecretsEngine {
     /// Validate lease ID format
 
     fn validate_lease_id(&self, lease_id: &str) -> Result<()> {
-
         if lease_id.is_empty() {
-
             return Err(FortressError::validation(
-
                 "Lease ID cannot be empty".to_string(),
-
                 Some("lease_id".to_string()),
-
                 None
-
             ));
-
         }
 
 
 
         if lease_id.len() > 255 {
-
             return Err(FortressError::validation(
-
                 "Lease ID cannot exceed 255 characters".to_string(),
-
                 Some("lease_id".to_string()),
-
                 Some(lease_id.to_string())
-
             ));
-
         }
 
 
@@ -821,17 +645,11 @@ impl DynamicSecretsEngine {
         // Check for valid characters (alphanumeric, hyphen, underscore)
 
         if !lease_id.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
-
             return Err(FortressError::validation(
-
                 "Lease ID can only contain alphanumeric characters, hyphens, and underscores".to_string(),
-
                 Some("lease_id".to_string()),
-
                 Some(lease_id.to_string())
-
             ));
-
         }
 
 
@@ -845,8 +663,7 @@ impl DynamicSecretsEngine {
     /// Generate secure random username
 
     fn generate_username(&self, prefix: Option<&str>, length: usize) -> String {
-
-        let mut rng = rand::thread_rng();
+        let mut rng = OsRng;
 
         let mut username = prefix.unwrap_or("vault").to_string();
 
@@ -871,8 +688,7 @@ impl DynamicSecretsEngine {
     /// Generate secure random password
 
     fn generate_password(&self, length: usize) -> String {
-
-        let mut rng = rand::thread_rng();
+        let mut rng = OsRng;
 
         let charset = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
 
@@ -897,8 +713,7 @@ impl DynamicSecretsEngine {
     /// Generate unique lease ID
 
     fn generate_lease_id(&self) -> String {
-
-        let mut rng = rand::thread_rng();
+        let mut rng = OsRng;
 
         let mut bytes = [0u8; 16];
 
@@ -1466,7 +1281,7 @@ impl DynamicSecretsEngine {
 
         // In a real implementation, this would call AWS STS AssumeRole
 
-        let mut rng = rand::thread_rng();
+        let mut rng = OsRng;
 
         let mut access_key = String::with_capacity(20);
 
@@ -1521,10 +1336,8 @@ impl DynamicSecretsEngine {
 
 
     /// Generate database username
-
     fn generate_database_username(&self, prefix: &str) -> String {
-
-        let mut rng = rand::thread_rng();
+        let mut rng = OsRng;
 
         let mut username = prefix.to_string();
 
@@ -1547,10 +1360,8 @@ impl DynamicSecretsEngine {
 
 
     /// Generate secure password
-
     fn generate_secure_password(&self, length: usize) -> String {
-
-        let mut rng = rand::thread_rng();
+        let mut rng = OsRng;
 
         let charset = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
 
@@ -1573,10 +1384,8 @@ impl DynamicSecretsEngine {
 
 
     /// Generate random string for mock credentials
-
     fn generate_random_string(&self, length: usize) -> String {
-
-        let mut rng = rand::thread_rng();
+        let mut rng = OsRng;
 
         let charset = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 

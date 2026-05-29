@@ -87,6 +87,7 @@ use tokio::sync::RwLock;
 use chrono::{DateTime, Utc, Duration};
 
 use rand::RngCore;
+use rand::rngs::OsRng;
 
 #[cfg(feature = "performance-optimization")]
 use dashmap::DashMap;
@@ -330,22 +331,13 @@ impl DatabaseEngine {
 
         
 
-        let mut rng = rand::thread_rng();
-
         for byte in password.iter_mut() {
-
-            *byte = CHARSET[rng.next_u32() as usize % CHARSET.len()];
-
+            *byte = CHARSET[OsRng.next_u32() as usize % CHARSET.len()];
         }
 
-        
-
         String::from_utf8(password).unwrap_or_else(|_| {
-
             // Fallback to simpler password if encoding fails
-
-            (0..length).map(|_| char::from(rng.next_u32() as u8)).collect()
-
+            (0..length).map(|_| char::from(OsRng.next_u32() as u8)).collect()
         })
 
     }
@@ -353,15 +345,10 @@ impl DatabaseEngine {
 
 
     /// Generate unique username
-
     fn generate_username(&self, prefix: &str) -> String {
-
         let timestamp = Utc::now().timestamp();
-
-        let random_suffix = rand::thread_rng().next_u32();
-
+        let random_suffix = OsRng.next_u32();
         format!("{}_{}_{}", prefix, timestamp, random_suffix)
-
     }
 
 

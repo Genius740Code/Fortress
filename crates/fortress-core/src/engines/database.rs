@@ -203,14 +203,18 @@ impl DatabaseEngine {
     }
 
     async fn generate_password(&self) -> Result<String> {
-        use rand::Rng;
+        use rand::RngCore;
+        use rand::rngs::OsRng;
         const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
         const PASSWORD_LEN: usize = 32;
         
-        let mut rng = rand::thread_rng();
-        let password: String = (0..PASSWORD_LEN)
-            .map(|_| {
-                let idx = rng.gen_range(0..CHARSET.len());
+        let mut password_bytes = vec![0u8; PASSWORD_LEN];
+        OsRng.fill_bytes(&mut password_bytes);
+        
+        let password: String = password_bytes
+            .into_iter()
+            .map(|byte| {
+                let idx = byte as usize % CHARSET.len();
                 CHARSET[idx] as char
             })
             .collect();

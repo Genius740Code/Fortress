@@ -475,9 +475,9 @@ pub mod utils {
     /// * `Result<Vec<u8>, FortressError>` - Random nonce
     pub fn generate_secure_nonce(length: usize) -> Result<Vec<u8>, FortressError> {
         use rand::RngCore;
-        let mut rng = rand::thread_rng();
+        use rand::rngs::OsRng;
         let mut nonce = vec![0u8; length];
-        rng.fill_bytes(&mut nonce);
+        OsRng.fill_bytes(&mut nonce);
         Ok(nonce)
     }
 

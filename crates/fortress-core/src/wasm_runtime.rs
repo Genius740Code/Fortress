@@ -79,16 +79,45 @@ impl Default for WasmPluginConfig {
 pub struct WasmPluginLoader {
     /// Plugin configuration
     config: WasmPluginConfig,
+    /// Require authentication for plugin loading
+    require_auth: bool,
 }
 
 impl WasmPluginLoader {
     /// Create a new WASM plugin loader
     pub fn new(config: WasmPluginConfig) -> Result<Self> {
-        Ok(Self { config })
+        Ok(Self { 
+            config,
+            require_auth: true, // Default to requiring authentication for security
+        })
+    }
+
+    /// Create a new WASM plugin loader with custom auth requirement
+    pub fn new_with_auth(config: WasmPluginConfig, require_auth: bool) -> Result<Self> {
+        Ok(Self { 
+            config,
+            require_auth,
+        })
     }
     
     /// Load a WASM plugin from bytes
-    pub fn load_from_bytes(&self, _wasm_bytes: &[u8], metadata: PluginMetadata) -> Result<WasmPlugin> {
+    /// 
+    /// # Arguments
+    /// * `wasm_bytes` - The WASM module bytes
+    /// * `metadata` - Plugin metadata
+    /// * `auth_token` - Optional authentication token (required if require_auth is true)
+    pub fn load_from_bytes(&self, _wasm_bytes: &[u8], metadata: PluginMetadata, auth_token: Option<&str>) -> Result<WasmPlugin> {
+        // SECURITY: Require authentication for plugin loading to prevent unauthorized code execution
+        if self.require_auth && auth_token.is_none() {
+            return Err(FortressError::authentication(
+                "Authentication required for plugin deployment", 
+                None
+            ));
+        }
+
+        // In a real implementation, validate the auth_token here
+        // For now, we'll check that a token was provided if required
+        
         // Create runtime context
         let context = Arc::new(RwLock::new(WasmContext {
             config: HashMap::new(),
@@ -103,11 +132,24 @@ impl WasmPluginLoader {
     }
     
     /// Load a WASM plugin from a file
-    pub fn load_from_file(&self, file_path: &PathBuf, metadata: PluginMetadata) -> Result<WasmPlugin> {
+    /// 
+    /// # Arguments
+    /// * `file_path` - Path to the WASM file
+    /// * `metadata` - Plugin metadata
+    /// * `auth_token` - Optional authentication token (required if require_auth is true)
+    pub fn load_from_file(&self, file_path: &PathBuf, metadata: PluginMetadata, auth_token: Option<&str>) -> Result<WasmPlugin> {
+        // SECURITY: Require authentication for plugin loading to prevent unauthorized code execution
+        if self.require_auth && auth_token.is_none() {
+            return Err(FortressError::authentication(
+                "Authentication required for plugin deployment", 
+                None
+            ));
+        }
+
         let wasm_bytes = std::fs::read(file_path)
             .map_err(|e| FortressError::plugin(format!("Failed to read WASM file: {}", e)))?;
         
-        self.load_from_bytes(&wasm_bytes, metadata)
+        self.load_from_bytes(&wasm_bytes, metadata, auth_token)
     }
     
     /// Validate a WASM module for security
@@ -335,13 +377,17 @@ mod tests {
             config_schema: None,
         };
         
-        // Test loading with dummy WASM bytes
+        // Test loading with dummy WASM bytes and auth token
         let dummy_wasm = vec![0x00, 0x61, 0x73, 0x6d]; // WASM magic number
-        let plugin = loader.load_from_bytes(&dummy_wasm, metadata.clone());
+        let plugin = loader.load_from_bytes(&dummy_wasm, metadata.clone(), Some("valid-auth-token"));
         assert!(plugin.is_ok());
         
         let plugin = plugin.unwrap();
         assert_eq!(plugin.metadata().id, "test-plugin");
+        
+        // Test that loading without auth token fails when require_auth is true
+        let plugin_no_auth = loader.load_from_bytes(&dummy_wasm, metadata, None);
+        assert!(plugin_no_auth.is_err());
     }
     
     #[tokio::test]
@@ -360,7 +406,7 @@ mod tests {
             config_schema: None,
         };
         
-        let mut plugin = loader.load_from_bytes(&[0x00, 0x61, 0x73, 0x6d], metadata.clone()).unwrap();
+        let mut plugin = loader.load_from_bytes(&[0x00, 0x61, 0x73, 0x6d], metadata.clone(), Some("valid-auth-token")).unwrap();
         
         // Initialize plugin
         let context = PluginContext {

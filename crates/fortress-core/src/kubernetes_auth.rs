@@ -39,6 +39,24 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use chrono::{DateTime, Utc, Duration};
 use base64::Engine as _;
+use rand::rngs::OsRng;
+use rand::RngCore;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // Kubernetes-specific imports for actual API calls
 #[cfg(feature = "k8s")]
@@ -361,9 +379,9 @@ impl KubernetesAuth {
     fn generate_session_token(&self, namespace: &str, pod_name: &str) -> Result<String> {
         let session_data = format!("{}:{}:{}", namespace, pod_name, Utc::now().timestamp());
         
-        // Generate random encryption key for session
+        // Generate random encryption key for session using OsRng
         let mut key = vec![0u8; 32];
-        rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut key);
+        OsRng.fill_bytes(&mut key);
         
         // Encrypt session data
         let encrypted_data = self.encryption

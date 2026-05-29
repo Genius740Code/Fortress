@@ -601,8 +601,8 @@ fn generate_nonce() -> Vec<u8> {
     // AEGIS-256 uses a 32-byte nonce
     let mut nonce = vec![0u8; 32];
     use rand::RngCore;
-    let mut rng = rand::thread_rng();
-    rng.fill_bytes(&mut nonce);
+    use rand::rngs::OsRng;
+    OsRng.fill_bytes(&mut nonce);
     nonce
 }
 

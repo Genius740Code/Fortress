@@ -200,24 +200,27 @@ impl AwsEngine {
 
     /// Generate STS credentials (simulated)
     async fn simulate_sts_assume_role(&self, role_arn: &str, duration: chrono::Duration) -> Result<AwsCredentials> {
-        use rand::Rng;
+        use rand::RngCore;
+        use rand::rngs::OsRng;
         
-        let mut rng = rand::thread_rng();
+        // Generate mock credentials using OsRng for consistency
+        let mut access_key_bytes = [0u8; 8];
+        OsRng.fill_bytes(&mut access_key_bytes);
+        let access_key_id = format!("AKIA{}", u64::from_be_bytes(access_key_bytes) % 9000000000000000u64 + 1000000000000000u64);
         
-        // Generate mock credentials
-        let access_key_id = format!("AKIA{}", rng.gen_range(1000000000000000u64..=9999999999999999u64));
-        let secret_key: String = (0..40)
-            .map(|_| {
-                let charset = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
-                charset[rng.gen_range(0..charset.len())] as char
-            })
+        let mut secret_key_bytes = [0u8; 40];
+        OsRng.fill_bytes(&mut secret_key_bytes);
+        let charset = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+        let secret_key: String = secret_key_bytes
+            .iter()
+            .map(|&byte| charset[byte as usize % charset.len()] as char)
             .collect();
         
-        let session_token: String = (0..352)
-            .map(|_| {
-                let charset = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
-                charset[rng.gen_range(0..charset.len())] as char
-            })
+        let mut session_token_bytes = [0u8; 352];
+        OsRng.fill_bytes(&mut session_token_bytes);
+        let session_token: String = session_token_bytes
+            .iter()
+            .map(|&byte| charset[byte as usize % charset.len()] as char)
             .collect();
         
         Ok(AwsCredentials {

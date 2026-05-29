@@ -27,6 +27,8 @@ use uuid::Uuid;
 use base64::{Engine as _, engine::general_purpose};
 use percent_encoding;
 use sha2;
+use rand::rngs::OsRng;
+use rand::RngCore;
 
 /// JWT claims structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -129,7 +131,13 @@ pub struct OidcUserStore {
     /// In-memory cache for user information
     user_cache: Arc<parking_lot::RwLock<HashMap<String, CachedUser>>>,
     /// Refresh token storage
-    refresh_tokens: Arc<parking_lot::RwLock<HashMap<String, String>>>, // token -> user_id
+    refresh_tokens: Arc<parking_lot::RwLock<HashMap<String, TokenEntry>>>, // token -> TokenEntry
+}
+
+#[derive(Clone)]
+struct TokenEntry {
+    user_id: String,
+    expiry: chrono::DateTime<chrono::Utc>,
 }
 
 /// OIDC provider configuration
@@ -528,7 +536,7 @@ impl OidcUserStore {
 /// In-memory user store for development/testing
 pub struct InMemoryUserStore {
     users: Arc<parking_lot::RwLock<HashMap<String, UserRecord>>>,
-    refresh_tokens: Arc<parking_lot::RwLock<HashMap<String, String>>>, // token -> user_id
+    refresh_tokens: Arc<parking_lot::RwLock<HashMap<String, (String, chrono::DateTime<chrono::Utc>)>>>, // token -> (user_id, expiry)
 }
 
 /// User record for in-memory store
@@ -569,11 +577,15 @@ impl UserStore for OidcUserStore {
     }
     
     async fn validate_refresh_token(&self, refresh_token: &str) -> ServerResult<UserInfo> {
-        let _user_id = {
+        let user_id = {
             let refresh_tokens = self.refresh_tokens.read();
-            refresh_tokens.get(refresh_token)
-                .ok_or_else(|| ServerError::auth("Invalid refresh token"))?
-                .clone()
+            let entry = refresh_tokens.get(refresh_token)
+                .ok_or_else(|| ServerError::auth("Invalid refresh token"))?;
+                
+            if entry.expiry < chrono::Utc::now() {
+                return Err(ServerError::auth("Refresh token expired"));
+            }
+            entry.user_id.clone()
         };
         
         // Refresh the access token and get fresh user info
@@ -592,7 +604,8 @@ impl UserStore for OidcUserStore {
     
     async fn store_refresh_token(&self, user_id: &str, refresh_token: &str) -> ServerResult<()> {
         let mut refresh_tokens = self.refresh_tokens.write();
-        refresh_tokens.insert(refresh_token.to_string(), user_id.to_string());
+        let expiry = chrono::Utc::now() + chrono::Duration::days(7);
+        refresh_tokens.insert(refresh_token.to_string(), TokenEntry { user_id: user_id.to_string(), expiry });
         Ok(())
     }
     
@@ -694,16 +707,9 @@ impl AuthManager {
 
     /// Generate refresh token
     fn generate_refresh_token(&self) -> String {
-        use rand::Rng;
-        let mut token = String::with_capacity(64);
-        let mut rng = rand::thread_rng();
-        
-        for _ in 0..64 {
-            let chars = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-            token.push(chars[rng.gen_range(0..chars.len())] as char);
-        }
-        
-        token
+        let mut token_bytes = [0u8; 64];
+        OsRng.fill_bytes(&mut token_bytes);
+        general_purpose::STANDARD.encode(&token_bytes)
     }
 
     /// Check if user has required role
@@ -741,6 +747,14 @@ impl InMemoryUserStore {
     pub fn add_user(&self, user: UserRecord) {
         let mut users = self.users.write();
         users.insert(user.username.clone(), user);
+    }
+
+    /// Clean up expired refresh tokens
+    pub fn cleanup_expired_refresh_tokens(&self) {
+        let mut refresh_tokens = self.refresh_tokens.write();
+        let now = chrono::Utc::now();
+        refresh_tokens.retain(|_, (_, expiry)| *expiry > now);
+        tracing::debug!("Cleaned up expired refresh tokens. {} tokens remaining.", refresh_tokens.len());
     }
 }
 
@@ -817,11 +831,15 @@ impl UserStore for InMemoryUserStore {
     async fn validate_refresh_token(&self, refresh_token: &str) -> ServerResult<UserInfo> {
         let user_id = {
             let refresh_tokens = self.refresh_tokens.read();
-            refresh_tokens.get(refresh_token)
-                .ok_or_else(|| ServerError::auth("Invalid refresh token"))?
-                .clone()
+            let (user_id, expiry) = refresh_tokens.get(refresh_token)
+                .ok_or_else(|| ServerError::auth("Invalid refresh token"))?;
+
+            if *expiry < chrono::Utc::now() {
+                return Err(ServerError::auth("Refresh token expired"));
+            }
+            user_id.clone()
         };
-        
+
         self.get_user(&user_id).await
             .map_err(|_| ServerError::auth("User not found"))?
             .ok_or_else(|| ServerError::auth("User not found"))
@@ -829,7 +847,8 @@ impl UserStore for InMemoryUserStore {
 
     async fn store_refresh_token(&self, user_id: &str, refresh_token: &str) -> ServerResult<()> {
         let mut refresh_tokens = self.refresh_tokens.write();
-        refresh_tokens.insert(refresh_token.to_string(), user_id.to_string());
+        let expiry = chrono::Utc::now() + chrono::Duration::days(7);
+        refresh_tokens.insert(refresh_token.to_string(), (user_id.to_string(), expiry));
         Ok(())
     }
 
