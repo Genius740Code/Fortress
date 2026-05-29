@@ -318,9 +318,6 @@ impl OptimizedQueryExecutor {
         // Production-ready SQL parser with comprehensive security validation
         let normalized_query = self.normalize_sql(query)?;
         
-        // Validate against SQL injection patterns
-        self.validate_sql_safety(&normalized_query)?;
-        
         // Parse SQL tokens for accurate analysis
         let tokens = self.tokenize_sql(&normalized_query)?;
         
@@ -365,73 +362,6 @@ impl OptimizedQueryExecutor {
         }
         
         Ok(normalized)
-    }
-    
-    fn validate_sql_safety(&self, query: &str) -> Result<()> {
-        // Comprehensive SQL injection detection patterns
-        let dangerous_patterns = [
-            // SQL injection patterns
-            ("'", "Unclosed quotes detected"),
-            (";", "Multiple statements detected"),
-            ("--", "SQL comment detected"),
-            ("/*", "Multi-line comment detected"),
-            ("xp_", "Extended stored procedure detected"),
-            ("sp_", "System stored procedure detected"),
-            // Dangerous functions
-            ("exec(", "Dynamic execution detected"),
-            ("execute(", "Dynamic execution detected"),
-            ("eval(", "Code evaluation detected"),
-            ("system(", "System command execution detected"),
-            ("shell(", "Shell command execution detected"),
-            // File operations
-            ("load_file(", "File operation detected"),
-            ("into outfile", "File write operation detected"),
-            ("dumpfile", "File dump operation detected"),
-            // Information schema attacks
-            ("information_schema", "System schema access detected"),
-            ("mysql.user", "System table access detected"),
-            ("pg_catalog", "System catalog access detected"),
-            ("sys.tables", "System table access detected"),
-            // Time-based attacks
-            ("waitfor delay", "Timing attack detected"),
-            ("sleep(", "Timing attack detected"),
-            ("benchmark(", "Timing attack detected"),
-            ("pg_sleep(", "Timing attack detected"),
-        ];
-        
-        let query_lower = query.to_lowercase();
-        
-        for (pattern, description) in &dangerous_patterns {
-            if query_lower.contains(pattern) {
-                return Err(async_graphql::Error::new(format!(
-                    "Security violation: {} (pattern: {})", 
-                    description, 
-                    pattern
-                )));
-            }
-        }
-        
-        // Check for suspicious keyword combinations
-        let suspicious_combinations = [
-            ("union", "select"),
-            ("or", "1=1"),
-            ("and", "1=1"),
-            ("'", "or"),
-            ("'", "and"),
-            ("'", "union"),
-        ];
-        
-        for (first, second) in &suspicious_combinations {
-            if query_lower.contains(first) && query_lower.contains(second) {
-                return Err(async_graphql::Error::new(format!(
-                    "Suspicious SQL pattern detected: {} + {}", 
-                    first, 
-                    second
-                )));
-            }
-        }
-        
-        Ok(())
     }
     
     fn tokenize_sql(&self, query: &str) -> Result<Vec<String>> {

@@ -5,7 +5,7 @@
 
 use crate::graphql::{
     context::from_context,
-    types::*,
+    types::{self, FilterConditionInput, QueryOperator, *},
     cache::{GraphQLCacheManager, QueryHasher, DatabaseCacheEntry},
 };
 use async_graphql::{Result, Context};
@@ -16,6 +16,100 @@ use serde_json;
 use uuid::Uuid;
 use tokio::time::Instant;
 use fortress_core::storage::StorageBackend;
+
+/// Helper function to evaluate a single record against a filter condition
+fn matches_filter_condition(
+    record: &DataRecord,
+    filter: &FilterConditionInput,
+) -> bool {
+    let field_name = &filter.field;
+    let record_value = record.data.get(field_name);
+
+    match (&filter.operator, record_value) {
+        (QueryOperator::Eq, Some(val)) => {
+            if let Some(filter_value) = &filter.value {
+                val == &filter_value.0
+            } else {
+                false
+            }
+        },
+        (QueryOperator::Ne, Some(val)) => {
+            if let Some(filter_value) = &filter.value {
+                val != &filter_value.0
+            } else {
+                false
+            }
+        },
+        (QueryOperator::Gt, Some(val)) => {
+            if let Some(filter_value) = &filter.value {
+                match (val, &filter_value.0) {
+                    (serde_json::Value::Number(a), serde_json::Value::Number(b)) => a.as_f64().unwrap_or(0.0) > b.as_f64().unwrap_or(0.0),
+                    (serde_json::Value::String(a), serde_json::Value::String(b)) => a > b,
+                    _ => false,
+                }
+            } else {
+                false
+            }
+        },
+        (QueryOperator::Gte, Some(val)) => {
+            if let Some(filter_value) = &filter.value {
+                match (val, &filter_value.0) {
+                    (serde_json::Value::Number(a), serde_json::Value::Number(b)) => a.as_f64().unwrap_or(0.0) >= b.as_f64().unwrap_or(0.0),
+                    (serde_json::Value::String(a), serde_json::Value::String(b)) => a >= b,
+                    _ => false,
+                }
+            } else {
+                false
+            }
+        },
+        (QueryOperator::Lt, Some(val)) => {
+            if let Some(filter_value) = &filter.value {
+                match (val, &filter_value.0) {
+                    (serde_json::Value::Number(a), serde_json::Value::Number(b)) => a.as_f64().unwrap_or(0.0) < b.as_f64().unwrap_or(0.0),
+                    (serde_json::Value::String(a), serde_json::Value::String(b)) => a < b,
+                    _ => false,
+                }
+            } else {
+                false
+            }
+        },
+        (QueryOperator::Lte, Some(val)) => {
+            if let Some(filter_value) = &filter.value {
+                match (val, &filter_value.0) {
+                    (serde_json::Value::Number(a), serde_json::Value::Number(b)) => a.as_f64().unwrap_or(0.0) <= b.as_f64().unwrap_or(0.0),
+                    (serde_json::Value::String(a), serde_json::Value::String(b)) => a <= b,
+                    _ => false,
+                }
+            } else {
+                false
+            }
+        },
+        (QueryOperator::Like, Some(serde_json::Value::String(val_str))) => {
+            if let Some(serde_json::Value::String(filter_str)) = &filter.value.as_ref().map(|v| &v.0) {
+                val_str.contains(filter_str.as_str()) // Simple substring match for LIKE
+            } else {
+                false
+            }
+        },
+        (QueryOperator::In, Some(val)) => {
+            if let Some(filter_values) = &filter.values {
+                filter_values.iter().any(|filter_val| val == &filter_val.0)
+            } else {
+                false
+            }
+        },
+        (QueryOperator::NotIn, Some(val)) => {
+            if let Some(filter_values) = &filter.values {
+                !filter_values.iter().any(|filter_val| val == &filter_val.0)
+            } else {
+                false
+            }
+        },
+        (QueryOperator::IsNull, val) => val.is_none() || val == Some(&serde_json::Value::Null),
+        (QueryOperator::IsNotNull, val) => val.is_some() && val != Some(&serde_json::Value::Null),
+        _ => false, // Operator or value type mismatch
+    }
+}
 
 /// Optimized GraphQL query root with performance enhancements
 pub struct OptimizedQuery {

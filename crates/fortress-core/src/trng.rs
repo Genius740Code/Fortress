@@ -1,4 +1,4 @@
-//! True Random Number Generator (TRNG) Module
+//! Entropy-Seeded Random Generator Module
 //!
 //! This module provides true random number generation capabilities using
 //! multiple entropy sources including hardware timing, network jitter,
@@ -64,7 +64,7 @@ pub enum EntropySource {
 }
 
 /// Main TRNG engine
-pub struct TrueRandomGenerator {
+pub struct EntropySeededRng {
     config: TrngConfig,
     entropy_pool: Arc<Mutex<EntropyPool>>,
     health_status: Arc<Mutex<TrngHealth>>,
@@ -267,7 +267,7 @@ impl EntropyPool {
     }
 }
 
-impl TrueRandomGenerator {
+impl EntropySeededRng {
     /// Create a new TRNG instance with default configuration
     pub fn new() -> Result<Self> {
         Self::with_config(TrngConfig::default())
@@ -379,7 +379,7 @@ impl TrueRandomGenerator {
         }
 
         // Estimate entropy bits (more conservative with better sources)
-        let entropy_bits: usize = ((iterations as usize) / 5) * 8; // Assume 1 bit per 5 measurements
+        let entropy_bits: usize = ((iterations as usize) / 100) * 8; // Assume 1 bit per 100 measurements for conservative estimate
 
         Ok((entropy_data, entropy_bits))
     }
@@ -387,7 +387,7 @@ impl TrueRandomGenerator {
     /// Collect entropy from network jitter (if available)
     fn collect_network_jitter_entropy(&self) -> Result<(Vec<u8>, usize)> {
         let mut entropy_data = Vec::new();
-        let entropy_bits: usize = 64; // Conservative estimate
+        let entropy_bits: usize = 8; // More conservative estimate
 
         // Try to connect to a remote host to measure network timing
         let hosts = ["8.8.8.8:53", "1.1.1.1:53", "localhost:80"];
@@ -413,7 +413,7 @@ impl TrueRandomGenerator {
     /// Collect entropy from disk I/O timing
     fn collect_disk_io_entropy(&self) -> Result<(Vec<u8>, usize)> {
         let mut entropy_data = Vec::new();
-        let entropy_bits: usize = 32;
+        let entropy_bits: usize = 4; // More conservative estimate
 
         // Measure disk access timing
         let temp_file = std::env::temp_dir().join("fortress_trng_test");
@@ -438,7 +438,7 @@ impl TrueRandomGenerator {
     /// Collect entropy from memory access timing variations
     fn collect_memory_latency_entropy(&self) -> Result<(Vec<u8>, usize)> {
         let mut entropy_data = Vec::new();
-        let entropy_bits: usize = 64; // Increased entropy estimate
+        let entropy_bits: usize = 8; // More conservative estimate
 
         // Allocate memory and measure access patterns with more variation
         let size = 2048 * 1024; // 2MB for more variation
@@ -481,7 +481,7 @@ impl TrueRandomGenerator {
     /// Collect entropy from system time variations
     fn collect_system_time_entropy(&self) -> Result<(Vec<u8>, usize)> {
         let mut entropy_data = Vec::new();
-        let entropy_bits: usize = 32; // Increased entropy estimate
+        let entropy_bits: usize = 4; // More conservative estimate // Increased entropy estimate
 
         // Collect high-resolution timestamps with more variation
         for i in 0..20 {
@@ -726,7 +726,7 @@ impl TrueRandomGenerator {
     }
 }
 
-impl Default for TrueRandomGenerator {
+impl Default for EntropySeededRng {
     fn default() -> Self {
         // For Default implementation, create a CSPRNG-only TRNG
         // This ensures we never have a failed TRNG instance
@@ -746,15 +746,15 @@ impl Default for TrueRandomGenerator {
 }
 
 /// Global TRNG instance for convenience
-static GLOBAL_TRNG: std::sync::OnceLock<std::sync::Mutex<Option<Arc<TrueRandomGenerator>>>> = std::sync::OnceLock::new();
+static GLOBAL_TRNG: std::sync::OnceLock<std::sync::Mutex<Option<Arc<EntropySeededRng>>>> = std::sync::OnceLock::new();
 
 /// Initialize the global TRNG instance
 pub fn init_global_trng() -> Result<()> {
-    let trng = match TrueRandomGenerator::new() {
+    let trng = match EntropySeededRng::new() {
         Ok(trng) => Arc::new(trng),
         Err(e) => {
             tracing::warn!("Failed to initialize full TRNG: {}, using CSPRNG fallback", e);
-            Arc::new(TrueRandomGenerator::default())
+            Arc::new(EntropySeededRng::default())
         }
     };
     
@@ -769,7 +769,7 @@ pub fn init_global_trng() -> Result<()> {
 }
 
 /// Get the global TRNG instance (initializes if needed)
-pub fn global_trng() -> Result<Arc<TrueRandomGenerator>> {
+pub fn global_trng() -> Result<Arc<EntropySeededRng>> {
     let global = GLOBAL_TRNG.get_or_init(|| std::sync::Mutex::new(None));
     let mut guard = global.lock().map_err(|_| FortressError::key_management(
         "Failed to acquire lock on global TRNG", 
@@ -778,7 +778,7 @@ pub fn global_trng() -> Result<Arc<TrueRandomGenerator>> {
     ))?;
     
     if guard.is_none() {
-        *guard = Some(Arc::new(TrueRandomGenerator::default()));
+        *guard = Some(Arc::new(EntropySeededRng::default()));
     }
     
     // Since we initialize if None above, this should always be Some
@@ -794,7 +794,7 @@ pub fn global_trng() -> Result<Arc<TrueRandomGenerator>> {
 
 /// Convenience function to generate random bytes using global TRNG
 pub fn random_bytes(count: usize) -> Result<Vec<u8>> {
-    global_trng()?.generate_bytes(count)
+    global_trng()?.fallback_generate(count)
 }
 
 /// Convenience function to generate random u64 using global TRNG
@@ -813,13 +813,13 @@ mod tests {
 
     #[test]
     fn test_trng_initialization() {
-        let trng = TrueRandomGenerator::new();
+        let trng = EntropySeededRng::new();
         assert!(trng.is_ok());
     }
 
     #[test]
     fn test_random_byte_generation() {
-        let trng = TrueRandomGenerator::new().unwrap();
+        let trng = EntropySeededRng::new().unwrap();
         let bytes1 = trng.generate_bytes(32).unwrap();
         let bytes2 = trng.generate_bytes(32).unwrap();
         
@@ -830,7 +830,7 @@ mod tests {
 
     #[test]
     fn test_random_u64_generation() {
-        let trng = TrueRandomGenerator::new().unwrap();
+        let trng = EntropySeededRng::new().unwrap();
         let val1 = trng.generate_u64().unwrap();
         let val2 = trng.generate_u64().unwrap();
         
@@ -839,7 +839,7 @@ mod tests {
 
     #[test]
     fn test_fill_bytes() {
-        let trng = TrueRandomGenerator::new().unwrap();
+        let trng = EntropySeededRng::new().unwrap();
         let mut buffer = [0u8; 16];
         trng.fill_bytes(&mut buffer).unwrap();
         
@@ -849,7 +849,7 @@ mod tests {
 
     #[test]
     fn test_entropy_collection() {
-        let trng = TrueRandomGenerator::new().unwrap();
+        let trng = EntropySeededRng::new().unwrap();
         
         for source in [
             EntropySource::CpuTiming,
@@ -866,14 +866,14 @@ mod tests {
 
     #[test]
     fn test_health_check() {
-        let trng = TrueRandomGenerator::new().unwrap();
+        let trng = EntropySeededRng::new().unwrap();
         let health = trng.health_status();
         assert!(health == TrngHealth::Healthy || health == TrngHealth::Degraded);
     }
 
     #[test]
     fn test_entropy_stats() {
-        let trng = TrueRandomGenerator::new().unwrap();
+        let trng = EntropySeededRng::new().unwrap();
         let (entropy_bits, pool_size) = trng.entropy_stats();
         assert!(entropy_bits > 0);
         assert!(pool_size > 0);
@@ -891,7 +891,7 @@ mod tests {
 
     #[test]
     fn test_reinitialization() {
-        let trng = TrueRandomGenerator::new().unwrap();
+        let trng = EntropySeededRng::new().unwrap();
         let result = trng.reinitialize();
         assert!(result.is_ok());
     }
@@ -905,7 +905,7 @@ mod tests {
             ..Default::default()
         };
         
-        let trng = TrueRandomGenerator::with_config(config).unwrap();
+        let trng = EntropySeededRng::with_config(config).unwrap();
         let bytes = trng.generate_bytes(32);
         assert!(bytes.is_ok());
     }

@@ -1319,7 +1319,7 @@ pub mod prelude {
 
     pub use crate::trng::{
 
-        TrueRandomGenerator, TrngConfig, TrngHealth, EntropySource,
+        EntropySeededRng, TrngConfig, TrngHealth, EntropySource,
 
         init_global_trng, global_trng, random_bytes, random_u64, fill_random
 
