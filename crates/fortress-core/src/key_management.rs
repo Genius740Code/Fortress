@@ -4,8 +4,8 @@
 //! in Fortress, making it easier for CLI tools and other components to interact
 //! with the key system without needing to know about specific implementations.
 
-use crate::error::{Result, FortressError, KeyErrorCode};
-use crate::key::{KeyManager, InMemoryKeyManager, SecureKey, KeyMetadata, KeyId, KeyVersion};
+use crate::error::Result;
+use crate::key::{KeyManager, InMemoryKeyManager, SecureKey, KeyMetadata, KeyId};
 use async_trait::async_trait;
 use std::sync::Arc;
 

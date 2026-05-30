@@ -208,6 +208,10 @@ base64 = "0.21"
 
 hex = "0.4"
 
+# Base32 encoding for TOTP
+
+base32 = "0.5"
+
 
 
 # File system traversal
@@ -382,7 +386,7 @@ jsonwebtoken = "9.2"
 
 # Advanced authentication dependencies
 
-totp-rs = { version = "5.1", optional = true }
+totp-rs = "5.1"
 
 qrcode = { version = "0.14", optional = true }
 
@@ -488,7 +492,7 @@ experimental = []  # Experimental features
 
 homomorphic-encryption = []  # Production-ready homomorphic encryption
 
-advanced-authentication = ["totp-rs", "qrcode", "percent-encoding", "user-agent-parser"]
+advanced-authentication = ["qrcode", "percent-encoding", "user-agent-parser"]
 
 # Phase 3 features
 

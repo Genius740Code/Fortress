@@ -17,8 +17,6 @@ use crate::backup::{
 };
 
 use crate::storage::StorageBackend;
-
-use crate::backup::BackupConfig;
 use crate::error::{FortressError, Result};
 
 use crate::error::StorageErrorCode;

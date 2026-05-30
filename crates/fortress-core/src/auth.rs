@@ -4,7 +4,7 @@
 //! for the Fortress system, including user management, role-based access control,
 //! and token-based authentication.
 
-use crate::error::FortressError;
+use crate::error::{FortressError, EncryptionErrorCode};
 use argon2::{Argon2, PasswordHasher, PasswordVerifier};
 use argon2::password_hash::{PasswordHash, SaltString};
 use serde::{Deserialize, Serialize};
@@ -1121,29 +1121,52 @@ pub struct MfaManager {
     config: MfaConfig,
 }
 
-use totp_rs::Totp;
-
 impl MfaManager {
     pub fn new(config: MfaConfig) -> Self {
         Self { config }
     }
 
-    pub fn verify_mfa(&self, method: &MfaMethod, code: &str) -> Result<bool, FortressError> {
+    pub fn verify_mfa(&self, method: &MfaMethod, code: &str, user_id: &str, secret: Option<&str>) -> Result<bool, FortressError> {
         // Implement real MFA verification
         match method {
-            MfaMethod::Totp => self.verify_totp(&self.config.totp_config.secret, code),
-            MfaMethod::BackupCode => self.verify_backup_code(&self.config.user_id, code),
+            MfaMethod::Totp => {
+                if let Some(secret) = secret {
+                    self.verify_totp(secret, code)
+                } else {
+                    Ok(false)
+                }
+            },
+            MfaMethod::BackupCode => self.verify_backup_code(user_id, code),
             _ => Ok(false), // Stub for other methods
         }
     }
 
     pub fn verify_totp(&self, secret: &str, code: &str) -> Result<bool, FortressError> {
-        let totp = Totp::from_base32(secret).map_err(|e| FortressError::encryption(
+        use totp_rs::{TOTP, Algorithm};
+        // Decode base32 secret to bytes
+        let secret_bytes = base32::decode(base32::Alphabet::Rfc4648 { padding: true }, secret)
+            .ok_or_else(|| FortressError::encryption(
+                "Failed to decode base32 secret".to_string(),
+                "totp".to_string(),
+                EncryptionErrorCode::DecryptionFailed,
+            ))?;
+        
+        let totp = TOTP::new(
+            Algorithm::SHA1,
+            6,
+            1,
+            30,
+            secret_bytes,
+        ).map_err(|e| FortressError::encryption(
             format!("Failed to create TOTP: {}", e),
             "totp".to_string(),
             EncryptionErrorCode::DecryptionFailed,
         ))?;
-        Ok(totp.check_current(code))
+        totp.check_current(code).map_err(|e| FortressError::encryption(
+            format!("Failed to check TOTP code: {}", e),
+            "totp".to_string(),
+            EncryptionErrorCode::DecryptionFailed,
+        ))
     }
 
     pub fn verify_hardware_token(&self, _token: &str, _user_id: &str) -> Result<bool, FortressError> {

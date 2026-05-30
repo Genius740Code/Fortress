@@ -12,7 +12,6 @@
 
 use crate::error::{FortressError, Result, StorageErrorCode};
 use crate::mongodb_database::{MongoKeyDatabase, MongoPullFilter};
-use uuid::Uuid;
 
 use crate::postgres_database::{PostgresKeyDatabase, PostgresQuery, PostgresBulkEntry};
 
