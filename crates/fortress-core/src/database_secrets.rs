@@ -74,7 +74,7 @@ use crate::error::{FortressError, Result};
 
 use crate::secrets::{EngineStatus, EngineStats, EngineType, LeaseInfo, Secret, SecretMetadata, SecretsEngine};
 
-use crate::encryption::{EncryptionAlgorithm, Aegis256};
+use crate::encryption::{EncryptionAlgorithm, Aegis256Wrapper as Aegis256};
 
 use serde::{Deserialize, Serialize};
 

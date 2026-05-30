@@ -3,7 +3,7 @@
 //! This module provides comprehensive performance testing for the AEGIS-256 algorithm
 //! to validate its speed claims and provide optimization insights.
 
-use crate::encryption::{Aegis256, EncryptionAlgorithm};
+use crate::encryption::{Aegis256Wrapper as Aegis256, EncryptionAlgorithm};
 use std::time::Instant;
 use std::sync::Arc;
 

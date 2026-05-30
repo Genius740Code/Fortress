@@ -1,6 +1,6 @@
 use crate::grpc::types::*;
 use crate::error::ServerError;
-use fortress_core::encryption::{Aegis256, EncryptionAlgorithm};
+use fortress_core::encryption::{Aegis256Wrapper, EncryptionAlgorithm};
 use fortress_core::key::KeyManager;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -17,14 +17,14 @@ pub struct FortressGrpcService {
     /// Database instance (placeholder)
     database: Arc<RwLock<Option<()>>>, // Placeholder for FortressDatabase
     /// Encryption manager instance
-    encryption_manager: Arc<Aegis256>,
+    encryption_manager: Arc<Aegis256Wrapper>,
     /// Key manager instance
     key_manager: Arc<dyn KeyManager>,
 }
 
 impl FortressGrpcService {
     /// Create a new Fortress gRPC service instance
-    pub fn new(encryption_manager: Arc<Aegis256>, key_manager: Arc<dyn KeyManager>) -> Self {
+    pub fn new(encryption_manager: Arc<Aegis256Wrapper>, key_manager: Arc<dyn KeyManager>) -> Self {
         Self {
             database: Arc::new(RwLock::new(None)),
             encryption_manager,

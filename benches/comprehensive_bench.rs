@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
-use fortress_core::encryption::{Aegis256, ChaCha20Poly1305, Aes256Gcm, EncryptionAlgorithm};
+use fortress_core::encryption::{Aegis256Wrapper, ChaCha20Poly1305, Aes256Gcm, EncryptionAlgorithm};
 use fortress_core::key::{KeyManager, KeyMetadata};
 use fortress_core::storage::StorageBackend;
 use fortress_core::cache::CacheManager;
@@ -15,9 +15,9 @@ fn bench_encryption_algorithms(c: &mut Criterion) {
         
         // AEGIS-256
         group.bench_with_input(BenchmarkId::new("aegis256_encrypt", size), &size, |b, _| {
-            let key = KeyManager::new().generate_key(&Aegis256::new()).unwrap();
+            let key = KeyManager::new().generate_key(&Aegis256Wrapper::new()).unwrap();
             b.iter(|| {
-                let cipher = Aegis256::new();
+                let cipher = Aegis256Wrapper::new();
                 cipher.encrypt(black_box(&data), black_box(&key))
             })
         });
@@ -51,11 +51,11 @@ fn bench_decryption_algorithms(c: &mut Criterion) {
     
     // AEGIS-256
     group.bench_function("aegis256_decrypt", |b| {
-        let key = KeyManager::new().generate_key(&Aegis256::new()).unwrap();
-        let cipher = Aegis256::new();
+        let key = KeyManager::new().generate_key(&Aegis256Wrapper::new()).unwrap();
+        let cipher = Aegis256Wrapper::new();
         let encrypted = cipher.encrypt(&data, &key).unwrap();
         b.iter(|| {
-            let cipher = Aegis256::new();
+            let cipher = Aegis256Wrapper::new();
             cipher.decrypt(black_box(&encrypted), black_box(&key))
         })
     });
@@ -91,7 +91,7 @@ fn bench_key_operations(c: &mut Criterion) {
     // Key generation
     group.bench_function("key_generation_aegis256", |b| {
         let key_manager = KeyManager::new();
-        let algorithm = Aegis256::new();
+        let algorithm = Aegis256Wrapper::new();
         b.iter(|| {
             key_manager.generate_key(black_box(&algorithm))
         })

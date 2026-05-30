@@ -10,6 +10,8 @@
 
 use crate::error::{FortressError, Result, EncryptionErrorCode};
 
+use crate::mpc_party::InMemoryMpcParty;
+use crate::mpc::PartyRole;
 use crate::mpc::{
 
     MpcProtocol, MpcParty, MpcNetwork, MpcManager, ComputationConfig, SessionId,

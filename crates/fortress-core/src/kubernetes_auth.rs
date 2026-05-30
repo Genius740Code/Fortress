@@ -32,7 +32,7 @@
 
 use crate::error::{FortressError, Result};
 use crate::secrets::{SecretsEngine, EngineStatus, EngineStats, EngineType, LeaseInfo, Secret, SecretMetadata};
-use crate::encryption::{EncryptionAlgorithm, Aegis256};
+use crate::encryption::{EncryptionAlgorithm, Aegis256Wrapper as Aegis256};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;

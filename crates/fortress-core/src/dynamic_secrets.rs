@@ -106,7 +106,7 @@ use crate::secrets::{EngineStatus, EngineStats, EngineType, LeaseInfo, Secret, S
 
 use crate::secure_audit::SecureAuditLogger;
 
-use crate::encryption::{EncryptionAlgorithm, Aegis256};
+use crate::encryption::{EncryptionAlgorithm, Aegis256Wrapper as Aegis256};
 
 use serde::{Deserialize, Serialize};
 

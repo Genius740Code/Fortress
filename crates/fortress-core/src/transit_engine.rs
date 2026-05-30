@@ -57,7 +57,7 @@
 //! ```
 
 use crate::error::{FortressError, Result, EncryptionErrorCode};
-use crate::encryption::{Aegis256, EncryptionAlgorithm};
+use crate::encryption::{Aegis256Wrapper as Aegis256, EncryptionAlgorithm};
 use crate::key::{SecureKey, KeyManager};
 use serde::{Serialize, Deserialize};
 use std::collections::HashMap;

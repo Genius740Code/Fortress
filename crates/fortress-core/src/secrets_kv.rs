@@ -35,7 +35,7 @@ use crate::secrets::{EngineStatus, EngineStats, EngineType, LeaseInfo, Secret, S
 use crate::storage::{StorageBackend, InMemoryStorage, FileSystemStorage};
 #[cfg(feature = "cloud-storage")]
 use crate::storage::S3Storage;
-use crate::encryption::{EncryptionAlgorithm, Aegis256};
+use crate::encryption::{EncryptionAlgorithm, Aegis256Wrapper as Aegis256};
 use crate::secure_audit::SecureAuditLogger;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

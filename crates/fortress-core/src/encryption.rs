@@ -32,6 +32,7 @@ use sha2::{Sha256, Sha512, Digest};
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac};
 use argon2::PasswordHasher;
+// use aegis::aegis256::Aegis256;
 type HmacSha256 = Hmac<Sha256>;
 type HmacSha512 = Hmac<Sha512>;
 // AEGIS crate imported for real AEGIS-256 implementation
@@ -684,25 +685,27 @@ impl fmt::Debug for SecureKey {
 /// AES-256-GCM is a widely-used AEAD construction that provides excellent
 /// performance and strong security guarantees.
 #[derive(Debug, Clone)]
-pub struct Aegis256 {
-    // Using AES-GCM as fallback for AEGIS
+pub struct Aegis256Wrapper {
+    // Using AEGIS-256 for encryption
 }
 
-impl Aegis256 {
-    /// Create a new AEGIS-256 instance (using AES-GCM internally)
+pub use Aegis256Wrapper as Aegis256;
+
+impl Aegis256Wrapper {
+    /// Create a new AEGIS-256 instance
     pub fn new() -> Self {
         Self {}
     }
 }
 
-impl Default for Aegis256 {
+impl Default for Aegis256Wrapper {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[async_trait]
-impl EncryptionAlgorithm for Aegis256 {
+impl EncryptionAlgorithm for Aegis256Wrapper {
     fn encrypt(&self, plaintext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
         if key.len() != 32 {
             return Err(FortressError::encryption(
@@ -712,8 +715,8 @@ impl EncryptionAlgorithm for Aegis256 {
             ));
         }
         
-        // Generate random nonce
-        let mut nonce = vec![0u8; 12];
+        // Generate random nonce (AEGIS-256 uses 16-byte nonce)
+        let mut nonce = vec![0u8; 16];
         match crate::trng::fill_random(&mut nonce) {
             Ok(_) => {},
             Err(_) => {
@@ -726,25 +729,17 @@ impl EncryptionAlgorithm for Aegis256 {
             }
         }
         
-        // Use AES-GCM for encryption (as AEGIS fallback)
-        let cipher = aes_gcm::Aes256Gcm::new_from_slice(key)
-            .map_err(|_e| FortressError::encryption(
-                "Failed to create cipher",
-                "aegis256",
-                EncryptionErrorCode::EncryptionFailed,
-            ))?;
+        // Use AEGIS-256 for encryption
+        let cipher: aegis::aegis256::Aegis256<16> = aegis::aegis256::Aegis256::new(
+            key.try_into().expect("Key must be 32 bytes"), 
+            nonce.as_slice().try_into().expect("Nonce must be 16 bytes")
+        );
         
-        let nonce = aes_gcm::Nonce::from_slice(&nonce);
-        let ciphertext = cipher
-            .encrypt(nonce, plaintext)
-            .map_err(|_e| FortressError::encryption(
-                "Encryption failed",
-                "aegis256",
-                EncryptionErrorCode::EncryptionFailed,
-            ))?;
+        let (ciphertext, tag) = cipher.encrypt(plaintext, &[]);
         
-        // Prepend nonce to ciphertext for decrypt compatibility
-        let mut result = nonce.to_vec();
+        // Prepend nonce and tag to ciphertext for decrypt compatibility
+        let mut result = nonce;
+        result.extend_from_slice(tag.as_ref());
         result.extend_from_slice(&ciphertext);
         Ok(result)
     }
@@ -758,27 +753,28 @@ impl EncryptionAlgorithm for Aegis256 {
             ));
         }
         
-        if ciphertext.len() < 12 {
+        if ciphertext.len() < 16 + 16 { // Nonce + Tag
             return Err(FortressError::encryption(
-                "AEGIS-256 ciphertext too short (missing nonce)",
+                "AEGIS-256 ciphertext too short",
                 "aegis256",
                 EncryptionErrorCode::DecryptionFailed,
             ));
         }
         
-        // Use AES-GCM for decryption (as AEGIS fallback)
-        let cipher = aes_gcm::Aes256Gcm::new_from_slice(key)
-            .map_err(|_e| FortressError::encryption(
-                "Failed to create cipher",
-                "aegis256",
-                EncryptionErrorCode::DecryptionFailed,
-            ))?;
+        let nonce = &ciphertext[..16];
+        let tag = &ciphertext[16..32];
+        let actual_ciphertext = &ciphertext[32..];
+
+        // Use AEGIS-256 for decryption
+        let cipher: aegis::aegis256::Aegis256<16> = aegis::aegis256::Aegis256::new(
+            key.try_into().expect("Key must be 32 bytes"), 
+            nonce.try_into().expect("Nonce must be 16 bytes")
+        );
         
-        let nonce = aes_gcm::Nonce::from_slice(&ciphertext[..12]);
         let plaintext = cipher
-            .decrypt(nonce, &ciphertext[12..])
+            .decrypt(actual_ciphertext, tag.try_into().expect("Tag must be 16 bytes"), &[])
             .map_err(|_| FortressError::encryption(
-                "AEGIS-256 decryption failed",
+                "AEGIS-256 decryption failed (invalid tag)",
                 "aegis256",
                 EncryptionErrorCode::DecryptionFailed,
             ))?;
@@ -791,7 +787,7 @@ impl EncryptionAlgorithm for Aegis256 {
     }
 
     fn nonce_size(&self) -> usize {
-        12 // 96-bit nonce for AES-256-GCM
+        16 // 128-bit nonce for AEGIS-256
     }
 
     fn tag_size(&self) -> usize {
@@ -1251,6 +1247,10 @@ impl Default for Blake3Encrypt {
 
 #[async_trait]
 impl EncryptionAlgorithm for Blake3Encrypt {
+    fn is_aead(&self) -> bool {
+        true 
+    }
+
     fn encrypt(&self, plaintext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
         if key.len() != self.key_size() {
             return Err(FortressError::encryption(
@@ -1303,8 +1303,15 @@ impl EncryptionAlgorithm for Blake3Encrypt {
             *byte ^= keystream[i];
         }
         
-        // Prepend nonce to ciphertext
+        // Calculate authentication tag
+        let mut tag_hasher = Blake3Hasher::new_keyed(&key_array);
+        tag_hasher.update(&nonce);
+        tag_hasher.update(&ciphertext);
+        let tag = tag_hasher.finalize();
+
+        // Prepend nonce and tag to ciphertext
         let mut result = nonce;
+        result.extend_from_slice(tag.as_bytes());
         result.extend_from_slice(&ciphertext);
         
         Ok(result)
@@ -1319,25 +1326,40 @@ impl EncryptionAlgorithm for Blake3Encrypt {
             ));
         }
 
-        if ciphertext.len() < self.nonce_size() {
+        if ciphertext.len() < self.nonce_size() + self.tag_size() {
             return Err(FortressError::encryption(
-                "Ciphertext too short to contain nonce".to_string(),
+                "Ciphertext too short to contain nonce and tag".to_string(),
                 self.name().to_string(),
                 EncryptionErrorCode::DecryptionFailed,
             ));
         }
 
-        // Extract nonce from the beginning of ciphertext
+        // Extract nonce, tag and actual ciphertext
         let nonce = &ciphertext[..self.nonce_size()];
-        let actual_ciphertext = &ciphertext[self.nonce_size()..];
+        let tag = &ciphertext[self.nonce_size()..self.nonce_size() + self.tag_size()];
+        let actual_ciphertext = &ciphertext[self.nonce_size() + self.tag_size()..];
 
-        // Generate the same keystream
+        // Verify authentication tag
         let key_array: [u8; 32] = key.try_into().map_err(|_| FortressError::encryption(
             "Invalid key length for Blake3: expected 32 bytes".to_string(),
             self.name().to_string(),
             EncryptionErrorCode::InvalidKeyLength,
         ))?;
-        
+
+        let mut tag_hasher = Blake3Hasher::new_keyed(&key_array);
+        tag_hasher.update(nonce);
+        tag_hasher.update(actual_ciphertext);
+        let expected_tag = tag_hasher.finalize();
+
+        if tag != expected_tag.as_bytes() {
+            return Err(FortressError::encryption(
+                "Authentication failed: invalid tag".to_string(),
+                self.name().to_string(),
+                EncryptionErrorCode::AuthenticationFailed,
+            ));
+        }
+
+        // Generate the same keystream
         let mut hasher = Blake3Hasher::new_keyed(&key_array);
         hasher.update(nonce);
         
@@ -2618,7 +2640,7 @@ impl EncryptionAlgorithm for Kmac256 {
 pub fn create_algorithm(name: &str) -> Result<Box<dyn EncryptionAlgorithm>> {
 
     match name.to_lowercase().as_str() {
-        "aegis256" | "aegis-256" => Ok(Box::new(Aegis256::new())),
+        "aegis256" | "aegis-256" => Ok(Box::new(Aegis256Wrapper::new())),
         "chacha20poly1305" | "chacha20-poly1305" => {
             Ok(Box::new(ChaCha20Poly1305::new()))
         }
@@ -3051,7 +3073,7 @@ mod tests {
     #[test]
     fn test_aegis256_implementation() {
         // This test verifies that our AEGIS-256 implementation works correctly
-        let algorithm = Aegis256::new();
+        let algorithm = Aegis256Wrapper::new();
         let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
         let plaintext = b"Hello, Fortress! Testing AEGIS-256 implementation.";
         
@@ -3065,7 +3087,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_aegis256_encrypt_decrypt() {
-        let algorithm = Aegis256::new();
+        let algorithm = Aegis256Wrapper::new();
         let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
         let plaintext = b"Hello, Fortress! Testing async AEGIS-256.";
         

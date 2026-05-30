@@ -1121,17 +1121,29 @@ pub struct MfaManager {
     config: MfaConfig,
 }
 
+use totp_rs::Totp;
+
 impl MfaManager {
     pub fn new(config: MfaConfig) -> Self {
         Self { config }
     }
 
-    pub fn verify_mfa(&self, _method: &MfaMethod, _code: &str) -> Result<bool, FortressError> {
-        Ok(true)
+    pub fn verify_mfa(&self, method: &MfaMethod, code: &str) -> Result<bool, FortressError> {
+        // Implement real MFA verification
+        match method {
+            MfaMethod::Totp => self.verify_totp(&self.config.totp_config.secret, code),
+            MfaMethod::BackupCode => self.verify_backup_code(&self.config.user_id, code),
+            _ => Ok(false), // Stub for other methods
+        }
     }
 
-    pub fn verify_totp(&self, _secret: &str, _code: &str) -> Result<bool, FortressError> {
-        Ok(true)
+    pub fn verify_totp(&self, secret: &str, code: &str) -> Result<bool, FortressError> {
+        let totp = Totp::from_base32(secret).map_err(|e| FortressError::encryption(
+            format!("Failed to create TOTP: {}", e),
+            "totp".to_string(),
+            EncryptionErrorCode::DecryptionFailed,
+        ))?;
+        Ok(totp.check_current(code))
     }
 
     pub fn verify_hardware_token(&self, _token: &str, _user_id: &str) -> Result<bool, FortressError> {

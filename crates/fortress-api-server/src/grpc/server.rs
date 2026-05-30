@@ -1,6 +1,6 @@
 use crate::grpc::service::FortressGrpcService;
 use crate::error::ServerError;
-use fortress_core::encryption::Aegis256;
+use fortress_core::encryption::Aegis256Wrapper;
 use fortress_core::key::InMemoryKeyManager;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -27,7 +27,7 @@ pub struct GrpcServer {
 impl GrpcServer {
     /// Create a new gRPC server instance
     pub fn new(addr: SocketAddr) -> Self {
-        let encryption_manager = Arc::new(Aegis256::new());
+        let encryption_manager = Arc::new(Aegis256Wrapper::new());
         let key_manager = Arc::new(InMemoryKeyManager::new());
         
         Self {
