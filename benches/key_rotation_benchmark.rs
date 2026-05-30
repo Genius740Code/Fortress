@@ -26,7 +26,7 @@ fn bench_basic_rotation(c: &mut Criterion) {
                 let algorithm = create_algorithm("aegis256").unwrap();
                 let security_context = SecurityContext {
                     requestor_id: "benchmark_user".to_string(),
-                    security_level: fortress_core::audit::SecurityLevel::Standard,
+                    security_level: fortress_core::audit::SecurityLevel::Low,
                     required_permissions: vec!["key.rotate".to_string()],
                     ip_address: None,
                     user_agent: None,
@@ -81,7 +81,7 @@ fn bench_concurrent_rotations(c: &mut Criterion) {
                         let algorithm = create_algorithm("aegis256").unwrap();
                         let security_context = SecurityContext {
                             requestor_id: "benchmark_user".to_string(),
-                            security_level: fortress_core::audit::SecurityLevel::Standard,
+                            security_level: fortress_core::audit::SecurityLevel::Low,
                             required_permissions: vec!["key.rotate".to_string()],
                             ip_address: None,
                             user_agent: None,
@@ -154,7 +154,7 @@ fn bench_bulk_rotation(c: &mut Criterion) {
                         let algorithm = create_algorithm("aegis256").unwrap();
                         let security_context = SecurityContext {
                             requestor_id: "benchmark_user".to_string(),
-                            security_level: fortress_core::audit::SecurityLevel::Standard,
+                            security_level: fortress_core::audit::SecurityLevel::Low,
                             required_permissions: vec!["key.rotate".to_string()],
                             ip_address: None,
                             user_agent: None,
@@ -212,7 +212,7 @@ fn bench_memory_efficiency(c: &mut Criterion) {
                 let algorithm = create_algorithm("aegis256").unwrap();
                 let security_context = SecurityContext {
                     requestor_id: "benchmark_user".to_string(),
-                    security_level: fortress_core::audit::SecurityLevel::Standard,
+                    security_level: fortress_core::audit::SecurityLevel::Low,
                     required_permissions: vec!["key.rotate".to_string()],
                     ip_address: None,
                     user_agent: None,
@@ -330,7 +330,7 @@ fn bench_timeout_handling(c: &mut Criterion) {
                         let algorithm = create_algorithm("aegis256").unwrap();
                         let security_context = SecurityContext {
                             requestor_id: "benchmark_user".to_string(),
-                            security_level: fortress_core::audit::SecurityLevel::Standard,
+                            security_level: fortress_core::audit::SecurityLevel::Low,
                             required_permissions: vec!["key.rotate".to_string()],
                             ip_address: None,
                             user_agent: None,
@@ -389,7 +389,7 @@ fn bench_metrics_overhead(c: &mut Criterion) {
                         let algorithm = create_algorithm("aegis256").unwrap();
                         let security_context = SecurityContext {
                             requestor_id: "benchmark_user".to_string(),
-                            security_level: fortress_core::audit::SecurityLevel::Standard,
+                            security_level: fortress_core::audit::SecurityLevel::Low,
                             required_permissions: vec!["key.rotate".to_string()],
                             ip_address: None,
                             user_agent: None,
@@ -417,8 +417,8 @@ fn bench_metrics_overhead(c: &mut Criterion) {
                             black_box(security_context)
                         ).await;
                         
-                        black_box(result.unwrap())
-                        
+                        black_box(result.unwrap());
+
                         // Get metrics if enabled
                         if metrics_enabled {
                             black_box(rotation_manager.get_metrics().await);

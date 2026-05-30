@@ -150,9 +150,10 @@ pub struct SecurityContext {
 }
 
 /// Optimized key rotation manager
+#[derive(Clone)]
 pub struct OptimizedKeyRotationManager<T: KeyManager> {
     /// Underlying key manager
-    key_manager: Arc<T>,
+    pub key_manager: Arc<T>,
     /// Rotation configuration
     config: OptimizedRotationConfig,
     /// Performance metrics

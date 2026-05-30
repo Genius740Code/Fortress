@@ -224,7 +224,7 @@ impl KeyManager for InMemoryKeyManager {
             metadata,
         ) {
             // Don't fail the operation if logging fails, but log the error
-            eprintln!("Failed to log key generation: {}", e);
+            tracing::error!("Failed to log key generation: {}", e);
         }
         
         Ok(key)
@@ -256,7 +256,7 @@ impl KeyManager for InMemoryKeyManager {
             EventOutcome::Success,
             audit_metadata,
         ) {
-            eprintln!("Failed to log key storage: {}", e);
+            tracing::error!("Failed to log key storage: {}", e);
         }
         
         Ok(())
@@ -293,7 +293,7 @@ impl KeyManager for InMemoryKeyManager {
             outcome,
             metadata,
         ) {
-            eprintln!("Failed to log key retrieval: {}", e);
+            tracing::error!("Failed to log key retrieval: {}", e);
         }
         
         result
@@ -326,7 +326,7 @@ impl KeyManager for InMemoryKeyManager {
             outcome,
             metadata,
         ) {
-            eprintln!("Failed to log key deletion: {}", e);
+            tracing::error!("Failed to log key deletion: {}", e);
         }
         
         if result.is_some() {
@@ -397,7 +397,7 @@ impl KeyManager for InMemoryKeyManager {
             EventOutcome::Success,
             audit_metadata,
         ) {
-            eprintln!("Failed to log rotation start: {}", e);
+            tracing::error!("Failed to log rotation start: {}", e);
         }
         
         // Phase 1: Prepare new key without disrupting existing operations
@@ -513,7 +513,7 @@ impl KeyManager for InMemoryKeyManager {
             EventOutcome::Success,
             success_metadata,
         ) {
-            eprintln!("Failed to log rotation completion: {}", e);
+            tracing::error!("Failed to log rotation completion: {}", e);
         }
         
         Ok(())
@@ -606,7 +606,7 @@ impl KeyManager for InMemoryKeyManager {
         
         if let Err(e) = cleanup_result {
             // Log cleanup failure but don't fail the operation
-            eprintln!("Warning: Failed to cleanup old key version {}: {}", old_versioned_id, e);
+            tracing::warn!("Warning: Failed to cleanup old key version {}: {}", old_versioned_id, e);
         }
         
         // Cleanup versioned new key (it's now the main key)
@@ -690,7 +690,7 @@ impl KeyManager for InMemoryKeyManager {
         let cleanup_result = self.delete_key(&new_versioned_id).await;
         
         if let Err(e) = cleanup_result {
-            eprintln!("Warning: Failed to cleanup failed new key version {}: {}", new_versioned_id, e);
+            tracing::warn!("Warning: Failed to cleanup failed new key version {}: {}", new_versioned_id, e);
         }
         
         Ok(())
@@ -1561,7 +1561,7 @@ impl SmartKeyRotationScheduler {
                 }
                 Err(e) => {
                     // Log rotation failure but continue with others
-                    eprintln!("Failed to rotate key {}: {}", key_id, e);
+                    tracing::error!("Failed to rotate key {}: {}", key_id, e);
                 }
             }
         }
@@ -1724,7 +1724,7 @@ impl RotationScheduler {
                 
                 // Check all keys for rotation
                 if let Err(e) = Self::check_and_rotate_keys(&key_manager, &policies).await {
-                    eprintln!("Rotation check failed: {}", e);
+                    tracing::error!("Rotation check failed: {}", e);
                 }
             }
         });
@@ -1773,7 +1773,7 @@ impl RotationScheduler {
                     
                     // Perform zero-downtime rotation
                     if let Err(e) = key_manager.rotate_key_with_zero_downtime(&key_id, algorithm.as_ref()).await {
-                        eprintln!("Failed to rotate key {}: {}", key_id, e);
+                        tracing::error!("Failed to rotate key {}: {}", key_id, e);
                         continue;
                     }
                     
@@ -1794,7 +1794,7 @@ impl RotationScheduler {
                         EventOutcome::Success,
                         audit_metadata,
                     ) {
-                        eprintln!("Failed to log rotation: {}", e);
+                        tracing::error!("Failed to log rotation: {}", e);
                     }
                 }
                 
@@ -1815,7 +1815,7 @@ impl RotationScheduler {
                         EventOutcome::Success,
                         notification_metadata,
                     ) {
-                        eprintln!("Failed to log rotation notification: {}", e);
+                        tracing::error!("Failed to log rotation notification: {}", e);
                     }
                 }
             }

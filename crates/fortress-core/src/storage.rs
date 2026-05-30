@@ -53,13 +53,25 @@ pub trait StorageBackend: Send + Sync + fmt::Debug {
 
     /// Batch get multiple keys efficiently
     async fn batch_get(&self, keys: &[String]) -> Result<Vec<(String, Option<Vec<u8>>)>> {
-        // Use concurrent operations with bounded concurrency
+        use std::sync::Arc;
+        use tokio::sync::Semaphore;
         use futures::future::join_all;
         
+        // Bound concurrency to 10 concurrent requests to avoid resource exhaustion
+        let semaphore = Arc::new(Semaphore::new(10));
+        
         let futures: Vec<_> = keys.iter()
-            .map(|key| async move {
-                let value = self.get(key).await?;
-                Ok::<_, FortressError>((key.as_str().to_string(), value))
+            .map(|key| {
+                let sem = semaphore.clone();
+                async move {
+                    let _permit = sem.acquire().await.map_err(|e| FortressError::storage(
+                        format!("Concurrency limit error: {}", e),
+                        self.metadata().backend_type,
+                        StorageErrorCode::ConnectionFailed,
+                    ))?;
+                    let value = self.get(key).await?;
+                    Ok::<_, FortressError>((key.clone(), value))
+                }
             })
             .collect();
         
@@ -774,7 +786,14 @@ impl StorageBackend for S3Storage {
                 Ok(Some(data))
             }
             Err(e) => {
-                // Simple error handling - check if error message contains "NoSuchKey"
+                // Check if the error is a NoSuchKey service error using SDK types
+                if let aws_sdk_s3::error::SdkError::ServiceError(err) = &e {
+                    if err.err().is_no_such_key() {
+                        return Ok(None);
+                    }
+                }
+                
+                // Fallback to string matching as safety
                 if e.to_string().contains("NoSuchKey") {
                     Ok(None)
                 } else {
@@ -818,7 +837,14 @@ impl StorageBackend for S3Storage {
         {
             Ok(_) => Ok(true),
             Err(e) => {
-                // Simple error handling - check if error message contains "NoSuchKey"
+                // Check if the error is a NotFound service error using SDK types
+                if let aws_sdk_s3::error::SdkError::ServiceError(err) = &e {
+                    if err.err().is_not_found() {
+                        return Ok(false);
+                    }
+                }
+                
+                // Fallback to string matching as safety
                 if e.to_string().contains("NoSuchKey") {
                     Ok(false)
                 } else {

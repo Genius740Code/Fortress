@@ -41,7 +41,7 @@ pub struct User {
     pub created_at: u64,
     /// Last login timestamp
     pub last_login: Option<u64>,
-    /// Password hash (in production, this would be properly hashed)
+    /// Password hash (Argon2id)
     pub password_hash: String,
 }
 
@@ -1261,6 +1261,8 @@ pub struct AuthManager {
     permissions: HashMap<PermissionId, AuthPermission>,
     /// Active tokens
     tokens: HashMap<String, AuthToken>,
+    /// Secure API Keys
+    api_keys: HashMap<String, UserId>,
     /// Session manager
     session_manager: SessionManager,
     /// Configuration
@@ -1397,6 +1399,7 @@ impl AuthManager {
             roles: HashMap::new(),
             permissions: HashMap::new(),
             tokens: HashMap::new(),
+            api_keys: HashMap::new(),
             session_manager: SessionManager::new(config.clone()),
             config: config.clone(),
             mfa_manager: MfaManager::new(config.mfa_config.clone()),
@@ -1766,12 +1769,47 @@ impl AuthManager {
         Ok(user)
     }
 
+    /// Register an API key for a user
+    pub fn register_api_key(&mut self, api_key: String, user_id: UserId) -> Result<(), FortressError> {
+        if !self.users.contains_key(&user_id) {
+            return Err(FortressError::validation("User not found", None, None));
+        }
+        let hashed = self.hash_api_key(&api_key);
+        self.api_keys.insert(hashed, user_id);
+        Ok(())
+    }
+
+    /// Hash an API key securely using SHA-256 with a salt
+    pub fn hash_api_key(&self, api_key: &str) -> String {
+        use sha2::{Sha256, Digest};
+        let mut hasher = Sha256::new();
+        hasher.update(api_key.as_bytes());
+        hasher.update(b"fortress_api_key_salt"); // Secure salt
+        format!("{:x}", hasher.finalize())
+    }
+
     /// Authenticate using an API key
-    pub async fn authenticate_api_key(&self, _api_key: &str, _ip_address: &str) -> Result<AuthToken, FortressError> {
-        // TODO: In a real implementation, validate the API key securely against a database
-        // For now, API key authentication is not implemented for security reasons.
-        // It should involve a secure lookup of the provided api_key against stored, hashed API keys.
-        Err(FortressError::authentication("API key authentication not implemented", None))
+    pub async fn authenticate_api_key(&mut self, api_key: &str, _ip_address: &str) -> Result<AuthToken, FortressError> {
+        let hashed_key = self.hash_api_key(api_key);
+        
+        let user_id = self.api_keys.get(&hashed_key)
+            .ok_or_else(|| FortressError::authentication("Invalid API key", None))?
+            .clone();
+            
+        let user = self.users.get(&user_id)
+            .ok_or_else(|| FortressError::authentication("User not found", None))?;
+            
+        if !user.active {
+            return Err(FortressError::authentication("User is not active", None));
+        }
+        
+        // Generate a new token for the user
+        let token = self.create_token(user)?;
+        
+        // Store the active token
+        self.tokens.insert(token.token.clone(), token.clone());
+        
+        Ok(token)
     }
 
     /// Check if a user has a specific permission
@@ -1959,14 +1997,20 @@ impl AuthManager {
     pub fn change_password(
         &mut self,
         user_id: &UserId,
-        _current_password: &str,
+        current_password: &str,
         new_password: &str,
     ) -> Result<(), FortressError> {
         let user = self.users.get_mut(user_id)
             .ok_or_else(|| FortressError::validation("User not found", None, None))?;
         
-        // Verify current password (simplified for tests)
-        // In production, this would verify against the stored hash
+        // Verify current password against stored hash using Argon2id
+        let parsed_hash = PasswordHash::new(&user.password_hash)
+            .map_err(|_| FortressError::authentication("Invalid password hash format", None))?;
+        
+        let argon2 = Argon2::default();
+        if argon2.verify_password(current_password.as_bytes(), &parsed_hash).is_err() {
+            return Err(FortressError::authentication("Invalid current password", None));
+        }
         
         // Validate new password
         let policy = &self.config.password_policy;
@@ -1986,7 +2030,7 @@ impl AuthManager {
             return Err(FortressError::validation("Password must contain special characters", None, None));
         }
         
-        // Hash new password
+        // Hash new password using Argon2id
         let salt = SaltString::generate(&mut OsRng);
         let argon2 = Argon2::default();
         let password_hash = argon2
@@ -2601,6 +2645,35 @@ mod tests {
         
         let result = auth.authenticate(login_request).await;
         assert!(result.is_ok());
+        
+        // Changing password with wrong current password should fail
+        let bad_change_result = auth.change_password(&user_id, "WrongPassword!", "BrandNew123!");
+        assert!(bad_change_result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_api_key_authentication() {
+        let mut auth = AuthManager::new();
+        
+        let user_id = auth.create_user("apikey_user".to_string(), "Password123!".to_string()).await
+            .expect("Failed to create user");
+            
+        let api_key = "secure_api_key_for_testing_123456".to_string();
+        
+        // Register API key
+        auth.register_api_key(api_key.clone(), user_id.clone())
+            .expect("Failed to register API key");
+            
+        // Authenticate with valid key
+        let auth_token_result = auth.authenticate_api_key(&api_key, "127.0.0.1").await;
+        assert!(auth_token_result.is_ok());
+        
+        let auth_token = auth_token_result.unwrap();
+        assert_eq!(auth_token.user_id, user_id);
+        
+        // Authenticate with invalid key should fail
+        let bad_auth_result = auth.authenticate_api_key("wrong_api_key_string", "127.0.0.1").await;
+        assert!(bad_auth_result.is_err());
     }
 
     #[tokio::test]

@@ -4,28 +4,21 @@
 //! in Fortress, making it easier for CLI tools and other components to interact
 //! with the key system without needing to know about specific implementations.
 
-// TODO: Implement once DatabaseKeyManager is available
+use crate::error::{Result, FortressError, KeyErrorCode};
+use crate::key::{KeyManager, InMemoryKeyManager, SecureKey, KeyMetadata, KeyId, KeyVersion};
+use async_trait::async_trait;
+use std::sync::Arc;
 
 /// Unified key manager that provides a simple interface to all key operations
-// TODO: Implement once DatabaseKeyManager is available
+#[derive(Debug, Clone)]
 pub struct UnifiedKeyManager {
-    // Placeholder implementation
+    inner: Arc<InMemoryKeyManager>,
 }
 
-/*
 impl UnifiedKeyManager {
     /// Create a new unified key manager with default configuration
     pub async fn new() -> Result<Self> {
-        let config = DatabaseKeyManagerConfig::default();
-        let manager = DatabaseKeyManager::new(config).await?;
-        Ok(Self {
-            inner: Arc::new(manager),
-        })
-    }
-
-    /// Create a new unified key manager with custom configuration
-    pub async fn with_config(config: DatabaseKeyManagerConfig) -> Result<Self> {
-        let manager = DatabaseKeyManager::new(config).await?;
+        let manager = InMemoryKeyManager::new();
         Ok(Self {
             inner: Arc::new(manager),
         })
@@ -69,15 +62,15 @@ impl UnifiedKeyManager {
 
 #[async_trait]
 impl KeyManager for UnifiedKeyManager {
-    async fn generate_key(&self, algorithm: &dyn crate::encryption::EncryptionAlgorithm) -> Result<crate::key::SecureKey> {
+    async fn generate_key(&self, algorithm: &dyn crate::encryption::EncryptionAlgorithm) -> Result<SecureKey> {
         self.inner.generate_key(algorithm).await
     }
 
-    async fn store_key(&self, key_id: &KeyId, key: &crate::key::SecureKey, metadata: &KeyMetadata) -> Result<()> {
+    async fn store_key(&self, key_id: &KeyId, key: &SecureKey, metadata: &KeyMetadata) -> Result<()> {
         self.inner.store_key(key_id, key, metadata).await
     }
 
-    async fn retrieve_key(&self, key_id: &KeyId) -> Result<(crate::key::SecureKey, KeyMetadata)> {
+    async fn retrieve_key(&self, key_id: &KeyId) -> Result<(SecureKey, KeyMetadata)> {
         self.inner.retrieve_key(key_id).await
     }
 
@@ -129,7 +122,7 @@ impl KeyManager for UnifiedKeyManager {
         self.inner.needs_rotation(key_id).await
     }
 
-    async fn get_active_key(&self, purpose: &str) -> Result<(crate::key::SecureKey, KeyMetadata)> {
+    async fn get_active_key(&self, purpose: &str) -> Result<(SecureKey, KeyMetadata)> {
         self.inner.get_active_key(purpose).await
     }
 
@@ -163,8 +156,17 @@ mod tests {
         // Generate a test key
         let algorithm = Aegis256::new();
         let key = manager.generate_key(&algorithm).await.unwrap();
-        let key_id = KeyId::new();
-        let metadata = KeyMetadata::new(&algorithm);
+        let key_id = uuid::Uuid::new_v4().to_string();
+        
+        let metadata = KeyMetadata::new(
+            key_id.clone(),
+            algorithm.name().to_string(),
+            1,
+            chrono::Utc::now(),
+            chrono::Utc::now() + chrono::Duration::days(90),
+            "encryption".to_string(),
+            crate::encryption::PerformanceProfile::Balanced,
+        );
         
         // Store the key
         manager.store_key(&key_id, &key, &metadata).await.unwrap();
@@ -185,8 +187,17 @@ mod tests {
         // Generate test keys with different algorithms
         let algorithm1 = Aegis256::new();
         let key1 = manager.generate_key(&algorithm1).await.unwrap();
-        let key_id1 = KeyId::new();
-        let metadata1 = KeyMetadata::new(&algorithm1);
+        let key_id1 = uuid::Uuid::new_v4().to_string();
+        
+        let metadata1 = KeyMetadata::new(
+            key_id1.clone(),
+            algorithm1.name().to_string(),
+            1,
+            chrono::Utc::now(),
+            chrono::Utc::now() + chrono::Duration::days(90),
+            "encryption".to_string(),
+            crate::encryption::PerformanceProfile::Balanced,
+        );
         
         manager.store_key(&key_id1, &key1, &metadata1).await.unwrap();
         
@@ -199,4 +210,3 @@ mod tests {
         manager.delete_key(&key_id1).await.unwrap();
     }
 }
-*/
