@@ -13,7 +13,7 @@ use axum::{
 };
 use chrono::{Utc, DateTime};
 use fortress_core::{
-    encryption::{EncryptionAlgorithm, Aegis256Wrapper},
+    encryption::{EncryptionAlgorithm, Aegis256},
     key::{KeyManager, SecureKey, InMemoryKeyManager},
     storage::StorageBackend,
     field_encryption::FieldEncryptionManager,
@@ -215,7 +215,7 @@ pub async fn store_data(
     // Ensure the key exists; if not, generate and store it.
     // This keeps the API usable without requiring a prior key-generation call.
     if !state.key_manager.key_exists(&key_id).await.map_err(ServerError::Core)? {
-        let algorithm = Aegis256Wrapper::new();
+        let algorithm = Aegis256::new();
         let new_key = state
             .key_manager
             .generate_key(&algorithm)
@@ -252,7 +252,7 @@ pub async fn store_data(
         .map_err(|e| ServerError::serialization(e.to_string()))?;
     
     let plaintext = data_json.as_bytes();
-    let ciphertext = match Aegis256Wrapper::new().encrypt(plaintext, key_bytes) {
+    let ciphertext = match Aegis256::new().encrypt(plaintext, key_bytes) {
         Ok(ciphertext) => ciphertext,
         Err(e) => return Err(ServerError::Core(e)),
     };
@@ -389,7 +389,7 @@ pub async fn retrieve_data(
     let key_bytes = key.0.as_bytes();
 
     // Decrypt the data
-    let plaintext = Aegis256Wrapper::new().decrypt(&storage_record.data, key_bytes)
+    let plaintext = Aegis256::new().decrypt(&storage_record.data, key_bytes)
         .map_err(|e| ServerError::Core(e))?;
     
     let decrypted_data: serde_json::Value = serde_json::from_slice(&plaintext)
@@ -640,10 +640,10 @@ pub async fn generate_key(
 
     // Parse algorithm and create key
     let algorithm = match request.algorithm.to_lowercase().as_str() {
-        "aegis256" => Aegis256Wrapper::new(),
+        "aegis256" => Aegis256::new(),
         "aes256" => {
             // For now, use AEGIS-256 as default for all requests
-            Aegis256Wrapper::new()
+            Aegis256::new()
         }
         _ => {
             return Err(ServerError::validation(format!("Unsupported algorithm: {}", request.algorithm)));

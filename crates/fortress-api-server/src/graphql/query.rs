@@ -600,34 +600,9 @@ impl Query {
     }
 
     /// Get a specific dynamic credential
-    async fn get_dynamic_credential(&self, ctx: &Context<'_>, lease_id: String) -> Result<Option<SecretData>> {
-        let graphql_ctx = from_context(ctx)?;
-        
-        // Check permissions - require at least user role
-        graphql_ctx.require_role("user")?;
-
-        let dynamic_secrets = &graphql_ctx.app_state.dynamic_secrets;
-        let secret = dynamic_secrets.read(&lease_id).await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to get dynamic credential: {}", e)))?;
-
-        match secret {
-            Some(secret) => {
-                let secret_data = SecretData {
-                    data: secret.data,
-                    created_at: secret.metadata.created_at,
-                    updated_at: secret.metadata.updated_at,
-                    version: secret.metadata.version as i32, // Cast u64 to i32
-                    lease: secret.lease.map(|lease| crate::graphql::types::LeaseInfo {
-                        lease_id: lease.lease_id,
-                        ttl: lease.ttl,
-                        created_at: lease.created_at,
-                        renewable: lease.renewable,
-                        max_ttl: lease.max_ttl,
-                    }),
-                };
-                Ok(Some(secret_data))
-            },
-            None => Ok(None),
-        }
+    // TODO: This function is broken - DynamicSecretsEngine doesn't have a read method
+    // Need to implement proper credential retrieval or use SecretsKvEngine for static secrets
+    async fn get_dynamic_credential(&self, _ctx: &Context<'_>, _lease_id: String) -> Result<Option<SecretData>> {
+        Err(async_graphql::Error::new("Dynamic credential retrieval not implemented - DynamicSecretsEngine doesn't have a read method"))
     }
 }
