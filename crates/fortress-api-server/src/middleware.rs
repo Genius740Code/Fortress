@@ -113,6 +113,8 @@ struct SuspiciousIpInfo {
     blocked: bool,
     /// Block expiry time
     block_expiry: Option<Instant>,
+    /// Window start time
+    window_start: Instant,
 }
 
 /// DDoS protection configuration
@@ -231,7 +233,14 @@ impl DdosProtection {
                 reputation_score: 100, // Start with perfect reputation
                 blocked: false,
                 block_expiry: None,
+                window_start: now,
             });
+
+        // Reset per-minute counter if window passed
+        if now.duration_since(ip_info.window_start) >= Duration::from_secs(60) {
+            ip_info.requests_per_minute = 0;
+            ip_info.window_start = now;
+        }
 
         // Decay reputation over time
         let hours_since_last_activity = now.duration_since(ip_info.last_activity).as_secs() / 3600;

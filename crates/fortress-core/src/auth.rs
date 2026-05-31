@@ -1443,6 +1443,7 @@ impl AuthManager {
     pub async fn create_user(
         &mut self,
         username: String,
+        email: String,
         password: String,
     ) -> Result<UserId, FortressError> {
         // Validate username
@@ -1471,7 +1472,7 @@ impl AuthManager {
         let user = User {
             id: user_id.clone(),
             username: username.clone(),
-            email: format!("{}@example.com", username),
+            email,
             full_name: username.clone(),
             roles: Vec::new(),
             active: true,
@@ -1489,6 +1490,9 @@ impl AuthManager {
         &mut self,
         request: LoginRequest,
     ) -> Result<LoginResponse, FortressError> {
+        // Cleanup tokens
+        self.cleanup_expired_tokens();
+
         // Check account lockout first
         if self.lockout_manager.is_account_locked(&request.username)? {
             return Err(FortressError::authentication("Account is locked due to multiple failed attempts", None));
@@ -1668,7 +1672,7 @@ impl AuthManager {
             vec![MfaMethod::Password] // Default to password only if no risk assessment
         };
 
-        let sufficient = required_methods.iter().any(|method| verified_methods.contains(method));
+        let sufficient = required_methods.iter().all(|method| verified_methods.contains(method));
         
         if !sufficient {
             return Err(FortressError::authentication(
@@ -1944,7 +1948,7 @@ impl AuthManager {
             return Err(FortressError::validation("Password must contain lowercase letters", None, None));
         }
 
-        if policy.require_numbers && !password.chars().any(|c| c.is_numeric()) {
+        if policy.require_numbers && !password.chars().any(|c| c.is_ascii_digit()) {
             return Err(FortressError::validation("Password must contain numbers", None, None));
         }
 
@@ -2011,6 +2015,9 @@ impl AuthManager {
         current_password: &str,
         new_password: &str,
     ) -> Result<(), FortressError> {
+        // Validate new password
+        self.validate_password(new_password)?;
+
         let user = self.users.get_mut(user_id)
             .ok_or_else(|| FortressError::validation("User not found", None, None))?;
         
@@ -2021,24 +2028,6 @@ impl AuthManager {
         let argon2 = Argon2::default();
         if argon2.verify_password(current_password.as_bytes(), &parsed_hash).is_err() {
             return Err(FortressError::authentication("Invalid current password", None));
-        }
-        
-        // Validate new password
-        let policy = &self.config.password_policy;
-        if new_password.len() < policy.min_length {
-            return Err(FortressError::validation("Password too short", None, None));
-        }
-        if policy.require_uppercase && !new_password.chars().any(|c| c.is_uppercase()) {
-            return Err(FortressError::validation("Password must contain uppercase letters", None, None));
-        }
-        if policy.require_lowercase && !new_password.chars().any(|c| c.is_lowercase()) {
-            return Err(FortressError::validation("Password must contain lowercase letters", None, None));
-        }
-        if policy.require_numbers && !new_password.chars().any(|c| c.is_ascii_digit()) {
-            return Err(FortressError::validation("Password must contain numbers", None, None));
-        }
-        if policy.require_special_chars && !new_password.chars().any(|c| !c.is_alphanumeric()) {
-            return Err(FortressError::validation("Password must contain special characters", None, None));
         }
         
         // Hash new password using Argon2id
@@ -2149,7 +2138,7 @@ mod tests {
     async fn test_user_creation() {
         let mut auth = AuthManager::new();
         
-        let user_id = auth.create_user("testuser".to_string(), "Password123!".to_string()).await
+        let user_id = auth.create_user("testuser".to_string(), "test@example.com".to_string(), "Password123!".to_string()).await
             .expect("Failed to create test user");
         
         let user = auth.get_user(&user_id)
@@ -2162,7 +2151,7 @@ mod tests {
     async fn test_authentication() {
         let mut auth = AuthManager::new();
         
-        let user_id = auth.create_user("testuser".to_string(), "Password123!".to_string()).await
+        let user_id = auth.create_user("testuser".to_string(), "test@example.com".to_string(), "Password123!".to_string()).await
             .expect("Failed to create test user");
         
         let login_request = LoginRequest {
@@ -2185,7 +2174,7 @@ mod tests {
     async fn test_role_assignment() {
         let mut auth = AuthManager::new();
         
-        let user_id = auth.create_user("testuser".to_string(), "Password123!".to_string()).await
+        let user_id = auth.create_user("testuser".to_string(), "test@example.com".to_string(), "Password123!".to_string()).await
             .expect("Failed to create test user");
         
         let permission_id = auth.create_permission(

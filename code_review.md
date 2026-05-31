@@ -471,12 +471,12 @@ Due to issues #10 (non-prime field) and the multi-byte share combination bug in 
 | 13 | ✅ Fixed | 🟠 High | Logic | `handlers.rs` | Soft delete identical to hard delete |
 | 14 | ✅ Fixed | 🟠 High | Logic | `key.rs` | Backup storage error silently ignored during rotation |
 | 15 | ✅ Fixed | 🟠 High | Logic | `middleware.rs` | Reputation decay never fires (uses stale timestamp) |
-| 16 | | 🟠 High | Logic | `middleware.rs` | DDoS counter never resets |
-| 17 | | 🟠 High | Logic | `auth.rs` | `validate_password` vs `change_password` use different digit checks |
-| 18 | | 🟠 High | Logic | `auth.rs` | MFA `sufficient` uses `any()` — only 1 factor needed for critical risk |
-| 19 | | 🟠 High | Logic | `handlers.rs` | `generate_key` generates key but never stores it |
-| 20 | | 🟠 High | Logic | `auth.rs` | `create_user` fabricates a fake email |
-| 21 | | 🟠 High | Perf | `auth.rs` | Token map grows unbounded — cleanup never called |
+| 16 | ✅ Fixed | 🟠 High | Logic | `middleware.rs` | DDoS counter never resets |
+| 17 | ✅ Fixed | 🟠 High | Logic | `auth.rs` | `validate_password` vs `change_password` use different digit checks |
+| 18 | ✅ Fixed | 🟠 High | Logic | `auth.rs` | MFA `sufficient` uses `any()` — only 1 factor needed for critical risk |
+| 19 | ✅ Fixed | 🟠 High | Logic | `handlers.rs` | `generate_key` generates key but never stores it |
+| 20 | ✅ Fixed | 🟠 High | Logic | `auth.rs` | `create_user` fabricates a fake email |
+| 21 | ✅ Fixed | 🟠 High | Logic | `auth.rs` | Token cleanup unimplemented (leaks memory) |
 | 22 | | 🟡 Medium | Quality | core src | `wasm_runtime_broken.rs` file exists in source tree |
 | 23 | | 🟡 Medium | Quality | `encryption.rs` | Every line has a blank line — file is 2× longer than necessary |
 | 24 | | 🟡 Medium | Perf | `middleware.rs` | `Instant` HashMap for DDoS is O(n) per request |

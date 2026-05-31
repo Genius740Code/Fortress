@@ -654,6 +654,22 @@ pub async fn generate_key(
     // Generate the key
     let key = state.key_manager.generate_key(&algorithm).await
         .map_err(|e| ServerError::Core(e))?;
+    
+    // Create metadata
+    let key_id = format!("key_{}", Uuid::new_v4());
+    let metadata = fortress_core::key::KeyMetadata::new(
+        key_id.clone(),
+        request.algorithm.clone(),
+        1,
+        Utc::now(),
+        Utc::now() + chrono::Duration::days(90),
+        "data_encryption".to_string(),
+        fortress_core::encryption::PerformanceProfile::Balanced,
+    );
+    
+    // Store key
+    state.key_manager.store_key(&key_id, &key, &metadata).await
+        .map_err(|e| ServerError::Core(e))?;
 
     // Generate fingerprint
     let fingerprint = generate_key_fingerprint(&key);
