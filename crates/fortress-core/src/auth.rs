@@ -1170,11 +1170,11 @@ impl MfaManager {
     }
 
     pub fn verify_hardware_token(&self, _token: &str, _user_id: &str) -> Result<bool, FortressError> {
-        Ok(true)
+        unimplemented!("Hardware token verification is a stub")
     }
 
     pub fn verify_backup_code(&self, _user_id: &str, _code: &str) -> Result<bool, FortressError> {
-        Ok(true)
+        unimplemented!("Backup code verification is a stub")
     }
 }
 
@@ -1230,7 +1230,7 @@ impl DeviceFingerprintManager {
     }
 
     pub fn generate_fingerprint(&self, _user_agent: &str, _ip: &str) -> Result<String, FortressError> {
-        Ok("dummy_fingerprint".to_string())
+        unimplemented!("Device fingerprint generation is a stub")
     }
 
     pub fn assess_trust(&self, _fingerprint: &str, _user_id: &str) -> Result<DeviceTrustStatus, FortressError> {
@@ -1261,11 +1261,11 @@ impl AccountLockoutManager {
     }
 
     pub fn is_account_locked(&self, _username: &str) -> Result<bool, FortressError> {
-        Ok(false)
+        unimplemented!("Account lockout check is a stub")
     }
 
     pub fn record_failed_attempt(&mut self, _username: &str) -> Result<(), FortressError> {
-        Ok(())
+        unimplemented!("Record failed attempt is a stub")
     }
 
     pub fn clear_failed_attempts(&mut self, _username: &str) -> Result<(), FortressError> {

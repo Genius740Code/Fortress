@@ -421,19 +421,17 @@ async fn generate_new_key() -> Result<String> {
     
     // Create metadata
     let key_id = Uuid::new_v4().to_string();
-    let metadata = KeyMetadata {
-        key_id: key_id.clone(),
-        version: 1,
-        algorithm: "aegis256".to_string(),
-        created_at: Utc::now(),
-        expires_at: Utc::now() + chrono::Duration::days(365), // Default 1 year expiration
-        purpose: "default".to_string(),
-        performance_profile: fortress_core::encryption::PerformanceProfile::default(),
-        metadata: HashMap::from([
-            ("created_by".to_string(), "cli".to_string()),
-            ("tags".to_string(), "cli-generated".to_string()),
-        ]),
-    };
+    let metadata = KeyMetadata::new(
+        key_id.clone(),
+        "aegis256".to_string(),
+        1,
+        Utc::now(),
+        Utc::now() + chrono::Duration::days(365), // Default 1 year expiration
+        "default".to_string(),
+        fortress_core::encryption::PerformanceProfile::default(),
+    )
+    .with_metadata("created_by".to_string(), "cli".to_string())
+    .with_metadata("tags".to_string(), "cli-generated".to_string());
     
     // Store key
     key_manager.store_key(&key_id, &key, &metadata).await
@@ -770,25 +768,21 @@ async fn execute_rollback(key_id: &str, target_version: u32) -> Result<()> {
     ).map_err(|e| color_eyre::eyre::eyre!("Failed to parse backup metadata: {}", e))?;
     
     // Create new metadata for rolled back key
-    let _rolled_back_metadata = fortress_core::key::KeyMetadata {
-        key_id: key_id.to_string(),
-        version: target_version,
-        algorithm: backup_metadata.algorithm,
-        created_at: backup_metadata.created_at,
-        expires_at: backup_metadata.expires_at,
-        purpose: backup_metadata.purpose,
-        performance_profile: backup_metadata.performance_profile,
-        metadata: {
-            let mut new_metadata = backup_metadata.metadata;
-            new_metadata.insert("rolled_back_from".to_string(), 
-                backup_metadata.version.to_string());
-            new_metadata.insert("rollback_timestamp".to_string(), 
-                chrono::Utc::now().to_rfc3339());
-            new_metadata.insert("rollback_reason".to_string(), 
-                "manual_rollback".to_string());
-            new_metadata
-        },
-    };
+    let _rolled_back_metadata = fortress_core::key::KeyMetadata::new(
+        key_id.to_string(),
+        backup_metadata.algorithm,
+        target_version,
+        backup_metadata.created_at,
+        backup_metadata.expires_at,
+        backup_metadata.purpose,
+        backup_metadata.performance_profile,
+    )
+    .with_metadata("rolled_back_from".to_string(), 
+        backup_metadata.version.to_string())
+    .with_metadata("rollback_timestamp".to_string(), 
+        chrono::Utc::now().to_rfc3339())
+    .with_metadata("rollback_reason".to_string(), 
+        "manual_rollback".to_string());
     
     // Update key metadata in key manager
     let _key_manager = InMemoryKeyManager::new();

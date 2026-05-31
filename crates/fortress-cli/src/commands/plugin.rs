@@ -970,6 +970,7 @@ fn format_capabilities(capabilities: &[fortress_core::plugin::PluginCapability])
             fortress_core::plugin::PluginCapability::Hash => "hash",
             fortress_core::plugin::PluginCapability::ApiIntegration => "api",
             fortress_core::plugin::PluginCapability::SecretManagement => "secrets",
+            fortress_core::plugin::PluginCapability::Authentication => "auth",
 
             fortress_core::plugin::PluginCapability::Custom(name) => name,
         })
