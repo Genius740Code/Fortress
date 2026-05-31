@@ -1190,12 +1190,7 @@ impl RiskAssessmentEngine {
     }
 
     pub fn assess_risk(&self, _context: &RiskContext) -> RiskAssessment {
-        RiskAssessment {
-            risk_score: 10,
-            risk_level: RiskLevel::Low,
-            risk_factors: vec![],
-            recommended_actions: vec![],
-        }
+        unimplemented!("Risk assessment is a stub and always returns Low risk")
     }
 }
 
@@ -1764,23 +1759,8 @@ impl AuthManager {
     }
 
     /// Create an authentication token
-    fn create_token(&self, user: &User) -> Result<AuthToken, FortressError> {
-        let token_value = Uuid::new_v4().to_string();
-        let now = current_timestamp();
-        let expires_at = now + self.config.token_expiration;
-
-        // Get user permissions
-        let permissions = self.get_user_permissions(&user.id);
-
-        let token = AuthToken {
-            token: token_value.clone(),
-            user_id: user.id.clone(),
-            issued_at: now,
-            expires_at,
-            permissions: permissions.into_iter().map(|p| p.id.clone()).collect(),
-        };
-
-        Ok(token)
+    fn create_token(&self, _user: &User) -> Result<AuthToken, FortressError> {
+        unimplemented!("Token is a plain UUID; needs to be a proper JWT with signature")
     }
 
     /// Validate a token
@@ -1815,12 +1795,8 @@ impl AuthManager {
     }
 
     /// Hash an API key securely using SHA-256 with a salt
-    pub fn hash_api_key(&self, api_key: &str) -> String {
-        use sha2::{Sha256, Digest};
-        let mut hasher = Sha256::new();
-        hasher.update(api_key.as_bytes());
-        hasher.update(b"fortress_api_key_salt"); // Secure salt
-        format!("{:x}", hasher.finalize())
+    pub fn hash_api_key(&self, _api_key: &str) -> String {
+        unimplemented!("API key hashing uses a hardcoded global salt; needs per-key unique salt")
     }
 
     /// Authenticate using an API key

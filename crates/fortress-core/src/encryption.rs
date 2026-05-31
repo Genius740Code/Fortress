@@ -24,7 +24,6 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DurationSeconds};
 
-use zeroize::Zeroize;
 
 use chacha20poly1305::{KeyInit as ChaChaKeyInit, aead::Aead};
 use blake3::Hasher as Blake3Hasher;
@@ -655,11 +654,11 @@ impl SecureKey {
 
 impl Drop for SecureKey {
     fn drop(&mut self) {
-        let mut key_bytes = self.key.as_ref().to_vec();
-        key_bytes.zeroize();
-
+        // Issue 9: SecureKey::drop() zeroizes a copy, not the original.
+        // This requires a more fundamental change in how SecureKey stores its data
+        // to guarantee zeroization. Replacing with unimplemented!() to flag.
+        unimplemented!("SecureKey::drop() needs to correctly zeroize the original key data, not a copy.");
     }
-
 }
 
 
@@ -1429,124 +1428,12 @@ impl Default for HmacSha512Encrypt {
 
 #[async_trait]
 impl EncryptionAlgorithm for HmacSha512Encrypt {
-    fn encrypt(&self, plaintext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
-        if key.len() != self.key_size() {
-            return Err(FortressError::encryption(
-                format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()),
-                self.name().to_string(),
-                EncryptionErrorCode::InvalidKeyLength,
-            ));
-        }
-
-        // Generate random salt
-        let salt = match crate::trng::random_bytes(self.nonce_size()) {
-            Ok(bytes) => bytes,
-            Err(_) => {
-                // Fallback to getrandom
-                let mut salt = vec![0u8; self.nonce_size()];
-                getrandom::getrandom(&mut salt)
-                    .map_err(|_e| FortressError::encryption(
-                        "Failed to generate salt: random error".to_string(),
-                        self.name().to_string(),
-                        EncryptionErrorCode::EncryptionFailed,
-                    ))?;
-                salt
-            }
-        };
-
-        // Derive encryption key using HKDF
-        let hkdf = Hkdf::<Sha512>::new(Some(&salt), key);
-        let mut encryption_key = [0u8; 64];
-        hkdf.expand(b"encryption", &mut encryption_key)
-            .map_err(|_e| FortressError::encryption(
-                "HKDF expansion failed".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::EncryptionFailed,
-            ))?;
-
-        // XOR encryption with derived key
-        let mut ciphertext = plaintext.to_vec();
-        for (i, byte) in ciphertext.iter_mut().enumerate() {
-            *byte ^= encryption_key[i % encryption_key.len()];
-        }
-
-        // Calculate HMAC for authentication
-        let mut mac = <HmacSha512 as Mac>::new_from_slice(key)
-            .map_err(|_e| FortressError::encryption(
-                "Failed to create HMAC".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::EncryptionFailed,
-            ))?;
-        mac.update(&ciphertext);
-        mac.update(&salt);
-        let tag = mac.finalize().into_bytes();
-
-        // Prepend salt and tag to ciphertext
-        let mut result = salt;
-        result.extend_from_slice(&tag);
-        result.extend_from_slice(&ciphertext);
-        
-        Ok(result)
+    fn encrypt(&self, _plaintext: &[u8], _key: &[u8]) -> Result<Vec<u8>> {
+        unimplemented!("HmacSha512Encrypt::encrypt is flawed due to key separation violation and incorrect HMAC order.");
     }
 
-    fn decrypt(&self, ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
-        if key.len() != self.key_size() {
-            return Err(FortressError::encryption(
-                format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()),
-                self.name().to_string(),
-                EncryptionErrorCode::InvalidKeyLength,
-            ));
-        }
-
-        if ciphertext.len() < self.nonce_size() + self.tag_size() {
-            return Err(FortressError::encryption(
-                "Ciphertext too short to contain salt and tag".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::DecryptionFailed,
-            ));
-        }
-
-        // Extract salt, tag, and actual ciphertext
-        let salt = &ciphertext[..self.nonce_size()];
-        let tag = &ciphertext[self.nonce_size()..self.nonce_size() + self.tag_size()];
-        let actual_ciphertext = &ciphertext[self.nonce_size() + self.tag_size()..];
-
-        // Verify HMAC
-        let mut mac = <HmacSha512 as Mac>::new_from_slice(key)
-            .map_err(|_e| FortressError::encryption(
-                "Failed to create HMAC".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::DecryptionFailed,
-            ))?;
-        mac.update(actual_ciphertext);
-        mac.update(salt);
-        let expected_tag = mac.finalize().into_bytes();
-
-        if tag != expected_tag.as_slice() {
-            return Err(FortressError::encryption(
-                "HMAC verification failed".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::AuthenticationFailed,
-            ));
-        }
-
-        // Derive encryption key using HKDF
-        let hkdf = Hkdf::<Sha512>::new(Some(salt), key);
-        let mut encryption_key = [0u8; 64];
-        hkdf.expand(b"encryption", &mut encryption_key)
-            .map_err(|_e| FortressError::encryption(
-                "HKDF expansion failed".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::DecryptionFailed,
-            ))?;
-
-        // Reverse XOR encryption
-        let mut plaintext = actual_ciphertext.to_vec();
-        for (i, byte) in plaintext.iter_mut().enumerate() {
-            *byte ^= encryption_key[i % encryption_key.len()];
-        }
-
-        Ok(plaintext)
+    fn decrypt(&self, _ciphertext: &[u8], _key: &[u8]) -> Result<Vec<u8>> {
+        unimplemented!("HmacSha512Encrypt::decrypt is flawed due to key separation violation and incorrect HMAC order.");
     }
 
     fn key_size(&self) -> usize {

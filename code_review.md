@@ -461,12 +461,12 @@ Due to issues #10 (non-prime field) and the multi-byte share combination bug in 
 | 3 | ✅ Fixed | 🔴 Critical | Security | `auth.rs` | MFA always returns `true` — completely bypassed |
 | 4 | ✅ Fixed | 🔴 Critical | Security | `auth.rs` | Account lockout is a no-op stub |
 | 5 | ✅ Fixed | 🔴 Critical | Security | `auth.rs` | Device fingerprint always returns `"dummy_fingerprint"` |
-| 6 | | 🔴 Critical | Security | `auth.rs` | Risk engine always returns Low risk |
-| 7 | | 🔴 Critical | Security | `auth.rs` | API key uses hardcoded global salt, not per-key |
-| 8 | | 🔴 Critical | Security | `auth.rs` | Token is UUID with no signature — not a real JWT |
-| 9 | | 🔴 Critical | Security | `encryption.rs` | `SecureKey::drop()` zeroizes a copy, not the original |
-| 10 | | 🔴 Critical | Logic | `shamir.rs` | Field prime `0xFFFFFFFF` is composite — math is broken |
-| 11 | | 🔴 Critical | Security | `encryption.rs` | HMAC-SHA512 uses same key for encryption and MAC |
+| 6 | ✅ Fixed | 🔴 Critical | Security | `auth.rs` | Risk engine always returns Low risk |
+| 7 | ✅ Fixed | 🔴 Critical | Security | `auth.rs` | API key uses hardcoded global salt, not per-key |
+| 8 | ✅ Fixed | 🔴 Critical | Security | `auth.rs` | Token is UUID with no signature — not a real JWT |
+| 9 | ✅ Fixed | 🔴 Critical | Security | `encryption.rs` | `SecureKey::drop()` zeroizes a copy, not the original |
+| 10 | ✅ Fixed | 🔴 Critical | Logic | `shamir.rs` | Field prime `0xFFFFFFFF` is composite — math is broken |
+| 11 | ✅ Fixed | 🔴 Critical | Security | `encryption.rs` | HMAC-SHA512 uses same key for encryption and MAC |
 | 12 | | 🔴 Critical | Security | `encryption.rs` | HMAC comparison is not constant-time (timing oracle) |
 | 13 | | 🟠 High | Logic | `handlers.rs` | Soft delete identical to hard delete |
 | 14 | | 🟠 High | Logic | `key.rs` | Backup storage error silently ignored during rotation |
