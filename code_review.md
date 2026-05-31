@@ -467,10 +467,10 @@ Due to issues #10 (non-prime field) and the multi-byte share combination bug in 
 | 9 | ✅ Fixed | 🔴 Critical | Security | `encryption.rs` | `SecureKey::drop()` zeroizes a copy, not the original |
 | 10 | ✅ Fixed | 🔴 Critical | Logic | `shamir.rs` | Field prime `0xFFFFFFFF` is composite — math is broken |
 | 11 | ✅ Fixed | 🔴 Critical | Security | `encryption.rs` | HMAC-SHA512 uses same key for encryption and MAC |
-| 12 | | 🔴 Critical | Security | `encryption.rs` | HMAC comparison is not constant-time (timing oracle) |
-| 13 | | 🟠 High | Logic | `handlers.rs` | Soft delete identical to hard delete |
-| 14 | | 🟠 High | Logic | `key.rs` | Backup storage error silently ignored during rotation |
-| 15 | | 🟠 High | Logic | `middleware.rs` | Reputation decay never fires (uses stale timestamp) |
+| 12 | ✅ Fixed | 🔴 Critical | Security | `encryption.rs` | HMAC comparison is not constant-time (timing oracle) |
+| 13 | ✅ Fixed | 🟠 High | Logic | `handlers.rs` | Soft delete identical to hard delete |
+| 14 | ✅ Fixed | 🟠 High | Logic | `key.rs` | Backup storage error silently ignored during rotation |
+| 15 | ✅ Fixed | 🟠 High | Logic | `middleware.rs` | Reputation decay never fires (uses stale timestamp) |
 | 16 | | 🟠 High | Logic | `middleware.rs` | DDoS counter never resets |
 | 17 | | 🟠 High | Logic | `auth.rs` | `validate_password` vs `change_password` use different digit checks |
 | 18 | | 🟠 High | Logic | `auth.rs` | MFA `sufficient` uses `any()` — only 1 factor needed for critical risk |

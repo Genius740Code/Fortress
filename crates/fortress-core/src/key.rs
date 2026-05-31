@@ -410,18 +410,17 @@ impl KeyManager for InMemoryKeyManager {
             self.store_key(&old_versioned_id, &old_key, &old_metadata)
         ).await;
         
-        if backup_result.is_err() {
-            return Err(FortressError::key_management(
-                "Backup creation timeout during zero-downtime rotation",
-                Some(key_id.clone()),
-                KeyErrorCode::RotationFailed,
-            ));
-        }
-        let _ = backup_result.map_err(|e| FortressError::key_management(
+        let backup_result_inner = backup_result.map_err(|e| FortressError::key_management(
+            format!("Backup creation timeout during zero-downtime rotation: {}", e),
+            Some(key_id.clone()),
+            KeyErrorCode::RotationFailed,
+        ))?; // Propagate timeout error
+
+        backup_result_inner.map_err(|e| FortressError::key_management( // Check inner result
             format!("Backup creation failed: {}", e),
             Some(key_id.clone()),
             KeyErrorCode::RotationFailed,
-        ));
+        ))?; // Propagate inner FortressError
         
         // Phase 2: Generate and prepare new key
         let new_key = self.generate_key(algorithm).await?;

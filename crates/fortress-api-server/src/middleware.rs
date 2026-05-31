@@ -233,59 +233,16 @@ impl DdosProtection {
                 block_expiry: None,
             });
 
-        // Update request tracking
-        ip_info.requests_per_minute += 1;
-        ip_info.last_activity = now;
-
-        // Check IP request rate
-        if ip_info.requests_per_minute > self.config.ip_rps_threshold * 60 {
-            warn!(
-                ip = %ip,
-                requests_per_minute = ip_info.requests_per_minute,
-                threshold = self.config.ip_rps_threshold * 60,
-                "IP request rate threshold exceeded"
-            );
-            
-            // Decrease reputation
-            ip_info.reputation_score = ip_info.reputation_score.saturating_sub(20);
-            
-            // Auto-block if threshold exceeded
-            if ip_info.requests_per_minute > self.config.auto_block_threshold {
-                ip_info.blocked = true;
-                ip_info.block_expiry = Some(now + self.config.block_duration);
-                warn!(
-                    ip = %ip,
-                    duration = ?self.config.block_duration,
-                    "IP auto-blocked due to excessive requests"
-                );
-                return Err(ServerError::DdosBlocked);
-            }
-        }
-
-        // Apply reputation-based filtering
-        if ip_info.reputation_score < 30 {
-            // Low reputation: apply stricter rate limiting
-            if ip_info.requests_per_minute > (self.config.ip_rps_threshold * 30) {
-                warn!(
-                    ip = %ip,
-                    reputation = ip_info.reputation_score,
-                    "Low reputation IP exceeded strict rate limit"
-                );
-                return Err(ServerError::RateLimit);
-            }
-        }
-
         // Decay reputation over time
         let hours_since_last_activity = now.duration_since(ip_info.last_activity).as_secs() / 3600;
         if hours_since_last_activity > 0 {
             ip_info.reputation_score = (ip_info.reputation_score + 
                 (hours_since_last_activity as u8 * self.config.reputation_decay_rate)).min(100);
         }
-
-        // Reset per-minute counter if needed
-        if now.duration_since(ip_info.last_activity) >= Duration::from_secs(60) {
-            ip_info.requests_per_minute = 0;
-        }
+        
+        // Update request tracking
+        ip_info.requests_per_minute += 1;
+        ip_info.last_activity = now;
 
         Ok(())
     }

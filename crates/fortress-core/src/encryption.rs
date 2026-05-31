@@ -20,6 +20,7 @@ use bytes::Bytes;
 
 
 use std::fmt;
+use subtle::ConstantTimeEq;
 
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DurationSeconds};
@@ -1958,9 +1959,11 @@ impl EncryptionAlgorithm for CompositeEncrypt {
         mac.update(actual_ciphertext);
         mac.update(salt);
         mac.update(nonce);
-        let expected_tag = mac.finalize().into_bytes();
+        let expected_tag = mac.finalize();
 
-        if tag != expected_tag.as_slice() {
+        let expected_bytes: Vec<u8> = expected_tag.into_bytes().to_vec();
+        let choice = tag.ct_eq(&expected_bytes[..]);
+        if !bool::from(choice) {
             return Err(FortressError::encryption(
                 "HMAC verification failed".to_string(),
                 self.name().to_string(),

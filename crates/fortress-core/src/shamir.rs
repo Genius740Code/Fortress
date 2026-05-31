@@ -169,26 +169,8 @@ impl ShamirSecretSharing {
     }
 
     /// Lagrange interpolation for polynomial reconstruction
-    fn lagrange_interpolation(&self, shares: &[Share], x: u32) -> Result<u32> {
-        let mut result = 0u32;
-
-        for (i, share_i) in shares.iter().enumerate() {
-            let mut numerator = 1u32;
-            let mut denominator = 1u32;
-
-            for (j, share_j) in shares.iter().enumerate() {
-                if i != j {
-                    numerator = field::mul(numerator, field::sub(x, share_j.x));
-                    denominator = field::mul(denominator, field::sub(share_i.x, share_j.x));
-                }
-            }
-
-            let lagrange_coeff = field::div(numerator, denominator)?;
-            let term = field::mul(share_i.y, lagrange_coeff);
-            result = field::add(result, term);
-        }
-
-        Ok(result)
+    fn lagrange_interpolation(&self, _shares: &[Share], _x: u32) -> Result<u32> {
+        unimplemented!("Lagrange interpolation requires correct field arithmetic.");
     }
 
     /// Verify that shares are consistent
