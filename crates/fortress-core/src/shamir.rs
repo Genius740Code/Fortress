@@ -13,36 +13,50 @@ pub mod field {
     // Issue 10: PRIME is not actually a prime number, breaking finite field arithmetic.
     // This constant must be replaced with a cryptographically secure prime.
     // For now, mark field operations as unimplemented.
-    // pub const PRIME: u32 = 0xFFFFFFFF; // Original non-prime value
+    /// Use the largest 32-bit prime as the modulus: 2^32 - 5
+    pub const PRIME: u32 = 4294967291;
 
     /// Add two numbers in the finite field
-    pub fn add(_: u32, _: u32) -> u32 {
-        unimplemented!("Shamir field arithmetic is based on an incorrect PRIME constant and needs reimplementation with a true prime field.");
+    pub fn add(a: u32, b: u32) -> u32 {
+        (a + b) % PRIME
     }
 
     /// Subtract two numbers in the finite field
-    pub fn sub(_a: u32, _b: u32) -> u32 {
-        unimplemented!("Shamir field arithmetic is based on an incorrect PRIME constant and needs reimplementation with a true prime field.");
+    pub fn sub(a: u32, b: u32) -> u32 {
+        if a >= b {
+            a - b
+        } else {
+            PRIME - (b - a)
+        }
     }
 
     /// Multiply two numbers in the finite field
-    pub fn mul(_: u32, _: u32) -> u32 {
-        unimplemented!("Shamir field arithmetic is based on an incorrect PRIME constant and needs reimplementation with a true prime field.");
+    pub fn mul(a: u32, b: u32) -> u32 {
+        ((a as u64 * b as u64) % PRIME as u64) as u32
+    }
+
+    /// Power function for modular exponentiation
+    pub fn pow(mut base: u32, mut exp: u32) -> u32 {
+        let mut res = 1;
+        base %= PRIME;
+        while exp > 0 {
+            if exp % 2 == 1 {
+                res = ((res as u64 * base as u64) % PRIME as u64) as u32;
+            }
+            base = ((base as u64 * base as u64) % PRIME as u64) as u32;
+            exp /= 2;
+        }
+        res
+    }
+
+    /// Modular inverse for division
+    pub fn inv(a: u32) -> u32 {
+        pow(a, PRIME - 2)
     }
 
     /// Divide two numbers in the finite field
-    pub fn div(_: u32, _: u32) -> Result<u32, FortressError> {
-        unimplemented!("Shamir field arithmetic is based on an incorrect PRIME constant and needs reimplementation with a true prime field.");
-    }
-
-    /// Exponentiation in the finite field
-    pub fn pow(_: u32, _: u32) -> u32 {
-        unimplemented!("Shamir field arithmetic is based on an incorrect PRIME constant and needs reimplementation with a true prime field.");
-    }
-
-    /// Inverse of a number in the finite field
-    pub fn inv(_: u32) -> Result<u32, FortressError> {
-        unimplemented!("Shamir field arithmetic is based on an incorrect PRIME constant and needs reimplementation with a true prime field.");
+    pub fn div(a: u32, b: u32) -> u32 {
+        mul(a, inv(b))
     }
 }
 

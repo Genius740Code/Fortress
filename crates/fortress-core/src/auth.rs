@@ -63,7 +63,7 @@ pub struct Role {
 }
 
 /// Permission definition
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct AuthPermission {
     /// Unique identifier for the permission
     pub id: PermissionId,
@@ -1339,30 +1339,48 @@ impl AccountLockoutManager {
 }
 
 /// Authentication and authorization manager
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct AuthManager {
     /// User storage
-    users: HashMap<UserId, User>,
+    users: std::sync::RwLock<HashMap<UserId, User>>,
     /// Role storage
-    roles: HashMap<RoleId, Role>,
+    roles: std::sync::RwLock<HashMap<RoleId, Role>>,
     /// Permission storage
-    permissions: HashMap<PermissionId, AuthPermission>,
+    permissions: std::sync::RwLock<HashMap<PermissionId, AuthPermission>>,
     /// Active tokens
-    tokens: HashMap<String, AuthToken>,
+    tokens: std::sync::RwLock<HashMap<String, AuthToken>>,
     /// Secure API Keys
-    api_keys: HashMap<String, UserId>,
+    api_keys: std::sync::RwLock<HashMap<String, UserId>>,
     /// Session manager
-    session_manager: SessionManager,
+    session_manager: std::sync::RwLock<SessionManager>,
     /// Configuration
     config: AuthConfig,
     /// MFA manager
-    mfa_manager: MfaManager,
+    mfa_manager: std::sync::RwLock<MfaManager>,
     /// Risk assessment engine
     risk_engine: RiskAssessmentEngine,
     /// Device fingerprint manager
     device_manager: DeviceFingerprintManager,
     /// Account lockout manager
-    lockout_manager: AccountLockoutManager,
+    lockout_manager: std::sync::RwLock<AccountLockoutManager>,
+}
+
+impl Clone for AuthManager {
+    fn clone(&self) -> Self {
+        Self {
+            users: std::sync::RwLock::new(self.users.read().unwrap().clone()),
+            roles: std::sync::RwLock::new(self.roles.read().unwrap().clone()),
+            permissions: std::sync::RwLock::new(self.permissions.read().unwrap().clone()),
+            tokens: std::sync::RwLock::new(self.tokens.read().unwrap().clone()),
+            api_keys: std::sync::RwLock::new(self.api_keys.read().unwrap().clone()),
+            session_manager: std::sync::RwLock::new(self.session_manager.read().unwrap().clone()),
+            config: self.config.clone(),
+            mfa_manager: std::sync::RwLock::new(self.mfa_manager.read().unwrap().clone()),
+            risk_engine: self.risk_engine.clone(),
+            device_manager: self.device_manager.clone(),
+            lockout_manager: std::sync::RwLock::new(self.lockout_manager.read().unwrap().clone()),
+        }
+    }
 }
 
 impl AuthManager {
@@ -1495,17 +1513,17 @@ impl AuthManager {
         };
 
         Self {
-            users: HashMap::new(),
-            roles: HashMap::new(),
-            permissions: HashMap::new(),
-            tokens: HashMap::new(),
-            api_keys: HashMap::new(),
-            session_manager: SessionManager::new(config.clone()),
+            users: HashMap::new().into(),
+            roles: HashMap::new().into(),
+            permissions: HashMap::new().into(),
+            tokens: HashMap::new().into(),
+            api_keys: HashMap::new().into(),
+            session_manager: SessionManager::new(config.clone()).into(),
             config: config.clone(),
-            mfa_manager: MfaManager::new(config.mfa_config.clone()),
+            mfa_manager: MfaManager::new(config.mfa_config.clone()).into(),
             risk_engine: RiskAssessmentEngine::new(config.risk_config.clone()),
             device_manager: DeviceFingerprintManager::new(config.device_fingerprint_config.clone()),
-            lockout_manager: AccountLockoutManager::new(config.lockout_config.clone()),
+            lockout_manager: AccountLockoutManager::new(config.lockout_config.clone()).into(),
         }
     }
 
@@ -1526,7 +1544,7 @@ impl AuthManager {
         }
 
         // Check if username already exists
-        if self.users.values().any(|u| u.username == username) {
+        if self.users.read().unwrap().values().any(|u| u.username == username) {
             return Err(FortressError::validation(
                 "Username already exists",
                 None,
@@ -1565,7 +1583,7 @@ impl AuthManager {
             password_hash,
         };
 
-        self.users.insert(user_id.clone(), user);
+        self.users.write().unwrap().insert(user_id.clone(), user);
         Ok(user_id)
     }
 
@@ -1578,7 +1596,7 @@ impl AuthManager {
         self.cleanup_expired_tokens();
 
         // Check account lockout first
-        if self.lockout_manager.is_account_locked(&request.username)? {
+        if self.lockout_manager.read().unwrap().is_account_locked(&request.username)? {
             return Err(FortressError::authentication(
                 "Account is locked due to multiple failed attempts",
                 None,
@@ -1605,6 +1623,8 @@ impl AuthManager {
         // Find user by username
         let user_id = self
             .users
+            .read()
+            .unwrap()
             .values()
             .find(|u| u.username == request.username && u.active)
             .map(|u| u.id.clone())
@@ -1613,7 +1633,10 @@ impl AuthManager {
         // Get user for password verification and update
         let user = self
             .users
+            .read()
+            .unwrap()
             .get(&user_id)
+            .cloned()
             .ok_or_else(|| FortressError::authentication("Invalid credentials", None))?;
 
         // Verify password using Argon2
@@ -1627,12 +1650,16 @@ impl AuthManager {
         {
             // Record failed attempt
             self.lockout_manager
+                .write()
+                .unwrap()
                 .record_failed_attempt(&request.username)?;
             return Err(FortressError::authentication("Invalid credentials", None));
         }
 
         // Reset failed attempts on successful password
         self.lockout_manager
+            .write()
+            .unwrap()
             .reset_failed_attempts(&request.username)?;
 
         // Device fingerprinting
@@ -1682,31 +1709,31 @@ impl AuthManager {
         let user_id_clone = user_id.clone();
         let _ = user;
 
-        if let Some(user) = self.users.get_mut(&user_id_clone) {
+        if let Some(user) = self.users.write().unwrap().get_mut(&user_id_clone) {
             user.last_login = Some(current_timestamp());
         }
 
         // Create session
-        let session_id = self.session_manager.create_session(
+        let session_id = self.session_manager.write().unwrap().create_session(
             user_id.clone(),
             request.ip_address,
             request.user_agent,
         )?;
 
         // Create token
-        let user_for_token = self.users.get(&user_id).ok_or_else(|| {
+        let user_for_token = self.users.read().unwrap().get(&user_id).cloned().ok_or_else(|| {
             FortressError::authentication(
                 "User not found after successful authentication",
                 Some("race_condition_detected".to_string()),
             )
         })?;
-        let token = self.create_token(user_for_token)?;
+        let token = self.create_token(&user_for_token)?;
 
         // Store token
-        self.tokens.insert(token.token.clone(), token.clone());
+        self.tokens.write().unwrap().insert(token.token.clone(), token.clone());
 
         // Get user for response
-        let user_for_response = self.users.get(&user_id).ok_or_else(|| {
+        let user_for_response = self.users.read().unwrap().get(&user_id).cloned().ok_or_else(|| {
             FortressError::authentication(
                 "User not found after token creation",
                 Some("race_condition_detected".to_string()),
@@ -1749,7 +1776,7 @@ impl AuthManager {
         if let Some(ref totp_code) = mfa_data.totp_code {
             // In a real implementation, retrieve user's TOTP secret
             // For now, we'll use a simplified verification
-            if self.mfa_manager.verify_totp("dummy_secret", totp_code)? {
+            if self.mfa_manager.read().unwrap().verify_totp("dummy_secret", totp_code)? {
                 verified_methods.push(MfaMethod::Totp);
             }
         }
@@ -1758,6 +1785,8 @@ impl AuthManager {
         if let Some(ref hardware_token) = mfa_data.hardware_token {
             if self
                 .mfa_manager
+                .read()
+                .unwrap()
                 .verify_hardware_token(hardware_token, user_id)?
             {
                 verified_methods.push(MfaMethod::HardwareToken);
@@ -1766,7 +1795,7 @@ impl AuthManager {
 
         // Verify backup code if provided
         if let Some(ref backup_code) = mfa_data.backup_code {
-            if self.mfa_manager.verify_backup_code(user_id, backup_code)? {
+            if self.mfa_manager.read().unwrap().verify_backup_code(user_id, backup_code)? {
                 verified_methods.push(MfaMethod::BackupCode);
             }
         }
@@ -1911,10 +1940,13 @@ impl AuthManager {
     }
 
     /// Validate a token
-    pub fn validate_token(&self, token: &str) -> Result<&User, FortressError> {
+    pub fn validate_token(&self, token: &str) -> Result<User, FortressError> {
         let auth_token = self
             .tokens
+            .read()
+            .unwrap()
             .get(token)
+            .cloned()
             .ok_or_else(|| FortressError::authentication("Invalid token", None))?;
 
         // Check if token is expired
@@ -1925,7 +1957,10 @@ impl AuthManager {
         // Get user
         let user = self
             .users
+            .read()
+            .unwrap()
             .get(&auth_token.user_id)
+            .cloned()
             .ok_or_else(|| FortressError::authentication("User not found", None))?;
 
         if !user.active {
@@ -1941,11 +1976,11 @@ impl AuthManager {
         api_key: String,
         user_id: UserId,
     ) -> Result<(), FortressError> {
-        if !self.users.contains_key(&user_id) {
+        if !self.users.read().unwrap().contains_key(&user_id) {
             return Err(FortressError::validation("User not found", None, None));
         }
         let hashed = self.hash_api_key(&api_key);
-        self.api_keys.insert(hashed, user_id);
+        self.api_keys.write().unwrap().insert(hashed, user_id);
         Ok(())
     }
 
@@ -1964,13 +1999,18 @@ impl AuthManager {
 
         let user_id = self
             .api_keys
+            .read()
+            .unwrap()
             .get(&hashed_key)
             .ok_or_else(|| FortressError::authentication("Invalid API key", None))?
             .clone();
 
         let user = self
             .users
+            .read()
+            .unwrap()
             .get(&user_id)
+            .cloned()
             .ok_or_else(|| FortressError::authentication("User not found", None))?;
 
         if !user.active {
@@ -1978,10 +2018,10 @@ impl AuthManager {
         }
 
         // Generate a new token for the user
-        let token = self.create_token(user)?;
+        let token = self.create_token(&user)?;
 
         // Store the active token
-        self.tokens.insert(token.token.clone(), token.clone());
+        self.tokens.write().unwrap().insert(token.token.clone(), token.clone());
 
         Ok(token)
     }
@@ -1994,39 +2034,39 @@ impl AuthManager {
     }
 
     /// Get all permissions for a user
-    pub fn get_user_permissions(&self, user_id: &UserId) -> Vec<&AuthPermission> {
-        let user = match self.users.get(user_id) {
+    pub fn get_user_permissions(&self, user_id: &UserId) -> Vec<AuthPermission> {
+        let users = self.users.read().unwrap();
+        let user = match users.get(user_id) {
             Some(u) => u,
             None => return Vec::new(),
         };
 
+        let roles = self.roles.read().unwrap();
+        let permissions_map = self.permissions.read().unwrap();
         let mut permissions = HashSet::new();
 
         for role_id in &user.roles {
-            if let Some(role) = self.roles.get(role_id) {
+            if let Some(role) = roles.get(role_id) {
                 for permission_id in &role.permissions {
-                    if let Some(permission) = self.permissions.get(permission_id) {
-                        permissions.insert(permission.id.clone());
+                    if let Some(permission) = permissions_map.get(permission_id) {
+                        permissions.insert(permission.clone());
                     }
                 }
             }
         }
 
-        permissions
-            .into_iter()
-            .filter_map(|id| self.permissions.get(&id))
-            .collect()
+        permissions.into_iter().collect()
     }
 
     /// Assign a role to a user
     pub fn assign_role(&mut self, user_id: &UserId, role_id: RoleId) -> Result<(), FortressError> {
-        let user = self
-            .users
+        let mut users = self.users.write().unwrap();
+        let user = users
             .get_mut(user_id)
             .ok_or_else(|| FortressError::validation("User not found", None, None))?;
 
-        let _role = self
-            .roles
+        let roles = self.roles.read().unwrap();
+        let _role = roles
             .get(&role_id)
             .ok_or_else(|| FortressError::validation("Role not found", None, None))?;
 
@@ -2054,7 +2094,7 @@ impl AuthManager {
             created_at: current_timestamp(),
         };
 
-        self.roles.insert(role_id.clone(), role);
+        self.roles.write().unwrap().insert(role_id.clone(), role);
         Ok(role_id)
     }
 
@@ -2077,23 +2117,23 @@ impl AuthManager {
             created_at: current_timestamp(),
         };
 
-        self.permissions.insert(permission_id.clone(), permission);
+        self.permissions.write().unwrap().insert(permission_id.clone(), permission);
         Ok(permission_id)
     }
 
     /// Check if a user exists
     pub fn user_exists(&self, user_id: &UserId) -> bool {
-        self.users.contains_key(user_id)
+        self.users.read().unwrap().contains_key(user_id)
     }
 
     /// Get a role by ID
-    pub fn get_role(&self, role_id: &RoleId) -> Option<&Role> {
-        self.roles.get(role_id)
+    pub fn get_role(&self, role_id: &RoleId) -> Option<Role> {
+        self.roles.read().unwrap().get(role_id).cloned()
     }
 
     /// Get a user by ID
-    pub fn get_user(&self, user_id: &UserId) -> Option<&User> {
-        self.users.get(user_id)
+    pub fn get_user(&self, user_id: &UserId) -> Option<User> {
+        self.users.read().unwrap().get(user_id).cloned()
     }
 
     /// Validate password against policy
@@ -2143,6 +2183,8 @@ impl AuthManager {
     pub fn logout(&mut self, token: &str) -> Result<(), FortressError> {
         let _auth_token = self
             .tokens
+            .write()
+            .unwrap()
             .remove(token)
             .ok_or_else(|| FortressError::authentication("Invalid token", None))?;
 
@@ -2153,19 +2195,19 @@ impl AuthManager {
     }
 
     /// Get session manager reference
-    pub fn session_manager(&self) -> &SessionManager {
-        &self.session_manager
+    pub fn session_manager(&self) -> std::sync::RwLockReadGuard<SessionManager> {
+        self.session_manager.read().unwrap()
     }
 
     /// Get mutable session manager reference
-    pub fn session_manager_mut(&mut self) -> &mut SessionManager {
-        &mut self.session_manager
+    pub fn session_manager_mut(&self) -> std::sync::RwLockWriteGuard<SessionManager> {
+        self.session_manager.write().unwrap()
     }
 
     /// Deactivate a user
     pub fn deactivate_user(&mut self, user_id: &UserId) -> Result<(), FortressError> {
-        let user = self
-            .users
+        let mut users = self.users.write().unwrap();
+        let user = users
             .get_mut(user_id)
             .ok_or_else(|| FortressError::validation("User not found", None, None))?;
         user.active = false;
@@ -2179,8 +2221,8 @@ impl AuthManager {
         full_name: Option<String>,
         email: Option<String>,
     ) -> Result<(), FortressError> {
-        let user = self
-            .users
+        let mut users = self.users.write().unwrap();
+        let user = users
             .get_mut(user_id)
             .ok_or_else(|| FortressError::validation("User not found", None, None))?;
 
@@ -2204,8 +2246,8 @@ impl AuthManager {
         // Validate new password
         self.validate_password(new_password)?;
 
-        let user = self
-            .users
+        let mut users = self.users.write().unwrap();
+        let user = users
             .get_mut(user_id)
             .ok_or_else(|| FortressError::validation("User not found", None, None))?;
 
@@ -2242,21 +2284,23 @@ impl AuthManager {
     }
 
     /// List all roles
-    pub fn list_roles(&self) -> Vec<&Role> {
-        self.roles.values().collect()
+    pub fn list_roles(&self) -> Vec<Role> {
+        self.roles.read().unwrap().values().cloned().collect()
     }
 
     /// List all permissions
-    pub fn list_permissions(&self) -> Vec<&AuthPermission> {
-        self.permissions.values().collect()
+    pub fn list_permissions(&self) -> Vec<AuthPermission> {
+        self.permissions.read().unwrap().values().cloned().collect()
     }
 
     /// Get permissions for a specific role
-    pub fn get_role_permissions(&self, role_id: &RoleId) -> Vec<&AuthPermission> {
-        if let Some(role) = self.roles.get(role_id) {
+    pub fn get_role_permissions(&self, role_id: &RoleId) -> Vec<AuthPermission> {
+        let roles = self.roles.read().unwrap();
+        let permissions_map = self.permissions.read().unwrap();
+        if let Some(role) = roles.get(role_id) {
             role.permissions
                 .iter()
-                .filter_map(|perm_id| self.permissions.get(perm_id))
+                .filter_map(|perm_id| permissions_map.get(perm_id).cloned())
                 .collect()
         } else {
             Vec::new()
@@ -2265,8 +2309,8 @@ impl AuthManager {
 
     /// Remove a role from a user
     pub fn remove_role(&mut self, user_id: &UserId, role_id: &RoleId) -> Result<(), FortressError> {
-        let user = self
-            .users
+        let mut users = self.users.write().unwrap();
+        let user = users
             .get_mut(user_id)
             .ok_or_else(|| FortressError::validation("User not found", None, None))?;
 
@@ -2278,11 +2322,19 @@ impl AuthManager {
     pub fn extract_token_claims(&self, token: &str) -> Result<TokenClaims, FortressError> {
         // Simplified token extraction for tests
         // In production, this would decode and validate a real JWT
-        if let Some(auth_token) = self.tokens.get(token) {
-            let user = self
-                .users
-                .get(&auth_token.user_id)
-                .ok_or_else(|| FortressError::authentication("User not found", None))?;
+        let auth_token = {
+            self.tokens.read().unwrap().get(token).cloned()
+        };
+
+        if let Some(auth_token) = auth_token {
+            let user = {
+                self.users
+                    .read()
+                    .unwrap()
+                    .get(&auth_token.user_id)
+                    .cloned()
+                    .ok_or_else(|| FortressError::authentication("User not found", None))?
+            };
 
             let permissions = self.get_user_permissions(&auth_token.user_id);
 
@@ -2303,11 +2355,11 @@ impl AuthManager {
 
     /// Clean up expired tokens to prevent memory accumulation
     /// This should be called periodically (e.g., via a background task)
-    pub fn cleanup_expired_tokens(&mut self) -> usize {
+    pub fn cleanup_expired_tokens(&self) -> usize {
         let now = current_timestamp();
         let mut expired_count = 0;
 
-        self.tokens.retain(|_, token| {
+        self.tokens.write().unwrap().retain(|_, token| {
             if token.expires_at < now {
                 expired_count += 1;
                 false

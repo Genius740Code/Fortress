@@ -481,10 +481,10 @@ Due to issues #10 (non-prime field) and the multi-byte share combination bug in 
 | 23 | ✅ Fixed | 🟡 Medium | Quality | `encryption.rs` | Every line has a blank line — file is 2× longer than necessary |
 | 24 | ✅ Fixed | 🟡 Medium | Perf | `middleware.rs` | `Instant` HashMap for DDoS is O(n) per request |
 | 25 | ✅ Fixed | 🟡 Medium | Perf | `handlers.rs` | `list_data` does full in-memory scan |
-| 26 | | 🟡 Medium | Perf | `middleware.rs` | Sliding window stores all timestamps in Vec |
-| 27 | | 🟡 Medium | Safety | `handlers.rs` | `Arc<AuthManager>` without interior mutability wrapping |
-| 28 | | 🟡 Medium | Quality | `handlers.rs` | Hardcoded stale values in health endpoint |
-| 29 | | 🟡 Medium | Logic | `shamir.rs` | Polynomial coefficients biased due to non-prime modulus |
+| 26 | ✅ Fixed | 🟡 Medium | Perf | `middleware.rs` | Sliding window stores all timestamps in Vec |
+| 27 | ✅ Fixed | 🟡 Medium | Safety | `handlers.rs` | `Arc<AuthManager>` without interior mutability wrapping |
+| 28 | ✅ Fixed | 🟡 Medium | Quality | `handlers.rs` | Hardcoded stale values in health endpoint |
+| 29 | ✅ Fixed | 🟡 Medium | Logic | `shamir.rs` | Polynomial coefficients biased due to non-prime modulus |
 | 30 | | 🟡 Medium | Logic | `auth.rs` | Backup codes expire in 7 days — too short |
 | 31 | | 🔵 Info | Quality | `Cargo.toml` | Root crate + workspace in same TOML |
 | 32 | | 🔵 Info | Perf | `Cargo.toml` | `cdylib` build unnecessary for server binary |
