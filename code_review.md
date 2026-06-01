@@ -477,10 +477,10 @@ Due to issues #10 (non-prime field) and the multi-byte share combination bug in 
 | 19 | ✅ Fixed | 🟠 High | Logic | `handlers.rs` | `generate_key` generates key but never stores it |
 | 20 | ✅ Fixed | 🟠 High | Logic | `auth.rs` | `create_user` fabricates a fake email |
 | 21 | ✅ Fixed | 🟠 High | Logic | `auth.rs` | Token cleanup unimplemented (leaks memory) |
-| 22 | | 🟡 Medium | Quality | core src | `wasm_runtime_broken.rs` file exists in source tree |
-| 23 | | 🟡 Medium | Quality | `encryption.rs` | Every line has a blank line — file is 2× longer than necessary |
-| 24 | | 🟡 Medium | Perf | `middleware.rs` | `Instant` HashMap for DDoS is O(n) per request |
-| 25 | | 🟡 Medium | Perf | `handlers.rs` | `list_data` does full in-memory scan |
+| 22 | ✅ Fixed | 🟡 Medium | Quality | core src | `wasm_runtime_broken.rs` file exists in source tree |
+| 23 | ✅ Fixed | 🟡 Medium | Quality | `encryption.rs` | Every line has a blank line — file is 2× longer than necessary |
+| 24 | ✅ Fixed | 🟡 Medium | Perf | `middleware.rs` | `Instant` HashMap for DDoS is O(n) per request |
+| 25 | ✅ Fixed | 🟡 Medium | Perf | `handlers.rs` | `list_data` does full in-memory scan |
 | 26 | | 🟡 Medium | Perf | `middleware.rs` | Sliding window stores all timestamps in Vec |
 | 27 | | 🟡 Medium | Safety | `handlers.rs` | `Arc<AuthManager>` without interior mutability wrapping |
 | 28 | | 🟡 Medium | Quality | `handlers.rs` | Hardcoded stale values in health endpoint |

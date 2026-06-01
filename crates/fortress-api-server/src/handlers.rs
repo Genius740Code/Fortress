@@ -541,9 +541,15 @@ pub async fn list_data(
 
     let mut items: Vec<DataItem> = vec![];
 
-    // Process each key to get record metadata
-    for key in keys {
-        if let Ok(Some(record_bytes)) = state.storage.get(&key).await {
+    // Process keys to get record metadata using batch_get for efficiency
+    let records = state
+        .storage
+        .batch_get(&keys)
+        .await
+        .map_err(|e| ServerError::Core(e))?;
+
+    for (_key, record_data) in records {
+        if let Some(record_bytes) = record_data {
             if let Ok(storage_record) = serde_json::from_slice::<StorageRecord>(&record_bytes) {
                 // Validate tenant access if multi-tenant
                 if let Some(ref tenant_id) = request.tenant_id {

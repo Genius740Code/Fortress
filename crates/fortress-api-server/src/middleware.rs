@@ -89,9 +89,24 @@ struct DdosProtection {
     /// Suspicious IP tracking
     suspicious_ips: Arc<DashMap<String, SuspiciousIpInfo>>,
     /// Global request tracking
-    global_requests: Arc<DashMap<Instant, u32>>,
+    global_requests: Arc<[Bucket; 60]>,
     /// Configuration
     config: DdosConfig,
+}
+
+#[derive(Debug)]
+struct Bucket {
+    timestamp: std::sync::atomic::AtomicU64,
+    count: std::sync::atomic::AtomicU32,
+}
+
+impl Bucket {
+    fn new() -> Self {
+        Self {
+            timestamp: std::sync::atomic::AtomicU64::new(0),
+            count: std::sync::atomic::AtomicU32::new(0),
+        }
+    }
 }
 
 /// Suspicious IP information
@@ -171,7 +186,18 @@ impl DdosProtection {
     fn new(config: DdosConfig) -> Self {
         Self {
             suspicious_ips: Arc::new(DashMap::new()),
-            global_requests: Arc::new(DashMap::new()),
+            global_requests: Arc::new([
+                Bucket::new(), Bucket::new(), Bucket::new(), Bucket::new(), Bucket::new(), Bucket::new(),
+                Bucket::new(), Bucket::new(), Bucket::new(), Bucket::new(), Bucket::new(), Bucket::new(),
+                Bucket::new(), Bucket::new(), Bucket::new(), Bucket::new(), Bucket::new(), Bucket::new(),
+                Bucket::new(), Bucket::new(), Bucket::new(), Bucket::new(), Bucket::new(), Bucket::new(),
+                Bucket::new(), Bucket::new(), Bucket::new(), Bucket::new(), Bucket::new(), Bucket::new(),
+                Bucket::new(), Bucket::new(), Bucket::new(), Bucket::new(), Bucket::new(), Bucket::new(),
+                Bucket::new(), Bucket::new(), Bucket::new(), Bucket::new(), Bucket::new(), Bucket::new(),
+                Bucket::new(), Bucket::new(), Bucket::new(), Bucket::new(), Bucket::new(), Bucket::new(),
+                Bucket::new(), Bucket::new(), Bucket::new(), Bucket::new(), Bucket::new(), Bucket::new(),
+                Bucket::new(), Bucket::new(), Bucket::new(), Bucket::new(), Bucket::new(), Bucket::new(),
+            ]),
             config,
         }
     }
@@ -207,12 +233,18 @@ impl DdosProtection {
         }
 
         // Check global request rate
-        self.cleanup_global_requests(now);
-        let current_rps = self
-            .global_requests
-            .iter()
-            .map(|entry| *entry.value())
-            .sum::<u32>();
+        let now_secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        let mut current_rps = 0;
+        for bucket in self.global_requests.iter() {
+            let ts = bucket.timestamp.load(std::sync::atomic::Ordering::Relaxed);
+            if ts > now_secs - 60 {
+                current_rps += bucket.count.load(std::sync::atomic::Ordering::Relaxed);
+            }
+        }
 
         if current_rps > self.config.global_rps_threshold {
             warn!(
@@ -290,10 +322,8 @@ impl DdosProtection {
         self.cleanup_global_requests(now);
     }
 
-    fn cleanup_global_requests(&self, now: Instant) {
-        let cutoff = now - Duration::from_secs(60); // Keep last minute
-        self.global_requests
-            .retain(|&timestamp, _| timestamp > cutoff);
+    fn cleanup_global_requests(&self, _now: Instant) {
+        // No-op: bucketed tracking manages cleanup automatically
     }
 
     fn extract_ip_from_client_id(&self, client_id: &str) -> String {
@@ -311,9 +341,21 @@ impl DdosProtection {
 
 // Track global requests for DDoS detection
 fn track_global_request(ddos_protection: &Arc<DdosProtection>) {
-    let now = Instant::now();
-    let mut counter = ddos_protection.global_requests.entry(now).or_insert(0);
-    *counter += 1;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let index = (now % 60) as usize;
+    let bucket = &ddos_protection.global_requests[index];
+
+    let old_ts = bucket.timestamp.load(std::sync::atomic::Ordering::Relaxed);
+    if old_ts != now {
+        // Reset bucket for new second
+        bucket.timestamp.store(now, std::sync::atomic::Ordering::Relaxed);
+        bucket.count.store(1, std::sync::atomic::Ordering::Relaxed);
+    } else {
+        bucket.count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
 }
 
 impl AdvancedRateLimiter {

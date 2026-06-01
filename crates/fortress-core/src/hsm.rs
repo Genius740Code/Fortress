@@ -3813,10 +3813,10 @@ mod tests {
     async fn test_azure_hsm_initialization() {
         let config = HsmConfig {
             provider: HsmProviderType::AzureDedicatedHsm,
-            connection: HsmConnection::Azure { 
-                resource_id: "/subscriptions/test/resourceGroups/test/providers/Microsoft.HardwareSecurityModules/hsmInstances/test".to_string() 
+            connection: HsmConnection::Azure {
+                resource_id: "/subscriptions/test/resourceGroups/test/providers/Microsoft.HardwareSecurityModules/hsmInstances/test".to_string()
             },
-            credentials: HsmCredentials::Azure { 
+            credentials: HsmCredentials::Azure {
                 client_id: "test-client-id".to_string(),
                 client_secret: "test-client-secret".to_string(),
                 tenant_id: "test-tenant-id".to_string(),
