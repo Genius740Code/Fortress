@@ -44,6 +44,9 @@ impl FortressCli {
     #[napi]
     pub fn test(&self, args: Option<Vec<String>>) -> napi::Result<String> {
         let arg_count = args.as_ref().map_or(0, |a| a.len());
-        Ok(format!("Test command executed with {} arguments", arg_count))
+        Ok(format!(
+            "Test command executed with {} arguments",
+            arg_count
+        ))
     }
 }

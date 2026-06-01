@@ -3,12 +3,12 @@
 //! Provides the foundational structure for compliance management across different
 //! regulatory frameworks with unified interfaces and common functionality.
 
-use crate::key::KeyId;
 use crate::error::{FortressError, Result};
+use crate::key::KeyId;
+use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use chrono::{DateTime, Utc};
-use async_trait::async_trait;
 use uuid::Uuid;
 
 /// Compliance framework types
@@ -333,10 +333,17 @@ pub trait ComplianceManager: Send + Sync {
     ) -> Result<ComplianceReport>;
 
     /// Validate compliance configuration
-    async fn validate_configuration(&self, config: &ComplianceConfig) -> Result<Vec<ComplianceIssue>>;
+    async fn validate_configuration(
+        &self,
+        config: &ComplianceConfig,
+    ) -> Result<Vec<ComplianceIssue>>;
 
     /// Collect compliance findings for a period
-    async fn collect_findings(&self, start_date: DateTime<Utc>, end_date: DateTime<Utc>) -> Result<Vec<ComplianceFinding>>;
+    async fn collect_findings(
+        &self,
+        start_date: DateTime<Utc>,
+        end_date: DateTime<Utc>,
+    ) -> Result<Vec<ComplianceFinding>>;
 
     /// Assess compliance issues
     async fn assess_compliance_issues(&self) -> Result<Vec<ComplianceIssue>>;
@@ -650,8 +657,11 @@ impl Default for DefaultComplianceManager {
 #[async_trait]
 impl ComplianceManager for DefaultComplianceManager {
     async fn initialize(&self, config: &ComplianceConfig) -> Result<()> {
-        log::info!("Initializing compliance manager with frameworks: {:?}", config.enabled_frameworks);
-        
+        log::info!(
+            "Initializing compliance manager with frameworks: {:?}",
+            config.enabled_frameworks
+        );
+
         // Validate configuration
         let issues = self.validate_configuration(config).await?;
         if !issues.is_empty() {
@@ -670,10 +680,10 @@ impl ComplianceManager for DefaultComplianceManager {
 
     async fn register_data_subject(&self, subject: &DataSubject) -> Result<()> {
         log::info!("Registering data subject: {}", subject.id);
-        
+
         let mut subjects = self.data_subjects.write().await;
         subjects.insert(subject.id.clone(), subject.clone());
-        
+
         // Log the registration event
         let event = ComplianceEvent {
             id: Uuid::new_v4(),
@@ -687,21 +697,28 @@ impl ComplianceManager for DefaultComplianceManager {
             outcome: ComplianceEventOutcome::Success,
             metadata: HashMap::new(),
         };
-        
+
         self.log_event(&event).await?;
         Ok(())
     }
 
     async fn record_consent(&self, subject_id: &str, consent: &ConsentRecord) -> Result<()> {
-        log::info!("Recording consent for subject {}: {}", subject_id, consent.id);
-        
+        log::info!(
+            "Recording consent for subject {}: {}",
+            subject_id,
+            consent.id
+        );
+
         let mut subjects = self.data_subjects.write().await;
         if let Some(subject) = subjects.get_mut(subject_id) {
             subject.consent_records.push(consent.clone());
         } else {
-            return Err(FortressError::compliance(format!("Data subject {} not found", subject_id)));
+            return Err(FortressError::compliance(format!(
+                "Data subject {} not found",
+                subject_id
+            )));
         }
-        
+
         // Log the consent event
         let event = ComplianceEvent {
             id: Uuid::new_v4(),
@@ -715,14 +732,18 @@ impl ComplianceManager for DefaultComplianceManager {
             outcome: ComplianceEventOutcome::Success,
             metadata: HashMap::new(),
         };
-        
+
         self.log_event(&event).await?;
         Ok(())
     }
 
     async fn process_rights_request(&self, request: &RightsRequest) -> Result<()> {
-        log::info!("Processing rights request {}: {:?}", request.id, request.request_type);
-        
+        log::info!(
+            "Processing rights request {}: {:?}",
+            request.id,
+            request.request_type
+        );
+
         // Log the request processing
         let event = ComplianceEvent {
             id: Uuid::new_v4(),
@@ -736,20 +757,20 @@ impl ComplianceManager for DefaultComplianceManager {
             outcome: ComplianceEventOutcome::Success,
             metadata: HashMap::new(),
         };
-        
+
         self.log_event(&event).await?;
         Ok(())
     }
 
     async fn log_event(&self, event: &ComplianceEvent) -> Result<()> {
         log::info!("Logging compliance event: {}", event.event_type);
-        
+
         let mut events = self.events.write().await;
         events.push(event.clone());
-        
+
         // In a real implementation, this would also write to persistent storage
         // and potentially trigger alerts for critical events
-        
+
         Ok(())
     }
 
@@ -765,7 +786,7 @@ impl ComplianceManager for DefaultComplianceManager {
         // - Consent records (for GDPR)
         // - Minimum necessary principle (for HIPAA)
         // - Need-to-know basis (for PCI-DSS)
-        
+
         // For now, return true as a placeholder
         Ok(true)
     }
@@ -777,15 +798,20 @@ impl ComplianceManager for DefaultComplianceManager {
         start_date: DateTime<Utc>,
         end_date: DateTime<Utc>,
     ) -> Result<ComplianceReport> {
-        log::info!("Generating {} report for {:?} from {} to {}", 
-                  report_type, framework, start_date, end_date);
-        
+        log::info!(
+            "Generating {} report for {:?} from {} to {}",
+            report_type,
+            framework,
+            start_date,
+            end_date
+        );
+
         // In a real implementation, this would:
         // - Query compliance events in the date range
         // - Analyze findings and generate metrics
         // - Create detailed recommendations
         // - Include evidence and supporting documentation
-        
+
         let report = ComplianceReport {
             id: Uuid::new_v4(),
             framework,
@@ -801,23 +827,27 @@ impl ComplianceManager for DefaultComplianceManager {
             ],
             evidence: HashMap::new(),
         };
-        
+
         Ok(report)
     }
 
-    async fn validate_configuration(&self, config: &ComplianceConfig) -> Result<Vec<ComplianceIssue>> {
+    async fn validate_configuration(
+        &self,
+        config: &ComplianceConfig,
+    ) -> Result<Vec<ComplianceIssue>> {
         let mut issues = Vec::new();
-        
+
         // Validate breach notification deadline
         if config.breach_notification.notification_deadline_hours > 72 {
             issues.push(ComplianceIssue {
                 severity: EventSeverity::Warning,
-                description: "Breach notification deadline exceeds GDPR 72-hour requirement".to_string(),
+                description: "Breach notification deadline exceeds GDPR 72-hour requirement"
+                    .to_string(),
                 affected_section: "breach_notification".to_string(),
                 recommendation: "Set notification deadline to 72 hours or less".to_string(),
             });
         }
-        
+
         // Validate encryption requirements
         if !config.encryption.encryption_at_rest_required {
             issues.push(ComplianceIssue {
@@ -827,7 +857,7 @@ impl ComplianceManager for DefaultComplianceManager {
                 recommendation: "Enable encryption at rest for compliance".to_string(),
             });
         }
-        
+
         // Validate access control
         if !config.access_control.rbac_enabled {
             issues.push(ComplianceIssue {
@@ -837,16 +867,26 @@ impl ComplianceManager for DefaultComplianceManager {
                 recommendation: "Enable RBAC for proper access control".to_string(),
             });
         }
-        
+
         Ok(issues)
     }
 
-    async fn collect_findings(&self, start_date: DateTime<Utc>, end_date: DateTime<Utc>) -> Result<Vec<ComplianceFinding>> {
+    async fn collect_findings(
+        &self,
+        start_date: DateTime<Utc>,
+        end_date: DateTime<Utc>,
+    ) -> Result<Vec<ComplianceFinding>> {
         let events = self.events.read().await;
         let mut findings = Vec::new();
-        
-        for event in events.iter().filter(|e| e.timestamp >= start_date && e.timestamp <= end_date) {
-            if matches!(event.severity, EventSeverity::Error | EventSeverity::Critical) {
+
+        for event in events
+            .iter()
+            .filter(|e| e.timestamp >= start_date && e.timestamp <= end_date)
+        {
+            if matches!(
+                event.severity,
+                EventSeverity::Error | EventSeverity::Critical
+            ) {
                 findings.push(ComplianceFinding {
                     id: Uuid::new_v4(),
                     severity: event.severity.clone(),
@@ -858,20 +898,21 @@ impl ComplianceManager for DefaultComplianceManager {
                 });
             }
         }
-        
+
         Ok(findings)
     }
 
     async fn assess_compliance_issues(&self) -> Result<Vec<ComplianceIssue>> {
         let events = self.events.read().await;
         let mut issues = Vec::new();
-        
+
         // Check for recent critical events
-        let recent_critical = events.iter()
+        let recent_critical = events
+            .iter()
             .filter(|e| e.timestamp > Utc::now() - chrono::Duration::days(7))
             .filter(|e| matches!(e.severity, EventSeverity::Critical))
             .count();
-            
+
         if recent_critical > 0 {
             issues.push(ComplianceIssue {
                 severity: EventSeverity::Critical,
@@ -880,59 +921,66 @@ impl ComplianceManager for DefaultComplianceManager {
                 recommendation: "Investigate and resolve critical events immediately".to_string(),
             });
         }
-        
+
         Ok(issues)
     }
 
     async fn get_upcoming_deadlines(&self) -> Result<Vec<ComplianceDeadline>> {
         // Return some example deadlines
-        Ok(vec![
-            ComplianceDeadline {
-                id: Uuid::new_v4(),
-                deadline_type: "Assessment".to_string(),
-                description: "Quarterly compliance assessment".to_string(),
-                due_date: Utc::now() + chrono::Duration::days(30),
-                framework: ComplianceFramework::GDPR,
-            },
-        ])
+        Ok(vec![ComplianceDeadline {
+            id: Uuid::new_v4(),
+            deadline_type: "Assessment".to_string(),
+            description: "Quarterly compliance assessment".to_string(),
+            due_date: Utc::now() + chrono::Duration::days(30),
+            framework: ComplianceFramework::GDPR,
+        }])
     }
 
     async fn calculate_compliance_score(&self, issues: &[ComplianceIssue]) -> Result<f64> {
-        let critical_count = issues.iter().filter(|i| matches!(i.severity, EventSeverity::Critical)).count();
-        let warning_count = issues.iter().filter(|i| matches!(i.severity, EventSeverity::Warning)).count();
-        let error_count = issues.iter().filter(|i| matches!(i.severity, EventSeverity::Error)).count();
-        
+        let critical_count = issues
+            .iter()
+            .filter(|i| matches!(i.severity, EventSeverity::Critical))
+            .count();
+        let warning_count = issues
+            .iter()
+            .filter(|i| matches!(i.severity, EventSeverity::Warning))
+            .count();
+        let error_count = issues
+            .iter()
+            .filter(|i| matches!(i.severity, EventSeverity::Error))
+            .count();
+
         let base_score = 100.0;
         let critical_penalty = (critical_count as f64) * 20.0;
         let error_penalty = (error_count as f64) * 10.0;
         let warning_penalty = (warning_count as f64) * 5.0;
-        
+
         Ok((base_score - critical_penalty - error_penalty - warning_penalty).max(0.0))
     }
 
     async fn generate_recommendations(&self, issues: &[ComplianceIssue]) -> Result<Vec<String>> {
         let mut recommendations = Vec::new();
-        
+
         for issue in issues {
             recommendations.push(issue.recommendation.clone());
         }
-        
+
         if recommendations.is_empty() {
             recommendations.push("Continue monitoring compliance posture".to_string());
         }
-        
+
         Ok(recommendations)
     }
 
     async fn get_compliance_status(&self) -> Result<ComplianceStatus> {
         let issues = self.assess_compliance_issues().await?;
         let score = self.calculate_compliance_score(&issues).await?;
-        
+
         let mut framework_status = HashMap::new();
         framework_status.insert("GDPR".to_string(), score);
         framework_status.insert("HIPAA".to_string(), score);
         framework_status.insert("PCI-DSS".to_string(), score);
-        
+
         Ok(ComplianceStatus {
             compliance_percentage: score,
             active_issues: issues.len() as u32,
@@ -946,10 +994,10 @@ impl ComplianceManager for DefaultComplianceManager {
         let now = Utc::now();
         let start_date = now - chrono::Duration::days(1);
         let end_date = now;
-        
+
         let findings = self.collect_findings(start_date, end_date).await?;
         log::info!("Daily report: {} findings found", findings.len());
-        
+
         Ok(())
     }
 
@@ -967,22 +1015,24 @@ impl ComplianceManager for DefaultComplianceManager {
     async fn collect_metrics(&self) -> Result<ComplianceMetrics> {
         let events = self.events.read().await;
         let total_events = events.len() as u64;
-        
+
         let mut events_by_severity = HashMap::new();
         events_by_severity.insert(EventSeverity::Info, 0);
         events_by_severity.insert(EventSeverity::Warning, 0);
         events_by_severity.insert(EventSeverity::Error, 0);
         events_by_severity.insert(EventSeverity::Critical, 0);
-        
+
         for event in events.iter() {
-            *events_by_severity.entry(event.severity.clone()).or_insert(0) += 1;
+            *events_by_severity
+                .entry(event.severity.clone())
+                .or_insert(0) += 1;
         }
-        
+
         Ok(ComplianceMetrics {
             total_events,
             events_by_severity,
             avg_response_time: 24.0, // Placeholder
-            compliance_score: 85.0, // Placeholder
+            compliance_score: 85.0,  // Placeholder
         })
     }
 }

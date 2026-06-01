@@ -11,7 +11,6 @@ use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-
 /// Performance monitoring configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PerformanceMonitorConfig {
@@ -418,17 +417,19 @@ impl AdvancedPerformanceMonitor {
 
         tokio::spawn(async move {
             let mut interval_timer = tokio::time::interval(interval);
-            
+
             loop {
                 interval_timer.tick().await;
-                
+
                 if let Err(e) = Self::aggregate_metrics(
                     &samples,
                     &aggregated_metrics,
                     &alerts,
                     &recommendations,
                     &thresholds,
-                ).await {
+                )
+                .await
+                {
                     tracing::error!("Metrics aggregation failed: {}", e);
                 }
             }
@@ -444,7 +445,7 @@ impl AdvancedPerformanceMonitor {
         thresholds: &PerformanceThresholds,
     ) -> Result<()> {
         let mut samples_guard = samples.write().await;
-        
+
         if samples_guard.is_empty() {
             return Ok(());
         }
@@ -452,7 +453,8 @@ impl AdvancedPerformanceMonitor {
         // Group samples by operation type
         let mut grouped_samples: HashMap<OperationType, Vec<ProfileSample>> = HashMap::new();
         for sample in samples_guard.drain(..) {
-            grouped_samples.entry(sample.operation_type)
+            grouped_samples
+                .entry(sample.operation_type)
                 .or_insert_with(Vec::new)
                 .push(sample);
         }
@@ -465,13 +467,14 @@ impl AdvancedPerformanceMonitor {
         for (operation_type, operation_samples) in grouped_samples {
             if !operation_samples.is_empty() {
                 let metrics = Self::calculate_aggregated_metrics(&operation_samples)?;
-                
+
                 // Check thresholds and generate alerts
                 let operation_alerts = Self::check_thresholds(&metrics, thresholds, operation_type);
                 new_alerts.extend(operation_alerts);
 
                 // Generate tuning recommendations
-                let operation_recommendations = Self::generate_recommendations(&metrics, operation_type);
+                let operation_recommendations =
+                    Self::generate_recommendations(&metrics, operation_type);
                 new_recommendations.extend(operation_recommendations);
 
                 new_metrics.insert(format!("{:?}", operation_type), metrics);
@@ -514,8 +517,10 @@ impl AdvancedPerformanceMonitor {
         let window_start = samples.iter().map(|s| s.timestamp).min().unwrap();
         let window_end = samples.iter().map(|s| s.timestamp).max().unwrap();
         let total_operations = samples.len() as u64;
-        
-        let duration_ms = window_end.signed_duration_since(window_start).num_milliseconds() as u64;
+
+        let duration_ms = window_end
+            .signed_duration_since(window_start)
+            .num_milliseconds() as u64;
         let operations_per_second = if duration_ms > 0 {
             (total_operations as f64 * 1000.0) / duration_ms as f64
         } else {
@@ -525,7 +530,7 @@ impl AdvancedPerformanceMonitor {
         // Calculate response time percentiles
         let mut durations: Vec<u64> = samples.iter().map(|s| s.duration_us / 1000).collect();
         durations.sort_unstable();
-        
+
         let avg_response_time_ms = durations.iter().sum::<u64>() as f64 / durations.len() as f64;
         let p50_response_time_ms = durations[durations.len() * 50 / 100] as f64;
         let p95_response_time_ms = durations[durations.len() * 95 / 100] as f64;
@@ -544,14 +549,19 @@ impl AdvancedPerformanceMonitor {
         let cpu_usages: Vec<f64> = samples.iter().map(|s| s.cpu_usage_percent).collect();
         let current_cpu_usage = cpu_usages.iter().sum::<f64>() / cpu_usages.len() as f64;
         let avg_cpu_usage = current_cpu_usage;
-        let peak_cpu_usage = *cpu_usages.iter().max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
+        let peak_cpu_usage = *cpu_usages
+            .iter()
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap();
 
         // Calculate database statistics
         let total_db_queries: u64 = samples.iter().map(|s| s.db_queries).sum();
         let avg_query_time_ms = if total_db_queries > 0 {
-            samples.iter()
+            samples
+                .iter()
                 .map(|s| s.duration_us as f64 / 1000.0)
-                .sum::<f64>() / total_db_queries as f64
+                .sum::<f64>()
+                / total_db_queries as f64
         } else {
             0.0
         };
@@ -624,18 +634,24 @@ impl AdvancedPerformanceMonitor {
         if metrics.avg_response_time_ms > thresholds.max_query_time_ms as f64 {
             alerts.push(PerformanceAlert {
                 id: Uuid::new_v4().to_string(),
-                severity: if metrics.avg_response_time_ms > thresholds.max_query_time_ms as f64 * 2.0 {
+                severity: if metrics.avg_response_time_ms
+                    > thresholds.max_query_time_ms as f64 * 2.0
+                {
                     AlertSeverity::Critical
                 } else {
                     AlertSeverity::Warning
                 },
                 alert_type: AlertType::HighResponseTime,
-                message: format!("High response time detected: {:.2}ms", metrics.avg_response_time_ms),
+                message: format!(
+                    "High response time detected: {:.2}ms",
+                    metrics.avg_response_time_ms
+                ),
                 current_value: metrics.avg_response_time_ms,
                 threshold_value: thresholds.max_query_time_ms as f64,
                 timestamp: chrono::Utc::now(),
                 component: format!("{:?}", operation_type),
-                recommended_action: "Consider optimizing queries or increasing resources".to_string(),
+                recommended_action: "Consider optimizing queries or increasing resources"
+                    .to_string(),
             });
         }
 
@@ -645,12 +661,16 @@ impl AdvancedPerformanceMonitor {
                 id: Uuid::new_v4().to_string(),
                 severity: AlertSeverity::Warning,
                 alert_type: AlertType::HighMemoryUsage,
-                message: format!("High memory usage: {:.1}%", metrics.memory_stats.usage_percent),
+                message: format!(
+                    "High memory usage: {:.1}%",
+                    metrics.memory_stats.usage_percent
+                ),
                 current_value: metrics.memory_stats.usage_percent,
                 threshold_value: thresholds.max_memory_usage_percent,
                 timestamp: chrono::Utc::now(),
                 component: format!("{:?}", operation_type),
-                recommended_action: "Consider increasing memory or optimizing memory usage".to_string(),
+                recommended_action: "Consider increasing memory or optimizing memory usage"
+                    .to_string(),
             });
         }
 
@@ -660,12 +680,17 @@ impl AdvancedPerformanceMonitor {
                 id: Uuid::new_v4().to_string(),
                 severity: AlertSeverity::Warning,
                 alert_type: AlertType::HighCpuUsage,
-                message: format!("High CPU usage: {:.1}%", metrics.cpu_stats.current_usage_percent),
+                message: format!(
+                    "High CPU usage: {:.1}%",
+                    metrics.cpu_stats.current_usage_percent
+                ),
                 current_value: metrics.cpu_stats.current_usage_percent,
                 threshold_value: thresholds.max_cpu_usage_percent,
                 timestamp: chrono::Utc::now(),
                 component: format!("{:?}", operation_type),
-                recommended_action: "Consider optimizing CPU-intensive operations or scaling horizontally".to_string(),
+                recommended_action:
+                    "Consider optimizing CPU-intensive operations or scaling horizontally"
+                        .to_string(),
             });
         }
 
@@ -675,12 +700,16 @@ impl AdvancedPerformanceMonitor {
                 id: Uuid::new_v4().to_string(),
                 severity: AlertSeverity::Warning,
                 alert_type: AlertType::LowCacheHitRatio,
-                message: format!("Low cache hit ratio: {:.2}%", metrics.cache_stats.hit_ratio * 100.0),
+                message: format!(
+                    "Low cache hit ratio: {:.2}%",
+                    metrics.cache_stats.hit_ratio * 100.0
+                ),
                 current_value: metrics.cache_stats.hit_ratio,
                 threshold_value: thresholds.min_cache_hit_ratio,
                 timestamp: chrono::Utc::now(),
                 component: format!("{:?}", operation_type),
-                recommended_action: "Consider increasing cache size or adjusting cache strategy".to_string(),
+                recommended_action: "Consider increasing cache size or adjusting cache strategy"
+                    .to_string(),
             });
         }
 
@@ -724,7 +753,10 @@ impl AdvancedPerformanceMonitor {
                 priority: RecommendationPriority::Medium,
                 parameters: {
                     let mut params = HashMap::new();
-                    params.insert("cache_size_multiplier".to_string(), serde_json::Value::Number(serde_json::Number::from(2)));
+                    params.insert(
+                        "cache_size_multiplier".to_string(),
+                        serde_json::Value::Number(serde_json::Number::from(2)),
+                    );
                     params
                 },
             });
@@ -754,7 +786,10 @@ impl AdvancedPerformanceMonitor {
                 priority: RecommendationPriority::Medium,
                 parameters: {
                     let mut params = HashMap::new();
-                    params.insert("pool_size_multiplier".to_string(), serde_json::Value::Number(serde_json::Number::from(2)));
+                    params.insert(
+                        "pool_size_multiplier".to_string(),
+                        serde_json::Value::Number(serde_json::Number::from(2)),
+                    );
                     params
                 },
             });
@@ -804,7 +839,7 @@ impl AdvancedPerformanceMonitor {
         let mut active_operations = self.active_operations.write().await;
         if let Some(context) = active_operations.remove(&operation_id) {
             let duration = context.start_time.elapsed();
-            
+
             // Create profile sample
             let sample = ProfileSample {
                 id: Uuid::new_v4().to_string(),
@@ -812,11 +847,11 @@ impl AdvancedPerformanceMonitor {
                 operation_type: context.operation_type,
                 operation_name: context.operation_name,
                 duration_us: duration.as_micros() as u64,
-                memory_usage_bytes: 0, // Would get actual memory usage
+                memory_usage_bytes: 0,  // Would get actual memory usage
                 cpu_usage_percent: 0.0, // Would get actual CPU usage
-                db_queries: 0, // Would track actual queries
-                cache_hits: 0, // Would track actual cache hits
-                cache_misses: 0, // Would track actual cache misses
+                db_queries: 0,          // Would track actual queries
+                cache_hits: 0,          // Would track actual cache hits
+                cache_misses: 0,        // Would track actual cache misses
                 error,
                 metadata: {
                     let mut metadata = context.metadata;
@@ -862,7 +897,9 @@ impl AdvancedPerformanceMonitor {
         let _cutoff = chrono::Utc::now() - chrono::Duration::days(older_than_days as i64);
         let mut alerts = self.alerts.write().await;
         let initial_len = alerts.len();
-        alerts.retain(|alert| alert.timestamp > chrono::Utc::now() - chrono::Duration::days(older_than_days as i64));
+        alerts.retain(|alert| {
+            alert.timestamp > chrono::Utc::now() - chrono::Duration::days(older_than_days as i64)
+        });
         Ok(initial_len - alerts.len())
     }
 
@@ -901,16 +938,21 @@ mod tests {
         let monitor = AdvancedPerformanceMonitor::new(config);
 
         // Test operation profiling
-        let operation_id = monitor.start_operation(
-            OperationType::KeyGeneration,
-            "test_operation".to_string(),
-            HashMap::new(),
-        ).await;
+        let operation_id = monitor
+            .start_operation(
+                OperationType::KeyGeneration,
+                "test_operation".to_string(),
+                HashMap::new(),
+            )
+            .await;
 
         // Simulate some work
         tokio::time::sleep(Duration::from_millis(10)).await;
 
-        monitor.finish_operation(operation_id, false, HashMap::new()).await.unwrap();
+        monitor
+            .finish_operation(operation_id, false, HashMap::new())
+            .await
+            .unwrap();
 
         // Wait for aggregation
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -932,15 +974,20 @@ mod tests {
         let monitor = AdvancedPerformanceMonitor::new(config);
 
         // Simulate slow operation
-        let operation_id = monitor.start_operation(
-            OperationType::DatabaseQuery,
-            "slow_query".to_string(),
-            HashMap::new(),
-        ).await;
+        let operation_id = monitor
+            .start_operation(
+                OperationType::DatabaseQuery,
+                "slow_query".to_string(),
+                HashMap::new(),
+            )
+            .await;
 
         tokio::time::sleep(Duration::from_millis(10)).await; // Slower than threshold
 
-        monitor.finish_operation(operation_id, false, HashMap::new()).await.unwrap();
+        monitor
+            .finish_operation(operation_id, false, HashMap::new())
+            .await
+            .unwrap();
 
         // Wait for aggregation and alert generation
         tokio::time::sleep(Duration::from_millis(200)).await;
@@ -957,14 +1004,19 @@ mod tests {
 
         // Simulate operations with poor cache performance
         for _ in 0..10 {
-            let operation_id = monitor.start_operation(
-                OperationType::CacheOperation,
-                "cache_miss".to_string(),
-                HashMap::new(),
-            ).await;
+            let operation_id = monitor
+                .start_operation(
+                    OperationType::CacheOperation,
+                    "cache_miss".to_string(),
+                    HashMap::new(),
+                )
+                .await;
 
             tokio::time::sleep(Duration::from_millis(1)).await;
-            monitor.finish_operation(operation_id, false, HashMap::new()).await.unwrap();
+            monitor
+                .finish_operation(operation_id, false, HashMap::new())
+                .await
+                .unwrap();
         }
 
         // Wait for aggregation and recommendation generation
@@ -980,19 +1032,23 @@ mod tests {
         let config = PerformanceMonitorConfig::default();
         let monitor = Arc::new(AdvancedPerformanceMonitor::new(config));
 
-        let operation_id = monitor.start_operation(
-            crate::performance_monitor::OperationType::Encryption,
-            "encrypt_data".to_string(),
-            std::collections::HashMap::new(),
-        ).await;
-        
+        let operation_id = monitor
+            .start_operation(
+                crate::performance_monitor::OperationType::Encryption,
+                "encrypt_data".to_string(),
+                std::collections::HashMap::new(),
+            )
+            .await;
+
         let result = {
             // Simulate encryption work
             tokio::time::sleep(Duration::from_millis(5)).await;
             Ok::<_, FortressError>("encrypted_data")
         };
-        
-        let _ = monitor.finish_operation(operation_id, false, std::collections::HashMap::new()).await;
+
+        let _ = monitor
+            .finish_operation(operation_id, false, std::collections::HashMap::new())
+            .await;
 
         assert!(result.is_ok());
 

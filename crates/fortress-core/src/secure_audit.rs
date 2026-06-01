@@ -32,19 +32,19 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
-use crate::error::{FortressError, Result, AuditErrorCode};
 use crate::audit::AuditEventType;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use crate::error::{AuditErrorCode, FortressError, Result};
+use base64::Engine as _;
 use chrono::{DateTime, Utc};
+use hmac::{Hmac, Mac};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{BufWriter, Write};
 use std::path::Path;
-use sha2::{Sha256, Digest};
-use hmac::{Hmac, Mac};
-use base64::Engine as _;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -254,18 +254,21 @@ impl SecureAuditLogger {
     pub async fn generate_entry_id(&self) -> String {
         let mut counter = self.entry_counter.write().await;
         *counter += 1;
-        
-        format!("audit_{}_{}", 
+
+        format!(
+            "audit_{}_{}",
             Utc::now().timestamp_nanos_opt().unwrap_or(0),
-            *counter)
+            *counter
+        )
     }
 
     /// Calculate hash for audit entry
     fn calculate_hash(&self, entry: &SecureAuditEntry) -> String {
         let mut hasher = Sha256::new();
-        
+
         // Hash all fields except hmac and current_hash
-        let hash_data = format!("{}|{}|{:?}|{}|{}|{}|{:?}|{}|{}|{}|{}|{}|{}",
+        let hash_data = format!(
+            "{}|{}|{:?}|{}|{}|{}|{:?}|{}|{}|{}|{}|{}|{}",
             entry.entry_id,
             entry.timestamp.to_rfc3339(),
             entry.event_type,
@@ -280,43 +283,43 @@ impl SecureAuditLogger {
             serde_json::to_string(&entry.metadata).unwrap_or_default(),
             entry.previous_hash.as_deref().unwrap_or("")
         );
-        
+
         hasher.update(hash_data.as_bytes());
         let result = hasher.finalize();
-        
+
         base64::engine::general_purpose::STANDARD.encode(result)
     }
 
     /// Calculate HMAC for integrity verification
     fn calculate_hmac(&self, entry: &SecureAuditEntry, key: &[u8]) -> String {
-        let mut mac = HmacSha256::new_from_slice(key)
-            .expect("HMAC can take key of any size");
-        
-        let hmac_data = format!("{}|{}|{}",
+        let mut mac = HmacSha256::new_from_slice(key).expect("HMAC can take key of any size");
+
+        let hmac_data = format!(
+            "{}|{}|{}",
             entry.entry_id,
             entry.current_hash,
             entry.previous_hash.as_deref().unwrap_or("")
         );
-        
+
         mac.update(hmac_data.as_bytes());
         let result = mac.finalize();
-        
+
         base64::engine::general_purpose::STANDARD.encode(result.into_bytes())
     }
 
     /// Verify entry integrity
     fn verify_entry_integrity(&self, entry: &SecureAuditEntry, key: &[u8]) -> bool {
-        let mut mac = HmacSha256::new_from_slice(key)
-            .expect("HMAC can take key of any size");
-        
-        let hmac_data = format!("{}|{}|{}",
+        let mut mac = HmacSha256::new_from_slice(key).expect("HMAC can take key of any size");
+
+        let hmac_data = format!(
+            "{}|{}|{}",
             entry.entry_id,
             entry.current_hash,
             entry.previous_hash.as_deref().unwrap_or("")
         );
-        
+
         mac.update(hmac_data.as_bytes());
-        
+
         if let Ok(decoded_hmac) = base64::engine::general_purpose::STANDARD.decode(&entry.hmac) {
             mac.verify((&decoded_hmac[..]).into()).is_ok()
         } else {
@@ -327,29 +330,46 @@ impl SecureAuditLogger {
     /// Write entry to file
     async fn write_to_file(&self, entry: &SecureAuditEntry) -> Result<()> {
         let config = self.config.read().await;
-        let config = config.as_ref()
-            .ok_or_else(|| FortressError::audit("Audit logger not configured".to_string(), None, AuditErrorCode::ConfigurationError))?;
+        let config = config.as_ref().ok_or_else(|| {
+            FortressError::audit(
+                "Audit logger not configured".to_string(),
+                None,
+                AuditErrorCode::ConfigurationError,
+            )
+        })?;
 
-        if config.output != AuditOutput::File && !matches!(config.output, AuditOutput::Multiple(_)) {
+        if config.output != AuditOutput::File && !matches!(config.output, AuditOutput::Multiple(_))
+        {
             return Ok(());
         }
 
         let mut writer = self.file_writer.write().await;
-        
+
         // Initialize file writer if needed
         if writer.is_none() {
             if let Some(file_path) = &config.file_path {
                 // Ensure directory exists
                 if let Some(parent) = Path::new(file_path).parent() {
-                    tokio::fs::create_dir_all(parent).await
-                        .map_err(|e| FortressError::audit(format!("Failed to create audit log directory: {}", e), None, AuditErrorCode::LogCreationFailed))?;
+                    tokio::fs::create_dir_all(parent).await.map_err(|e| {
+                        FortressError::audit(
+                            format!("Failed to create audit log directory: {}", e),
+                            None,
+                            AuditErrorCode::LogCreationFailed,
+                        )
+                    })?;
                 }
 
                 let file = OpenOptions::new()
                     .create(true)
                     .append(true)
                     .open(file_path)
-                    .map_err(|e| FortressError::audit(format!("Failed to open audit log file: {}", e), None, AuditErrorCode::LogCreationFailed))?;
+                    .map_err(|e| {
+                        FortressError::audit(
+                            format!("Failed to open audit log file: {}", e),
+                            None,
+                            AuditErrorCode::LogCreationFailed,
+                        )
+                    })?;
 
                 *writer = Some(BufWriter::new(file));
             }
@@ -357,13 +377,28 @@ impl SecureAuditLogger {
 
         // Write entry
         if let Some(writer) = writer.as_mut() {
-            let entry_json = serde_json::to_string(entry)
-                .map_err(|e| FortressError::audit(format!("Failed to write audit entry: {}", e), None, AuditErrorCode::LogStorageFailed))?;
-            
-            writer.write_all(entry_json.as_bytes())
-                .map_err(|e| FortressError::audit(format!("Failed to write audit entry to file: {}", e), None, AuditErrorCode::LogStorageFailed))?;
-            writer.flush()
-                .map_err(|e| FortressError::audit(format!("Failed to flush audit log: {}", e), None, AuditErrorCode::LogStorageFailed))?;
+            let entry_json = serde_json::to_string(entry).map_err(|e| {
+                FortressError::audit(
+                    format!("Failed to write audit entry: {}", e),
+                    None,
+                    AuditErrorCode::LogStorageFailed,
+                )
+            })?;
+
+            writer.write_all(entry_json.as_bytes()).map_err(|e| {
+                FortressError::audit(
+                    format!("Failed to write audit entry to file: {}", e),
+                    None,
+                    AuditErrorCode::LogStorageFailed,
+                )
+            })?;
+            writer.flush().map_err(|e| {
+                FortressError::audit(
+                    format!("Failed to flush audit log: {}", e),
+                    None,
+                    AuditErrorCode::LogStorageFailed,
+                )
+            })?;
         }
 
         Ok(())
@@ -372,16 +407,28 @@ impl SecureAuditLogger {
     /// Write entry to stdout
     async fn write_to_stdout(&self, entry: &SecureAuditEntry) -> Result<()> {
         let config = self.config.read().await;
-        let config = config.as_ref()
-            .ok_or_else(|| FortressError::audit("Audit logger not configured".to_string(), None, AuditErrorCode::ConfigurationError))?;
+        let config = config.as_ref().ok_or_else(|| {
+            FortressError::audit(
+                "Audit logger not configured".to_string(),
+                None,
+                AuditErrorCode::ConfigurationError,
+            )
+        })?;
 
-        if config.output != AuditOutput::Stdout && !matches!(config.output, AuditOutput::Multiple(_)) {
+        if config.output != AuditOutput::Stdout
+            && !matches!(config.output, AuditOutput::Multiple(_))
+        {
             return Ok(());
         }
 
-        let entry_json = serde_json::to_string(entry)
-            .map_err(|e| FortressError::audit(format!("Failed to serialize audit entry: {}", e), None, AuditErrorCode::LogCreationFailed))?;
-        
+        let entry_json = serde_json::to_string(entry).map_err(|e| {
+            FortressError::audit(
+                format!("Failed to serialize audit entry: {}", e),
+                None,
+                AuditErrorCode::LogCreationFailed,
+            )
+        })?;
+
         println!("{}", entry_json);
         Ok(())
     }
@@ -397,8 +444,13 @@ impl SecureAuditLogger {
         metadata: HashMap<String, serde_json::Value>,
     ) -> Result<SecureAuditEntry> {
         let config = self.config.read().await;
-        let _config = config.as_ref()
-            .ok_or_else(|| FortressError::audit("Audit logger not configured".to_string(), None, AuditErrorCode::ConfigurationError))?;
+        let _config = config.as_ref().ok_or_else(|| {
+            FortressError::audit(
+                "Audit logger not configured".to_string(),
+                None,
+                AuditErrorCode::ConfigurationError,
+            )
+        })?;
 
         let entry_id = self.generate_entry_id().await;
         let previous_hash = self.previous_hash.read().await.clone();
@@ -411,28 +463,37 @@ impl SecureAuditLogger {
             resource: resource.to_string(),
             action: action.to_string(),
             outcome: outcome.clone(),
-            source_ip: metadata.get("source_ip")
+            source_ip: metadata
+                .get("source_ip")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string()),
-            user_agent: metadata.get("user_agent")
+            user_agent: metadata
+                .get("user_agent")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string()),
-            session_id: metadata.get("session_id")
+            session_id: metadata
+                .get("session_id")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string()),
-            request_id: metadata.get("request_id")
+            request_id: metadata
+                .get("request_id")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string()),
             metadata,
             previous_hash: previous_hash.clone(),
             current_hash: String::new(), // Will be set after hash calculation
-            hmac: String::new(), // Will be set after HMAC calculation
+            hmac: String::new(),         // Will be set after HMAC calculation
         };
 
         // Calculate hash and HMAC
         let hmac_key = self.hmac_key.read().await;
-        let hmac_key = hmac_key.as_ref()
-            .ok_or_else(|| FortressError::audit("HMAC key not configured".to_string(), None, AuditErrorCode::ConfigurationError))?;
+        let hmac_key = hmac_key.as_ref().ok_or_else(|| {
+            FortressError::audit(
+                "HMAC key not configured".to_string(),
+                None,
+                AuditErrorCode::ConfigurationError,
+            )
+        })?;
         let mut entry_with_hash = entry;
         entry_with_hash.current_hash = self.calculate_hash(&entry_with_hash);
         entry_with_hash.hmac = self.calculate_hmac(&entry_with_hash, hmac_key);
@@ -462,20 +523,25 @@ impl SecureAuditLogger {
         };
 
         let metadata = HashMap::new();
-        let entry = self.create_entry(
-            SecureAuditEventType::SecretAccess,
-            principal,
-            resource,
-            action,
-            outcome_enum.clone(),
-            metadata,
-        ).await?;
+        let entry = self
+            .create_entry(
+                SecureAuditEventType::SecretAccess,
+                principal,
+                resource,
+                action,
+                outcome_enum.clone(),
+                metadata,
+            )
+            .await?;
 
         // Update statistics
         {
             let mut stats = self.stats.write().await;
             stats.total_entries += 1;
-            *stats.entries_by_type.entry(SecureAuditEventType::SecretAccess).or_insert(0) += 1;
+            *stats
+                .entries_by_type
+                .entry(SecureAuditEventType::SecretAccess)
+                .or_insert(0) += 1;
             *stats.entries_by_outcome.entry(outcome_enum).or_insert(0) += 1;
             stats.last_log_time = Some(Utc::now());
         }
@@ -503,22 +569,30 @@ impl SecureAuditLogger {
         };
 
         let mut metadata = HashMap::new();
-        metadata.insert("version".to_string(), serde_json::Value::Number(version.into()));
+        metadata.insert(
+            "version".to_string(),
+            serde_json::Value::Number(version.into()),
+        );
 
-        let entry = self.create_entry(
-            SecureAuditEventType::SecretWrite,
-            principal,
-            resource,
-            "write",
-            outcome_enum.clone(),
-            metadata,
-        ).await?;
+        let entry = self
+            .create_entry(
+                SecureAuditEventType::SecretWrite,
+                principal,
+                resource,
+                "write",
+                outcome_enum.clone(),
+                metadata,
+            )
+            .await?;
 
         // Update statistics
         {
             let mut stats = self.stats.write().await;
             stats.total_entries += 1;
-            *stats.entries_by_type.entry(SecureAuditEventType::SecretWrite).or_insert(0) += 1;
+            *stats
+                .entries_by_type
+                .entry(SecureAuditEventType::SecretWrite)
+                .or_insert(0) += 1;
             *stats.entries_by_outcome.entry(outcome_enum).or_insert(0) += 1;
             stats.last_log_time = Some(Utc::now());
         }
@@ -546,16 +620,21 @@ impl SecureAuditLogger {
         };
 
         let mut metadata = HashMap::new();
-        metadata.insert("secret_type".to_string(), serde_json::Value::String(secret_type.to_string()));
-        
-        let entry = self.create_entry(
-            SecureAuditEventType::SecretGeneration,
-            principal,
-            resource,
-            "generate",
-            outcome_enum,
-            metadata,
-        ).await?;
+        metadata.insert(
+            "secret_type".to_string(),
+            serde_json::Value::String(secret_type.to_string()),
+        );
+
+        let entry = self
+            .create_entry(
+                SecureAuditEventType::SecretGeneration,
+                principal,
+                resource,
+                "generate",
+                outcome_enum,
+                metadata,
+            )
+            .await?;
 
         // Write to outputs
         self.write_to_file(&entry).await?;
@@ -579,20 +658,25 @@ impl SecureAuditLogger {
         };
 
         let metadata = HashMap::new();
-        let entry = self.create_entry(
-            SecureAuditEventType::SecretDelete,
-            principal,
-            resource,
-            "delete",
-            outcome_enum.clone(),
-            metadata,
-        ).await?;
+        let entry = self
+            .create_entry(
+                SecureAuditEventType::SecretDelete,
+                principal,
+                resource,
+                "delete",
+                outcome_enum.clone(),
+                metadata,
+            )
+            .await?;
 
         // Update statistics
         {
             let mut stats = self.stats.write().await;
             stats.total_entries += 1;
-            *stats.entries_by_type.entry(SecureAuditEventType::SecretDelete).or_insert(0) += 1;
+            *stats
+                .entries_by_type
+                .entry(SecureAuditEventType::SecretDelete)
+                .or_insert(0) += 1;
             *stats.entries_by_outcome.entry(outcome_enum).or_insert(0) += 1;
             stats.last_log_time = Some(Utc::now());
         }
@@ -607,15 +691,30 @@ impl SecureAuditLogger {
     /// Verify log integrity
     pub async fn verify_log_integrity(&self, file_path: &str) -> Result<bool> {
         let config = self.config.read().await;
-        let _config = config.as_ref()
-            .ok_or_else(|| FortressError::audit("Audit logger not configured".to_string(), None, AuditErrorCode::ConfigurationError))?;
+        let _config = config.as_ref().ok_or_else(|| {
+            FortressError::audit(
+                "Audit logger not configured".to_string(),
+                None,
+                AuditErrorCode::ConfigurationError,
+            )
+        })?;
 
         let hmac_key = self.hmac_key.read().await;
-        let hmac_key = hmac_key.as_ref()
-            .ok_or_else(|| FortressError::audit("HMAC key not configured".to_string(), None, AuditErrorCode::ConfigurationError))?;
+        let hmac_key = hmac_key.as_ref().ok_or_else(|| {
+            FortressError::audit(
+                "HMAC key not configured".to_string(),
+                None,
+                AuditErrorCode::ConfigurationError,
+            )
+        })?;
 
-        let content = tokio::fs::read_to_string(file_path).await
-            .map_err(|e| FortressError::audit(format!("Failed to read audit log: {}", e), None, AuditErrorCode::LogRetrievalFailed))?;
+        let content = tokio::fs::read_to_string(file_path).await.map_err(|e| {
+            FortressError::audit(
+                format!("Failed to read audit log: {}", e),
+                None,
+                AuditErrorCode::LogRetrievalFailed,
+            )
+        })?;
 
         let lines: Vec<&str> = content.lines().collect();
         let mut previous_hash: Option<String> = None;
@@ -626,21 +725,32 @@ impl SecureAuditLogger {
                 continue;
             }
 
-            let entry: SecureAuditEntry = serde_json::from_str(line)
-                .map_err(|e| FortressError::audit(format!("Failed to parse audit entry: {}", e), None, AuditErrorCode::LogRetrievalFailed))?;
+            let entry: SecureAuditEntry = serde_json::from_str(line).map_err(|e| {
+                FortressError::audit(
+                    format!("Failed to parse audit entry: {}", e),
+                    None,
+                    AuditErrorCode::LogRetrievalFailed,
+                )
+            })?;
 
             // Verify previous hash chain
             if let Some(prev_hash) = &previous_hash {
                 if entry.previous_hash.as_ref() != Some(prev_hash) {
                     violations += 1;
-                    log::warn!("Hash chain violation detected for entry: {}", entry.entry_id);
+                    log::warn!(
+                        "Hash chain violation detected for entry: {}",
+                        entry.entry_id
+                    );
                 }
             }
 
             // Verify HMAC integrity
             if !self.verify_entry_integrity(&entry, hmac_key) {
                 violations += 1;
-                log::warn!("HMAC integrity violation detected for entry: {}", entry.entry_id);
+                log::warn!(
+                    "HMAC integrity violation detected for entry: {}",
+                    entry.entry_id
+                );
             }
 
             previous_hash = Some(entry.current_hash.clone());
@@ -669,7 +779,7 @@ impl SecureAuditLogger {
     /// Flush buffered entries
     pub async fn flush(&self) -> Result<()> {
         let buffer = self.buffer.write().await;
-        
+
         for entry in buffer.iter() {
             self.write_to_file(entry).await?;
             self.write_to_stdout(entry).await?;
@@ -694,34 +804,71 @@ impl crate::secrets::SecretsEngine for SecureAuditLogger {
         crate::secrets::EngineType::Custom("secure-audit".to_string())
     }
 
-    async fn write(&self, _path: &str, _data: &serde_json::Value) -> Result<crate::secrets::Secret> {
-        Err(FortressError::audit("Write operation not supported on audit logger".to_string(), None, AuditErrorCode::PolicyNotFound))
+    async fn write(
+        &self,
+        _path: &str,
+        _data: &serde_json::Value,
+    ) -> Result<crate::secrets::Secret> {
+        Err(FortressError::audit(
+            "Write operation not supported on audit logger".to_string(),
+            None,
+            AuditErrorCode::PolicyNotFound,
+        ))
     }
 
     async fn read(&self, _path: &str) -> Result<Option<crate::secrets::Secret>> {
-        Err(FortressError::audit("Read operation not supported on audit logger".to_string(), None, AuditErrorCode::PolicyNotFound))
+        Err(FortressError::audit(
+            "Read operation not supported on audit logger".to_string(),
+            None,
+            AuditErrorCode::PolicyNotFound,
+        ))
     }
 
     async fn delete(&self, _path: &str) -> Result<()> {
-        Err(FortressError::audit("Delete operation not supported on audit logger".to_string(), None, AuditErrorCode::PolicyNotFound))
+        Err(FortressError::audit(
+            "Delete operation not supported on audit logger".to_string(),
+            None,
+            AuditErrorCode::PolicyNotFound,
+        ))
     }
 
     async fn list(&self, _path: &str) -> Result<Vec<String>> {
-        Err(FortressError::audit("List operation not supported on audit logger".to_string(), None, AuditErrorCode::PolicyNotFound))
+        Err(FortressError::audit(
+            "List operation not supported on audit logger".to_string(),
+            None,
+            AuditErrorCode::PolicyNotFound,
+        ))
     }
 
-    async fn renew(&self, _lease_id: &str, _increment: Option<u64>) -> Result<crate::secrets::LeaseInfo> {
-        Err(FortressError::audit("Renew operation not supported on audit logger".to_string(), None, AuditErrorCode::PolicyNotFound))
+    async fn renew(
+        &self,
+        _lease_id: &str,
+        _increment: Option<u64>,
+    ) -> Result<crate::secrets::LeaseInfo> {
+        Err(FortressError::audit(
+            "Renew operation not supported on audit logger".to_string(),
+            None,
+            AuditErrorCode::PolicyNotFound,
+        ))
     }
 
     async fn revoke(&self, _lease_id: &str) -> Result<()> {
-        Err(FortressError::audit("Revoke operation not supported on audit logger".to_string(), None, AuditErrorCode::PolicyNotFound))
+        Err(FortressError::audit(
+            "Revoke operation not supported on audit logger".to_string(),
+            None,
+            AuditErrorCode::PolicyNotFound,
+        ))
     }
 
     async fn configure(&self, config: serde_json::Value) -> Result<()> {
-        let audit_config: SecureAuditConfig = serde_json::from_value(config)
-            .map_err(|e| FortressError::audit(format!("Invalid audit configuration: {}", e), None, AuditErrorCode::ConfigurationError))?;
-        
+        let audit_config: SecureAuditConfig = serde_json::from_value(config).map_err(|e| {
+            FortressError::audit(
+                format!("Invalid audit configuration: {}", e),
+                None,
+                AuditErrorCode::ConfigurationError,
+            )
+        })?;
+
         let mut self_config = self.config.write().await;
         *self_config = Some(audit_config.clone());
 
@@ -735,12 +882,12 @@ impl crate::secrets::SecretsEngine for SecureAuditLogger {
     async fn status(&self) -> Result<crate::secrets::EngineStatus> {
         let config = self.config.read().await;
         let stats = self.stats.read().await;
-        
+
         let config_value = match config.as_ref() {
             Some(c) => serde_json::to_value(c).unwrap_or_default(),
             None => serde_json::Value::Null,
         };
-        
+
         Ok(crate::secrets::EngineStatus {
             name: self.name().to_string(),
             engine_type: self.engine_type(),
@@ -780,13 +927,16 @@ mod tests {
     async fn test_audit_logger_creation() {
         let logger = SecureAuditLogger::new();
         assert_eq!(logger.name(), "secure-audit");
-        assert!(matches!(logger.engine_type(), crate::secrets::EngineType::Custom(_)));
+        assert!(matches!(
+            logger.engine_type(),
+            crate::secrets::EngineType::Custom(_)
+        ));
     }
 
     #[tokio::test]
     async fn test_audit_configuration() {
         let mut logger = SecureAuditLogger::new();
-        
+
         let config = json!({
             "output": "file",
             "file_path": "/tmp/test_audit.log",
@@ -797,10 +947,10 @@ mod tests {
             "buffer_size": 1000,
             "flush_interval": 60
         });
-        
+
         let result = logger.configure(config).await;
         assert!(result.is_ok());
-        
+
         let status = logger.status().await.unwrap();
         assert!(status.initialized);
     }
@@ -808,7 +958,7 @@ mod tests {
     #[tokio::test]
     async fn test_hash_calculation() {
         let logger = SecureAuditLogger::new();
-        
+
         let entry = SecureAuditEntry {
             entry_id: "test_123".to_string(),
             timestamp: Utc::now(),
@@ -835,7 +985,7 @@ mod tests {
     #[tokio::test]
     async fn test_hmac_calculation() {
         let logger = SecureAuditLogger::new();
-        
+
         let entry = SecureAuditEntry {
             entry_id: "test_123".to_string(),
             timestamp: Utc::now(),
@@ -863,33 +1013,43 @@ mod tests {
     #[tokio::test]
     async fn test_audit_logging() {
         let mut logger = SecureAuditLogger::new();
-        
+
         // Configure with stdout output for testing
         let config = json!({
             "output": "stdout",
             "hmac_key": "test_key_123456789012345678901234"
         });
-        
+
         logger.configure(config).await.unwrap();
-        
+
         // Log an access event
-        let result = logger.log_access("user123", "secret/test", "read", "success").await;
+        let result = logger
+            .log_access("user123", "secret/test", "read", "success")
+            .await;
         assert!(result.is_ok());
-        
+
         // Check statistics
         let stats = logger.get_stats().await;
         assert_eq!(stats.total_entries, 1);
-        assert_eq!(stats.entries_by_type.get(&SecureAuditEventType::SecretAccess), Some(&1));
-        assert_eq!(stats.entries_by_outcome.get(&AuditOutcome::Success), Some(&1));
+        assert_eq!(
+            stats
+                .entries_by_type
+                .get(&SecureAuditEventType::SecretAccess),
+            Some(&1)
+        );
+        assert_eq!(
+            stats.entries_by_outcome.get(&AuditOutcome::Success),
+            Some(&1)
+        );
     }
 
     #[tokio::test]
     async fn test_entry_id_generation() {
         let logger = SecureAuditLogger::new();
-        
+
         let id1 = logger.generate_entry_id().await;
         let id2 = logger.generate_entry_id().await;
-        
+
         assert_ne!(id1, id2);
         assert!(id1.starts_with("audit_"));
         assert!(id2.starts_with("audit_"));

@@ -493,3 +493,4 @@ Due to issues #10 (non-prime field) and the multi-byte share combination bug in 
 | 35 | ✅ Fixed | 🔴 Critical | Logic | `graphql/query.rs` | `get_dynamic_credential` calls non-existent `read()` method |
 | 36 | | 🔴 Critical | Security | `handlers.rs` | Field-level encryption silently ignores errors |
 | 37 | | 🟡 Medium | Perf | `handlers.rs` | Double serialization of request data |
+

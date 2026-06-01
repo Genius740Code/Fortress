@@ -56,15 +56,15 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
-use crate::error::{FortressError, Result, EncryptionErrorCode};
 use crate::encryption::{Aegis256Wrapper as Aegis256, EncryptionAlgorithm};
-use crate::key::{SecureKey, KeyManager};
-use serde::{Serialize, Deserialize};
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::fmt::Debug;
-use uuid::Uuid;
+use crate::error::{EncryptionErrorCode, FortressError, Result};
+use crate::key::{KeyManager, SecureKey};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fmt::Debug;
+use std::sync::Arc;
+use uuid::Uuid;
 
 /// Trait combining KeyManager and Debug for trait objects
 pub trait DebugKeyManager: KeyManager + Debug {}
@@ -253,38 +253,49 @@ pub struct TransitStats {
 
 impl TransitEngine {
     /// Create a new Transit Engine
-    pub async fn new(key_manager: Arc<dyn DebugKeyManager + Send + Sync>, config: TransitConfig) -> Result<Self> {
+    pub async fn new(
+        key_manager: Arc<dyn DebugKeyManager + Send + Sync>,
+        config: TransitConfig,
+    ) -> Result<Self> {
         let engine = Self {
             key_manager,
             cipher: Aegis256::new(),
             named_keys: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
             config,
         };
-        
+
         // Create default key if it doesn't exist
-        if !engine.named_keys.read().await.contains_key(&engine.config.default_key_name) {
-            engine.create_key(&engine.config.default_key_name, TransitKeyType::Aegis256).await?;
+        if !engine
+            .named_keys
+            .read()
+            .await
+            .contains_key(&engine.config.default_key_name)
+        {
+            engine
+                .create_key(&engine.config.default_key_name, TransitKeyType::Aegis256)
+                .await?;
         }
-        
+
         Ok(engine)
     }
-    
+
     /// Create a new encryption key
     pub async fn create_key(&self, name: &str, key_type: TransitKeyType) -> Result<TransitKey> {
         let key_id = Uuid::new_v4().to_string();
-        
+
         // Generate encryption key
         let secure_key = self.key_manager.generate_key(&self.cipher).await?;
         let key_bytes = secure_key.as_bytes();
-        
+
         // Determine version
         let version = if self.config.key_versioning_enabled {
             let keys = self.named_keys.read().await;
-            let existing_versions: Vec<u32> = keys.values()
+            let existing_versions: Vec<u32> = keys
+                .values()
                 .filter(|k| k.name == name)
                 .map(|k| k.version)
                 .collect();
-            
+
             if existing_versions.is_empty() {
                 1
             } else {
@@ -293,7 +304,7 @@ impl TransitEngine {
         } else {
             1
         };
-        
+
         let transit_key = TransitKey {
             name: name.to_string(),
             key_id: key_id.clone(),
@@ -304,11 +315,11 @@ impl TransitEngine {
             key_size_bits: (key_bytes.len() * 8) as u32,
             metadata: HashMap::new(),
         };
-        
+
         // Store the key
         {
             let mut keys = self.named_keys.write().await;
-            
+
             // Mark previous versions as not latest
             if self.config.key_versioning_enabled {
                 for key in keys.values_mut() {
@@ -317,47 +328,47 @@ impl TransitEngine {
                     }
                 }
             }
-            
+
             keys.insert(key_id.clone(), transit_key.clone());
-            
+
             // Clean up old versions if needed
             if self.config.key_versioning_enabled {
-                let versions: Vec<_> = keys.values()
-                    .filter(|k| k.name == name)
-                    .collect();
-                
+                let versions: Vec<_> = keys.values().filter(|k| k.name == name).collect();
+
                 if versions.len() > self.config.max_key_versions as usize {
                     let mut to_remove = Vec::new();
                     for key in &versions {
-                        if !key.latest && key.version <= (versions.len() as u32 - self.config.max_key_versions) {
+                        if !key.latest
+                            && key.version <= (versions.len() as u32 - self.config.max_key_versions)
+                        {
                             to_remove.push(key.key_id.clone());
                         }
                     }
-                    
+
                     for key_id in to_remove {
                         keys.remove(&key_id);
                     }
                 }
             }
         }
-        
+
         if self.config.audit_logging_enabled {
             tracing::info!("Created transit key: {} (version: {})", name, version);
         }
-        
+
         Ok(transit_key)
     }
-    
+
     /// List all keys
     pub async fn list_keys(&self) -> Result<Vec<TransitKey>> {
         let keys = self.named_keys.read().await;
         Ok(keys.values().cloned().collect())
     }
-    
+
     /// Get key by name and version
     pub async fn get_key(&self, name: &str, version: Option<u32>) -> Result<Option<TransitKey>> {
         let keys = self.named_keys.read().await;
-        
+
         for key in keys.values() {
             if key.name == name {
                 if let Some(v) = version {
@@ -369,41 +380,52 @@ impl TransitEngine {
                 }
             }
         }
-        
+
         Ok(None)
     }
-    
+
     /// Delete a key
     pub async fn delete_key(&self, name: &str) -> Result<()> {
         let mut keys = self.named_keys.write().await;
-        
-        let to_remove: Vec<String> = keys.values()
+
+        let to_remove: Vec<String> = keys
+            .values()
             .filter(|k| k.name == name)
             .map(|k| k.key_id.clone())
             .collect();
-        
+
         for key_id in to_remove {
             keys.remove(&key_id);
         }
-        
+
         if self.config.audit_logging_enabled {
             tracing::info!("Deleted transit key: {}", name);
         }
-        
+
         Ok(())
     }
-    
+
     /// Rotate a key
     pub async fn rotate_key(&self, name: &str) -> Result<RotateKeyResponse> {
-        let old_key = self.get_key(name, None).await?
-            .ok_or_else(|| FortressError::encryption(format!("Key not found: {}", name), "transit".to_string(), EncryptionErrorCode::DecryptionFailed))?;
-        
+        let old_key = self.get_key(name, None).await?.ok_or_else(|| {
+            FortressError::encryption(
+                format!("Key not found: {}", name),
+                "transit".to_string(),
+                EncryptionErrorCode::DecryptionFailed,
+            )
+        })?;
+
         let new_key = self.create_key(name, old_key.key_type.clone()).await?;
-        
+
         if self.config.audit_logging_enabled {
-            tracing::info!("Rotated transit key: {} from version {} to {}", name, old_key.version, new_key.version);
+            tracing::info!(
+                "Rotated transit key: {} from version {} to {}",
+                name,
+                old_key.version,
+                new_key.version
+            );
         }
-        
+
         Ok(RotateKeyResponse {
             old_key_name: old_key.key_id,
             new_key_name: new_key.key_id,
@@ -411,52 +433,64 @@ impl TransitEngine {
             timestamp: Utc::now(),
         })
     }
-    
+
     /// Encrypt data
     pub async fn encrypt(&self, request: EncryptRequest) -> Result<EncryptResponse> {
         let start = std::time::Instant::now();
-        
+
         // Validate plaintext size
         if request.plaintext.len() > self.config.max_plaintext_size {
             return Err(FortressError::encryption(
-                format!("Plaintext too large: {} bytes (max: {})", 
-                    request.plaintext.len(), self.config.max_plaintext_size),
+                format!(
+                    "Plaintext too large: {} bytes (max: {})",
+                    request.plaintext.len(),
+                    self.config.max_plaintext_size
+                ),
                 "transit".to_string(),
                 EncryptionErrorCode::InvalidKeyLength,
             ));
         }
-        
+
         // Get key name
-        let key_name = request.key_name.as_ref().unwrap_or(&self.config.default_key_name);
-        
+        let key_name = request
+            .key_name
+            .as_ref()
+            .unwrap_or(&self.config.default_key_name);
+
         // Get key
-        let key = self.get_key(key_name, request.key_version).await?
-            .ok_or_else(|| FortressError::encryption(
-                format!("Key not found: {}", key_name),
-                "transit".to_string(),
-                EncryptionErrorCode::DecryptionFailed,
-            ))?;
-        
+        let key = self
+            .get_key(key_name, request.key_version)
+            .await?
+            .ok_or_else(|| {
+                FortressError::encryption(
+                    format!("Key not found: {}", key_name),
+                    "transit".to_string(),
+                    EncryptionErrorCode::DecryptionFailed,
+                )
+            })?;
+
         // Generate nonce for AEGIS-256
         let nonce_bytes = generate_nonce();
-        
+
         // Prepare associated data
         let aad = if let Some(aad) = &request.associated_data {
             aad.clone()
         } else {
             Vec::new()
         };
-        
+
         // Encrypt using AEGIS-256
         let mut plaintext_with_aad = request.plaintext.clone();
         plaintext_with_aad.extend_from_slice(&aad);
-        
+
         let secure_key = SecureKey::from_bytes(&[0u8; 32]); // In real implementation, get from key manager
-        let mut ciphertext = self.cipher.encrypt(&plaintext_with_aad, secure_key.as_bytes())?;
-        
+        let mut ciphertext = self
+            .cipher
+            .encrypt(&plaintext_with_aad, secure_key.as_bytes())?;
+
         // Add nonce to ciphertext
         ciphertext.extend_from_slice(&nonce_bytes);
-        
+
         let response = EncryptResponse {
             ciphertext,
             key_name: key.name.clone(),
@@ -464,34 +498,42 @@ impl TransitEngine {
             timestamp: Utc::now(),
             key_id: key.key_id.clone(),
         };
-        
+
         if self.config.audit_logging_enabled {
             if let Some(context) = &request.context {
-                tracing::info!("Encrypted data with key: {} (source: {}, purpose: {})", 
-                    key_name, context.source, context.purpose);
+                tracing::info!(
+                    "Encrypted data with key: {} (source: {}, purpose: {})",
+                    key_name,
+                    context.source,
+                    context.purpose
+                );
             } else {
                 tracing::info!("Encrypted data with key: {}", key_name);
             }
         }
-        
+
         // Update stats (simplified)
         tracing::debug!("Encryption completed in {:?}", start.elapsed());
-        
+
         Ok(response)
     }
-    
+
     /// Decrypt data
     pub async fn decrypt(&self, request: DecryptRequest) -> Result<DecryptResponse> {
         let start = std::time::Instant::now();
-        
+
         // Get key
-        let key = self.get_key(&request.key_name, request.key_version).await?
-            .ok_or_else(|| FortressError::encryption(
-                format!("Key not found: {}", request.key_name),
-                "transit".to_string(),
-                EncryptionErrorCode::DecryptionFailed,
-            ))?;
-        
+        let key = self
+            .get_key(&request.key_name, request.key_version)
+            .await?
+            .ok_or_else(|| {
+                FortressError::encryption(
+                    format!("Key not found: {}", request.key_name),
+                    "transit".to_string(),
+                    EncryptionErrorCode::DecryptionFailed,
+                )
+            })?;
+
         // Extract nonce from ciphertext (last 32 bytes for AEGIS-256)
         if request.ciphertext.len() < 32 {
             return Err(FortressError::encryption(
@@ -500,22 +542,22 @@ impl TransitEngine {
                 EncryptionErrorCode::DecryptionFailed,
             ));
         }
-        
+
         let ciphertext_len = request.ciphertext.len() - 32;
         let ciphertext = &request.ciphertext[..ciphertext_len];
         let _nonce = &request.ciphertext[ciphertext_len..];
-        
+
         // Prepare associated data
         let aad = if let Some(aad) = &request.associated_data {
             aad.clone()
         } else {
             Vec::new()
         };
-        
+
         // Decrypt using AEGIS-256
         let secure_key = SecureKey::from_bytes(&[0u8; 32]); // In real implementation, get from key manager
         let plaintext_with_aad = self.cipher.decrypt(ciphertext, secure_key.as_bytes())?;
-        
+
         // Remove associated data
         if plaintext_with_aad.len() < aad.len() {
             return Err(FortressError::encryption(
@@ -524,10 +566,10 @@ impl TransitEngine {
                 EncryptionErrorCode::DecryptionFailed,
             ));
         }
-        
+
         let plaintext_len = plaintext_with_aad.len() - aad.len();
         let plaintext = plaintext_with_aad[..plaintext_len].to_vec();
-        
+
         let response = DecryptResponse {
             plaintext,
             key_name: key.name.clone(),
@@ -535,21 +577,25 @@ impl TransitEngine {
             timestamp: Utc::now(),
             key_id: key.key_id.clone(),
         };
-        
+
         if self.config.audit_logging_enabled {
-            tracing::info!("Decrypted data with key: {} (version: {})", key.name, key.version);
+            tracing::info!(
+                "Decrypted data with key: {} (version: {})",
+                key.name,
+                key.version
+            );
         }
-        
+
         // Update stats (simplified)
         tracing::debug!("Decryption completed in {:?}", start.elapsed());
-        
+
         Ok(response)
     }
-    
+
     /// Get engine statistics
     pub async fn stats(&self) -> Result<TransitStats> {
         let keys = self.named_keys.read().await;
-        
+
         Ok(TransitStats {
             total_encryptions: 0, // Would be tracked in real implementation
             total_decryptions: 0,
@@ -561,12 +607,12 @@ impl TransitEngine {
             uptime_seconds: 0, // Would track actual uptime
         })
     }
-    
+
     /// Health check
     pub async fn health_check(&self) -> Result<bool> {
         // Test encryption/decryption with default key
         let test_data = b"health_check_test_data";
-        
+
         let encrypt_request = EncryptRequest {
             plaintext: test_data.to_vec(),
             key_name: None,
@@ -574,14 +620,14 @@ impl TransitEngine {
             key_version: None,
             associated_data: None,
         };
-        
+
         let encrypt_response = self.encrypt(encrypt_request).await.unwrap();
-        
+
         // Clone values to avoid move issues
         let ciphertext = encrypt_response.ciphertext.clone();
         let key_name = encrypt_response.key_name.clone();
         let key_version = encrypt_response.key_version;
-        
+
         // Test decryption
         let decrypt_request = DecryptRequest {
             ciphertext,
@@ -589,9 +635,9 @@ impl TransitEngine {
             key_version: Some(key_version),
             associated_data: None,
         };
-        
+
         let decrypt_response = self.decrypt(decrypt_request).await.unwrap();
-        
+
         Ok(decrypt_response.plaintext == test_data)
     }
 }
@@ -600,8 +646,8 @@ impl TransitEngine {
 fn generate_nonce() -> Vec<u8> {
     // AEGIS-256 uses a 32-byte nonce
     let mut nonce = vec![0u8; 32];
-    use rand::RngCore;
     use rand::rngs::OsRng;
+    use rand::RngCore;
     OsRng.fill_bytes(&mut nonce);
     nonce
 }
@@ -616,12 +662,15 @@ impl TransitEngineFactory {
         let config = TransitConfig::default();
         TransitEngine::new(key_manager, config).await
     }
-    
+
     /// Create a Transit Engine with custom configuration
-    pub async fn create_with_config(key_manager: Arc<dyn DebugKeyManager + Send + Sync>, config: TransitConfig) -> Result<TransitEngine> {
+    pub async fn create_with_config(
+        key_manager: Arc<dyn DebugKeyManager + Send + Sync>,
+        config: TransitConfig,
+    ) -> Result<TransitEngine> {
         TransitEngine::new(key_manager, config).await
     }
-    
+
     /// Create a Transit Engine for testing
     pub async fn create_for_testing() -> Result<TransitEngine> {
         let key_manager = Arc::new(crate::key::InMemoryKeyManager::new());
@@ -641,11 +690,11 @@ impl TransitEngineFactory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     async fn test_transit_engine_basic_operations() {
         let engine = TransitEngineFactory::create_for_testing().await.unwrap();
-        
+
         // Test encryption
         let plaintext = b"Hello, Transit Engine!";
         let encrypt_request = EncryptRequest {
@@ -655,12 +704,12 @@ mod tests {
             key_version: None,
             associated_data: None,
         };
-        
+
         let encrypt_response = engine.encrypt(encrypt_request).await.unwrap();
         assert!(!encrypt_response.ciphertext.is_empty());
         assert_eq!(encrypt_response.key_name, "test");
         assert_eq!(encrypt_response.key_version, 1);
-        
+
         // Test decryption
         let decrypt_request = DecryptRequest {
             ciphertext: encrypt_response.ciphertext,
@@ -668,49 +717,52 @@ mod tests {
             key_version: Some(encrypt_response.key_version),
             associated_data: None,
         };
-        
+
         let decrypt_response = engine.decrypt(decrypt_request).await.unwrap();
         assert_eq!(decrypt_response.plaintext, plaintext);
         assert_eq!(decrypt_response.key_name, "test");
         assert_eq!(decrypt_response.key_version, 1);
     }
-    
+
     #[tokio::test]
     async fn test_transit_engine_key_management() {
         let engine = TransitEngineFactory::create_for_testing().await.unwrap();
-        
+
         // Create a new key
-        let key = engine.create_key("custom_key", TransitKeyType::Aegis256).await.unwrap();
+        let key = engine
+            .create_key("custom_key", TransitKeyType::Aegis256)
+            .await
+            .unwrap();
         assert_eq!(key.name, "custom_key");
         assert_eq!(key.version, 1);
         assert!(key.latest);
-        
+
         // List keys
         let keys = engine.list_keys().await.unwrap();
         assert!(keys.len() >= 2); // default key + custom key
-        
+
         // Get key
         let retrieved_key = engine.get_key("custom_key", None).await.unwrap();
         assert!(retrieved_key.is_some());
         assert_eq!(retrieved_key.unwrap().name, "custom_key");
-        
+
         // Rotate key
         let rotate_response = engine.rotate_key("custom_key").await.unwrap();
         assert_eq!(rotate_response.new_version, 2);
-        
+
         // Delete key
         engine.delete_key("custom_key").await.unwrap();
         let deleted_key = engine.get_key("custom_key", None).await.unwrap();
         assert!(deleted_key.is_none());
     }
-    
+
     #[tokio::test]
     async fn test_transit_engine_with_associated_data() {
         let engine = TransitEngineFactory::create_for_testing().await.unwrap();
-        
+
         let plaintext = b"Secret message";
         let associated_data = b"additional authenticated data";
-        
+
         // Encrypt with associated data
         let encrypt_request = EncryptRequest {
             plaintext: plaintext.to_vec(),
@@ -719,9 +771,9 @@ mod tests {
             key_version: None,
             associated_data: Some(associated_data.to_vec()),
         };
-        
+
         let encrypt_response = engine.encrypt(encrypt_request).await.unwrap();
-        
+
         // Decrypt with correct associated data
         let decrypt_request = DecryptRequest {
             ciphertext: encrypt_response.ciphertext.clone(),
@@ -729,10 +781,10 @@ mod tests {
             key_version: Some(encrypt_response.key_version),
             associated_data: Some(associated_data.to_vec()),
         };
-        
+
         let decrypt_response = engine.decrypt(decrypt_request).await.unwrap();
         assert_eq!(decrypt_response.plaintext, plaintext);
-        
+
         // Decrypt with incorrect associated data should fail
         let decrypt_request_wrong_aad = DecryptRequest {
             ciphertext: encrypt_response.ciphertext.clone(),
@@ -740,18 +792,18 @@ mod tests {
             key_version: Some(encrypt_response.key_version),
             associated_data: Some(b"wrong data".to_vec()),
         };
-        
+
         let result = engine.decrypt(decrypt_request_wrong_aad).await;
         assert!(result.is_err());
     }
-    
+
     #[tokio::test]
     async fn test_transit_engine_health_check() {
         let engine = TransitEngineFactory::create_for_testing().await.unwrap();
-        
+
         // Health check should pass
         assert!(engine.health_check().await.unwrap());
-        
+
         // Get stats
         let stats = engine.stats().await.unwrap();
         assert!(stats.total_keys >= 1); // At least the default key

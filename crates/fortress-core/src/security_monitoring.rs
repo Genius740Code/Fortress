@@ -1,11 +1,11 @@
 //! Security Monitoring and Alerting System
-//! 
+//!
 //! Provides real-time security metrics collection, analysis, and alerting.
 //! This module monitors security events, detects threats, and triggers alerts
 //! for anomalous activity.
 
 use crate::error::FortressError;
-use crate::security_audit::{SecurityAuditEvent, SecurityEventType, SecurityEventResult};
+use crate::security_audit::{SecurityAuditEvent, SecurityEventResult, SecurityEventType};
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
@@ -14,11 +14,11 @@ use tokio::sync::{Mutex, RwLock};
 use tokio::time::interval;
 
 #[cfg(feature = "performance-optimization")]
+use crossbeam::queue::SegQueue;
+#[cfg(feature = "performance-optimization")]
 use dashmap::DashMap;
 #[cfg(feature = "performance-optimization")]
-use parking_lot::{RwLock as ParkingLotRwLock, Mutex as ParkingLotMutex};
-#[cfg(feature = "performance-optimization")]
-use crossbeam::queue::SegQueue;
+use parking_lot::{Mutex as ParkingLotMutex, RwLock as ParkingLotRwLock};
 
 /// Security alert severity levels
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -270,9 +270,9 @@ impl SecurityMonitoringSystem {
 
         let system = self.clone();
         tokio::spawn(async move {
-            let mut interval = interval(
-                std::time::Duration::from_secs(system.config.monitoring_interval_seconds as u64),
-            );
+            let mut interval = interval(std::time::Duration::from_secs(
+                system.config.monitoring_interval_seconds as u64,
+            ));
 
             loop {
                 interval.tick().await;
@@ -287,7 +287,10 @@ impl SecurityMonitoringSystem {
     }
 
     /// Process a security event
-    pub async fn process_security_event(&self, event: &SecurityAuditEvent) -> Result<(), FortressError> {
+    pub async fn process_security_event(
+        &self,
+        event: &SecurityAuditEvent,
+    ) -> Result<(), FortressError> {
         // Update metrics
         self.update_metrics(event).await?;
 
@@ -347,8 +350,13 @@ impl SecurityMonitoringSystem {
         let config = &self.config.anomaly_detection;
 
         // Check for brute force attacks
-        if event.event_type == SecurityEventType::Authentication && event.result == SecurityEventResult::Failure {
-            if self.is_brute_force_attack(event, &now, config.failed_auth_threshold_per_minute).await? {
+        if event.event_type == SecurityEventType::Authentication
+            && event.result == SecurityEventResult::Failure
+        {
+            if self
+                .is_brute_force_attack(event, &now, config.failed_auth_threshold_per_minute)
+                .await?
+            {
                 self.create_alert(
                     AlertType::BruteForceAttack,
                     AlertSeverity::High,
@@ -358,31 +366,42 @@ impl SecurityMonitoringSystem {
                         event.ip_address.as_deref().unwrap_or("unknown")
                     ),
                     event,
-                ).await?;
+                )
+                .await?;
             }
         }
 
         // Check for suspicious activity patterns
-        if self.is_suspicious_activity_pattern(&now, config.suspicious_activity_threshold_per_minute).await? {
+        if self
+            .is_suspicious_activity_pattern(&now, config.suspicious_activity_threshold_per_minute)
+            .await?
+        {
             self.create_alert(
                 AlertType::SuspiciousActivity,
                 AlertSeverity::Medium,
                 "Suspicious activity pattern detected",
                 "Elevated level of suspicious activities detected".to_string(),
                 event,
-            ).await?;
+            )
+            .await?;
         }
 
         // Check for authorization failures
-        if event.event_type == SecurityEventType::Authorization && event.result == SecurityEventResult::Failure {
-            if self.is_authorization_abuse(event, &now, config.failed_authz_threshold_per_minute).await? {
+        if event.event_type == SecurityEventType::Authorization
+            && event.result == SecurityEventResult::Failure
+        {
+            if self
+                .is_authorization_abuse(event, &now, config.failed_authz_threshold_per_minute)
+                .await?
+            {
                 self.create_alert(
                     AlertType::UnauthorizedAccess,
                     AlertSeverity::High,
                     "Potential authorization abuse detected",
                     "Multiple failed authorization attempts detected".to_string(),
                     event,
-                ).await?;
+                )
+                .await?;
             }
         }
 
@@ -396,7 +415,10 @@ impl SecurityMonitoringSystem {
         now: &DateTime<Utc>,
         threshold: u32,
     ) -> Result<bool, FortressError> {
-        let ip = event.ip_address.clone().unwrap_or_else(|| "unknown".to_string());
+        let ip = event
+            .ip_address
+            .clone()
+            .unwrap_or_else(|| "unknown".to_string());
         let key = format!("auth_fail_{}", ip);
 
         let mut counters = self.event_counters.lock().await;
@@ -452,7 +474,10 @@ impl SecurityMonitoringSystem {
         now: &DateTime<Utc>,
         threshold: u32,
     ) -> Result<bool, FortressError> {
-        let ip = event.ip_address.clone().unwrap_or_else(|| "unknown".to_string());
+        let ip = event
+            .ip_address
+            .clone()
+            .unwrap_or_else(|| "unknown".to_string());
         let key = format!("authz_fail_{}", ip);
 
         let mut counters = self.event_counters.lock().await;
@@ -484,7 +509,10 @@ impl SecurityMonitoringSystem {
         related_event: &SecurityAuditEvent,
     ) -> Result<(), FortressError> {
         // Check cooldown period
-        if self.is_alert_in_cooldown(&alert_type, severity.clone()).await? {
+        if self
+            .is_alert_in_cooldown(&alert_type, severity.clone())
+            .await?
+        {
             return Ok(());
         }
 
@@ -541,9 +569,14 @@ impl SecurityMonitoringSystem {
     }
 
     /// Check if alert is in cooldown period
-    async fn is_alert_in_cooldown(&self, alert_type: &AlertType, severity: AlertSeverity) -> Result<bool, FortressError> {
+    async fn is_alert_in_cooldown(
+        &self,
+        alert_type: &AlertType,
+        severity: AlertSeverity,
+    ) -> Result<bool, FortressError> {
         let active_alerts = self.active_alerts.lock().await;
-        let cooldown_duration = Duration::minutes(self.config.anomaly_detection.alert_cooldown_minutes as i64);
+        let cooldown_duration =
+            Duration::minutes(self.config.anomaly_detection.alert_cooldown_minutes as i64);
         let cutoff_time = Utc::now() - cooldown_duration;
 
         for alert in active_alerts.iter() {
@@ -639,7 +672,8 @@ impl SecurityMonitoringSystem {
                     "performance_check".to_string(),
                     SecurityEventResult::Warning,
                 ),
-            ).await?;
+            )
+            .await?;
         }
 
         Ok(())
@@ -668,7 +702,7 @@ impl SecurityMonitoringSystem {
     /// Acknowledge an alert
     pub async fn acknowledge_alert(&self, alert_id: &str) -> Result<(), FortressError> {
         let mut active_alerts = self.active_alerts.lock().await;
-        
+
         for alert in active_alerts.iter_mut() {
             if alert.id == alert_id {
                 alert.status = AlertStatus::Acknowledged;
@@ -683,16 +717,16 @@ impl SecurityMonitoringSystem {
     /// Resolve an alert
     pub async fn resolve_alert(&self, alert_id: &str) -> Result<(), FortressError> {
         let mut active_alerts = self.active_alerts.lock().await;
-        
+
         for i in 0..active_alerts.len() {
             if active_alerts[i].id == alert_id {
                 let mut alert = active_alerts.remove(i);
                 alert.status = AlertStatus::Resolved;
-                
+
                 // Add to history
                 let mut history = self.alert_history.lock().await;
                 history.push_back(alert);
-                
+
                 tracing::info!(target: "security_alert", alert_id = %alert_id, "Alert resolved");
                 return Ok(());
             }
@@ -702,12 +736,16 @@ impl SecurityMonitoringSystem {
     }
 
     /// Update performance metrics
-    pub async fn update_performance_metrics(&self, response_time_ms: f64, concurrent_requests: u32) {
+    pub async fn update_performance_metrics(
+        &self,
+        response_time_ms: f64,
+        concurrent_requests: u32,
+    ) {
         let mut metrics = self.metrics.write().await;
-        
+
         // Update average response time (simple moving average)
         metrics.avg_response_time_ms = (metrics.avg_response_time_ms + response_time_ms) / 2.0;
-        
+
         // Update concurrent requests
         metrics.current_concurrent_requests = concurrent_requests;
         if concurrent_requests > metrics.peak_concurrent_requests {
@@ -745,13 +783,15 @@ impl SecurityMonitoringSystem {
 
         // Deduct for failed authentications
         if metrics.authentication_attempts > 0 {
-            let fail_rate = metrics.failed_authentications as f64 / metrics.authentication_attempts as f64;
+            let fail_rate =
+                metrics.failed_authentications as f64 / metrics.authentication_attempts as f64;
             score -= fail_rate * 20.0;
         }
 
         // Deduct for failed authorizations
         if metrics.authorization_checks > 0 {
-            let fail_rate = metrics.failed_authorizations as f64 / metrics.authorization_checks as f64;
+            let fail_rate =
+                metrics.failed_authorizations as f64 / metrics.authorization_checks as f64;
             score -= fail_rate * 15.0;
         }
 
@@ -855,18 +895,19 @@ pub enum HealthStatus {
 }
 
 /// Global security monitoring instance
-static GLOBAL_MONITORING_SYSTEM: std::sync::OnceLock<Arc<SecurityMonitoringSystem>> = std::sync::OnceLock::new();
+static GLOBAL_MONITORING_SYSTEM: std::sync::OnceLock<Arc<SecurityMonitoringSystem>> =
+    std::sync::OnceLock::new();
 
 /// Initialize global security monitoring system
 pub fn init_security_monitoring(config: SecurityMonitoringConfig) -> Result<(), FortressError> {
     let system = Arc::new(SecurityMonitoringSystem::new(config));
-    GLOBAL_MONITORING_SYSTEM
-        .set(system)
-        .map_err(|_| FortressError::configuration(
+    GLOBAL_MONITORING_SYSTEM.set(system).map_err(|_| {
+        FortressError::configuration(
             "Security monitoring system already initialized".to_string(),
             None,
             crate::error::ConfigurationErrorCode::InvalidFormat,
-        ))?;
+        )
+    })?;
     Ok(())
 }
 
@@ -891,7 +932,7 @@ mod tests {
     #[tokio::test]
     async fn test_security_metrics_update() {
         let monitoring = SecurityMonitoringSystem::default();
-        
+
         let event = SecurityAuditEvent::new(
             SecurityEventType::Authentication,
             "login_attempt".to_string(),
@@ -923,7 +964,8 @@ mod tests {
                 SecurityEventType::Authentication,
                 format!("login_attempt_{}", i),
                 SecurityEventResult::Failure,
-            ).with_network("192.168.1.1".to_string(), None);
+            )
+            .with_network("192.168.1.1".to_string(), None);
 
             monitoring.process_security_event(&event).await.unwrap();
         }
@@ -936,7 +978,7 @@ mod tests {
     #[tokio::test]
     async fn test_alert_acknowledgment() {
         let monitoring = SecurityMonitoringSystem::default();
-        
+
         // Create a test alert
         let event = SecurityAuditEvent::new(
             SecurityEventType::ThreatDetection,
@@ -944,13 +986,16 @@ mod tests {
             SecurityEventResult::Blocked,
         );
 
-        monitoring.create_alert(
-            AlertType::SuspiciousActivity,
-            AlertSeverity::Medium,
-            "Test alert",
-            "Test description".to_string(),
-            &event,
-        ).await.unwrap();
+        monitoring
+            .create_alert(
+                AlertType::SuspiciousActivity,
+                AlertSeverity::Medium,
+                "Test alert",
+                "Test description".to_string(),
+                &event,
+            )
+            .await
+            .unwrap();
 
         let alerts = monitoring.get_active_alerts().await;
         let alert_id = alerts[0].id.clone();
@@ -964,7 +1009,7 @@ mod tests {
     #[tokio::test]
     async fn test_system_health_calculation() {
         let monitoring = SecurityMonitoringSystem::default();
-        
+
         // Simulate some metrics
         let mut metrics = monitoring.get_metrics().await;
         metrics.failed_authentications = 5;

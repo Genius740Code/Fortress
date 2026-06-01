@@ -13,8 +13,8 @@
 //! - **Threat Intelligence**: Integration with external threat feeds
 //! - **Forensic Analysis**: Detailed investigation and evidence collection
 
+use crate::audit::{AuditEntry, AuditEventType, AuditLogger, EventOutcome, SecurityLevel};
 use crate::error::Result;
-use crate::audit::{AuditLogger, AuditEntry, AuditEventType, SecurityLevel, EventOutcome};
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -436,11 +436,7 @@ pub struct SecurityIncident {
 
 impl SecurityIncident {
     /// Create a new security incident
-    pub fn new(
-        title: String,
-        description: String,
-        severity: ThreatSeverity,
-    ) -> Self {
+    pub fn new(title: String, description: String, severity: ThreatSeverity) -> Self {
         let now = Utc::now();
         Self {
             id: Uuid::new_v4().to_string(),
@@ -554,7 +550,11 @@ pub trait ThreatResponseSystem: Send + Sync {
     async fn create_incident(&self, incident: SecurityIncident) -> Result<IncidentId>;
 
     /// Update incident status
-    async fn update_incident_status(&self, incident_id: &IncidentId, status: IncidentStatus) -> Result<()>;
+    async fn update_incident_status(
+        &self,
+        incident_id: &IncidentId,
+        status: IncidentStatus,
+    ) -> Result<()>;
 
     /// Get incident by ID
     async fn get_incident(&self, incident_id: &IncidentId) -> Result<Option<SecurityIncident>>;
@@ -616,13 +616,18 @@ impl DefaultThreatDetectionEngine {
     }
 
     /// Evaluate a rule against events
-    async fn evaluate_rule(&self, rule: &DetectionRule, events: &[SecurityEvent]) -> Option<ThreatDetection> {
+    async fn evaluate_rule(
+        &self,
+        rule: &DetectionRule,
+        events: &[SecurityEvent],
+    ) -> Option<ThreatDetection> {
         if !rule.enabled {
             return None;
         }
 
         // Simple rule evaluation - in practice, this would be much more sophisticated
-        let matching_events: Vec<_> = events.iter()
+        let matching_events: Vec<_> = events
+            .iter()
             .filter(|event| {
                 // Check if event matches rule conditions
                 self.event_matches_conditions(event, &rule.conditions)
@@ -642,7 +647,11 @@ impl DefaultThreatDetectionEngine {
         }
 
         // Create threat detection
-        let threat_type = rule.threat_types.first().unwrap_or(&ThreatType::Unknown).clone();
+        let threat_type = rule
+            .threat_types
+            .first()
+            .unwrap_or(&ThreatType::Unknown)
+            .clone();
         let mut detection = ThreatDetection::new(
             rule.id.clone(),
             threat_type.clone(),
@@ -658,7 +667,11 @@ impl DefaultThreatDetectionEngine {
     }
 
     /// Check if event matches rule conditions
-    fn event_matches_conditions(&self, event: &SecurityEvent, conditions: &serde_json::Value) -> bool {
+    fn event_matches_conditions(
+        &self,
+        event: &SecurityEvent,
+        conditions: &serde_json::Value,
+    ) -> bool {
         // Simplified condition matching
         if let Some(obj) = conditions.as_object() {
             if let Some(event_types) = obj.get("event_types").and_then(|v| v.as_array()) {
@@ -714,9 +727,9 @@ impl DefaultThreatDetectionEngine {
     /// Update statistics
     async fn update_statistics(&self, threats: &[ThreatDetection]) {
         let mut stats = self.statistics.write().await;
-        
+
         stats.total_threats += threats.len() as u64;
-        
+
         for threat in threats {
             if !threat.false_positive {
                 stats.true_positives += 1;
@@ -724,8 +737,14 @@ impl DefaultThreatDetectionEngine {
                 stats.false_positives += 1;
             }
 
-            *stats.threats_by_type.entry(threat.threat_type.clone()).or_insert(0) += 1;
-            *stats.threats_by_severity.entry(threat.severity.clone()).or_insert(0) += 1;
+            *stats
+                .threats_by_type
+                .entry(threat.threat_type.clone())
+                .or_insert(0) += 1;
+            *stats
+                .threats_by_severity
+                .entry(threat.severity.clone())
+                .or_insert(0) += 1;
         }
 
         if stats.total_threats > 0 {
@@ -775,7 +794,7 @@ impl ThreatDetectionEngine for DefaultThreatDetectionEngine {
                 current_hash: String::new(),
                 signature: String::new(),
             };
-            
+
             self.audit_logger.lock().unwrap().log(entry)?;
         }
 
@@ -870,7 +889,7 @@ impl DefaultThreatResponseSystem {
                     current_hash: String::new(),
                     signature: String::new(),
                 };
-                
+
                 self.audit_logger.lock().unwrap().log(entry)?;
             }
             ResponseAction::BlockUser(user_id) => {
@@ -889,7 +908,7 @@ impl DefaultThreatResponseSystem {
                     current_hash: String::new(),
                     signature: String::new(),
                 };
-                
+
                 self.audit_logger.lock().unwrap().log(entry)?;
             }
             ResponseAction::TriggerAlert => {
@@ -908,7 +927,7 @@ impl DefaultThreatResponseSystem {
                     current_hash: String::new(),
                     signature: String::new(),
                 };
-                
+
                 self.audit_logger.lock().unwrap().log(entry)?;
             }
             ResponseAction::LogEvents => {
@@ -927,7 +946,7 @@ impl DefaultThreatResponseSystem {
                     current_hash: String::new(),
                     signature: String::new(),
                 };
-                
+
                 self.audit_logger.lock().unwrap().log(entry)?;
             }
             _ => {
@@ -946,7 +965,7 @@ impl DefaultThreatResponseSystem {
                     current_hash: String::new(),
                     signature: String::new(),
                 };
-                
+
                 self.audit_logger.lock().unwrap().log(entry)?;
             }
         }
@@ -956,12 +975,18 @@ impl DefaultThreatResponseSystem {
     /// Update response statistics
     async fn update_statistics(&self, incident: &SecurityIncident) {
         let mut stats = self.statistics.write().await;
-        
+
         stats.total_incidents += 1;
-        *stats.incidents_by_status.entry(incident.status.clone()).or_insert(0) += 1;
-        *stats.incidents_by_severity.entry(incident.severity.clone()).or_insert(0) += 1;
+        *stats
+            .incidents_by_status
+            .entry(incident.status.clone())
+            .or_insert(0) += 1;
+        *stats
+            .incidents_by_severity
+            .entry(incident.severity.clone())
+            .or_insert(0) += 1;
         stats.total_actions += incident.actions_taken.len() as u64;
-        
+
         for action in &incident.actions_taken {
             let action_type = match action {
                 ResponseAction::BlockIp(_) => "block_ip",
@@ -972,7 +997,10 @@ impl DefaultThreatResponseSystem {
                 ResponseAction::Custom(name, _) => name,
                 _ => "other",
             };
-            *stats.actions_by_type.entry(action_type.to_string()).or_insert(0) += 1;
+            *stats
+                .actions_by_type
+                .entry(action_type.to_string())
+                .or_insert(0) += 1;
         }
 
         stats.last_updated = Utc::now();
@@ -1024,7 +1052,7 @@ impl ThreatResponseSystem for DefaultThreatResponseSystem {
         let incident_id = incident.id.clone();
         let mut incidents = self.incidents.write().await;
         incidents.insert(incident_id.clone(), incident);
-        
+
         // Update statistics
         drop(incidents);
         let incidents = self.incidents.read().await;
@@ -1035,7 +1063,11 @@ impl ThreatResponseSystem for DefaultThreatResponseSystem {
         Ok(incident_id)
     }
 
-    async fn update_incident_status(&self, incident_id: &IncidentId, status: IncidentStatus) -> Result<()> {
+    async fn update_incident_status(
+        &self,
+        incident_id: &IncidentId,
+        status: IncidentStatus,
+    ) -> Result<()> {
         let mut incidents = self.incidents.write().await;
         if let Some(incident) = incidents.get_mut(incident_id) {
             incident.update_status(status);
@@ -1115,16 +1147,14 @@ mod tests {
         let response_system = DefaultThreatResponseSystem::new(audit_logger);
 
         // Create a threat detection
-        let events = vec![
-            SecurityEvent::new(
-                "login_failure".to_string(),
-                "auth_system".to_string(),
-                serde_json::json!({"reason": "invalid_password"}),
-                85,
-            )
-            .with_ip_address("192.168.1.100")
-            .with_user_id("user123"),
-        ];
+        let events = vec![SecurityEvent::new(
+            "login_failure".to_string(),
+            "auth_system".to_string(),
+            serde_json::json!({"reason": "invalid_password"}),
+            85,
+        )
+        .with_ip_address("192.168.1.100")
+        .with_user_id("user123")];
 
         let threat = ThreatDetection::new(
             "rule1".to_string(),

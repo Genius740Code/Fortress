@@ -8,25 +8,35 @@
 //!
 //! Tests ensure systems are fast, scalable, effective, and secure with no errors.
 
+use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
-use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use fortress_core::{
+    cluster::{ClusterConfig, ClusterNode, LoadMetrics, NodeCapabilities, NodeId, NodeState},
     error::{FortressError, Result},
-    cluster::{ClusterConfig, ClusterNode, NodeState, NodeId, NodeCapabilities, LoadMetrics},
-    mpc::{MpcManager, MpcProtocol, ComputationConfig, SessionId, PartyId, ComputationStatus, SecretSharingScheme, PartyRole},
+    mpc::{
+        ComputationConfig, ComputationStatus, MpcManager, MpcProtocol, PartyId, PartyRole,
+        SecretSharingScheme, SessionId,
+    },
     mpc_manager::DefaultMpcManager,
-    mpc_party::InMemoryMpcParty,
     mpc_network::InMemoryMpcNetwork,
-    plugin::{Plugin, PluginMetadata, PluginCapability, PluginContext, PluginResult, PluginMetrics, PluginInput, PluginHealth},
+    mpc_party::InMemoryMpcParty,
+    plugin::{
+        Plugin, PluginCapability, PluginContext, PluginHealth, PluginInput, PluginMetadata,
+        PluginMetrics, PluginResult,
+    },
 };
 
 /// Test cluster configuration for integration tests
-fn create_test_cluster_config(node_id: NodeId, bind_address: &str, seed_nodes: Vec<&str>) -> ClusterConfig {
+fn create_test_cluster_config(
+    node_id: NodeId,
+    bind_address: &str,
+    seed_nodes: Vec<&str>,
+) -> ClusterConfig {
     use std::net::SocketAddr;
     ClusterConfig {
         node_id,
@@ -83,9 +93,9 @@ impl Plugin for TestPlugin {
 
     async fn execute(&self, input: PluginInput) -> Result<PluginResult> {
         self.increment_execution_count().await;
-        
+
         let start_time = std::time::Instant::now();
-        
+
         // Simulate plugin work based on action
         let result = match input.action.as_str() {
             "sign" => {
@@ -94,13 +104,13 @@ impl Plugin for TestPlugin {
                     "transaction_hash": "abc123",
                     "verified": true
                 })
-            },
+            }
             "encrypt" => {
                 serde_json::json!({
                     "encrypted_data": "encrypted-12345",
                     "algorithm": "AES-256-GCM"
                 })
-            },
+            }
             "api" => {
                 serde_json::json!({
                     "api_response": {
@@ -108,7 +118,7 @@ impl Plugin for TestPlugin {
                         "data": input.data
                     }
                 })
-            },
+            }
             _ => {
                 serde_json::json!({
                     "processed": true,
@@ -118,7 +128,7 @@ impl Plugin for TestPlugin {
         };
 
         let execution_time = start_time.elapsed();
-        
+
         Ok(PluginResult {
             success: true,
             data: Some(result),
@@ -126,9 +136,10 @@ impl Plugin for TestPlugin {
             metrics: PluginMetrics {
                 execution_time_ms: execution_time.as_millis() as u64,
                 memory_usage_bytes: 1024,
-                custom_metrics: HashMap::from([
-                    ("operations".to_string(), serde_json::Value::Number(1.into())),
-                ]),
+                custom_metrics: HashMap::from([(
+                    "operations".to_string(),
+                    serde_json::Value::Number(1.into()),
+                )]),
             },
         })
     }
@@ -242,18 +253,21 @@ impl MpcProtocol for TestMpcProtocol {
 #[cfg(test)]
 mod cluster_tests {
     use super::*;
-    use fortress_core::cluster::{NodeCapabilities, LoadMetrics};
+    use fortress_core::cluster::{LoadMetrics, NodeCapabilities};
 
     #[tokio::test]
     async fn test_cluster_node_creation() {
         let node_id = Uuid::new_v4();
         let config = create_test_cluster_config(node_id, "127.0.0.1:8080", vec![]);
-        
+
         // Test cluster node creation
         let node = ClusterNode {
             id: node_id,
             address: config.bind_address,
-            state: NodeState::Follower { leader: None, term: 0 },
+            state: NodeState::Follower {
+                leader: None,
+                term: 0,
+            },
             last_heartbeat: chrono::Utc::now().timestamp_millis() as u64,
             capabilities: NodeCapabilities {
                 storage: true,
@@ -280,19 +294,39 @@ mod cluster_tests {
     #[tokio::test]
     async fn test_cluster_state_transitions() {
         let node_id = Uuid::new_v4();
-        
+
         // Test follower state
-        let follower_state = NodeState::Follower { leader: None, term: 1 };
-        assert!(matches!(follower_state, NodeState::Follower { leader: None, term: 1 }));
-        
+        let follower_state = NodeState::Follower {
+            leader: None,
+            term: 1,
+        };
+        assert!(matches!(
+            follower_state,
+            NodeState::Follower {
+                leader: None,
+                term: 1
+            }
+        ));
+
         // Test candidate state
-        let candidate_state = NodeState::Candidate { term: 2, votes_received: 1, votes_needed: 3 };
-        assert!(matches!(candidate_state, NodeState::Candidate { term: 2, votes_received: 1, votes_needed: 3 }));
-        
+        let candidate_state = NodeState::Candidate {
+            term: 2,
+            votes_received: 1,
+            votes_needed: 3,
+        };
+        assert!(matches!(
+            candidate_state,
+            NodeState::Candidate {
+                term: 2,
+                votes_received: 1,
+                votes_needed: 3
+            }
+        ));
+
         // Test leader state
         let leader_state = NodeState::Leader { term: 3 };
         assert!(matches!(leader_state, NodeState::Leader { term: 3 }));
-        
+
         // Test state serialization
         let serialized = serde_json::to_string(&leader_state).unwrap();
         let deserialized: NodeState = serde_json::from_str(&serialized).unwrap();
@@ -305,7 +339,7 @@ mod cluster_tests {
         let config = create_test_cluster_config(
             node_id,
             "127.0.0.1:8080",
-            vec!["127.0.0.1:8081", "127.0.0.1:8082"]
+            vec!["127.0.0.1:8081", "127.0.0.1:8082"],
         );
 
         assert_eq!(config.node_id, node_id);
@@ -352,11 +386,11 @@ mod cluster_tests {
     async fn test_cluster_config_serialization() {
         let node_id = Uuid::new_v4();
         let config = create_test_cluster_config(node_id, "127.0.0.1:8080", vec!["127.0.0.1:8081"]);
-        
+
         // Test serialization
         let serialized = serde_json::to_string(&config).unwrap();
         assert!(!serialized.is_empty());
-        
+
         // Test deserialization
         let deserialized: ClusterConfig = serde_json::from_str(&serialized).unwrap();
         assert_eq!(deserialized.node_id, node_id);
@@ -390,7 +424,7 @@ mod cluster_tests {
         // Test serialization
         let serialized = serde_json::to_string(&node).unwrap();
         assert!(!serialized.is_empty());
-        
+
         // Test deserialization
         let deserialized: ClusterNode = serde_json::from_str(&serialized).unwrap();
         assert_eq!(deserialized.id, node_id);
@@ -401,7 +435,7 @@ mod cluster_tests {
     #[tokio::test]
     async fn test_multiple_cluster_nodes() {
         let mut nodes = Vec::new();
-        
+
         for i in 0..5 {
             let node_id = Uuid::new_v4();
             let node = ClusterNode {
@@ -410,7 +444,10 @@ mod cluster_tests {
                 state: if i == 0 {
                     NodeState::Leader { term: 1 }
                 } else {
-                    NodeState::Follower { leader: Some(nodes[0].id), term: 1 }
+                    NodeState::Follower {
+                        leader: Some(nodes[0].id),
+                        term: 1,
+                    }
                 },
                 last_heartbeat: chrono::Utc::now().timestamp_millis() as u64,
                 capabilities: NodeCapabilities {
@@ -432,11 +469,11 @@ mod cluster_tests {
         }
 
         assert_eq!(nodes.len(), 5);
-        
+
         // Verify leader
         let leader = &nodes[0];
         assert!(matches!(leader.state, NodeState::Leader { .. }));
-        
+
         // Verify followers
         for i in 1..5 {
             assert!(matches!(nodes[i].state, NodeState::Follower { .. }));
@@ -446,47 +483,59 @@ mod cluster_tests {
     #[tokio::test]
     async fn test_cluster_performance_metrics() {
         let start_time = std::time::Instant::now();
-        
+
         // Create multiple nodes to test performance
-        let nodes: Vec<ClusterNode> = (0..100).map(|i| {
-            let node_id = Uuid::new_v4();
-            ClusterNode {
-                id: node_id,
-                address: format!("127.0.0.1:{}", 8080 + i).parse().unwrap(),
-                state: NodeState::Follower { leader: None, term: 0 },
-                last_heartbeat: chrono::Utc::now().timestamp_millis() as u64,
-                capabilities: NodeCapabilities {
-                    storage: true,
-                    encryption: true,
-                    leadership: true,
-                    algorithms: vec!["raft".to_string()],
-                },
-                load_metrics: LoadMetrics {
-                    cpu_usage: (i as f64) * 0.01,
-                    memory_usage: (i as f64) * 0.01,
-                    active_connections: i,
-                    ops_per_second: (i as f64) * 10.0,
-                    storage_used: (i as u64) * 256,
-                    network_io: (i as u64) * 128,
-                },
-            }
-        }).collect();
+        let nodes: Vec<ClusterNode> = (0..100)
+            .map(|i| {
+                let node_id = Uuid::new_v4();
+                ClusterNode {
+                    id: node_id,
+                    address: format!("127.0.0.1:{}", 8080 + i).parse().unwrap(),
+                    state: NodeState::Follower {
+                        leader: None,
+                        term: 0,
+                    },
+                    last_heartbeat: chrono::Utc::now().timestamp_millis() as u64,
+                    capabilities: NodeCapabilities {
+                        storage: true,
+                        encryption: true,
+                        leadership: true,
+                        algorithms: vec!["raft".to_string()],
+                    },
+                    load_metrics: LoadMetrics {
+                        cpu_usage: (i as f64) * 0.01,
+                        memory_usage: (i as f64) * 0.01,
+                        active_connections: i,
+                        ops_per_second: (i as f64) * 10.0,
+                        storage_used: (i as u64) * 256,
+                        network_io: (i as u64) * 128,
+                    },
+                }
+            })
+            .collect();
 
         let creation_time = start_time.elapsed();
-        
+
         // Performance assertions
         assert_eq!(nodes.len(), 100);
-        assert!(creation_time.as_millis() < 1000, "Node creation should complete in < 1 second");
-        
+        assert!(
+            creation_time.as_millis() < 1000,
+            "Node creation should complete in < 1 second"
+        );
+
         // Test serialization performance
         let serialization_start = std::time::Instant::now();
-        let serialized: Vec<String> = nodes.iter()
+        let serialized: Vec<String> = nodes
+            .iter()
             .map(|node| serde_json::to_string(node).unwrap())
             .collect();
         let serialization_time = serialization_start.elapsed();
-        
+
         assert_eq!(serialized.len(), 100);
-        assert!(serialization_time.as_millis() < 2000, "Serialization should complete in < 2 seconds");
+        assert!(
+            serialization_time.as_millis() < 2000,
+            "Serialization should complete in < 2 seconds"
+        );
     }
 
     #[tokio::test]
@@ -494,12 +543,12 @@ mod cluster_tests {
         // Test invalid address
         let result = "127.0.0.1:99999".parse::<std::net::SocketAddr>();
         assert!(result.is_err());
-        
+
         // Test empty seed nodes is valid
         let node_id = Uuid::new_v4();
         let config = create_test_cluster_config(node_id, "127.0.0.1:8080", vec![]);
         assert_eq!(config.seed_nodes.len(), 0);
-        
+
         // Test invalid replication factor (should still work as it's just a number)
         let mut config = create_test_cluster_config(node_id, "127.0.0.1:8080", vec![]);
         config.replication_factor = 0; // Invalid but not enforced at struct level
@@ -509,7 +558,7 @@ mod cluster_tests {
     #[tokio::test]
     async fn test_cluster_security_validation() {
         let node_id = Uuid::new_v4();
-        
+
         // Test node with security capabilities
         let secure_node = ClusterNode {
             id: node_id,
@@ -528,14 +577,23 @@ mod cluster_tests {
         // Verify security features
         assert!(secure_node.capabilities.encryption);
         assert!(secure_node.capabilities.storage);
-        assert!(secure_node.capabilities.algorithms.contains(&"tls".to_string()));
-        assert!(secure_node.capabilities.algorithms.contains(&"https".to_string()));
-        
+        assert!(secure_node
+            .capabilities
+            .algorithms
+            .contains(&"tls".to_string()));
+        assert!(secure_node
+            .capabilities
+            .algorithms
+            .contains(&"https".to_string()));
+
         // Test node without security capabilities
         let insecure_node = ClusterNode {
             id: Uuid::new_v4(),
             address: "127.0.0.1:8081".parse().unwrap(),
-            state: NodeState::Follower { leader: Some(secure_node.id), term: 1 },
+            state: NodeState::Follower {
+                leader: Some(secure_node.id),
+                term: 1,
+            },
             last_heartbeat: chrono::Utc::now().timestamp_millis() as u64,
             capabilities: NodeCapabilities {
                 storage: false,
@@ -548,20 +606,23 @@ mod cluster_tests {
 
         assert!(!insecure_node.capabilities.encryption);
         assert!(!insecure_node.capabilities.storage);
-        assert!(!insecure_node.capabilities.algorithms.contains(&"tls".to_string()));
+        assert!(!insecure_node
+            .capabilities
+            .algorithms
+            .contains(&"tls".to_string()));
     }
 }
 
 #[cfg(test)]
 mod mpc_tests {
     use super::*;
-    use fortress_core::mpc::{PartyRole, SecretShare, MpcMessage};
+    use fortress_core::mpc::{MpcMessage, PartyRole, SecretShare};
 
     #[tokio::test]
     async fn test_mpc_party_creation() {
         let party_id = Uuid::new_v4().to_string();
         let party = InMemoryMpcParty::new(party_id.clone(), PartyRole::Participant);
-        
+
         assert_eq!(party.party_id, party_id);
         assert!(matches!(party.role, PartyRole::Participant));
         assert_eq!(party.inbox_count().await, 0);
@@ -574,18 +635,22 @@ mod mpc_tests {
         let mut metadata = HashMap::new();
         metadata.insert("name".to_string(), "Test Party".to_string());
         metadata.insert("version".to_string(), "1.0".to_string());
-        
+
         let party = InMemoryMpcParty::with_metadata(
             party_id.clone(),
             PartyRole::Initiator,
             metadata.clone(),
-        ).await;
-        
+        )
+        .await;
+
         assert_eq!(party.party_id, party_id);
         assert!(matches!(party.role, PartyRole::Initiator));
-        
+
         let retrieved_metadata = party.get_metadata().await;
-        assert_eq!(retrieved_metadata.get("name"), Some(&"Test Party".to_string()));
+        assert_eq!(
+            retrieved_metadata.get("name"),
+            Some(&"Test Party".to_string())
+        );
         assert_eq!(retrieved_metadata.get("version"), Some(&"1.0".to_string()));
     }
 
@@ -593,12 +658,12 @@ mod mpc_tests {
     async fn test_mpc_party_message_handling() {
         let party_id = Uuid::new_v4().to_string();
         let party = InMemoryMpcParty::new(party_id, PartyRole::Participant);
-        
+
         // Test adding metadata
         party.add_metadata("test_key", "test_value").await;
         let metadata = party.get_metadata().await;
         assert_eq!(metadata.get("test_key"), Some(&"test_value".to_string()));
-        
+
         // Test message processing
         let message = MpcMessage {
             message_id: Uuid::new_v4().to_string(),
@@ -609,7 +674,7 @@ mod mpc_tests {
             payload: serde_json::json!({"data": "test"}),
             timestamp: Utc::now(),
         };
-        
+
         // Since we can't directly access the inbox, test through the public interface
         let responses = party.process_all_messages().await.unwrap();
         assert_eq!(responses.len(), 0); // No messages in inbox initially
@@ -628,7 +693,10 @@ mod mpc_tests {
         for i in 0..5 {
             let config = ComputationConfig::new(
                 "secret_sharing".to_string(),
-                SecretSharingScheme::Shamir { threshold: 2, total_shares: 3 },
+                SecretSharingScheme::Shamir {
+                    threshold: 2,
+                    total_shares: 3,
+                },
             )
             .with_party(format!("party{}", i + 1), PartyRole::Initiator)
             .with_party(format!("party{}", i + 2), PartyRole::Participant);
@@ -658,7 +726,10 @@ mod mpc_tests {
 
         let config = ComputationConfig::new(
             "test_computation".to_string(),
-            SecretSharingScheme::Shamir { threshold: 5, total_shares: 3 },
+            SecretSharingScheme::Shamir {
+                threshold: 5,
+                total_shares: 3,
+            },
         );
 
         let result = manager.create_session(config).await;
@@ -668,7 +739,9 @@ mod mpc_tests {
         assert!(result.is_err());
 
         let party = Arc::new(InMemoryMpcParty::new("party1", PartyRole::Participant));
-        let result = manager.add_party_to_session("nonexistent-session", party).await;
+        let result = manager
+            .add_party_to_session("nonexistent-session", party)
+            .await;
         assert!(result.is_err());
     }
 
@@ -682,7 +755,10 @@ mod mpc_tests {
         for i in 0..50 {
             let config = ComputationConfig::new(
                 "secret_sharing".to_string(),
-                SecretSharingScheme::Shamir { threshold: 2, total_shares: 3 },
+                SecretSharingScheme::Shamir {
+                    threshold: 2,
+                    total_shares: 3,
+                },
             )
             .with_party(format!("party{}", i), PartyRole::Initiator)
             .with_party(format!("party{}", i + 1), PartyRole::Participant);
@@ -692,7 +768,10 @@ mod mpc_tests {
         }
 
         let creation_time = start_time.elapsed();
-        assert!(creation_time.as_millis() < 5000, "Session creation should complete in < 5 seconds");
+        assert!(
+            creation_time.as_millis() < 5000,
+            "Session creation should complete in < 5 seconds"
+        );
         assert_eq!(session_ids.len(), 50);
 
         let list_start = std::time::Instant::now();
@@ -700,54 +779,78 @@ mod mpc_tests {
         let list_time = list_start.elapsed();
 
         assert_eq!(all_sessions.len(), 50);
-        assert!(list_time.as_millis() < 1000, "Session listing should complete in < 1 second");
+        assert!(
+            list_time.as_millis() < 1000,
+            "Session listing should complete in < 1 second"
+        );
     }
 
     #[tokio::test]
     async fn test_system_security_validation() {
         // Test security across all systems
-        
+
         // Create secure cluster
-        let secure_nodes: Vec<ClusterNode> = (0..3).map(|i| {
-            let node_id = Uuid::new_v4();
-            ClusterNode {
-                id: node_id,
-                address: format!("127.0.0.1:{}", 8080 + i).parse().unwrap(),
-                state: if i == 0 {
-                    NodeState::Leader { term: 1 }
-                } else {
-                    NodeState::Follower { leader: Some(Uuid::new_v4()), term: 1 }
-                },
-                last_heartbeat: chrono::Utc::now().timestamp_millis() as u64,
-                capabilities: NodeCapabilities {
-                    storage: true,
-                    encryption: true,
-                    leadership: true,
-                    algorithms: vec!["aes-256-gcm".to_string(), "chacha20-poly1305".to_string()],
-                },
-                load_metrics: LoadMetrics::default(),
-            }
-        }).collect();
-        
+        let secure_nodes: Vec<ClusterNode> = (0..3)
+            .map(|i| {
+                let node_id = Uuid::new_v4();
+                ClusterNode {
+                    id: node_id,
+                    address: format!("127.0.0.1:{}", 8080 + i).parse().unwrap(),
+                    state: if i == 0 {
+                        NodeState::Leader { term: 1 }
+                    } else {
+                        NodeState::Follower {
+                            leader: Some(Uuid::new_v4()),
+                            term: 1,
+                        }
+                    },
+                    last_heartbeat: chrono::Utc::now().timestamp_millis() as u64,
+                    capabilities: NodeCapabilities {
+                        storage: true,
+                        encryption: true,
+                        leadership: true,
+                        algorithms: vec![
+                            "aes-256-gcm".to_string(),
+                            "chacha20-poly1305".to_string(),
+                        ],
+                    },
+                    load_metrics: LoadMetrics::default(),
+                }
+            })
+            .collect();
+
         // Verify cluster security
         assert!(secure_nodes.iter().all(|n| n.capabilities.encryption));
-        assert!(secure_nodes.iter().all(|n| n.capabilities.algorithms.contains(&"aes-256-gcm".to_string())));
-        
+        assert!(secure_nodes.iter().all(|n| n
+            .capabilities
+            .algorithms
+            .contains(&"aes-256-gcm".to_string())));
+
         // Create secure MPC manager
         let network = Arc::new(InMemoryMpcNetwork::new());
         let mut manager = DefaultMpcManager::with_network(network).unwrap();
-        
+
         let protocol = TestMpcProtocol::new("secure-protocol");
         manager.add_protocol("secure-protocol", Box::new(protocol));
-        
+
         // Create secure computation
         let config = ComputationConfig::new(
             "secure_computation".to_string(),
-            SecretSharingScheme::Shamir { threshold: 2, total_shares: 3 },
-        ).with_parameter("encryption_required".to_string(), serde_json::Value::Bool(true))
-         .with_parameter("authentication_required".to_string(), serde_json::Value::Bool(true))
-         .with_parameter("audit_enabled".to_string(), serde_json::Value::Bool(true));
-        
+            SecretSharingScheme::Shamir {
+                threshold: 2,
+                total_shares: 3,
+            },
+        )
+        .with_parameter(
+            "encryption_required".to_string(),
+            serde_json::Value::Bool(true),
+        )
+        .with_parameter(
+            "authentication_required".to_string(),
+            serde_json::Value::Bool(true),
+        )
+        .with_parameter("audit_enabled".to_string(), serde_json::Value::Bool(true));
+
         let session_id = manager.create_session(config).await.unwrap();
 
         for node in &secure_nodes {
@@ -775,16 +878,31 @@ mod mpc_tests {
 
         let secure_plugin = TestPlugin::new(
             "secure",
-            vec![PluginCapability::Encrypt, PluginCapability::SecretManagement],
+            vec![
+                PluginCapability::Encrypt,
+                PluginCapability::SecretManagement,
+            ],
         );
 
         let context = PluginContext {
             config: HashMap::from([
-                ("security_level".to_string(), serde_json::Value::String("maximum".to_string())),
-                ("compliance_framework".to_string(), serde_json::Value::String("gdpr,hipaa,pci-dss".to_string())),
+                (
+                    "security_level".to_string(),
+                    serde_json::Value::String("maximum".to_string()),
+                ),
+                (
+                    "compliance_framework".to_string(),
+                    serde_json::Value::String("gdpr,hipaa,pci-dss".to_string()),
+                ),
                 ("audit_logging".to_string(), serde_json::Value::Bool(true)),
-                ("encryption_at_rest".to_string(), serde_json::Value::Bool(true)),
-                ("encryption_in_transit".to_string(), serde_json::Value::Bool(true)),
+                (
+                    "encryption_at_rest".to_string(),
+                    serde_json::Value::Bool(true),
+                ),
+                (
+                    "encryption_in_transit".to_string(),
+                    serde_json::Value::Bool(true),
+                ),
             ]),
             metadata: secure_plugin.metadata().clone(),
             encryption_access: true,
@@ -793,7 +911,7 @@ mod mpc_tests {
             session_id: Some("test-session".to_string()),
             request_id: Some("test-request".to_string()),
         };
-        
+
         // Execute secure plugin
         let secure_input = PluginInput {
             action: "encrypt".to_string(),
@@ -807,21 +925,21 @@ mod mpc_tests {
             operation: Some("secure_encrypt".to_string()),
             timestamp: Some(chrono::Utc::now()),
         };
-        
+
         let secure_result = secure_plugin.execute(secure_input).await.unwrap();
         assert!(secure_result.success);
-        
+
         // Complete secure computation
         manager.start_computation(&session_id).await.unwrap();
         let secure_mpc_result = manager.get_result(&session_id).await.unwrap().unwrap();
-        
+
         // Verify comprehensive security
         assert!(secure_nodes.iter().all(|n| n.capabilities.encryption));
         assert!(secure_result.success);
         assert!(context.encryption_access && context.storage_access);
         assert!(context.config.contains_key("security_level"));
         assert!(context.config.contains_key("compliance_framework"));
-        
+
         // Verify security metrics
         assert!(secure_result.metrics.execution_time_ms < 1000);
         assert!(!secure_mpc_result.result_data.is_empty());

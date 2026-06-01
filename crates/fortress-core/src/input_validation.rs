@@ -1,5 +1,5 @@
 //! Input Validation Module
-//! 
+//!
 //! Provides comprehensive input validation for all API endpoints and user input processing.
 //! This module prevents injection attacks and data corruption by validating all incoming data.
 
@@ -18,12 +18,24 @@ const MAX_QUERY_LENGTH: usize = 4000;
 /// Dangerous characters and patterns
 const DANGEROUS_CHARS: &[char] = &[';', '-', '\'', '"', '\\', '|', '&', '<', '>', '$', '`'];
 const SQL_INJECTION_PATTERNS: &[&str] = &[
-    "union", "select", "insert", "update", "delete", "drop", "create", "alter",
-    "exec", "execute", "sp_executesql", "xp_cmdshell", "cmdshell"
+    "union",
+    "select",
+    "insert",
+    "update",
+    "delete",
+    "drop",
+    "create",
+    "alter",
+    "exec",
+    "execute",
+    "sp_executesql",
+    "xp_cmdshell",
+    "cmdshell",
 ];
 
 /// Valid characters for different input types
-const USERNAME_ALLOWED_CHARS: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.";
+const USERNAME_ALLOWED_CHARS: &str =
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.";
 const EMAIL_ALLOWED_PATTERN: &str = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$";
 
 lazy_static::lazy_static! {
@@ -69,10 +81,8 @@ impl InputValidator {
         for pattern in SQL_INJECTION_PATTERNS {
             dangerous_patterns.insert(pattern.to_lowercase());
         }
-        
-        Self {
-            dangerous_patterns,
-        }
+
+        Self { dangerous_patterns }
     }
 
     /// Validate general user input
@@ -168,7 +178,7 @@ impl InputValidator {
                 "Invalid email format",
                 Some("invalid_format".to_string()),
                 None,
-                ));
+            ));
         }
 
         Ok(email.to_string())
@@ -194,8 +204,15 @@ impl InputValidator {
 
         // Check for common weak passwords
         let weak_passwords = vec![
-            "password", "123456", "12345678", "qwerty", "abc123",
-            "password123", "admin", "root", "letmein"
+            "password",
+            "123456",
+            "12345678",
+            "qwerty",
+            "abc123",
+            "password123",
+            "admin",
+            "root",
+            "letmein",
         ];
 
         if weak_passwords.contains(&password.to_lowercase().as_str()) {
@@ -203,7 +220,7 @@ impl InputValidator {
                 "Password is too common",
                 Some("weak_password".to_string()),
                 None,
-                ));
+            ));
         }
 
         Ok(password.to_string())
@@ -216,7 +233,7 @@ impl InputValidator {
                 "Invalid UUID format",
                 Some("invalid_format".to_string()),
                 None,
-                ));
+            ));
         }
 
         Ok(uuid.to_string())
@@ -241,7 +258,7 @@ impl InputValidator {
                 "Invalid query characters",
                 Some("sql_comment".to_string()),
                 None,
-                ));
+            ));
         }
 
         Ok(param.to_string())
@@ -263,7 +280,7 @@ impl InputValidator {
                 "Invalid URL protocol",
                 Some("invalid_protocol".to_string()),
                 None,
-                ));
+            ));
         }
 
         Ok(url.to_string())
@@ -277,17 +294,27 @@ impl InputValidator {
                 "Path traversal detected",
                 Some("path_traversal".to_string()),
                 None,
-                ));
+            ));
         }
 
         // Check for absolute paths in sensitive areas
         let sensitive_paths = vec![
-            "/etc", "/sys", "/proc", "/dev", "/root", "/var",
-            "C:\\Windows", "C:\\Program Files", "C:\\Users"
+            "/etc",
+            "/sys",
+            "/proc",
+            "/dev",
+            "/root",
+            "/var",
+            "C:\\Windows",
+            "C:\\Program Files",
+            "C:\\Users",
         ];
 
         for sensitive_path in sensitive_paths {
-            if path.to_lowercase().starts_with(&sensitive_path.to_lowercase()) {
+            if path
+                .to_lowercase()
+                .starts_with(&sensitive_path.to_lowercase())
+            {
                 return Err(FortressError::validation(
                     "Access to sensitive path not allowed",
                     Some("sensitive_path".to_string()),
@@ -319,7 +346,7 @@ impl InputValidator {
                 "API key length invalid",
                 Some("invalid_length".to_string()),
                 None,
-                ));
+            ));
         }
 
         // Check for alphanumeric characters only
@@ -328,14 +355,18 @@ impl InputValidator {
                 "API key contains invalid characters",
                 Some("invalid_chars".to_string()),
                 None,
-                ));
+            ));
         }
 
         Ok(api_key.to_string())
     }
 
     /// Validate pagination parameters
-    pub fn validate_pagination(&self, page: u32, page_size: u32) -> Result<(u32, u32), FortressError> {
+    pub fn validate_pagination(
+        &self,
+        page: u32,
+        page_size: u32,
+    ) -> Result<(u32, u32), FortressError> {
         if page == 0 {
             return Err(FortressError::validation(
                 "Page number must be greater than 0",
@@ -349,7 +380,7 @@ impl InputValidator {
                 "Page size must be between 1 and 1000",
                 Some("invalid_page_size".to_string()),
                 Some("1-1000".to_string()),
-                ));
+            ));
         }
 
         Ok((page, page_size))
@@ -379,7 +410,12 @@ impl InputValidator {
     }
 
     /// Validate input length
-    pub fn validate_length(&self, input: &str, min: usize, max: usize) -> Result<String, FortressError> {
+    pub fn validate_length(
+        &self,
+        input: &str,
+        min: usize,
+        max: usize,
+    ) -> Result<String, FortressError> {
         if input.len() < min {
             return Err(FortressError::validation(
                 &format!("Input too short (minimum {} characters)", min),
@@ -407,17 +443,17 @@ mod tests {
     #[test]
     fn test_validate_username() {
         let validator = InputValidator::new();
-        
+
         // Valid username
         assert!(validator.validate_username("testuser123").is_ok());
-        
+
         // Too short
         assert!(validator.validate_username("ab").is_err());
-        
+
         // Too long
         let long_username = "a".repeat(256);
         assert!(validator.validate_username(&long_username).is_err());
-        
+
         // Invalid characters
         assert!(validator.validate_username("test@user").is_err());
     }
@@ -425,10 +461,10 @@ mod tests {
     #[test]
     fn test_validate_email() {
         let validator = InputValidator::new();
-        
+
         // Valid email
         assert!(validator.validate_email("test@example.com").is_ok());
-        
+
         // Invalid format
         assert!(validator.validate_email("invalid-email").is_err());
     }
@@ -436,13 +472,13 @@ mod tests {
     #[test]
     fn test_validate_password() {
         let validator = InputValidator::new();
-        
+
         // Valid password
         assert!(validator.validate_password("SecurePass123!").is_ok());
-        
+
         // Too short
         assert!(validator.validate_password("short").is_err());
-        
+
         // Weak password
         assert!(validator.validate_password("password").is_err());
     }
@@ -450,20 +486,26 @@ mod tests {
     #[test]
     fn test_sql_injection_detection() {
         let validator = InputValidator::new();
-        
+
         // SQL injection attempts
-        assert!(validator.validate_user_input("'; DROP TABLE users; --").is_err());
-        assert!(validator.validate_user_input("UNION SELECT * FROM users").is_err());
+        assert!(validator
+            .validate_user_input("'; DROP TABLE users; --")
+            .is_err());
+        assert!(validator
+            .validate_user_input("UNION SELECT * FROM users")
+            .is_err());
         assert!(validator.validate_user_input("' OR '1'='1").is_err());
     }
 
     #[test]
     fn test_path_traversal_detection() {
         let validator = InputValidator::new();
-        
+
         // Path traversal attempts
         assert!(validator.validate_file_path("../../../etc/passwd").is_err());
-        assert!(validator.validate_file_path("..\\..\\windows\\system32").is_err());
+        assert!(validator
+            .validate_file_path("..\\..\\windows\\system32")
+            .is_err());
         assert!(validator.validate_file_path("/etc/passwd").is_err());
     }
 }

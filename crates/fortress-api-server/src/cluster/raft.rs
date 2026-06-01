@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{RwLock, Mutex};
+use tokio::sync::{Mutex, RwLock};
 use tokio::time::interval;
 use tracing::{error, info};
 use uuid::Uuid;
@@ -108,7 +108,7 @@ pub enum RaftMessage {
         /// Term of candidate's last log entry
         last_log_term: u64,
     },
-    
+
     /// Response to vote request
     RequestVoteResponse {
         /// Current election term
@@ -116,7 +116,7 @@ pub enum RaftMessage {
         /// Whether the vote was granted
         vote_granted: bool,
     },
-    
+
     /// Append entries message (heartbeat or log replication)
     AppendEntries {
         /// Current election term
@@ -132,7 +132,7 @@ pub enum RaftMessage {
         /// Leader's commit index
         leader_commit: u64,
     },
-    
+
     /// Response to append entries
     AppendEntriesResponse {
         /// Current election term
@@ -142,7 +142,7 @@ pub enum RaftMessage {
         /// Index of highest log entry known to be replicated
         match_index: u64,
     },
-    
+
     /// Install snapshot message
     InstallSnapshot {
         /// Current election term
@@ -156,7 +156,7 @@ pub enum RaftMessage {
         /// Snapshot data bytes
         data: Vec<u8>,
     },
-    
+
     /// Response to install snapshot
     InstallSnapshotResponse {
         /// Current election term
@@ -170,23 +170,23 @@ pub enum RaftError {
     /// Invalid election term
     #[error("Invalid term: {0}")]
     InvalidTerm(u64),
-    
+
     /// Log inconsistency detected
     #[error("Log inconsistency at index {0}")]
     LogInconsistency(u64),
-    
+
     /// Node is not the leader
     #[error("Not a leader")]
     NotLeader,
-    
+
     /// Leadership transfer failed
     #[error("Leadership transfer failed: {0}")]
     LeadershipTransferFailed(String),
-    
+
     /// Snapshot installation failed
     #[error("Snapshot installation failed: {0}")]
     SnapshotInstallationFailed(String),
-    
+
     /// Log compaction failed
     #[error("Log compaction failed: {0}")]
     LogCompactionFailed(String),
@@ -211,7 +211,7 @@ pub struct RaftNode {
 pub trait MessageSender {
     /// Send a message to a specific node
     async fn send_message(&self, target: Uuid, message: RaftMessage) -> ClusterResult<()>;
-    
+
     /// Broadcast a message to all nodes
     async fn broadcast_message(&self, message: RaftMessage) -> ClusterResult<()>;
 }
@@ -224,7 +224,8 @@ impl RaftNode {
         message_sender: Arc<Mutex<dyn MessageSender + Send + Sync>>,
     ) -> Self {
         let election_timeout = Duration::from_millis(
-            rand::random::<u64>() % (config.max_election_timeout_ms - config.min_election_timeout_ms)
+            rand::random::<u64>()
+                % (config.max_election_timeout_ms - config.min_election_timeout_ms)
                 + config.min_election_timeout_ms,
         );
 
@@ -253,7 +254,7 @@ impl RaftNode {
     /// Start the Raft node
     pub async fn start(&self) -> ClusterResult<()> {
         info!("Starting Raft node {}", self.node_id);
-        
+
         // Start the main Raft loop
         let raft_node = self.clone();
         tokio::spawn(async move {
@@ -265,8 +266,9 @@ impl RaftNode {
 
     /// Main Raft event loop
     async fn raft_loop(&self) {
-        let mut heartbeat_interval = interval(Duration::from_millis(self.config.heartbeat_interval_ms));
-        
+        let mut heartbeat_interval =
+            interval(Duration::from_millis(self.config.heartbeat_interval_ms));
+
         loop {
             let state = self.state.read().await;
             let role = state.role.clone();
@@ -291,7 +293,7 @@ impl RaftNode {
     /// Handle follower role responsibilities
     async fn handle_follower_role(&self) {
         let state = self.state.read().await;
-        
+
         // Check if election timeout has expired
         if let Some(last_heartbeat) = state.last_heartbeat {
             if last_heartbeat.elapsed() > state.election_timeout {
@@ -308,7 +310,7 @@ impl RaftNode {
     /// Handle candidate role responsibilities
     async fn handle_candidate_role(&self) {
         let state = self.state.read().await;
-        
+
         // Check if election timeout has expired
         if let Some(last_heartbeat) = state.last_heartbeat {
             if last_heartbeat.elapsed() > state.election_timeout {
@@ -321,12 +323,12 @@ impl RaftNode {
     /// Handle leader role responsibilities
     async fn handle_leader_role(&self, heartbeat_interval: &mut tokio::time::Interval) {
         heartbeat_interval.tick().await;
-        
+
         // Send heartbeats to all followers
         if let Err(e) = self.send_heartbeats().await {
             error!("Failed to send heartbeats: {}", e);
         }
-        
+
         // Check for committed entries
         self.check_commit_index().await;
     }
@@ -334,7 +336,7 @@ impl RaftNode {
     /// Start a new election
     async fn start_election(&self) {
         info!("Starting election for node {}", self.node_id);
-        
+
         // Update state to candidate
         {
             let mut state = self.state.write().await;
@@ -390,12 +392,12 @@ impl RaftNode {
         drop(state);
 
         match_indices.sort_unstable_by(|a, b| b.cmp(a));
-        
+
         // Find majority index
         let majority = (self.cluster_members.read().await.len() + 1) / 2 + 1;
         if match_indices.len() >= majority {
             let majority_commit_index = match_indices[majority - 1];
-            
+
             let mut state = self.state.write().await;
             if majority_commit_index > state.commit_index {
                 state.commit_index = majority_commit_index;
@@ -407,23 +409,63 @@ impl RaftNode {
     /// Handle incoming Raft message
     pub async fn handle_message(&self, message: RaftMessage) -> ClusterResult<RaftMessage> {
         match message {
-            RaftMessage::RequestVote { term, candidate_id, last_log_index, last_log_term } => {
-                self.handle_request_vote(term, candidate_id, last_log_index, last_log_term).await
+            RaftMessage::RequestVote {
+                term,
+                candidate_id,
+                last_log_index,
+                last_log_term,
+            } => {
+                self.handle_request_vote(term, candidate_id, last_log_index, last_log_term)
+                    .await
             }
-            RaftMessage::AppendEntries { term, leader_id, prev_log_index, prev_log_term, entries, leader_commit } => {
-                self.handle_append_entries(term, leader_id, prev_log_index, prev_log_term, entries, leader_commit).await
+            RaftMessage::AppendEntries {
+                term,
+                leader_id,
+                prev_log_index,
+                prev_log_term,
+                entries,
+                leader_commit,
+            } => {
+                self.handle_append_entries(
+                    term,
+                    leader_id,
+                    prev_log_index,
+                    prev_log_term,
+                    entries,
+                    leader_commit,
+                )
+                .await
             }
-            RaftMessage::InstallSnapshot { term, leader_id, last_included_index, last_included_term, data } => {
-                self.handle_install_snapshot(term, leader_id, last_included_index, last_included_term, data).await
+            RaftMessage::InstallSnapshot {
+                term,
+                leader_id,
+                last_included_index,
+                last_included_term,
+                data,
+            } => {
+                self.handle_install_snapshot(
+                    term,
+                    leader_id,
+                    last_included_index,
+                    last_included_term,
+                    data,
+                )
+                .await
             }
             _ => Err(ClusterError::Raft(RaftError::InvalidTerm(0))),
         }
     }
 
     /// Handle vote request
-    async fn handle_request_vote(&self, term: u64, candidate_id: Uuid, last_log_index: u64, last_log_term: u64) -> ClusterResult<RaftMessage> {
+    async fn handle_request_vote(
+        &self,
+        term: u64,
+        candidate_id: Uuid,
+        last_log_index: u64,
+        last_log_term: u64,
+    ) -> ClusterResult<RaftMessage> {
         let mut state = self.state.write().await;
-        
+
         // Update term if necessary
         if term > state.current_term {
             state.current_term = term;
@@ -436,9 +478,9 @@ impl RaftNode {
             // Check if candidate's log is at least as up-to-date as ours
             let our_last_log_index = state.log.len() as u64;
             let our_last_log_term = state.log.last().map(|e| e.term).unwrap_or(0);
-            
-            (last_log_term > our_last_log_term) || 
-            (last_log_term == our_last_log_term && last_log_index >= our_last_log_index)
+
+            (last_log_term > our_last_log_term)
+                || (last_log_term == our_last_log_term && last_log_index >= our_last_log_index)
         } else {
             false
         };
@@ -455,9 +497,17 @@ impl RaftNode {
     }
 
     /// Handle append entries request
-    async fn handle_append_entries(&self, term: u64, _leader_id: Uuid, prev_log_index: u64, prev_log_term: u64, entries: Vec<LogEntry>, leader_commit: u64) -> ClusterResult<RaftMessage> {
+    async fn handle_append_entries(
+        &self,
+        term: u64,
+        _leader_id: Uuid,
+        prev_log_index: u64,
+        prev_log_term: u64,
+        entries: Vec<LogEntry>,
+        leader_commit: u64,
+    ) -> ClusterResult<RaftMessage> {
         let mut state = self.state.write().await;
-        
+
         // Update term if necessary
         if term > state.current_term {
             state.current_term = term;
@@ -493,7 +543,7 @@ impl RaftNode {
         let mut match_index = prev_log_index;
         for (i, entry) in entries.iter().enumerate() {
             let log_index = prev_log_index + 1 + i as u64;
-            
+
             if state.log.len() >= log_index as usize {
                 if state.log[log_index as usize - 1].term != entry.term {
                     // Remove conflicting entries
@@ -519,9 +569,16 @@ impl RaftNode {
     }
 
     /// Handle install snapshot request
-    async fn handle_install_snapshot(&self, term: u64, _leader_id: Uuid, _last_included_index: u64, _last_included_term: u64, _data: Vec<u8>) -> ClusterResult<RaftMessage> {
+    async fn handle_install_snapshot(
+        &self,
+        term: u64,
+        _leader_id: Uuid,
+        _last_included_index: u64,
+        _last_included_term: u64,
+        _data: Vec<u8>,
+    ) -> ClusterResult<RaftMessage> {
         let mut state = self.state.write().await;
-        
+
         // Update term if necessary
         if term > state.current_term {
             state.current_term = term;
@@ -531,7 +588,7 @@ impl RaftNode {
 
         // Install snapshot logic would go here
         // For now, just acknowledge receipt
-        
+
         Ok(RaftMessage::InstallSnapshotResponse {
             term: state.current_term,
         })
@@ -541,7 +598,7 @@ impl RaftNode {
     pub async fn add_member(&self, node_id: Uuid) {
         let mut members = self.cluster_members.write().await;
         members.insert(node_id);
-        
+
         // Initialize next_index for new member
         let mut state = self.state.write().await;
         // Update next index for this node
@@ -554,7 +611,7 @@ impl RaftNode {
     pub async fn remove_member(&self, node_id: Uuid) {
         let mut members = self.cluster_members.write().await;
         members.remove(&node_id);
-        
+
         // Clean up tracking for removed member
         let mut state = self.state.write().await;
         state.next_index.remove(&node_id);

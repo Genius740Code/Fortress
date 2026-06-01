@@ -3,18 +3,18 @@
 //! This module provides seamless integration between the caching system and
 //! Fortress's key management and encryption components.
 
-use crate::error::{FortressError, Result};
-use crate::key::{KeyId, KeyMetadata, SecureKey};
-use crate::encryption::PerformanceProfile;
 use crate::cache_manager::{CacheManager, CacheManagerConfig, CacheType};
 #[cfg(feature = "distributed-cache")]
 use crate::distributed_cache::DistributedCacheConfig;
+use crate::encryption::PerformanceProfile;
+use crate::error::{FortressError, Result};
+use crate::key::{KeyId, KeyMetadata, SecureKey};
 use async_trait::async_trait;
+use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use chrono::{DateTime, Utc, Duration};
 
 /// Cached key entry with encryption metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -223,7 +223,13 @@ pub struct CacheIntegrationPerformanceMetrics {
 #[async_trait]
 pub trait CacheIntegration: Send + Sync + std::fmt::Debug {
     /// Cache a key
-    async fn cache_key(&self, key_id: &KeyId, key: &SecureKey, metadata: &KeyMetadata, algorithm: &str) -> Result<()>;
+    async fn cache_key(
+        &self,
+        key_id: &KeyId,
+        key: &SecureKey,
+        metadata: &KeyMetadata,
+        algorithm: &str,
+    ) -> Result<()>;
 
     /// Get a cached key
     async fn get_cached_key(&self, key_id: &KeyId) -> Result<Option<(SecureKey, KeyMetadata)>>;
@@ -232,13 +238,25 @@ pub trait CacheIntegration: Send + Sync + std::fmt::Debug {
     async fn invalidate_cached_key(&self, key_id: &KeyId) -> Result<bool>;
 
     /// Cache encryption result
-    async fn cache_encryption_result(&self, cache_key: &str, plaintext: &[u8], ciphertext: &[u8], algorithm: &str) -> Result<()>;
+    async fn cache_encryption_result(
+        &self,
+        cache_key: &str,
+        plaintext: &[u8],
+        ciphertext: &[u8],
+        algorithm: &str,
+    ) -> Result<()>;
 
     /// Get cached encryption result
     async fn get_cached_encryption_result(&self, cache_key: &str) -> Result<Option<Vec<u8>>>;
 
     /// Cache decryption result
-    async fn cache_decryption_result(&self, cache_key: &str, ciphertext: &[u8], plaintext: &[u8], algorithm: &str) -> Result<()>;
+    async fn cache_decryption_result(
+        &self,
+        cache_key: &str,
+        ciphertext: &[u8],
+        plaintext: &[u8],
+        algorithm: &str,
+    ) -> Result<()>;
 
     /// Get cached decryption result
     async fn get_cached_decryption_result(&self, cache_key: &str) -> Result<Option<Vec<u8>>>;
@@ -247,7 +265,10 @@ pub trait CacheIntegration: Send + Sync + std::fmt::Debug {
     async fn get_integration_statistics(&self) -> Result<CacheIntegrationStatistics>;
 
     /// Warm up cache with keys
-    async fn warm_up_keys(&self, keys: Vec<(KeyId, SecureKey, KeyMetadata, String)>) -> Result<usize>;
+    async fn warm_up_keys(
+        &self,
+        keys: Vec<(KeyId, SecureKey, KeyMetadata, String)>,
+    ) -> Result<usize>;
 
     /// Invalidate all cache entries for a key ID
     async fn invalidate_all_for_key(&self, key_id: &KeyId) -> Result<usize>;
@@ -273,7 +294,8 @@ impl FortressCacheIntegration {
     #[cfg(feature = "distributed-cache")]
     pub async fn new(config: CacheIntegrationConfig) -> Result<Self> {
         // Create cache manager
-        let cache_manager = crate::cache_manager::create_cache_manager(config.cache_config.clone()).await?;
+        let cache_manager =
+            crate::cache_manager::create_cache_manager(config.cache_config.clone()).await?;
 
         let integration = Self {
             config,
@@ -345,18 +367,19 @@ impl FortressCacheIntegration {
 
         let now = Utc::now();
         let mut rate_limiter = self.rate_limiter.write().await;
-        
+
         if let Some(last_request) = rate_limiter.get(client_id) {
             let time_since_last = now.signed_duration_since(*last_request);
-            let min_interval = Duration::milliseconds(1000 / self.config.security_settings.rate_limit_rps as i64);
-            
+            let min_interval =
+                Duration::milliseconds(1000 / self.config.security_settings.rate_limit_rps as i64);
+
             if time_since_last < min_interval {
                 let mut stats = self.stats.write().await;
                 stats.security_stats.rate_limited_requests += 1;
                 return Ok(false);
             }
         }
-        
+
         rate_limiter.insert(client_id.to_string(), now);
         Ok(true)
     }
@@ -366,7 +389,7 @@ impl FortressCacheIntegration {
         if self.config.security_settings.enable_access_logging {
             let mut stats = self.stats.write().await;
             stats.security_stats.access_log_entries += 1;
-            
+
             // In a real implementation, you would log to a file or monitoring system
             // For now, we'll just increment the counter
         }
@@ -377,69 +400,109 @@ impl FortressCacheIntegration {
         if data_size > self.config.security_settings.max_entry_size_bytes {
             let mut stats = self.stats.write().await;
             stats.security_stats.security_violations += 1;
-            
+
             return Err(FortressError::storage(
-                format!("Cache entry size ({}) exceeds maximum ({})", data_size, self.config.security_settings.max_entry_size_bytes),
+                format!(
+                    "Cache entry size ({}) exceeds maximum ({})",
+                    data_size, self.config.security_settings.max_entry_size_bytes
+                ),
                 "cache_integration".to_string(),
                 crate::error::StorageErrorCode::InvalidData,
             ));
         }
-        
+
         Ok(())
     }
 
     /// Generate cache key for encryption results
-    fn generate_encryption_cache_key(&self, key_id: &KeyId, data_hash: &[u8], algorithm: &str) -> String {
+    fn generate_encryption_cache_key(
+        &self,
+        key_id: &KeyId,
+        data_hash: &[u8],
+        algorithm: &str,
+    ) -> String {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
         key_id.hash(&mut hasher);
         data_hash.hash(&mut hasher);
         algorithm.hash(&mut hasher);
-        
-        format!("enc:{:x}:{:x}", hasher.finish(), data_hash.iter().take(8).fold(0u64, |acc, &b| acc * 256 + b as u64))
+
+        format!(
+            "enc:{:x}:{:x}",
+            hasher.finish(),
+            data_hash
+                .iter()
+                .take(8)
+                .fold(0u64, |acc, &b| acc * 256 + b as u64)
+        )
     }
 
     /// Generate cache key for decryption results
-    fn generate_decryption_cache_key(&self, key_id: &KeyId, data_hash: &[u8], algorithm: &str) -> String {
+    fn generate_decryption_cache_key(
+        &self,
+        key_id: &KeyId,
+        data_hash: &[u8],
+        algorithm: &str,
+    ) -> String {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
         key_id.hash(&mut hasher);
         data_hash.hash(&mut hasher);
         algorithm.hash(&mut hasher);
-        
-        format!("dec:{:x}:{:x}", hasher.finish(), data_hash.iter().take(8).fold(0u64, |acc, &b| acc * 256 + b as u64))
+
+        format!(
+            "dec:{:x}:{:x}",
+            hasher.finish(),
+            data_hash
+                .iter()
+                .take(8)
+                .fold(0u64, |acc, &b| acc * 256 + b as u64)
+        )
     }
 
     /// Update integration statistics
     async fn update_integration_stats(&self) {
         let mut stats = self.stats.write().await;
-        
+
         // Calculate overall hit ratio
-        let total_hits = stats.key_cache_stats.hits + stats.encryption_cache_stats.hits + stats.decryption_cache_stats.hits;
-        let total_requests = total_hits + stats.key_cache_stats.misses + stats.encryption_cache_stats.misses + stats.decryption_cache_stats.misses;
-        
+        let total_hits = stats.key_cache_stats.hits
+            + stats.encryption_cache_stats.hits
+            + stats.decryption_cache_stats.hits;
+        let total_requests = total_hits
+            + stats.key_cache_stats.misses
+            + stats.encryption_cache_stats.misses
+            + stats.decryption_cache_stats.misses;
+
         if total_requests > 0 {
             stats.performance_metrics.overall_hit_ratio = total_hits as f64 / total_requests as f64;
         }
-        
+
         // Calculate efficiency score
-        stats.performance_metrics.efficiency_score = stats.performance_metrics.overall_hit_ratio * 0.7 + 0.3; // Base score of 0.3
-        
+        stats.performance_metrics.efficiency_score =
+            stats.performance_metrics.overall_hit_ratio * 0.7 + 0.3; // Base score of 0.3
+
         // Calculate memory usage ratio
         let max_memory = self.config.max_cached_keys * 1024; // Rough estimate
         if max_memory > 0 {
-            stats.performance_metrics.memory_usage_ratio = stats.key_cache_stats.total_size_bytes as f64 / max_memory as f64;
+            stats.performance_metrics.memory_usage_ratio =
+                stats.key_cache_stats.total_size_bytes as f64 / max_memory as f64;
         }
     }
 }
 
 #[async_trait]
 impl CacheIntegration for FortressCacheIntegration {
-    async fn cache_key(&self, key_id: &KeyId, key: &SecureKey, metadata: &KeyMetadata, algorithm: &str) -> Result<()> {
+    async fn cache_key(
+        &self,
+        key_id: &KeyId,
+        key: &SecureKey,
+        metadata: &KeyMetadata,
+        algorithm: &str,
+    ) -> Result<()> {
         if !self.config.enable_key_caching {
             return Ok(());
         }
@@ -454,7 +517,8 @@ impl CacheIntegration for FortressCacheIntegration {
         }
 
         // Check security
-        self.check_security_violation("cache_key", key.len()).await?;
+        self.check_security_violation("cache_key", key.len())
+            .await?;
         self.log_access("cache_key", &key_id.to_string()).await;
 
         // Create cached entry
@@ -470,22 +534,31 @@ impl CacheIntegration for FortressCacheIntegration {
         };
 
         // Serialize and cache
-        let serialized = serde_json::to_vec(&entry)
-            .map_err(|e| FortressError::storage(
+        let serialized = serde_json::to_vec(&entry).map_err(|e| {
+            FortressError::storage(
                 format!("Failed to serialize cached key: {}", e),
                 "cache_integration".to_string(),
                 crate::error::StorageErrorCode::SerializationError,
-            ))?;
+            )
+        })?;
 
         let cache_key = format!("key:{}", key_id);
-        self.cache_manager.set(&cache_key, serialized, Some(self.config.key_cache_ttl_seconds)).await?;
+        self.cache_manager
+            .set(
+                &cache_key,
+                serialized,
+                Some(self.config.key_cache_ttl_seconds),
+            )
+            .await?;
 
         // Update statistics
         {
             let mut stats = self.stats.write().await;
             stats.key_cache_stats.cached_keys += 1;
             stats.key_cache_stats.total_size_bytes += key.len();
-            stats.key_cache_stats.avg_key_size_bytes = stats.key_cache_stats.total_size_bytes as f64 / stats.key_cache_stats.cached_keys as f64;
+            stats.key_cache_stats.avg_key_size_bytes = stats.key_cache_stats.total_size_bytes
+                as f64
+                / stats.key_cache_stats.cached_keys as f64;
         }
 
         // Note: update_integration_stats() is async but we're in a sync context
@@ -512,23 +585,25 @@ impl CacheIntegration for FortressCacheIntegration {
         self.log_access("get_key", &key_id.to_string()).await;
 
         let cache_key = format!("key:{}", key_id);
-        
+
         match self.cache_manager.get(&cache_key).await? {
             Some(serialized) => {
-                let entry: CachedKeyEntry = serde_json::from_slice(&serialized)
-                    .map_err(|e| FortressError::storage(
+                let entry: CachedKeyEntry = serde_json::from_slice(&serialized).map_err(|e| {
+                    FortressError::storage(
                         format!("Failed to deserialize cached key: {}", e),
                         "cache_integration".to_string(),
                         crate::error::StorageErrorCode::SerializationError,
-                    ))?;
+                    )
+                })?;
 
                 let secure_key = SecureKey::from_bytes(&entry.encrypted_key);
-                
+
                 // Update statistics
                 {
                     let mut stats = self.stats.write().await;
                     stats.key_cache_stats.hits += 1;
-                    stats.key_cache_stats.hit_ratio = stats.key_cache_stats.hits as f64 / (stats.key_cache_stats.hits + stats.key_cache_stats.misses) as f64;
+                    stats.key_cache_stats.hit_ratio = stats.key_cache_stats.hits as f64
+                        / (stats.key_cache_stats.hits + stats.key_cache_stats.misses) as f64;
                 }
 
                 // Note: update_integration_stats() is async but we're in a sync context
@@ -542,7 +617,8 @@ impl CacheIntegration for FortressCacheIntegration {
                 {
                     let mut stats = self.stats.write().await;
                     stats.key_cache_stats.misses += 1;
-                    stats.key_cache_stats.hit_ratio = stats.key_cache_stats.hits as f64 / (stats.key_cache_stats.hits + stats.key_cache_stats.misses) as f64;
+                    stats.key_cache_stats.hit_ratio = stats.key_cache_stats.hits as f64
+                        / (stats.key_cache_stats.hits + stats.key_cache_stats.misses) as f64;
                 }
 
                 // Note: update_integration_stats() is async but we're in a sync context
@@ -557,22 +633,29 @@ impl CacheIntegration for FortressCacheIntegration {
     async fn invalidate_cached_key(&self, key_id: &KeyId) -> Result<bool> {
         let cache_key = format!("key:{}", key_id);
         let result = self.cache_manager.delete(&cache_key).await?;
-        
+
         if result {
             let mut stats = self.stats.write().await;
             stats.key_cache_stats.cached_keys = stats.key_cache_stats.cached_keys.saturating_sub(1);
         }
-        
+
         Ok(result)
     }
 
-    async fn cache_encryption_result(&self, cache_key: &str, _plaintext: &[u8], ciphertext: &[u8], algorithm: &str) -> Result<()> {
+    async fn cache_encryption_result(
+        &self,
+        cache_key: &str,
+        _plaintext: &[u8],
+        ciphertext: &[u8],
+        algorithm: &str,
+    ) -> Result<()> {
         if !self.config.enable_encryption_caching {
             return Ok(());
         }
 
         // Check security
-        self.check_security_violation("cache_encryption", ciphertext.len()).await?;
+        self.check_security_violation("cache_encryption", ciphertext.len())
+            .await?;
         self.log_access("cache_encryption", cache_key).await;
 
         let cache_entry = serde_json::json!({
@@ -581,15 +664,22 @@ impl CacheIntegration for FortressCacheIntegration {
             "created_at": Utc::now(),
         });
 
-        let serialized = serde_json::to_vec(&cache_entry)
-            .map_err(|e| FortressError::storage(
+        let serialized = serde_json::to_vec(&cache_entry).map_err(|e| {
+            FortressError::storage(
                 format!("Failed to serialize encryption result: {}", e),
                 "cache_integration".to_string(),
                 crate::error::StorageErrorCode::SerializationError,
-            ))?;
+            )
+        })?;
 
         let full_cache_key = format!("enc:{}", cache_key);
-        self.cache_manager.set(&full_cache_key, serialized, Some(self.config.encryption_cache_ttl_seconds)).await?;
+        self.cache_manager
+            .set(
+                &full_cache_key,
+                serialized,
+                Some(self.config.encryption_cache_ttl_seconds),
+            )
+            .await?;
 
         // Update statistics
         {
@@ -609,22 +699,27 @@ impl CacheIntegration for FortressCacheIntegration {
         self.log_access("get_encryption", cache_key).await;
 
         let full_cache_key = format!("enc:{}", cache_key);
-        
+
         match self.cache_manager.get(&full_cache_key).await? {
             Some(serialized) => {
-                let entry: serde_json::Value = serde_json::from_slice(&serialized)
-                    .map_err(|e| FortressError::storage(
-                        format!("Failed to deserialize encryption result: {}", e),
-                        "cache_integration".to_string(),
-                        crate::error::StorageErrorCode::SerializationError,
-                    ))?;
+                let entry: serde_json::Value =
+                    serde_json::from_slice(&serialized).map_err(|e| {
+                        FortressError::storage(
+                            format!("Failed to deserialize encryption result: {}", e),
+                            "cache_integration".to_string(),
+                            crate::error::StorageErrorCode::SerializationError,
+                        )
+                    })?;
 
-                let ciphertext = entry["ciphertext"].as_array()
-                    .ok_or_else(|| FortressError::storage(
-                        "Invalid encryption cache format".to_string(),
-                        "cache_integration".to_string(),
-                        crate::error::StorageErrorCode::CorruptedData,
-                    ))?
+                let ciphertext = entry["ciphertext"]
+                    .as_array()
+                    .ok_or_else(|| {
+                        FortressError::storage(
+                            "Invalid encryption cache format".to_string(),
+                            "cache_integration".to_string(),
+                            crate::error::StorageErrorCode::CorruptedData,
+                        )
+                    })?
                     .iter()
                     .filter_map(|v| v.as_u64())
                     .map(|v| v as u8)
@@ -634,7 +729,10 @@ impl CacheIntegration for FortressCacheIntegration {
                 {
                     let mut stats = self.stats.write().await;
                     stats.encryption_cache_stats.hits += 1;
-                    stats.encryption_cache_stats.hit_ratio = stats.encryption_cache_stats.hits as f64 / (stats.encryption_cache_stats.hits + stats.encryption_cache_stats.misses) as f64;
+                    stats.encryption_cache_stats.hit_ratio = stats.encryption_cache_stats.hits
+                        as f64
+                        / (stats.encryption_cache_stats.hits + stats.encryption_cache_stats.misses)
+                            as f64;
                 }
 
                 Ok(Some(ciphertext))
@@ -644,7 +742,10 @@ impl CacheIntegration for FortressCacheIntegration {
                 {
                     let mut stats = self.stats.write().await;
                     stats.encryption_cache_stats.misses += 1;
-                    stats.encryption_cache_stats.hit_ratio = stats.encryption_cache_stats.hits as f64 / (stats.encryption_cache_stats.hits + stats.encryption_cache_stats.misses) as f64;
+                    stats.encryption_cache_stats.hit_ratio = stats.encryption_cache_stats.hits
+                        as f64
+                        / (stats.encryption_cache_stats.hits + stats.encryption_cache_stats.misses)
+                            as f64;
                 }
 
                 Ok(None)
@@ -652,13 +753,20 @@ impl CacheIntegration for FortressCacheIntegration {
         }
     }
 
-    async fn cache_decryption_result(&self, cache_key: &str, _ciphertext: &[u8], plaintext: &[u8], algorithm: &str) -> Result<()> {
+    async fn cache_decryption_result(
+        &self,
+        cache_key: &str,
+        _ciphertext: &[u8],
+        plaintext: &[u8],
+        algorithm: &str,
+    ) -> Result<()> {
         if !self.config.enable_decryption_caching {
             return Ok(());
         }
 
         // Check security
-        self.check_security_violation("cache_decryption", plaintext.len()).await?;
+        self.check_security_violation("cache_decryption", plaintext.len())
+            .await?;
         self.log_access("cache_decryption", cache_key).await;
 
         let cache_entry = serde_json::json!({
@@ -667,15 +775,22 @@ impl CacheIntegration for FortressCacheIntegration {
             "created_at": Utc::now(),
         });
 
-        let serialized = serde_json::to_vec(&cache_entry)
-            .map_err(|e| FortressError::storage(
+        let serialized = serde_json::to_vec(&cache_entry).map_err(|e| {
+            FortressError::storage(
                 format!("Failed to serialize decryption result: {}", e),
                 "cache_integration".to_string(),
                 crate::error::StorageErrorCode::SerializationError,
-            ))?;
+            )
+        })?;
 
         let full_cache_key = format!("dec:{}", cache_key);
-        self.cache_manager.set(&full_cache_key, serialized, Some(self.config.decryption_cache_ttl_seconds)).await?;
+        self.cache_manager
+            .set(
+                &full_cache_key,
+                serialized,
+                Some(self.config.decryption_cache_ttl_seconds),
+            )
+            .await?;
 
         // Update statistics
         {
@@ -695,22 +810,27 @@ impl CacheIntegration for FortressCacheIntegration {
         self.log_access("get_decryption", cache_key).await;
 
         let full_cache_key = format!("dec:{}", cache_key);
-        
+
         match self.cache_manager.get(&full_cache_key).await? {
             Some(serialized) => {
-                let entry: serde_json::Value = serde_json::from_slice(&serialized)
-                    .map_err(|e| FortressError::storage(
-                        format!("Failed to deserialize decryption result: {}", e),
-                        "cache_integration".to_string(),
-                        crate::error::StorageErrorCode::SerializationError,
-                    ))?;
+                let entry: serde_json::Value =
+                    serde_json::from_slice(&serialized).map_err(|e| {
+                        FortressError::storage(
+                            format!("Failed to deserialize decryption result: {}", e),
+                            "cache_integration".to_string(),
+                            crate::error::StorageErrorCode::SerializationError,
+                        )
+                    })?;
 
-                let plaintext = entry["plaintext"].as_array()
-                    .ok_or_else(|| FortressError::storage(
-                        "Invalid decryption cache format".to_string(),
-                        "cache_integration".to_string(),
-                        crate::error::StorageErrorCode::CorruptedData,
-                    ))?
+                let plaintext = entry["plaintext"]
+                    .as_array()
+                    .ok_or_else(|| {
+                        FortressError::storage(
+                            "Invalid decryption cache format".to_string(),
+                            "cache_integration".to_string(),
+                            crate::error::StorageErrorCode::CorruptedData,
+                        )
+                    })?
                     .iter()
                     .filter_map(|v| v.as_u64())
                     .map(|v| v as u8)
@@ -720,7 +840,10 @@ impl CacheIntegration for FortressCacheIntegration {
                 {
                     let mut stats = self.stats.write().await;
                     stats.decryption_cache_stats.hits += 1;
-                    stats.decryption_cache_stats.hit_ratio = stats.decryption_cache_stats.hits as f64 / (stats.decryption_cache_stats.hits + stats.decryption_cache_stats.misses) as f64;
+                    stats.decryption_cache_stats.hit_ratio = stats.decryption_cache_stats.hits
+                        as f64
+                        / (stats.decryption_cache_stats.hits + stats.decryption_cache_stats.misses)
+                            as f64;
                 }
 
                 Ok(Some(plaintext))
@@ -730,7 +853,10 @@ impl CacheIntegration for FortressCacheIntegration {
                 {
                     let mut stats = self.stats.write().await;
                     stats.decryption_cache_stats.misses += 1;
-                    stats.decryption_cache_stats.hit_ratio = stats.decryption_cache_stats.hits as f64 / (stats.decryption_cache_stats.hits + stats.decryption_cache_stats.misses) as f64;
+                    stats.decryption_cache_stats.hit_ratio = stats.decryption_cache_stats.hits
+                        as f64
+                        / (stats.decryption_cache_stats.hits + stats.decryption_cache_stats.misses)
+                            as f64;
                 }
 
                 Ok(None)
@@ -743,38 +869,45 @@ impl CacheIntegration for FortressCacheIntegration {
         Ok(self.stats.read().await.clone())
     }
 
-    async fn warm_up_keys(&self, keys: Vec<(KeyId, SecureKey, KeyMetadata, String)>) -> Result<usize> {
+    async fn warm_up_keys(
+        &self,
+        keys: Vec<(KeyId, SecureKey, KeyMetadata, String)>,
+    ) -> Result<usize> {
         if !self.config.enable_cache_warming {
             return Ok(0);
         }
 
         let mut warmed_count = 0;
-        
+
         for (key_id, key, metadata, algorithm) in keys {
-            if self.cache_key(&key_id, &key, &metadata, &algorithm).await.is_ok() {
+            if self
+                .cache_key(&key_id, &key, &metadata, &algorithm)
+                .await
+                .is_ok()
+            {
                 warmed_count += 1;
             }
         }
-        
+
         Ok(warmed_count)
     }
 
     async fn invalidate_all_for_key(&self, key_id: &KeyId) -> Result<usize> {
         let mut invalidated_count = 0;
-        
+
         // Invalidate key cache
         if self.invalidate_cached_key(key_id).await? {
             invalidated_count += 1;
         }
-        
+
         // In a real implementation, you would also invalidate related encryption/decryption results
         // For now, we'll just count the key invalidation
-        
+
         if self.config.security_settings.invalidate_on_rotation {
             let mut stats = self.stats.write().await;
             stats.security_stats.security_invalidations += invalidated_count as u64;
         }
-        
+
         Ok(invalidated_count)
     }
 
@@ -784,19 +917,21 @@ impl CacheIntegration for FortressCacheIntegration {
             let mut rate_limiter = self.rate_limiter.write().await;
             let now = Utc::now();
             let cutoff = now - Duration::minutes(5); // Keep 5 minutes of rate limit data
-            
+
             rate_limiter.retain(|_, &mut timestamp| timestamp > cutoff);
         }
-        
+
         // Update statistics
         self.update_integration_stats().await;
-        
+
         Ok(())
     }
 }
 
 /// Factory function to create cache integration
-pub async fn create_cache_integration(config: CacheIntegrationConfig) -> Result<Box<dyn CacheIntegration>> {
+pub async fn create_cache_integration(
+    config: CacheIntegrationConfig,
+) -> Result<Box<dyn CacheIntegration>> {
     let integration = FortressCacheIntegration::new(config).await?;
     Ok(Box::new(integration))
 }
@@ -824,12 +959,15 @@ mod tests {
         );
 
         // Cache key
-        integration.cache_key(&key_id, &key, &metadata, "test_algorithm").await.unwrap();
+        integration
+            .cache_key(&key_id, &key, &metadata, "test_algorithm")
+            .await
+            .unwrap();
 
         // Get cached key
         let cached = integration.get_cached_key(&key_id).await.unwrap();
         assert!(cached.is_some());
-        
+
         let (cached_key, cached_metadata) = cached.unwrap();
         assert_eq!(cached_key.to_vec(), key.to_vec());
         assert_eq!(cached_metadata.id, key_id);
@@ -854,10 +992,16 @@ mod tests {
         let algorithm = "AES-256-GCM";
 
         // Cache encryption result
-        integration.cache_encryption_result(cache_key, plaintext, ciphertext, algorithm).await.unwrap();
+        integration
+            .cache_encryption_result(cache_key, plaintext, ciphertext, algorithm)
+            .await
+            .unwrap();
 
         // Get cached encryption result
-        let cached = integration.get_cached_encryption_result(cache_key).await.unwrap();
+        let cached = integration
+            .get_cached_encryption_result(cache_key)
+            .await
+            .unwrap();
         assert!(cached.is_some());
         assert_eq!(cached.unwrap(), ciphertext);
     }
@@ -873,10 +1017,16 @@ mod tests {
         let algorithm = "AES-256-GCM";
 
         // Cache decryption result
-        integration.cache_decryption_result(cache_key, ciphertext, plaintext, algorithm).await.unwrap();
+        integration
+            .cache_decryption_result(cache_key, ciphertext, plaintext, algorithm)
+            .await
+            .unwrap();
 
         // Get cached decryption result
-        let cached = integration.get_cached_decryption_result(cache_key).await.unwrap();
+        let cached = integration
+            .get_cached_decryption_result(cache_key)
+            .await
+            .unwrap();
         assert!(cached.is_some());
         assert_eq!(cached.unwrap(), plaintext);
     }
@@ -899,7 +1049,10 @@ mod tests {
             PerformanceProfile::Balanced,
         );
 
-        integration.cache_key(&key_id, &key, &metadata, "test_algorithm").await.unwrap();
+        integration
+            .cache_key(&key_id, &key, &metadata, "test_algorithm")
+            .await
+            .unwrap();
         integration.get_cached_key(&key_id).await.unwrap();
 
         let stats = integration.get_integration_statistics().await.unwrap();
@@ -926,7 +1079,7 @@ mod tests {
         );
 
         let keys = vec![(key_id, key, metadata, "test_algorithm".to_string())];
-        
+
         let warmed_count = integration.warm_up_keys(keys).await.unwrap();
         assert_eq!(warmed_count, 1);
     }
@@ -938,7 +1091,7 @@ mod tests {
 
         // Perform maintenance
         integration.perform_maintenance().await.unwrap();
-        
+
         // Should not error
         assert!(true);
     }

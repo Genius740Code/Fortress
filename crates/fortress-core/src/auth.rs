@@ -1,17 +1,17 @@
 //! Authentication and Authorization System
-//! 
+//!
 //! This module provides comprehensive authentication and authorization capabilities
 //! for the Fortress system, including user management, role-based access control,
 //! and token-based authentication.
 
-use crate::error::{FortressError, EncryptionErrorCode};
-use argon2::{Argon2, PasswordHasher, PasswordVerifier};
+use crate::error::{EncryptionErrorCode, FortressError};
+use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::{PasswordHash, SaltString};
+use argon2::{Argon2, PasswordHasher, PasswordVerifier};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
-use argon2::password_hash::rand_core::OsRng;
 
 /// Unique identifier for a user
 pub type UserId = String;
@@ -619,8 +619,17 @@ impl Default for RiskBasedMfaMethods {
         Self {
             low_risk: vec![MfaMethod::Password],
             medium_risk: vec![MfaMethod::Password, MfaMethod::Totp],
-            high_risk: vec![MfaMethod::Password, MfaMethod::Totp, MfaMethod::HardwareToken],
-            critical_risk: vec![MfaMethod::Password, MfaMethod::Totp, MfaMethod::HardwareToken, MfaMethod::BackupCode],
+            high_risk: vec![
+                MfaMethod::Password,
+                MfaMethod::Totp,
+                MfaMethod::HardwareToken,
+            ],
+            critical_risk: vec![
+                MfaMethod::Password,
+                MfaMethod::Totp,
+                MfaMethod::HardwareToken,
+                MfaMethod::BackupCode,
+            ],
         }
     }
 }
@@ -715,7 +724,12 @@ impl Default for IpRiskConfig {
     fn default() -> Self {
         Self {
             malicious_networks: vec![],
-            trusted_networks: vec!["127.0.0.0/8".to_string(), "10.0.0.0/8".to_string(), "172.16.0.0/12".to_string(), "192.168.0.0/16".to_string()],
+            trusted_networks: vec![
+                "127.0.0.0/8".to_string(),
+                "10.0.0.0/8".to_string(),
+                "172.16.0.0/12".to_string(),
+                "192.168.0.0/16".to_string(),
+            ],
             detect_proxies: true,
             geolocation_restrictions: GeolocationRestrictions::default(),
         }
@@ -739,9 +753,19 @@ impl Default for GeolocationRestrictions {
     fn default() -> Self {
         Self {
             enabled: false,
-            allowed_countries: vec!["US".to_string(), "CA".to_string(), "GB".to_string(), "AU".to_string()],
+            allowed_countries: vec![
+                "US".to_string(),
+                "CA".to_string(),
+                "GB".to_string(),
+                "AU".to_string(),
+            ],
             blocked_countries: vec![],
-            require_vpn_countries: vec!["CN".to_string(), "RU".to_string(), "IR".to_string(), "KP".to_string()],
+            require_vpn_countries: vec![
+                "CN".to_string(),
+                "RU".to_string(),
+                "IR".to_string(),
+                "KP".to_string(),
+            ],
         }
     }
 }
@@ -810,7 +834,11 @@ impl Default for TimeRiskConfig {
         Self {
             business_hours: BusinessHoursConfig::default(),
             unusual_time_detection: true,
-            timezone_restrictions: vec!["UTC".to_string(), "America/New_York".to_string(), "Europe/London".to_string()],
+            timezone_restrictions: vec![
+                "UTC".to_string(),
+                "America/New_York".to_string(),
+                "Europe/London".to_string(),
+            ],
         }
     }
 }
@@ -1007,9 +1035,16 @@ impl SessionManager {
         user_agent: Option<String>,
     ) -> Result<String, FortressError> {
         // Check session limit
-        let user_session_count = self.user_sessions.get(&user_id).map(|s| s.len()).unwrap_or(0);
+        let user_session_count = self
+            .user_sessions
+            .get(&user_id)
+            .map(|s| s.len())
+            .unwrap_or(0);
         if user_session_count >= self.config.max_sessions_per_user {
-            return Err(FortressError::authentication("Maximum sessions per user exceeded", None));
+            return Err(FortressError::authentication(
+                "Maximum sessions per user exceeded",
+                None,
+            ));
         }
 
         let session_id = Uuid::new_v4().to_string();
@@ -1043,7 +1078,9 @@ impl SessionManager {
 
     /// Update session activity
     pub fn update_activity(&mut self, session_id: &str) -> Result<(), FortressError> {
-        let session = self.sessions.get_mut(session_id)
+        let session = self
+            .sessions
+            .get_mut(session_id)
             .ok_or_else(|| FortressError::authentication("Session not found", None))?;
 
         // Check if session is expired
@@ -1058,7 +1095,9 @@ impl SessionManager {
 
     /// Invalidate a session
     pub fn invalidate_session(&mut self, session_id: &str) -> Result<(), FortressError> {
-        let session = self.sessions.remove(session_id)
+        let session = self
+            .sessions
+            .remove(session_id)
             .ok_or_else(|| FortressError::authentication("Session not found", None))?;
 
         // Remove from user sessions mapping
@@ -1092,7 +1131,8 @@ impl SessionManager {
         let now = current_timestamp();
         let mut expired_count = 0;
 
-        let expired_sessions: Vec<String> = self.sessions
+        let expired_sessions: Vec<String> = self
+            .sessions
             .values()
             .filter(|s| s.expires_at < now)
             .map(|s| s.id.clone())
@@ -1126,7 +1166,13 @@ impl MfaManager {
         Self { config }
     }
 
-    pub fn verify_mfa(&self, method: &MfaMethod, code: &str, user_id: &str, secret: Option<&str>) -> Result<bool, FortressError> {
+    pub fn verify_mfa(
+        &self,
+        method: &MfaMethod,
+        code: &str,
+        user_id: &str,
+        secret: Option<&str>,
+    ) -> Result<bool, FortressError> {
         // Implement real MFA verification
         match method {
             MfaMethod::Totp => {
@@ -1135,41 +1181,45 @@ impl MfaManager {
                 } else {
                     Ok(false)
                 }
-            },
+            }
             MfaMethod::BackupCode => self.verify_backup_code(user_id, code),
             _ => Ok(false), // Stub for other methods
         }
     }
 
     pub fn verify_totp(&self, secret: &str, code: &str) -> Result<bool, FortressError> {
-        use totp_rs::{TOTP, Algorithm};
+        use totp_rs::{Algorithm, TOTP};
         // Decode base32 secret to bytes
         let secret_bytes = base32::decode(base32::Alphabet::Rfc4648 { padding: true }, secret)
-            .ok_or_else(|| FortressError::encryption(
-                "Failed to decode base32 secret".to_string(),
+            .ok_or_else(|| {
+                FortressError::encryption(
+                    "Failed to decode base32 secret".to_string(),
+                    "totp".to_string(),
+                    EncryptionErrorCode::DecryptionFailed,
+                )
+            })?;
+
+        let totp = TOTP::new(Algorithm::SHA1, 6, 1, 30, secret_bytes).map_err(|e| {
+            FortressError::encryption(
+                format!("Failed to create TOTP: {}", e),
                 "totp".to_string(),
                 EncryptionErrorCode::DecryptionFailed,
-            ))?;
-        
-        let totp = TOTP::new(
-            Algorithm::SHA1,
-            6,
-            1,
-            30,
-            secret_bytes,
-        ).map_err(|e| FortressError::encryption(
-            format!("Failed to create TOTP: {}", e),
-            "totp".to_string(),
-            EncryptionErrorCode::DecryptionFailed,
-        ))?;
-        totp.check_current(code).map_err(|e| FortressError::encryption(
-            format!("Failed to check TOTP code: {}", e),
-            "totp".to_string(),
-            EncryptionErrorCode::DecryptionFailed,
-        ))
+            )
+        })?;
+        totp.check_current(code).map_err(|e| {
+            FortressError::encryption(
+                format!("Failed to check TOTP code: {}", e),
+                "totp".to_string(),
+                EncryptionErrorCode::DecryptionFailed,
+            )
+        })
     }
 
-    pub fn verify_hardware_token(&self, _token: &str, _user_id: &str) -> Result<bool, FortressError> {
+    pub fn verify_hardware_token(
+        &self,
+        _token: &str,
+        _user_id: &str,
+    ) -> Result<bool, FortressError> {
         unimplemented!("Hardware token verification is a stub")
     }
 
@@ -1224,11 +1274,19 @@ impl DeviceFingerprintManager {
         }
     }
 
-    pub fn generate_fingerprint(&self, _user_agent: &str, _ip: &str) -> Result<String, FortressError> {
+    pub fn generate_fingerprint(
+        &self,
+        _user_agent: &str,
+        _ip: &str,
+    ) -> Result<String, FortressError> {
         unimplemented!("Device fingerprint generation is a stub")
     }
 
-    pub fn assess_trust(&self, _fingerprint: &str, _user_id: &str) -> Result<DeviceTrustStatus, FortressError> {
+    pub fn assess_trust(
+        &self,
+        _fingerprint: &str,
+        _user_id: &str,
+    ) -> Result<DeviceTrustStatus, FortressError> {
         Ok(DeviceTrustStatus {
             trusted: true,
             trust_score: 80,
@@ -1334,7 +1392,10 @@ impl AuthManager {
                 },
                 hardware_token_config: HardwareTokenConfig {
                     enabled: true,
-                    supported_types: vec![HardwareTokenType::YubiKey, HardwareTokenType::RSASecurId],
+                    supported_types: vec![
+                        HardwareTokenType::YubiKey,
+                        HardwareTokenType::RSASecurId,
+                    ],
                     require_for_admin: true,
                 },
                 backup_codes_config: BackupCodesConfig {
@@ -1347,8 +1408,17 @@ impl AuthManager {
                 risk_based_methods: RiskBasedMfaMethods {
                     low_risk: vec![MfaMethod::Password],
                     medium_risk: vec![MfaMethod::Password, MfaMethod::Totp],
-                    high_risk: vec![MfaMethod::Password, MfaMethod::Totp, MfaMethod::HardwareToken],
-                    critical_risk: vec![MfaMethod::Password, MfaMethod::Totp, MfaMethod::HardwareToken, MfaMethod::Biometric],
+                    high_risk: vec![
+                        MfaMethod::Password,
+                        MfaMethod::Totp,
+                        MfaMethod::HardwareToken,
+                    ],
+                    critical_risk: vec![
+                        MfaMethod::Password,
+                        MfaMethod::Totp,
+                        MfaMethod::HardwareToken,
+                        MfaMethod::Biometric,
+                    ],
                 },
             },
             risk_config: RiskAuthConfig {
@@ -1356,7 +1426,7 @@ impl AuthManager {
                 risk_scoring: RiskScoringConfig {
                     ip_risk: IpRiskConfig {
                         malicious_networks: vec!["192.168.1.0/24".to_string()], // Example
-                        trusted_networks: vec!["10.0.0.0/8".to_string()], // Example
+                        trusted_networks: vec!["10.0.0.0/8".to_string()],       // Example
                         detect_proxies: true,
                         geolocation_restrictions: GeolocationRestrictions {
                             enabled: false,
@@ -1448,12 +1518,20 @@ impl AuthManager {
     ) -> Result<UserId, FortressError> {
         // Validate username
         if username.len() < 3 {
-            return Err(FortressError::validation("Username must be at least 3 characters", None, None));
+            return Err(FortressError::validation(
+                "Username must be at least 3 characters",
+                None,
+                None,
+            ));
         }
 
         // Check if username already exists
         if self.users.values().any(|u| u.username == username) {
-            return Err(FortressError::validation("Username already exists", None, None));
+            return Err(FortressError::validation(
+                "Username already exists",
+                None,
+                None,
+            ));
         }
 
         // Validate password against policy
@@ -1464,7 +1542,13 @@ impl AuthManager {
         let argon2 = Argon2::default();
         let password_hash = argon2
             .hash_password(password.as_bytes(), &salt)
-            .map_err(|_e| FortressError::encryption("Password hashing failed", "argon2", crate::error::EncryptionErrorCode::EncryptionFailed))?;
+            .map_err(|_e| {
+                FortressError::encryption(
+                    "Password hashing failed",
+                    "argon2",
+                    crate::error::EncryptionErrorCode::EncryptionFailed,
+                )
+            })?;
 
         let password_hash = password_hash.to_string();
 
@@ -1495,46 +1579,61 @@ impl AuthManager {
 
         // Check account lockout first
         if self.lockout_manager.is_account_locked(&request.username)? {
-            return Err(FortressError::authentication("Account is locked due to multiple failed attempts", None));
+            return Err(FortressError::authentication(
+                "Account is locked due to multiple failed attempts",
+                None,
+            ));
         }
 
         // Perform risk assessment
         let risk_assessment = if self.config.risk_config.enabled {
-            Some(self.risk_engine.assess_risk(&request.risk_context.as_ref().unwrap_or(&RiskContext {
-                ip_address: request.ip_address.clone(),
-                user_agent: request.user_agent.clone(),
-                timestamp: Some(current_timestamp()),
-                geolocation: None,
-                network_info: None,
-                device_info: None,
-            })))
+            Some(
+                self.risk_engine
+                    .assess_risk(&request.risk_context.as_ref().unwrap_or(&RiskContext {
+                        ip_address: request.ip_address.clone(),
+                        user_agent: request.user_agent.clone(),
+                        timestamp: Some(current_timestamp()),
+                        geolocation: None,
+                        network_info: None,
+                        device_info: None,
+                    })),
+            )
         } else {
             None
         };
 
         // Find user by username
-        let user_id = self.users.values()
+        let user_id = self
+            .users
+            .values()
             .find(|u| u.username == request.username && u.active)
             .map(|u| u.id.clone())
             .ok_or_else(|| FortressError::authentication("Invalid credentials", None))?;
 
         // Get user for password verification and update
-        let user = self.users.get(&user_id)
+        let user = self
+            .users
+            .get(&user_id)
             .ok_or_else(|| FortressError::authentication("Invalid credentials", None))?;
 
         // Verify password using Argon2
         let parsed_hash = PasswordHash::new(&user.password_hash)
             .map_err(|_| FortressError::authentication("Invalid password hash format", None))?;
-        
+
         let argon2 = Argon2::default();
-        if argon2.verify_password(request.password.as_bytes(), &parsed_hash).is_err() {
+        if argon2
+            .verify_password(request.password.as_bytes(), &parsed_hash)
+            .is_err()
+        {
             // Record failed attempt
-            self.lockout_manager.record_failed_attempt(&request.username)?;
+            self.lockout_manager
+                .record_failed_attempt(&request.username)?;
             return Err(FortressError::authentication("Invalid credentials", None));
         }
 
         // Reset failed attempts on successful password
-        self.lockout_manager.reset_failed_attempts(&request.username)?;
+        self.lockout_manager
+            .reset_failed_attempts(&request.username)?;
 
         // Device fingerprinting
         let device_fingerprint = if self.config.enable_device_fingerprinting {
@@ -1560,15 +1659,20 @@ impl AuthManager {
 
         // Multi-factor authentication verification
         let mfa_verified = if let Some(ref mfa_data) = request.mfa_data {
-            self.verify_mfa(&mfa_data, &user_id, &risk_assessment).await?
+            self.verify_mfa(&mfa_data, &user_id, &risk_assessment)
+                .await?
         } else {
             // Determine if MFA is required based on risk
             if let Some(ref risk) = risk_assessment {
                 let required_methods = self.get_required_mfa_methods(risk.risk_level);
                 if !required_methods.is_empty() {
                     return Err(FortressError::authentication(
-                        format!("Multi-factor authentication required: {:?}", required_methods),
-                        None));
+                        format!(
+                            "Multi-factor authentication required: {:?}",
+                            required_methods
+                        ),
+                        None,
+                    ));
                 }
             }
             true // No MFA data provided, assume verified if not required
@@ -1577,7 +1681,7 @@ impl AuthManager {
         // Update last login
         let user_id_clone = user_id.clone();
         let _ = user;
-        
+
         if let Some(user) = self.users.get_mut(&user_id_clone) {
             user.last_login = Some(current_timestamp());
         }
@@ -1590,25 +1694,28 @@ impl AuthManager {
         )?;
 
         // Create token
-        let user_for_token = self.users.get(&user_id)
-            .ok_or_else(|| FortressError::authentication(
+        let user_for_token = self.users.get(&user_id).ok_or_else(|| {
+            FortressError::authentication(
                 "User not found after successful authentication",
                 Some("race_condition_detected".to_string()),
-            ))?;
+            )
+        })?;
         let token = self.create_token(user_for_token)?;
 
         // Store token
         self.tokens.insert(token.token.clone(), token.clone());
 
         // Get user for response
-        let user_for_response = self.users.get(&user_id)
-            .ok_or_else(|| FortressError::authentication(
+        let user_for_response = self.users.get(&user_id).ok_or_else(|| {
+            FortressError::authentication(
                 "User not found after token creation",
                 Some("race_condition_detected".to_string()),
-            ))?;
+            )
+        })?;
 
         // Determine security measures based on risk and device trust
-        let security_measures = self.determine_security_measures(&risk_assessment, &device_trust, &mfa_verified);
+        let security_measures =
+            self.determine_security_measures(&risk_assessment, &device_trust, &mfa_verified);
 
         // Generate MFA requirements if needed
         let mfa_requirements = if !self.config.mfa_config.required {
@@ -1630,9 +1737,14 @@ impl AuthManager {
     }
 
     /// Verify multi-factor authentication
-    async fn verify_mfa(&self, mfa_data: &MfaData, user_id: &str, risk_assessment: &Option<RiskAssessment>) -> Result<bool, FortressError> {
+    async fn verify_mfa(
+        &self,
+        mfa_data: &MfaData,
+        user_id: &str,
+        risk_assessment: &Option<RiskAssessment>,
+    ) -> Result<bool, FortressError> {
         let mut verified_methods = Vec::new();
-        
+
         // Verify TOTP if provided
         if let Some(ref totp_code) = mfa_data.totp_code {
             // In a real implementation, retrieve user's TOTP secret
@@ -1644,7 +1756,10 @@ impl AuthManager {
 
         // Verify hardware token if provided
         if let Some(ref hardware_token) = mfa_data.hardware_token {
-            if self.mfa_manager.verify_hardware_token(hardware_token, user_id)? {
+            if self
+                .mfa_manager
+                .verify_hardware_token(hardware_token, user_id)?
+            {
                 verified_methods.push(MfaMethod::HardwareToken);
             }
         }
@@ -1667,17 +1782,26 @@ impl AuthManager {
 
         // Check if sufficient MFA methods were verified
         let required_methods = if let Some(ref risk) = risk_assessment {
-            self.config.mfa_config.risk_based_methods.get_required_methods(risk.risk_level)
+            self.config
+                .mfa_config
+                .risk_based_methods
+                .get_required_methods(risk.risk_level)
         } else {
             vec![MfaMethod::Password] // Default to password only if no risk assessment
         };
 
-        let sufficient = required_methods.iter().all(|method| verified_methods.contains(method));
-        
+        let sufficient = required_methods
+            .iter()
+            .all(|method| verified_methods.contains(method));
+
         if !sufficient {
             return Err(FortressError::authentication(
-                format!("Insufficient multi-factor authentication. Required: {:?}, Verified: {:?}", required_methods, verified_methods),
-                None));
+                format!(
+                    "Insufficient multi-factor authentication. Required: {:?}, Verified: {:?}",
+                    required_methods, verified_methods
+                ),
+                None,
+            ));
         }
 
         Ok(true)
@@ -1687,14 +1811,28 @@ impl AuthManager {
     fn get_required_mfa_methods(&self, risk_level: RiskLevel) -> Vec<MfaMethod> {
         match risk_level {
             RiskLevel::Low => self.config.mfa_config.risk_based_methods.low_risk.clone(),
-            RiskLevel::Medium => self.config.mfa_config.risk_based_methods.medium_risk.clone(),
+            RiskLevel::Medium => self
+                .config
+                .mfa_config
+                .risk_based_methods
+                .medium_risk
+                .clone(),
             RiskLevel::High => self.config.mfa_config.risk_based_methods.high_risk.clone(),
-            RiskLevel::Critical => self.config.mfa_config.risk_based_methods.critical_risk.clone(),
+            RiskLevel::Critical => self
+                .config
+                .mfa_config
+                .risk_based_methods
+                .critical_risk
+                .clone(),
         }
     }
 
     /// Generate MFA requirements for user
-    fn generate_mfa_requirements(&self, _user_id: &str, risk_assessment: &Option<RiskAssessment>) -> MfaRequirements {
+    fn generate_mfa_requirements(
+        &self,
+        _user_id: &str,
+        risk_assessment: &Option<RiskAssessment>,
+    ) -> MfaRequirements {
         let available_methods = vec![
             MfaMethod::Totp,
             MfaMethod::HardwareToken,
@@ -1725,7 +1863,12 @@ impl AuthManager {
     }
 
     /// Determine security measures based on risk and device trust
-    fn determine_security_measures(&self, risk_assessment: &Option<RiskAssessment>, device_trust: &Option<DeviceTrustStatus>, mfa_verified: &bool) -> Vec<SecurityMeasure> {
+    fn determine_security_measures(
+        &self,
+        risk_assessment: &Option<RiskAssessment>,
+        device_trust: &Option<DeviceTrustStatus>,
+        mfa_verified: &bool,
+    ) -> Vec<SecurityMeasure> {
         let mut measures = Vec::new();
 
         // Risk-based measures
@@ -1733,7 +1876,7 @@ impl AuthManager {
             if risk.risk_score >= self.config.risk_config.thresholds.high_threshold {
                 measures.push(SecurityMeasure::RequireAdditionalMfa);
             }
-            
+
             if risk.risk_score >= self.config.risk_config.thresholds.critical_threshold {
                 measures.push(SecurityMeasure::AccessDenied);
                 return measures; // Critical risk - block access
@@ -1769,7 +1912,9 @@ impl AuthManager {
 
     /// Validate a token
     pub fn validate_token(&self, token: &str) -> Result<&User, FortressError> {
-        let auth_token = self.tokens.get(token)
+        let auth_token = self
+            .tokens
+            .get(token)
             .ok_or_else(|| FortressError::authentication("Invalid token", None))?;
 
         // Check if token is expired
@@ -1778,7 +1923,9 @@ impl AuthManager {
         }
 
         // Get user
-        let user = self.users.get(&auth_token.user_id)
+        let user = self
+            .users
+            .get(&auth_token.user_id)
             .ok_or_else(|| FortressError::authentication("User not found", None))?;
 
         if !user.active {
@@ -1789,7 +1936,11 @@ impl AuthManager {
     }
 
     /// Register an API key for a user
-    pub fn register_api_key(&mut self, api_key: String, user_id: UserId) -> Result<(), FortressError> {
+    pub fn register_api_key(
+        &mut self,
+        api_key: String,
+        user_id: UserId,
+    ) -> Result<(), FortressError> {
         if !self.users.contains_key(&user_id) {
             return Err(FortressError::validation("User not found", None, None));
         }
@@ -1804,26 +1955,34 @@ impl AuthManager {
     }
 
     /// Authenticate using an API key
-    pub async fn authenticate_api_key(&mut self, api_key: &str, _ip_address: &str) -> Result<AuthToken, FortressError> {
+    pub async fn authenticate_api_key(
+        &mut self,
+        api_key: &str,
+        _ip_address: &str,
+    ) -> Result<AuthToken, FortressError> {
         let hashed_key = self.hash_api_key(api_key);
-        
-        let user_id = self.api_keys.get(&hashed_key)
+
+        let user_id = self
+            .api_keys
+            .get(&hashed_key)
             .ok_or_else(|| FortressError::authentication("Invalid API key", None))?
             .clone();
-            
-        let user = self.users.get(&user_id)
+
+        let user = self
+            .users
+            .get(&user_id)
             .ok_or_else(|| FortressError::authentication("User not found", None))?;
-            
+
         if !user.active {
             return Err(FortressError::authentication("User is not active", None));
         }
-        
+
         // Generate a new token for the user
         let token = self.create_token(user)?;
-        
+
         // Store the active token
         self.tokens.insert(token.token.clone(), token.clone());
-        
+
         Ok(token)
     }
 
@@ -1842,7 +2001,7 @@ impl AuthManager {
         };
 
         let mut permissions = HashSet::new();
-        
+
         for role_id in &user.roles {
             if let Some(role) = self.roles.get(role_id) {
                 for permission_id in &role.permissions {
@@ -1853,17 +2012,22 @@ impl AuthManager {
             }
         }
 
-        permissions.into_iter()
+        permissions
+            .into_iter()
             .filter_map(|id| self.permissions.get(&id))
             .collect()
     }
 
     /// Assign a role to a user
     pub fn assign_role(&mut self, user_id: &UserId, role_id: RoleId) -> Result<(), FortressError> {
-        let user = self.users.get_mut(user_id)
+        let user = self
+            .users
+            .get_mut(user_id)
             .ok_or_else(|| FortressError::validation("User not found", None, None))?;
 
-        let _role = self.roles.get(&role_id)
+        let _role = self
+            .roles
+            .get(&role_id)
             .ok_or_else(|| FortressError::validation("Role not found", None, None))?;
 
         if !user.roles.contains(&role_id) {
@@ -1941,19 +2105,35 @@ impl AuthManager {
         }
 
         if policy.require_uppercase && !password.chars().any(|c| c.is_uppercase()) {
-            return Err(FortressError::validation("Password must contain uppercase letters", None, None));
+            return Err(FortressError::validation(
+                "Password must contain uppercase letters",
+                None,
+                None,
+            ));
         }
 
         if policy.require_lowercase && !password.chars().any(|c| c.is_lowercase()) {
-            return Err(FortressError::validation("Password must contain lowercase letters", None, None));
+            return Err(FortressError::validation(
+                "Password must contain lowercase letters",
+                None,
+                None,
+            ));
         }
 
         if policy.require_numbers && !password.chars().any(|c| c.is_ascii_digit()) {
-            return Err(FortressError::validation("Password must contain numbers", None, None));
+            return Err(FortressError::validation(
+                "Password must contain numbers",
+                None,
+                None,
+            ));
         }
 
         if policy.require_special_chars && !password.chars().any(|c| !c.is_alphanumeric()) {
-            return Err(FortressError::validation("Password must contain special characters", None, None));
+            return Err(FortressError::validation(
+                "Password must contain special characters",
+                None,
+                None,
+            ));
         }
 
         Ok(())
@@ -1961,12 +2141,14 @@ impl AuthManager {
 
     /// Logout a user (invalidate token and session)
     pub fn logout(&mut self, token: &str) -> Result<(), FortressError> {
-        let _auth_token = self.tokens.remove(token)
+        let _auth_token = self
+            .tokens
+            .remove(token)
             .ok_or_else(|| FortressError::authentication("Invalid token", None))?;
 
         // Invalidate session (would need session_id from token in real implementation)
         // For now, we'll just remove the token
-        
+
         Ok(())
     }
 
@@ -1982,7 +2164,9 @@ impl AuthManager {
 
     /// Deactivate a user
     pub fn deactivate_user(&mut self, user_id: &UserId) -> Result<(), FortressError> {
-        let user = self.users.get_mut(user_id)
+        let user = self
+            .users
+            .get_mut(user_id)
             .ok_or_else(|| FortressError::validation("User not found", None, None))?;
         user.active = false;
         Ok(())
@@ -1995,16 +2179,18 @@ impl AuthManager {
         full_name: Option<String>,
         email: Option<String>,
     ) -> Result<(), FortressError> {
-        let user = self.users.get_mut(user_id)
+        let user = self
+            .users
+            .get_mut(user_id)
             .ok_or_else(|| FortressError::validation("User not found", None, None))?;
-        
+
         if let Some(name) = full_name {
             user.full_name = name;
         }
         if let Some(email_addr) = email {
             user.email = email_addr;
         }
-        
+
         Ok(())
     }
 
@@ -2018,25 +2204,39 @@ impl AuthManager {
         // Validate new password
         self.validate_password(new_password)?;
 
-        let user = self.users.get_mut(user_id)
+        let user = self
+            .users
+            .get_mut(user_id)
             .ok_or_else(|| FortressError::validation("User not found", None, None))?;
-        
+
         // Verify current password against stored hash using Argon2id
         let parsed_hash = PasswordHash::new(&user.password_hash)
             .map_err(|_| FortressError::authentication("Invalid password hash format", None))?;
-        
+
         let argon2 = Argon2::default();
-        if argon2.verify_password(current_password.as_bytes(), &parsed_hash).is_err() {
-            return Err(FortressError::authentication("Invalid current password", None));
+        if argon2
+            .verify_password(current_password.as_bytes(), &parsed_hash)
+            .is_err()
+        {
+            return Err(FortressError::authentication(
+                "Invalid current password",
+                None,
+            ));
         }
-        
+
         // Hash new password using Argon2id
         let salt = SaltString::generate(&mut OsRng);
         let argon2 = Argon2::default();
         let password_hash = argon2
             .hash_password(new_password.as_bytes(), &salt)
-            .map_err(|_e| FortressError::encryption("Password hashing failed", "argon2", crate::error::EncryptionErrorCode::EncryptionFailed))?;
-        
+            .map_err(|_e| {
+                FortressError::encryption(
+                    "Password hashing failed",
+                    "argon2",
+                    crate::error::EncryptionErrorCode::EncryptionFailed,
+                )
+            })?;
+
         user.password_hash = password_hash.to_string();
         Ok(())
     }
@@ -2054,7 +2254,8 @@ impl AuthManager {
     /// Get permissions for a specific role
     pub fn get_role_permissions(&self, role_id: &RoleId) -> Vec<&AuthPermission> {
         if let Some(role) = self.roles.get(role_id) {
-            role.permissions.iter()
+            role.permissions
+                .iter()
                 .filter_map(|perm_id| self.permissions.get(perm_id))
                 .collect()
         } else {
@@ -2064,9 +2265,11 @@ impl AuthManager {
 
     /// Remove a role from a user
     pub fn remove_role(&mut self, user_id: &UserId, role_id: &RoleId) -> Result<(), FortressError> {
-        let user = self.users.get_mut(user_id)
+        let user = self
+            .users
+            .get_mut(user_id)
             .ok_or_else(|| FortressError::validation("User not found", None, None))?;
-        
+
         user.roles.retain(|r| r != role_id);
         Ok(())
     }
@@ -2076,11 +2279,13 @@ impl AuthManager {
         // Simplified token extraction for tests
         // In production, this would decode and validate a real JWT
         if let Some(auth_token) = self.tokens.get(token) {
-            let user = self.users.get(&auth_token.user_id)
+            let user = self
+                .users
+                .get(&auth_token.user_id)
                 .ok_or_else(|| FortressError::authentication("User not found", None))?;
-            
+
             let permissions = self.get_user_permissions(&auth_token.user_id);
-            
+
             Ok(TokenClaims {
                 sub: auth_token.user_id.clone(),
                 iss: "Fortress".to_string(),
@@ -2137,11 +2342,18 @@ mod tests {
     #[tokio::test]
     async fn test_user_creation() {
         let mut auth = AuthManager::new();
-        
-        let user_id = auth.create_user("testuser".to_string(), "test@example.com".to_string(), "Password123!".to_string()).await
+
+        let user_id = auth
+            .create_user(
+                "testuser".to_string(),
+                "test@example.com".to_string(),
+                "Password123!".to_string(),
+            )
+            .await
             .expect("Failed to create test user");
-        
-        let user = auth.get_user(&user_id)
+
+        let user = auth
+            .get_user(&user_id)
             .expect("Failed to retrieve created user");
         assert_eq!(user.username, "testuser");
         assert!(user.active);
@@ -2150,10 +2362,16 @@ mod tests {
     #[tokio::test]
     async fn test_authentication() {
         let mut auth = AuthManager::new();
-        
-        let user_id = auth.create_user("testuser".to_string(), "test@example.com".to_string(), "Password123!".to_string()).await
+
+        let user_id = auth
+            .create_user(
+                "testuser".to_string(),
+                "test@example.com".to_string(),
+                "Password123!".to_string(),
+            )
+            .await
             .expect("Failed to create test user");
-        
+
         let login_request = LoginRequest {
             username: "testuser".to_string(),
             password: "Password123!".to_string(),
@@ -2163,8 +2381,10 @@ mod tests {
             mfa_data: None,
             risk_context: None,
         };
-        
-        let response = auth.authenticate(login_request).await
+
+        let response = auth
+            .authenticate(login_request)
+            .await
             .expect("Failed to authenticate test user");
         assert_eq!(response.user.id, user_id);
         assert!(!response.token.is_empty());
@@ -2173,28 +2393,41 @@ mod tests {
     #[tokio::test]
     async fn test_role_assignment() {
         let mut auth = AuthManager::new();
-        
-        let user_id = auth.create_user("testuser".to_string(), "test@example.com".to_string(), "Password123!".to_string()).await
+
+        let user_id = auth
+            .create_user(
+                "testuser".to_string(),
+                "test@example.com".to_string(),
+                "Password123!".to_string(),
+            )
+            .await
             .expect("Failed to create test user");
-        
-        let permission_id = auth.create_permission(
-            "read_data".to_string(),
-            "Read data permission".to_string(),
-            "data".to_string(),
-            "read".to_string(),
-        ).expect("Failed to create test permission");
-        
-        let role_id = auth.create_role(
-            "data_reader".to_string(),
-            "Can read data".to_string(),
-            vec![permission_id.clone()],
-        ).expect("Failed to create test role");
-        
-        auth.assign_role(&user_id, role_id.clone()).expect("Failed to assign test role");
-        
-        let user = auth.get_user(&user_id).expect("Failed to retrieve user after role assignment");
+
+        let permission_id = auth
+            .create_permission(
+                "read_data".to_string(),
+                "Read data permission".to_string(),
+                "data".to_string(),
+                "read".to_string(),
+            )
+            .expect("Failed to create test permission");
+
+        let role_id = auth
+            .create_role(
+                "data_reader".to_string(),
+                "Can read data".to_string(),
+                vec![permission_id.clone()],
+            )
+            .expect("Failed to create test role");
+
+        auth.assign_role(&user_id, role_id.clone())
+            .expect("Failed to assign test role");
+
+        let user = auth
+            .get_user(&user_id)
+            .expect("Failed to retrieve user after role assignment");
         assert!(user.roles.contains(&role_id));
-        
+
         assert!(auth.user_has_permission(&user_id, &permission_id));
     }
 
@@ -2218,23 +2451,27 @@ mod tests {
             device_fingerprint_config: DeviceFingerprintConfig::default(),
             lockout_config: AccountLockoutConfig::default(),
         };
-        
+
         let mut session_manager = SessionManager::new(config);
-        
+
         let user_id = "user1".to_string();
-        
-        let session_id1 = session_manager.create_session(
-            user_id.clone(),
-            Some("127.0.0.1".to_string()),
-            Some("Test Agent".to_string()),
-        ).unwrap();
-        
-        let session_id2 = session_manager.create_session(
-            user_id.clone(),
-            Some("127.0.0.1".to_string()),
-            Some("Test Agent".to_string()),
-        ).unwrap();
-        
+
+        let session_id1 = session_manager
+            .create_session(
+                user_id.clone(),
+                Some("127.0.0.1".to_string()),
+                Some("Test Agent".to_string()),
+            )
+            .unwrap();
+
+        let session_id2 = session_manager
+            .create_session(
+                user_id.clone(),
+                Some("127.0.0.1".to_string()),
+                Some("Test Agent".to_string()),
+            )
+            .unwrap();
+
         // Should fail due to session limit
         let result = session_manager.create_session(
             user_id.clone(),
@@ -2242,11 +2479,11 @@ mod tests {
             Some("Test Agent".to_string()),
         );
         assert!(result.is_err());
-        
+
         // Get session
         let session = session_manager.get_session(&session_id1).unwrap();
         assert_eq!(session.user_id, user_id);
-        
+
         // Invalidate session
         session_manager.invalidate_session(&session_id1).unwrap();
         assert!(session_manager.get_session(&session_id1).is_none());
@@ -2255,10 +2492,10 @@ mod tests {
     #[tokio::test]
     async fn test_password_validation() {
         let auth = AuthManager::new();
-        
+
         // Test valid password
         assert!(auth.validate_password("Password123!").is_ok());
-        
+
         // Test invalid passwords
         assert!(auth.validate_password("short").is_err()); // Too short
         assert!(auth.validate_password("nouppercase123!").is_err()); // No uppercase
@@ -2270,10 +2507,12 @@ mod tests {
     #[tokio::test]
     async fn test_authentication_with_invalid_credentials() {
         let mut auth = AuthManager::new();
-        
-        let _user_id = auth.create_user("testuser".to_string(), "Password123!".to_string()).await
+
+        let _user_id = auth
+            .create_user("testuser".to_string(), "Password123!".to_string())
+            .await
             .expect("Failed to create test user");
-        
+
         let login_request = LoginRequest {
             username: "testuser".to_string(),
             password: "WrongPassword!".to_string(),
@@ -2283,7 +2522,7 @@ mod tests {
             mfa_data: None,
             risk_context: None,
         };
-        
+
         let result = auth.authenticate(login_request).await;
         assert!(result.is_err());
     }
@@ -2291,16 +2530,19 @@ mod tests {
     #[tokio::test]
     async fn test_user_deactivation() {
         let mut auth = AuthManager::new();
-        
-        let user_id = auth.create_user("testuser".to_string(), "Password123!".to_string()).await
+
+        let user_id = auth
+            .create_user("testuser".to_string(), "Password123!".to_string())
+            .await
             .expect("Failed to create test user");
-        
+
         // Deactivate user
-        auth.deactivate_user(&user_id).expect("Failed to deactivate user");
-        
+        auth.deactivate_user(&user_id)
+            .expect("Failed to deactivate user");
+
         let user = auth.get_user(&user_id).expect("Failed to retrieve user");
         assert!(!user.active);
-        
+
         // Authentication should fail for deactivated user
         let login_request = LoginRequest {
             username: "testuser".to_string(),
@@ -2311,7 +2553,7 @@ mod tests {
             mfa_data: None,
             risk_context: None,
         };
-        
+
         let result = auth.authenticate(login_request).await;
         assert!(result.is_err());
     }
@@ -2319,10 +2561,12 @@ mod tests {
     #[tokio::test]
     async fn test_multi_factor_authentication() {
         let mut auth = AuthManager::new();
-        
-        let user_id = auth.create_user("testuser".to_string(), "Password123!".to_string()).await
+
+        let user_id = auth
+            .create_user("testuser".to_string(), "Password123!".to_string())
+            .await
             .expect("Failed to create test user");
-        
+
         let mfa_data = Some(MfaData {
             totp_code: Some("123456".to_string()),
             hardware_token: None,
@@ -2331,7 +2575,7 @@ mod tests {
             push_token: None,
             verification_code: None,
         });
-        
+
         let login_request = LoginRequest {
             username: "testuser".to_string(),
             password: "Password123!".to_string(),
@@ -2341,8 +2585,10 @@ mod tests {
             mfa_data,
             risk_context: None,
         };
-        
-        let response = auth.authenticate(login_request).await
+
+        let response = auth
+            .authenticate(login_request)
+            .await
             .expect("Failed to authenticate with MFA");
         assert_eq!(response.user.id, user_id);
     }
@@ -2350,10 +2596,12 @@ mod tests {
     #[tokio::test]
     async fn test_risk_assessment() {
         let mut auth = AuthManager::new();
-        
-        let _user_id = auth.create_user("testuser".to_string(), "Password123!".to_string()).await
+
+        let _user_id = auth
+            .create_user("testuser".to_string(), "Password123!".to_string())
+            .await
             .expect("Failed to create test user");
-        
+
         let risk_context = Some(RiskContext {
             ip_address: Some("192.168.1.100".to_string()),
             user_agent: Some("Mozilla/5.0".to_string()),
@@ -2387,7 +2635,7 @@ mod tests {
                 webgl_fingerprint: Some("webgl456".to_string()),
             }),
         });
-        
+
         let login_request = LoginRequest {
             username: "testuser".to_string(),
             password: "Password123!".to_string(),
@@ -2397,8 +2645,10 @@ mod tests {
             mfa_data: None,
             risk_context,
         };
-        
-        let response = auth.authenticate(login_request).await
+
+        let response = auth
+            .authenticate(login_request)
+            .await
             .expect("Failed to authenticate with risk context");
         assert!(response.risk_assessment.is_some());
         assert!(response.risk_assessment.unwrap().risk_score <= 100);
@@ -2407,12 +2657,14 @@ mod tests {
     #[tokio::test]
     async fn test_device_fingerprinting() {
         let mut auth = AuthManager::new();
-        
-        let _user_id = auth.create_user("testuser".to_string(), "Password123!".to_string()).await
+
+        let _user_id = auth
+            .create_user("testuser".to_string(), "Password123!".to_string())
+            .await
             .expect("Failed to create test user");
-        
+
         let device_fingerprint = Some("device_fingerprint_12345".to_string());
-        
+
         let login_request = LoginRequest {
             username: "testuser".to_string(),
             password: "Password123!".to_string(),
@@ -2422,8 +2674,10 @@ mod tests {
             mfa_data: None,
             risk_context: None,
         };
-        
-        let response = auth.authenticate(login_request).await
+
+        let response = auth
+            .authenticate(login_request)
+            .await
             .expect("Failed to authenticate with device fingerprint");
         assert!(response.device_trust.is_some());
     }
@@ -2431,10 +2685,12 @@ mod tests {
     #[tokio::test]
     async fn test_account_lockout() {
         let mut auth = AuthManager::new();
-        
-        let _user_id = auth.create_user("testuser".to_string(), "Password123!".to_string()).await
+
+        let _user_id = auth
+            .create_user("testuser".to_string(), "Password123!".to_string())
+            .await
             .expect("Failed to create test user");
-        
+
         // Attempt multiple failed logins
         for _ in 0..5 {
             let login_request = LoginRequest {
@@ -2446,10 +2702,10 @@ mod tests {
                 mfa_data: None,
                 risk_context: None,
             };
-            
+
             let _ = auth.authenticate(login_request).await;
         }
-        
+
         // Next login attempt should fail due to lockout
         let login_request = LoginRequest {
             username: "testuser".to_string(),
@@ -2460,7 +2716,7 @@ mod tests {
             mfa_data: None,
             risk_context: None,
         };
-        
+
         let result = auth.authenticate(login_request).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("locked"));
@@ -2469,10 +2725,12 @@ mod tests {
     #[tokio::test]
     async fn test_token_validation() {
         let mut auth = AuthManager::new();
-        
-        let user_id = auth.create_user("testuser".to_string(), "Password123!".to_string()).await
+
+        let user_id = auth
+            .create_user("testuser".to_string(), "Password123!".to_string())
+            .await
             .expect("Failed to create test user");
-        
+
         let login_request = LoginRequest {
             username: "testuser".to_string(),
             password: "Password123!".to_string(),
@@ -2482,14 +2740,16 @@ mod tests {
             mfa_data: None,
             risk_context: None,
         };
-        
-        let response = auth.authenticate(login_request).await
+
+        let response = auth
+            .authenticate(login_request)
+            .await
             .expect("Failed to authenticate test user");
-        
+
         // Validate token
         let token_result = auth.validate_token(&response.token);
         assert!(token_result.is_ok());
-        
+
         let validated_user = token_result.unwrap();
         assert_eq!(validated_user.id, user_id);
     }
@@ -2497,48 +2757,60 @@ mod tests {
     #[tokio::test]
     async fn test_permission_hierarchy() {
         let mut auth = AuthManager::new();
-        
-        let user_id = auth.create_user("testuser".to_string(), "Password123!".to_string()).await
+
+        let user_id = auth
+            .create_user("testuser".to_string(), "Password123!".to_string())
+            .await
             .expect("Failed to create test user");
-        
+
         // Create permissions
-        let read_perm = auth.create_permission(
-            "read".to_string(),
-            "Read permission".to_string(),
-            "data".to_string(),
-            "read".to_string(),
-        ).expect("Failed to create read permission");
-        
-        let write_perm = auth.create_permission(
-            "write".to_string(),
-            "Write permission".to_string(),
-            "data".to_string(),
-            "write".to_string(),
-        ).expect("Failed to create write permission");
-        
+        let read_perm = auth
+            .create_permission(
+                "read".to_string(),
+                "Read permission".to_string(),
+                "data".to_string(),
+                "read".to_string(),
+            )
+            .expect("Failed to create read permission");
+
+        let write_perm = auth
+            .create_permission(
+                "write".to_string(),
+                "Write permission".to_string(),
+                "data".to_string(),
+                "write".to_string(),
+            )
+            .expect("Failed to create write permission");
+
         // Create roles with hierarchy
-        let user_role = auth.create_role(
-            "user".to_string(),
-            "Basic user".to_string(),
-            vec![read_perm.clone()],
-        ).expect("Failed to create user role");
-        
-        let admin_role = auth.create_role(
-            "admin".to_string(),
-            "Administrator".to_string(),
-            vec![read_perm.clone(), write_perm.clone()],
-        ).expect("Failed to create admin role");
-        
+        let user_role = auth
+            .create_role(
+                "user".to_string(),
+                "Basic user".to_string(),
+                vec![read_perm.clone()],
+            )
+            .expect("Failed to create user role");
+
+        let admin_role = auth
+            .create_role(
+                "admin".to_string(),
+                "Administrator".to_string(),
+                vec![read_perm.clone(), write_perm.clone()],
+            )
+            .expect("Failed to create admin role");
+
         // Assign roles
-        auth.assign_role(&user_id, user_role).expect("Failed to assign user role");
-        
+        auth.assign_role(&user_id, user_role)
+            .expect("Failed to assign user role");
+
         // Check permissions
         assert!(auth.user_has_permission(&user_id, &read_perm));
         assert!(!auth.user_has_permission(&user_id, &write_perm));
-        
+
         // Upgrade to admin
-        auth.assign_role(&user_id, admin_role).expect("Failed to assign admin role");
-        
+        auth.assign_role(&user_id, admin_role)
+            .expect("Failed to assign admin role");
+
         // Now should have both permissions
         assert!(auth.user_has_permission(&user_id, &read_perm));
         assert!(auth.user_has_permission(&user_id, &write_perm));
@@ -2548,7 +2820,7 @@ mod tests {
     async fn test_session_expiration() {
         let config = AuthConfig {
             token_expiration: 1, // 1 second
-            session_timeout: 1, // 1 second
+            session_timeout: 1,  // 1 second
             max_sessions_per_user: 5,
             enable_device_fingerprinting: true,
             password_policy: PasswordPolicy {
@@ -2564,28 +2836,30 @@ mod tests {
             device_fingerprint_config: DeviceFingerprintConfig::default(),
             lockout_config: AccountLockoutConfig::default(),
         };
-        
+
         let mut session_manager = SessionManager::new(config);
-        
+
         let user_id = "user1".to_string();
-        
-        let session_id = session_manager.create_session(
-            user_id.clone(),
-            Some("127.0.0.1".to_string()),
-            Some("Test Agent".to_string()),
-        ).unwrap();
-        
+
+        let session_id = session_manager
+            .create_session(
+                user_id.clone(),
+                Some("127.0.0.1".to_string()),
+                Some("Test Agent".to_string()),
+            )
+            .unwrap();
+
         // Session should be valid initially
         let session = session_manager.get_session(&session_id).unwrap();
         assert!(session.active);
-        
+
         // Wait for expiration
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-        
+
         // Update activity should fail due to expiration
         let result = session_manager.update_activity(&session_id);
         assert!(result.is_err());
-        
+
         // Session should be inactive
         let session = session_manager.get_session(&session_id).unwrap();
         assert!(!session.active);
@@ -2594,15 +2868,23 @@ mod tests {
     #[tokio::test]
     async fn test_user_update() {
         let mut auth = AuthManager::new();
-        
-        let user_id = auth.create_user("testuser".to_string(), "Password123!".to_string()).await
+
+        let user_id = auth
+            .create_user("testuser".to_string(), "Password123!".to_string())
+            .await
             .expect("Failed to create test user");
-        
+
         // Update user information
-        auth.update_user(&user_id, Some("Updated User".to_string()), Some("updated@example.com".to_string()))
-            .expect("Failed to update user");
-        
-        let user = auth.get_user(&user_id).expect("Failed to retrieve updated user");
+        auth.update_user(
+            &user_id,
+            Some("Updated User".to_string()),
+            Some("updated@example.com".to_string()),
+        )
+        .expect("Failed to update user");
+
+        let user = auth
+            .get_user(&user_id)
+            .expect("Failed to retrieve updated user");
         assert_eq!(user.full_name, "Updated User");
         assert_eq!(user.email, "updated@example.com");
     }
@@ -2610,14 +2892,16 @@ mod tests {
     #[tokio::test]
     async fn test_password_change() {
         let mut auth = AuthManager::new();
-        
-        let user_id = auth.create_user("testuser".to_string(), "Password123!".to_string()).await
+
+        let user_id = auth
+            .create_user("testuser".to_string(), "Password123!".to_string())
+            .await
             .expect("Failed to create test user");
-        
+
         // Change password
         auth.change_password(&user_id, "Password123!", "NewPassword456!")
             .expect("Failed to change password");
-        
+
         // Login with old password should fail
         let login_request = LoginRequest {
             username: "testuser".to_string(),
@@ -2628,10 +2912,10 @@ mod tests {
             mfa_data: None,
             risk_context: None,
         };
-        
+
         let result = auth.authenticate(login_request).await;
         assert!(result.is_err());
-        
+
         // Login with new password should succeed
         let login_request = LoginRequest {
             username: "testuser".to_string(),
@@ -2642,10 +2926,10 @@ mod tests {
             mfa_data: None,
             risk_context: None,
         };
-        
+
         let result = auth.authenticate(login_request).await;
         assert!(result.is_ok());
-        
+
         // Changing password with wrong current password should fail
         let bad_change_result = auth.change_password(&user_id, "WrongPassword!", "BrandNew123!");
         assert!(bad_change_result.is_err());
@@ -2654,99 +2938,117 @@ mod tests {
     #[tokio::test]
     async fn test_api_key_authentication() {
         let mut auth = AuthManager::new();
-        
-        let user_id = auth.create_user("apikey_user".to_string(), "Password123!".to_string()).await
+
+        let user_id = auth
+            .create_user("apikey_user".to_string(), "Password123!".to_string())
+            .await
             .expect("Failed to create user");
-            
+
         let api_key = "secure_api_key_for_testing_123456".to_string();
-        
+
         // Register API key
         auth.register_api_key(api_key.clone(), user_id.clone())
             .expect("Failed to register API key");
-            
+
         // Authenticate with valid key
         let auth_token_result = auth.authenticate_api_key(&api_key, "127.0.0.1").await;
         assert!(auth_token_result.is_ok());
-        
+
         let auth_token = auth_token_result.unwrap();
         assert_eq!(auth_token.user_id, user_id);
-        
+
         // Authenticate with invalid key should fail
-        let bad_auth_result = auth.authenticate_api_key("wrong_api_key_string", "127.0.0.1").await;
+        let bad_auth_result = auth
+            .authenticate_api_key("wrong_api_key_string", "127.0.0.1")
+            .await;
         assert!(bad_auth_result.is_err());
     }
 
     #[tokio::test]
     async fn test_role_and_permission_management() {
         let mut auth = AuthManager::new();
-        
+
         // Create multiple permissions
-        let perm1 = auth.create_permission(
-            "create".to_string(),
-            "Create permission".to_string(),
-            "resources".to_string(),
-            "create".to_string(),
-        ).expect("Failed to create permission 1");
-        
-        let perm2 = auth.create_permission(
-            "read".to_string(),
-            "Read permission".to_string(),
-            "resources".to_string(),
-            "read".to_string(),
-        ).expect("Failed to create permission 2");
-        
-        let perm3 = auth.create_permission(
-            "update".to_string(),
-            "Update permission".to_string(),
-            "resources".to_string(),
-            "update".to_string(),
-        ).expect("Failed to create permission 3");
-        
-        let perm4 = auth.create_permission(
-            "delete".to_string(),
-            "Delete permission".to_string(),
-            "resources".to_string(),
-            "delete".to_string(),
-        ).expect("Failed to create permission 4");
-        
+        let perm1 = auth
+            .create_permission(
+                "create".to_string(),
+                "Create permission".to_string(),
+                "resources".to_string(),
+                "create".to_string(),
+            )
+            .expect("Failed to create permission 1");
+
+        let perm2 = auth
+            .create_permission(
+                "read".to_string(),
+                "Read permission".to_string(),
+                "resources".to_string(),
+                "read".to_string(),
+            )
+            .expect("Failed to create permission 2");
+
+        let perm3 = auth
+            .create_permission(
+                "update".to_string(),
+                "Update permission".to_string(),
+                "resources".to_string(),
+                "update".to_string(),
+            )
+            .expect("Failed to create permission 3");
+
+        let perm4 = auth
+            .create_permission(
+                "delete".to_string(),
+                "Delete permission".to_string(),
+                "resources".to_string(),
+                "delete".to_string(),
+            )
+            .expect("Failed to create permission 4");
+
         // Create roles with different permission sets
-        let reader_role = auth.create_role(
-            "reader".to_string(),
-            "Reader role".to_string(),
-            vec![perm2.clone()],
-        ).expect("Failed to create reader role");
-        
-        let editor_role = auth.create_role(
-            "editor".to_string(),
-            "Editor role".to_string(),
-            vec![perm1.clone(), perm2.clone(), perm3.clone()],
-        ).expect("Failed to create editor role");
-        
-        let admin_role = auth.create_role(
-            "admin".to_string(),
-            "Admin role".to_string(),
-            vec![perm1.clone(), perm2.clone(), perm3.clone(), perm4.clone()],
-        ).expect("Failed to create admin role");
-        
+        let reader_role = auth
+            .create_role(
+                "reader".to_string(),
+                "Reader role".to_string(),
+                vec![perm2.clone()],
+            )
+            .expect("Failed to create reader role");
+
+        let editor_role = auth
+            .create_role(
+                "editor".to_string(),
+                "Editor role".to_string(),
+                vec![perm1.clone(), perm2.clone(), perm3.clone()],
+            )
+            .expect("Failed to create editor role");
+
+        let admin_role = auth
+            .create_role(
+                "admin".to_string(),
+                "Admin role".to_string(),
+                vec![perm1.clone(), perm2.clone(), perm3.clone(), perm4.clone()],
+            )
+            .expect("Failed to create admin role");
+
         // Test role listing
         let roles = auth.list_roles();
         assert_eq!(roles.len(), 3);
-        
+
         // Test permission listing
         let permissions = auth.list_permissions();
         assert_eq!(permissions.len(), 4);
-        
+
         // Test role permissions
         let reader_perms = auth.get_role_permissions(&reader_role);
         assert_eq!(reader_perms.len(), 1);
         assert!(reader_perms.iter().any(|p| p.id == perm2));
-        
+
         let editor_perms = auth.get_role_permissions(&editor_role);
         assert_eq!(editor_perms.len(), 3);
         assert!(editor_perms.iter().any(|p| p.id == perm1));
         assert!(editor_perms.iter().any(|p| p.id == perm2));
         assert!(editor_perms.iter().any(|p| p.id == perm3));
-        
+
         let admin_perms = auth.get_role_permissions(&admin_role);
         assert_eq!(admin_perms.len(), 4);
     }
@@ -2754,36 +3056,46 @@ mod tests {
     #[tokio::test]
     async fn test_user_role_removal() {
         let mut auth = AuthManager::new();
-        
-        let user_id = auth.create_user("testuser".to_string(), "Password123!".to_string()).await
+
+        let user_id = auth
+            .create_user("testuser".to_string(), "Password123!".to_string())
+            .await
             .expect("Failed to create test user");
-        
-        let permission_id = auth.create_permission(
-            "read_data".to_string(),
-            "Read data permission".to_string(),
-            "data".to_string(),
-            "read".to_string(),
-        ).expect("Failed to create test permission");
-        
-        let role_id = auth.create_role(
-            "data_reader".to_string(),
-            "Can read data".to_string(),
-            vec![permission_id.clone()],
-        ).expect("Failed to create test role");
-        
+
+        let permission_id = auth
+            .create_permission(
+                "read_data".to_string(),
+                "Read data permission".to_string(),
+                "data".to_string(),
+                "read".to_string(),
+            )
+            .expect("Failed to create test permission");
+
+        let role_id = auth
+            .create_role(
+                "data_reader".to_string(),
+                "Can read data".to_string(),
+                vec![permission_id.clone()],
+            )
+            .expect("Failed to create test role");
+
         // Assign role
-        auth.assign_role(&user_id, role_id.clone()).expect("Failed to assign test role");
-        
+        auth.assign_role(&user_id, role_id.clone())
+            .expect("Failed to assign test role");
+
         // Verify role is assigned
         let user = auth.get_user(&user_id).expect("Failed to retrieve user");
         assert!(user.roles.contains(&role_id));
         assert!(auth.user_has_permission(&user_id, &permission_id));
-        
+
         // Remove role
-        auth.remove_role(&user_id, &role_id).expect("Failed to remove role");
-        
+        auth.remove_role(&user_id, &role_id)
+            .expect("Failed to remove role");
+
         // Verify role is removed
-        let user = auth.get_user(&user_id).expect("Failed to retrieve user after role removal");
+        let user = auth
+            .get_user(&user_id)
+            .expect("Failed to retrieve user after role removal");
         assert!(!user.roles.contains(&role_id));
         assert!(!auth.user_has_permission(&user_id, &permission_id));
     }
@@ -2791,17 +3103,19 @@ mod tests {
     #[tokio::test]
     async fn test_biometric_authentication() {
         let mut auth = AuthManager::new();
-        
-        let _user_id = auth.create_user("testuser".to_string(), "Password123!".to_string()).await
+
+        let _user_id = auth
+            .create_user("testuser".to_string(), "Password123!".to_string())
+            .await
             .expect("Failed to create test user");
-        
+
         let biometric_data = Some(BiometricData {
             biometric_type: BiometricType::Fingerprint,
             template: "fingerprint_template_123".to_string(),
             confidence: 0.95,
             challenge_response: Some("challenge_response_456".to_string()),
         });
-        
+
         let mfa_data = Some(MfaData {
             totp_code: None,
             hardware_token: None,
@@ -2810,7 +3124,7 @@ mod tests {
             push_token: None,
             verification_code: None,
         });
-        
+
         let login_request = LoginRequest {
             username: "testuser".to_string(),
             password: "Password123!".to_string(),
@@ -2820,8 +3134,10 @@ mod tests {
             mfa_data,
             risk_context: None,
         };
-        
-        let response = auth.authenticate(login_request).await
+
+        let response = auth
+            .authenticate(login_request)
+            .await
             .expect("Failed to authenticate with biometric data");
         assert!(!response.token.is_empty());
     }
@@ -2829,26 +3145,33 @@ mod tests {
     #[tokio::test]
     async fn test_jwt_token_claims() {
         let mut auth = AuthManager::new();
-        
-        let user_id = auth.create_user("testuser".to_string(), "Password123!".to_string()).await
+
+        let user_id = auth
+            .create_user("testuser".to_string(), "Password123!".to_string())
+            .await
             .expect("Failed to create test user");
-        
+
         // Assign role to user
-        let permission_id = auth.create_permission(
-            "read_data".to_string(),
-            "Read data permission".to_string(),
-            "data".to_string(),
-            "read".to_string(),
-        ).expect("Failed to create test permission");
-        
-        let role_id = auth.create_role(
-            "data_reader".to_string(),
-            "Can read data".to_string(),
-            vec![permission_id.clone()],
-        ).expect("Failed to create test role");
-        
-        auth.assign_role(&user_id, role_id).expect("Failed to assign test role");
-        
+        let permission_id = auth
+            .create_permission(
+                "read_data".to_string(),
+                "Read data permission".to_string(),
+                "data".to_string(),
+                "read".to_string(),
+            )
+            .expect("Failed to create test permission");
+
+        let role_id = auth
+            .create_role(
+                "data_reader".to_string(),
+                "Can read data".to_string(),
+                vec![permission_id.clone()],
+            )
+            .expect("Failed to create test role");
+
+        auth.assign_role(&user_id, role_id)
+            .expect("Failed to assign test role");
+
         let login_request = LoginRequest {
             username: "testuser".to_string(),
             password: "Password123!".to_string(),
@@ -2858,14 +3181,17 @@ mod tests {
             mfa_data: None,
             risk_context: None,
         };
-        
-        let response = auth.authenticate(login_request).await
+
+        let response = auth
+            .authenticate(login_request)
+            .await
             .expect("Failed to authenticate test user");
-        
+
         // Extract token claims
-        let claims = auth.extract_token_claims(&response.token)
+        let claims = auth
+            .extract_token_claims(&response.token)
             .expect("Failed to extract token claims");
-        
+
         assert_eq!(claims.sub, user_id);
         assert!(claims.exp > claims.iat);
         assert!(!claims.roles.is_empty());
@@ -2875,13 +3201,15 @@ mod tests {
     #[tokio::test]
     async fn test_concurrent_authentication() {
         let mut auth = AuthManager::new();
-        
-        let user_id = auth.create_user("testuser".to_string(), "Password123!".to_string()).await
+
+        let user_id = auth
+            .create_user("testuser".to_string(), "Password123!".to_string())
+            .await
             .expect("Failed to create test user");
-        
+
         // Create multiple concurrent authentication requests
         let mut handles = Vec::new();
-        
+
         for i in 0..5 {
             let mut auth_clone = auth.clone();
             let handle = tokio::spawn(async move {
@@ -2894,15 +3222,15 @@ mod tests {
                     mfa_data: None,
                     risk_context: None,
                 };
-                
+
                 auth_clone.authenticate(login_request).await
             });
             handles.push(handle);
         }
-        
+
         // Wait for all authentications to complete
         let results = join_all(handles).await;
-        
+
         // All should succeed
         for result in results {
             let response = result.expect("Authentication task panicked");
@@ -2915,10 +3243,12 @@ mod tests {
     #[tokio::test]
     async fn test_security_measures_application() {
         let mut auth = AuthManager::new();
-        
-        let _user_id = auth.create_user("testuser".to_string(), "Password123!".to_string()).await
+
+        let _user_id = auth
+            .create_user("testuser".to_string(), "Password123!".to_string())
+            .await
             .expect("Failed to create test user");
-        
+
         // Create high-risk context
         let risk_context = Some(RiskContext {
             ip_address: Some(" suspicious_ip".to_string()),
@@ -2942,7 +3272,7 @@ mod tests {
             }),
             device_info: None,
         });
-        
+
         let login_request = LoginRequest {
             username: "testuser".to_string(),
             password: "Password123!".to_string(),
@@ -2952,10 +3282,12 @@ mod tests {
             mfa_data: None,
             risk_context,
         };
-        
-        let response = auth.authenticate(login_request).await
+
+        let response = auth
+            .authenticate(login_request)
+            .await
             .expect("Failed to authenticate with high risk");
-        
+
         // Should have security measures applied
         assert!(!response.security_measures.is_empty());
         assert!(response.risk_assessment.is_some());

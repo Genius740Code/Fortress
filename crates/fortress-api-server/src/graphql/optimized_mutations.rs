@@ -3,20 +3,16 @@
 //! Implements high-performance mutations with batch processing, async operations,
 //! and efficient resource management for scalability.
 
-use crate::graphql::{
-    context::from_context,
-    types::*,
-    cache::GraphQLCacheManager,
-};
-use async_graphql::{Result, Context};
+use crate::graphql::{cache::GraphQLCacheManager, context::from_context, types::*};
+use async_graphql::{Context, Result};
 use chrono::Utc;
-use std::sync::Arc;
-use futures::stream::{self, StreamExt};
-use serde_json;
-use uuid::Uuid;
-use tokio::time::Instant;
 use fortress_core::storage::StorageBackend;
 use fortress_core::KeyManager;
+use futures::stream::{self, StreamExt};
+use serde_json;
+use std::sync::Arc;
+use tokio::time::Instant;
+use uuid::Uuid;
 
 /// Optimized GraphQL mutation root with performance enhancements
 pub struct OptimizedMutation {
@@ -36,14 +32,14 @@ impl OptimizedMutation {
         records: Vec<(String, serde_json::Value)>,
     ) -> Result<Vec<DataRecord>> {
         let start_time = Instant::now();
-        
+
         // Process records in parallel with controlled concurrency
         let batch_size = 50; // Process 50 records at a time
         let results = stream::iter(records)
             .chunks(batch_size)
             .map(|batch| async move {
                 let mut batch_results = Vec::new();
-                
+
                 for (record_id, record_data) in batch {
                     let record_metadata = serde_json::json!({
                         "id": record_id,
@@ -51,10 +47,13 @@ impl OptimizedMutation {
                         "created_at": Utc::now().to_rfc3339(),
                         "updated_at": Utc::now().to_rfc3339(),
                     });
-                    
+
                     let record_key = format!("{}:record:{}", table_key, record_id);
-                    
-                    match storage.put(&record_key, &serde_json::to_vec(&record_metadata).unwrap()).await {
+
+                    match storage
+                        .put(&record_key, &serde_json::to_vec(&record_metadata).unwrap())
+                        .await
+                    {
                         Ok(_) => {
                             let record = DataRecord {
                                 id: record_id,
@@ -71,7 +70,7 @@ impl OptimizedMutation {
                         }
                     }
                 }
-                
+
                 batch_results
             })
             .buffer_unordered(4) // Process up to 4 batches concurrently
@@ -96,25 +95,32 @@ impl OptimizedMutation {
         updates: Vec<(String, serde_json::Value)>,
     ) -> Result<Vec<DataRecord>> {
         let start_time = Instant::now();
-        
+
         let results = stream::iter(updates)
             .map(|(record_id, update_data)| async move {
                 let record_key = format!("record:{}", record_id);
-                
+
                 // Get existing record to preserve created_at
                 match storage.get(&record_key).await {
                     Ok(Some(existing_data)) => {
-                        if let Ok(mut record_info) = serde_json::from_slice::<serde_json::Value>(&existing_data) {
-                            let original_created_at = record_info.get("created_at")
+                        if let Ok(mut record_info) =
+                            serde_json::from_slice::<serde_json::Value>(&existing_data)
+                        {
+                            let original_created_at = record_info
+                                .get("created_at")
                                 .and_then(|v| v.as_str())
                                 .and_then(|s| s.parse().ok())
                                 .unwrap_or_else(|| Utc::now());
-                            
+
                             // Update record
                             record_info["data"] = update_data;
-                            record_info["updated_at"] = serde_json::Value::String(Utc::now().to_rfc3339());
-                            
-                            match storage.put(&record_key, &serde_json::to_vec(&record_info).unwrap()).await {
+                            record_info["updated_at"] =
+                                serde_json::Value::String(Utc::now().to_rfc3339());
+
+                            match storage
+                                .put(&record_key, &serde_json::to_vec(&record_info).unwrap())
+                                .await
+                            {
                                 Ok(_) => {
                                     let record = DataRecord {
                                         id: record_id,
@@ -156,45 +162,50 @@ impl OptimizedMutation {
     async fn invalidate_cache(&self, database: &str, table: Option<&str>) {
         // Invalidate database cache
         self.cache_manager.database_cache.clear().await;
-        
+
         // Invalidate table cache if specified
         if let Some(table_name) = table {
             let _table_key = self.cache_manager.table_key(database, table_name);
             self.cache_manager.table_cache.clear().await;
         }
-        
+
         // Invalidate query cache for affected resources
         self.cache_manager.query_cache.clear().await;
-        
-        tracing::debug!("Invalidated cache for database: {}, table: {:?}", database, table);
+
+        tracing::debug!(
+            "Invalidated cache for database: {}, table: {:?}",
+            database,
+            table
+        );
     }
 }
 
 impl OptimizedMutation {
     /// Optimized bulk insert with parallel processing
     pub async fn bulk_insert_optimized(
-        &self, 
-        ctx: &Context<'_>, 
-        database: String, 
-        table: String, 
-        data: Vec<async_graphql::Json<serde_json::Value>>
+        &self,
+        ctx: &Context<'_>,
+        database: String,
+        table: String,
+        data: Vec<async_graphql::Json<serde_json::Value>>,
     ) -> Result<ApiResponse<Vec<DataRecord>>> {
         let graphql_ctx = from_context(ctx)?;
-        
+
         // Check permissions
         graphql_ctx.require_any_role(&["admin", "database_admin", "bulk_writer"])?;
 
         let storage = &graphql_ctx.app_state.storage;
-        
+
         // Check if table exists (with caching)
         let table_key = format!("db:{}:table:{}", database, table);
         let cache_key = self.cache_manager.table_key(&database, &table);
-        
+
         let table_exists = if let Some(_) = self.cache_manager.table_cache.get(&cache_key).await {
             true // Cache hit means table exists
         } else {
-            storage.exists(&table_key).await
-                .map_err(|e| async_graphql::Error::new(format!("Failed to check table existence: {}", e)))?
+            storage.exists(&table_key).await.map_err(|e| {
+                async_graphql::Error::new(format!("Failed to check table existence: {}", e))
+            })?
         };
 
         if !table_exists {
@@ -207,7 +218,7 @@ impl OptimizedMutation {
         }
 
         let start_time = Instant::now();
-        
+
         // Prepare records for batch insertion
         let records: Vec<(String, serde_json::Value)> = data
             .into_iter()
@@ -219,20 +230,30 @@ impl OptimizedMutation {
             .collect();
 
         // Batch insert records
-        let inserted_records = self.batch_insert_records(storage, &table_key, records).await?;
+        let inserted_records = self
+            .batch_insert_records(storage, &table_key, records)
+            .await?;
 
         // Update table record count efficiently
-        if let Some(table_data) = storage.get(&table_key).await.map_err(|e| async_graphql::Error::new(format!("Failed to get table data: {}", e)))? {
+        if let Some(table_data) = storage
+            .get(&table_key)
+            .await
+            .map_err(|e| async_graphql::Error::new(format!("Failed to get table data: {}", e)))?
+        {
             if let Ok(mut table_info) = serde_json::from_slice::<serde_json::Value>(&table_data) {
                 if let Some(record_count) = table_info.get_mut("record_count") {
                     *record_count = serde_json::Value::Number(serde_json::Number::from(
-                        record_count.as_u64().unwrap_or(0) + inserted_records.len() as u64
+                        record_count.as_u64().unwrap_or(0) + inserted_records.len() as u64,
                     ));
-                    
+
                     table_info["updated_at"] = serde_json::Value::String(Utc::now().to_rfc3339());
-                    
-                    storage.put(&table_key, &serde_json::to_vec(&table_info).unwrap()).await
-                        .map_err(|e| async_graphql::Error::new(format!("Failed to update table: {}", e)))?;
+
+                    storage
+                        .put(&table_key, &serde_json::to_vec(&table_info).unwrap())
+                        .await
+                        .map_err(|e| {
+                            async_graphql::Error::new(format!("Failed to update table: {}", e))
+                        })?;
                 }
             }
         }
@@ -261,14 +282,14 @@ impl OptimizedMutation {
         updates: Vec<async_graphql::Json<serde_json::Value>>,
     ) -> Result<ApiResponse<Vec<DataRecord>>> {
         let graphql_ctx = from_context(ctx)?;
-        
+
         // Check permissions
         graphql_ctx.require_any_role(&["admin", "database_admin", "data_writer"])?;
 
         let storage = &graphql_ctx.app_state.storage;
-        
+
         let start_time = Instant::now();
-        
+
         // Prepare updates
         let prepared_updates: Vec<(String, serde_json::Value)> = updates
             .into_iter()
@@ -309,14 +330,14 @@ impl OptimizedMutation {
         record_ids: Vec<String>,
     ) -> Result<ApiResponse<i32>> {
         let graphql_ctx = from_context(ctx)?;
-        
+
         // Check permissions
         graphql_ctx.require_any_role(&["admin", "database_admin", "data_deleter"])?;
 
         let storage = &graphql_ctx.app_state.storage;
-        
+
         let start_time = Instant::now();
-        
+
         // Batch delete records
         let db_name = database.clone();
         let table_name = table.clone();
@@ -326,8 +347,9 @@ impl OptimizedMutation {
                 let db_clone = db_name.clone();
                 let table_clone = table_name.clone();
                 async move {
-                    let record_key = format!("db:{}:table:{}:record:{}", db_clone, table_clone, record_id);
-                    
+                    let record_key =
+                        format!("db:{}:table:{}:record:{}", db_clone, table_clone, record_id);
+
                     match storage_clone.delete(&record_key).await {
                         Ok(_) => Some(1),
                         Err(e) => {
@@ -346,18 +368,26 @@ impl OptimizedMutation {
 
         // Update table record count
         let table_key = format!("db:{}:table:{}", database, table);
-        if let Some(table_data) = storage.get(&table_key).await.map_err(|e| async_graphql::Error::new(format!("Failed to get table data: {}", e)))? {
+        if let Some(table_data) = storage
+            .get(&table_key)
+            .await
+            .map_err(|e| async_graphql::Error::new(format!("Failed to get table data: {}", e)))?
+        {
             if let Ok(mut table_info) = serde_json::from_slice::<serde_json::Value>(&table_data) {
                 if let Some(record_count) = table_info.get_mut("record_count") {
                     let current_count = record_count.as_u64().unwrap_or(0);
                     *record_count = serde_json::Value::Number(serde_json::Number::from(
-                        current_count.saturating_sub(deleted_count as u64)
+                        current_count.saturating_sub(deleted_count as u64),
                     ));
-                    
+
                     table_info["updated_at"] = serde_json::Value::String(Utc::now().to_rfc3339());
-                    
-                    storage.put(&table_key, &serde_json::to_vec(&table_info).unwrap()).await
-                        .map_err(|e| async_graphql::Error::new(format!("Failed to update table: {}", e)))?;
+
+                    storage
+                        .put(&table_key, &serde_json::to_vec(&table_info).unwrap())
+                        .await
+                        .map_err(|e| {
+                            async_graphql::Error::new(format!("Failed to update table: {}", e))
+                        })?;
                 }
             }
         }
@@ -386,37 +416,44 @@ impl OptimizedMutation {
         input: CreateDatabaseInput,
     ) -> Result<ApiResponse<Database>> {
         let graphql_ctx = from_context(ctx)?;
-        
+
         // Check permissions
         graphql_ctx.require_role("admin")?;
 
         let storage = &graphql_ctx.app_state.storage;
         let key_manager = &graphql_ctx.app_state.key_manager;
-        
+
         let start_time = Instant::now();
-        
+
         // Generate database ID and algorithm
         let db_id = Uuid::new_v4();
-        let algorithm = input.encryption_algorithm.unwrap_or(crate::graphql::types::EncryptionAlgorithm::Aegis256);
-        
+        let algorithm = input
+            .encryption_algorithm
+            .unwrap_or(crate::graphql::types::EncryptionAlgorithm::Aegis256);
+
         // Convert to core algorithm
-        let core_algorithm: Box<dyn fortress_core::encryption::EncryptionAlgorithm> = match algorithm {
-            crate::graphql::types::EncryptionAlgorithm::Aegis256 => {
-                Box::new(fortress_core::encryption::Aegis256::new())
-            },
-            crate::graphql::types::EncryptionAlgorithm::Aes256Gcm => {
-                Box::new(fortress_core::encryption::Aes256Ctr::new())
-            },
-            crate::graphql::types::EncryptionAlgorithm::ChaCha20Poly1305 => {
-                Box::new(fortress_core::encryption::ChaCha20Poly1305::new())
-            },
-            _ => Box::new(fortress_core::encryption::Aegis256::new()),
-        };
-        
+        let core_algorithm: Box<dyn fortress_core::encryption::EncryptionAlgorithm> =
+            match algorithm {
+                crate::graphql::types::EncryptionAlgorithm::Aegis256 => {
+                    Box::new(fortress_core::encryption::Aegis256::new())
+                }
+                crate::graphql::types::EncryptionAlgorithm::Aes256Gcm => {
+                    Box::new(fortress_core::encryption::Aes256Ctr::new())
+                }
+                crate::graphql::types::EncryptionAlgorithm::ChaCha20Poly1305 => {
+                    Box::new(fortress_core::encryption::ChaCha20Poly1305::new())
+                }
+                _ => Box::new(fortress_core::encryption::Aegis256::new()),
+            };
+
         // Generate encryption key
-        let encryption_key = key_manager.generate_key(core_algorithm.as_ref()).await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to generate encryption key: {}", e)))?;
-        
+        let encryption_key = key_manager
+            .generate_key(core_algorithm.as_ref())
+            .await
+            .map_err(|e| {
+                async_graphql::Error::new(format!("Failed to generate encryption key: {}", e))
+            })?;
+
         // Create database metadata
         let db_metadata = serde_json::json!({
             "id": db_id.to_string(),
@@ -436,12 +473,17 @@ impl OptimizedMutation {
             "storage_size_bytes": 0,
             "key_id": hex::encode(encryption_key.as_bytes()),
         });
-        
+
         // Store database metadata
         let db_key = format!("db:{}", input.name);
-        storage.put(&db_key, &serde_json::to_vec(&db_metadata).unwrap_or_default()).await
+        storage
+            .put(
+                &db_key,
+                &serde_json::to_vec(&db_metadata).unwrap_or_default(),
+            )
+            .await
             .map_err(|e| async_graphql::Error::new(format!("Failed to create database: {}", e)))?;
-        
+
         let database = Database {
             id: db_id.to_string(),
             name: input.name.clone(),

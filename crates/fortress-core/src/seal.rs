@@ -5,10 +5,13 @@
 //! to split the master key into multiple shares, requiring a threshold number
 //! of shares to reconstruct the key and unseal the vault.
 
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
-use tokio::sync::RwLock;
 use chrono::{DateTime, Utc};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
+use tokio::sync::RwLock;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::error::{FortressError, Result, SealErrorCode};
@@ -94,12 +97,10 @@ pub struct MasterKey {
 impl MasterKey {
     /// Generate a new master key
     pub fn generate() -> Result<Self> {
-        
-        
         let mut key = [0u8; 32];
         let random_data = crate::trng::random_bytes(32)?;
-key.copy_from_slice(&random_data);
-        
+        key.copy_from_slice(&random_data);
+
         Ok(Self {
             key,
             created_at: Utc::now(),
@@ -150,7 +151,7 @@ impl SealManager {
     /// Create a new seal manager with custom configuration
     pub fn with_config(config: SealConfig) -> Self {
         let sealed_atomic = Arc::new(AtomicBool::new(true));
-        
+
         Self {
             master_key: None,
             key_shares: Vec::new(),
@@ -177,14 +178,15 @@ impl SealManager {
 
         // Generate master key
         let master_key = MasterKey::generate()?;
-        
+
         // Split master key using Shamir's Secret Sharing
-        let shares = self.split_secret(&master_key.key, self.config.threshold, self.config.shares)?;
-        
+        let shares =
+            self.split_secret(&master_key.key, self.config.threshold, self.config.shares)?;
+
         // Store master key and shares
         self.master_key = Some(master_key);
         self.key_shares = shares.clone();
-        
+
         // Update seal state
         {
             let mut state = self.seal_state.write().await;
@@ -192,9 +194,9 @@ impl SealManager {
             state.last_operation = Utc::now();
             state.failed_attempts = 0;
         }
-        
+
         self.sealed_atomic.store(false, Ordering::SeqCst);
-        
+
         // Generate recovery keys if enabled
         if self.config.recovery_keys_enabled {
             self.generate_recovery_keys().await?;
@@ -241,8 +243,11 @@ impl SealManager {
 
         if provided_shares.len() < self.config.threshold {
             return Err(FortressError::seal_with_code(
-                format!("Insufficient shares: need {}, got {}", 
-                    self.config.threshold, provided_shares.len()),
+                format!(
+                    "Insufficient shares: need {}, got {}",
+                    self.config.threshold,
+                    provided_shares.len()
+                ),
                 SealErrorCode::InsufficientShares,
             ));
         }
@@ -316,19 +321,27 @@ impl SealManager {
         })?;
 
         for share in shares {
-            if share.threshold != first_share.threshold || 
-               share.total_shares != first_share.total_shares {
+            if share.threshold != first_share.threshold
+                || share.total_shares != first_share.total_shares
+            {
                 return Ok(false);
             }
         }
 
         // Try reconstruction (this is a simplified check)
         // In production, you'd use proper Shamir validation
-        self.reconstruct_secret(shares).map(|_| true).or_else(|_| Ok(false))
+        self.reconstruct_secret(shares)
+            .map(|_| true)
+            .or_else(|_| Ok(false))
     }
 
     /// Split a secret using Shamir's Secret Sharing
-    fn split_secret(&self, secret: &[u8], threshold: usize, shares: usize) -> Result<Vec<SecretShare>> {
+    fn split_secret(
+        &self,
+        secret: &[u8],
+        threshold: usize,
+        shares: usize,
+    ) -> Result<Vec<SecretShare>> {
         if secret.len() != 32 {
             return Err(FortressError::seal_with_code(
                 "Secret must be 32 bytes",
@@ -349,7 +362,7 @@ impl SealManager {
         // In production, use a proper cryptographic library
         for i in 1..=shares {
             let mut share_data = Vec::new();
-            
+
             // For each byte in the secret, create a share
             for (j, &byte) in secret.iter().enumerate() {
                 // Simple XOR-based sharing (NOT SECURE - use proper SSS in production)
@@ -385,7 +398,7 @@ impl SealManager {
         // Simplified reconstruction (NOT SECURE - use proper SSS in production)
         for i in 0..32 {
             let mut sum = 0u16;
-            
+
             for share in shares {
                 if i < share.share.len() {
                     sum += share.share[i] as u16;
@@ -403,12 +416,12 @@ impl SealManager {
     /// Generate recovery keys for emergency access
     async fn generate_recovery_keys(&self) -> Result<()> {
         let mut recovery_keys = self.recovery_keys.write().await;
-        
+
         // Generate 3 recovery keys
         for _ in 0..3 {
             let mut key = [0u8; 32];
             let random_data = crate::trng::random_bytes(32)?;
-key.copy_from_slice(&random_data);
+            key.copy_from_slice(&random_data);
             recovery_keys.push(key);
         }
 
@@ -438,16 +451,20 @@ key.copy_from_slice(&random_data);
 
         // Generate new master key
         let new_master_key = MasterKey::generate()?;
-        
+
         // Split new master key
-        let new_shares = self.split_secret(&new_master_key.key, self.config.threshold, self.config.shares)?;
-        
+        let new_shares = self.split_secret(
+            &new_master_key.key,
+            self.config.threshold,
+            self.config.shares,
+        )?;
+
         // Replace old master key and shares
         if let Some(mut old_key) = self.master_key.take() {
             use zeroize::Zeroize;
-old_key.zeroize();
+            old_key.zeroize();
         }
-        
+
         self.master_key = Some(new_master_key);
         self.key_shares = new_shares.clone();
 
@@ -484,24 +501,24 @@ mod tests {
     #[tokio::test]
     async fn test_seal_unseal_workflow() {
         let mut seal_manager = SealManager::new();
-        
+
         // Initially sealed
         assert!(seal_manager.is_sealed());
-        
+
         // Initialize and get shares
         let shares = seal_manager.initialize().await.unwrap();
         assert!(!seal_manager.is_sealed());
         assert_eq!(shares.len(), 5); // Default configuration
-        
+
         // Seal the vault
         seal_manager.seal().await.unwrap();
         assert!(seal_manager.is_sealed());
-        
+
         // Try to unseal with insufficient shares
         let insufficient_shares = &shares[..2];
         assert!(seal_manager.unseal(insufficient_shares).await.is_err());
         assert!(seal_manager.is_sealed());
-        
+
         // Unseal with sufficient shares
         let sufficient_shares = &shares[..3];
         seal_manager.unseal(sufficient_shares).await.unwrap();
@@ -516,18 +533,18 @@ mod tests {
             auto_seal_timeout: None,
             recovery_keys_enabled: false,
         };
-        
+
         let mut seal_manager = SealManager::with_config(config);
         let shares = seal_manager.initialize().await.unwrap();
-        
+
         assert_eq!(shares.len(), 7);
         assert_eq!(shares[0].threshold, 4);
-        
+
         // Should need 4 shares to unseal
         seal_manager.seal().await.unwrap();
         let insufficient_shares = &shares[..3];
         assert!(seal_manager.unseal(insufficient_shares).await.is_err());
-        
+
         let sufficient_shares = &shares[..4];
         seal_manager.unseal(sufficient_shares).await.unwrap();
     }
@@ -535,10 +552,10 @@ mod tests {
     #[tokio::test]
     async fn test_share_validation() {
         let _seal_manager = SealManager::new();
-        
+
         let valid_share = SecretShare::new(1, vec![1, 2, 3, 4], 3, 5);
         assert!(valid_share.is_valid());
-        
+
         let invalid_share = SecretShare::new(0, vec![], 3, 5);
         assert!(!invalid_share.is_valid());
     }
@@ -547,10 +564,10 @@ mod tests {
     async fn test_master_key_rotation() {
         let mut seal_manager = SealManager::new();
         let initial_shares = seal_manager.initialize().await.unwrap();
-        
+
         // Rotate master key
         let new_shares = seal_manager.rotate_master_key().await.unwrap();
-        
+
         // Should have different shares
         assert_ne!(initial_shares.len(), new_shares.len());
         assert!(!seal_manager.is_sealed());
@@ -560,15 +577,15 @@ mod tests {
     async fn test_recovery_keys() {
         let mut seal_manager = SealManager::new();
         let _shares = seal_manager.initialize().await.unwrap();
-        
+
         // Seal first
         seal_manager.seal().await.unwrap();
         assert!(seal_manager.is_sealed());
-        
+
         // Get recovery keys
         let recovery_keys = seal_manager.get_recovery_keys().await.unwrap();
         assert_eq!(recovery_keys.len(), 3);
-        
+
         // Should not be able to get recovery keys when unsealed
         seal_manager.unseal(&_shares[..3]).await.unwrap();
         assert!(seal_manager.get_recovery_keys().await.is_err());

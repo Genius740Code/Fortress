@@ -3,14 +3,14 @@
 //! This module provides MongoDB integration for key storage and general data operations,
 //! with support for push/pull operations and optimized performance.
 
-use crate::error::{FortressError, Result, KeyErrorCode, StorageErrorCode};
+use crate::error::{FortressError, KeyErrorCode, Result, StorageErrorCode};
 use crate::key::{KeyId, KeyMetadata, SecureKey};
 use crate::storage::StorageBackend;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use sha2::Digest;
+use std::collections::HashMap;
 
 /// MongoDB configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -64,13 +64,13 @@ pub enum MongoWriteConcern {
     /// Require acknowledgment from majority of replica set
     Majority,
     /// Custom write concern settings
-    Custom { 
+    Custom {
         /// Write replication factor
-        w: i32, 
+        w: i32,
         /// Journal write requirement
-        j: bool, 
+        j: bool,
         /// Write timeout in milliseconds
-        wtimeout: Option<i32> 
+        wtimeout: Option<i32>,
     },
 }
 
@@ -132,7 +132,7 @@ impl MongoKeyDatabase {
     pub async fn new(config: MongoConfig) -> Result<Self> {
         // In a real implementation, this would establish MongoDB connection
         // For now, we'll create an in-memory simulation
-        
+
         Ok(Self {
             config,
             keys_data: std::sync::Arc::new(tokio::sync::RwLock::new(HashMap::new())),
@@ -147,14 +147,20 @@ impl MongoKeyDatabase {
         // 2. Create indexes for performance
         // 3. Set up TTL indexes for expiration
         // 4. Validate connection
-        
-        tracing::info!("Initializing MongoDB database with collections: {}, {}", 
-                     self.config.keys_collection, self.config.data_collection);
-        
+
+        tracing::info!(
+            "Initializing MongoDB database with collections: {}, {}",
+            self.config.keys_collection,
+            self.config.data_collection
+        );
+
         // Simulate index creation
         let keys = self.keys_data.read().await;
-        tracing::info!("MongoDB keys collection initialized with {} entries", keys.len());
-        
+        tracing::info!(
+            "MongoDB keys collection initialized with {} entries",
+            keys.len()
+        );
+
         Ok(())
     }
 
@@ -165,16 +171,19 @@ impl MongoKeyDatabase {
         // - Index on key_id for fast lookups
         // - Index on tags for metadata queries
         // - TTL index on expires_at for automatic cleanup
-        
+
         tracing::info!("Creating MongoDB indexes for optimal performance");
         Ok(())
     }
 
     /// Push data to MongoDB with bulk operations
-    pub async fn push_bulk(&self, entries: Vec<(String, Vec<u8>, HashMap<String, String>)>) -> Result<u64> {
+    pub async fn push_bulk(
+        &self,
+        entries: Vec<(String, Vec<u8>, HashMap<String, String>)>,
+    ) -> Result<u64> {
         let mut data_storage = self.data_storage.write().await;
         let mut count = 0;
-        
+
         for (key, data, metadata) in entries {
             let entry = MongoDataEntry {
                 _id: key.clone(),
@@ -186,11 +195,11 @@ impl MongoKeyDatabase {
                 size_bytes: data.len() as i64,
                 metadata,
             };
-            
+
             data_storage.insert(key, entry);
             count += 1;
         }
-        
+
         tracing::info!("Pushed {} entries to MongoDB", count);
         Ok(count)
     }
@@ -199,7 +208,7 @@ impl MongoKeyDatabase {
     pub async fn pull_filtered(&self, filter: MongoPullFilter) -> Result<Vec<(String, Vec<u8>)>> {
         let data_storage = self.data_storage.read().await;
         let mut results = Vec::new();
-        
+
         for (key, entry) in data_storage.iter() {
             let matches = match &filter {
                 MongoPullFilter::All => true,
@@ -210,17 +219,22 @@ impl MongoKeyDatabase {
                 MongoPullFilter::SizeRange { min_size, max_size } => {
                     entry.size_bytes >= *min_size && entry.size_bytes <= *max_size
                 }
-                MongoPullFilter::Metadata { key: meta_key, value } => {
-                    entry.metadata.get(meta_key).map_or(false, |v| v == value)
-                }
+                MongoPullFilter::Metadata {
+                    key: meta_key,
+                    value,
+                } => entry.metadata.get(meta_key).map_or(false, |v| v == value),
             };
-            
+
             if matches {
                 results.push((key.clone(), entry.data.clone()));
             }
         }
-        
-        tracing::info!("Pulled {} entries from MongoDB with filter {:?}", results.len(), filter);
+
+        tracing::info!(
+            "Pulled {} entries from MongoDB with filter {:?}",
+            results.len(),
+            filter
+        );
         Ok(results)
     }
 
@@ -228,22 +242,23 @@ impl MongoKeyDatabase {
     pub async fn aggregate(&self, pipeline: MongoPipeline) -> Result<Vec<MongoAggregationResult>> {
         let _keys = self.keys_data.read().await;
         let data = self.data_storage.read().await;
-        
+
         // Simulate aggregation - in real implementation this would use MongoDB's aggregation framework
         let mut results = Vec::new();
-        
+
         match pipeline.operation.as_str() {
             "count_by_type" => {
                 let mut type_counts: HashMap<String, i64> = HashMap::new();
                 for entry in data.values() {
                     *type_counts.entry(entry.content_type.clone()).or_insert(0) += 1;
                 }
-                
+
                 for (content_type, count) in type_counts {
                     results.push(MongoAggregationResult {
                         _id: content_type.clone(),
                         count,
-                        total_size: data.values()
+                        total_size: data
+                            .values()
                             .filter(|e| e.content_type == content_type)
                             .map(|e| e.size_bytes)
                             .sum(),
@@ -253,13 +268,17 @@ impl MongoKeyDatabase {
             "size_distribution" => {
                 let mut size_buckets = HashMap::new();
                 for entry in data.values() {
-                    let bucket = if entry.size_bytes < 1024 { "small".to_string() }
-                        else if entry.size_bytes < 1024 * 1024 { "medium".to_string() }
-                        else { "large".to_string() };
-                    
+                    let bucket = if entry.size_bytes < 1024 {
+                        "small".to_string()
+                    } else if entry.size_bytes < 1024 * 1024 {
+                        "medium".to_string()
+                    } else {
+                        "large".to_string()
+                    };
+
                     *size_buckets.entry(bucket).or_insert(0) += 1;
                 }
-                
+
                 for (bucket, count) in size_buckets {
                     results.push(MongoAggregationResult {
                         _id: bucket,
@@ -276,27 +295,33 @@ impl MongoKeyDatabase {
                 ));
             }
         }
-        
+
         Ok(results)
     }
 
     /// Perform text search on data metadata
-    pub async fn text_search(&self, query: &str, limit: Option<i32>) -> Result<Vec<MongoSearchResult>> {
+    pub async fn text_search(
+        &self,
+        query: &str,
+        limit: Option<i32>,
+    ) -> Result<Vec<MongoSearchResult>> {
         let data_storage = self.data_storage.read().await;
         let mut results = Vec::new();
-        
+
         let limit = limit.unwrap_or(10) as usize;
         let query_lower = query.to_lowercase();
-        
+
         for (key, entry) in data_storage.iter() {
             // Simple text search simulation - in real MongoDB this would use text indexes
-            let metadata_text = entry.metadata.values()
+            let metadata_text = entry
+                .metadata
+                .values()
                 .cloned()
                 .chain(std::iter::once(entry.content_type.clone()))
                 .collect::<Vec<_>>()
                 .join(" ")
                 .to_lowercase();
-            
+
             if metadata_text.contains(&query_lower) {
                 results.push(MongoSearchResult {
                     key: key.clone(),
@@ -304,22 +329,27 @@ impl MongoKeyDatabase {
                     snippet: entry.content_type.clone(),
                     metadata: entry.metadata.clone(),
                 });
-                
+
                 if results.len() >= limit {
                     break;
                 }
             }
         }
-        
+
         Ok(results)
     }
 }
 
 #[async_trait]
 impl crate::key_database::KeyDatabase for MongoKeyDatabase {
-    async fn store_key(&self, key_id: &KeyId, key: &SecureKey, metadata: &KeyMetadata) -> Result<()> {
+    async fn store_key(
+        &self,
+        key_id: &KeyId,
+        key: &SecureKey,
+        metadata: &KeyMetadata,
+    ) -> Result<()> {
         let mut keys_data = self.keys_data.write().await;
-        
+
         let entry = MongoKeyEntry {
             _id: key_id.clone(),
             key_data: key.to_vec(),
@@ -330,19 +360,19 @@ impl crate::key_database::KeyDatabase for MongoKeyDatabase {
             version: metadata.version as i32,
             tags: HashMap::new(), // Could be populated from metadata
         };
-        
+
         keys_data.insert(key_id.clone(), entry);
-        
+
         tracing::debug!("Stored key {} in MongoDB", key_id);
         Ok(())
     }
 
     async fn retrieve_key(&self, key_id: &KeyId) -> Result<Option<(SecureKey, KeyMetadata)>> {
         let keys_data = self.keys_data.read().await;
-        
+
         if let Some(entry) = keys_data.get(key_id) {
             let key = SecureKey::from_bytes(&entry.key_data);
-            
+
             Ok(Some((key, entry.metadata.clone())))
         } else {
             Ok(None)
@@ -351,7 +381,7 @@ impl crate::key_database::KeyDatabase for MongoKeyDatabase {
 
     async fn delete_key(&self, key_id: &KeyId) -> Result<()> {
         let mut keys_data = self.keys_data.write().await;
-        
+
         if keys_data.remove(key_id).is_none() {
             return Err(FortressError::key_management(
                 format!("Key not found: {}", key_id),
@@ -359,48 +389,57 @@ impl crate::key_database::KeyDatabase for MongoKeyDatabase {
                 KeyErrorCode::KeyNotFound,
             ));
         }
-        
+
         tracing::debug!("Deleted key {} from MongoDB", key_id);
         Ok(())
     }
 
-    async fn list_keys(&self, _limit: Option<u32>, _offset: Option<u32>) -> Result<Vec<(KeyId, KeyMetadata)>> {
+    async fn list_keys(
+        &self,
+        _limit: Option<u32>,
+        _offset: Option<u32>,
+    ) -> Result<Vec<(KeyId, KeyMetadata)>> {
         let keys_data = self.keys_data.read().await;
-        
+
         let mut keys = Vec::new();
         for (key_id, entry) in keys_data.iter() {
             if entry.expires_at > Utc::now() {
                 keys.push((key_id.clone(), entry.metadata.clone()));
             }
         }
-        
+
         keys.sort_by(|a, b| a.1.created_at.cmp(&b.1.created_at));
         Ok(keys)
     }
 
     async fn key_exists(&self, key_id: &KeyId) -> Result<bool> {
         let keys_data = self.keys_data.read().await;
-        Ok(keys_data.contains_key(key_id) && 
-            keys_data.get(key_id).map_or(false, |e| e.expires_at > Utc::now()))
+        Ok(keys_data.contains_key(key_id)
+            && keys_data
+                .get(key_id)
+                .map_or(false, |e| e.expires_at > Utc::now()))
     }
 
     async fn get_key_metadata(&self, key_id: &KeyId) -> Result<Option<KeyMetadata>> {
         let keys_data = self.keys_data.read().await;
-        Ok(keys_data.get(key_id).filter(|e| e.expires_at > Utc::now()).map(|e| e.metadata.clone()))
+        Ok(keys_data
+            .get(key_id)
+            .filter(|e| e.expires_at > Utc::now())
+            .map(|e| e.metadata.clone()))
     }
 
     async fn preload_keys(&self) -> Result<Vec<(KeyId, SecureKey, KeyMetadata)>> {
         let keys_data = self.keys_data.read().await;
         let mut keys = Vec::new();
-        
+
         for (key_id, entry) in keys_data.iter() {
             if entry.expires_at > Utc::now() {
                 let key = SecureKey::from_bytes(&entry.key_data);
-                
+
                 keys.push((key_id.clone(), key, entry.metadata.clone()));
             }
         }
-        
+
         tracing::info!("Preloaded {} keys from MongoDB", keys.len());
         Ok(keys)
     }
@@ -408,23 +447,26 @@ impl crate::key_database::KeyDatabase for MongoKeyDatabase {
     async fn get_stats(&self) -> Result<crate::key_database::KeyDatabaseStats> {
         let keys_data = self.keys_data.read().await;
         let data_storage = self.data_storage.read().await;
-        
-        let total_keys = keys_data.values()
+
+        let total_keys = keys_data
+            .values()
             .filter(|e| e.expires_at > Utc::now())
             .count() as u64;
-        
-        let database_size_bytes = keys_data.values()
+
+        let database_size_bytes = keys_data
+            .values()
             .map(|e| e.key_data.len() as i64)
-            .sum::<i64>() as u64 +
-            data_storage.values()
-            .map(|e| e.data.len() as i64)
-            .sum::<i64>() as u64;
-        
+            .sum::<i64>() as u64
+            + data_storage
+                .values()
+                .map(|e| e.data.len() as i64)
+                .sum::<i64>() as u64;
+
         Ok(crate::key_database::KeyDatabaseStats {
             total_keys,
             database_size_bytes,
             active_connections: self.config.max_pool_size,
-            avg_query_time_ms: 0.0, // Would need to implement query timing
+            avg_query_time_ms: 0.0,   // Would need to implement query timing
             last_rotation_time: None, // Would need to track rotation times
         })
     }
@@ -438,7 +480,7 @@ impl crate::key_database::KeyDatabase for MongoKeyDatabase {
         // For simulation, we'll just check if we can access the data
         let _keys = self.keys_data.read().await;
         let _data = self.data_storage.read().await;
-        
+
         tracing::debug!("MongoDB health check passed");
         Ok(true)
     }
@@ -452,25 +494,25 @@ pub enum MongoPullFilter {
     /// Pull documents with key prefix
     Prefix(String),
     /// Pull documents within date range
-    DateRange { 
+    DateRange {
         /// Start date (inclusive)
-        start: DateTime<Utc>, 
+        start: DateTime<Utc>,
         /// End date (inclusive)
-        end: DateTime<Utc> 
+        end: DateTime<Utc>,
     },
     /// Pull documents within size range
-    SizeRange { 
+    SizeRange {
         /// Minimum size in bytes
-        min_size: i64, 
+        min_size: i64,
         /// Maximum size in bytes
-        max_size: i64 
+        max_size: i64,
     },
     /// Pull documents matching metadata key-value pair
-    Metadata { 
+    Metadata {
         /// Metadata key
-        key: String, 
+        key: String,
         /// Metadata value
-        value: String 
+        value: String,
     },
 }
 
@@ -516,10 +558,10 @@ pub struct MongoStorage {
 
 impl MongoStorage {
     /// Create a new MongoDB storage instance
-    /// 
+    ///
     /// # Arguments
     /// * `config` - MongoDB configuration
-    /// 
+    ///
     /// # Returns
     /// Result containing the MongoStorage instance or an error
     pub async fn new(config: MongoConfig) -> Result<Self> {
@@ -535,7 +577,7 @@ impl StorageBackend for MongoStorage {
     async fn put(&self, key: &str, value: &[u8]) -> Result<()> {
         let mut data = self.data_storage.write().await;
         data.insert(key.to_string(), value.to_vec());
-        
+
         tracing::debug!("Stored data in MongoDB with key: {}", key);
         Ok(())
     }
@@ -547,7 +589,7 @@ impl StorageBackend for MongoStorage {
 
     async fn delete(&self, key: &str) -> Result<()> {
         let mut data = self.data_storage.write().await;
-        
+
         if data.remove(key).is_none() {
             return Err(FortressError::storage(
                 format!("Key not found: {}", key),
@@ -555,7 +597,7 @@ impl StorageBackend for MongoStorage {
                 StorageErrorCode::NotFound,
             ));
         }
-        
+
         Ok(())
     }
 
@@ -568,25 +610,30 @@ impl StorageBackend for MongoStorage {
         self.list_prefix_paginated(prefix, None, None).await
     }
 
-    async fn list_prefix_paginated(&self, prefix: &str, limit: Option<usize>, offset: Option<usize>) -> Result<Vec<String>> {
+    async fn list_prefix_paginated(
+        &self,
+        prefix: &str,
+        limit: Option<usize>,
+        offset: Option<usize>,
+    ) -> Result<Vec<String>> {
         let data = self.data_storage.read().await;
         let keys: Vec<_> = data
             .keys()
             .filter(|key| key.starts_with(prefix))
             .cloned()
             .collect();
-        
+
         // Apply pagination
         let start_idx = offset.unwrap_or(0);
         let end_idx = match limit {
             Some(limit) => std::cmp::min(start_idx + limit, keys.len()),
             None => keys.len(),
         };
-        
+
         if start_idx >= keys.len() {
             return Ok(Vec::new());
         }
-        
+
         Ok(keys[start_idx..end_idx].to_vec())
     }
 
@@ -605,7 +652,10 @@ impl StorageBackend for MongoStorage {
             metadata: {
                 let mut meta = HashMap::new();
                 meta.insert("database".to_string(), self.config.database_name.clone());
-                meta.insert("collection".to_string(), self.config.data_collection.clone());
+                meta.insert(
+                    "collection".to_string(),
+                    self.config.data_collection.clone(),
+                );
                 meta
             },
         }
@@ -645,7 +695,7 @@ mod tests {
     async fn test_mongo_key_database_creation() {
         let config = MongoConfig::default();
         let db = MongoKeyDatabase::new(config).await.unwrap();
-        
+
         assert!(db.initialize().await.is_ok());
     }
 
@@ -653,16 +703,16 @@ mod tests {
     async fn test_mongo_push_pull_operations() {
         let config = MongoConfig::default();
         let db = MongoKeyDatabase::new(config).await.unwrap();
-        
+
         // Test push bulk
         let entries = vec![
             ("key1".to_string(), b"data1".to_vec(), HashMap::new()),
             ("key2".to_string(), b"data2".to_vec(), HashMap::new()),
         ];
-        
+
         let count = db.push_bulk(entries).await.unwrap();
         assert_eq!(count, 2);
-        
+
         // Test pull filtered
         let results = db.pull_filtered(MongoPullFilter::All).await.unwrap();
         assert_eq!(results.len(), 2);
@@ -672,7 +722,7 @@ mod tests {
     async fn test_mongo_aggregation() {
         let config = MongoConfig::default();
         let db = MongoKeyDatabase::new(config).await.unwrap();
-        
+
         // Add some test data
         let entries = vec![
             ("doc1".to_string(), b"data".to_vec(), {
@@ -686,15 +736,15 @@ mod tests {
                 meta
             }),
         ];
-        
+
         db.push_bulk(entries).await.unwrap();
-        
+
         // Test aggregation
         let pipeline = MongoPipeline {
             operation: "count_by_type".to_string(),
             stages: vec![],
         };
-        
+
         let results = db.aggregate(pipeline).await.unwrap();
         assert_eq!(results.len(), 2);
     }
@@ -703,17 +753,17 @@ mod tests {
     async fn test_mongo_storage_backend() {
         let config = MongoConfig::default();
         let storage = MongoStorage::new(config).await.unwrap();
-        
+
         // Test basic operations
         storage.put("test_key", b"test_value").await.unwrap();
         let value = storage.get("test_key").await.unwrap();
         assert_eq!(value, Some(b"test_value".to_vec()));
-        
+
         assert!(storage.exists("test_key").await.unwrap());
-        
+
         let keys = storage.list_prefix("test").await.unwrap();
         assert_eq!(keys, vec!["test_key"]);
-        
+
         let metadata = storage.metadata();
         assert_eq!(metadata.backend_type, "mongodb");
         assert!(metadata.supports_transactions);

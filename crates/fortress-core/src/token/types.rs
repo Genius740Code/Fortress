@@ -2,8 +2,8 @@
 //!
 //! This module defines the core types used throughout the token management system.
 
-use chrono::{DateTime, Utc, Duration};
-use serde::{Serialize, Deserialize};
+use chrono::{DateTime, Duration, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -188,9 +188,9 @@ impl Token {
             return true;
         }
 
-        self.user_agent_restrictions.iter().any(|ua| {
-            user_agent.contains(ua)
-        })
+        self.user_agent_restrictions
+            .iter()
+            .any(|ua| user_agent.contains(ua))
     }
 }
 
@@ -462,8 +462,7 @@ impl TokenSearchResults {
     /// Check if there are more results
     pub fn has_more(&self) -> bool {
         if let Some(limit) = self.criteria.limit {
-            (self.tokens.len() as u64) < self.total_count && 
-            (self.tokens.len() as u32) < limit
+            (self.tokens.len() as u64) < self.total_count && (self.tokens.len() as u32) < limit
         } else {
             false
         }
@@ -502,7 +501,7 @@ mod tests {
         );
 
         assert!(!token.is_expired());
-        
+
         // Manually set expiration to past
         token.expires_time = Utc::now() - Duration::seconds(1);
         assert!(token.is_expired());
@@ -519,9 +518,9 @@ mod tests {
         );
 
         token.max_renewals = Some(2);
-        
+
         assert!(token.is_renewable());
-        
+
         token.renewal_count = 2;
         assert!(!token.is_renewable());
     }
@@ -563,8 +562,14 @@ mod tests {
         token.add_metadata("department".to_string(), "engineering".to_string());
         token.add_metadata("environment".to_string(), "production".to_string());
 
-        assert_eq!(token.get_metadata("department"), Some(&"engineering".to_string()));
-        assert_eq!(token.get_metadata("environment"), Some(&"production".to_string()));
+        assert_eq!(
+            token.get_metadata("department"),
+            Some(&"engineering".to_string())
+        );
+        assert_eq!(
+            token.get_metadata("environment"),
+            Some(&"production".to_string())
+        );
         assert_eq!(token.get_metadata("nonexistent"), None);
     }
 
@@ -591,8 +596,14 @@ mod tests {
         metadata.add_custom_metadata("key1".to_string(), "value1".to_string());
         metadata.add_custom_metadata("key2".to_string(), "value2".to_string());
 
-        assert_eq!(metadata.get_custom_metadata("key1"), Some(&"value1".to_string()));
-        assert_eq!(metadata.get_custom_metadata("key2"), Some(&"value2".to_string()));
+        assert_eq!(
+            metadata.get_custom_metadata("key1"),
+            Some(&"value1".to_string())
+        );
+        assert_eq!(
+            metadata.get_custom_metadata("key2"),
+            Some(&"value2".to_string())
+        );
 
         let initial_updated = metadata.updated_at;
         metadata.add_custom_metadata("key3".to_string(), "value3".to_string());

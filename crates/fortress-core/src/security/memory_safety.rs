@@ -1,28 +1,28 @@
 //! Memory Safety Module
-//! 
+//!
 //! This module provides memory safety improvements including constant-time operations,
 //! secure memory zeroization, and secure memory pools for sensitive data.
 
 use crate::error::FortressError;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::collections::VecDeque;
+use std::sync::{Arc, Mutex};
 use subtle::ConstantTimeEq;
 use zeroize::{Zeroize, ZeroizeOnDrop};
-use serde::{Serialize, Deserialize, Serializer, Deserializer};
-use std::sync::{Arc, Mutex};
-use std::collections::VecDeque;
 
 /// Constant-time comparison operations to prevent timing attacks
 pub struct ConstantTimeOps;
 
 impl ConstantTimeOps {
     /// Secure constant-time comparison of two byte slices
-    /// 
+    ///
     /// # Arguments
     /// * `a` - First byte slice to compare
     /// * `b` - Second byte slice to compare
-    /// 
+    ///
     /// # Returns
     /// * `true` if slices are equal, `false` otherwise
-    /// 
+    ///
     /// # Security
     /// This function performs the comparison in constant time to prevent
     /// timing attacks that could reveal information about the data.
@@ -34,14 +34,14 @@ impl ConstantTimeOps {
     }
 
     /// Secure constant-time comparison of two strings
-    /// 
+    ///
     /// # Arguments
     /// * `a` - First string to compare
     /// * `b` - Second string to compare
-    /// 
+    ///
     /// # Returns
     /// * `true` if strings are equal, `false` otherwise
-    /// 
+    ///
     /// # Security
     /// Performs constant-time comparison to prevent timing attacks.
     pub fn compare_strings_secure(a: &str, b: &str) -> bool {
@@ -52,14 +52,14 @@ impl ConstantTimeOps {
     }
 
     /// Secure constant-time comparison for authentication tokens
-    /// 
+    ///
     /// # Arguments
     /// * `token` - Authentication token to verify
     /// * `expected` - Expected token value
-    /// 
+    ///
     /// # Returns
     /// * `true` if tokens match, `false` otherwise
-    /// 
+    ///
     /// # Security
     /// Uses constant-time comparison to prevent timing attacks on authentication.
     pub fn verify_token_secure(token: &[u8], expected: &[u8]) -> bool {
@@ -100,13 +100,13 @@ impl Clone for SecureKey {
 
 impl SecureKey {
     /// Create a new secure key
-    /// 
+    ///
     /// # Arguments
     /// * `data` - Key data as bytes
-    /// 
+    ///
     /// # Returns
     /// * `SecureKey` instance
-    /// 
+    ///
     /// # Security
     /// The key data will be automatically zeroized when the SecureKey is dropped.
     pub fn new(data: Vec<u8>) -> Self {
@@ -114,10 +114,10 @@ impl SecureKey {
     }
 
     /// Create a secure key from a slice
-    /// 
+    ///
     /// # Arguments
     /// * `data` - Key data as slice
-    /// 
+    ///
     /// # Returns
     /// * `SecureKey` instance
     pub fn from_slice(data: &[u8]) -> Self {
@@ -125,10 +125,10 @@ impl SecureKey {
     }
 
     /// Generate a secure random key of specified length
-    /// 
+    ///
     /// # Arguments
     /// * `length` - Length of key to generate in bytes
-    /// 
+    ///
     /// # Returns
     /// * `Result<SecureKey, FortressError>` - Generated secure key or error
     pub fn generate_random(length: usize) -> Result<Self, FortressError> {
@@ -140,10 +140,10 @@ impl SecureKey {
     }
 
     /// Get reference to key data
-    /// 
+    ///
     /// # Returns
     /// * `&[u8]` - Reference to key data
-    /// 
+    ///
     /// # Security
     /// Returns immutable reference to prevent accidental modification.
     pub fn as_bytes(&self) -> &[u8] {
@@ -151,7 +151,7 @@ impl SecureKey {
     }
 
     /// Get key length
-    /// 
+    ///
     /// # Returns
     /// * `usize` - Length of key in bytes
     pub fn len(&self) -> usize {
@@ -159,7 +159,7 @@ impl SecureKey {
     }
 
     /// Check if key is empty
-    /// 
+    ///
     /// # Returns
     /// * `bool` - true if key is empty
     pub fn is_empty(&self) -> bool {
@@ -167,13 +167,13 @@ impl SecureKey {
     }
 
     /// Securely compare with another key using constant-time comparison
-    /// 
+    ///
     /// # Arguments
     /// * `other` - Other key to compare with
-    /// 
+    ///
     /// # Returns
     /// * `bool` - true if keys are equal
-    /// 
+    ///
     /// # Security
     /// Uses constant-time comparison to prevent timing attacks.
     pub fn equals_secure(&self, other: &SecureKey) -> bool {
@@ -181,10 +181,10 @@ impl SecureKey {
     }
 
     /// Convert to hex string (for display purposes only)
-    /// 
+    ///
     /// # Returns
     /// * `String` - Hexadecimal representation
-    /// 
+    ///
     /// # Security
     /// This should only be used for display/debugging purposes, not for cryptographic operations.
     pub fn to_hex(&self) -> String {
@@ -192,22 +192,22 @@ impl SecureKey {
     }
 
     /// Convert to base64 string (for storage/transmission)
-    /// 
+    ///
     /// # Returns
     /// * `String` - Base64 representation
-    /// 
+    ///
     /// # Security
     /// Use only when necessary for storage/transmission protocols.
     pub fn to_base64(&self) -> String {
-        use base64::{Engine as _, engine::general_purpose};
+        use base64::{engine::general_purpose, Engine as _};
         general_purpose::STANDARD.encode(&self.data)
     }
 
     /// Convert to Vec<u8> (for cryptographic operations)
-    /// 
+    ///
     /// # Returns
     /// * `Vec<u8>` - Clone of key data
-    /// 
+    ///
     /// # Security
     /// This creates a copy of the key data. Use with care in performance-critical code.
     pub fn to_vec(&self) -> Vec<u8> {
@@ -215,29 +215,39 @@ impl SecureKey {
     }
 
     /// Create secure key from hex string
-    /// 
+    ///
     /// # Arguments
     /// * `hex_str` - Hexadecimal string representation
-    /// 
+    ///
     /// # Returns
     /// * `Result<SecureKey, FortressError>` - Secure key or error
     pub fn from_hex(hex_str: &str) -> Result<Self, FortressError> {
-        let data = hex::decode(hex_str)
-            .map_err(|e| FortressError::encryption(format!("Invalid hex format: {}", e), "hex_decode".to_string(), crate::error::EncryptionErrorCode::InvalidInput))?;
+        let data = hex::decode(hex_str).map_err(|e| {
+            FortressError::encryption(
+                format!("Invalid hex format: {}", e),
+                "hex_decode".to_string(),
+                crate::error::EncryptionErrorCode::InvalidInput,
+            )
+        })?;
         Ok(Self::new(data))
     }
 
     /// Create secure key from base64 string
-    /// 
+    ///
     /// # Arguments
     /// * `base64_str` - Base64 string representation
-    /// 
+    ///
     /// # Returns
     /// * `Result<SecureKey, FortressError>` - Secure key or error
     pub fn from_base64(base64_str: &str) -> Result<Self, FortressError> {
-        use base64::{Engine as _, engine::general_purpose};
-        let data = general_purpose::STANDARD.decode(base64_str)
-            .map_err(|e| FortressError::encryption(format!("Invalid base64 format: {}", e), "base64_decode".to_string(), crate::error::EncryptionErrorCode::InvalidInput))?;
+        use base64::{engine::general_purpose, Engine as _};
+        let data = general_purpose::STANDARD.decode(base64_str).map_err(|e| {
+            FortressError::encryption(
+                format!("Invalid base64 format: {}", e),
+                "base64_decode".to_string(),
+                crate::error::EncryptionErrorCode::InvalidInput,
+            )
+        })?;
         Ok(Self::new(data))
     }
 }
@@ -252,20 +262,20 @@ pub struct SecureMemoryPool {
 
 impl SecureMemoryPool {
     /// Create a new secure memory pool
-    /// 
+    ///
     /// # Arguments
     /// * `initial_size` - Initial number of buffers to allocate
     /// * `max_size` - Maximum number of buffers in pool
     /// * `buffer_size` - Size of each buffer in bytes
-    /// 
+    ///
     /// # Returns
     /// * `SecureMemoryPool` instance
-    /// 
+    ///
     /// # Security
     /// All buffers are securely zeroized when returned to pool or when pool is dropped.
     pub fn new(initial_size: usize, max_size: usize, buffer_size: usize) -> Self {
         let mut pool = VecDeque::with_capacity(initial_size);
-        
+
         // Pre-allocate initial buffers
         for _ in 0..initial_size {
             pool.push_back(vec![0u8; buffer_size]);
@@ -280,10 +290,10 @@ impl SecureMemoryPool {
     }
 
     /// Get a secure buffer from the pool
-    /// 
+    ///
     /// # Returns
     /// * `Vec<u8>` - Secure buffer
-    /// 
+    ///
     /// # Security
     /// Returns a zeroized buffer. Buffer will be securely wiped when returned.
     pub fn get_secure_buffer(&self) -> Vec<u8> {
@@ -301,10 +311,10 @@ impl SecureMemoryPool {
     }
 
     /// Return a buffer to the pool
-    /// 
+    ///
     /// # Arguments
     /// * `buffer` - Buffer to return to pool
-    /// 
+    ///
     /// # Security
     /// Buffer is securely zeroized before being returned to pool.
     pub fn return_secure_buffer(&self, mut buffer: Vec<u8>) {
@@ -326,7 +336,7 @@ impl SecureMemoryPool {
     }
 
     /// Get pool statistics
-    /// 
+    ///
     /// # Returns
     /// * `(usize, usize, usize)` - (available buffers, max size, total allocated bytes)
     pub fn get_stats(&self) -> (usize, usize, usize) {
@@ -336,7 +346,7 @@ impl SecureMemoryPool {
     }
 
     /// Clear the pool and securely wipe all buffers
-    /// 
+    ///
     /// # Security
     /// All buffers in the pool are securely zeroized.
     pub fn clear(&self) {
@@ -344,29 +354,29 @@ impl SecureMemoryPool {
         while let Some(mut buffer) = pool.pop_front() {
             buffer.zeroize();
         }
-        
+
         // Reset allocation counter
         let mut total_allocated = self.total_allocated.lock().unwrap();
         *total_allocated = 0;
     }
 
     /// Resize the pool
-    /// 
+    ///
     /// # Arguments
     /// * `new_max_size` - New maximum pool size
-    /// 
+    ///
     /// # Security
     /// Excess buffers are securely zeroized.
     pub fn resize(&self, new_max_size: usize) {
         let mut pool = self.pool.lock().unwrap();
-        
+
         // Remove excess buffers and zeroize them
         while pool.len() > new_max_size {
             if let Some(mut buffer) = pool.pop_front() {
                 buffer.zeroize();
             }
         }
-        
+
         // Update max size (stored separately for simplicity)
         // Note: In a real implementation, you'd store this as a field
     }
@@ -390,7 +400,7 @@ pub struct GlobalSecureMemoryPool {
 
 impl GlobalSecureMemoryPool {
     /// Create a new global secure memory pool manager
-    /// 
+    ///
     /// # Returns
     /// * `GlobalSecureMemoryPool` instance
     pub fn new() -> Self {
@@ -400,7 +410,7 @@ impl GlobalSecureMemoryPool {
     }
 
     /// Add a memory pool to the manager
-    /// 
+    ///
     /// # Arguments
     /// * `pool` - Secure memory pool to add
     pub fn add_pool(&self, pool: SecureMemoryPool) {
@@ -409,7 +419,7 @@ impl GlobalSecureMemoryPool {
     }
 
     /// Clear all managed pools
-    /// 
+    ///
     /// # Security
     /// Securely wipes all buffers in all managed pools.
     pub fn clear_all(&self) {
@@ -420,7 +430,7 @@ impl GlobalSecureMemoryPool {
     }
 
     /// Get statistics for all pools
-    /// 
+    ///
     /// # Returns
     /// * `Vec<(usize, usize, usize)>` - Vector of pool statistics
     pub fn get_all_stats(&self) -> Vec<(usize, usize, usize)> {
@@ -445,10 +455,10 @@ pub mod utils {
     // Proper password verification should use secure hashing algorithms like Argon2.
 
     /// Securely wipe a string
-    /// 
+    ///
     /// # Arguments
     /// * `s` - String to wipe (will be consumed)
-    /// 
+    ///
     /// # Security
     /// The string memory will be securely zeroized.
     pub fn wipe_string(mut s: String) {
@@ -456,10 +466,10 @@ pub mod utils {
     }
 
     /// Securely wipe a byte slice
-    /// 
+    ///
     /// # Arguments
     /// * `data` - Byte slice to wipe
-    /// 
+    ///
     /// # Security
     /// The slice memory will be securely zeroized.
     pub fn wipe_bytes(data: &mut [u8]) {
@@ -467,28 +477,28 @@ pub mod utils {
     }
 
     /// Create a secure random nonce
-    /// 
+    ///
     /// # Arguments
     /// * `length` - Length of nonce in bytes
-    /// 
+    ///
     /// # Returns
     /// * `Result<Vec<u8>, FortressError>` - Random nonce
     pub fn generate_secure_nonce(length: usize) -> Result<Vec<u8>, FortressError> {
-        use rand::RngCore;
         use rand::rngs::OsRng;
+        use rand::RngCore;
         let mut nonce = vec![0u8; length];
         OsRng.fill_bytes(&mut nonce);
         Ok(nonce)
     }
 
     /// Derive a secure key using HKDF
-    /// 
+    ///
     /// # Arguments
     /// * `secret` - Input secret/key material
     /// * `salt` - Salt value
     /// * `info` - Context info
     /// * `length` - Desired key length
-    /// 
+    ///
     /// # Returns
     /// * `Result<SecureKey, FortressError>` - Derived secure key
     pub fn derive_key_hkdf(
@@ -502,10 +512,15 @@ pub mod utils {
 
         let hk = Hkdf::<Sha256>::new(Some(salt), secret);
         let mut okm = vec![0u8; length];
-        
-        hk.expand(info, &mut okm)
-            .map_err(|e| FortressError::encryption(format!("HKDF expansion failed: {}", e), "hkdf_expand".to_string(), crate::error::EncryptionErrorCode::KeyGenerationFailed))?;
-        
+
+        hk.expand(info, &mut okm).map_err(|e| {
+            FortressError::encryption(
+                format!("HKDF expansion failed: {}", e),
+                "hkdf_expand".to_string(),
+                crate::error::EncryptionErrorCode::KeyGenerationFailed,
+            )
+        })?;
+
         Ok(SecureKey::new(okm))
     }
 }
@@ -568,7 +583,7 @@ mod tests {
     #[test]
     fn test_secure_memory_pool() {
         let pool = SecureMemoryPool::new(2, 5, 1024);
-        
+
         // Get initial stats
         let (available, max_size, total) = pool.get_stats();
         assert_eq!(available, 2);
@@ -617,7 +632,7 @@ mod tests {
     #[test]
     fn test_global_secure_memory_pool() {
         let global_pool = GlobalSecureMemoryPool::new();
-        
+
         let pool1 = SecureMemoryPool::new(2, 5, 512);
         let pool2 = SecureMemoryPool::new(3, 6, 1024);
 

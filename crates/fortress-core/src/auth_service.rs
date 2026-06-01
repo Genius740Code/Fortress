@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{info, warn, error, debug};
+use tracing::{debug, error, info, warn};
 
 /// Unified authentication service using plugin system
 pub struct PluginAuthService {
@@ -195,8 +195,14 @@ impl PluginAuthService {
         };
 
         let plugin_manager = Arc::new(
-            HotSwappableAuthPluginManager::new(plugin_config).await
-                .map_err(|e| FortressError::authentication(format!("Failed to create plugin manager: {}", e), None))?
+            HotSwappableAuthPluginManager::new(plugin_config)
+                .await
+                .map_err(|e| {
+                    FortressError::authentication(
+                        format!("Failed to create plugin manager: {}", e),
+                        None,
+                    )
+                })?,
         );
 
         Ok(Self {
@@ -207,20 +213,30 @@ impl PluginAuthService {
     }
 
     /// Authenticate a request using the appropriate plugin
-    pub async fn authenticate(&self, request: AuthRequest, context: ServiceContext) -> Result<AuthResult> {
+    pub async fn authenticate(
+        &self,
+        request: AuthRequest,
+        context: ServiceContext,
+    ) -> Result<AuthResult> {
         let start_time = std::time::Instant::now();
 
         // Update statistics
         {
             let mut stats = self.stats.write().await;
             stats.total_requests += 1;
-            
+
             let method_key = format!("{:?}", request.method);
-            *stats.successful_by_method.entry(method_key.clone()).or_insert(0) += 0;
+            *stats
+                .successful_by_method
+                .entry(method_key.clone())
+                .or_insert(0) += 0;
             *stats.failed_by_method.entry(method_key).or_insert(0) += 0;
         }
 
-        info!("Processing authentication request for method: {:?}", request.method);
+        info!(
+            "Processing authentication request for method: {:?}",
+            request.method
+        );
 
         // Apply security policies
         let request_method = request.method.clone();
@@ -235,33 +251,37 @@ impl PluginAuthService {
         let elapsed = start_time.elapsed().as_millis() as f64;
         {
             let mut stats = self.stats.write().await;
-            
+
             if result.is_ok() {
                 stats.successful_auths += 1;
                 if let Some(_user_info) = &result.as_ref().ok().unwrap().user_info {
                     stats.active_sessions += 1;
                 }
-                
+
                 let method_key = format!("{:?}", request_method);
                 *stats.successful_by_method.entry(method_key).or_insert(0) += 1;
             } else {
                 stats.failed_auths += 1;
                 stats.security_events += 1;
-                
+
                 let method_key = format!("{:?}", request_method);
                 *stats.failed_by_method.entry(method_key).or_insert(0) += 1;
             }
-            
+
             // Update average authentication time
             let total_requests = stats.total_requests;
-            stats.avg_auth_time_ms = (stats.avg_auth_time_ms * (total_requests - 1) as f64 + elapsed) / total_requests as f64;
+            stats.avg_auth_time_ms = (stats.avg_auth_time_ms * (total_requests - 1) as f64
+                + elapsed)
+                / total_requests as f64;
         }
 
         // Log authentication result
         match &result {
             Ok(auth_result) => {
-                info!("Authentication successful for user: {:?}", 
-                      auth_result.user_info.as_ref().map(|u| &u.username));
+                info!(
+                    "Authentication successful for user: {:?}",
+                    auth_result.user_info.as_ref().map(|u| &u.username)
+                );
             }
             Err(e) => {
                 warn!("Authentication failed: {}", e);
@@ -272,7 +292,11 @@ impl PluginAuthService {
     }
 
     /// Validate an existing token
-    pub async fn validate_token(&self, token: &str, context: ServiceContext) -> Result<AuthUserInfo> {
+    pub async fn validate_token(
+        &self,
+        token: &str,
+        context: ServiceContext,
+    ) -> Result<AuthUserInfo> {
         info!("Validating token for request: {}", context.request_id);
 
         // Try to get plugin for token validation
@@ -317,11 +341,18 @@ impl PluginAuthService {
             }
         }
 
-        Err(FortressError::authentication("Token validation failed".to_string(), None))
+        Err(FortressError::authentication(
+            "Token validation failed".to_string(),
+            None,
+        ))
     }
 
     /// Refresh an authentication token
-    pub async fn refresh_token(&self, refresh_token: &str, context: ServiceContext) -> Result<AuthResult> {
+    pub async fn refresh_token(
+        &self,
+        refresh_token: &str,
+        context: ServiceContext,
+    ) -> Result<AuthResult> {
         info!("Refreshing token for request: {}", context.request_id);
 
         // Try to refresh with available plugins
@@ -342,7 +373,10 @@ impl PluginAuthService {
             }
         }
 
-        Err(FortressError::authentication("Token refresh failed".to_string(), None))
+        Err(FortressError::authentication(
+            "Token refresh failed".to_string(),
+            None,
+        ))
     }
 
     /// Logout a user/token
@@ -357,7 +391,7 @@ impl PluginAuthService {
                 match plugin.logout(token).await {
                     Ok(()) => {
                         info!("Logout successful for method: {:?}", method);
-                        
+
                         // Update statistics
                         {
                             let mut stats = self.stats.write().await;
@@ -365,7 +399,7 @@ impl PluginAuthService {
                                 stats.active_sessions -= 1;
                             }
                         }
-                        
+
                         return Ok(());
                     }
                     Err(_) => {
@@ -376,7 +410,10 @@ impl PluginAuthService {
             }
         }
 
-        Err(FortressError::authentication("Logout failed".to_string(), None))
+        Err(FortressError::authentication(
+            "Logout failed".to_string(),
+            None,
+        ))
     }
 
     /// Get available authentication methods
@@ -418,7 +455,7 @@ impl PluginAuthService {
                     let mut stats = self.stats.write().await;
                     stats.plugin_reloads += 1;
                 }
-                
+
                 info!("Plugin reload successful: {}", request.plugin_name);
                 Ok(())
             }
@@ -431,7 +468,10 @@ impl PluginAuthService {
 
     /// Deploy a new plugin
     pub async fn deploy_plugin(&self, deployment: PluginDeployment) -> Result<()> {
-        info!("Deploying plugin: {} v{}", deployment.name, deployment.version);
+        info!(
+            "Deploying plugin: {} v{}",
+            deployment.name, deployment.version
+        );
 
         match self.plugin_manager.deploy_plugin(deployment.clone()).await {
             Ok(()) => {
@@ -466,7 +506,11 @@ impl PluginAuthService {
     }
 
     /// Apply security policies to the request
-    async fn apply_security_policies(&self, request: &AuthRequest, context: &ServiceContext) -> Result<()> {
+    async fn apply_security_policies(
+        &self,
+        request: &AuthRequest,
+        context: &ServiceContext,
+    ) -> Result<()> {
         let policies = &self.config.security_policies;
 
         // IP filtering
@@ -476,16 +520,19 @@ impl PluginAuthService {
                     if !policies.ip_filtering.whitelist.contains(ip_address) {
                         return Err(FortressError::authentication(
                             format!("IP address not whitelisted: {}", ip_address),
-                            None
+                            None,
                         ));
                     }
                 }
 
                 if policies.ip_filtering.blacklist.contains(ip_address) {
                     return Err(FortressError::authentication(
-                            format!("IP address blacklisted: {}", ip_address),
-                            Some("IP address is blacklisted and cannot be used for authentication".to_string())
-                        ));
+                        format!("IP address blacklisted: {}", ip_address),
+                        Some(
+                            "IP address is blacklisted and cannot be used for authentication"
+                                .to_string(),
+                        ),
+                    ));
                 }
             }
         }
@@ -498,7 +545,9 @@ impl PluginAuthService {
         }
 
         // Password policy validation (for basic auth)
-        if let (Some(ref username), Some(ref password)) = (&request.credentials.username, &request.credentials.password) {
+        if let (Some(ref username), Some(ref password)) =
+            (&request.credentials.username, &request.credentials.password)
+        {
             self.validate_password_policy(username, password, &policies.password_policy)?;
         }
 
@@ -506,39 +555,47 @@ impl PluginAuthService {
     }
 
     /// Validate password against policy
-    fn validate_password_policy(&self, username: &str, password: &str, policy: &PasswordPolicy) -> Result<()> {
+    fn validate_password_policy(
+        &self,
+        username: &str,
+        password: &str,
+        policy: &PasswordPolicy,
+    ) -> Result<()> {
         if password.len() < policy.min_length {
             return Err(FortressError::authentication(
-                format!("Password too short, minimum {} characters", policy.min_length),
-                Some(username.to_string())
+                format!(
+                    "Password too short, minimum {} characters",
+                    policy.min_length
+                ),
+                Some(username.to_string()),
             ));
         }
 
         if policy.require_uppercase && !password.chars().any(|c| c.is_uppercase()) {
             return Err(FortressError::authentication(
                 "Password must contain uppercase letters".to_string(),
-                Some(username.to_string())
+                Some(username.to_string()),
             ));
         }
 
         if policy.require_lowercase && !password.chars().any(|c| c.is_lowercase()) {
             return Err(FortressError::authentication(
                 "Password must contain lowercase letters".to_string(),
-                Some(username.to_string())
+                Some(username.to_string()),
             ));
         }
 
         if policy.require_numbers && !password.chars().any(|c| c.is_numeric()) {
             return Err(FortressError::authentication(
                 "Password must contain numbers".to_string(),
-                Some(username.to_string())
+                Some(username.to_string()),
             ));
         }
 
         if policy.require_special_chars && !password.chars().any(|c| !c.is_alphanumeric()) {
             return Err(FortressError::authentication(
                 "Password must contain special characters".to_string(),
-                Some(username.to_string())
+                Some(username.to_string()),
             ));
         }
 
@@ -546,7 +603,7 @@ impl PluginAuthService {
         if self.is_weak_password(username, password) {
             return Err(FortressError::authentication(
                 "Password is too weak or common".to_string(),
-                Some(username.to_string())
+                Some(username.to_string()),
             ));
         }
 
@@ -556,8 +613,15 @@ impl PluginAuthService {
     /// Check if password is weak or common
     fn is_weak_password(&self, username: &str, password: &str) -> bool {
         let weak_passwords = vec![
-            "password", "123456", "password123", "admin", "root",
-            "qwerty", "letmein", "welcome", "changeme",
+            "password",
+            "123456",
+            "password123",
+            "admin",
+            "root",
+            "qwerty",
+            "letmein",
+            "welcome",
+            "changeme",
         ];
 
         // Check if password is in weak list
@@ -571,9 +635,12 @@ impl PluginAuthService {
         }
 
         // Check for simple patterns
-        if password.chars().collect::<Vec<_>>().windows(3).any(|w| {
-            w[0] == w[1] && w[1] == w[2]
-        }) {
+        if password
+            .chars()
+            .collect::<Vec<_>>()
+            .windows(3)
+            .any(|w| w[0] == w[1] && w[1] == w[2])
+        {
             return true;
         }
 
@@ -589,14 +656,19 @@ impl PluginAuthService {
 
         // Log final statistics
         let stats = self.stats.read().await;
-        info!("Final statistics: {} total requests, {} successful, {} failed",
-               stats.total_requests, stats.successful_auths, stats.failed_auths);
+        info!(
+            "Final statistics: {} total requests, {} successful, {} failed",
+            stats.total_requests, stats.successful_auths, stats.failed_auths
+        );
 
         Ok(())
     }
 
     /// Get plugin metadata
-    pub async fn get_plugin_metadata(&self, plugin_name: &str) -> Result<Option<AuthPluginMetadata>> {
+    pub async fn get_plugin_metadata(
+        &self,
+        plugin_name: &str,
+    ) -> Result<Option<AuthPluginMetadata>> {
         Ok(self.plugin_manager.get_plugin_metadata(plugin_name).await)
     }
 }
@@ -616,7 +688,7 @@ mod tests {
     async fn test_password_validation() {
         let config = AuthServiceConfig::default();
         let service = PluginAuthService::new(config).await.unwrap();
-        
+
         let policy = PasswordPolicy {
             min_length: 8,
             require_uppercase: true,
@@ -627,25 +699,31 @@ mod tests {
         };
 
         // Test valid password
-        assert!(service.validate_password_policy("user", "SecurePass123!", &policy).is_ok());
-        
+        assert!(service
+            .validate_password_policy("user", "SecurePass123!", &policy)
+            .is_ok());
+
         // Test invalid password - too short
-        assert!(service.validate_password_policy("user", "short", &policy).is_err());
-        
+        assert!(service
+            .validate_password_policy("user", "short", &policy)
+            .is_err());
+
         // Test invalid password - no uppercase
-        assert!(service.validate_password_policy("user", "lowercase123!", &policy).is_err());
+        assert!(service
+            .validate_password_policy("user", "lowercase123!", &policy)
+            .is_err());
     }
 
     #[tokio::test]
     async fn test_weak_password_detection() {
         let config = AuthServiceConfig::default();
         let service = PluginAuthService::new(config).await.unwrap();
-        
+
         // Test weak passwords
         assert!(service.is_weak_password("user", "password"));
         assert!(service.is_weak_password("user", "user"));
         assert!(service.is_weak_password("admin", "admin123"));
-        
+
         // Test strong password
         assert!(!service.is_weak_password("user", "SecurePass123!"));
     }

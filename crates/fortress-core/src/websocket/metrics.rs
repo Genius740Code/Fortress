@@ -1,11 +1,11 @@
 //! WebSocket monitoring and metrics
 
 use crate::error::{FortressError, Result};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
-use serde::{Serialize, Deserialize};
 
 /// WebSocket metrics collector
 #[derive(Debug)]
@@ -122,17 +122,25 @@ impl WebSocketMetrics {
     }
 
     /// Record connection established
-    pub async fn record_connection_established(&self, _connection_id: &str, client_ip: &str, user_id: Option<String>) {
+    pub async fn record_connection_established(
+        &self,
+        _connection_id: &str,
+        client_ip: &str,
+        user_id: Option<String>,
+    ) {
         let mut metrics = self.connection_metrics.write().await;
         metrics.total_connections += 1;
         metrics.active_connections += 1;
-        
+
         if metrics.active_connections > metrics.peak_connections {
             metrics.peak_connections = metrics.active_connections;
         }
 
-        *metrics.connections_per_ip.entry(client_ip.to_string()).or_insert(0) += 1;
-        
+        *metrics
+            .connections_per_ip
+            .entry(client_ip.to_string())
+            .or_insert(0) += 1;
+
         if let Some(uid) = user_id {
             *metrics.connections_per_user.entry(uid).or_insert(0) += 1;
             metrics.authenticated_connections += 1;
@@ -142,13 +150,13 @@ impl WebSocketMetrics {
     /// Record connection closed
     pub async fn record_connection_closed(&self, _connection_id: &str, duration: Duration) {
         let mut metrics = self.connection_metrics.write().await;
-        
+
         if metrics.active_connections > 0 {
             metrics.active_connections -= 1;
         }
 
         metrics.connection_durations.push(duration);
-        
+
         // Keep only last 1000 durations for statistics
         if metrics.connection_durations.len() > 1000 {
             metrics.connection_durations.remove(0);
@@ -157,26 +165,37 @@ impl WebSocketMetrics {
         // Update average connection duration
         if !metrics.connection_durations.is_empty() {
             let total: Duration = metrics.connection_durations.iter().sum();
-            metrics.avg_connection_duration = total.as_secs_f64() / metrics.connection_durations.len() as f64;
+            metrics.avg_connection_duration =
+                total.as_secs_f64() / metrics.connection_durations.len() as f64;
         }
 
         // Update connection success rate
         if metrics.total_connections > 0 {
-            metrics.connection_success_rate = (metrics.authenticated_connections as f64 / metrics.total_connections as f64) * 100.0;
+            metrics.connection_success_rate = (metrics.authenticated_connections as f64
+                / metrics.total_connections as f64)
+                * 100.0;
         }
     }
 
     /// Record message sent
-    pub async fn record_message_sent(&self, message_type: &str, size_bytes: usize, latency: Duration) {
+    pub async fn record_message_sent(
+        &self,
+        message_type: &str,
+        size_bytes: usize,
+        latency: Duration,
+    ) {
         let mut metrics = self.message_metrics.write().await;
-        
+
         metrics.messages_sent += 1;
         metrics.bytes_sent += size_bytes as u64;
-        
-        *metrics.messages_per_type.entry(message_type.to_string()).or_insert(0) += 1;
-        
+
+        *metrics
+            .messages_per_type
+            .entry(message_type.to_string())
+            .or_insert(0) += 1;
+
         metrics.message_latencies.push(latency);
-        
+
         // Keep only last 1000 latencies for statistics
         if metrics.message_latencies.len() > 1000 {
             metrics.message_latencies.remove(0);
@@ -194,29 +213,36 @@ impl WebSocketMetrics {
     /// Record message received
     pub async fn record_message_received(&self, message_type: &str, size_bytes: usize) {
         let mut metrics = self.message_metrics.write().await;
-        
+
         metrics.messages_received += 1;
         metrics.bytes_received += size_bytes as u64;
-        
-        *metrics.messages_per_type.entry(message_type.to_string()).or_insert(0) += 1;
-        
+
+        *metrics
+            .messages_per_type
+            .entry(message_type.to_string())
+            .or_insert(0) += 1;
+
         // Update messages per second (simplified calculation)
-        metrics.messages_per_second = (metrics.messages_sent + metrics.messages_received) as f64 / 60.0; // Last minute average
+        metrics.messages_per_second =
+            (metrics.messages_sent + metrics.messages_received) as f64 / 60.0; // Last minute average
     }
 
     /// Record error
     pub async fn record_error(&self, error_type: &str, connection_id: Option<String>) {
         let mut metrics = self.error_metrics.write().await;
-        
+
         metrics.total_errors += 1;
-        *metrics.errors_per_type.entry(error_type.to_string()).or_insert(0) += 1;
-        
+        *metrics
+            .errors_per_type
+            .entry(error_type.to_string())
+            .or_insert(0) += 1;
+
         if let Some(conn_id) = connection_id {
             *metrics.errors_per_connection.entry(conn_id).or_insert(0) += 1;
         }
-        
+
         metrics.last_error = Some(chrono::Utc::now().to_rfc3339());
-        
+
         // Update error rate
         metrics.errors_per_minute = metrics.total_errors as f64 / 60.0; // Last minute average
     }
@@ -236,7 +262,7 @@ impl WebSocketMetrics {
     /// Update performance metrics
     pub async fn update_performance_metrics(&self) {
         let mut metrics = self.performance_metrics.write().await;
-        
+
         // Get system information
         metrics.cpu_usage = self.get_cpu_usage();
         metrics.memory_usage = self.get_memory_usage();
@@ -309,9 +335,8 @@ impl WebSocketMetrics {
     /// Export metrics to JSON
     pub async fn export_json(&self) -> Result<String> {
         let metrics = self.get_all_metrics().await;
-        serde_json::to_string(&metrics).map_err(|e| {
-            FortressError::websocket(format!("Failed to serialize metrics: {}", e))
-        })
+        serde_json::to_string(&metrics)
+            .map_err(|e| FortressError::websocket(format!("Failed to serialize metrics: {}", e)))
     }
 }
 

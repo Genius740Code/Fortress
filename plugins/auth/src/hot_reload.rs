@@ -80,10 +80,7 @@ pub struct HotReloadManager {
 
 impl HotReloadManager {
     /// Create a new hot-reload manager
-    pub fn new(
-        config: HotReloadConfig,
-        plugin_registry: Arc<RwLock<PluginRegistry>>,
-    ) -> Self {
+    pub fn new(config: HotReloadConfig, plugin_registry: Arc<RwLock<PluginRegistry>>) -> Self {
         Self {
             reload_semaphore: Arc::new(Semaphore::new(config.max_concurrent_reloads)),
             plugin_files: Arc::new(RwLock::new(HashMap::new())),
@@ -142,7 +139,10 @@ impl HotReloadManager {
             return Err(PluginError::HotReloadDisabled);
         }
 
-        let permit = self.reload_semaphore.acquire().await
+        let permit = self
+            .reload_semaphore
+            .acquire()
+            .await
             .map_err(|_| PluginError::ReloadInProgress)?;
 
         let result = self.perform_reload(plugin_name).await;
@@ -154,30 +154,37 @@ impl HotReloadManager {
     /// Initialize plugin file tracking
     async fn initialize_plugin_tracking(&self) -> Result<(), PluginError> {
         let mut plugin_files = self.plugin_files.write().await;
-        
+
         // Scan the watch directory for WASM files
-        let mut entries = fs::read_dir(&self.config.watch_directory).await
+        let mut entries = fs::read_dir(&self.config.watch_directory)
+            .await
             .map_err(|e| PluginError::IoError(e.to_string()))?;
 
-        while let Some(entry) = entries.next_entry().await
-            .map_err(|e| PluginError::IoError(e.to_string()))? {
-            
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .map_err(|e| PluginError::IoError(e.to_string()))?
+        {
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) == Some("wasm") {
                 if let Ok(metadata) = fs::metadata(&path).await {
                     if let Ok(modified) = metadata.modified() {
                         if let Ok(checksum) = self.calculate_checksum(&path).await {
-                            let plugin_name = path.file_stem()
+                            let plugin_name = path
+                                .file_stem()
                                 .and_then(|s| s.to_str())
                                 .unwrap_or("unknown")
                                 .to_string();
 
-                            plugin_files.insert(plugin_name.clone(), PluginFile {
-                                path: path.clone(),
-                                last_modified: modified,
-                                checksum,
-                                version: self.generate_version(),
-                            });
+                            plugin_files.insert(
+                                plugin_name.clone(),
+                                PluginFile {
+                                    path: path.clone(),
+                                    last_modified: modified,
+                                    checksum,
+                                    version: self.generate_version(),
+                                },
+                            );
 
                             // Set initial status
                             let mut reload_status = self.reload_status.write().await;
@@ -194,7 +201,7 @@ impl HotReloadManager {
     /// Main monitoring loop
     async fn monitor_loop(&self) {
         let interval = Duration::from_millis(self.config.poll_interval_ms);
-        
+
         loop {
             // Check if we should continue running
             {
@@ -216,17 +223,21 @@ impl HotReloadManager {
     /// Check for plugin file changes
     async fn check_for_changes(&self) -> Result<(), PluginError> {
         let plugin_files = self.plugin_files.read().await;
-        let mut entries = fs::read_dir(&self.config.watch_directory).await
+        let mut entries = fs::read_dir(&self.config.watch_directory)
+            .await
             .map_err(|e| PluginError::IoError(e.to_string()))?;
 
-        while let Some(entry) = entries.next_entry().await
-            .map_err(|e| PluginError::IoError(e.to_string()))? {
-            
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .map_err(|e| PluginError::IoError(e.to_string()))?
+        {
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) == Some("wasm") {
                 if let Ok(metadata) = fs::metadata(&path).await {
                     if let Ok(modified) = metadata.modified() {
-                        let plugin_name = path.file_stem()
+                        let plugin_name = path
+                            .file_stem()
                             .and_then(|s| s.to_str())
                             .unwrap_or("unknown")
                             .to_string();
@@ -241,8 +252,13 @@ impl HotReloadManager {
                                             let manager = self.clone();
                                             let plugin_name_clone = plugin_name.clone();
                                             tokio::spawn(async move {
-                                                if let Err(e) = manager.reload_plugin(&plugin_name_clone).await {
-                                                    eprintln!("Auto-reload failed for {}: {:?}", plugin_name_clone, e);
+                                                if let Err(e) =
+                                                    manager.reload_plugin(&plugin_name_clone).await
+                                                {
+                                                    eprintln!(
+                                                        "Auto-reload failed for {}: {:?}",
+                                                        plugin_name_clone, e
+                                                    );
                                                 }
                                             });
                                         }
@@ -335,11 +351,13 @@ impl HotReloadManager {
 
     /// Load plugin from file
     async fn load_plugin_from_file(&self, path: &Path) -> Result<(), PluginError> {
-        let wasm_bytes = fs::read(path).await
+        let wasm_bytes = fs::read(path)
+            .await
             .map_err(|e| PluginError::IoError(e.to_string()))?;
 
         // Load the WASM module
-        let plugin_name = path.file_stem()
+        let plugin_name = path
+            .file_stem()
             .and_then(|s| s.to_str())
             .ok_or_else(|| PluginError::InvalidPluginName)?;
 
@@ -352,7 +370,9 @@ impl HotReloadManager {
         // Load new plugin
         {
             let mut registry = self.plugin_registry.write().await;
-            registry.load_plugin_from_bytes(plugin_name, &wasm_bytes).await?;
+            registry
+                .load_plugin_from_bytes(plugin_name, &wasm_bytes)
+                .await?;
         }
 
         Ok(())
@@ -361,10 +381,11 @@ impl HotReloadManager {
     /// Calculate file checksum
     async fn calculate_checksum(&self, path: &Path) -> Result<String, PluginError> {
         use sha2::{Digest, Sha256};
-        
-        let contents = fs::read(path).await
+
+        let contents = fs::read(path)
+            .await
             .map_err(|e| PluginError::IoError(e.to_string()))?;
-        
+
         let mut hasher = Sha256::new();
         hasher.update(&contents);
         Ok(format!("{:x}", hasher.finalize()))
@@ -372,7 +393,8 @@ impl HotReloadManager {
 
     /// Generate a version string
     fn generate_version(&self) -> String {
-        format!("v{}.{}.{}", 
+        format!(
+            "v{}.{}.{}",
             Uuid::new_v4().simple().to_string()[..8].to_string(),
             SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)
@@ -383,9 +405,14 @@ impl HotReloadManager {
     }
 
     /// Create backup of plugin file
-    async fn create_backup(&self, plugin_file: &PluginFile, backup_dir: &Path) -> Result<(), PluginError> {
+    async fn create_backup(
+        &self,
+        plugin_file: &PluginFile,
+        backup_dir: &Path,
+    ) -> Result<(), PluginError> {
         // Create backup directory if it doesn't exist
-        fs::create_dir_all(backup_dir).await
+        fs::create_dir_all(backup_dir)
+            .await
             .map_err(|e| PluginError::IoError(e.to_string()))?;
 
         // Generate backup filename with timestamp
@@ -393,16 +420,19 @@ impl HotReloadManager {
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
-        
-        let plugin_name = plugin_file.path.file_stem()
+
+        let plugin_name = plugin_file
+            .path
+            .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("unknown");
-        
+
         let backup_filename = format!("{}_{}.wasm.bak", plugin_name, timestamp);
         let backup_path = backup_dir.join(backup_filename);
 
         // Copy file to backup location
-        fs::copy(&plugin_file.path, &backup_path).await
+        fs::copy(&plugin_file.path, &backup_path)
+            .await
             .map_err(|e| PluginError::IoError(e.to_string()))?;
 
         // Clean up old backups
@@ -412,14 +442,21 @@ impl HotReloadManager {
     }
 
     /// Clean up old backup files
-    async fn cleanup_old_backups(&self, backup_dir: &Path, plugin_name: &str) -> Result<(), PluginError> {
-        let mut entries = fs::read_dir(backup_dir).await
+    async fn cleanup_old_backups(
+        &self,
+        backup_dir: &Path,
+        plugin_name: &str,
+    ) -> Result<(), PluginError> {
+        let mut entries = fs::read_dir(backup_dir)
+            .await
             .map_err(|e| PluginError::IoError(e.to_string()))?;
 
         let mut backup_files = Vec::new();
-        while let Some(entry) = entries.next_entry().await
-            .map_err(|e| PluginError::IoError(e.to_string()))? {
-            
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .map_err(|e| PluginError::IoError(e.to_string()))?
+        {
             let path = entry.path();
             if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
                 if filename.starts_with(plugin_name) && filename.ends_with(".wasm.bak") {
@@ -437,8 +474,12 @@ impl HotReloadManager {
 
         // Remove excess backups
         if backup_files.len() > self.config.max_backups {
-            for (path, _) in backup_files.iter().take(backup_files.len() - self.config.max_backups) {
-                fs::remove_file(path).await
+            for (path, _) in backup_files
+                .iter()
+                .take(backup_files.len() - self.config.max_backups)
+            {
+                fs::remove_file(path)
+                    .await
                     .map_err(|e| PluginError::IoError(e.to_string()))?;
             }
         }

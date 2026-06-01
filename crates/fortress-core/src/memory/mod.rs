@@ -3,19 +3,19 @@
 //! This module provides zero-copy architecture and smart memory management
 //! for Fortress to optimize performance and reduce memory overhead.
 
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use serde::{Serialize, Deserialize};
 
-pub mod zero_copy;
-pub mod pool_allocator;
 pub mod arc_optimization;
 pub mod memory_monitor;
+pub mod pool_allocator;
+pub mod zero_copy;
 
-pub use zero_copy::ZeroCopyManager;
-pub use pool_allocator::PoolAllocator;
 pub use arc_optimization::ArcOptimizer;
 pub use memory_monitor::MemoryMonitor;
+pub use pool_allocator::PoolAllocator;
+pub use zero_copy::ZeroCopyManager;
 
 /// Memory optimization configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -92,13 +92,13 @@ impl Default for MemoryOptimizationConfig {
             max_memory_mb: 1024, // 1GB default
             pool_sizes: PoolSizes {
                 small_pool_size: 64,    // 64 bytes
-                medium_pool_size: 1024,  // 1KB
+                medium_pool_size: 1024, // 1KB
                 large_pool_size: 65536, // 64KB
                 small_pool_count: 1000,
                 medium_pool_count: 100,
                 large_pool_count: 10,
             },
-            gc_trigger_threshold: 0.8, // 80%
+            gc_trigger_threshold: 0.8,    // 80%
             cleanup_interval_seconds: 60, // 1 minute
         }
     }
@@ -164,7 +164,7 @@ impl MemoryOptimizationManager {
 
         if manager.config.pool_allocation_enabled {
             manager.pool_allocator = Some(Arc::new(PoolAllocator::new(
-                manager.config.pool_sizes.clone()
+                manager.config.pool_sizes.clone(),
             )?));
         }
 
@@ -185,7 +185,7 @@ impl MemoryOptimizationManager {
     /// Get current memory metrics
     pub async fn get_metrics(&self) -> crate::error::Result<MemoryOptimizationMetrics> {
         let mut metrics = self.metrics.write().await;
-        
+
         // Update metrics from components
         if let Some(monitor) = &self.memory_monitor {
             let monitor_metrics = monitor.get_metrics().await?;

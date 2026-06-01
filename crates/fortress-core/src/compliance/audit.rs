@@ -7,26 +7,26 @@ use crate::audit::EventOutcome;
 use crate::compliance::framework::*;
 use crate::error::Result;
 use async_trait::async_trait;
-use chrono::{DateTime, Utc, Duration};
+use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 
 /// Compliance audit logger for regulatory compliance
-/// 
+///
 /// This struct provides a comprehensive audit logging system for regulatory compliance
 /// including GDPR, HIPAA, PCI DSS, and other frameworks.
-/// 
+///
 /// It supports event storage, retrieval, integrity checking, and automated cleanup.
-/// 
+///
 /// # Examples
 /// ```
 /// let audit_logger = ComplianceAuditLogger::new(
-///     storage, 
-///     retention_policy, 
+///     storage,
+///     retention_policy,
 ///     integrity_checker
 /// ).await?;
-/// 
+///
 /// audit_logger.store_event(event).await?;
 /// ```
 pub struct ComplianceAuditLogger {
@@ -42,19 +42,19 @@ pub struct ComplianceAuditLogger {
 #[async_trait]
 pub trait AuditStorage: Send + Sync {
     /// Store an audit event in the audit log
-    /// 
+    ///
     /// # Arguments
     /// * `event` - The audit event to store
     async fn store_event(&self, event: &AuditEvent) -> Result<()>;
 
     /// Retrieve audit events based on filter criteria
-    /// 
+    ///
     /// # Arguments
     /// * `filter` - Filter criteria for event retrieval
     async fn retrieve_events(&self, filter: &AuditFilter) -> Result<Vec<AuditEvent>>;
 
     /// Delete audit events older than specified date
-    /// 
+    ///
     /// # Arguments
     /// * `before` - Delete events older than this date
     async fn delete_old_events(&self, before: DateTime<Utc>) -> Result<u64>;
@@ -64,13 +64,13 @@ pub trait AuditStorage: Send + Sync {
 #[async_trait]
 pub trait IntegrityChecker: Send + Sync {
     /// Verify the integrity of audit events
-    /// 
+    ///
     /// # Arguments
     /// * `events` - Events to verify
     async fn verify_integrity(&self, events: &[AuditEvent]) -> Result<IntegrityReport>;
 
     /// Generate checksum for audit events
-    /// 
+    ///
     /// # Arguments
     /// * `events` - Events to generate checksum for
     async fn generate_checksum(&self, events: &[AuditEvent]) -> Result<String>;
@@ -92,7 +92,7 @@ pub struct ComplianceRetentionPolicy {
 }
 
 /// Audit filter for retrieving audit events
-/// 
+///
 /// This struct defines filter criteria for retrieving audit events, including start and end dates,
 /// compliance frameworks, event types, severities, users, resources, and maximum number of events.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -116,7 +116,7 @@ pub struct AuditFilter {
 }
 
 /// Comprehensive audit event
-/// 
+///
 /// This struct represents a comprehensive audit event for compliance tracking.
 /// It includes all necessary metadata for regulatory compliance and security auditing.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -188,7 +188,7 @@ pub struct IntegrityReport {
 
 impl ComplianceAuditLogger {
     /// Create a new compliance audit logger
-    /// 
+    ///
     /// # Arguments
     /// * `storage` - Storage backend for audit events
     /// * `retention_policy` - Policy for event retention
@@ -206,26 +206,26 @@ impl ComplianceAuditLogger {
     }
 
     /// Log a compliance event to the audit trail
-    /// 
+    ///
     /// # Arguments
     /// * `event` - The compliance event to log
     pub async fn log_event(&self, event: &ComplianceEvent) -> Result<()> {
         let audit_event = self.convert_to_audit_event(event).await?;
-        
+
         // Store the event
         self.storage.store_event(&audit_event).await?;
-        
+
         // If this is a critical event, trigger immediate integrity check
         if matches!(event.severity, EventSeverity::Critical) {
             self.verify_recent_events().await?;
         }
-        
+
         Ok(())
     }
 
     async fn convert_to_audit_event(&self, event: &ComplianceEvent) -> Result<AuditEvent> {
         let retention_days = self.determine_retention_period(event);
-        
+
         Ok(AuditEvent {
             id: event.id,
             timestamp: event.timestamp,
@@ -239,12 +239,26 @@ impl ComplianceAuditLogger {
             user_agent: None,
             action: "compliance_event".to_string(),
             resource_type: "compliance".to_string(),
-            resource_id: Some(event.affected_resources.first().cloned().unwrap_or_default()),
+            resource_id: Some(
+                event
+                    .affected_resources
+                    .first()
+                    .cloned()
+                    .unwrap_or_default(),
+            ),
             outcome: match event.outcome {
-                crate::compliance::framework::ComplianceEventOutcome::Success => crate::audit::EventOutcome::Success,
-                crate::compliance::framework::ComplianceEventOutcome::Failure => crate::audit::EventOutcome::Failure,
-                crate::compliance::framework::ComplianceEventOutcome::Blocked => crate::audit::EventOutcome::Failure,
-                crate::compliance::framework::ComplianceEventOutcome::RequiresReview => crate::audit::EventOutcome::RequiresReview,
+                crate::compliance::framework::ComplianceEventOutcome::Success => {
+                    crate::audit::EventOutcome::Success
+                }
+                crate::compliance::framework::ComplianceEventOutcome::Failure => {
+                    crate::audit::EventOutcome::Failure
+                }
+                crate::compliance::framework::ComplianceEventOutcome::Blocked => {
+                    crate::audit::EventOutcome::Failure
+                }
+                crate::compliance::framework::ComplianceEventOutcome::RequiresReview => {
+                    crate::audit::EventOutcome::RequiresReview
+                }
             },
             description: event.description.clone(),
             details: event.metadata.clone(),
@@ -259,24 +273,32 @@ impl ComplianceAuditLogger {
 
     fn determine_retention_period(&self, event: &ComplianceEvent) -> u32 {
         // Check framework-specific retention
-        if let Some(days) = self.retention_policy.framework_retentions.get(&event.framework) {
+        if let Some(days) = self
+            .retention_policy
+            .framework_retentions
+            .get(&event.framework)
+        {
             return *days;
         }
-        
+
         // Check event type-specific retention
-        if let Some(days) = self.retention_policy.event_type_retentions.get(&event.event_type) {
+        if let Some(days) = self
+            .retention_policy
+            .event_type_retentions
+            .get(&event.event_type)
+        {
             return *days;
         }
-        
+
         // Use default retention
         self.retention_policy.default_retention_days
     }
 
     /// Retrieve audit trail events based on filter criteria
-    /// 
+    ///
     /// # Arguments
     /// * `filter` - Filter criteria for retrieving events
-    /// 
+    ///
     /// # Returns
     /// Vector of audit events matching the filter
     pub async fn retrieve_audit_trail(&self, filter: &AuditFilter) -> Result<Vec<AuditEvent>> {
@@ -284,10 +306,10 @@ impl ComplianceAuditLogger {
     }
 
     /// Verify the integrity of audit events
-    /// 
+    ///
     /// # Arguments
     /// * `filter` - Optional filter for events to check (None checks all)
-    /// 
+    ///
     /// # Returns
     /// Integrity report with findings and recommendations
     pub async fn verify_integrity(&self, filter: Option<&AuditFilter>) -> Result<IntegrityReport> {
@@ -295,16 +317,18 @@ impl ComplianceAuditLogger {
             self.storage.retrieve_events(f).await?
         } else {
             // Get all events for full integrity check
-            self.storage.retrieve_events(&AuditFilter {
-                start_date: None,
-                end_date: None,
-                frameworks: vec![],
-                event_types: vec![],
-                severities: vec![],
-                users: vec![],
-                resources: vec![],
-                limit: None,
-            }).await?
+            self.storage
+                .retrieve_events(&AuditFilter {
+                    start_date: None,
+                    end_date: None,
+                    frameworks: vec![],
+                    event_types: vec![],
+                    severities: vec![],
+                    users: vec![],
+                    resources: vec![],
+                    limit: None,
+                })
+                .await?
         };
 
         self.integrity_checker.verify_integrity(&events).await
@@ -323,10 +347,10 @@ impl ComplianceAuditLogger {
         };
 
         let integrity_report = self.verify_integrity(Some(&recent_filter)).await?;
-        
+
         if !integrity_report.integrity_passed {
             log::error!("Audit integrity check failed: {:?}", integrity_report);
-            
+
             // Create alert for integrity failure
             let alert_event = ComplianceEvent {
                 id: Uuid::new_v4(),
@@ -340,17 +364,17 @@ impl ComplianceAuditLogger {
                 outcome: ComplianceEventOutcome::Failure,
                 metadata: HashMap::new(),
             };
-            
+
             // Log the alert (without infinite recursion)
             let audit_event = self.convert_to_audit_event(&alert_event).await?;
             self.storage.store_event(&audit_event).await?;
         }
-        
+
         Ok(())
     }
 
     /// Clean up old audit events based on retention policy
-    /// 
+    ///
     /// # Returns
     /// Number of events that were cleaned up
     pub async fn cleanup_old_events(&self) -> Result<u64> {
@@ -358,7 +382,8 @@ impl ComplianceAuditLogger {
             return Ok(0);
         }
 
-        let cutoff_date = Utc::now() - Duration::days(self.retention_policy.default_retention_days as i64);
+        let cutoff_date =
+            Utc::now() - Duration::days(self.retention_policy.default_retention_days as i64);
         self.storage.delete_old_events(cutoff_date).await
     }
 }
@@ -418,7 +443,7 @@ impl AuditStorage for DefaultAuditStorage {
 
     async fn retrieve_events(&self, filter: &AuditFilter) -> Result<Vec<AuditEvent>> {
         let events = self.events.read().await;
-        
+
         let filtered_events: Vec<AuditEvent> = events
             .iter()
             .filter(|e| {
@@ -433,22 +458,22 @@ impl AuditStorage for DefaultAuditStorage {
                         return false;
                     }
                 }
-                
+
                 // Framework filter
                 if !filter.frameworks.is_empty() && !filter.frameworks.contains(&e.framework) {
                     return false;
                 }
-                
+
                 // Event type filter
                 if !filter.event_types.is_empty() && !filter.event_types.contains(&e.event_type) {
                     return false;
                 }
-                
+
                 // Severity filter
                 if !filter.severities.is_empty() && !filter.severities.contains(&e.severity) {
                     return false;
                 }
-                
+
                 // User filter
                 if !filter.users.is_empty() {
                     if let Some(user_id) = &e.user_id {
@@ -459,7 +484,7 @@ impl AuditStorage for DefaultAuditStorage {
                         return false;
                     }
                 }
-                
+
                 // Resource filter
                 if !filter.resources.is_empty() {
                     if let Some(resource_id) = &e.resource_id {
@@ -470,13 +495,13 @@ impl AuditStorage for DefaultAuditStorage {
                         return false;
                     }
                 }
-                
+
                 true
             })
             .cloned()
             .take(filter.limit.unwrap_or(u32::MAX) as usize)
             .collect();
-        
+
         Ok(filtered_events)
     }
 
@@ -504,7 +529,7 @@ impl IntegrityChecker for DefaultIntegrityChecker {
         let mut missing_events = Vec::new();
         let tampered_events = Vec::new();
         let mut checksum_mismatches = Vec::new();
-        
+
         // Check for sequence number gaps
         if !events.is_empty() {
             let mut expected_seq = 0;
@@ -515,7 +540,7 @@ impl IntegrityChecker for DefaultIntegrityChecker {
                 expected_seq = event.sequence_number + 1;
             }
         }
-        
+
         // Verify checksums
         for event in events {
             if let Some(stored_checksum) = &event.checksum {
@@ -525,11 +550,11 @@ impl IntegrityChecker for DefaultIntegrityChecker {
                 }
             }
         }
-        
-        let integrity_passed = missing_events.is_empty() 
-            && tampered_events.is_empty() 
+
+        let integrity_passed = missing_events.is_empty()
+            && tampered_events.is_empty()
             && checksum_mismatches.is_empty();
-        
+
         let mut recommendations = Vec::new();
         if !missing_events.is_empty() {
             recommendations.push("Investigate missing audit events".to_string());
@@ -540,7 +565,7 @@ impl IntegrityChecker for DefaultIntegrityChecker {
         if integrity_passed {
             recommendations.push("Audit trail integrity verified".to_string());
         }
-        
+
         Ok(IntegrityReport {
             check_timestamp: Utc::now(),
             total_events_checked: events.len() as u64,
@@ -555,9 +580,9 @@ impl IntegrityChecker for DefaultIntegrityChecker {
     async fn generate_checksum(&self, events: &[AuditEvent]) -> Result<String> {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
-        
+
         for event in events {
             event.id.hash(&mut hasher);
             event.timestamp.hash(&mut hasher);
@@ -568,7 +593,7 @@ impl IntegrityChecker for DefaultIntegrityChecker {
             event.action.hash(&mut hasher);
             event.outcome.hash(&mut hasher);
         }
-        
+
         Ok(format!("{:x}", hasher.finish()))
     }
 }

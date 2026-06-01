@@ -13,18 +13,27 @@ async fn test_simple_backup_and_restore() {
 
     // Add test data
     source_storage.put("test.txt", b"test data").await.unwrap();
-    source_storage.put("data.json", b"{\"key\": \"value\"}").await.unwrap();
+    source_storage
+        .put("data.json", b"{\"key\": \"value\"}")
+        .await
+        .unwrap();
 
     let config = BackupConfig::default();
     let manager = DefaultBackupManager::new(backup_storage.clone(), None, config.clone()).unwrap();
 
     // Create backup
-    let backup = manager.create_backup(&*source_storage, &config).await.unwrap();
+    let backup = manager
+        .create_backup(&*source_storage, &config)
+        .await
+        .unwrap();
     assert_eq!(backup.item_count, 2);
     assert!(matches!(backup.strategy, BackupStrategy::Full));
 
     // Restore backup
-    let status = manager.restore_backup(&backup.backup_id, &*target_storage, &config).await.unwrap();
+    let status = manager
+        .restore_backup(&backup.backup_id, &*target_storage, &config)
+        .await
+        .unwrap();
     assert!(matches!(status.status, RestoreOperationStatus::Completed));
 
     // Verify restored data
@@ -46,14 +55,23 @@ async fn test_backup_verification() {
     let config = BackupConfig::default();
     let manager = DefaultBackupManager::new(backup_storage.clone(), None, config.clone()).unwrap();
 
-    let backup = manager.create_backup(&*source_storage, &config).await.unwrap();
+    let backup = manager
+        .create_backup(&*source_storage, &config)
+        .await
+        .unwrap();
 
     // Test basic verification
-    let is_valid = manager.verify_backup(&backup.backup_id, VerificationLevel::Basic).await.unwrap();
+    let is_valid = manager
+        .verify_backup(&backup.backup_id, VerificationLevel::Basic)
+        .await
+        .unwrap();
     assert!(is_valid);
 
     // Test full verification
-    let is_valid = manager.verify_backup(&backup.backup_id, VerificationLevel::Full).await.unwrap();
+    let is_valid = manager
+        .verify_backup(&backup.backup_id, VerificationLevel::Full)
+        .await
+        .unwrap();
     assert!(is_valid);
 }
 
@@ -68,7 +86,10 @@ async fn test_backup_list_and_delete() {
     let manager = DefaultBackupManager::new(backup_storage.clone(), None, config.clone()).unwrap();
 
     // Create backup
-    let backup = manager.create_backup(&*source_storage, &config).await.unwrap();
+    let backup = manager
+        .create_backup(&*source_storage, &config)
+        .await
+        .unwrap();
 
     // List backups
     let backups = manager.list_backups().await.unwrap();
@@ -76,7 +97,10 @@ async fn test_backup_list_and_delete() {
     assert_eq!(backups[0].backup_id, backup.backup_id);
 
     // Get backup metadata
-    let metadata = manager.get_backup_metadata(&backup.backup_id).await.unwrap();
+    let metadata = manager
+        .get_backup_metadata(&backup.backup_id)
+        .await
+        .unwrap();
     assert!(metadata.is_some());
     assert_eq!(metadata.unwrap().backup_id, backup.backup_id);
 
@@ -100,7 +124,10 @@ async fn test_storage_stats() {
     let manager = DefaultBackupManager::new(backup_storage.clone(), None, config.clone()).unwrap();
 
     // Create backup
-    let backup = manager.create_backup(&*source_storage, &config).await.unwrap();
+    let backup = manager
+        .create_backup(&*source_storage, &config)
+        .await
+        .unwrap();
 
     // Get storage stats
     let stats = manager.get_storage_stats().await.unwrap();
@@ -119,13 +146,19 @@ async fn test_empty_backup() {
     let manager = DefaultBackupManager::new(backup_storage.clone(), None, config.clone()).unwrap();
 
     // Create backup of empty storage
-    let backup = manager.create_backup(&*source_storage, &config).await.unwrap();
+    let backup = manager
+        .create_backup(&*source_storage, &config)
+        .await
+        .unwrap();
     assert_eq!(backup.item_count, 0);
     assert_eq!(backup.total_size, 0);
 
     // Restore empty backup
     let target_storage = Arc::new(InMemoryStorage::new());
-    let status = manager.restore_backup(&backup.backup_id, &*target_storage, &config).await.unwrap();
+    let status = manager
+        .restore_backup(&backup.backup_id, &*target_storage, &config)
+        .await
+        .unwrap();
     assert!(matches!(status.status, RestoreOperationStatus::Completed));
     assert_eq!(status.items_restored, 0);
 }
@@ -143,13 +176,19 @@ async fn test_large_data_backup() {
     let manager = DefaultBackupManager::new(backup_storage.clone(), None, config.clone()).unwrap();
 
     // Create backup
-    let backup = manager.create_backup(&*source_storage, &config).await.unwrap();
+    let backup = manager
+        .create_backup(&*source_storage, &config)
+        .await
+        .unwrap();
     assert_eq!(backup.item_count, 1);
     assert_eq!(backup.total_size, large_data.len() as u64);
 
     // Restore backup
     let target_storage = Arc::new(InMemoryStorage::new());
-    let status = manager.restore_backup(&backup.backup_id, &*target_storage, &config).await.unwrap();
+    let status = manager
+        .restore_backup(&backup.backup_id, &*target_storage, &config)
+        .await
+        .unwrap();
     assert!(matches!(status.status, RestoreOperationStatus::Completed));
 
     // Verify restored data
@@ -177,19 +216,28 @@ async fn test_special_characters_in_keys() {
     ];
 
     for key in &test_keys {
-        source_storage.put(key, format!("data for {}", key).as_bytes()).await.unwrap();
+        source_storage
+            .put(key, format!("data for {}", key).as_bytes())
+            .await
+            .unwrap();
     }
 
     let config = BackupConfig::default();
     let manager = DefaultBackupManager::new(backup_storage.clone(), None, config.clone()).unwrap();
 
     // Create backup
-    let backup = manager.create_backup(&*source_storage, &config).await.unwrap();
+    let backup = manager
+        .create_backup(&*source_storage, &config)
+        .await
+        .unwrap();
     assert_eq!(backup.item_count, test_keys.len() as u64);
 
     // Restore backup
     let target_storage = Arc::new(InMemoryStorage::new());
-    let status = manager.restore_backup(&backup.backup_id, &*target_storage, &config).await.unwrap();
+    let status = manager
+        .restore_backup(&backup.backup_id, &*target_storage, &config)
+        .await
+        .unwrap();
     assert!(matches!(status.status, RestoreOperationStatus::Completed));
     assert_eq!(status.items_restored, test_keys.len() as u64);
 
@@ -211,26 +259,41 @@ async fn test_multiple_backups() {
 
     // Create first backup
     source_storage.put("file1.txt", b"version1").await.unwrap();
-    let backup1 = manager.create_backup(&*source_storage, &config).await.unwrap();
+    let backup1 = manager
+        .create_backup(&*source_storage, &config)
+        .await
+        .unwrap();
 
     // Modify data and create second backup
     source_storage.put("file1.txt", b"version2").await.unwrap();
     source_storage.put("file2.txt", b"new file").await.unwrap();
-    let backup2 = manager.create_backup(&*source_storage, &config).await.unwrap();
+    let backup2 = manager
+        .create_backup(&*source_storage, &config)
+        .await
+        .unwrap();
 
     // List backups should show both
     let backups = manager.list_backups().await.unwrap();
     assert_eq!(backups.len(), 2);
 
     // Verify backup metadata
-    let metadata1 = manager.get_backup_metadata(&backup1.backup_id).await.unwrap();
-    let metadata2 = manager.get_backup_metadata(&backup2.backup_id).await.unwrap();
+    let metadata1 = manager
+        .get_backup_metadata(&backup1.backup_id)
+        .await
+        .unwrap();
+    let metadata2 = manager
+        .get_backup_metadata(&backup2.backup_id)
+        .await
+        .unwrap();
     assert!(metadata1.is_some());
     assert!(metadata2.is_some());
 
     // Restore from first backup
     let target1 = Arc::new(InMemoryStorage::new());
-    let status1 = manager.restore_backup(&backup1.backup_id, &*target1, &config).await.unwrap();
+    let status1 = manager
+        .restore_backup(&backup1.backup_id, &*target1, &config)
+        .await
+        .unwrap();
     assert!(matches!(status1.status, RestoreOperationStatus::Completed));
 
     let data1 = target1.get("file1.txt").await.unwrap();
@@ -238,7 +301,10 @@ async fn test_multiple_backups() {
 
     // Restore from second backup
     let target2 = Arc::new(InMemoryStorage::new());
-    let status2 = manager.restore_backup(&backup2.backup_id, &*target2, &config).await.unwrap();
+    let status2 = manager
+        .restore_backup(&backup2.backup_id, &*target2, &config)
+        .await
+        .unwrap();
     assert!(matches!(status2.status, RestoreOperationStatus::Completed));
 
     let data2 = target2.get("file1.txt").await.unwrap();

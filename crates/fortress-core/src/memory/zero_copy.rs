@@ -3,13 +3,13 @@
 //! This module provides zero-copy data structures and operations to minimize
 //! memory allocations and improve performance in hot paths.
 
-use std::borrow::Cow;
-use std::sync::Arc;
-use std::collections::HashMap;
-use tokio::sync::RwLock;
-use serde::{Serialize, Deserialize};
-use bytes::{Bytes, BytesMut};
 use crate::error::Result;
+use bytes::{Bytes, BytesMut};
+use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 /// Zero-copy data type for efficient string handling
 pub type ZeroCopyString = Cow<'static, str>;
@@ -75,7 +75,7 @@ where
             data: Arc::new(data),
         }
     }
-    
+
     /// Create a new zero-copy map with default values
     pub fn default() -> Self {
         Self::new(HashMap::new())
@@ -172,8 +172,12 @@ impl ZeroCopyBuffer {
     pub fn split_at(&self, mid: usize) -> (ZeroCopyBuffer, ZeroCopyBuffer) {
         let (left, right) = self.data.split_at(mid);
         (
-            ZeroCopyBuffer { data: Bytes::copy_from_slice(left) },
-            ZeroCopyBuffer { data: Bytes::copy_from_slice(right) },
+            ZeroCopyBuffer {
+                data: Bytes::copy_from_slice(left),
+            },
+            ZeroCopyBuffer {
+                data: Bytes::copy_from_slice(right),
+            },
         )
     }
 }
@@ -302,7 +306,7 @@ impl ZeroCopyManager {
     /// Create a zero-copy string with caching
     pub async fn create_string(&self, s: String) -> Result<ZeroCopyString> {
         let start = std::time::Instant::now();
-        
+
         // Check cache first
         {
             let cache = self.string_cache.read().await;
@@ -310,8 +314,10 @@ impl ZeroCopyManager {
                 let mut metrics = self.metrics.write().await;
                 metrics.string_cache_hits += 1;
                 metrics.total_operations += 1;
-                metrics.avg_operation_time_us = (metrics.avg_operation_time_us * (metrics.total_operations - 1) as f64 
-                    + start.elapsed().as_micros() as f64) / metrics.total_operations as f64;
+                metrics.avg_operation_time_us = (metrics.avg_operation_time_us
+                    * (metrics.total_operations - 1) as f64
+                    + start.elapsed().as_micros() as f64)
+                    / metrics.total_operations as f64;
                 return Ok(cached.clone());
             }
         }
@@ -329,8 +335,10 @@ impl ZeroCopyManager {
         metrics.string_cache_misses += 1;
         metrics.total_operations += 1;
         metrics.memory_saved_bytes += s.len() as u64;
-        metrics.avg_operation_time_us = (metrics.avg_operation_time_us * (metrics.total_operations - 1) as f64 
-            + start.elapsed().as_micros() as f64) / metrics.total_operations as f64;
+        metrics.avg_operation_time_us = (metrics.avg_operation_time_us
+            * (metrics.total_operations - 1) as f64
+            + start.elapsed().as_micros() as f64)
+            / metrics.total_operations as f64;
 
         Ok(zero_copy_str)
     }
@@ -339,7 +347,7 @@ impl ZeroCopyManager {
     pub async fn create_buffer(&self, data: Vec<u8>) -> Result<ZeroCopyBuffer> {
         let start = std::time::Instant::now();
         let size = data.len();
-        
+
         // Check cache first
         {
             let cache = self.buffer_cache.read().await;
@@ -347,8 +355,10 @@ impl ZeroCopyManager {
                 let mut metrics = self.metrics.write().await;
                 metrics.buffer_cache_hits += 1;
                 metrics.total_operations += 1;
-                metrics.avg_operation_time_us = (metrics.avg_operation_time_us * (metrics.total_operations - 1) as f64 
-                    + start.elapsed().as_micros() as f64) / metrics.total_operations as f64;
+                metrics.avg_operation_time_us = (metrics.avg_operation_time_us
+                    * (metrics.total_operations - 1) as f64
+                    + start.elapsed().as_micros() as f64)
+                    / metrics.total_operations as f64;
                 return Ok(cached.clone());
             }
         }
@@ -366,8 +376,10 @@ impl ZeroCopyManager {
         metrics.buffer_cache_misses += 1;
         metrics.total_operations += 1;
         metrics.memory_saved_bytes += size as u64;
-        metrics.avg_operation_time_us = (metrics.avg_operation_time_us * (metrics.total_operations - 1) as f64 
-            + start.elapsed().as_micros() as f64) / metrics.total_operations as f64;
+        metrics.avg_operation_time_us = (metrics.avg_operation_time_us
+            * (metrics.total_operations - 1) as f64
+            + start.elapsed().as_micros() as f64)
+            / metrics.total_operations as f64;
 
         Ok(zero_copy_buffer)
     }
@@ -392,7 +404,11 @@ impl ZeroCopyManager {
             let mut cache = self.string_cache.write().await;
             if cache.len() > max_cache_size {
                 // Remove oldest entries (simple LRU simulation)
-                let keys_to_remove: Vec<String> = cache.keys().take(cache.len() - max_cache_size).cloned().collect();
+                let keys_to_remove: Vec<String> = cache
+                    .keys()
+                    .take(cache.len() - max_cache_size)
+                    .cloned()
+                    .collect();
                 for key in keys_to_remove {
                     cache.remove(&key);
                 }
@@ -403,7 +419,11 @@ impl ZeroCopyManager {
         {
             let mut cache = self.buffer_cache.write().await;
             if cache.len() > max_cache_size {
-                let keys_to_remove: Vec<usize> = cache.keys().take(cache.len() - max_cache_size).cloned().collect();
+                let keys_to_remove: Vec<usize> = cache
+                    .keys()
+                    .take(cache.len() - max_cache_size)
+                    .cloned()
+                    .collect();
                 for key in keys_to_remove {
                     cache.remove(&key);
                 }
@@ -437,7 +457,7 @@ mod tests {
     fn test_zero_copy_vec() {
         let data = vec![1, 2, 3, 4, 5];
         let zero_copy_vec = ZeroCopyVec::new(data);
-        
+
         assert_eq!(zero_copy_vec.len(), 5);
         assert!(!zero_copy_vec.is_empty());
         assert_eq!(zero_copy_vec.as_slice(), &[1, 2, 3, 4, 5]);
@@ -448,9 +468,9 @@ mod tests {
         let mut data = HashMap::new();
         data.insert("key1".to_string(), "value1");
         data.insert("key2".to_string(), "value2");
-        
+
         let zero_copy_map = ZeroCopyMap::new(data);
-        
+
         assert_eq!(zero_copy_map.len(), 2);
         assert!(zero_copy_map.contains_key(&"key1".to_string()));
         assert_eq!(zero_copy_map.get(&"key1".to_string()), Some(&"value1"));
@@ -460,7 +480,7 @@ mod tests {
     fn test_zero_copy_buffer() {
         let data = vec![1, 2, 3, 4, 5];
         let buffer = ZeroCopyBuffer::new(data);
-        
+
         assert_eq!(buffer.len(), 5);
         assert!(!buffer.is_empty());
         assert_eq!(buffer.as_slice(), &[1, 2, 3, 4, 5]);
@@ -470,7 +490,7 @@ mod tests {
     fn test_zero_copy_string_builder() {
         let mut builder = ZeroCopyStringBuilder::new();
         builder.append_str("Hello, ").append_str("World!");
-        
+
         let result = builder.build();
         assert_eq!(result.as_ref(), "Hello, World!");
     }
@@ -478,13 +498,13 @@ mod tests {
     #[tokio::test]
     async fn test_zero_copy_manager() {
         let manager = ZeroCopyManager::new().unwrap();
-        
+
         let string = manager.create_string("test".to_string()).await.unwrap();
         assert_eq!(string.as_ref(), "test");
-        
+
         let buffer = manager.create_buffer(vec![1, 2, 3, 4, 5]).await.unwrap();
         assert_eq!(buffer.as_slice(), &[1, 2, 3, 4, 5]);
-        
+
         let metrics = manager.get_metrics().await.unwrap();
         assert_eq!(metrics.total_operations, 2);
     }

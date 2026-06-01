@@ -288,11 +288,18 @@ impl SystemResourceMonitor {
 
         tokio::spawn(async move {
             let mut interval_timer = interval(Duration::from_secs(interval_seconds));
-            
+
             loop {
                 interval_timer.tick().await;
-                
-                match Self::collect_system_snapshot(enable_disk, enable_network, enable_process, &previous_network_stats).await {
+
+                match Self::collect_system_snapshot(
+                    enable_disk,
+                    enable_network,
+                    enable_process,
+                    &previous_network_stats,
+                )
+                .await
+                {
                     Ok(snapshot) => {
                         // Update current snapshot
                         {
@@ -304,7 +311,7 @@ impl SystemResourceMonitor {
                         {
                             let mut history_guard = history.write().await;
                             history_guard.push(snapshot);
-                            
+
                             // Limit history size
                             if history_guard.len() > retention_count {
                                 let excess = history_guard.len() - retention_count;
@@ -328,34 +335,34 @@ impl SystemResourceMonitor {
         previous_network_stats: &Arc<RwLock<HashMap<String, (u64, u64, Instant)>>>,
     ) -> Result<SystemSnapshot> {
         let timestamp = chrono::Utc::now();
-        
+
         // Collect CPU information
         let cpu = Self::collect_cpu_info().await?;
-        
+
         // Collect memory information
         let memory = Self::collect_memory_info().await?;
-        
+
         // Collect disk information
         let disks = if enable_disk {
             Self::collect_disk_info().await?
         } else {
             Vec::new()
         };
-        
+
         // Collect network information
         let networks = if enable_network {
             Self::collect_network_info(previous_network_stats).await?
         } else {
             Vec::new()
         };
-        
+
         // Collect process information
         let processes = if enable_process {
             Self::collect_process_info().await?
         } else {
             Vec::new()
         };
-        
+
         // Collect system uptime
         let uptime_seconds = Self::get_system_uptime().await?;
         let boot_time = timestamp - chrono::Duration::seconds(uptime_seconds as i64);
@@ -377,18 +384,19 @@ impl SystemResourceMonitor {
         // Use sysinfo crate for cross-platform CPU information
         let mut system = sysinfo::System::new();
         system.refresh_all();
-        
+
         let global_cpu = system.global_cpu_info();
         let overall_usage_percent = global_cpu.cpu_usage() as f64;
-        
+
         // Get per-core usage
-        let per_core_usage: Vec<f64> = system.cpus()
+        let per_core_usage: Vec<f64> = system
+            .cpus()
             .iter()
             .map(|cpu| cpu.cpu_usage() as f64)
             .collect();
-        
+
         let core_count = per_core_usage.len();
-        
+
         // Get load averages (Unix-like systems only)
         let load_averages = cfg!(unix).then(|| {
             let _loadavg = [0.0; 3];
@@ -413,12 +421,12 @@ impl SystemResourceMonitor {
     async fn collect_memory_info() -> Result<MemoryUsage> {
         let mut system = sysinfo::System::new();
         system.refresh_all();
-        
+
         let total_bytes = system.total_memory();
         let available_bytes = system.available_memory();
         let used_bytes = total_bytes - available_bytes;
         let usage_percent = (used_bytes as f64 / total_bytes as f64) * 100.0;
-        
+
         let swap_total_bytes = system.total_swap();
         let swap_used_bytes = system.used_swap();
         let swap_usage_percent = if swap_total_bytes > 0 {
@@ -446,17 +454,17 @@ impl SystemResourceMonitor {
     async fn collect_disk_info() -> Result<Vec<DiskUsage>> {
         let mut system = sysinfo::System::new();
         system.refresh_all();
-        
+
         let mut disks = Vec::new();
-        
+
         // For now, return a placeholder disk usage
         // In a real implementation, you would use platform-specific APIs
         disks.push(DiskUsage {
             mount_point: "/".to_string(),
             filesystem_type: "unknown".to_string(),
-            total_bytes: 1000000000000, // 1TB
+            total_bytes: 1000000000000,    // 1TB
             available_bytes: 500000000000, // 500GB
-            used_bytes: 500000000000, // 500GB
+            used_bytes: 500000000000,      // 500GB
             usage_percent: 50.0,
             read_ops: 0,
             write_ops: 0,
@@ -466,7 +474,7 @@ impl SystemResourceMonitor {
             write_time_ms: 0,
             queue_depth: 0.0,
         });
-        
+
         Ok(disks)
     }
 
@@ -475,7 +483,7 @@ impl SystemResourceMonitor {
         _previous_network_stats: &Arc<RwLock<HashMap<String, (u64, u64, Instant)>>>,
     ) -> Result<Vec<NetworkUsage>> {
         let mut networks = Vec::new();
-        
+
         // For now, return a placeholder network usage
         // In a real implementation, you would use platform-specific APIs
         networks.push(NetworkUsage {
@@ -493,7 +501,7 @@ impl SystemResourceMonitor {
             transmit_bandwidth_bps: 50000.0,
             error_rate_percent: 0.0,
         });
-        
+
         Ok(networks)
     }
 
@@ -501,18 +509,20 @@ impl SystemResourceMonitor {
     async fn collect_process_info() -> Result<Vec<ProcessInfo>> {
         let mut system = sysinfo::System::new();
         system.refresh_processes();
-        
+
         let mut processes = Vec::new();
-        
+
         // Get top processes by CPU usage
         let mut process_list: Vec<_> = system.processes().values().collect();
         process_list.sort_by(|a, b| b.cpu_usage().partial_cmp(&a.cpu_usage()).unwrap());
-        
-        for process in process_list.iter().take(20) { // Top 20 processes
+
+        for process in process_list.iter().take(20) {
+            // Top 20 processes
             let pid = process.pid().as_u32();
             let memory_usage_bytes = process.memory();
-            let memory_usage_percent = (memory_usage_bytes as f64 / system.total_memory() as f64) * 100.0;
-            
+            let memory_usage_percent =
+                (memory_usage_bytes as f64 / system.total_memory() as f64) * 100.0;
+
             processes.push(ProcessInfo {
                 pid,
                 ppid: process.parent().map(|p| p.as_u32()).unwrap_or(0),
@@ -521,15 +531,15 @@ impl SystemResourceMonitor {
                 cpu_usage_percent: process.cpu_usage() as f64,
                 memory_usage_bytes,
                 memory_usage_percent,
-                thread_count: 0, // Would need additional info
-                fd_count: 0, // Would need platform-specific implementation
+                thread_count: 0,                // Would need additional info
+                fd_count: 0,                    // Would need platform-specific implementation
                 start_time: chrono::Utc::now(), // Would need actual start time
                 status: format!("{:?}", process.status()),
                 uid: 0, // Would need platform-specific implementation
                 gid: 0,
             });
         }
-        
+
         Ok(processes)
     }
 
@@ -558,14 +568,17 @@ impl SystemResourceMonitor {
         let current = self.current.read().await;
         let thresholds = &self.config.alert_thresholds;
         let mut alerts = Vec::new();
-        
+
         if let Some(snapshot) = current.as_ref() {
             // CPU alerts
             if snapshot.cpu.overall_usage_percent > thresholds.cpu_critical_threshold {
                 alerts.push(ResourceAlert {
                     resource_type: ResourceType::Cpu,
                     severity: AlertSeverity::Critical,
-                    message: format!("Critical CPU usage: {:.1}%", snapshot.cpu.overall_usage_percent),
+                    message: format!(
+                        "Critical CPU usage: {:.1}%",
+                        snapshot.cpu.overall_usage_percent
+                    ),
                     current_value: snapshot.cpu.overall_usage_percent,
                     threshold_value: thresholds.cpu_critical_threshold,
                 });
@@ -578,13 +591,16 @@ impl SystemResourceMonitor {
                     threshold_value: thresholds.cpu_warning_threshold,
                 });
             }
-            
+
             // Memory alerts
             if snapshot.memory.usage_percent > thresholds.memory_critical_threshold {
                 alerts.push(ResourceAlert {
                     resource_type: ResourceType::Memory,
                     severity: AlertSeverity::Critical,
-                    message: format!("Critical memory usage: {:.1}%", snapshot.memory.usage_percent),
+                    message: format!(
+                        "Critical memory usage: {:.1}%",
+                        snapshot.memory.usage_percent
+                    ),
                     current_value: snapshot.memory.usage_percent,
                     threshold_value: thresholds.memory_critical_threshold,
                 });
@@ -597,14 +613,17 @@ impl SystemResourceMonitor {
                     threshold_value: thresholds.memory_warning_threshold,
                 });
             }
-            
+
             // Disk alerts
             for disk in &snapshot.disks {
                 if disk.usage_percent > thresholds.disk_critical_threshold {
                     alerts.push(ResourceAlert {
                         resource_type: ResourceType::Disk,
                         severity: AlertSeverity::Critical,
-                        message: format!("Critical disk usage on {}: {:.1}%", disk.mount_point, disk.usage_percent),
+                        message: format!(
+                            "Critical disk usage on {}: {:.1}%",
+                            disk.mount_point, disk.usage_percent
+                        ),
                         current_value: disk.usage_percent,
                         threshold_value: thresholds.disk_critical_threshold,
                     });
@@ -612,27 +631,33 @@ impl SystemResourceMonitor {
                     alerts.push(ResourceAlert {
                         resource_type: ResourceType::Disk,
                         severity: AlertSeverity::Warning,
-                        message: format!("High disk usage on {}: {:.1}%", disk.mount_point, disk.usage_percent),
+                        message: format!(
+                            "High disk usage on {}: {:.1}%",
+                            disk.mount_point, disk.usage_percent
+                        ),
                         current_value: disk.usage_percent,
                         threshold_value: thresholds.disk_warning_threshold,
                     });
                 }
             }
-            
+
             // Network alerts
             for network in &snapshot.networks {
                 if network.error_rate_percent > thresholds.network_error_threshold {
                     alerts.push(ResourceAlert {
                         resource_type: ResourceType::Network,
                         severity: AlertSeverity::Warning,
-                        message: format!("High network error rate on {}: {:.1}%", network.interface_name, network.error_rate_percent),
+                        message: format!(
+                            "High network error rate on {}: {:.1}%",
+                            network.interface_name, network.error_rate_percent
+                        ),
                         current_value: network.error_rate_percent,
                         threshold_value: thresholds.network_error_threshold,
                     });
                 }
             }
         }
-        
+
         alerts
     }
 
@@ -640,11 +665,12 @@ impl SystemResourceMonitor {
     pub async fn get_performance_trends(&self, duration_minutes: u64) -> Result<PerformanceTrends> {
         let history = self.history.read().await;
         let cutoff_time = chrono::Utc::now() - chrono::Duration::minutes(duration_minutes as i64);
-        
-        let recent_snapshots: Vec<_> = history.iter()
+
+        let recent_snapshots: Vec<_> = history
+            .iter()
             .filter(|snapshot| snapshot.timestamp > cutoff_time)
             .collect();
-        
+
         if recent_snapshots.is_empty() {
             return Err(FortressError::storage(
                 "No data available for trend analysis".to_string(),
@@ -652,11 +678,11 @@ impl SystemResourceMonitor {
                 crate::error::StorageErrorCode::NotFound,
             ));
         }
-        
+
         // Calculate trends
         let cpu_trend = Self::calculate_trend(&recent_snapshots, |s| s.cpu.overall_usage_percent);
         let memory_trend = Self::calculate_trend(&recent_snapshots, |s| s.memory.usage_percent);
-        
+
         Ok(PerformanceTrends {
             duration_minutes,
             cpu_trend,
@@ -674,19 +700,17 @@ impl SystemResourceMonitor {
         if snapshots.len() < 2 {
             return Trend::Stable;
         }
-        
-        let values: Vec<f64> = snapshots.iter()
-            .map(|&s| extractor(s).into())
-            .collect();
-        
+
+        let values: Vec<f64> = snapshots.iter().map(|&s| extractor(s).into()).collect();
+
         let first_half = &values[..values.len() / 2];
         let second_half = &values[values.len() / 2..];
-        
+
         let first_avg = first_half.iter().sum::<f64>() / first_half.len() as f64;
         let second_avg = second_half.iter().sum::<f64>() / second_half.len() as f64;
-        
+
         let change_percent = ((second_avg - first_avg) / first_avg) * 100.0;
-        
+
         match change_percent {
             x if x > 10.0 => Trend::Increasing,
             x if x < -10.0 => Trend::Decreasing,
@@ -765,10 +789,10 @@ mod tests {
     async fn test_system_resource_monitor_creation() {
         let config = SystemResourceConfig::default();
         let monitor = SystemResourceMonitor::new(config);
-        
+
         // Wait for initial collection
         sleep(Duration::from_millis(100)).await;
-        
+
         let snapshot = monitor.get_current_snapshot().await;
         assert!(snapshot.is_some());
     }
@@ -783,12 +807,12 @@ mod tests {
             },
             ..Default::default()
         };
-        
+
         let monitor = SystemResourceMonitor::new(config);
-        
+
         // Wait for initial collection
         sleep(Duration::from_millis(100)).await;
-        
+
         let alerts = monitor.get_resource_alerts().await;
         // Should trigger alerts due to low thresholds
         assert!(!alerts.is_empty());
@@ -798,10 +822,10 @@ mod tests {
     async fn test_performance_trends() {
         let config = SystemResourceConfig::default();
         let monitor = SystemResourceMonitor::new(config);
-        
+
         // Wait for some data collection
         sleep(Duration::from_millis(200)).await;
-        
+
         let trends = monitor.get_performance_trends(1).await;
         // May fail if no data collected yet, which is expected
         assert!(trends.is_ok() || trends.is_err());

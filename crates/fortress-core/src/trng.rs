@@ -6,9 +6,9 @@
 //! and graceful fallback to cryptographically secure pseudo-random generators.
 
 use crate::error::{FortressError, Result};
+use sha2::{Digest, Sha256};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use sha2::{Sha256, Digest};
 
 /// Configuration for the TRNG system
 #[derive(Debug, Clone)]
@@ -108,12 +108,12 @@ impl CircularBuffer {
 
         let mut result = Vec::with_capacity(self.size);
         let start_pos = if self.size < 4096 { 0 } else { self.head };
-        
+
         for i in 0..self.size {
             let pos = (start_pos + i) % 4096;
             result.push(self.buffer[pos]);
         }
-        
+
         result
     }
 
@@ -149,9 +149,9 @@ impl EntropyPool {
     fn add_entropy(&mut self, data: &[u8], estimated_bits: usize) {
         // Add data to pool using efficient circular buffer
         self.buffer.add_entropy(data);
-        
+
         self.entropy_bits += estimated_bits;
-        
+
         // Mix the pool periodically
         if self.last_mix.elapsed() > Duration::from_millis(100) {
             if let Err(e) = self.mix_pool() {
@@ -164,15 +164,15 @@ impl EntropyPool {
         if self.buffer.len() < 32 {
             return Ok(());
         }
-        
+
         let pool_data = self.buffer.as_vec();
         let original_len = self.buffer.len();
         let mut hasher = Sha256::new();
-        
+
         // Multiple hash rounds for better mixing
         for round in 0..3 {
             hasher.update(&pool_data);
-            
+
             // Add round-specific entropy
             let round_data = [
                 (round as u8).wrapping_mul(0x9b),
@@ -182,9 +182,9 @@ impl EntropyPool {
             ];
             hasher.update(&round_data);
         }
-        
+
         let hash = hasher.finalize();
-        
+
         // Replace pool with hashed entropy with enhanced mixing
         let mut new_buffer = CircularBuffer::new();
         for (i, &byte) in hash.iter().enumerate() {
@@ -198,25 +198,24 @@ impl EntropyPool {
                 ^ (i.wrapping_mul(0x9e3779b9) % 256) as u8;
             new_buffer.add_entropy(&[mixed_byte]);
         }
-        
+
         // Add additional entropy from system state
         let time_now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|_| FortressError::internal(
-                "System time went backwards",
-                "trng_system_time",
-            ))?;
-        
+            .map_err(|_| {
+                FortressError::internal("System time went backwards", "trng_system_time")
+            })?;
+
         let system_entropy = [
             (time_now.as_nanos() as u64 % 256) as u8,
             (std::process::id() as u64 % 256) as u8,
             (self.buffer.len() % 256) as u8,
         ];
-        
+
         for &byte in &system_entropy {
             new_buffer.add_entropy(&[byte.wrapping_add(self.entropy_bits as u8)]);
         }
-        
+
         // Replace the old buffer with the new mixed buffer
         self.buffer = new_buffer;
         self.last_mix = Instant::now();
@@ -227,14 +226,17 @@ impl EntropyPool {
     fn get_bytes(&mut self, count: usize) -> Result<Vec<u8>> {
         if self.entropy_bits < 8 * count {
             return Err(FortressError::internal(
-                format!("Insufficient entropy: {} bits available, {} needed", 
-                       self.entropy_bits, 8 * count),
+                format!(
+                    "Insufficient entropy: {} bits available, {} needed",
+                    self.entropy_bits,
+                    8 * count
+                ),
                 "trng_entropy".to_string(),
             ));
         }
 
         let mut result = Vec::with_capacity(count);
-        
+
         // Extract bytes from pool
         for _ in 0..count {
             if let Some(byte) = self.buffer.pop_front() {
@@ -284,14 +286,14 @@ impl EntropySeededRng {
 
         // Initialize entropy pool
         trng.initialize_entropy_pool()?;
-        
+
         Ok(trng)
     }
 
     /// Initialize the entropy pool with data from multiple sources
     fn initialize_entropy_pool(&self) -> Result<()> {
         let mut total_entropy = 0usize;
-        
+
         // Collect entropy from all sources
         for source in [
             EntropySource::CpuTiming,
@@ -303,10 +305,7 @@ impl EntropySeededRng {
             match self.collect_entropy(source) {
                 Ok((data, bits)) => {
                     let mut pool = self.entropy_pool.lock().map_err(|_| {
-                        FortressError::internal(
-                            "Failed to acquire entropy pool lock",
-                            "trng_lock",
-                        )
+                        FortressError::internal("Failed to acquire entropy pool lock", "trng_lock")
                     })?;
                     pool.add_entropy(&data, bits);
                     total_entropy += bits;
@@ -319,8 +318,10 @@ impl EntropySeededRng {
 
         if total_entropy < self.config.min_entropy_bits {
             return Err(FortressError::internal(
-                format!("Insufficient initial entropy: {} bits collected, {} required", 
-                       total_entropy, self.config.min_entropy_bits),
+                format!(
+                    "Insufficient initial entropy: {} bits collected, {} required",
+                    total_entropy, self.config.min_entropy_bits
+                ),
                 "trng_init".to_string(),
             ));
         }
@@ -344,12 +345,12 @@ impl EntropySeededRng {
     fn collect_cpu_timing_entropy(&self) -> Result<(Vec<u8>, usize)> {
         let mut timings = Vec::new();
         let iterations = 1000;
-        
+
         // Measure CPU timing variations with more entropy sources
         for i in 0..iterations {
             let start = Instant::now();
             let mut dummy = 0u64;
-            
+
             // Variable loop iterations based on i to add more variation
             let loop_size = 1000 + (i % 500);
             for j in 0u32..loop_size as u32 {
@@ -357,17 +358,17 @@ impl EntropySeededRng {
                 dummy = dummy.wrapping_mul((i + 1) as u64);
                 dummy = dummy ^ (j.wrapping_mul(i) as u64);
             }
-            
+
             let elapsed = start.elapsed();
             timings.push(elapsed.as_nanos() as u64);
-            
+
             // Add memory access timing variation
             let mem_start = Instant::now();
             let data: Vec<u8> = vec![i as u8; 1024];
             std::hint::black_box(data.len());
             let mem_elapsed = mem_start.elapsed();
             timings.push(mem_elapsed.as_nanos() as u64);
-            
+
             // Prevent optimization
             std::hint::black_box(dummy);
         }
@@ -391,7 +392,7 @@ impl EntropySeededRng {
 
         // Try to connect to a remote host to measure network timing
         let hosts = ["8.8.8.8:53", "1.1.1.1:53", "localhost:80"];
-        
+
         for host in &hosts {
             let start = Instant::now();
             match std::net::TcpStream::connect(host) {
@@ -417,7 +418,7 @@ impl EntropySeededRng {
 
         // Measure disk access timing
         let temp_file = std::env::temp_dir().join("fortress_trng_test");
-        
+
         for _ in 0..10 {
             let start = Instant::now();
             match std::fs::write(&temp_file, b"test_data") {
@@ -443,7 +444,7 @@ impl EntropySeededRng {
         // Allocate memory and measure access patterns with more variation
         let size = 2048 * 1024; // 2MB for more variation
         let data: Vec<u8> = vec![0; size];
-        
+
         for i in 0..200 {
             // Use multiple access patterns
             let patterns = [
@@ -452,19 +453,19 @@ impl EntropySeededRng {
                 (i * i) % size,     // Quadratic pattern
                 (i.wrapping_mul(0x9e3779b9) as usize) % size, // Golden ratio hash
             ];
-            
+
             for &index in &patterns {
                 let start = Instant::now();
                 std::hint::black_box(data[index]);
                 let elapsed = start.elapsed();
                 entropy_data.extend_from_slice(&elapsed.as_nanos().to_le_bytes());
-                
+
                 // Add some computation between accesses
                 let mut dummy = index as u64;
                 dummy = dummy.wrapping_mul(i as u64).wrapping_add(index as u64);
                 std::hint::black_box(dummy);
             }
-            
+
             // Add cache flush timing variation
             let flush_start = Instant::now();
             let flush_size = 1024 * (i % 16 + 1);
@@ -486,17 +487,18 @@ impl EntropySeededRng {
         // Collect high-resolution timestamps with more variation
         for i in 0..20 {
             let now = SystemTime::now();
-            let duration = now.duration_since(UNIX_EPOCH)
-                .map_err(|_| FortressError::internal(
+            let duration = now.duration_since(UNIX_EPOCH).map_err(|_| {
+                FortressError::internal(
                     "System time went backwards during entropy collection",
                     "trng_entropy_time",
-                ))?;
-            
+                )
+            })?;
+
             // Add different time components
             entropy_data.extend_from_slice(&duration.as_nanos().to_le_bytes());
             entropy_data.extend_from_slice(&duration.as_secs().to_le_bytes());
             entropy_data.extend_from_slice(&duration.subsec_nanos().to_le_bytes());
-            
+
             // Add some computation time variation
             let compute_start = Instant::now();
             let mut dummy = i as u64;
@@ -506,7 +508,7 @@ impl EntropySeededRng {
             let compute_elapsed = compute_start.elapsed();
             entropy_data.extend_from_slice(&compute_elapsed.as_nanos().to_le_bytes());
             std::hint::black_box(dummy);
-            
+
             // Small delay to add timing variation
             std::thread::sleep(std::time::Duration::from_nanos(i % 1000));
         }
@@ -520,7 +522,10 @@ impl EntropySeededRng {
         match self.generate_from_entropy_pool(count) {
             Ok(bytes) => Ok(bytes),
             Err(e) => {
-                tracing::warn!("Entropy pool generation failed: {}, using CSPRNG fallback", e);
+                tracing::warn!(
+                    "Entropy pool generation failed: {}, using CSPRNG fallback",
+                    e
+                );
                 if self.config.enable_fallback {
                     self.fallback_generate(count)
                 } else {
@@ -537,14 +542,11 @@ impl EntropySeededRng {
     fn generate_from_entropy_pool(&self, count: usize) -> Result<Vec<u8>> {
         // Perform health check first
         self.health_check()?;
-        
+
         let mut pool = self.entropy_pool.lock().map_err(|_| {
-            FortressError::internal(
-                "Failed to acquire entropy pool lock",
-                "trng_pool_lock",
-            )
+            FortressError::internal("Failed to acquire entropy pool lock", "trng_pool_lock")
         })?;
-        
+
         // If insufficient entropy, refresh or use CSPRNG fallback
         if pool.entropy_available() < 8 * count {
             drop(pool);
@@ -560,14 +562,14 @@ impl EntropySeededRng {
                 )
             })?;
         }
-        
+
         pool.get_bytes(count)
     }
 
     /// Refresh entropy pool with new data
     fn refresh_entropy_pool(&self) -> Result<()> {
         let mut total_entropy = 0usize;
-        
+
         // Collect entropy from all sources
         for source in [
             EntropySource::CpuTiming,
@@ -588,18 +590,22 @@ impl EntropySeededRng {
                     total_entropy += bits;
                 }
                 Err(e) => {
-                    tracing::warn!("Failed to collect entropy from {:?} during refresh: {}", source, e);
+                    tracing::warn!(
+                        "Failed to collect entropy from {:?} during refresh: {}",
+                        source,
+                        e
+                    );
                 }
             }
         }
-        
+
         if total_entropy == 0 {
             return Err(FortressError::internal(
                 "Failed to collect any entropy during refresh",
                 "trng_refresh_failed",
             ));
         }
-        
+
         tracing::debug!("Refreshed entropy pool with {} bits", total_entropy);
         Ok(())
     }
@@ -635,12 +641,9 @@ impl EntropySeededRng {
     /// Perform health check on the TRNG system
     pub fn health_check(&self) -> Result<()> {
         let mut last_check = self.last_health_check.lock().map_err(|_| {
-            FortressError::internal(
-                "Failed to acquire health check lock",
-                "trng_health_lock",
-            )
+            FortressError::internal("Failed to acquire health check lock", "trng_health_lock")
         })?;
-        
+
         if last_check.elapsed() < self.config.health_check_interval {
             return Ok(());
         }
@@ -660,7 +663,7 @@ impl EntropySeededRng {
                 "trng_health_status_lock",
             )
         })?;
-        
+
         if entropy_available < self.config.min_entropy_bits / 4 {
             *health = TrngHealth::Failed;
             return Err(FortressError::internal(
@@ -694,7 +697,9 @@ impl EntropySeededRng {
         match self.entropy_pool.lock() {
             Ok(pool) => (pool.entropy_available(), pool.buffer.len()),
             Err(_) => {
-                tracing::error!("Failed to acquire entropy pool lock for stats, returning defaults");
+                tracing::error!(
+                    "Failed to acquire entropy pool lock for stats, returning defaults"
+                );
                 (0, 0) // Return defaults if lock fails
             }
         }
@@ -703,11 +708,12 @@ impl EntropySeededRng {
     /// Fallback to cryptographically secure pseudo-random generator
     fn fallback_generate(&self, count: usize) -> Result<Vec<u8>> {
         let mut bytes = vec![0u8; count];
-        getrandom::getrandom(&mut bytes)
-            .map_err(|e| FortressError::internal(
+        getrandom::getrandom(&mut bytes).map_err(|e| {
+            FortressError::internal(
                 format!("CSPRNG fallback failed: {}", e),
                 "trng_fallback".to_string(),
-            ))?;
+            )
+        })?;
         Ok(bytes)
     }
 
@@ -731,11 +737,11 @@ impl Default for EntropySeededRng {
         // For Default implementation, create a CSPRNG-only TRNG
         // This ensures we never have a failed TRNG instance
         let config = TrngConfig {
-            min_entropy_bits: 0, // Don't require entropy pool
+            min_entropy_bits: 0,   // Don't require entropy pool
             enable_fallback: true, // Always enable fallback
             ..TrngConfig::default()
         };
-        
+
         Self {
             config,
             entropy_pool: Arc::new(Mutex::new(EntropyPool::new())),
@@ -746,24 +752,30 @@ impl Default for EntropySeededRng {
 }
 
 /// Global TRNG instance for convenience
-static GLOBAL_TRNG: std::sync::OnceLock<std::sync::Mutex<Option<Arc<EntropySeededRng>>>> = std::sync::OnceLock::new();
+static GLOBAL_TRNG: std::sync::OnceLock<std::sync::Mutex<Option<Arc<EntropySeededRng>>>> =
+    std::sync::OnceLock::new();
 
 /// Initialize the global TRNG instance
 pub fn init_global_trng() -> Result<()> {
     let trng = match EntropySeededRng::new() {
         Ok(trng) => Arc::new(trng),
         Err(e) => {
-            tracing::warn!("Failed to initialize full TRNG: {}, using CSPRNG fallback", e);
+            tracing::warn!(
+                "Failed to initialize full TRNG: {}, using CSPRNG fallback",
+                e
+            );
             Arc::new(EntropySeededRng::default())
         }
     };
-    
+
     let global = GLOBAL_TRNG.get_or_init(|| std::sync::Mutex::new(None));
-    let mut guard = global.lock().map_err(|_| FortressError::key_management(
-        "Failed to acquire lock on global TRNG during initialization", 
-        None, 
-        crate::error::KeyErrorCode::ProviderError
-    ))?;
+    let mut guard = global.lock().map_err(|_| {
+        FortressError::key_management(
+            "Failed to acquire lock on global TRNG during initialization",
+            None,
+            crate::error::KeyErrorCode::ProviderError,
+        )
+    })?;
     *guard = Some(trng);
     Ok(())
 }
@@ -771,24 +783,26 @@ pub fn init_global_trng() -> Result<()> {
 /// Get the global TRNG instance (initializes if needed)
 pub fn global_trng() -> Result<Arc<EntropySeededRng>> {
     let global = GLOBAL_TRNG.get_or_init(|| std::sync::Mutex::new(None));
-    let mut guard = global.lock().map_err(|_| FortressError::key_management(
-        "Failed to acquire lock on global TRNG", 
-        None, 
-        crate::error::KeyErrorCode::ProviderError
-    ))?;
-    
+    let mut guard = global.lock().map_err(|_| {
+        FortressError::key_management(
+            "Failed to acquire lock on global TRNG",
+            None,
+            crate::error::KeyErrorCode::ProviderError,
+        )
+    })?;
+
     if guard.is_none() {
         *guard = Some(Arc::new(EntropySeededRng::default()));
     }
-    
+
     // Since we initialize if None above, this should always be Some
     match guard.as_ref() {
         Some(trng) => Ok(trng.clone()),
         None => Err(FortressError::key_management(
-            "Failed to initialize global TRNG", 
-            None, 
-            crate::error::KeyErrorCode::ProviderError
-        ))
+            "Failed to initialize global TRNG",
+            None,
+            crate::error::KeyErrorCode::ProviderError,
+        )),
     }
 }
 
@@ -822,7 +836,7 @@ mod tests {
         let trng = EntropySeededRng::new().unwrap();
         let bytes1 = trng.generate_bytes(32).unwrap();
         let bytes2 = trng.generate_bytes(32).unwrap();
-        
+
         assert_eq!(bytes1.len(), 32);
         assert_eq!(bytes2.len(), 32);
         assert_ne!(bytes1, bytes2); // Should be different
@@ -833,7 +847,7 @@ mod tests {
         let trng = EntropySeededRng::new().unwrap();
         let val1 = trng.generate_u64().unwrap();
         let val2 = trng.generate_u64().unwrap();
-        
+
         assert_ne!(val1, val2); // Should be different
     }
 
@@ -842,7 +856,7 @@ mod tests {
         let trng = EntropySeededRng::new().unwrap();
         let mut buffer = [0u8; 16];
         trng.fill_bytes(&mut buffer).unwrap();
-        
+
         // Should not be all zeros
         assert_ne!(buffer, [0u8; 16]);
     }
@@ -850,7 +864,7 @@ mod tests {
     #[test]
     fn test_entropy_collection() {
         let trng = EntropySeededRng::new().unwrap();
-        
+
         for source in [
             EntropySource::CpuTiming,
             EntropySource::SystemTime,
@@ -883,7 +897,7 @@ mod tests {
     fn test_global_trng() {
         let result = init_global_trng();
         assert!(result.is_ok());
-        
+
         let bytes = random_bytes(16);
         assert!(bytes.is_ok());
         assert_eq!(bytes.unwrap().len(), 16);
@@ -904,7 +918,7 @@ mod tests {
             enable_fallback: true,
             ..Default::default()
         };
-        
+
         let trng = EntropySeededRng::with_config(config).unwrap();
         let bytes = trng.generate_bytes(32);
         assert!(bytes.is_ok());

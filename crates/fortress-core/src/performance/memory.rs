@@ -1,15 +1,15 @@
 //! Memory management optimizations
-//! 
+//!
 //! This module provides memory pools, pressure monitoring, and efficient
 //! memory allocation patterns for cryptographic operations.
 
 use crate::error::FortressError;
-use std::sync::{Arc, Mutex};
+use once_cell::sync::Lazy;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::time::{interval, sleep};
-use once_cell::sync::Lazy;
 
 /// Performance metrics for memory operations
 static MEMORY_ALLOCATIONS: AtomicU64 = AtomicU64::new(0);
@@ -24,17 +24,17 @@ pub struct MemoryPool<T> {
     current_size: Arc<AtomicUsize>,
 }
 
-impl<T> MemoryPool<T> 
-where 
+impl<T> MemoryPool<T>
+where
     T: Send + 'static,
 {
     /// Create a new memory pool
-    pub fn new<F>(initial_size: usize, max_size: usize, factory: F) -> Self 
-    where 
+    pub fn new<F>(initial_size: usize, max_size: usize, factory: F) -> Self
+    where
         F: Fn() -> T + Send + Sync + 'static,
     {
         let pool: VecDeque<T> = (0..initial_size).map(|_| factory()).collect();
-        
+
         Self {
             pool: Arc::new(Mutex::new(pool)),
             factory: Box::new(factory),
@@ -90,7 +90,7 @@ where
         let hits = POOL_HITS.load(Ordering::Relaxed) as f64;
         let misses = POOL_MISSES.load(Ordering::Relaxed) as f64;
         let total = hits + misses;
-        
+
         if total == 0.0 {
             0.0
         } else {
@@ -110,9 +110,8 @@ pub struct PoolStats {
 }
 
 /// Global buffer pool for cryptographic operations
-static BUFFER_POOL: Lazy<MemoryPool<Vec<u8>>> = Lazy::new(|| {
-    MemoryPool::new(100, 1000, || vec![0u8; 4096])
-});
+static BUFFER_POOL: Lazy<MemoryPool<Vec<u8>>> =
+    Lazy::new(|| MemoryPool::new(100, 1000, || vec![0u8; 4096]));
 
 /// Pooled buffer with automatic return to pool
 pub struct PooledBuffer {
@@ -127,7 +126,7 @@ impl PooledBuffer {
         let mut buffer = BUFFER_POOL.get();
         buffer.resize(size, 0);
         let original_capacity = buffer.capacity();
-        
+
         Self {
             buffer,
             pool: &BUFFER_POOL,
@@ -141,7 +140,7 @@ impl PooledBuffer {
         buffer.clear();
         buffer.reserve(capacity);
         let original_capacity = buffer.capacity();
-        
+
         Self {
             buffer,
             pool: &BUFFER_POOL,
@@ -223,8 +222,8 @@ impl MemoryMonitor {
     }
 
     /// Add a cleanup callback
-    pub fn add_cleanup_callback<F>(&mut self, callback: F) 
-    where 
+    pub fn add_cleanup_callback<F>(&mut self, callback: F)
+    where
         F: Fn() + Send + Sync + 'static,
     {
         self.cleanup_callbacks.push(Box::new(callback));
@@ -234,7 +233,9 @@ impl MemoryMonitor {
     pub async fn start_monitoring(&self) -> Result<(), FortressError> {
         let mut is_running = self.is_running.lock().unwrap();
         if *is_running {
-            return Err(FortressError::processor_error("Memory monitor already running".to_string()));
+            return Err(FortressError::processor_error(
+                "Memory monitor already running".to_string(),
+            ));
         }
         *is_running = true;
         drop(is_running);
@@ -246,10 +247,10 @@ impl MemoryMonitor {
 
         tokio::spawn(async move {
             let mut interval = interval(cleanup_interval);
-            
+
             loop {
                 interval.tick().await;
-                
+
                 // Check if we should continue running
                 {
                     let running = is_running.lock().unwrap();
@@ -274,7 +275,9 @@ impl MemoryMonitor {
             *is_running = false;
             Ok(())
         } else {
-            Err(FortressError::processor_error("Memory monitor not running".to_string()))
+            Err(FortressError::processor_error(
+                "Memory monitor not running".to_string(),
+            ))
         }
     }
 
@@ -305,7 +308,7 @@ impl MemoryStats {
     /// Collect current memory statistics
     pub fn collect() -> Result<Self, FortressError> {
         let system_memory = get_system_memory()?;
-        
+
         Ok(Self {
             total_memory: system_memory.total,
             used_memory: system_memory.used,
@@ -337,12 +340,12 @@ fn get_system_memory() -> Result<SystemMemory, FortressError> {
     // This is a simplified implementation
     // In production, you would use a proper system information library
     // like sysinfo or sysctl
-    
+
     // For now, return mock data
     Ok(SystemMemory {
         total: 16 * 1024 * 1024 * 1024, // 16GB
         used: 8 * 1024 * 1024 * 1024,   // 8GB
-        free: 8 * 1024 * 1024 * 1024,    // 8GB
+        free: 8 * 1024 * 1024 * 1024,   // 8GB
     })
 }
 
@@ -356,16 +359,16 @@ fn get_process_memory() -> Result<u64, FortressError> {
 /// Trigger cleanup callbacks
 async fn trigger_cleanup(cleanup_callbacks: &[Box<dyn Fn() + Send + Sync>]) {
     tracing::info!("Triggering memory cleanup");
-    
+
     for callback in cleanup_callbacks {
         callback();
     }
-    
+
     // Additional cleanup actions
     clear_caches().await;
     expire_sessions().await;
     force_garbage_collection().await;
-    
+
     sleep(Duration::from_millis(100)).await;
 }
 
@@ -410,7 +413,7 @@ impl AllocationTracker {
         let total: usize = allocations.iter().sum();
         let count = allocations.len();
         let average = if count > 0 { total / count } else { 0 };
-        
+
         AllocationStats {
             total_allocated: total,
             allocation_count: count,
@@ -443,18 +446,18 @@ mod tests {
     #[test]
     fn test_memory_pool() {
         let pool = MemoryPool::new(5, 10, || vec![0u8; 1024]);
-        
+
         assert_eq!(pool.size(), 5);
-        
+
         let buffer1 = pool.get();
         assert_eq!(pool.size(), 4);
-        
+
         let buffer2 = pool.get();
         assert_eq!(pool.size(), 3);
-        
+
         pool.return_item(buffer1);
         assert_eq!(pool.size(), 4);
-        
+
         let stats = pool.stats();
         assert!(stats.hit_rate > 0.0);
     }
@@ -463,11 +466,11 @@ mod tests {
     fn test_pooled_buffer() {
         let buffer = PooledBuffer::new(1024);
         assert_eq!(buffer.len(), 1024);
-        
+
         let mut buffer = PooledBuffer::with_capacity(2048);
         buffer.extend_from_slice(&[1, 2, 3, 4]);
         assert_eq!(buffer.len(), 4);
-        
+
         let vec = buffer.into_vec();
         assert_eq!(vec, vec![1, 2, 3, 4]);
     }
@@ -475,19 +478,19 @@ mod tests {
     #[tokio::test]
     async fn test_memory_monitor() {
         let mut monitor = MemoryMonitor::new(80.0, Duration::from_millis(100));
-        
+
         // Add a cleanup callback
         let cleanup_called = Arc::new(Mutex::new(false));
         let cleanup_called_clone = cleanup_called.clone();
-        
+
         monitor.add_cleanup_callback(move || {
             *cleanup_called_clone.lock().unwrap() = true;
         });
-        
+
         // Start monitoring (this will likely not trigger cleanup in this short test)
         let result = monitor.start_monitoring().await;
         assert!(result.is_ok());
-        
+
         // Stop monitoring
         let result = monitor.stop_monitoring();
         assert!(result.is_ok());
@@ -496,11 +499,11 @@ mod tests {
     #[test]
     fn test_allocation_tracker() {
         let tracker = AllocationTracker::new();
-        
+
         tracker.track_allocation(1024);
         tracker.track_allocation(2048);
         tracker.track_allocation(512);
-        
+
         let stats = tracker.get_stats();
         assert_eq!(stats.allocation_count, 3);
         assert_eq!(stats.total_allocated, 3584);
@@ -511,7 +514,7 @@ mod tests {
     fn test_memory_stats() {
         let stats = MemoryStats::collect();
         assert!(stats.is_ok());
-        
+
         let stats = stats.unwrap();
         assert!(stats.total_memory > 0);
         assert!(stats.buffer_pool_size >= 0);
@@ -520,9 +523,9 @@ mod tests {
     #[test]
     fn test_global_allocation_tracker() {
         let initial_count = MEMORY_ALLOCATIONS.load(Ordering::Relaxed);
-        
+
         allocation_tracker().track_allocation(1024);
-        
+
         let final_count = MEMORY_ALLOCATIONS.load(Ordering::Relaxed);
         assert!(final_count > initial_count);
     }

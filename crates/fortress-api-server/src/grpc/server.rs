@@ -1,20 +1,20 @@
-use crate::grpc::service::FortressGrpcService;
 use crate::error::ServerError;
+use crate::grpc::service::FortressGrpcService;
+use axum::{
+    extract::{Path, State},
+    http::StatusCode,
+    response::Json,
+    routing::{get, post},
+    Router,
+};
 use fortress_core::encryption::Aegis256;
 use fortress_core::key::InMemoryKeyManager;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use axum::{
-    routing::{get, post},
-    extract::{Path, State},
-    http::StatusCode,
-    response::Json,
-    Router,
-};
-use tracing::{info, error};
+use tracing::{error, info};
 
 /// gRPC-compatible server implementation for Fortress
-/// 
+///
 /// This server provides HTTP endpoints that mimic gRPC functionality
 /// using JSON for simplicity. Can be upgraded to full protobuf gRPC.
 pub struct GrpcServer {
@@ -29,7 +29,7 @@ impl GrpcServer {
     pub fn new(addr: SocketAddr) -> Self {
         let encryption_manager = Arc::new(Aegis256::new());
         let key_manager = Arc::new(InMemoryKeyManager::new());
-        
+
         Self {
             addr,
             service: Arc::new(FortressGrpcService::new(encryption_manager, key_manager)),
@@ -52,16 +52,16 @@ impl GrpcServer {
             .with_state(self.service)
             .layer(tower_http::cors::CorsLayer::permissive());
 
-        let listener = tokio::net::TcpListener::bind(self.addr).await
+        let listener = tokio::net::TcpListener::bind(self.addr)
+            .await
             .map_err(|e| ServerError::internal(e.to_string()))?;
 
         info!("gRPC-compatible server listening on {}", self.addr);
-        
-        axum::serve(listener, app).await
-            .map_err(|e| {
-                error!("Server error: {}", e);
-                ServerError::internal(e.to_string())
-            })?;
+
+        axum::serve(listener, app).await.map_err(|e| {
+            error!("Server error: {}", e);
+            ServerError::internal(e.to_string())
+        })?;
 
         Ok(())
     }

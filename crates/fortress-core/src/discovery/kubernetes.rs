@@ -1,14 +1,14 @@
 //! Kubernetes Discovery Provider
-//! 
+//!
 //! This module provides automatic discovery of Fortress cluster nodes
 //! within a Kubernetes environment using the Kubernetes API.
 
+use crate::discovery::{DiscoveredNode, DiscoveryConfig, DiscoveryProvider, NodeHealthStatus};
+use crate::error::{FortressError, Result};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
-use serde::{Serialize, Deserialize};
-use chrono::{DateTime, Utc};
-use crate::error::{FortressError, Result};
-use crate::discovery::{DiscoveryProvider, DiscoveredNode, NodeHealthStatus, DiscoveryConfig};
 
 /// Kubernetes discovery provider configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -71,15 +71,13 @@ impl KubernetesDiscovery {
         } else {
             // Use kubeconfig
             match kube::Config::from_kubeconfig().await {
-                Ok(config) => {
-                    match kube::Client::try_from(config).await {
-                        Ok(client) => Ok(Some(client)),
-                        Err(e) => {
-                            tracing::warn!("Failed to create Kubernetes client from kubeconfig: {}", e);
-                            Ok(None)
-                        }
+                Ok(config) => match kube::Client::try_from(config).await {
+                    Ok(client) => Ok(Some(client)),
+                    Err(e) => {
+                        tracing::warn!("Failed to create Kubernetes client from kubeconfig: {}", e);
+                        Ok(None)
                     }
-                }
+                },
                 Err(e) => {
                     tracing::warn!("Failed to load kubeconfig: {}", e);
                     Ok(None)
@@ -95,12 +93,21 @@ impl KubernetesDiscovery {
             None => return Ok(Vec::new()),
         };
 
-        let pods: kube::api::Api<kube::api::Pod> = kube::api::Api::namespaced(
-            client.clone(),
-            &self.config.namespace,
-        );
+        let pods: kube::api::Api<kube::api::Pod> =
+            kube::api::Api::namespaced(client.clone(), &self.config.namespace);
 
-        match pods.list(&kube::api::ListParams::default().labels(&self.config.label_selector.as_ref().unwrap_or(&"".to_string()))).await {
+        match pods
+            .list(
+                &kube::api::ListParams::default().labels(
+                    &self
+                        .config
+                        .label_selector
+                        .as_ref()
+                        .unwrap_or(&"".to_string()),
+                ),
+            )
+            .await
+        {
             Ok(pod_list) => Ok(pod_list.items),
             Err(e) => {
                 tracing::warn!("Failed to list pods: {}", e);
@@ -116,10 +123,8 @@ impl KubernetesDiscovery {
             None => return Ok(Vec::new()),
         };
 
-        let services: kube::api::Api<kube::api::Service> = kube::api::Api::namespaced(
-            client.clone(),
-            &self.config.namespace
-        );
+        let services: kube::api::Api<kube::api::Service> =
+            kube::api::Api::namespaced(client.clone(), &self.config.namespace);
 
         match services.list(&kube::api::ListParams::default()).await {
             Ok(service_list) => Ok(service_list.items),
@@ -132,10 +137,15 @@ impl KubernetesDiscovery {
 
     /// Extract node information from a pod
     fn pod_to_node(&self, pod: &kube::api::Pod) -> Result<DiscoveredNode> {
-        let pod_name = pod.metadata.name.as_ref()
+        let pod_name = pod
+            .metadata
+            .name
+            .as_ref()
             .ok_or_else(|| FortressError::discovery("Pod missing name"))?;
 
-        let pod_ip = pod.status.as_ref()
+        let pod_ip = pod
+            .status
+            .as_ref()
             .and_then(|status| status.pod_ip.as_ref())
             .ok_or_else(|| FortressError::discovery("Pod missing IP address"))?;
 
@@ -168,7 +178,7 @@ impl KubernetesDiscovery {
         let mut zone = None;
         if let Some(ref node_name) = pod.spec.as_ref().and_then(|spec| spec.node_name.as_ref()) {
             metadata.insert("node_name".to_string(), node_name.clone());
-            
+
             // Try to extract region/zone from node labels (cloud provider specific)
             // This would require additional API calls to get node details
         }
@@ -179,7 +189,10 @@ impl KubernetesDiscovery {
         // Extract capabilities from labels or annotations
         let mut capabilities = Vec::new();
         if let Some(capability_list) = metadata.get("capabilities") {
-            capabilities = capability_list.split(',').map(|s| s.trim().to_string()).collect();
+            capabilities = capability_list
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .collect();
         }
 
         Ok(DiscoveredNode {
@@ -198,10 +211,15 @@ impl KubernetesDiscovery {
 
     /// Extract node information from a service
     fn service_to_node(&self, service: &kube::api::Service) -> Result<DiscoveredNode> {
-        let service_name = service.metadata.name.as_ref()
+        let service_name = service
+            .metadata
+            .name
+            .as_ref()
             .ok_or_else(|| FortressError::discovery("Service missing name"))?;
 
-        let service_ip = service.spec.as_ref()
+        let service_ip = service
+            .spec
+            .as_ref()
             .and_then(|spec| spec.cluster_ip.as_ref())
             .ok_or_else(|| FortressError::discovery("Service missing cluster IP"))?;
 
@@ -227,14 +245,30 @@ impl KubernetesDiscovery {
 
         // Add service-specific metadata
         metadata.insert("service_name".to_string(), service_name.clone());
-        metadata.insert("service_namespace".to_string(), self.config.namespace.clone());
+        metadata.insert(
+            "service_namespace".to_string(),
+            self.config.namespace.clone(),
+        );
         metadata.insert("service_ip".to_string(), service_ip.clone());
-        metadata.insert("service_type".to_string(), format!("{:?}", service.spec.as_ref().map(|s| &s.service_type).unwrap_or(&kube::api::ServiceType::ClusterIP)));
+        metadata.insert(
+            "service_type".to_string(),
+            format!(
+                "{:?}",
+                service
+                    .spec
+                    .as_ref()
+                    .map(|s| &s.service_type)
+                    .unwrap_or(&kube::api::ServiceType::ClusterIP)
+            ),
+        );
 
         // Extract capabilities from labels or annotations
         let mut capabilities = Vec::new();
         if let Some(capability_list) = metadata.get("capabilities") {
-            capabilities = capability_list.split(',').map(|s| s.trim().to_string()).collect();
+            capabilities = capability_list
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .collect();
         }
 
         Ok(DiscoveredNode {
@@ -255,7 +289,9 @@ impl KubernetesDiscovery {
     fn extract_port_from_pod(&self, pod: &kube::api::Pod) -> Result<u16> {
         // Check if a specific port name is configured
         if let Some(ref port_name) = self.config.port_name {
-            if let Some(ref containers) = pod.spec.as_ref().and_then(|spec| spec.containers.as_ref()) {
+            if let Some(ref containers) =
+                pod.spec.as_ref().and_then(|spec| spec.containers.as_ref())
+            {
                 for container in containers {
                     if let Some(ref ports) = container.ports {
                         for port in ports {
@@ -281,7 +317,9 @@ impl KubernetesDiscovery {
             }
         }
 
-        Err(FortressError::discovery("No port found in pod specification"))
+        Err(FortressError::discovery(
+            "No port found in pod specification",
+        ))
     }
 
     /// Extract port from service specification
@@ -306,7 +344,9 @@ impl KubernetesDiscovery {
             }
         }
 
-        Err(FortressError::discovery("No port found in service specification"))
+        Err(FortressError::discovery(
+            "No port found in service specification",
+        ))
     }
 
     /// Determine pod health status
@@ -318,9 +358,8 @@ impl KubernetesDiscovery {
                     "Running" => {
                         // Check if all containers are ready
                         if let Some(ref conditions) = status.conditions {
-                            let ready_condition = conditions.iter()
-                                .find(|c| c.type_ == "Ready");
-                            
+                            let ready_condition = conditions.iter().find(|c| c.type_ == "Ready");
+
                             if let Some(ready) = ready_condition {
                                 if ready.status == "True" {
                                     return NodeHealthStatus::Healthy;
@@ -344,13 +383,13 @@ impl KubernetesDiscovery {
 
     /// Check if a pod is ready
     async fn check_pod_ready(&self, pod_name: &str) -> Result<NodeHealthStatus> {
-        let client = self.client.as_ref()
+        let client = self
+            .client
+            .as_ref()
             .ok_or_else(|| FortressError::discovery("Kubernetes client not initialized"))?;
 
-        let pods: kube::api::Api<kube::api::Pod> = kube::api::Api::namespaced(
-            client.clone(),
-            &self.config.namespace
-        );
+        let pods: kube::api::Api<kube::api::Pod> =
+            kube::api::Api::namespaced(client.clone(), &self.config.namespace);
 
         match pods.get(pod_name).await {
             Ok(pod) => Ok(self.pod_health_status(&pod)),
@@ -367,9 +406,9 @@ impl DiscoveryProvider for KubernetesDiscovery {
 
     async fn initialize(&mut self, config: &DiscoveryConfig) -> Result<()> {
         // Extract Kubernetes-specific config
-        let k8s_config: KubernetesDiscoveryConfig = serde_json::from_value(
-            serde_json::to_value(&config.settings).unwrap_or_default()
-        ).unwrap_or_default();
+        let k8s_config: KubernetesDiscoveryConfig =
+            serde_json::from_value(serde_json::to_value(&config.settings).unwrap_or_default())
+                .unwrap_or_default();
 
         self.config = k8s_config;
 
@@ -383,7 +422,9 @@ impl DiscoveryProvider for KubernetesDiscovery {
 
     async fn discover_nodes(&self) -> Result<Vec<DiscoveredNode>> {
         if !self.initialized {
-            return Err(FortressError::discovery("Kubernetes discovery provider not initialized"));
+            return Err(FortressError::discovery(
+                "Kubernetes discovery provider not initialized",
+            ));
         }
 
         let mut nodes = Vec::new();
@@ -428,14 +469,18 @@ impl DiscoveryProvider for KubernetesDiscovery {
 
     async fn check_node_health(&self, node: &DiscoveredNode) -> Result<NodeHealthStatus> {
         if !self.initialized {
-            return Err(FortressError::discovery("Kubernetes discovery provider not initialized"));
+            return Err(FortressError::discovery(
+                "Kubernetes discovery provider not initialized",
+            ));
         }
 
         // Extract pod name from node ID if it's a pod
         if node.id.starts_with("kube-pod-") {
-            let pod_name = node.id.strip_prefix("kube-pod-")
+            let pod_name = node
+                .id
+                .strip_prefix("kube-pod-")
                 .ok_or_else(|| FortressError::discovery("Invalid pod node ID"))?;
-            
+
             return self.check_pod_ready(pod_name).await;
         }
 
@@ -472,7 +517,7 @@ mod tests {
     fn test_kubernetes_discovery_creation() {
         let config = KubernetesDiscoveryConfig::default();
         let discovery = KubernetesDiscovery::new(config);
-        
+
         assert_eq!(discovery.name(), "kubernetes");
         assert!(!discovery.initialized);
         assert!(discovery.client.is_none());

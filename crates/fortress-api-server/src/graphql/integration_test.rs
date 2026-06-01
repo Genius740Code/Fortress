@@ -3,19 +3,19 @@
 //! This test verifies that all components work together correctly
 //! including security, performance, caching, and optimization features.
 
+use crate::graphql::{
+    auth::{AuthConfig, AuthManager, AuthenticatedUser},
+    benchmark::PerformanceBenchmark,
+    cache::{CacheConfig, GraphQLCacheManager},
+    performance::PerformanceMonitor,
+    security::{SecurityConfig, SecurityManager},
+    security_tests::SecurityTestSuite,
+};
+use serde_json;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
-use serde_json;
 use uuid::Uuid;
-use crate::graphql::{
-    security::{SecurityManager, SecurityConfig},
-    auth::{AuthManager, AuthConfig, AuthenticatedUser},
-    cache::{GraphQLCacheManager, CacheConfig},
-    performance::PerformanceMonitor,
-    benchmark::PerformanceBenchmark,
-    security_tests::SecurityTestSuite,
-};
 
 /// Comprehensive integration test suite
 pub struct IntegrationTestSuite {
@@ -39,10 +39,8 @@ impl IntegrationTestSuite {
         let cache_config = CacheConfig::default();
         let cache_manager = Arc::new(GraphQLCacheManager::new(cache_config));
 
-        let performance_monitor = Arc::new(PerformanceMonitor::new(
-            10_000,
-            Duration::from_secs(300),
-        ));
+        let performance_monitor =
+            Arc::new(PerformanceMonitor::new(10_000, Duration::from_secs(300)));
 
         let security_test_suite = SecurityTestSuite::new(
             security_manager.clone(),
@@ -52,7 +50,10 @@ impl IntegrationTestSuite {
                 use fortress_core::key::InMemoryKeyManager;
                 let key_manager = Arc::new(InMemoryKeyManager::new());
                 let encryption_config = crate::graphql::encryption::EncryptionConfig::default();
-                Arc::new(crate::graphql::encryption::DataEncryptionManager::new(key_manager, encryption_config))
+                Arc::new(crate::graphql::encryption::DataEncryptionManager::new(
+                    key_manager,
+                    encryption_config,
+                ))
             },
             performance_monitor.clone(),
         );
@@ -111,8 +112,12 @@ impl IntegrationTestSuite {
 
             let validation = self.security_manager.validate_request(&request).await;
             match validation {
-                Ok(crate::graphql::security::SecurityValidationResult::Allowed) => allowed_count += 1,
-                Ok(crate::graphql::security::SecurityValidationResult::Blocked { .. }) => blocked_count += 1,
+                Ok(crate::graphql::security::SecurityValidationResult::Allowed) => {
+                    allowed_count += 1
+                }
+                Ok(crate::graphql::security::SecurityValidationResult::Blocked { .. }) => {
+                    blocked_count += 1
+                }
                 Err(_) => blocked_count += 1,
             }
         }
@@ -124,10 +129,17 @@ impl IntegrationTestSuite {
             "malicious_client".to_string(),
             Some("test_user".to_string()),
             "127.0.0.1".to_string(),
-        ).with_input("query".to_string(), "SELECT * FROM users".to_string());
+        )
+        .with_input("query".to_string(), "SELECT * FROM users".to_string());
 
-        let validation = self.security_manager.validate_request(&malicious_request).await;
-        let input_validation_working = matches!(validation, Ok(crate::graphql::security::SecurityValidationResult::Blocked { .. }));
+        let validation = self
+            .security_manager
+            .validate_request(&malicious_request)
+            .await;
+        let input_validation_working = matches!(
+            validation,
+            Ok(crate::graphql::security::SecurityValidationResult::Blocked { .. })
+        );
 
         TestResult {
             passed: security_working && input_validation_working,
@@ -159,13 +171,25 @@ impl IntegrationTestSuite {
         self.auth_manager.upsert_user(test_user).await.unwrap();
 
         // Test authentication
-        let auth_result = self.auth_manager.authenticate("testuser", "hello", "127.0.0.1", "Mozilla/5.0").await;
-        let auth_success = matches!(auth_result, Ok(crate::graphql::auth::AuthResult::Success { .. }));
+        let auth_result = self
+            .auth_manager
+            .authenticate("testuser", "hello", "127.0.0.1", "Mozilla/5.0")
+            .await;
+        let auth_success = matches!(
+            auth_result,
+            Ok(crate::graphql::auth::AuthResult::Success { .. })
+        );
 
         // Test token verification
         if let Ok(crate::graphql::auth::AuthResult::Success { token, .. }) = auth_result {
-            let verification = self.auth_manager.verify_token(&token, "127.0.0.1", "Mozilla/5.0").await;
-            let token_verification_success = matches!(verification, Ok(crate::graphql::auth::TokenVerificationResult::Valid { .. }));
+            let verification = self
+                .auth_manager
+                .verify_token(&token, "127.0.0.1", "Mozilla/5.0")
+                .await;
+            let token_verification_success = matches!(
+                verification,
+                Ok(crate::graphql::auth::TokenVerificationResult::Valid { .. })
+            );
 
             // Test logout
             let logout_success = self.auth_manager.logout(&token).await.is_ok();
@@ -200,7 +224,10 @@ impl IntegrationTestSuite {
             storage_size_bytes: 1024,
         };
 
-        self.cache_manager.database_cache.put(db_key.to_string(), db_entry).await;
+        self.cache_manager
+            .database_cache
+            .put(db_key.to_string(), db_entry)
+            .await;
 
         let cached_db = self.cache_manager.database_cache.get(db_key).await;
         let cache_retrieval_success = cached_db.is_some();
@@ -217,7 +244,10 @@ impl IntegrationTestSuite {
             updated_at: chrono::Utc::now().to_string(),
         };
 
-        self.cache_manager.table_cache.put(table_key.to_string(), table_entry).await;
+        self.cache_manager
+            .table_cache
+            .put(table_key.to_string(), table_entry)
+            .await;
 
         let cached_table = self.cache_manager.table_cache.get(table_key).await;
         let table_cache_success = cached_table.is_some();
@@ -238,10 +268,13 @@ impl IntegrationTestSuite {
     /// Test performance integration
     async fn test_performance_integration(&self) -> TestResult {
         // Record some operations
-        let tracker = self.performance_monitor.start_operation(
-            crate::graphql::performance::OperationType::Query,
-            "test_operation".to_string(),
-        ).await;
+        let tracker = self
+            .performance_monitor
+            .start_operation(
+                crate::graphql::performance::OperationType::Query,
+                "test_operation".to_string(),
+            )
+            .await;
 
         // Simulate some work
         sleep(Duration::from_millis(10)).await;
@@ -268,18 +301,25 @@ impl IntegrationTestSuite {
     /// Test end-to-end workflow
     async fn test_end_to_end_workflow(&self) -> TestResult {
         // Step 1: Authenticate user
-        let auth_result = self.auth_manager.authenticate("testuser", "hello", "127.0.0.1", "Mozilla/5.0").await;
-        
+        let auth_result = self
+            .auth_manager
+            .authenticate("testuser", "hello", "127.0.0.1", "Mozilla/5.0")
+            .await;
+
         if let Ok(crate::graphql::auth::AuthResult::Success { token, user, .. }) = auth_result {
             // Step 2: Validate security request
             let request = crate::graphql::security::SecurityRequest::new(
                 "workflow_client".to_string(),
                 Some(user.id.clone()),
                 "127.0.0.1".to_string(),
-            ).with_query("{ user { id name } }".to_string());
+            )
+            .with_query("{ user { id name } }".to_string());
 
             let security_validation = self.security_manager.validate_request(&request).await;
-            let security_passed = matches!(security_validation, Ok(crate::graphql::security::SecurityValidationResult::Allowed));
+            let security_passed = matches!(
+                security_validation,
+                Ok(crate::graphql::security::SecurityValidationResult::Allowed)
+            );
 
             // Step 3: Cache some data
             let cache_key = "workflow_data";
@@ -294,14 +334,25 @@ impl IntegrationTestSuite {
                 storage_size_bytes: 512,
             };
 
-            self.cache_manager.database_cache.put(cache_key.to_string(), cache_entry).await;
-            let cache_success = self.cache_manager.database_cache.get(cache_key).await.is_some();
+            self.cache_manager
+                .database_cache
+                .put(cache_key.to_string(), cache_entry)
+                .await;
+            let cache_success = self
+                .cache_manager
+                .database_cache
+                .get(cache_key)
+                .await
+                .is_some();
 
             // Step 4: Record performance metric
-            let tracker = self.performance_monitor.start_operation(
-                crate::graphql::performance::OperationType::Query,
-                "workflow_operation".to_string(),
-            ).await;
+            let tracker = self
+                .performance_monitor
+                .start_operation(
+                    crate::graphql::performance::OperationType::Query,
+                    "workflow_operation".to_string(),
+                )
+                .await;
 
             sleep(Duration::from_millis(5)).await;
 
@@ -330,9 +381,9 @@ impl IntegrationTestSuite {
     /// Test security test suite
     async fn test_security_test_suite(&self) -> TestResult {
         let test_results = self.security_test_suite.run_all_tests().await;
-        
+
         let security_tests_passed = test_results.overall_score >= 80.0; // 80% threshold
-        
+
         TestResult {
             passed: security_tests_passed,
             details: format!(
@@ -353,9 +404,9 @@ impl IntegrationTestSuite {
         };
 
         let benchmark_results = benchmark.run_benchmark(config).await;
-        
+
         let benchmark_passed = benchmark_results.len() >= 5; // Should have at least 5 different test results
-        
+
         TestResult {
             passed: benchmark_passed,
             details: format!(
@@ -391,13 +442,34 @@ impl IntegrationTestResults {
     /// Create new integration test results with default values
     pub fn new() -> Self {
         Self {
-            security_integration: TestResult { passed: false, details: String::new() },
-            auth_integration: TestResult { passed: false, details: String::new() },
-            cache_integration: TestResult { passed: false, details: String::new() },
-            performance_integration: TestResult { passed: false, details: String::new() },
-            end_to_end_workflow: TestResult { passed: false, details: String::new() },
-            security_test_suite: TestResult { passed: false, details: String::new() },
-            performance_benchmark: TestResult { passed: false, details: String::new() },
+            security_integration: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            auth_integration: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            cache_integration: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            performance_integration: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            end_to_end_workflow: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            security_test_suite: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            performance_benchmark: TestResult {
+                passed: false,
+                details: String::new(),
+            },
             overall_success: false,
         }
     }
@@ -416,63 +488,96 @@ impl IntegrationTestResults {
     /// Generate a formatted test report
     pub fn generate_report(&self) -> String {
         let mut report = String::new();
-        
+
         report.push_str("# GraphQL API Integration Test Report\n\n");
-        
+
         report.push_str("## Test Results\n\n");
         report.push_str("| Test | Status | Details |\n");
         report.push_str("|------|--------|---------|\n");
-        
+
         report.push_str(&format!(
             "| Security Integration | {} | {} |\n",
-            if self.security_integration.passed { "✓ PASS" } else { "✗ FAIL" },
+            if self.security_integration.passed {
+                "✓ PASS"
+            } else {
+                "✗ FAIL"
+            },
             self.security_integration.details
         ));
-        
+
         report.push_str(&format!(
             "| Authentication Integration | {} | {} |\n",
-            if self.auth_integration.passed { "✓ PASS" } else { "✗ FAIL" },
+            if self.auth_integration.passed {
+                "✓ PASS"
+            } else {
+                "✗ FAIL"
+            },
             self.auth_integration.details
         ));
-        
+
         report.push_str(&format!(
             "| Cache Integration | {} | {} |\n",
-            if self.cache_integration.passed { "✓ PASS" } else { "✗ FAIL" },
+            if self.cache_integration.passed {
+                "✓ PASS"
+            } else {
+                "✗ FAIL"
+            },
             self.cache_integration.details
         ));
-        
+
         report.push_str(&format!(
             "| Performance Integration | {} | {} |\n",
-            if self.performance_integration.passed { "✓ PASS" } else { "✗ FAIL" },
+            if self.performance_integration.passed {
+                "✓ PASS"
+            } else {
+                "✗ FAIL"
+            },
             self.performance_integration.details
         ));
-        
+
         report.push_str(&format!(
             "| End-to-End Workflow | {} | {} |\n",
-            if self.end_to_end_workflow.passed { "✓ PASS" } else { "✗ FAIL" },
+            if self.end_to_end_workflow.passed {
+                "✓ PASS"
+            } else {
+                "✗ FAIL"
+            },
             self.end_to_end_workflow.details
         ));
-        
+
         report.push_str(&format!(
             "| Security Test Suite | {} | {} |\n",
-            if self.security_test_suite.passed { "✓ PASS" } else { "✗ FAIL" },
+            if self.security_test_suite.passed {
+                "✓ PASS"
+            } else {
+                "✗ FAIL"
+            },
             self.security_test_suite.details
         ));
-        
+
         report.push_str(&format!(
             "| Performance Benchmark | {} | {} |\n",
-            if self.performance_benchmark.passed { "✓ PASS" } else { "✗ FAIL" },
+            if self.performance_benchmark.passed {
+                "✓ PASS"
+            } else {
+                "✗ FAIL"
+            },
             self.performance_benchmark.details
         ));
-        
+
         report.push_str("\n## Overall Status\n\n");
         report.push_str(&format!(
             "**Result: {}**\n\n",
-            if self.overall_success { "✓ ALL TESTS PASSED" } else { "✗ SOME TESTS FAILED" }
+            if self.overall_success {
+                "✓ ALL TESTS PASSED"
+            } else {
+                "✗ SOME TESTS FAILED"
+            }
         ));
-        
+
         if self.overall_success {
-            report.push_str("**The GraphQL API is fully integrated and ready for production!**\n\n");
+            report
+                .push_str("**The GraphQL API is fully integrated and ready for production!**\n\n");
             report.push_str("All components are working correctly:\n");
             report.push_str("- ✓ Security layer is active and blocking threats\n");
             report.push_str("- ✓ Authentication system is working properly\n");
@@ -484,7 +589,7 @@ impl IntegrationTestResults {
         } else {
             report.push_str("⚠ **Some integration tests failed. Review the details above.**\n\n");
         }
-        
+
         report
     }
 }
@@ -506,7 +611,7 @@ mod tests {
     async fn test_integration_suite() {
         let suite = IntegrationTestSuite::new();
         let results = suite.run_all_tests().await;
-        
+
         // Verify all tests ran
         assert!(results.security_integration.passed || !results.security_integration.passed);
         assert!(results.auth_integration.passed || !results.auth_integration.passed);
@@ -515,12 +620,12 @@ mod tests {
         assert!(results.end_to_end_workflow.passed || !results.end_to_end_workflow.passed);
         assert!(results.security_test_suite.passed || !results.security_test_suite.passed);
         assert!(results.performance_benchmark.passed || !results.performance_benchmark.passed);
-        
+
         // Generate report
         let report = results.generate_report();
         assert!(!report.is_empty());
         assert!(report.contains("GraphQL API Integration Test Report"));
-        
+
         println!("{}", report);
     }
 }

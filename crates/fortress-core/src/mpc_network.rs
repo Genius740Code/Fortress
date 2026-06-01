@@ -3,8 +3,8 @@
 //! This module provides the default implementation of the MpcNetwork trait
 //! with in-memory message passing between parties.
 
-use crate::error::{FortressError, Result, EncryptionErrorCode};
-use crate::mpc::{MpcNetwork, PartyId, MpcMessage};
+use crate::error::{EncryptionErrorCode, FortressError, Result};
+use crate::mpc::{MpcMessage, MpcNetwork, PartyId};
 
 use async_trait::async_trait;
 use std::collections::HashMap;
@@ -34,16 +34,16 @@ impl InMemoryMpcNetwork {
     /// Create with initial parties
     pub fn with_parties(parties: Vec<PartyId>) -> Self {
         let network = Self::new();
-        
+
         // Initialize message boxes for each party
         let mut message_boxes = HashMap::new();
         for party in &parties {
             message_boxes.insert(party.clone(), Vec::new());
         }
-        
+
         *network.message_boxes.blocking_write() = message_boxes;
         *network.connected_parties.blocking_write() = parties;
-        
+
         network
     }
 
@@ -51,7 +51,7 @@ impl InMemoryMpcNetwork {
     pub async fn add_party(&self, party_id: PartyId) -> Result<()> {
         let mut message_boxes = self.message_boxes.write().await;
         let mut connected_parties = self.connected_parties.write().await;
-        
+
         // Check if party already exists
         if message_boxes.contains_key(&party_id) {
             return Err(FortressError::encryption(
@@ -60,11 +60,11 @@ impl InMemoryMpcNetwork {
                 EncryptionErrorCode::AlgorithmNotSupported,
             ));
         }
-        
+
         // Add message box for the party
         message_boxes.insert(party_id.clone(), Vec::new());
         connected_parties.push(party_id);
-        
+
         Ok(())
     }
 
@@ -72,13 +72,13 @@ impl InMemoryMpcNetwork {
     pub async fn remove_party(&self, party_id: &PartyId) -> Result<()> {
         let mut message_boxes = self.message_boxes.write().await;
         let mut connected_parties = self.connected_parties.write().await;
-        
+
         // Remove message box
         message_boxes.remove(party_id);
-        
+
         // Remove from connected parties
         connected_parties.retain(|p| p != party_id);
-        
+
         Ok(())
     }
 
@@ -91,7 +91,10 @@ impl InMemoryMpcNetwork {
     /// Get message count for a party
     pub async fn message_count(&self, party_id: &PartyId) -> usize {
         let message_boxes = self.message_boxes.read().await;
-        message_boxes.get(party_id).map(|msgs| msgs.len()).unwrap_or(0)
+        message_boxes
+            .get(party_id)
+            .map(|msgs| msgs.len())
+            .unwrap_or(0)
     }
 
     /// Clear all messages for a party
@@ -182,7 +185,7 @@ impl InMemoryMpcNetwork {
     /// Send message to specific party
     async fn send_to_party(&self, recipient: &PartyId, message: MpcMessage) -> Result<()> {
         let mut message_boxes = self.message_boxes.write().await;
-        
+
         match message_boxes.get_mut(recipient) {
             Some(messages) => {
                 messages.push(message);
@@ -200,21 +203,21 @@ impl InMemoryMpcNetwork {
     async fn broadcast_to_all(&self, message: MpcMessage) -> Result<()> {
         let mut message_boxes = self.message_boxes.write().await;
         let sender = &message.sender;
-        
+
         let mut sent_count = 0;
         let mut errors = Vec::new();
-        
+
         for (party_id, messages) in message_boxes.iter_mut() {
             if party_id != sender {
                 messages.push(message.clone());
                 sent_count += 1;
             }
         }
-        
+
         if sent_count == 0 {
             errors.push("No recipients found (sender might be the only party)".to_string());
         }
-        
+
         if !errors.is_empty() {
             return Err(FortressError::encryption(
                 format!("Broadcast failed: {}", errors.join(", ")),
@@ -222,7 +225,7 @@ impl InMemoryMpcNetwork {
                 EncryptionErrorCode::AlgorithmNotSupported,
             ));
         }
-        
+
         Ok(())
     }
 }
@@ -238,7 +241,7 @@ impl MpcNetwork for InMemoryMpcNetwork {
     async fn send_message(&self, message: MpcMessage) -> Result<()> {
         // Validate message
         self.validate_message(&message)?;
-        
+
         // Check if sender is connected
         if !self.is_connected(&message.sender).await {
             return Err(FortressError::encryption(
@@ -247,7 +250,7 @@ impl MpcNetwork for InMemoryMpcNetwork {
                 EncryptionErrorCode::AlgorithmNotSupported,
             ));
         }
-        
+
         // Route message
         self.route_message(message).await
     }
@@ -255,7 +258,7 @@ impl MpcNetwork for InMemoryMpcNetwork {
     async fn broadcast_message(&self, message: MpcMessage) -> Result<()> {
         // Validate message
         self.validate_message(&message)?;
-        
+
         // Check if sender is connected
         if !self.is_connected(&message.sender).await {
             return Err(FortressError::encryption(
@@ -264,13 +267,13 @@ impl MpcNetwork for InMemoryMpcNetwork {
                 EncryptionErrorCode::AlgorithmNotSupported,
             ));
         }
-        
+
         // Create broadcast message (no specific recipient)
         let broadcast_msg = MpcMessage {
             recipient: None,
             ..message
         };
-        
+
         // Route to all parties
         self.broadcast_to_all(broadcast_msg).await
     }
@@ -305,16 +308,16 @@ impl InMemoryMpcNetwork {
         let message_boxes = self.message_boxes.read().await;
         let connected_parties = self.connected_parties.read().await;
         let metadata = self.metadata.read().await;
-        
+
         let mut messages_per_party = HashMap::new();
         let mut total_messages = 0;
-        
+
         for (party_id, messages) in message_boxes.iter() {
             let count = messages.len();
             messages_per_party.insert(party_id.clone(), count);
             total_messages += count;
         }
-        
+
         NetworkStats {
             connected_parties: connected_parties.len(),
             total_messages,
@@ -327,10 +330,10 @@ impl InMemoryMpcNetwork {
     pub async fn reset(&self) -> Result<()> {
         let mut message_boxes = self.message_boxes.write().await;
         let mut connected_parties = self.connected_parties.write().await;
-        
+
         message_boxes.clear();
         connected_parties.clear();
-        
+
         Ok(())
     }
 
@@ -392,7 +395,7 @@ impl MpcNetworkBuilder {
     /// Build the network
     pub fn build(self) -> InMemoryMpcNetwork {
         let network = InMemoryMpcNetwork::with_parties(self.parties);
-        
+
         // Add metadata
         {
             let mut metadata = network.metadata.blocking_write();
@@ -400,7 +403,7 @@ impl MpcNetworkBuilder {
                 metadata.insert(key, value);
             }
         }
-        
+
         network
     }
 }
@@ -418,10 +421,10 @@ mod tests {
     #[tokio::test]
     async fn test_network_creation() {
         let network = InMemoryMpcNetwork::new();
-        
+
         let parties = network.get_connected_parties().await.unwrap();
         assert!(parties.is_empty());
-        
+
         let stats = network.get_stats().await;
         assert_eq!(stats.connected_parties, 0);
         assert_eq!(stats.total_messages, 0);
@@ -430,21 +433,21 @@ mod tests {
     #[tokio::test]
     async fn test_party_management() {
         let network = InMemoryMpcNetwork::new();
-        
+
         // Add parties
         network.add_party("party1".to_string()).await.unwrap();
         network.add_party("party2".to_string()).await.unwrap();
-        
+
         let parties = network.get_connected_parties().await.unwrap();
         assert_eq!(parties.len(), 2);
         assert!(parties.contains(&"party1".to_string()));
         assert!(parties.contains(&"party2".to_string()));
-        
+
         // Check connection status
         assert!(network.is_connected(&"party1".to_string()).await);
         assert!(network.is_connected(&"party2".to_string()).await);
         assert!(!network.is_connected(&"party3".to_string()).await);
-        
+
         // Remove party
         network.remove_party(&"party1".to_string()).await.unwrap();
         let parties = network.get_connected_parties().await.unwrap();
@@ -455,11 +458,11 @@ mod tests {
     #[tokio::test]
     async fn test_message_sending() {
         let network = InMemoryMpcNetwork::new();
-        
+
         // Add parties
         network.add_party("party1".to_string()).await.unwrap();
         network.add_party("party2".to_string()).await.unwrap();
-        
+
         // Send message from party1 to party2
         let message = MpcMessage::new(
             "session1".to_string(),
@@ -468,19 +471,22 @@ mod tests {
             "test".to_string(),
             b"hello".to_vec(),
         );
-        
+
         network.send_message(message).await.unwrap();
-        
+
         // Check message count
         assert_eq!(network.message_count(&"party1".to_string()).await, 0);
         assert_eq!(network.message_count(&"party2".to_string()).await, 1);
-        
+
         // Receive message
-        let messages = network.receive_messages(&"party2".to_string()).await.unwrap();
+        let messages = network
+            .receive_messages(&"party2".to_string())
+            .await
+            .unwrap();
         assert_eq!(messages.len(), 1);
         assert_eq!(messages[0].sender, "party1");
         assert_eq!(messages[0].recipient, Some("party2".to_string()));
-        
+
         // Message should be cleared
         assert_eq!(network.message_count(&"party2".to_string()).await, 0);
     }
@@ -488,12 +494,12 @@ mod tests {
     #[tokio::test]
     async fn test_message_broadcast() {
         let network = InMemoryMpcNetwork::new();
-        
+
         // Add parties
         network.add_party("party1".to_string()).await.unwrap();
         network.add_party("party2".to_string()).await.unwrap();
         network.add_party("party3".to_string()).await.unwrap();
-        
+
         // Broadcast message from party1
         let message = MpcMessage::new(
             "session1".to_string(),
@@ -502,9 +508,9 @@ mod tests {
             "broadcast".to_string(),
             b"hello everyone".to_vec(),
         );
-        
+
         network.broadcast_message(message).await.unwrap();
-        
+
         // Check message counts (sender should not receive their own broadcast)
         assert_eq!(network.message_count(&"party1".to_string()).await, 0);
         assert_eq!(network.message_count(&"party2".to_string()).await, 1);
@@ -514,11 +520,11 @@ mod tests {
     #[tokio::test]
     async fn test_network_stats() {
         let network = InMemoryMpcNetwork::new();
-        
+
         // Add parties
         network.add_party("party1".to_string()).await.unwrap();
         network.add_party("party2".to_string()).await.unwrap();
-        
+
         // Send some messages
         let message1 = MpcMessage::new(
             "session1".to_string(),
@@ -527,7 +533,7 @@ mod tests {
             "test1".to_string(),
             b"message1".to_vec(),
         );
-        
+
         let message2 = MpcMessage::new(
             "session1".to_string(),
             "party2".to_string(),
@@ -535,10 +541,10 @@ mod tests {
             "test2".to_string(),
             b"message2".to_vec(),
         );
-        
+
         network.send_message(message1).await.unwrap();
         network.send_message(message2).await.unwrap();
-        
+
         // Get stats
         let stats = network.get_stats().await;
         assert_eq!(stats.connected_parties, 2);
@@ -554,10 +560,10 @@ mod tests {
             .with_party("party2".to_string())
             .with_metadata("region", "us-east-1")
             .build();
-        
+
         let parties = network.get_connected_parties().await.unwrap();
         assert_eq!(parties.len(), 2);
-        
+
         let metadata = network.get_metadata().await;
         assert_eq!(metadata.get("region"), Some(&"us-east-1".to_string()));
     }
@@ -565,11 +571,11 @@ mod tests {
     #[tokio::test]
     async fn test_network_reset() {
         let network = InMemoryMpcNetwork::new();
-        
+
         // Add parties and messages
         network.add_party("party1".to_string()).await.unwrap();
         network.add_party("party2".to_string()).await.unwrap();
-        
+
         let message = MpcMessage::new(
             "session1".to_string(),
             "party1".to_string(),
@@ -577,16 +583,16 @@ mod tests {
             "test".to_string(),
             b"hello".to_vec(),
         );
-        
+
         network.send_message(message).await.unwrap();
-        
+
         // Reset network
         network.reset().await.unwrap();
-        
+
         // Check everything is cleared
         let parties = network.get_connected_parties().await.unwrap();
         assert!(parties.is_empty());
-        
+
         let stats = network.get_stats().await;
         assert_eq!(stats.connected_parties, 0);
         assert_eq!(stats.total_messages, 0);

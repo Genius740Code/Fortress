@@ -5,54 +5,50 @@
 
 use crate::auth::{AuthManager, RequiredTokenClaims};
 use crate::error::{ServerError, ServerResult};
-use crate::models::*;
+use crate::health::HealthChecker;
 use crate::metrics::MetricsCollector;
+use crate::models::*;
 use axum::{
     extract::{Path, Query, State},
     response::Json,
 };
-use chrono::{Utc, DateTime};
+use chrono::{DateTime, Utc};
 use fortress_core::{
-    encryption::{EncryptionAlgorithm, Aegis256},
-    key::{KeyManager, SecureKey, InMemoryKeyManager},
-    storage::StorageBackend,
-    field_encryption::FieldEncryptionManager,
-    tenant::{TenantManager, InMemoryTenantManager, CreateTenantRequest, TenantResourceLimits},
     dynamic_secrets::DynamicSecretsEngine,
+    encryption::{Aegis256, EncryptionAlgorithm},
+    field_encryption::FieldEncryptionManager,
+    key::{InMemoryKeyManager, KeyManager, SecureKey},
+    storage::StorageBackend,
+    tenant::{CreateTenantRequest, InMemoryTenantManager, TenantManager, TenantResourceLimits},
 };
-use crate::health::HealthChecker;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::info;
+use utoipa::OpenApi;
 use uuid::Uuid;
-use utoipa::{
-    OpenApi,
-};
 
 /// Sanitize error messages to prevent information disclosure
 pub fn sanitize_error(error: &ServerError) -> &'static str {
     match error {
-        ServerError::Core(core_err) => {
-            match core_err {
-                fortress_core::error::FortressError::Storage { .. } => "Database operation failed",
-                fortress_core::error::FortressError::Encryption { .. } => "Data protection failed",
-                fortress_core::error::FortressError::KeyManagement { .. } => "Key operation failed",
-                fortress_core::error::FortressError::Configuration { .. } => "Configuration error",
-                fortress_core::error::FortressError::Cluster { .. } => "Cluster operation failed",
-                fortress_core::error::FortressError::QueryExecution { .. } => "Query operation failed",
-                fortress_core::error::FortressError::Validation { .. } => "Invalid input provided",
-                fortress_core::error::FortressError::Io { .. } => "I/O operation failed",
-                fortress_core::error::FortressError::Network { .. } => "Network operation failed",
-                fortress_core::error::FortressError::Authentication { .. } => "Authentication failed",
-                fortress_core::error::FortressError::RateLimit { .. } => "Rate limit exceeded",
-                fortress_core::error::FortressError::Internal { .. } => "Internal server error",
-                fortress_core::error::FortressError::PolicyError(_) => "Access denied",
-                fortress_core::error::FortressError::Token { .. } => "Authentication failed",
-                fortress_core::error::FortressError::Seal { .. } => "Data protection failed",
-                fortress_core::error::FortressError::Plugin { .. } => "Plugin operation failed",
-                _ => "Internal server error",
-            }
+        ServerError::Core(core_err) => match core_err {
+            fortress_core::error::FortressError::Storage { .. } => "Database operation failed",
+            fortress_core::error::FortressError::Encryption { .. } => "Data protection failed",
+            fortress_core::error::FortressError::KeyManagement { .. } => "Key operation failed",
+            fortress_core::error::FortressError::Configuration { .. } => "Configuration error",
+            fortress_core::error::FortressError::Cluster { .. } => "Cluster operation failed",
+            fortress_core::error::FortressError::QueryExecution { .. } => "Query operation failed",
+            fortress_core::error::FortressError::Validation { .. } => "Invalid input provided",
+            fortress_core::error::FortressError::Io { .. } => "I/O operation failed",
+            fortress_core::error::FortressError::Network { .. } => "Network operation failed",
+            fortress_core::error::FortressError::Authentication { .. } => "Authentication failed",
+            fortress_core::error::FortressError::RateLimit { .. } => "Rate limit exceeded",
+            fortress_core::error::FortressError::Internal { .. } => "Internal server error",
+            fortress_core::error::FortressError::PolicyError(_) => "Access denied",
+            fortress_core::error::FortressError::Token { .. } => "Authentication failed",
+            fortress_core::error::FortressError::Seal { .. } => "Data protection failed",
+            fortress_core::error::FortressError::Plugin { .. } => "Plugin operation failed",
+            _ => "Internal server error",
         },
         ServerError::Authentication(_) => "Authentication failed",
         ServerError::Authorization(_) => "Access denied",
@@ -77,28 +73,20 @@ pub fn sanitize_error(error: &ServerError) -> &'static str {
 
 pub struct StorageRecord {
     /// Unique identifier for the storage record
-    
     pub id: String,
     /// Unique identifier for the encryption key
-    
     pub key_id: String,
     /// Encrypted data bytes
-    
     pub data: Vec<u8>,
     /// Name of the encryption algorithm used
-    
     pub algorithm: String,
     /// Timestamp when the record was created
-    
     pub created_at: DateTime<Utc>,
     /// Optional metadata associated with the record
-    
     pub metadata: Option<HashMap<String, serde_json::Value>>,
     /// Optional tenant identifier for multi-tenancy
-    
     pub tenant_id: Option<String>,
     /// Optional field-level encryption metadata
-    
     pub field_metadata: Option<HashMap<String, FieldEncryptionMetadata>>,
 }
 
@@ -107,10 +95,8 @@ pub struct StorageRecord {
 
 pub struct QueryParams {
     /// Optional tenant identifier for filtering
-    
     pub tenant_id: Option<String>,
     /// Pagination parameters for query
-    
     pub pagination: PaginationParams,
     /// Optional filtering parameters
     pub filter: Option<FilterParams>,
@@ -172,7 +158,7 @@ pub async fn store_data(
     Json(request): Json<StoreRequest>,
 ) -> ServerResult<Json<ApiResponse<StoreDataResponse>>> {
     let start_time = std::time::Instant::now();
-    
+
     info!(
         user_id = %claims.sub,
         tenant_id = ?request.tenant_id,
@@ -181,26 +167,26 @@ pub async fn store_data(
 
     // Input validation
     let validator = fortress_core::input_validation::InputValidator::new();
-    
+
     // Validate tenant ID if present
     if let Some(ref tenant_id) = request.tenant_id {
         validator.validate_string(tenant_id, "tenant_id")?;
-        
+
         if !state.auth_manager.has_tenant_access(&claims, tenant_id) {
             return Err(ServerError::access_denied("Access denied to tenant"));
         }
     }
-    
+
     // Validate key ID if present
     if let Some(ref key_id) = request.key_id {
         validator.validate_string(key_id, "key_id")?;
     }
-    
+
     // Validate algorithm if present
     if let Some(ref algorithm) = request.algorithm {
         validator.validate_string(algorithm, "algorithm")?;
     }
-    
+
     // Validate data size
     let data_str = serde_json::to_string(&request.data)
         .map_err(|e| ServerError::validation(format!("Invalid JSON data: {}", e)))?;
@@ -210,11 +196,19 @@ pub async fn store_data(
     let data_id = Uuid::new_v4().to_string();
 
     // Get or generate encryption key
-    let key_id = request.key_id.clone().unwrap_or_else(|| format!("key_{}", Uuid::new_v4()));
+    let key_id = request
+        .key_id
+        .clone()
+        .unwrap_or_else(|| format!("key_{}", Uuid::new_v4()));
 
     // Ensure the key exists; if not, generate and store it.
     // This keeps the API usable without requiring a prior key-generation call.
-    if !state.key_manager.key_exists(&key_id).await.map_err(ServerError::Core)? {
+    if !state
+        .key_manager
+        .key_exists(&key_id)
+        .await
+        .map_err(ServerError::Core)?
+    {
         let algorithm = Aegis256::new();
         let new_key = state
             .key_manager
@@ -250,7 +244,7 @@ pub async fn store_data(
     // Encrypt data
     let data_json = serde_json::to_string(&request.data)
         .map_err(|e| ServerError::serialization(e.to_string()))?;
-    
+
     let plaintext = data_json.as_bytes();
     let ciphertext = match Aegis256::new().encrypt(plaintext, key_bytes) {
         Ok(ciphertext) => ciphertext,
@@ -262,24 +256,35 @@ pub async fn store_data(
         let mut metadata = HashMap::new();
         for (field_name, field_config) in &field_config.fields {
             if let Some(field_value) = get_nested_value(&request.data, field_name) {
-                let field_id = fortress_core::field_encryption::FieldIdentifier::Name(field_name.clone());
-                
+                let field_id =
+                    fortress_core::field_encryption::FieldIdentifier::Name(field_name.clone());
+
                 // Cache serialized field value to avoid repeated serialization
                 let field_bytes = serde_json::to_vec(&field_value)
                     .map_err(|e| ServerError::serialization(e.to_string()))?;
-                
-                if let Ok(_encrypted_field) = state.field_encryption_manager.encrypt_field(&field_id, &field_bytes).await {
-                    metadata.insert(field_name.clone(), FieldEncryptionMetadata {
-                        config_id: "default".to_string(),
-                        field: field_name.clone(),
-                        algorithm: field_config.algorithm.clone(),
-                        key_id: field_config.key_id.clone().unwrap_or_else(|| "default".to_string()),
-                        key_version: 1,
-                        encrypted_at: Utc::now(),
-                        nonce: None,
-                        tag: None,
-                        metadata: HashMap::new(),
-                    });
+
+                if let Ok(_encrypted_field) = state
+                    .field_encryption_manager
+                    .encrypt_field(&field_id, &field_bytes)
+                    .await
+                {
+                    metadata.insert(
+                        field_name.clone(),
+                        FieldEncryptionMetadata {
+                            config_id: "default".to_string(),
+                            field: field_name.clone(),
+                            algorithm: field_config.algorithm.clone(),
+                            key_id: field_config
+                                .key_id
+                                .clone()
+                                .unwrap_or_else(|| "default".to_string()),
+                            key_version: 1,
+                            encrypted_at: Utc::now(),
+                            nonce: None,
+                            tag: None,
+                            metadata: HashMap::new(),
+                        },
+                    );
                 }
             }
         }
@@ -304,10 +309,13 @@ pub async fn store_data(
     // Cache serialized record to avoid repeated serialization
     let record_bytes = serde_json::to_vec(&storage_record)
         .map_err(|e| ServerError::serialization(e.to_string()))?;
-    
-    state.storage.put(&data_id, &record_bytes).await
+
+    state
+        .storage
+        .put(&data_id, &record_bytes)
+        .await
         .map_err(|e| ServerError::Core(e))?;
-    
+
     let response = StoreDataResponse {
         id: data_id,
         key_id,
@@ -315,9 +323,10 @@ pub async fn store_data(
         size_bytes: storage_record.data.len() as u64,
         algorithm: "aegis256".to_string(),
         field_metadata: storage_record.field_metadata.map(|core_metadata| {
-            core_metadata.into_iter().map(|(field, meta)| {
-                (field, serde_json::to_value(meta).unwrap_or_default())
-            }).collect()
+            core_metadata
+                .into_iter()
+                .map(|(field, meta)| (field, serde_json::to_value(meta).unwrap_or_default()))
+                .collect()
         }),
     };
 
@@ -356,7 +365,7 @@ pub async fn retrieve_data(
     Query(_params): Query<RetrieveRequest>,
 ) -> ServerResult<Json<ApiResponse<RetrieveDataResponse>>> {
     let start_time = std::time::Instant::now();
-    
+
     info!(
         user_id = %claims.sub,
         data_id = %data_id,
@@ -365,15 +374,18 @@ pub async fn retrieve_data(
 
     // Input validation
     let validator = fortress_core::input_validation::InputValidator::new();
-    
+
     // Validate data ID
     validator.validate_uuid(&data_id)?;
 
     // Retrieve the storage record
-    let record_bytes = state.storage.get(&data_id).await
+    let record_bytes = state
+        .storage
+        .get(&data_id)
+        .await
         .map_err(|e| ServerError::Core(e))?
         .ok_or_else(|| ServerError::not_found("Data not found"))?;
-    
+
     let storage_record: StorageRecord = serde_json::from_slice(&record_bytes)
         .map_err(|e| ServerError::serialization(e.to_string()))?;
 
@@ -384,14 +396,18 @@ pub async fn retrieve_data(
     }
 
     // Get the decryption key
-    let key = state.key_manager.retrieve_key(&storage_record.key_id).await
+    let key = state
+        .key_manager
+        .retrieve_key(&storage_record.key_id)
+        .await
         .map_err(|e| ServerError::Core(e))?;
     let key_bytes = key.0.as_bytes();
 
     // Decrypt the data
-    let plaintext = Aegis256::new().decrypt(&storage_record.data, key_bytes)
+    let plaintext = Aegis256::new()
+        .decrypt(&storage_record.data, key_bytes)
         .map_err(|e| ServerError::Core(e))?;
-    
+
     let decrypted_data: serde_json::Value = serde_json::from_slice(&plaintext)
         .map_err(|e| ServerError::serialization(e.to_string()))?;
 
@@ -399,8 +415,9 @@ pub async fn retrieve_data(
     let final_data = if let Some(ref field_metadata) = storage_record.field_metadata {
         let data = decrypted_data;
         for (field_name, _metadata) in field_metadata {
-            let _field_id = fortress_core::field_encryption::FieldIdentifier::Name(field_name.clone());
-            
+            let _field_id =
+                fortress_core::field_encryption::FieldIdentifier::Name(field_name.clone());
+
             // This would require storing the encrypted field data separately
             // For now, we'll keep the original data
         }
@@ -418,9 +435,10 @@ pub async fn retrieve_data(
         algorithm: storage_record.algorithm,
         key_id: storage_record.key_id,
         field_metadata: storage_record.field_metadata.map(|core_metadata| {
-            core_metadata.into_iter().map(|(field, meta)| {
-                (field, serde_json::to_value(meta).unwrap_or_default())
-            }).collect()
+            core_metadata
+                .into_iter()
+                .map(|(field, meta)| (field, serde_json::to_value(meta).unwrap_or_default()))
+                .collect()
         }),
     };
 
@@ -441,7 +459,7 @@ pub async fn delete_data(
     Json(request): Json<DeleteRequest>,
 ) -> ServerResult<Json<ApiResponse<DeleteResponse>>> {
     let start_time = std::time::Instant::now();
-    
+
     info!(
         user_id = %claims.sub,
         data_id = %data_id,
@@ -449,10 +467,13 @@ pub async fn delete_data(
     );
 
     // First retrieve the record to validate access
-    let record_bytes = state.storage.get(&data_id).await
+    let record_bytes = state
+        .storage
+        .get(&data_id)
+        .await
         .map_err(|e| ServerError::Core(e))?
         .ok_or_else(|| ServerError::not_found("Data not found"))?;
-    
+
     let storage_record: StorageRecord = serde_json::from_slice(&record_bytes)
         .map_err(|e| ServerError::serialization(e.to_string()))?;
 
@@ -464,7 +485,7 @@ pub async fn delete_data(
 
     // Delete the record
     let soft_delete = request.soft_delete.unwrap_or(false);
-    
+
     if soft_delete {
         // Issue 13: Soft delete is identical to hard delete.
         // Proper soft delete would involve marking the record as deleted
@@ -472,7 +493,10 @@ pub async fn delete_data(
         todo!("Implement proper soft delete mechanism for StorageRecord");
     } else {
         // Hard delete
-        state.storage.delete(&data_id).await
+        state
+            .storage
+            .delete(&data_id)
+            .await
             .map_err(|e| ServerError::Core(e))?;
     }
 
@@ -499,7 +523,7 @@ pub async fn list_data(
     Query(request): Query<ListRequest>,
 ) -> ServerResult<Json<ApiResponse<ListResponse>>> {
     let start_time = std::time::Instant::now();
-    
+
     info!(
         user_id = %claims.sub,
         tenant_id = ?request.tenant_id,
@@ -508,11 +532,14 @@ pub async fn list_data(
 
     // Use prefix-based listing to get all records
     let prefix = request.tenant_id.as_deref().unwrap_or("");
-    let keys = state.storage.list_prefix(prefix).await
+    let pagination = request.pagination.clone().unwrap_or_default();
+    let keys = state
+        .storage
+        .list_prefix_paginated(prefix, pagination.page_size.map(|v| v as usize), Some((pagination.page.unwrap_or(1) as usize - 1) * pagination.page_size.unwrap_or(50) as usize))
+        .await
         .map_err(|e| ServerError::Core(e))?;
 
     let mut items: Vec<DataItem> = vec![];
-    let mut total_count = 0;
 
     // Process each key to get record metadata
     for key in keys {
@@ -532,7 +559,7 @@ pub async fn list_data(
                             continue;
                         }
                     }
-                    
+
                     if let Some(ref date_range) = filter.date_range {
                         if let Some(start) = date_range.start {
                             if storage_record.created_at < start {
@@ -547,8 +574,6 @@ pub async fn list_data(
                     }
                 }
 
-                total_count += 1;
-                
                 // Create data item summary (without the actual data)
                 let item = DataItem {
                     id: storage_record.id,
@@ -558,7 +583,7 @@ pub async fn list_data(
                     algorithm: storage_record.algorithm,
                     metadata: storage_record.metadata,
                 };
-                
+
                 items.push(item);
             }
         }
@@ -568,18 +593,14 @@ pub async fn list_data(
     if let Some(ref sort) = request.sort {
         items.sort_by(|a, b| {
             match sort.field.as_str() {
-                "stored_at" | "created_at" => {
-                    match sort.direction {
-                        SortDirection::Asc => a.stored_at.cmp(&b.stored_at),
-                        SortDirection::Desc => b.stored_at.cmp(&a.stored_at),
-                    }
-                }
-                "size_bytes" => {
-                    match sort.direction {
-                        SortDirection::Asc => a.size_bytes.cmp(&b.size_bytes),
-                        SortDirection::Desc => b.size_bytes.cmp(&a.size_bytes),
-                    }
-                }
+                "stored_at" | "created_at" => match sort.direction {
+                    SortDirection::Asc => a.stored_at.cmp(&b.stored_at),
+                    SortDirection::Desc => b.stored_at.cmp(&a.stored_at),
+                },
+                "size_bytes" => match sort.direction {
+                    SortDirection::Asc => a.size_bytes.cmp(&b.size_bytes),
+                    SortDirection::Desc => b.size_bytes.cmp(&a.size_bytes),
+                },
                 _ => {
                     // Default sort by stored_at descending
                     b.stored_at.cmp(&a.stored_at)
@@ -591,22 +612,9 @@ pub async fn list_data(
         items.sort_by(|a, b| b.stored_at.cmp(&a.stored_at));
     }
 
-    // Apply pagination
-    let pagination = request.pagination.unwrap_or_default();
-    let page = pagination.page.unwrap_or(1);
-    let page_size = pagination.page_size.unwrap_or(50);
-    let start = ((page - 1) * page_size) as usize;
-    let end = std::cmp::min(start + page_size as usize, items.len());
-    
-    let paginated_items = if start < items.len() {
-        items[start..end].to_vec()
-    } else {
-        vec![]
-    };
-
     let response = ListResponse {
-        items: paginated_items,
-        total_count,
+        total_count: items.len() as u64, // Simplified count for paginated request
+        items,
     };
 
     info!(
@@ -626,7 +634,7 @@ pub async fn generate_key(
     Json(request): Json<KeyRequest>,
 ) -> ServerResult<Json<ApiResponse<KeyResponse>>> {
     let start_time = std::time::Instant::now();
-    
+
     info!(
         user_id = %claims.sub,
         algorithm = %request.algorithm,
@@ -647,14 +655,20 @@ pub async fn generate_key(
             Aegis256::new()
         }
         _ => {
-            return Err(ServerError::validation(format!("Unsupported algorithm: {}", request.algorithm)));
+            return Err(ServerError::validation(format!(
+                "Unsupported algorithm: {}",
+                request.algorithm
+            )));
         }
     };
 
     // Generate the key
-    let key = state.key_manager.generate_key(&algorithm).await
+    let key = state
+        .key_manager
+        .generate_key(&algorithm)
+        .await
         .map_err(|e| ServerError::Core(e))?;
-    
+
     // Create metadata
     let key_id = format!("key_{}", Uuid::new_v4());
     let metadata = fortress_core::key::KeyMetadata::new(
@@ -666,9 +680,12 @@ pub async fn generate_key(
         "data_encryption".to_string(),
         fortress_core::encryption::PerformanceProfile::Balanced,
     );
-    
+
     // Store key
-    state.key_manager.store_key(&key_id, &key, &metadata).await
+    state
+        .key_manager
+        .store_key(&key_id, &key, &metadata)
+        .await
         .map_err(|e| ServerError::Core(e))?;
 
     // Generate fingerprint
@@ -700,7 +717,7 @@ pub async fn authenticate(
     Json(request): Json<AuthRequest>,
 ) -> ServerResult<Json<ApiResponse<AuthResponse>>> {
     let start_time = std::time::Instant::now();
-    
+
     info!(
         username = %request.username,
         tenant_id = ?request.tenant_id,
@@ -733,7 +750,7 @@ pub async fn refresh_token(
     Json(request): Json<RefreshTokenRequest>,
 ) -> ServerResult<Json<ApiResponse<RefreshTokenResponse>>> {
     let start_time = std::time::Instant::now();
-    
+
     info!("Token refresh request received");
 
     let refresh_response = state.auth_manager.refresh_token(request).await?;
@@ -766,12 +783,11 @@ pub async fn get_metrics(
 }
 
 /// Prometheus metrics handler
-pub async fn get_prometheus_metrics(
-    State(state): State<Arc<AppState>>,
-) -> ServerResult<String> {
-    let prometheus_metrics = state.metrics.get_prometheus_metrics().await
-        .map_err(|e| ServerError::internal(format!("Failed to generate Prometheus metrics: {}", e)))?;
-    
+pub async fn get_prometheus_metrics(State(state): State<Arc<AppState>>) -> ServerResult<String> {
+    let prometheus_metrics = state.metrics.get_prometheus_metrics().await.map_err(|e| {
+        ServerError::internal(format!("Failed to generate Prometheus metrics: {}", e))
+    })?;
+
     Ok(prometheus_metrics)
 }
 
@@ -780,13 +796,13 @@ pub async fn detailed_health_check(
     State(state): State<Arc<AppState>>,
 ) -> ServerResult<Json<serde_json::Value>> {
     let health_checker = &*state.health_checker;
-    
+
     // Run comprehensive health checks
     health_checker.run_all_checks().await;
-    
+
     // Get detailed health status
     let health_response = health_checker.get_health().await;
-    
+
     // Convert to detailed JSON with additional information
     let detailed_health = serde_json::json!({
         "status": health_response.status,
@@ -810,7 +826,7 @@ pub async fn detailed_health_check(
             "error_rate": 0.001
         }
     });
-    
+
     Ok(Json(detailed_health))
 }
 
@@ -819,12 +835,12 @@ pub async fn security_health_check(
     State(state): State<Arc<AppState>>,
 ) -> ServerResult<Json<serde_json::Value>> {
     let health_checker = &*state.health_checker;
-    
+
     // Get auth component health
     let auth_health = health_checker.get_component_health("auth").await;
     let encryption_health = health_checker.get_component_health("encryption").await;
     let audit_health = health_checker.get_component_health("audit_logging").await;
-    
+
     let security_status = serde_json::json!({
         "status": if auth_health.is_some() && auth_health.as_ref().map(|h| h.status == crate::models::HealthStatus::Healthy).unwrap_or(false) &&
                         encryption_health.is_some() && encryption_health.as_ref().map(|h| h.status == crate::models::HealthStatus::Healthy).unwrap_or(false) {
@@ -851,7 +867,7 @@ pub async fn security_health_check(
             "false_positives": 2
         }
     });
-    
+
     Ok(Json(security_status))
 }
 
@@ -888,10 +904,11 @@ pub async fn get_security_events(
             "source_ip": "198.51.100.1",
             "user_agent": "Python/3.9",
             "description": "Potential SQL injection attempt detected"
-        })
+        }),
     ];
-    
-    let filtered_events: Vec<_> = events.into_iter()
+
+    let filtered_events: Vec<_> = events
+        .into_iter()
         .filter(|event| {
             let _event_time = event["timestamp"].as_str().unwrap_or("");
             // Apply filters based on query parameters
@@ -905,7 +922,7 @@ pub async fn get_security_events(
         .skip(params.offset.unwrap_or(0) as usize)
         .take(params.limit.unwrap_or(50) as usize)
         .collect();
-    
+
     Ok(Json(serde_json::json!({
         "events": filtered_events,
         "total_count": 3,
@@ -950,10 +967,11 @@ pub async fn get_blocked_requests(
             "request_method": "GET",
             "blocked_by": "auth_middleware",
             "severity": "medium"
-        })
+        }),
     ];
-    
-    let filtered_requests: Vec<_> = blocked_requests.into_iter()
+
+    let filtered_requests: Vec<_> = blocked_requests
+        .into_iter()
         .filter(|req| {
             // Apply filters based on query parameters
             if let Some(reason) = &params.reason {
@@ -966,7 +984,7 @@ pub async fn get_blocked_requests(
         .skip(params.offset.unwrap_or(0) as usize)
         .take(params.limit.unwrap_or(50) as usize)
         .collect();
-    
+
     Ok(Json(serde_json::json!({
         "blocked_requests": filtered_requests,
         "total_count": 3,
@@ -1006,7 +1024,7 @@ fn get_memory_usage() -> String {
 
 /// Helper function to generate key fingerprint
 fn generate_key_fingerprint(key: &SecureKey) -> String {
-    use sha2::{Sha256, Digest};
+    use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
     hasher.update(key.as_bytes());
     format!("{:x}", hasher.finalize())[..16].to_string()
@@ -1016,7 +1034,7 @@ fn generate_key_fingerprint(key: &SecureKey) -> String {
 fn get_nested_value(data: &serde_json::Value, path: &str) -> Option<serde_json::Value> {
     let parts: Vec<&str> = path.split('.').collect();
     let mut current = data;
-    
+
     for part in parts {
         match current {
             serde_json::Value::Object(map) => {
@@ -1032,7 +1050,7 @@ fn get_nested_value(data: &serde_json::Value, path: &str) -> Option<serde_json::
             _ => return None,
         }
     }
-    
+
     Some(current.clone())
 }
 
@@ -1044,7 +1062,7 @@ pub async fn create_database(
     Json(request): Json<CreateDatabaseRequest>,
 ) -> ServerResult<Json<ApiResponse<DatabaseResponse>>> {
     let start_time = std::time::Instant::now();
-    
+
     info!(
         database_name = %request.name,
         algorithm = %request.algorithm,
@@ -1076,7 +1094,7 @@ pub async fn list_databases(
     State(_state): State<Arc<AppState>>,
 ) -> ServerResult<Json<ApiResponse<ListDatabasesResponse>>> {
     let start_time = std::time::Instant::now();
-    
+
     info!("List databases request received");
 
     // For now, return empty list
@@ -1101,7 +1119,7 @@ pub async fn get_database(
     Path(database_name): Path<String>,
 ) -> ServerResult<Json<ApiResponse<DatabaseResponse>>> {
     let start_time = std::time::Instant::now();
-    
+
     info!(
         database_name = %database_name,
         "Get database request received"
@@ -1133,7 +1151,7 @@ pub async fn delete_database(
     Path(database_name): Path<String>,
 ) -> ServerResult<Json<ApiResponse<OperationDeleteResponse>>> {
     let start_time = std::time::Instant::now();
-    
+
     info!(
         database_name = %database_name,
         "Delete database request received"
@@ -1164,7 +1182,7 @@ pub async fn create_table(
     Json(request): Json<CreateTableRequest>,
 ) -> ServerResult<Json<ApiResponse<TableResponse>>> {
     let start_time = std::time::Instant::now();
-    
+
     info!(
         database_name = %database_name,
         table_name = %request.name,
@@ -1198,7 +1216,7 @@ pub async fn list_tables(
     Path(database_name): Path<String>,
 ) -> ServerResult<Json<ApiResponse<ListTablesResponse>>> {
     let start_time = std::time::Instant::now();
-    
+
     info!(
         database_name = %database_name,
         "List tables request received"
@@ -1227,7 +1245,7 @@ pub async fn get_table_schema(
     Path((database_name, table_name)): Path<(String, String)>,
 ) -> ServerResult<Json<ApiResponse<TableSchemaResponse>>> {
     let start_time = std::time::Instant::now();
-    
+
     info!(
         database_name = %database_name,
         table_name = %table_name,
@@ -1258,7 +1276,7 @@ pub async fn drop_table(
     Path((database_name, table_name)): Path<(String, String)>,
 ) -> ServerResult<Json<ApiResponse<OperationDeleteResponse>>> {
     let start_time = std::time::Instant::now();
-    
+
     info!(
         database_name = %database_name,
         table_name = %table_name,
@@ -1269,7 +1287,10 @@ pub async fn drop_table(
     // In production, this would delete actual table
     let response = OperationDeleteResponse {
         deleted: true,
-        message: format!("Table '{}.{}' dropped successfully", database_name, table_name),
+        message: format!(
+            "Table '{}.{}' dropped successfully",
+            database_name, table_name
+        ),
     };
 
     info!(
@@ -1291,7 +1312,7 @@ pub async fn insert_data(
     Json(_request): Json<InsertDataRequest>,
 ) -> ServerResult<Json<ApiResponse<InsertResponse>>> {
     let start_time = std::time::Instant::now();
-    
+
     info!(
         database_name = %database_name,
         table_name = %table_name,
@@ -1325,7 +1346,7 @@ pub async fn query_data(
     Query(_params): Query<QueryParams>,
 ) -> ServerResult<Json<ApiResponse<QueryResponse>>> {
     let start_time = std::time::Instant::now();
-    
+
     info!(
         database_name = %database_name,
         table_name = %table_name,
@@ -1358,7 +1379,7 @@ pub async fn bulk_insert(
     Json(request): Json<BulkInsertRequest>,
 ) -> ServerResult<Json<ApiResponse<BulkInsertResponse>>> {
     let start_time = std::time::Instant::now();
-    
+
     info!(
         database_name = %database_name,
         table_name = %table_name,
@@ -1392,7 +1413,7 @@ pub async fn update_data(
     Json(_request): Json<UpdateDataRequest>,
 ) -> ServerResult<Json<ApiResponse<UpdateResponse>>> {
     let start_time = std::time::Instant::now();
-    
+
     info!(
         database_name = %database_name,
         table_name = %table_name,
@@ -1425,7 +1446,7 @@ pub async fn delete_data_v2(
     Path((database_name, table_name, data_id)): Path<(String, String, String)>,
 ) -> ServerResult<Json<ApiResponse<OperationDeleteResponse>>> {
     let start_time = std::time::Instant::now();
-    
+
     info!(
         database_name = %database_name,
         table_name = %table_name,
@@ -1437,7 +1458,10 @@ pub async fn delete_data_v2(
     // In production, this would delete actual data
     let response = OperationDeleteResponse {
         deleted: true,
-        message: format!("Data '{}' deleted successfully from '{}.{}'", data_id, database_name, table_name),
+        message: format!(
+            "Data '{}' deleted successfully from '{}.{}'",
+            data_id, database_name, table_name
+        ),
     };
 
     info!(
@@ -1460,7 +1484,7 @@ pub async fn execute_query(
     Json(request): Json<ExecuteQueryRequest>,
 ) -> ServerResult<Json<ApiResponse<QueryResponse>>> {
     let start_time = std::time::Instant::now();
-    
+
     info!(
         database_name = %database_name,
         sql = %request.sql,
@@ -1493,7 +1517,7 @@ pub async fn rotate_keys(
     Path((database_name, table_name)): Path<(String, String)>,
 ) -> ServerResult<Json<ApiResponse<RotateKeysResponse>>> {
     let start_time = std::time::Instant::now();
-    
+
     info!(
         database_name = %database_name,
         table_name = %table_name,
@@ -1527,7 +1551,7 @@ pub async fn rotate_keys_zero_downtime(
     Path((database_name, table_name)): Path<(String, String)>,
 ) -> ServerResult<Json<ApiResponse<RotateKeysResponse>>> {
     let start_time = std::time::Instant::now();
-    
+
     info!(
         database_name = %database_name,
         table_name = %table_name,
@@ -1561,7 +1585,7 @@ pub async fn get_rotation_status(
     Path((database_name, table_name)): Path<(String, String)>,
 ) -> ServerResult<Json<ApiResponse<RotationStatusResponse>>> {
     let start_time = std::time::Instant::now();
-    
+
     info!(
         database_name = %database_name,
         table_name = %table_name,
@@ -1596,7 +1620,7 @@ pub async fn get_encryption_metadata(
     Path((database_name, table_name)): Path<(String, String)>,
 ) -> ServerResult<Json<ApiResponse<EncryptionMetadataResponse>>> {
     let start_time = std::time::Instant::now();
-    
+
     info!(
         database_name = %database_name,
         table_name = %table_name,
@@ -1628,13 +1652,11 @@ pub async fn get_encryption_metadata(
 /// Create OpenAPI documentation (simplified)
 pub fn create_openapi() -> utoipa::openapi::OpenApi {
     #[derive(utoipa::OpenApi)]
-    #[openapi(
-        info(
-            title = "Fortress API",
-            version = "1.0.0",
-            description = "REST API for Fortress secure database system with end-to-end encryption"
-        )
-    )]
+    #[openapi(info(
+        title = "Fortress API",
+        version = "1.0.0",
+        description = "REST API for Fortress secure database system with end-to-end encryption"
+    ))]
     struct ApiDoc;
 
     ApiDoc::openapi()
@@ -1656,9 +1678,18 @@ mod tests {
             "tags": ["admin", "user"]
         });
 
-        assert_eq!(get_nested_value(&data, "user.name"), Some(serde_json::json!("John")));
-        assert_eq!(get_nested_value(&data, "user.address.city"), Some(serde_json::json!("New York")));
-        assert_eq!(get_nested_value(&data, "tags.0"), Some(serde_json::json!("admin")));
+        assert_eq!(
+            get_nested_value(&data, "user.name"),
+            Some(serde_json::json!("John"))
+        );
+        assert_eq!(
+            get_nested_value(&data, "user.address.city"),
+            Some(serde_json::json!("New York"))
+        );
+        assert_eq!(
+            get_nested_value(&data, "tags.0"),
+            Some(serde_json::json!("admin"))
+        );
         assert_eq!(get_nested_value(&data, "nonexistent"), None);
     }
 
@@ -1743,7 +1774,10 @@ pub async fn create_tenant(
 
             Ok(Json(ApiResponse::success(response)))
         }
-        Err(e) => Err(ServerError::internal(format!("Failed to create tenant: {}", e))),
+        Err(e) => Err(ServerError::internal(format!(
+            "Failed to create tenant: {}",
+            e
+        ))),
     }
 }
 
@@ -1771,19 +1805,25 @@ pub async fn list_tenants(
 
     match state.tenant_manager.list_tenants().await {
         Ok(tenants) => {
-            let response: Vec<TenantResponse> = tenants.into_iter().map(|tenant| TenantResponse {
-                id: tenant.id.to_string(),
-                name: tenant.name,
-                description: tenant.description,
-                resource_limits: tenant.resource_limits,
-                active: tenant.active,
-                created_at: tenant.created_at,
-                modified_at: tenant.modified_at,
-            }).collect();
+            let response: Vec<TenantResponse> = tenants
+                .into_iter()
+                .map(|tenant| TenantResponse {
+                    id: tenant.id.to_string(),
+                    name: tenant.name,
+                    description: tenant.description,
+                    resource_limits: tenant.resource_limits,
+                    active: tenant.active,
+                    created_at: tenant.created_at,
+                    modified_at: tenant.modified_at,
+                })
+                .collect();
 
             Ok(Json(ApiResponse::success(response)))
         }
-        Err(e) => Err(ServerError::internal(format!("Failed to list tenants: {}", e))),
+        Err(e) => Err(ServerError::internal(format!(
+            "Failed to list tenants: {}",
+            e
+        ))),
     }
 }
 
@@ -1819,7 +1859,10 @@ pub async fn get_tenant_stats(
 
     match state.tenant_manager.get_tenant_stats(&tenant_uuid).await {
         Ok(stats) => Ok(Json(ApiResponse::success(stats))),
-        Err(e) => Err(ServerError::internal(format!("Failed to get tenant stats: {}", e))),
+        Err(e) => Err(ServerError::internal(format!(
+            "Failed to get tenant stats: {}",
+            e
+        ))),
     }
 }
 
@@ -1846,7 +1889,10 @@ pub async fn admin_list_data(
     }
 
     // List all data without tenant filtering
-    let keys = state.storage.list_prefix("").await
+    let keys = state
+        .storage
+        .list_prefix("")
+        .await
         .map_err(|e| ServerError::Core(e))?;
 
     let mut records = Vec::new();

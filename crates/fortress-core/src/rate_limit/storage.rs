@@ -1,15 +1,15 @@
 //! Rate Limiting Storage Backends
-//! 
+//!
 //! This module provides storage implementations for rate limiting
 //! including memory, Redis, and database backends.
 
+use crate::error::{FortressError, Result};
+use crate::rate_limit::{RateLimitAlgorithm, RateLimitContext, RateLimitResult, RateLimitRule};
+use async_trait::async_trait;
+use chrono::{DateTime, Duration, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use chrono::{DateTime, Utc, Duration};
-use crate::error::{FortressError, Result};
-use crate::rate_limit::{RateLimitAlgorithm, RateLimitRule, RateLimitResult, RateLimitContext};
-use async_trait::async_trait;
 
 /// In-memory storage implementation
 pub struct MemoryStorage {
@@ -42,7 +42,7 @@ impl MemoryStorage {
     async fn cleanup_expired(&self) {
         let mut counters = self.counters.write().await;
         let now = Utc::now();
-        
+
         counters.retain(|_, entry| {
             if let Some(expires_at) = entry.expires_at {
                 expires_at > now
@@ -62,56 +62,71 @@ impl RateLimitStorage for MemoryStorage {
     async fn get_counter(&self, key: &str, rule_name: &str) -> Result<Option<u64>> {
         let storage_key = self.generate_key(key, rule_name);
         let counters = self.counters.read().await;
-        
+
         Ok(counters.get(&storage_key).map(|entry| entry.value))
     }
 
-    async fn set_counter(&self, key: str, rule_name: str, value: u64, ttl: Option<Duration>) -> Result<()> {
+    async fn set_counter(
+        &self,
+        key: str,
+        rule_name: str,
+        value: u64,
+        ttl: Option<Duration>,
+    ) -> Result<()> {
         let storage_key = self.generate_key(&key, &rule_name);
         let mut counters = self.counters.write().await;
-        
+
         let now = Utc::now();
         let expires_at = ttl.map(|duration| now + duration);
-        
-        counters.insert(storage_key, CounterEntry {
-            value,
-            created_at: now,
-            expires_at,
-            ttl,
-        });
-        
+
+        counters.insert(
+            storage_key,
+            CounterEntry {
+                value,
+                created_at: now,
+                expires_at,
+                ttl,
+            },
+        );
+
         Ok(())
     }
 
-    async fn increment_counter(&self, key: str, rule_name: str, amount: u64, ttl: Option<Duration>) -> Result<u64> {
+    async fn increment_counter(
+        &self,
+        key: str,
+        rule_name: str,
+        amount: u64,
+        ttl: Option<Duration>,
+    ) -> Result<u64> {
         let storage_key = self.generate_key(&key, &rule_name);
         let mut counters = self.counters.write().await;
-        
+
         let now = Utc::now();
         let expires_at = ttl.map(|duration| now + duration);
-        
+
         let entry = counters.entry(storage_key).or_insert_with(|| CounterEntry {
             value: 0,
             created_at: now,
             expires_at,
             ttl,
         });
-        
+
         entry.value += amount;
-        
+
         // Update TTL if provided
         if ttl.is_some() {
             entry.ttl = ttl;
             entry.expires_at = expires_at;
         }
-        
+
         Ok(entry.value)
     }
 
     async fn decrement_counter(&self, key: str, rule_name: str, amount: u64) -> Result<u64> {
         let storage_key = self.generate_key(&key, &rule_name);
         let mut counters = self.counters.write().await;
-        
+
         if let Some(entry) = counters.get_mut(&storage_key) {
             entry.value = entry.value.saturating_sub(amount);
             Ok(entry.value)
@@ -123,7 +138,7 @@ impl RateLimitStorage for MemoryStorage {
     async fn delete_counter(&self, key: &str, rule_name: &str) -> Result<()> {
         let storage_key = self.generate_key(key, rule_name);
         let mut counters = self.counters.write().await;
-        
+
         counters.remove(&storage_key);
         Ok(())
     }
@@ -131,12 +146,13 @@ impl RateLimitStorage for MemoryStorage {
     async fn get_keys(&self, rule_name: &str) -> Result<Vec<String>> {
         let counters = self.counters.read().await;
         let prefix = format!("{}:", rule_name);
-        
-        let keys: Vec<String> = counters.keys()
+
+        let keys: Vec<String> = counters
+            .keys()
             .filter(|key| key.starts_with(&prefix))
             .map(|key| key.strip_prefix(&prefix).unwrap_or(key).to_string())
             .collect();
-        
+
         Ok(keys)
     }
 
@@ -160,7 +176,7 @@ impl RedisStorage {
         let client = redis::Client::open("redis://localhost:6379")
             .ok()
             .map(Arc::new);
-        
+
         Self {
             client,
             key_prefix: "fortress:rate_limit".to_string(),
@@ -170,10 +186,8 @@ impl RedisStorage {
 
     /// Create Redis storage with custom configuration
     pub fn with_config(redis_url: &str, key_prefix: String, default_ttl: Duration) -> Self {
-        let client = redis::Client::open(redis_url)
-            .ok()
-            .map(Arc::new);
-        
+        let client = redis::Client::open(redis_url).ok().map(Arc::new);
+
         Self {
             client,
             key_prefix,
@@ -190,12 +204,12 @@ impl RedisStorage {
     async fn get_connection(&self) -> Result<Option<redis::aio::Connection>> {
         match &self.client {
             Some(client) => {
-                let conn = client.get_async_connection()
-                    .await
-                    .map_err(|e| FortressError::rate_limit(format!("Failed to get Redis connection: {}", e)))?;
+                let conn = client.get_async_connection().await.map_err(|e| {
+                    FortressError::rate_limit(format!("Failed to get Redis connection: {}", e))
+                })?;
                 Ok(Some(conn))
             }
-            None => Ok(None)
+            None => Ok(None),
         }
     }
 }
@@ -212,26 +226,32 @@ impl RateLimitStorage for RedisStorage {
             Some(conn) => conn,
             None => return Ok(None),
         };
-        
+
         let value: Option<u64> = redis::cmd("GET")
             .arg(&storage_key)
             .query_async(&mut conn)
             .await
             .map_err(|e| FortressError::rate_limit(format!("Redis GET failed: {}", e)))?;
-        
+
         Ok(value)
     }
 
-    async fn set_counter(&self, key: str, rule_name: str, value: u64, ttl: Option<Duration>) -> Result<()> {
+    async fn set_counter(
+        &self,
+        key: str,
+        rule_name: str,
+        value: u64,
+        ttl: Option<Duration>,
+    ) -> Result<()> {
         let storage_key = self.generate_key(&key, &rule_name);
         let mut conn = match self.get_connection().await? {
             Some(conn) => conn,
             None => return Ok(()),
         };
-        
+
         let now = Utc::now();
         let expires_at = ttl.map(|duration| now + duration);
-        
+
         redis::cmd("SET")
             .arg(&storage_key)
             .arg(value)
@@ -240,35 +260,41 @@ impl RateLimitStorage for RedisStorage {
             .query_async(&mut conn)
             .await
             .map_err(|e| FortressError::rate_limit(format!("Redis SET failed: {}", e)))?;
-        
+
         Ok(())
     }
 
-    async fn increment_counter(&self, key: str, rule_name: str, amount: u64, ttl: Option<Duration>) -> Result<u64> {
+    async fn increment_counter(
+        &self,
+        key: str,
+        rule_name: str,
+        amount: u64,
+        ttl: Option<Duration>,
+    ) -> Result<u64> {
         let storage_key = self.generate_key(&key, &rule_name);
         let mut conn = match self.get_connection().await? {
             Some(conn) => conn,
             None => return Ok(0),
         };
-        
+
         let now = Utc::now();
         let expires_at = ttl.map(|duration| now + duration);
-        
+
         let entry = conn.entry(storage_key).or_insert_with(|| CounterEntry {
             value: 0,
             created_at: now,
             expires_at,
             ttl,
         });
-        
+
         entry.value += amount;
-        
+
         // Update TTL if provided
         if ttl.is_some() {
             entry.ttl = ttl;
             entry.expires_at = expires_at;
         }
-        
+
         Ok(entry.value)
     }
 
@@ -278,7 +304,7 @@ impl RateLimitStorage for RedisStorage {
             Some(conn) => conn,
             None => return Ok(0),
         };
-        
+
         if let Some(entry) = conn.get_mut(&storage_key) {
             entry.value = entry.value.saturating_sub(amount);
             Ok(entry.value)
@@ -293,10 +319,11 @@ impl RateLimitStorage for RedisStorage {
             Some(conn) => conn,
             None => return Ok(()),
         };
-        
-        conn.del(&storage_key).await
+
+        conn.del(&storage_key)
+            .await
             .map_err(|e| FortressError::rate_limit(format!("Redis DEL failed: {}", e)))?;
-        
+
         Ok(())
     }
 
@@ -305,12 +332,14 @@ impl RateLimitStorage for RedisStorage {
             Some(conn) => conn,
             None => return Ok(Vec::new()),
         };
-        
+
         let prefix = format!("{}:", rule_name);
-        
-        let keys: Vec<String> = conn.keys(&prefix).await
+
+        let keys: Vec<String> = conn
+            .keys(&prefix)
+            .await
             .map_err(|e| FortressError::rate_limit(format!("Redis KEYS failed: {}", e)))?;
-        
+
         Ok(keys)
     }
 
@@ -362,13 +391,25 @@ impl RateLimitStorage for DatabaseStorage {
         Ok(None)
     }
 
-    async fn set_counter(&self, key: str, rule_name: str, value: u64, ttl: Option<Duration>) -> Result<()> {
+    async fn set_counter(
+        &self,
+        key: str,
+        rule_name: str,
+        value: u64,
+        ttl: Option<Duration>,
+    ) -> Result<()> {
         // Placeholder implementation - would use actual database queries
         tracing::warn!("Database storage not implemented yet");
         Ok(())
     }
 
-    async fn increment_counter(&self, key: str, rule_name: str, amount: u64, ttl: Option<Duration>) -> Result<u64> {
+    async fn increment_counter(
+        &self,
+        key: str,
+        rule_name: str,
+        amount: u64,
+        ttl: Option<Duration>,
+    ) -> Result<u64> {
         // Placeholder implementation - would use actual database queries
         tracing::warn!("Database storage not implemented yet");
         Ok(0)
@@ -449,13 +490,25 @@ impl RateLimitStorage for DistributedStorage {
         Ok(None)
     }
 
-    async fn set_counter(&self, key: str, rule_name: str, value: u64, ttl: Option<Duration>) -> Result<()> {
+    async fn set_counter(
+        &self,
+        key: str,
+        rule_name: str,
+        value: u64,
+        ttl: Option<Duration>,
+    ) -> Result<()> {
         // Placeholder implementation - would use distributed cache
         tracing::warn!("Distributed storage not implemented yet");
         Ok(())
     }
 
-    async fn increment_counter(&self, key: str, rule_name: str, amount: u64, ttl: Option<Duration>) -> Result<u64> {
+    async fn increment_counter(
+        &self,
+        key: str,
+        rule_name: str,
+        amount: u64,
+        ttl: Option<Duration>,
+    ) -> Result<u64> {
         // Placeholder implementation - would use distributed cache
         tracing::warn!("Distributed storage not implemented yet");
         Ok(0)
@@ -493,25 +546,37 @@ mod tests {
     #[tokio::test]
     async fn test_memory_storage() {
         let storage = MemoryStorage::new();
-        
+
         // Test set and get
-        storage.set_counter("test_key", "test_rule", 10, None).await.unwrap();
+        storage
+            .set_counter("test_key", "test_rule", 10, None)
+            .await
+            .unwrap();
         let value = storage.get_counter("test_key", "test_rule").await.unwrap();
         assert_eq!(value, Some(10));
-        
+
         // Test increment
-        let new_value = storage.increment_counter("test_key", "test_rule", 5, None).await.unwrap();
+        let new_value = storage
+            .increment_counter("test_key", "test_rule", 5, None)
+            .await
+            .unwrap();
         assert_eq!(new_value, 15);
-        
+
         let value = storage.get_counter("test_key", "test_rule").await.unwrap();
         assert_eq!(value, Some(15));
-        
+
         // Test decrement
-        let new_value = storage.decrement_counter("test_key", "test_rule", 3).await.unwrap();
+        let new_value = storage
+            .decrement_counter("test_key", "test_rule", 3)
+            .await
+            .unwrap();
         assert_eq!(new_value, 12);
-        
+
         // Test delete
-        storage.delete_counter("test_key", "test_rule").await.unwrap();
+        storage
+            .delete_counter("test_key", "test_rule")
+            .await
+            .unwrap();
         let value = storage.get_counter("test_key", "test_rule").await.unwrap();
         assert_eq!(value, None);
     }
@@ -519,20 +584,23 @@ mod tests {
     #[tokio::test]
     async fn test_memory_storage_ttl() {
         let storage = MemoryStorage::new();
-        
+
         // Set with TTL
-        storage.set_counter("test_key", "test_rule", 10, Some(Duration::seconds(1))).await.unwrap();
-        
+        storage
+            .set_counter("test_key", "test_rule", 10, Some(Duration::seconds(1)))
+            .await
+            .unwrap();
+
         // Should exist immediately
         let value = storage.get_counter("test_key", "test_rule").await.unwrap();
         assert_eq!(value, Some(10));
-        
+
         // Wait for expiration
         tokio::time::sleep(Duration::seconds(2)).await;
-        
+
         // Cleanup expired entries
         storage.cleanup().await.unwrap();
-        
+
         // Should be gone after cleanup
         let value = storage.get_counter("test_key", "test_rule").await.unwrap();
         assert_eq!(value, None);
@@ -541,12 +609,21 @@ mod tests {
     #[tokio::test]
     async fn test_memory_storage_get_keys() {
         let storage = MemoryStorage::new();
-        
+
         // Add multiple counters
-        storage.set_counter("key1", "test_rule", 10, None).await.unwrap();
-        storage.set_counter("key2", "test_rule", 20, None).await.unwrap();
-        storage.set_counter("key3", "other_rule", 30, None).await.unwrap();
-        
+        storage
+            .set_counter("key1", "test_rule", 10, None)
+            .await
+            .unwrap();
+        storage
+            .set_counter("key2", "test_rule", 20, None)
+            .await
+            .unwrap();
+        storage
+            .set_counter("key3", "other_rule", 30, None)
+            .await
+            .unwrap();
+
         // Get keys for test_rule
         let keys = storage.get_keys("test_rule").await.unwrap();
         assert_eq!(keys.len(), 2);
@@ -567,7 +644,7 @@ mod tests {
         let storage = RedisStorage::with_config(
             "redis://localhost:6379".to_string(),
             "custom:prefix".to_string(),
-            Duration::hours(12)
+            Duration::hours(12),
         );
         assert_eq!(storage.name(), "redis");
         assert_eq!(storage.key_prefix, "custom:prefix");
@@ -609,14 +686,26 @@ mod tests {
         let redis_storage = RedisStorage::new();
         let db_storage = DatabaseStorage::new();
         let distributed_storage = DistributedStorage::new();
-        
+
         // Test key generation
         let key = "test_key";
         let rule_name = "test_rule";
-        
-        assert_eq!(memory_storage.generate_key(key, rule_name), "test_rule:test_key");
-        assert_eq!(redis_storage.generate_key(key, rule_name), "fortress:rate_limit:test_rule:test_key");
-        assert_eq!(db_storage.generate_key(key, rule_name), "test_rule:test_key");
-        assert_eq!(distributed_storage.generate_key(key, rule_name), "test_rule:test_key");
+
+        assert_eq!(
+            memory_storage.generate_key(key, rule_name),
+            "test_rule:test_key"
+        );
+        assert_eq!(
+            redis_storage.generate_key(key, rule_name),
+            "fortress:rate_limit:test_rule:test_key"
+        );
+        assert_eq!(
+            db_storage.generate_key(key, rule_name),
+            "test_rule:test_key"
+        );
+        assert_eq!(
+            distributed_storage.generate_key(key, rule_name),
+            "test_rule:test_key"
+        );
     }
 }

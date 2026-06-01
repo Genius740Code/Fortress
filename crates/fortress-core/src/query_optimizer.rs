@@ -127,10 +127,7 @@ pub struct QueryOptimizer {
 
 impl QueryOptimizer {
     /// Create a new query optimizer
-    pub fn new(
-        config: QueryOptimizerConfig,
-        query_engine: Arc<dyn QueryEngine>,
-    ) -> Self {
+    pub fn new(config: QueryOptimizerConfig, query_engine: Arc<dyn QueryEngine>) -> Self {
         Self {
             config,
             table_stats: Arc::new(RwLock::new(HashMap::new())),
@@ -156,7 +153,10 @@ impl QueryOptimizer {
     }
 
     /// Apply cost-based optimization
-    async fn apply_cost_based_optimization(&self, mut plan: ExecutionPlan) -> Result<ExecutionPlan> {
+    async fn apply_cost_based_optimization(
+        &self,
+        mut plan: ExecutionPlan,
+    ) -> Result<ExecutionPlan> {
         // Calculate current plan cost
         let _current_cost = self.calculate_plan_cost(&plan).await?;
 
@@ -186,7 +186,9 @@ impl QueryOptimizer {
             if node.node_type == PlanNodeType::Filter {
                 // Try to push filter down to child nodes
                 for child in &mut node.children {
-                    if child.node_type == PlanNodeType::TableScan || child.node_type == PlanNodeType::IndexScan {
+                    if child.node_type == PlanNodeType::TableScan
+                        || child.node_type == PlanNodeType::IndexScan
+                    {
                         // Merge filter parameters
                         for (key, value) in node.parameters.iter() {
                             child.parameters.insert(key.clone(), value.clone());
@@ -206,16 +208,18 @@ impl QueryOptimizer {
         let used_columns = self.analyze_used_columns(&plan).await?;
         for node in &mut plan.nodes {
             if node.node_type == PlanNodeType::Project {
-                
                 if let Some(columns) = node.parameters.get("columns") {
-                    if let Ok(column_list) = serde_json::from_value::<Vec<String>>(columns.clone()) {
+                    if let Ok(column_list) = serde_json::from_value::<Vec<String>>(columns.clone())
+                    {
                         let pruned_columns: Vec<String> = column_list
                             .into_iter()
                             .filter(|col| used_columns.contains(col))
                             .collect();
 
-                        node.parameters.insert("columns".to_string(), 
-                            serde_json::to_value(pruned_columns).unwrap());
+                        node.parameters.insert(
+                            "columns".to_string(),
+                            serde_json::to_value(pruned_columns).unwrap(),
+                        );
                         node.estimated_cost *= 0.8; // Assume 20% cost reduction
                     }
                 }
@@ -228,7 +232,8 @@ impl QueryOptimizer {
     /// Apply join reordering optimization
     async fn apply_join_reordering(&self, mut plan: ExecutionPlan) -> Result<ExecutionPlan> {
         // Reorder joins based on table sizes and selectivity
-        let join_nodes: Vec<usize> = plan.nodes
+        let join_nodes: Vec<usize> = plan
+            .nodes
             .iter()
             .enumerate()
             .filter(|(_, node)| node.node_type == PlanNodeType::Join)
@@ -239,7 +244,10 @@ impl QueryOptimizer {
             // Sort join nodes by estimated cost (smaller tables first)
             let mut join_indices = join_nodes.clone();
             join_indices.sort_by(|&a, &b| {
-                plan.nodes[a].estimated_cost.partial_cmp(&plan.nodes[b].estimated_cost).unwrap()
+                plan.nodes[a]
+                    .estimated_cost
+                    .partial_cmp(&plan.nodes[b].estimated_cost)
+                    .unwrap()
             });
 
             // Reorder nodes in the plan
@@ -316,7 +324,8 @@ impl QueryOptimizer {
                     for (_, index_stats) in &stats.index_stats {
                         if index_stats.selectivity < 0.5 {
                             // Index is selective enough to be useful
-                            let index_cost = (stats.row_count as f64 * index_stats.selectivity) * stats.avg_row_size;
+                            let index_cost = (stats.row_count as f64 * index_stats.selectivity)
+                                * stats.avg_row_size;
                             return Ok(Some(index_cost));
                         }
                     }
@@ -343,14 +352,18 @@ impl QueryOptimizer {
                 }
                 PlanNodeType::Project => {
                     if let Some(columns) = node.parameters.get("columns") {
-                        if let Ok(column_list) = serde_json::from_value::<Vec<String>>(columns.clone()) {
+                        if let Ok(column_list) =
+                            serde_json::from_value::<Vec<String>>(columns.clone())
+                        {
                             used_columns.extend(column_list);
                         }
                     }
                 }
                 PlanNodeType::Join => {
                     if let Some(join_cols) = node.parameters.get("join_columns") {
-                        if let Ok(join_col_list) = serde_json::from_value::<Vec<String>>(join_cols.clone()) {
+                        if let Ok(join_col_list) =
+                            serde_json::from_value::<Vec<String>>(join_cols.clone())
+                        {
                             used_columns.extend(join_col_list);
                         }
                     }
@@ -365,7 +378,7 @@ impl QueryOptimizer {
     /// Extract column names from a predicate string (simplified parser)
     fn extract_columns_from_predicate(&self, predicate: &str) -> Vec<String> {
         let mut columns = Vec::new();
-        
+
         // Simple regex-based extraction (in production, use a proper SQL parser)
         for word in predicate.split_whitespace() {
             if word.contains('.') && !word.contains('(') {
@@ -389,7 +402,7 @@ impl QueryOptimizer {
         }
 
         let mut cached_plans = self.cached_plans.write().await;
-        
+
         // Check cache size limit
         if cached_plans.len() >= self.config.max_cached_plans {
             // Remove least recently used plan
@@ -416,7 +429,11 @@ impl QueryOptimizer {
     }
 
     /// Update table statistics
-    pub async fn update_table_statistics(&self, table_name: String, stats: TableStatistics) -> Result<()> {
+    pub async fn update_table_statistics(
+        &self,
+        table_name: String,
+        stats: TableStatistics,
+    ) -> Result<()> {
         let mut table_stats = self.table_stats.write().await;
         table_stats.insert(table_name, stats);
         Ok(())
@@ -445,9 +462,12 @@ impl QueryOptimizer {
             max_cached_plans: self.config.max_cached_plans,
             tables_with_stats: table_stats.len(),
             total_cache_hits: cached_plans.values().map(|p| p.use_count).sum(),
-            cache_hit_ratio: if cached_plans.is_empty() { 0.0 } else {
-                cached_plans.values().map(|p| p.use_count).sum::<u64>() as f64 / 
-                (cached_plans.values().map(|p| p.use_count).sum::<u64>() + cached_plans.len() as u64) as f64
+            cache_hit_ratio: if cached_plans.is_empty() {
+                0.0
+            } else {
+                cached_plans.values().map(|p| p.use_count).sum::<u64>() as f64
+                    / (cached_plans.values().map(|p| p.use_count).sum::<u64>()
+                        + cached_plans.len() as u64) as f64
             },
         }
     }
@@ -527,7 +547,10 @@ mod tests {
         };
 
         // Cache the plan
-        optimizer.cache_plan(query_hash, plan.clone()).await.unwrap();
+        optimizer
+            .cache_plan(query_hash, plan.clone())
+            .await
+            .unwrap();
 
         // Retrieve from cache
         let cached = optimizer.get_cached_plan(query_hash).await.unwrap();
@@ -550,7 +573,10 @@ mod tests {
             last_updated: chrono::Utc::now(),
         };
 
-        optimizer.update_table_statistics("users".to_string(), stats).await.unwrap();
+        optimizer
+            .update_table_statistics("users".to_string(), stats)
+            .await
+            .unwrap();
 
         let retrieved = optimizer.get_table_statistics("users").await.unwrap();
         assert_eq!(retrieved.table_name, "users");

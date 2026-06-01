@@ -1,22 +1,22 @@
 #![cfg(any())]
 //! Azure Integration Tests for Fortress
-//! 
+//!
 //! This test suite validates Azure Blob Storage and Key Vault integration with Fortress.
 //! Tests are designed to run against actual Azure services using test credentials.
 
 #[cfg(test)]
 mod azure_integration_tests {
     use fortress_core::{
-        storage::{StorageBackend, InMemoryStorage},
-        error::{FortressError, Result},
         config::Config,
         encryption::{EncryptionAlgorithm, EncryptionProfile},
+        error::{FortressError, Result},
+        storage::{InMemoryStorage, StorageBackend},
     };
     // AzureBlobStorage not available in fortress_core::storage
     // use fortress_core::storage::AzureBlobStorage;
-    use tokio::time::{timeout, Duration};
-    use std::env;
     use serde_json::json;
+    use std::env;
+    use tokio::time::{timeout, Duration};
 
     /// Test configuration for Azure integration
     struct AzureTestConfig {
@@ -90,7 +90,9 @@ mod azure_integration_tests {
         let storage = match AzureBlobStorage::new(
             config.container_name.clone(),
             config.storage_account.clone(),
-        ).await {
+        )
+        .await
+        {
             Ok(storage) => storage,
             Err(e) => {
                 config.cleanup_env_vars();
@@ -101,25 +103,35 @@ mod azure_integration_tests {
         let test_data = TestData::new();
 
         // Test put operation
-        storage.put(&test_data.key, &test_data.value).await
+        storage
+            .put(&test_data.key, &test_data.value)
+            .await
             .expect("Failed to put data to Azure Blob");
 
         // Test get operation
-        let retrieved = storage.get(&test_data.key).await
+        let retrieved = storage
+            .get(&test_data.key)
+            .await
             .expect("Failed to get data from Azure Blob");
         assert_eq!(retrieved, Some(test_data.value));
 
         // Test exists operation
-        let exists = storage.exists(&test_data.key).await
+        let exists = storage
+            .exists(&test_data.key)
+            .await
             .expect("Failed to check existence in Azure Blob");
         assert!(exists);
 
         // Test delete operation
-        storage.delete(&test_data.key).await
+        storage
+            .delete(&test_data.key)
+            .await
             .expect("Failed to delete data from Azure Blob");
 
         // Verify deletion
-        let exists_after_delete = storage.exists(&test_data.key).await
+        let exists_after_delete = storage
+            .exists(&test_data.key)
+            .await
             .expect("Failed to check existence after delete");
         assert!(!exists_after_delete);
 
@@ -142,20 +154,26 @@ mod azure_integration_tests {
         let storage = AzureBlobStorage::new(
             config.container_name.clone(),
             config.storage_account.clone(),
-        ).await.expect("Failed to create Azure Blob storage");
+        )
+        .await
+        .expect("Failed to create Azure Blob storage");
 
         let test_data = TestData::new();
         let large_key = format!("large-{}", test_data.key);
 
         // Test large file upload
         let start = std::time::Instant::now();
-        storage.put(&large_key, &test_data.large_value).await
+        storage
+            .put(&large_key, &test_data.large_value)
+            .await
             .expect("Failed to upload large file to Azure Blob");
         let upload_time = start.elapsed();
 
         // Test large file download
         let start = std::time::Instant::now();
-        let retrieved = storage.get(&large_key).await
+        let retrieved = storage
+            .get(&large_key)
+            .await
             .expect("Failed to download large file from Azure Blob");
         let download_time = start.elapsed();
 
@@ -165,11 +183,22 @@ mod azure_integration_tests {
         println!("Large file (10MB) download time: {:?}", download_time);
 
         // Performance assertions (adjust based on your requirements)
-        assert!(upload_time.as_secs() < 30, "Upload took too long: {:?}", upload_time);
-        assert!(download_time.as_secs() < 30, "Download took too long: {:?}", download_time);
+        assert!(
+            upload_time.as_secs() < 30,
+            "Upload took too long: {:?}",
+            upload_time
+        );
+        assert!(
+            download_time.as_secs() < 30,
+            "Download took too long: {:?}",
+            download_time
+        );
 
         // Cleanup
-        storage.delete(&large_key).await.expect("Failed to delete large file");
+        storage
+            .delete(&large_key)
+            .await
+            .expect("Failed to delete large file");
 
         config.cleanup_env_vars();
     }
@@ -190,17 +219,27 @@ mod azure_integration_tests {
         let storage = AzureBlobStorage::new(
             config.container_name.clone(),
             config.storage_account.clone(),
-        ).await.expect("Failed to create Azure Blob storage");
+        )
+        .await
+        .expect("Failed to create Azure Blob storage");
 
         // Test health check
-        let health_status = storage.health_check().await
+        let health_status = storage
+            .health_check()
+            .await
             .expect("Azure Blob health check failed");
 
         assert!(health_status.healthy, "Azure Blob should be healthy");
-        assert!(health_status.response_time_ms < 5000, "Health check response time too high: {}ms", 
-                health_status.response_time_ms);
+        assert!(
+            health_status.response_time_ms < 5000,
+            "Health check response time too high: {}ms",
+            health_status.response_time_ms
+        );
 
-        println!("Azure Blob health check passed in {}ms", health_status.response_time_ms);
+        println!(
+            "Azure Blob health check passed in {}ms",
+            health_status.response_time_ms
+        );
 
         config.cleanup_env_vars();
     }
@@ -211,7 +250,9 @@ mod azure_integration_tests {
         let config = match AzureTestConfig::from_env() {
             Some(cfg) => cfg,
             None => {
-                println!("Skipping Azure Blob list operations test - missing environment variables");
+                println!(
+                    "Skipping Azure Blob list operations test - missing environment variables"
+                );
                 return;
             }
         };
@@ -221,7 +262,9 @@ mod azure_integration_tests {
         let storage = AzureBlobStorage::new(
             config.container_name.clone(),
             config.storage_account.clone(),
-        ).await.expect("Failed to create Azure Blob storage");
+        )
+        .await
+        .expect("Failed to create Azure Blob storage");
 
         // Create test data with different prefixes
         let prefix1 = "folder1/";
@@ -236,19 +279,25 @@ mod azure_integration_tests {
 
         // Upload test files
         for key in &keys {
-            storage.put(key, format!("content of {}", key).as_bytes()).await
+            storage
+                .put(key, format!("content of {}", key).as_bytes())
+                .await
                 .expect("Failed to upload test file");
         }
 
         // Test listing with prefix1
-        let listed_keys = storage.list_prefix(prefix1).await
+        let listed_keys = storage
+            .list_prefix(prefix1)
+            .await
             .expect("Failed to list keys with prefix1");
         assert_eq!(listed_keys.len(), 2);
         assert!(listed_keys.iter().any(|k| k.contains("file1.txt")));
         assert!(listed_keys.iter().any(|k| k.contains("file2.txt")));
 
         // Test listing with prefix2
-        let listed_keys = storage.list_prefix(prefix2).await
+        let listed_keys = storage
+            .list_prefix(prefix2)
+            .await
             .expect("Failed to list keys with prefix2");
         assert_eq!(listed_keys.len(), 2);
         assert!(listed_keys.iter().any(|k| k.contains("file3.txt")));
@@ -256,7 +305,10 @@ mod azure_integration_tests {
 
         // Cleanup test files
         for key in &keys {
-            storage.delete(key).await.expect("Failed to delete test file");
+            storage
+                .delete(key)
+                .await
+                .expect("Failed to delete test file");
         }
 
         config.cleanup_env_vars();
@@ -279,7 +331,9 @@ mod azure_integration_tests {
             AzureBlobStorage::new(
                 config.container_name.clone(),
                 config.storage_account.clone(),
-            ).await.expect("Failed to create Azure Blob storage")
+            )
+            .await
+            .expect("Failed to create Azure Blob storage"),
         );
 
         let num_operations = 10;
@@ -292,7 +346,9 @@ mod azure_integration_tests {
             let value = format!("concurrent-value-{}", i).into_bytes();
 
             let handle = tokio::spawn(async move {
-                storage_clone.put(&key, &value).await
+                storage_clone
+                    .put(&key, &value)
+                    .await
                     .expect("Failed to put data in concurrent operation");
             });
             handles.push(handle);
@@ -307,8 +363,10 @@ mod azure_integration_tests {
         for i in 0..num_operations {
             let key = format!("concurrent-{}", i);
             let expected_value = format!("concurrent-value-{}", i).into_bytes();
-            
-            let retrieved = storage.get(&key).await
+
+            let retrieved = storage
+                .get(&key)
+                .await
                 .expect("Failed to get data in concurrent test");
             assert_eq!(retrieved, Some(expected_value));
         }
@@ -316,7 +374,10 @@ mod azure_integration_tests {
         // Cleanup
         for i in 0..num_operations {
             let key = format!("concurrent-{}", i);
-            storage.delete(&key).await.expect("Failed to delete data in cleanup");
+            storage
+                .delete(&key)
+                .await
+                .expect("Failed to delete data in cleanup");
         }
 
         config.cleanup_env_vars();
@@ -339,32 +400,45 @@ mod azure_integration_tests {
         let invalid_storage_result = AzureBlobStorage::new(
             "non-existent-container-12345".to_string(),
             config.storage_account.clone(),
-        ).await;
+        )
+        .await;
 
         // This might succeed initially but fail on first operation
         if let Ok(storage) = invalid_storage_result {
             // Test getting non-existent key
             let non_existent = storage.get("non-existent-key").await;
-            assert!(non_existent.is_ok(), "Should handle non-existent key gracefully");
+            assert!(
+                non_existent.is_ok(),
+                "Should handle non-existent key gracefully"
+            );
 
             // Test deleting non-existent key (should not error)
             let delete_result = storage.delete("non-existent-key").await;
-            assert!(delete_result.is_ok(), "Delete of non-existent key should not error");
+            assert!(
+                delete_result.is_ok(),
+                "Delete of non-existent key should not error"
+            );
         }
 
         // Test with valid storage but invalid operations
         let storage = AzureBlobStorage::new(
             config.container_name.clone(),
             config.storage_account.clone(),
-        ).await.expect("Failed to create valid Azure Blob storage");
+        )
+        .await
+        .expect("Failed to create valid Azure Blob storage");
 
         // Test getting non-existent key
-        let non_existent = storage.get("non-existent-key").await
+        let non_existent = storage
+            .get("non-existent-key")
+            .await
             .expect("Failed to check non-existent key");
         assert_eq!(non_existent, None);
 
         // Test deleting non-existent key (should not error)
-        storage.delete("non-existent-key").await
+        storage
+            .delete("non-existent-key")
+            .await
             .expect("Delete of non-existent key should not error");
 
         config.cleanup_env_vars();
@@ -386,7 +460,9 @@ mod azure_integration_tests {
         let storage = AzureBlobStorage::new(
             config.container_name.clone(),
             config.storage_account.clone(),
-        ).await.expect("Failed to create Azure Blob storage");
+        )
+        .await
+        .expect("Failed to create Azure Blob storage");
 
         let metadata = storage.metadata();
 
@@ -400,8 +476,14 @@ mod azure_integration_tests {
         println!("Azure Blob Backend Metadata:");
         println!("  Type: {}", metadata.backend_type);
         println!("  Version: {}", metadata.version);
-        println!("  Max Object Size: {} bytes", metadata.max_object_size.unwrap());
-        println!("  Supports Encryption at Rest: {}", metadata.supports_encryption_at_rest);
+        println!(
+            "  Max Object Size: {} bytes",
+            metadata.max_object_size.unwrap()
+        );
+        println!(
+            "  Supports Encryption at Rest: {}",
+            metadata.supports_encryption_at_rest
+        );
 
         config.cleanup_env_vars();
     }
@@ -424,7 +506,9 @@ mod azure_integration_tests {
         let storage = AzureBlobStorage::new(
             config.container_name.clone(),
             config.storage_account.clone(),
-        ).await.expect("Failed to create Azure Blob storage");
+        )
+        .await
+        .expect("Failed to create Azure Blob storage");
 
         // Create Fortress encryption profile
         let encryption_profile = EncryptionProfile::new(
@@ -432,7 +516,8 @@ mod azure_integration_tests {
             "test-password-123".to_string(),
             std::time::Duration::from_secs(3600),
             fortress_core::encryption::PerformanceProfile::Balanced,
-        ).expect("Failed to create encryption profile");
+        )
+        .expect("Failed to create encryption profile");
 
         // Test data
         let original_data = json!({
@@ -442,33 +527,41 @@ mod azure_integration_tests {
             "sensitive_data": "this should be encrypted"
         });
 
-        let serialized_data = serde_json::to_vec(&original_data)
-            .expect("Failed to serialize test data");
+        let serialized_data =
+            serde_json::to_vec(&original_data).expect("Failed to serialize test data");
 
         let test_key = format!("encrypted-{}", uuid::Uuid::new_v4());
 
         // Encrypt and store data
-        let encrypted_data = encryption_profile.encrypt(&serialized_data)
+        let encrypted_data = encryption_profile
+            .encrypt(&serialized_data)
             .expect("Failed to encrypt data");
-        
-        storage.put(&test_key, &encrypted_data).await
+
+        storage
+            .put(&test_key, &encrypted_data)
+            .await
             .expect("Failed to store encrypted data");
 
         // Retrieve and decrypt data
-        let retrieved_encrypted = storage.get(&test_key).await
+        let retrieved_encrypted = storage
+            .get(&test_key)
+            .await
             .expect("Failed to retrieve encrypted data");
-        
-        let decrypted_data = encryption_profile.decrypt(
-            &retrieved_encrypted.expect("No data found")
-        ).expect("Failed to decrypt data");
 
-        let retrieved_json: serde_json::Value = serde_json::from_slice(&decrypted_data)
-            .expect("Failed to deserialize decrypted data");
+        let decrypted_data = encryption_profile
+            .decrypt(&retrieved_encrypted.expect("No data found"))
+            .expect("Failed to decrypt data");
+
+        let retrieved_json: serde_json::Value =
+            serde_json::from_slice(&decrypted_data).expect("Failed to deserialize decrypted data");
 
         assert_eq!(original_data, retrieved_json);
 
         // Cleanup
-        storage.delete(&test_key).await.expect("Failed to cleanup test data");
+        storage
+            .delete(&test_key)
+            .await
+            .expect("Failed to cleanup test data");
 
         config.cleanup_env_vars();
     }
@@ -480,7 +573,9 @@ mod azure_integration_tests {
         let config = match AzureTestConfig::from_env() {
             Some(cfg) => cfg,
             None => {
-                println!("Skipping Azure Key Vault integration test - missing environment variables");
+                println!(
+                    "Skipping Azure Key Vault integration test - missing environment variables"
+                );
                 return;
             }
         };
@@ -489,7 +584,7 @@ mod azure_integration_tests {
 
         // This test would require Azure Key Vault SDK integration
         // For now, we'll simulate the test structure
-        
+
         println!("Azure Key Vault integration test placeholder");
         println!("Would test:");
         println!("  - Key creation and management");

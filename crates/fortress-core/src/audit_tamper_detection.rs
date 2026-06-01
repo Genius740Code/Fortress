@@ -12,16 +12,16 @@
 //! - **Forensic Analysis**: Detailed tampering analysis and evidence collection
 //! - **Compliance Reporting**: Automated compliance violation reporting
 
-use crate::error::{FortressError, Result, AuditErrorCode};
+use crate::error::{AuditErrorCode, FortressError, Result};
+use base64::Engine as _;
+use chrono::{DateTime, Timelike, Utc};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use chrono::{DateTime, Utc, Timelike};
-use sha2::{Sha256, Digest};
-use base64::Engine as _;
-use uuid::Uuid;
 use tracing::info;
+use uuid::Uuid;
 
 /// Tamper detection alert severity levels
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Hash)]
@@ -352,8 +352,12 @@ pub enum ResponseStatus {
 impl TamperDetectionSystem {
     /// Create new tamper detection system
     pub fn new(config: TamperDetectionConfig) -> Self {
-        let evidence_collector = Arc::new(EvidenceCollector::new(config.evidence_collection_depth.clone()));
-        let alert_notifier = Arc::new(AlertNotifier::new(AlertChannel::Multiple(config.alert_channels.clone())));
+        let evidence_collector = Arc::new(EvidenceCollector::new(
+            config.evidence_collection_depth.clone(),
+        ));
+        let alert_notifier = Arc::new(AlertNotifier::new(AlertChannel::Multiple(
+            config.alert_channels.clone(),
+        )));
         let response_coordinator = Arc::new(ResponseCoordinator::new());
 
         Self {
@@ -378,47 +382,66 @@ impl TamperDetectionSystem {
 
         // Check for various tampering indicators
         if !integrity_report.chain_integrity_valid {
-            let alert = self.create_alert(
-                TamperAlertType::HashChainBroken,
-                AlertSeverity::Critical,
-                format!("Hash chain integrity compromised in audit log: {}", audit_log_id),
-                audit_log_id.to_string(),
-                integrity_report.tampered_entries.clone(),
-            ).await?;
+            let alert = self
+                .create_alert(
+                    TamperAlertType::HashChainBroken,
+                    AlertSeverity::Critical,
+                    format!(
+                        "Hash chain integrity compromised in audit log: {}",
+                        audit_log_id
+                    ),
+                    audit_log_id.to_string(),
+                    integrity_report.tampered_entries.clone(),
+                )
+                .await?;
             alerts.push(alert);
         }
 
         if !integrity_report.signature_valid {
-            let alert = self.create_alert(
-                TamperAlertType::InvalidSignature,
-                AlertSeverity::Critical,
-                format!("Digital signature verification failed in audit log: {}", audit_log_id),
-                audit_log_id.to_string(),
-                integrity_report.tampered_entries.clone(),
-            ).await?;
+            let alert = self
+                .create_alert(
+                    TamperAlertType::InvalidSignature,
+                    AlertSeverity::Critical,
+                    format!(
+                        "Digital signature verification failed in audit log: {}",
+                        audit_log_id
+                    ),
+                    audit_log_id.to_string(),
+                    integrity_report.tampered_entries.clone(),
+                )
+                .await?;
             alerts.push(alert);
         }
 
         if !integrity_report.merkle_root_valid {
-            let alert = self.create_alert(
-                TamperAlertType::MerkleTreeCorruption,
-                AlertSeverity::Critical,
-                format!("Merkle tree corruption detected in audit log: {}", audit_log_id),
-                audit_log_id.to_string(),
-                integrity_report.tampered_entries.clone(),
-            ).await?;
+            let alert = self
+                .create_alert(
+                    TamperAlertType::MerkleTreeCorruption,
+                    AlertSeverity::Critical,
+                    format!(
+                        "Merkle tree corruption detected in audit log: {}",
+                        audit_log_id
+                    ),
+                    audit_log_id.to_string(),
+                    integrity_report.tampered_entries.clone(),
+                )
+                .await?;
             alerts.push(alert);
         }
 
         if !integrity_report.missing_entries.is_empty() {
-            let alert = self.create_alert(
-                TamperAlertType::MissingEntries,
-                AlertSeverity::High,
-                format!("Missing audit entries detected in log: {}. Missing sequence numbers: {:?}", 
-                    audit_log_id, integrity_report.missing_entries),
-                audit_log_id.to_string(),
-                integrity_report.tampered_entries.clone(),
-            ).await?;
+            let alert = self
+                .create_alert(
+                    TamperAlertType::MissingEntries,
+                    AlertSeverity::High,
+                    format!(
+                        "Missing audit entries detected in log: {}. Missing sequence numbers: {:?}",
+                        audit_log_id, integrity_report.missing_entries
+                    ),
+                    audit_log_id.to_string(),
+                    integrity_report.tampered_entries.clone(),
+                )
+                .await?;
             alerts.push(alert);
         }
 
@@ -448,14 +471,19 @@ impl TamperDetectionSystem {
         // Check for suspicious patterns
         for (pattern_type, confidence) in patterns {
             if confidence >= self.get_anomaly_threshold(&config.anomaly_sensitivity) {
-                let alert = self.create_alert(
-                    TamperAlertType::AnomalousAccess,
-                    self.confidence_to_severity(confidence),
-                    format!("Anomalous access pattern detected: {:?} (confidence: {:.2}%)", 
-                        pattern_type, confidence * 100.0),
-                    "pattern_analysis".to_string(),
-                    Vec::new(),
-                ).await?;
+                let alert = self
+                    .create_alert(
+                        TamperAlertType::AnomalousAccess,
+                        self.confidence_to_severity(confidence),
+                        format!(
+                            "Anomalous access pattern detected: {:?} (confidence: {:.2}%)",
+                            pattern_type,
+                            confidence * 100.0
+                        ),
+                        "pattern_analysis".to_string(),
+                        Vec::new(),
+                    )
+                    .await?;
                 alerts.push(alert);
             }
         }
@@ -476,17 +504,19 @@ impl TamperDetectionSystem {
         let timestamp = Utc::now();
 
         // Collect evidence
-        let evidence = self.evidence_collector.collect_evidence(
-            &alert_type,
-            &audit_log_id,
-            &affected_entries,
-        ).await?;
+        let evidence = self
+            .evidence_collector
+            .collect_evidence(&alert_type, &audit_log_id, &affected_entries)
+            .await?;
 
         // Generate recommended actions
-        let recommended_actions = self.generate_recommended_actions(&alert_type, &severity).await;
+        let recommended_actions = self
+            .generate_recommended_actions(&alert_type, &severity)
+            .await;
 
         // Convert affected entries to entry IDs
-        let entry_ids: Vec<String> = affected_entries.iter()
+        let entry_ids: Vec<String> = affected_entries
+            .iter()
             .map(|e| e.entry_id.clone())
             .collect();
 
@@ -578,7 +608,10 @@ impl TamperDetectionSystem {
     }
 
     /// Detect frequency anomalies
-    async fn detect_frequency_anomalies(&self, entries: &[crate::secure_audit_merkle::SecureAuditEntry]) -> Result<f64> {
+    async fn detect_frequency_anomalies(
+        &self,
+        entries: &[crate::secure_audit_merkle::SecureAuditEntry],
+    ) -> Result<f64> {
         if entries.len() < 10 {
             return Ok(0.0);
         }
@@ -593,9 +626,11 @@ impl TamperDetectionSystem {
         // Calculate average and standard deviation
         let counts: Vec<u32> = hourly_counts.values().cloned().collect();
         let avg = counts.iter().sum::<u32>() as f64 / counts.len() as f64;
-        let variance = counts.iter()
+        let variance = counts
+            .iter()
             .map(|&x| (x as f64 - avg).powi(2))
-            .sum::<f64>() / counts.len() as f64;
+            .sum::<f64>()
+            / counts.len() as f64;
         let std_dev = variance.sqrt();
 
         // Check for outliers (more than 3 standard deviations from mean)
@@ -603,7 +638,8 @@ impl TamperDetectionSystem {
         for &count in &counts {
             let z_score = (count as f64 - avg) / std_dev;
             if z_score.abs() > 3.0 {
-                anomaly_score = anomaly_score.max((z_score.abs() / 5.0) as f32); // Normalize to 0-1
+                anomaly_score = anomaly_score.max((z_score.abs() / 5.0) as f32);
+                // Normalize to 0-1
             }
         }
 
@@ -611,57 +647,81 @@ impl TamperDetectionSystem {
     }
 
     /// Detect time anomalies
-    async fn detect_time_anomalies(&self, entries: &[crate::secure_audit_merkle::SecureAuditEntry]) -> Result<f64> {
+    async fn detect_time_anomalies(
+        &self,
+        entries: &[crate::secure_audit_merkle::SecureAuditEntry],
+    ) -> Result<f64> {
         if entries.len() < 5 {
             return Ok(0.0);
         }
 
         // Check for access during unusual hours (e.g., 2 AM - 5 AM)
         let unusual_hours = vec![2, 3, 4, 5];
-        let unusual_access_count = entries.iter()
+        let unusual_access_count = entries
+            .iter()
             .filter(|e| unusual_hours.contains(&e.timestamp.hour()))
             .count();
 
         let unusual_access_ratio = unusual_access_count as f64 / entries.len() as f64;
-        
+
         // High ratio of unusual hour access is suspicious
-        Ok(if unusual_access_ratio > 0.3 { unusual_access_ratio } else { 0.0 })
+        Ok(if unusual_access_ratio > 0.3 {
+            unusual_access_ratio
+        } else {
+            0.0
+        })
     }
 
     /// Detect resource anomalies
-    async fn detect_resource_anomalies(&self, entries: &[crate::secure_audit_merkle::SecureAuditEntry]) -> Result<f64> {
+    async fn detect_resource_anomalies(
+        &self,
+        entries: &[crate::secure_audit_merkle::SecureAuditEntry],
+    ) -> Result<f64> {
         let mut resource_access_counts = HashMap::new();
-        
+
         for entry in entries {
             *resource_access_counts.entry(&entry.resource).or_insert(0) += 1;
         }
 
         // Check for single resource being accessed disproportionately
         let total_access: u32 = resource_access_counts.values().sum();
-        let max_access_ratio = resource_access_counts.values()
+        let max_access_ratio = resource_access_counts
+            .values()
             .map(|&count| count as f64 / total_access as f64)
             .fold(0.0, f64::max);
 
         // If one resource accounts for > 80% of access, it's suspicious
-        Ok(if max_access_ratio > 0.8 { max_access_ratio } else { 0.0 })
+        Ok(if max_access_ratio > 0.8 {
+            max_access_ratio
+        } else {
+            0.0
+        })
     }
 
     /// Detect principal anomalies
-    async fn detect_principal_anomalies(&self, entries: &[crate::secure_audit_merkle::SecureAuditEntry]) -> Result<f64> {
+    async fn detect_principal_anomalies(
+        &self,
+        entries: &[crate::secure_audit_merkle::SecureAuditEntry],
+    ) -> Result<f64> {
         let mut principal_access_counts = HashMap::new();
-        
+
         for entry in entries {
             *principal_access_counts.entry(&entry.principal).or_insert(0) += 1;
         }
 
         // Check for single principal accessing unusually many resources
         let total_access: u32 = principal_access_counts.values().sum();
-        let max_principal_ratio = principal_access_counts.values()
+        let max_principal_ratio = principal_access_counts
+            .values()
             .map(|&count| count as f64 / total_access as f64)
             .fold(0.0, f64::max);
 
         // If one principal accounts for > 90% of access, it's suspicious
-        Ok(if max_principal_ratio > 0.9 { max_principal_ratio } else { 0.0 })
+        Ok(if max_principal_ratio > 0.9 {
+            max_principal_ratio
+        } else {
+            0.0
+        })
     }
 
     /// Get anomaly threshold based on sensitivity
@@ -688,7 +748,11 @@ impl TamperDetectionSystem {
     }
 
     /// Generate recommended actions for alert
-    async fn generate_recommended_actions(&self, alert_type: &TamperAlertType, severity: &AlertSeverity) -> Vec<String> {
+    async fn generate_recommended_actions(
+        &self,
+        alert_type: &TamperAlertType,
+        severity: &AlertSeverity,
+    ) -> Vec<String> {
         let mut actions = Vec::new();
 
         match alert_type {
@@ -754,15 +818,21 @@ impl TamperDetectionSystem {
     /// Update detection metrics
     async fn update_metrics(&self, alert: &TamperAlert) {
         let mut metrics = self.metrics.write().await;
-        
+
         metrics.total_alerts += 1;
-        *metrics.alerts_by_severity.entry(alert.severity.clone()).or_insert(0) += 1;
-        *metrics.alerts_by_type.entry(alert.alert_type.clone()).or_insert(0) += 1;
-        
+        *metrics
+            .alerts_by_severity
+            .entry(alert.severity.clone())
+            .or_insert(0) += 1;
+        *metrics
+            .alerts_by_type
+            .entry(alert.alert_type.clone())
+            .or_insert(0) += 1;
+
         if alert.status != AlertStatus::FalsePositive {
             metrics.active_alerts += 1;
         }
-        
+
         metrics.last_detection = Some(Utc::now());
     }
 
@@ -790,7 +860,7 @@ impl TamperDetectionSystem {
         let mut active_alerts = self.active_alerts.write().await;
         if let Some(alert) = active_alerts.get_mut(alert_id) {
             alert.status = AlertStatus::Acknowledged;
-            
+
             // Update metrics
             let mut metrics = self.metrics.write().await;
             if alert.status != AlertStatus::FalsePositive {
@@ -809,17 +879,20 @@ impl TamperDetectionSystem {
             } else {
                 AlertStatus::Resolved
             };
-            
+
             // Update metrics
             let mut metrics = self.metrics.write().await;
             if !is_false_positive {
                 metrics.resolved_alerts += 1;
             }
             metrics.active_alerts = metrics.active_alerts.saturating_sub(1);
-            
+
             // Update false positive rate
             if metrics.total_alerts > 0 {
-                let false_positives = self.alert_history.read().await
+                let false_positives = self
+                    .alert_history
+                    .read()
+                    .await
                     .iter()
                     .filter(|a| a.status == AlertStatus::FalsePositive)
                     .count() as u64;
@@ -860,11 +933,17 @@ impl EvidenceCollector {
             _ => EvidenceType::FileSystem,
         };
 
-        let raw_data = self.collect_raw_evidence(alert_type, audit_log_id, affected_entries).await?;
+        let raw_data = self
+            .collect_raw_evidence(alert_type, audit_log_id, affected_entries)
+            .await?;
         let analyzed_data = self.analyze_evidence(&raw_data, alert_type).await?;
-        let confidence_level = self.calculate_confidence(&analyzed_data, alert_type).await?;
+        let confidence_level = self
+            .calculate_confidence(&analyzed_data, alert_type)
+            .await?;
 
-        let evidence_hash = self.calculate_evidence_hash(&raw_data, &analyzed_data).await?;
+        let evidence_hash = self
+            .calculate_evidence_hash(&raw_data, &analyzed_data)
+            .await?;
 
         let evidence = TamperingEvidence {
             evidence_type,
@@ -890,17 +969,20 @@ impl EvidenceCollector {
         affected_entries: &[crate::secure_audit_merkle::TamperedEntry],
     ) -> Result<String> {
         let mut evidence = String::new();
-        
+
         evidence.push_str(&format!("Alert Type: {:?}\n", alert_type));
         evidence.push_str(&format!("Audit Log ID: {}\n", audit_log_id));
-        evidence.push_str(&format!("Collection Timestamp: {}\n", Utc::now().to_rfc3339()));
+        evidence.push_str(&format!(
+            "Collection Timestamp: {}\n",
+            Utc::now().to_rfc3339()
+        ));
         evidence.push_str(&format!("Affected Entries: {}\n", affected_entries.len()));
-        
+
         for entry in affected_entries {
-            evidence.push_str(&format!("Entry {}: {:?} - {}\n", 
-                entry.sequence_number, 
-                entry.tampering_type, 
-                entry.description));
+            evidence.push_str(&format!(
+                "Entry {}: {:?} - {}\n",
+                entry.sequence_number, entry.tampering_type, entry.description
+            ));
         }
 
         // Add system information based on collection depth
@@ -910,21 +992,42 @@ impl EvidenceCollector {
             }
             EvidenceCollectionDepth::Standard => {
                 evidence.push_str("Collection Depth: Standard\n");
-                evidence.push_str(&format!("System Uptime: {}\n", self.get_system_uptime().await));
+                evidence.push_str(&format!(
+                    "System Uptime: {}\n",
+                    self.get_system_uptime().await
+                ));
             }
             EvidenceCollectionDepth::Comprehensive => {
                 evidence.push_str("Collection Depth: Comprehensive\n");
-                evidence.push_str(&format!("System Uptime: {}\n", self.get_system_uptime().await));
-                evidence.push_str(&format!("Memory Usage: {}\n", self.get_memory_usage().await));
+                evidence.push_str(&format!(
+                    "System Uptime: {}\n",
+                    self.get_system_uptime().await
+                ));
+                evidence.push_str(&format!(
+                    "Memory Usage: {}\n",
+                    self.get_memory_usage().await
+                ));
                 evidence.push_str(&format!("Disk Usage: {}\n", self.get_disk_usage().await));
             }
             EvidenceCollectionDepth::Forensic => {
                 evidence.push_str("Collection Depth: Forensic\n");
-                evidence.push_str(&format!("System Uptime: {}\n", self.get_system_uptime().await));
-                evidence.push_str(&format!("Memory Usage: {}\n", self.get_memory_usage().await));
+                evidence.push_str(&format!(
+                    "System Uptime: {}\n",
+                    self.get_system_uptime().await
+                ));
+                evidence.push_str(&format!(
+                    "Memory Usage: {}\n",
+                    self.get_memory_usage().await
+                ));
                 evidence.push_str(&format!("Disk Usage: {}\n", self.get_disk_usage().await));
-                evidence.push_str(&format!("Network Connections: {}\n", self.get_network_connections().await));
-                evidence.push_str(&format!("Process List: {}\n", self.get_process_list().await));
+                evidence.push_str(&format!(
+                    "Network Connections: {}\n",
+                    self.get_network_connections().await
+                ));
+                evidence.push_str(&format!(
+                    "Process List: {}\n",
+                    self.get_process_list().await
+                ));
             }
         }
 
@@ -932,29 +1035,45 @@ impl EvidenceCollector {
     }
 
     /// Analyze collected evidence
-    async fn analyze_evidence(&self, raw_data: &str, alert_type: &TamperAlertType) -> Result<HashMap<String, serde_json::Value>> {
+    async fn analyze_evidence(
+        &self,
+        raw_data: &str,
+        alert_type: &TamperAlertType,
+    ) -> Result<HashMap<String, serde_json::Value>> {
         let mut analyzed = HashMap::new();
-        
-        analyzed.insert("evidence_length".to_string(), 
-            serde_json::Value::Number(raw_data.len().into()));
-        analyzed.insert("alert_type".to_string(), 
-            serde_json::Value::String(format!("{:?}", alert_type)));
-        analyzed.insert("analysis_timestamp".to_string(), 
-            serde_json::Value::String(Utc::now().to_rfc3339()));
+
+        analyzed.insert(
+            "evidence_length".to_string(),
+            serde_json::Value::Number(raw_data.len().into()),
+        );
+        analyzed.insert(
+            "alert_type".to_string(),
+            serde_json::Value::String(format!("{:?}", alert_type)),
+        );
+        analyzed.insert(
+            "analysis_timestamp".to_string(),
+            serde_json::Value::String(Utc::now().to_rfc3339()),
+        );
 
         // Perform specific analysis based on alert type
         match alert_type {
             TamperAlertType::HashChainBroken => {
-                analyzed.insert("chain_integrity".to_string(), 
-                    serde_json::Value::String("compromised".to_string()));
+                analyzed.insert(
+                    "chain_integrity".to_string(),
+                    serde_json::Value::String("compromised".to_string()),
+                );
             }
             TamperAlertType::InvalidSignature => {
-                analyzed.insert("signature_validity".to_string(), 
-                    serde_json::Value::String("invalid".to_string()));
+                analyzed.insert(
+                    "signature_validity".to_string(),
+                    serde_json::Value::String("invalid".to_string()),
+                );
             }
             _ => {
-                analyzed.insert("analysis_type".to_string(), 
-                    serde_json::Value::String("general".to_string()));
+                analyzed.insert(
+                    "analysis_type".to_string(),
+                    serde_json::Value::String("general".to_string()),
+                );
             }
         }
 
@@ -962,10 +1081,14 @@ impl EvidenceCollector {
     }
 
     /// Calculate confidence level
-    async fn calculate_confidence(&self, analyzed_data: &HashMap<String, serde_json::Value>, _alert_type: &TamperAlertType) -> Result<f64> {
+    async fn calculate_confidence(
+        &self,
+        analyzed_data: &HashMap<String, serde_json::Value>,
+        _alert_type: &TamperAlertType,
+    ) -> Result<f64> {
         // Simple confidence calculation based on evidence completeness
         let mut confidence: f32 = 0.5; // Base confidence
-        
+
         if analyzed_data.contains_key("evidence_length") {
             confidence += 0.2;
         }
@@ -975,19 +1098,28 @@ impl EvidenceCollector {
         if analyzed_data.len() > 5 {
             confidence += 0.1;
         }
-        
+
         Ok((confidence.min(1.0)) as f64)
     }
 
     /// Calculate evidence hash
-    async fn calculate_evidence_hash(&self, raw_data: &str, analyzed_data: &HashMap<String, serde_json::Value>) -> Result<String> {
+    async fn calculate_evidence_hash(
+        &self,
+        raw_data: &str,
+        analyzed_data: &HashMap<String, serde_json::Value>,
+    ) -> Result<String> {
         let mut hasher = Sha256::new();
         hasher.update(raw_data.as_bytes());
-        
-        let analyzed_json = serde_json::to_string(analyzed_data)
-            .map_err(|e| FortressError::audit(format!("Failed to serialize analyzed data: {}", e), None, AuditErrorCode::LogCreationFailed))?;
+
+        let analyzed_json = serde_json::to_string(analyzed_data).map_err(|e| {
+            FortressError::audit(
+                format!("Failed to serialize analyzed data: {}", e),
+                None,
+                AuditErrorCode::LogCreationFailed,
+            )
+        })?;
         hasher.update(analyzed_json.as_bytes());
-        
+
         let result = hasher.finalize();
         Ok(base64::engine::general_purpose::STANDARD.encode(result))
     }
@@ -1022,22 +1154,29 @@ impl AlertNotifier {
     /// Create new alert notifier
     pub fn new(channel: AlertChannel) -> Self {
         let mut templates = HashMap::new();
-        
-        templates.insert(AlertSeverity::Info, 
-            "INFO: {{title}} - {{description}}".to_string());
-        templates.insert(AlertSeverity::Warning, 
-            "WARNING: {{title}} - {{description}}".to_string());
-        templates.insert(AlertSeverity::Critical, 
-            "CRITICAL: {{title}} - {{description}}".to_string());
-        templates.insert(AlertSeverity::Emergency, 
-            "EMERGENCY: {{title}} - {{description}}".to_string());
-        templates.insert(AlertSeverity::High, 
-            "HIGH: {{title}} - {{description}}".to_string());
 
-        Self {
-            channel,
-            templates,
-        }
+        templates.insert(
+            AlertSeverity::Info,
+            "INFO: {{title}} - {{description}}".to_string(),
+        );
+        templates.insert(
+            AlertSeverity::Warning,
+            "WARNING: {{title}} - {{description}}".to_string(),
+        );
+        templates.insert(
+            AlertSeverity::Critical,
+            "CRITICAL: {{title}} - {{description}}".to_string(),
+        );
+        templates.insert(
+            AlertSeverity::Emergency,
+            "EMERGENCY: {{title}} - {{description}}".to_string(),
+        );
+        templates.insert(
+            AlertSeverity::High,
+            "HIGH: {{title}} - {{description}}".to_string(),
+        );
+
+        Self { channel, templates }
     }
 
     /// Send alert notification
@@ -1124,7 +1263,9 @@ impl AlertNotifier {
     /// Format alert message
     async fn format_alert_message(&self, alert: &TamperAlert) -> Result<String> {
         let default_template = "ALERT: {{title}} - {{description}}".to_string();
-        let template = self.templates.get(&alert.severity)
+        let template = self
+            .templates
+            .get(&alert.severity)
             .unwrap_or(&default_template);
 
         let message = template
@@ -1167,7 +1308,11 @@ impl AlertNotifier {
     /// Send SIEM notification (mock implementation)
     async fn send_siem_notification(&self, siem: &str, alert: &TamperAlert) -> Result<()> {
         // In a real implementation, this would send to SIEM system
-        log::info!("Sending SIEM notification to {}: {:?}", siem, alert.alert_type);
+        log::info!(
+            "Sending SIEM notification to {}: {:?}",
+            siem,
+            alert.alert_type
+        );
         Ok(())
     }
 }
@@ -1176,23 +1321,32 @@ impl ResponseCoordinator {
     /// Create new response coordinator
     pub fn new() -> Self {
         let mut response_actions = HashMap::new();
-        
+
         // Define default response actions for each alert type
-        response_actions.insert(TamperAlertType::HashChainBroken, vec![
-            AutomatedResponse::IsolateSystem("audit_system".to_string()),
-            AutomatedResponse::CreateForensicSnapshot,
-            AutomatedResponse::NotifySecurityTeam,
-        ]);
-        
-        response_actions.insert(TamperAlertType::InvalidSignature, vec![
-            AutomatedResponse::RotateKeys,
-            AutomatedResponse::NotifySecurityTeam,
-        ]);
-        
-        response_actions.insert(TamperAlertType::MissingEntries, vec![
-            AutomatedResponse::EnableEnhancedMonitoring,
-            AutomatedResponse::InitiateBackupRestore,
-        ]);
+        response_actions.insert(
+            TamperAlertType::HashChainBroken,
+            vec![
+                AutomatedResponse::IsolateSystem("audit_system".to_string()),
+                AutomatedResponse::CreateForensicSnapshot,
+                AutomatedResponse::NotifySecurityTeam,
+            ],
+        );
+
+        response_actions.insert(
+            TamperAlertType::InvalidSignature,
+            vec![
+                AutomatedResponse::RotateKeys,
+                AutomatedResponse::NotifySecurityTeam,
+            ],
+        );
+
+        response_actions.insert(
+            TamperAlertType::MissingEntries,
+            vec![
+                AutomatedResponse::EnableEnhancedMonitoring,
+                AutomatedResponse::InitiateBackupRestore,
+            ],
+        );
 
         Self {
             response_actions,
@@ -1216,13 +1370,13 @@ impl ResponseCoordinator {
 
     /// Execute single response action
     async fn execute_single_action(
-        &self, 
-        action: &AutomatedResponse, 
-        alert_id: &str
+        &self,
+        action: &AutomatedResponse,
+        alert_id: &str,
     ) -> Result<ResponseAction> {
         let action_id = Uuid::new_v4().to_string();
         let timestamp = Utc::now();
-        
+
         let mut response_action = ResponseAction {
             action_id: action_id.clone(),
             timestamp,
@@ -1234,35 +1388,22 @@ impl ResponseCoordinator {
 
         // Update status to in progress
         response_action.status = ResponseStatus::InProgress;
-        
+
         // Execute the action
         let result = match action {
-            AutomatedResponse::IsolateSystem(system) => {
-                self.isolate_system(system).await
-            }
-            AutomatedResponse::LockAccount(account) => {
-                self.lock_account(account).await
-            }
-            AutomatedResponse::RotateKeys => {
-                self.rotate_keys().await
-            }
-            AutomatedResponse::InitiateBackupRestore => {
-                self.initiate_backup_restore().await
-            }
-            AutomatedResponse::EnableEnhancedMonitoring => {
-                self.enable_enhanced_monitoring().await
-            }
-            AutomatedResponse::NotifySecurityTeam => {
-                self.notify_security_team().await
-            }
-            AutomatedResponse::CreateForensicSnapshot => {
-                self.create_forensic_snapshot().await
-            }
+            AutomatedResponse::IsolateSystem(system) => self.isolate_system(system).await,
+            AutomatedResponse::LockAccount(account) => self.lock_account(account).await,
+            AutomatedResponse::RotateKeys => self.rotate_keys().await,
+            AutomatedResponse::InitiateBackupRestore => self.initiate_backup_restore().await,
+            AutomatedResponse::EnableEnhancedMonitoring => self.enable_enhanced_monitoring().await,
+            AutomatedResponse::NotifySecurityTeam => self.notify_security_team().await,
+            AutomatedResponse::CreateForensicSnapshot => self.create_forensic_snapshot().await,
             AutomatedResponse::Multiple(actions) => {
                 let mut results = Vec::new();
                 for sub_action in actions {
                     // Use Box::pin to handle recursion
-                    let sub_result = Box::pin(self.execute_single_action(sub_action, alert_id)).await?;
+                    let sub_result =
+                        Box::pin(self.execute_single_action(sub_action, alert_id)).await?;
                     results.push(format!("{:?}", sub_result.result));
                 }
                 Ok(results.join("; "))
@@ -1388,7 +1529,7 @@ mod tests {
     async fn test_tamper_detection_system_creation() {
         let config = TamperDetectionConfig::default();
         let system = TamperDetectionSystem::new(config);
-        
+
         let metrics = system.get_metrics().await;
         assert_eq!(metrics.total_alerts, 0);
         assert_eq!(metrics.active_alerts, 0);
@@ -1398,7 +1539,7 @@ mod tests {
     async fn test_tampering_detection() {
         let config = TamperDetectionConfig::default();
         let system = TamperDetectionSystem::new(config);
-        
+
         // Create a mock integrity report with tampering
         let integrity_report = IntegrityVerificationReport {
             verification_time: Utc::now(),
@@ -1406,14 +1547,12 @@ mod tests {
             valid_entries: 95,
             invalid_entries: 5,
             missing_entries: vec![10, 20, 30],
-            tampered_entries: vec![
-                TamperedEntry {
-                    sequence_number: 15,
-                    entry_id: "entry_15".to_string(),
-                    tampering_type: TamperingType::HashMismatch,
-                    description: "Hash mismatch detected".to_string(),
-                }
-            ],
+            tampered_entries: vec![TamperedEntry {
+                sequence_number: 15,
+                entry_id: "entry_15".to_string(),
+                tampering_type: TamperingType::HashMismatch,
+                description: "Hash mismatch detected".to_string(),
+            }],
             merkle_root_valid: false,
             signature_valid: false,
             chain_integrity_valid: false,
@@ -1426,11 +1565,15 @@ mod tests {
             },
         };
 
-        let alerts = system.detect_tampering("test_log", &integrity_report).await.unwrap();
+        let alerts = system
+            .detect_tampering("test_log", &integrity_report)
+            .await
+            .unwrap();
         assert!(!alerts.is_empty());
-        
+
         // Should generate alerts for each type of tampering
-        let alert_types: Vec<TamperAlertType> = alerts.iter().map(|a| a.alert_type.clone()).collect();
+        let alert_types: Vec<TamperAlertType> =
+            alerts.iter().map(|a| a.alert_type.clone()).collect();
         assert!(alert_types.contains(&TamperAlertType::HashChainBroken));
         assert!(alert_types.contains(&TamperAlertType::InvalidSignature));
         assert!(alert_types.contains(&TamperAlertType::MerkleTreeCorruption));
@@ -1441,7 +1584,7 @@ mod tests {
     async fn test_anomalous_pattern_detection() {
         let config = TamperDetectionConfig::default();
         let system = TamperDetectionSystem::new(config);
-        
+
         // Create mock audit entries with anomalous patterns
         let entries = vec![
             SecureAuditEntry {
@@ -1493,14 +1636,17 @@ mod tests {
     async fn test_alert_processing() {
         let config = TamperDetectionConfig::default();
         let system = TamperDetectionSystem::new(config);
-        
-        let alert = system.create_alert(
-            TamperAlertType::HashChainBroken,
-            AlertSeverity::Critical,
-            "Test alert".to_string(),
-            "test_log".to_string(),
-            vec![],
-        ).await.unwrap();
+
+        let alert = system
+            .create_alert(
+                TamperAlertType::HashChainBroken,
+                AlertSeverity::Critical,
+                "Test alert".to_string(),
+                "test_log".to_string(),
+                vec![],
+            )
+            .await
+            .unwrap();
 
         system.process_alert(alert.clone()).await.unwrap();
 
@@ -1519,29 +1665,32 @@ mod tests {
     async fn test_alert_acknowledgment_and_resolution() {
         let config = TamperDetectionConfig::default();
         let system = TamperDetectionSystem::new(config);
-        
-        let alert = system.create_alert(
-            TamperAlertType::InvalidSignature,
-            AlertSeverity::Warning,
-            "Test alert".to_string(),
-            "test_log".to_string(),
-            vec![],
-        ).await.unwrap();
+
+        let alert = system
+            .create_alert(
+                TamperAlertType::InvalidSignature,
+                AlertSeverity::Warning,
+                "Test alert".to_string(),
+                "test_log".to_string(),
+                vec![],
+            )
+            .await
+            .unwrap();
 
         system.process_alert(alert.clone()).await.unwrap();
-        
+
         // Acknowledge alert
         system.acknowledge_alert(&alert.alert_id).await.unwrap();
-        
+
         let active_alerts = system.get_active_alerts().await;
         assert_eq!(active_alerts[0].status, AlertStatus::Acknowledged);
 
         // Resolve alert
         system.resolve_alert(&alert.alert_id, false).await.unwrap();
-        
+
         let active_alerts_after = system.get_active_alerts().await;
         assert_eq!(active_alerts_after.len(), 0);
-        
+
         let metrics = system.get_metrics().await;
         assert_eq!(metrics.active_alerts, 0);
         assert_eq!(metrics.resolved_alerts, 1);
@@ -1550,12 +1699,11 @@ mod tests {
     #[tokio::test]
     async fn test_evidence_collection() {
         let collector = EvidenceCollector::new(EvidenceCollectionDepth::Standard);
-        
-        let evidence = collector.collect_evidence(
-            &TamperAlertType::HashChainBroken,
-            "test_log",
-            &vec![],
-        ).await.unwrap();
+
+        let evidence = collector
+            .collect_evidence(&TamperAlertType::HashChainBroken, "test_log", &vec![])
+            .await
+            .unwrap();
 
         assert!(!evidence.raw_data.is_empty());
         assert!(!evidence.analyzed_data.is_empty());
@@ -1568,7 +1716,7 @@ mod tests {
     async fn test_alert_notification() {
         let channel = AlertChannel::Email("test@example.com".to_string());
         let notifier = AlertNotifier::new(channel);
-        
+
         let alert = TamperAlert {
             alert_id: "test_alert".to_string(),
             timestamp: Utc::now(),
@@ -1599,7 +1747,7 @@ mod tests {
     #[tokio::test]
     async fn test_automated_response() {
         let coordinator = ResponseCoordinator::new();
-        
+
         let alert = TamperAlert {
             alert_id: "test_alert".to_string(),
             timestamp: Utc::now(),
@@ -1625,10 +1773,10 @@ mod tests {
 
         let actions = coordinator.execute_response(&alert).await.unwrap();
         assert!(!actions.is_empty());
-        
+
         // Should execute default actions for HashChainBroken
         assert_eq!(actions.len(), 3); // IsolateSystem, CreateForensicSnapshot, NotifySecurityTeam
-        
+
         for action in &actions {
             assert_eq!(action.status, ResponseStatus::Completed);
             assert!(action.result.is_some());

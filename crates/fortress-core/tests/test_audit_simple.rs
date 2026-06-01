@@ -1,8 +1,8 @@
 //! Simple integration tests for audit logging system
 
 use fortress_core::audit::{
-    AuditConfig, AuditEventType, SecurityLevel, EventOutcome,
-    DefaultAuditLogger, log_event_with_metadata,
+    log_event_with_metadata, AuditConfig, AuditEventType, DefaultAuditLogger, EventOutcome,
+    SecurityLevel,
 };
 use std::collections::HashMap;
 
@@ -10,15 +10,15 @@ use std::collections::HashMap;
 fn test_audit_entry_creation() {
     let mut config = AuditConfig::default();
     // Generate a test HMAC key
-    use base64::{Engine as _, engine::general_purpose};
+    use base64::{engine::general_purpose, Engine as _};
     let hmac_key = general_purpose::STANDARD.encode("test_hmac_key_32_bytes_long_1234");
     config.hmac_key = Some(hmac_key);
 
     let _logger = DefaultAuditLogger::new(config).unwrap();
-    
+
     let mut metadata = HashMap::new();
     metadata.insert("test_field".to_string(), "test_value".to_string());
-    
+
     // Test logging an event instead of directly creating an entry
     let result = log_event_with_metadata(
         AuditEventType::Authentication,
@@ -29,7 +29,7 @@ fn test_audit_entry_creation() {
         EventOutcome::Success,
         metadata,
     );
-    
+
     assert!(result.is_ok());
 }
 
@@ -57,7 +57,10 @@ fn test_event_outcome_display() {
     assert_eq!(format!("{}", EventOutcome::Success), "Success");
     assert_eq!(format!("{}", EventOutcome::Failure), "Failure");
     assert_eq!(format!("{}", EventOutcome::Blocked), "Blocked");
-    assert_eq!(format!("{}", EventOutcome::RequiresReview), "RequiresReview");
+    assert_eq!(
+        format!("{}", EventOutcome::RequiresReview),
+        "RequiresReview"
+    );
 }
 
 #[test]

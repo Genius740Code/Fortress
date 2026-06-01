@@ -3,8 +3,8 @@
 //! Provides comprehensive reporting capabilities for all compliance frameworks
 //! including automated report generation, documentation, and evidence collection.
 
-use crate::error::{FortressError, Result};
 use crate::compliance::framework::*;
+use crate::error::{FortressError, Result};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -85,7 +85,11 @@ pub enum SectionContentType {
 #[async_trait]
 pub trait EvidenceCollector: Send + Sync {
     /// Collect evidence for a specific compliance framework
-    async fn collect_evidence(&self, framework: ComplianceFramework, evidence_type: &str) -> Result<Vec<EvidenceItem>>;
+    async fn collect_evidence(
+        &self,
+        framework: ComplianceFramework,
+        evidence_type: &str,
+    ) -> Result<Vec<EvidenceItem>>;
 }
 
 /// Evidence item collected during compliance audit
@@ -109,47 +113,53 @@ pub struct EvidenceItem {
 
 impl ComplianceReportGenerator {
     /// Create a new compliance report generator
-    /// 
+    ///
     /// # Arguments
     /// * `evidence_collector` - Boxed trait object for collecting evidence
     pub fn new(evidence_collector: Box<dyn EvidenceCollector>) -> Self {
         let mut templates = HashMap::new();
-        
+
         // GDPR report template
-        templates.insert("gdpr_compliance".to_string(), ReportTemplate {
-            id: "gdpr_compliance".to_string(),
-            name: "GDPR Compliance Report".to_string(),
-            framework: ComplianceFramework::GDPR,
-            report_type: "compliance".to_string(),
-            sections: vec![
-                ReportSection {
-                    id: "executive_summary".to_string(),
-                    title: "Executive Summary".to_string(),
-                    content_type: SectionContentType::ExecutiveSummary,
-                    required: true,
-                },
-                ReportSection {
-                    id: "compliance_score".to_string(),
-                    title: "Compliance Score".to_string(),
-                    content_type: SectionContentType::ComplianceScore,
-                    required: true,
-                },
-                ReportSection {
-                    id: "findings".to_string(),
-                    title: "Compliance Findings".to_string(),
-                    content_type: SectionContentType::Findings,
-                    required: true,
-                },
-                ReportSection {
-                    id: "recommendations".to_string(),
-                    title: "Recommendations".to_string(),
-                    content_type: SectionContentType::Recommendations,
-                    required: true,
-                },
-            ],
-            required_evidence: vec!["consent_records".to_string(), "data_subject_requests".to_string()],
-        });
-        
+        templates.insert(
+            "gdpr_compliance".to_string(),
+            ReportTemplate {
+                id: "gdpr_compliance".to_string(),
+                name: "GDPR Compliance Report".to_string(),
+                framework: ComplianceFramework::GDPR,
+                report_type: "compliance".to_string(),
+                sections: vec![
+                    ReportSection {
+                        id: "executive_summary".to_string(),
+                        title: "Executive Summary".to_string(),
+                        content_type: SectionContentType::ExecutiveSummary,
+                        required: true,
+                    },
+                    ReportSection {
+                        id: "compliance_score".to_string(),
+                        title: "Compliance Score".to_string(),
+                        content_type: SectionContentType::ComplianceScore,
+                        required: true,
+                    },
+                    ReportSection {
+                        id: "findings".to_string(),
+                        title: "Compliance Findings".to_string(),
+                        content_type: SectionContentType::Findings,
+                        required: true,
+                    },
+                    ReportSection {
+                        id: "recommendations".to_string(),
+                        title: "Recommendations".to_string(),
+                        content_type: SectionContentType::Recommendations,
+                        required: true,
+                    },
+                ],
+                required_evidence: vec![
+                    "consent_records".to_string(),
+                    "data_subject_requests".to_string(),
+                ],
+            },
+        );
+
         Self {
             templates,
             evidence_collector,
@@ -157,7 +167,7 @@ impl ComplianceReportGenerator {
     }
 
     /// Generate a compliance report
-    /// 
+    ///
     /// # Arguments
     /// * `&self` - Reference to the report generator
     /// * `framework` - Compliance framework to use for the report
@@ -172,7 +182,9 @@ impl ComplianceReportGenerator {
         end_date: DateTime<Utc>,
     ) -> Result<GeneratedReport> {
         let template_key = format!("{:?}_{}", framework, report_type);
-        let template = self.templates.get(&template_key)
+        let template = self
+            .templates
+            .get(&template_key)
             .ok_or_else(|| FortressError::compliance("Report template not found"))?;
 
         let report = GeneratedReport {
@@ -219,7 +231,11 @@ pub struct DefaultEvidenceCollector;
 
 #[async_trait]
 impl EvidenceCollector for DefaultEvidenceCollector {
-    async fn collect_evidence(&self, framework: ComplianceFramework, evidence_type: &str) -> Result<Vec<EvidenceItem>> {
+    async fn collect_evidence(
+        &self,
+        framework: ComplianceFramework,
+        evidence_type: &str,
+    ) -> Result<Vec<EvidenceItem>> {
         match framework {
             ComplianceFramework::GDPR => self.collect_gdpr_evidence(evidence_type).await,
             ComplianceFramework::HIPAA => self.collect_hipaa_evidence(evidence_type).await,

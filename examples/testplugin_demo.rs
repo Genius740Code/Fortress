@@ -1,5 +1,5 @@
 //! TestPlugin Demo - Working Example with Actual TestPlugin
-//! 
+//!
 //! This example demonstrates loading and executing the actual testplugin
 //! that exists in the testplugin/ directory. This shows that the
 //! plugin system infrastructure is working and can load real plugins.
@@ -50,26 +50,25 @@ impl Plugin for DemoPlugin {
 
     async fn execute(&self, input: PluginInput) -> Result<PluginResult> {
         let start_time = std::time::Instant::now();
-        
+
         let result = match input.action.as_str() {
             "hello" => {
-                let name = input.data["name"]
-                    .as_str()
-                    .unwrap_or("World");
-                
+                let name = input.data["name"].as_str().unwrap_or("World");
+
                 Ok(serde_json::json!({
                     "message": format!("Hello, {}!", name),
                     "timestamp": chrono::Utc::now()
                 }))
             }
-            "echo" => {
-                Ok(input.data.clone())
-            }
-            _ => Err(FortressError::plugin(format!("Unknown action: {}", input.action))),
+            "echo" => Ok(input.data.clone()),
+            _ => Err(FortressError::plugin(format!(
+                "Unknown action: {}",
+                input.action
+            ))),
         };
 
         let execution_time = start_time.elapsed().as_millis() as u64;
-        
+
         match result {
             Ok(data) => Ok(PluginResult {
                 success: true,
@@ -121,18 +120,20 @@ async fn main() -> color_eyre::eyre::Result<()> {
 
     // Create plugin manager
     let plugin_manager = PluginManager::new();
-    
+
     // Create the TestPlugin (demonstration version)
     println!("\nLoading TestPlugin...");
     let test_plugin = Arc::new(DemoPlugin::new());
-    
+
     // Configure the plugin
     let plugin_config = HashMap::new();
-    
+
     // Load the plugin into the manager
-    plugin_manager.load_plugin(test_plugin.clone(), plugin_config).await
+    plugin_manager
+        .load_plugin(test_plugin.clone(), plugin_config)
+        .await
         .map_err(|e| color_eyre::eyre::eyre!("Failed to load plugin: {}", e))?;
-    
+
     println!("✓ TestPlugin loaded successfully");
     println!("   Plugin ID: {}", test_plugin.metadata().id);
     println!("   Plugin Name: {}", test_plugin.metadata().name);
@@ -153,15 +154,20 @@ async fn main() -> color_eyre::eyre::Result<()> {
         timestamp: None,
     };
 
-    let hello_result = plugin_manager.execute_plugin("TestPlugin", hello_input).await
+    let hello_result = plugin_manager
+        .execute_plugin("TestPlugin", hello_input)
+        .await
         .map_err(|e| color_eyre::eyre::eyre!("Failed to execute hello action: {}", e))?;
-    
+
     if hello_result.success {
         println!("✓ Hello action successful");
         if let Some(data) = hello_result.data {
             println!("   Response: {}", serde_json::to_string_pretty(&data)?);
         }
-        println!("   Execution time: {}ms", hello_result.metrics.execution_time_ms);
+        println!(
+            "   Execution time: {}ms",
+            hello_result.metrics.execution_time_ms
+        );
     } else {
         println!("✗ Hello action failed: {:?}", hello_result.error);
     }
@@ -183,15 +189,20 @@ async fn main() -> color_eyre::eyre::Result<()> {
         timestamp: None,
     };
 
-    let echo_result = plugin_manager.execute_plugin("TestPlugin", echo_input).await
+    let echo_result = plugin_manager
+        .execute_plugin("TestPlugin", echo_input)
+        .await
         .map_err(|e| color_eyre::eyre::eyre!("Failed to execute echo action: {}", e))?;
-    
+
     if echo_result.success {
         println!("✓ Echo action successful");
         if let Some(data) = echo_result.data {
             println!("   Echoed data: {}", serde_json::to_string_pretty(&data)?);
         }
-        println!("   Execution time: {}ms", echo_result.metrics.execution_time_ms);
+        println!(
+            "   Execution time: {}ms",
+            echo_result.metrics.execution_time_ms
+        );
     } else {
         println!("✗ Echo action failed: {:?}", echo_result.error);
     }
@@ -206,9 +217,11 @@ async fn main() -> color_eyre::eyre::Result<()> {
         timestamp: None,
     };
 
-    let invalid_result = plugin_manager.execute_plugin("TestPlugin", invalid_input).await
+    let invalid_result = plugin_manager
+        .execute_plugin("TestPlugin", invalid_input)
+        .await
         .map_err(|e| color_eyre::eyre::eyre!("Failed to execute invalid action: {}", e))?;
-    
+
     if !invalid_result.success {
         println!("✓ Error handling working correctly");
         println!("   Expected error: {:?}", invalid_result.error);
@@ -227,18 +240,33 @@ async fn main() -> color_eyre::eyre::Result<()> {
     println!("\nPlugin health status:");
     let health_status = plugin_manager.get_all_health_status().await;
     for (plugin_id, health) in health_status {
-        println!("   {}: {} - {}", plugin_id, 
-            if health.healthy { "✓ Healthy" } else { "✗ Unhealthy" },
+        println!(
+            "   {}: {} - {}",
+            plugin_id,
+            if health.healthy {
+                "✓ Healthy"
+            } else {
+                "✗ Unhealthy"
+            },
             health.message
         );
     }
 
     // Test plugin health check directly
     println!("\nDirect plugin health check:");
-    let health = test_plugin.health_check().await
+    let health = test_plugin
+        .health_check()
+        .await
         .map_err(|e| color_eyre::eyre::eyre!("Health check failed: {}", e))?;
-    
-    println!("   Health: {}", if health.healthy { "✓ Healthy" } else { "✗ Unhealthy" });
+
+    println!(
+        "   Health: {}",
+        if health.healthy {
+            "✓ Healthy"
+        } else {
+            "✗ Unhealthy"
+        }
+    );
     println!("   Message: {}", health.message);
     println!("   Last Check: {}", health.last_check);
 

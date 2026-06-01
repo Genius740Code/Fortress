@@ -3,18 +3,25 @@
 //! Provides a unified interface for managing multiple compliance frameworks
 //! with centralized reporting and risk assessment.
 use crate::compliance::framework::ComplianceManager;
-use crate::compliance::framework::{ComplianceFramework, ComplianceEvent, EventSeverity, ComplianceEventOutcome};
-use crate::compliance::framework::{ComplianceFinding, FindingStatus, ComplianceIssue, ComplianceStatus, ComplianceDeadline};
-use crate::compliance::framework::{ComplianceConfig, ComplianceMetrics, ComplianceReport, DataSubject, ConsentRecord, RightsRequest};
+use crate::compliance::framework::{
+    ComplianceConfig, ComplianceMetrics, ComplianceReport, ConsentRecord, DataSubject,
+    RightsRequest,
+};
+use crate::compliance::framework::{
+    ComplianceDeadline, ComplianceFinding, ComplianceIssue, ComplianceStatus, FindingStatus,
+};
+use crate::compliance::framework::{
+    ComplianceEvent, ComplianceEventOutcome, ComplianceFramework, EventSeverity,
+};
 use crate::compliance::gdpr::GdprComplianceManager;
 use crate::compliance::hipaa::HipaaComplianceManager;
 use crate::compliance::pci_dss::PciDssComplianceManager;
-use crate::error::{FortressError, ConfigurationErrorCode, Result};
+use crate::error::{ConfigurationErrorCode, FortressError, Result};
 use chrono::{DateTime, Utc};
-use std::collections::HashMap;
-use uuid::Uuid;
-use tokio::sync::RwLock;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use tokio::sync::RwLock;
+use uuid::Uuid;
 
 /// Comprehensive compliance dashboard with real-time metrics
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -537,7 +544,7 @@ impl AnomalyDetector {
     pub async fn analyze_event(&self, event: &ComplianceEvent) -> Result<AnomalyResult> {
         // In a real implementation, this would use sophisticated ML algorithms
         // For now, implement basic anomaly detection
-        
+
         let mut anomaly_score: f32 = 0.0;
         let mut anomaly_type = "normal".to_string();
         let mut description = "No anomalies detected".to_string();
@@ -547,7 +554,10 @@ impl AnomalyDetector {
         if self.is_high_frequency_event(&event.event_type).await? {
             anomaly_score += 0.3;
             anomaly_type = "high_frequency".to_string();
-            description = format!("Unusually high frequency for event type: {}", event.event_type);
+            description = format!(
+                "Unusually high frequency for event type: {}",
+                event.event_type
+            );
             is_anomaly = anomaly_score > self.config.anomaly_threshold as f32;
         }
 
@@ -620,7 +630,10 @@ impl RealtimeMonitor {
     }
 
     /// Monitor compliance events in real-time
-    pub async fn monitor_events(&mut self, events: Vec<ComplianceEvent>) -> Result<Vec<ComplianceEvent>> {
+    pub async fn monitor_events(
+        &mut self,
+        events: Vec<ComplianceEvent>,
+    ) -> Result<Vec<ComplianceEvent>> {
         let mut alerts = Vec::new();
 
         for event in events {
@@ -648,7 +661,9 @@ impl RealtimeMonitor {
     /// Check alert thresholds
     async fn check_alert_thresholds(&self, event: &ComplianceEvent) -> Result<bool> {
         // Check frequency threshold
-        let recent_events = self.event_stream.iter()
+        let recent_events = self
+            .event_stream
+            .iter()
             .filter(|e| e.timestamp > Utc::now() - chrono::Duration::minutes(5))
             .filter(|e| e.event_type == event.event_type)
             .count();
@@ -661,7 +676,11 @@ impl RealtimeMonitor {
     }
 
     /// Create anomaly alert
-    async fn create_anomaly_alert(&self, event: &ComplianceEvent, anomaly_result: &AnomalyResult) -> Result<ComplianceEvent> {
+    async fn create_anomaly_alert(
+        &self,
+        event: &ComplianceEvent,
+        anomaly_result: &AnomalyResult,
+    ) -> Result<ComplianceEvent> {
         Ok(ComplianceEvent {
             id: Uuid::new_v4(),
             timestamp: Utc::now(),
@@ -674,8 +693,14 @@ impl RealtimeMonitor {
             outcome: ComplianceEventOutcome::Failure,
             metadata: {
                 let mut meta = HashMap::new();
-                meta.insert("anomaly_type".to_string(), anomaly_result.anomaly_type.clone());
-                meta.insert("anomaly_score".to_string(), anomaly_result.anomaly_score.to_string());
+                meta.insert(
+                    "anomaly_type".to_string(),
+                    anomaly_result.anomaly_type.clone(),
+                );
+                meta.insert(
+                    "anomaly_score".to_string(),
+                    anomaly_result.anomaly_score.to_string(),
+                );
                 meta.insert("original_event_id".to_string(), event.id.to_string());
                 meta
             },
@@ -721,7 +746,7 @@ impl UnifiedComplianceManager {
     pub fn new() -> Self {
         Self {
             gdpr_manager: Some(GdprComplianceManager::new()),
-            hipaa_manager: None, // Will be initialized later
+            hipaa_manager: None,   // Will be initialized later
             pci_dss_manager: None, // Will be initialized later
             config: RwLock::new(None),
         }
@@ -729,7 +754,10 @@ impl UnifiedComplianceManager {
 
     /// Initialize the unified compliance manager
     pub async fn initialize(&self, config: ComplianceConfig) -> Result<()> {
-        log::info!("Initializing unified compliance manager with frameworks: {:?}", config.enabled_frameworks);
+        log::info!(
+            "Initializing unified compliance manager with frameworks: {:?}",
+            config.enabled_frameworks
+        );
 
         // Store configuration
         {
@@ -738,23 +766,34 @@ impl UnifiedComplianceManager {
         }
 
         // Initialize individual framework managers
-        if config.enabled_frameworks.contains(&ComplianceFramework::GDPR) {
+        if config
+            .enabled_frameworks
+            .contains(&ComplianceFramework::GDPR)
+        {
             if let Some(gdpr_manager) = &self.gdpr_manager {
                 gdpr_manager.initialize(&config).await?;
             }
         }
 
-        if config.enabled_frameworks.contains(&ComplianceFramework::HIPAA) {
+        if config
+            .enabled_frameworks
+            .contains(&ComplianceFramework::HIPAA)
+        {
             // Create a base manager for HIPAA
-            let base_manager = Box::new(crate::compliance::framework::DefaultComplianceManager::new());
+            let base_manager =
+                Box::new(crate::compliance::framework::DefaultComplianceManager::new());
             let hipaa_manager = HipaaComplianceManager::new(base_manager);
             hipaa_manager.initialize(&config).await?;
             // Note: In a real implementation, we'd need to store this manager
         }
 
-        if config.enabled_frameworks.contains(&ComplianceFramework::PCIDSS) {
+        if config
+            .enabled_frameworks
+            .contains(&ComplianceFramework::PCIDSS)
+        {
             // Create a base manager for PCI-DSS
-            let base_manager = Box::new(crate::compliance::framework::DefaultComplianceManager::new());
+            let base_manager =
+                Box::new(crate::compliance::framework::DefaultComplianceManager::new());
             let pci_dss_manager = PciDssComplianceManager::new(base_manager);
             pci_dss_manager.initialize(&config).await?;
             // Note: In a real implementation, we'd need to store this manager
@@ -765,7 +804,11 @@ impl UnifiedComplianceManager {
     }
 
     /// Collect findings from all frameworks
-    async fn collect_findings(&self, start_date: DateTime<Utc>, end_date: DateTime<Utc>) -> Result<Vec<ComplianceFinding>> {
+    async fn collect_findings(
+        &self,
+        start_date: DateTime<Utc>,
+        end_date: DateTime<Utc>,
+    ) -> Result<Vec<ComplianceFinding>> {
         let mut all_findings = Vec::new();
         let mut total_score = 0.0;
         let mut framework_count = 0;
@@ -785,7 +828,9 @@ impl UnifiedComplianceManager {
         }
 
         if let Some(pci_dss_manager) = &self.pci_dss_manager {
-            let findings = pci_dss_manager.collect_findings(start_date, end_date).await?;
+            let findings = pci_dss_manager
+                .collect_findings(start_date, end_date)
+                .await?;
             all_findings.extend(findings);
         }
 
@@ -795,11 +840,13 @@ impl UnifiedComplianceManager {
             0.0
         };
 
-        let critical_findings = all_findings.iter()
+        let critical_findings = all_findings
+            .iter()
             .filter(|f| matches!(f.severity, EventSeverity::Critical))
             .count();
 
-        let active_issues = all_findings.iter()
+        let active_issues = all_findings
+            .iter()
             .filter(|f| matches!(f.status, FindingStatus::Fail))
             .count();
 
@@ -807,7 +854,8 @@ impl UnifiedComplianceManager {
             total_findings: all_findings.len(),
             active_issues,
             critical_findings,
-            resolved_issues: all_findings.iter()
+            resolved_issues: all_findings
+                .iter()
                 .filter(|f| matches!(f.status, FindingStatus::Pass))
                 .count(),
             compliance_percentage: overall_score,
@@ -848,7 +896,9 @@ impl UnifiedComplianceManager {
         }
 
         if let Some(pci_dss_manager) = &self.pci_dss_manager {
-            let findings = pci_dss_manager.collect_findings(start_date, end_date).await?;
+            let findings = pci_dss_manager
+                .collect_findings(start_date, end_date)
+                .await?;
             let status = pci_dss_manager.get_compliance_status().await?;
             all_findings.extend(findings);
             total_score += status.compliance_percentage;
@@ -861,11 +911,13 @@ impl UnifiedComplianceManager {
             0.0
         };
 
-        let critical_findings = all_findings.iter()
+        let critical_findings = all_findings
+            .iter()
             .filter(|f| matches!(f.severity, EventSeverity::Critical))
             .count();
 
-        let active_issues = all_findings.iter()
+        let active_issues = all_findings
+            .iter()
             .filter(|f| matches!(f.status, FindingStatus::Fail))
             .count();
 
@@ -873,7 +925,8 @@ impl UnifiedComplianceManager {
             total_findings: all_findings.len(),
             active_issues,
             critical_findings,
-            resolved_issues: all_findings.iter()
+            resolved_issues: all_findings
+                .iter()
                 .filter(|f| matches!(f.status, FindingStatus::Pass))
                 .count(),
             compliance_percentage: overall_score,
@@ -908,7 +961,9 @@ impl UnifiedComplianceManager {
         end_date: DateTime<Utc>,
     ) -> Result<ComplianceReport> {
         // For now, delegate to report generation
-        let report = self.generate_report(framework, report_type, start_date, end_date).await?;
+        let report = self
+            .generate_report(framework, report_type, start_date, end_date)
+            .await?;
         Ok(report)
     }
 
@@ -931,7 +986,8 @@ impl UnifiedComplianceManager {
 
     /// Generate Excel report
     async fn generate_excel_report(&self, report: &AutomatedComplianceReport) -> Result<Vec<u8>> {
-        let mut csv_content = "Framework,Compliance Score,Active Issues,Critical Findings\n".to_string();
+        let mut csv_content =
+            "Framework,Compliance Score,Active Issues,Critical Findings\n".to_string();
 
         csv_content.push_str(&format!(
             "{:?},{:.2},{},{}\n",
@@ -956,7 +1012,8 @@ impl UnifiedComplianceManager {
 
     /// Generate CSV report
     async fn generate_csv_report(&self, report: &AutomatedComplianceReport) -> Result<Vec<u8>> {
-        let mut csv_content = "ID,Framework,Description,Severity,Status,Due Date,Assigned To\n".to_string();
+        let mut csv_content =
+            "ID,Framework,Description,Severity,Status,Due Date,Assigned To\n".to_string();
 
         for finding in &report.findings {
             csv_content.push_str(&format!(
@@ -976,8 +1033,13 @@ impl UnifiedComplianceManager {
 
     /// Generate JSON report
     async fn generate_json_report(&self, report: &AutomatedComplianceReport) -> Result<Vec<u8>> {
-        let json_report = serde_json::to_string_pretty(report)
-            .map_err(|e| FortressError::configuration(format!("Failed to serialize report to JSON: {}", e), None, ConfigurationErrorCode::InvalidFormat))?;
+        let json_report = serde_json::to_string_pretty(report).map_err(|e| {
+            FortressError::configuration(
+                format!("Failed to serialize report to JSON: {}", e),
+                None,
+                ConfigurationErrorCode::InvalidFormat,
+            )
+        })?;
 
         Ok(json_report.into_bytes())
     }
@@ -988,10 +1050,12 @@ impl UnifiedComplianceManager {
         stakeholder: &Stakeholder,
         format: &GeneratedFormat,
     ) -> Result<()> {
-        log::info!("Distributing {} report to {} ({})", 
-                  format!("{:?}", format.format), 
-                  stakeholder.name, 
-                  stakeholder.email);
+        log::info!(
+            "Distributing {} report to {} ({})",
+            format!("{:?}", format.format),
+            stakeholder.name,
+            stakeholder.email
+        );
 
         // Simulate email distribution
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
@@ -1003,8 +1067,10 @@ impl UnifiedComplianceManager {
             framework: ComplianceFramework::GDPR,
             event_type: "report_distributed".to_string(),
             severity: EventSeverity::Info,
-            description: format!("Compliance report distributed to {} in {:?} format", 
-                             stakeholder.name, format.format),
+            description: format!(
+                "Compliance report distributed to {} in {:?} format",
+                stakeholder.name, format.format
+            ),
             affected_resources: vec![stakeholder.email.clone()],
             actor: "automated_system".to_string(),
             outcome: ComplianceEventOutcome::Success,
@@ -1028,7 +1094,10 @@ impl UnifiedComplianceManager {
 #[async_trait::async_trait]
 impl ComplianceManager for UnifiedComplianceManager {
     async fn initialize(&self, config: &ComplianceConfig) -> Result<()> {
-        log::info!("Initializing unified compliance manager with frameworks: {:?}", config.enabled_frameworks);
+        log::info!(
+            "Initializing unified compliance manager with frameworks: {:?}",
+            config.enabled_frameworks
+        );
 
         // Store configuration
         {
@@ -1037,19 +1106,28 @@ impl ComplianceManager for UnifiedComplianceManager {
         }
 
         // Initialize individual framework managers
-        if config.enabled_frameworks.contains(&ComplianceFramework::GDPR) {
+        if config
+            .enabled_frameworks
+            .contains(&ComplianceFramework::GDPR)
+        {
             if let Some(gdpr_manager) = &self.gdpr_manager {
                 gdpr_manager.initialize(config).await?;
             }
         }
 
-        if config.enabled_frameworks.contains(&ComplianceFramework::HIPAA) {
+        if config
+            .enabled_frameworks
+            .contains(&ComplianceFramework::HIPAA)
+        {
             if let Some(hipaa_manager) = &self.hipaa_manager {
                 hipaa_manager.initialize(config).await?;
             }
         }
 
-        if config.enabled_frameworks.contains(&ComplianceFramework::PCIDSS) {
+        if config
+            .enabled_frameworks
+            .contains(&ComplianceFramework::PCIDSS)
+        {
             if let Some(pci_dss_manager) = &self.pci_dss_manager {
                 pci_dss_manager.initialize(config).await?;
             }
@@ -1059,7 +1137,11 @@ impl ComplianceManager for UnifiedComplianceManager {
         Ok(())
     }
 
-    async fn collect_findings(&self, start_date: DateTime<Utc>, end_date: DateTime<Utc>) -> Result<Vec<ComplianceFinding>> {
+    async fn collect_findings(
+        &self,
+        start_date: DateTime<Utc>,
+        end_date: DateTime<Utc>,
+    ) -> Result<Vec<ComplianceFinding>> {
         let mut all_findings = Vec::new();
 
         if let Some(gdpr_manager) = &self.gdpr_manager {
@@ -1073,7 +1155,9 @@ impl ComplianceManager for UnifiedComplianceManager {
         }
 
         if let Some(pci_dss_manager) = &self.pci_dss_manager {
-            let findings = pci_dss_manager.collect_findings(start_date, end_date).await?;
+            let findings = pci_dss_manager
+                .collect_findings(start_date, end_date)
+                .await?;
             all_findings.extend(findings);
         }
 
@@ -1161,7 +1245,7 @@ impl ComplianceManager for UnifiedComplianceManager {
             total_events,
             events_by_severity,
             avg_response_time: 24.0, // Placeholder
-            compliance_score: 85.0, // Placeholder
+            compliance_score: 85.0,  // Placeholder
         })
     }
 
@@ -1188,9 +1272,17 @@ impl ComplianceManager for UnifiedComplianceManager {
         Ok(())
     }
 
-    async fn generate_report(&self, _framework: ComplianceFramework, report_type: &str, start_date: DateTime<Utc>, end_date: DateTime<Utc>) -> Result<ComplianceReport> {
+    async fn generate_report(
+        &self,
+        _framework: ComplianceFramework,
+        report_type: &str,
+        start_date: DateTime<Utc>,
+        end_date: DateTime<Utc>,
+    ) -> Result<ComplianceReport> {
         // Generate unified report
-        let unified_report = self.generate_unified_report(_framework, report_type, start_date, end_date).await?;
+        let unified_report = self
+            .generate_unified_report(_framework, report_type, start_date, end_date)
+            .await?;
 
         Ok(ComplianceReport {
             id: unified_report.id,
@@ -1230,7 +1322,12 @@ impl ComplianceManager for UnifiedComplianceManager {
         Ok(())
     }
 
-    async fn check_access_compliance(&self, user_id: &str, data_id: &str, framework: ComplianceFramework) -> Result<bool> {
+    async fn check_access_compliance(
+        &self,
+        user_id: &str,
+        data_id: &str,
+        framework: ComplianceFramework,
+    ) -> Result<bool> {
         match framework {
             ComplianceFramework::GDPR => {
                 if let Some(gdpr_manager) = &self.gdpr_manager {
@@ -1241,14 +1338,18 @@ impl ComplianceManager for UnifiedComplianceManager {
             }
             ComplianceFramework::HIPAA => {
                 if let Some(hipaa_manager) = &self.hipaa_manager {
-                    hipaa_manager.check_access_compliance(user_id, data_id, framework).await
+                    hipaa_manager
+                        .check_access_compliance(user_id, data_id, framework)
+                        .await
                 } else {
                     Ok(false)
                 }
             }
             ComplianceFramework::PCIDSS => {
                 if let Some(pci_dss_manager) = &self.pci_dss_manager {
-                    pci_dss_manager.check_access_compliance(user_id, data_id, framework).await
+                    pci_dss_manager
+                        .check_access_compliance(user_id, data_id, framework)
+                        .await
                 } else {
                     Ok(false)
                 }
@@ -1256,7 +1357,10 @@ impl ComplianceManager for UnifiedComplianceManager {
         }
     }
 
-    async fn validate_configuration(&self, config: &ComplianceConfig) -> Result<Vec<ComplianceIssue>> {
+    async fn validate_configuration(
+        &self,
+        config: &ComplianceConfig,
+    ) -> Result<Vec<ComplianceIssue>> {
         let mut all_issues = Vec::new();
 
         if let Some(gdpr_manager) = &self.gdpr_manager {
@@ -1303,12 +1407,15 @@ impl ComplianceManager for UnifiedComplianceManager {
             return Ok(100.0);
         }
 
-        let total_weight: f64 = issues.iter().map(|i| match i.severity {
-            EventSeverity::Critical => 10.0,
-            EventSeverity::Error => 5.0,
-            EventSeverity::Warning => 2.0,
-            EventSeverity::Info => 1.0,
-        }).sum();
+        let total_weight: f64 = issues
+            .iter()
+            .map(|i| match i.severity {
+                EventSeverity::Critical => 10.0,
+                EventSeverity::Error => 5.0,
+                EventSeverity::Warning => 2.0,
+                EventSeverity::Info => 1.0,
+            })
+            .sum();
 
         let max_weight = issues.len() as f64 * 10.0;
         let score = ((max_weight - total_weight) / max_weight) * 100.0;
@@ -1322,13 +1429,20 @@ impl ComplianceManager for UnifiedComplianceManager {
         for issue in issues {
             match issue.severity {
                 EventSeverity::Critical => {
-                    recommendations.push(format!("URGENT: Address critical issue - {}", issue.description));
+                    recommendations.push(format!(
+                        "URGENT: Address critical issue - {}",
+                        issue.description
+                    ));
                 }
                 EventSeverity::Error => {
-                    recommendations.push(format!("High priority: Fix issue - {}", issue.description));
+                    recommendations
+                        .push(format!("High priority: Fix issue - {}", issue.description));
                 }
                 EventSeverity::Warning => {
-                    recommendations.push(format!("Review: Consider addressing - {}", issue.description));
+                    recommendations.push(format!(
+                        "Review: Consider addressing - {}",
+                        issue.description
+                    ));
                 }
                 EventSeverity::Info => {
                     recommendations.push(format!("Note: {}", issue.description));
@@ -1347,12 +1461,9 @@ impl ComplianceManager for UnifiedComplianceManager {
         let now = Utc::now();
         let start_date = now - chrono::Duration::days(1);
 
-        let report = self.generate_report(
-            ComplianceFramework::GDPR,
-            "daily",
-            start_date,
-            now
-        ).await?;
+        let report = self
+            .generate_report(ComplianceFramework::GDPR, "daily", start_date, now)
+            .await?;
 
         log::info!("Daily report generated: {} findings", report.findings.len());
         Ok(())

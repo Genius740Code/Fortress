@@ -4,16 +4,15 @@
 //! in-memory caching with distributed backends for optimal performance.
 
 #[cfg(feature = "distributed-cache")]
-
-use crate::error::Result;
+use crate::distributed_cache::{CacheBackend, DistributedCache};
 #[cfg(feature = "distributed-cache")]
-use crate::distributed_cache::{DistributedCache, CacheBackend};
+use crate::error::Result;
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use chrono::{DateTime, Utc};
 
 /// Hybrid cache configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -206,9 +205,12 @@ impl HybridCache {
     /// Create a new hybrid cache
     pub async fn new(config: HybridCacheConfig) -> Result<Self> {
         // Create local cache
-        let local_cache = crate::distributed_cache::create_distributed_cache(config.local_config.clone()).await?;
-        let distributed_cache = crate::distributed_cache::create_distributed_cache(config.distributed_config.clone()).await?;
-        
+        let local_cache =
+            crate::distributed_cache::create_distributed_cache(config.local_config.clone()).await?;
+        let distributed_cache =
+            crate::distributed_cache::create_distributed_cache(config.distributed_config.clone())
+                .await?;
+
         let stats = Arc::new(RwLock::new(HybridCacheStatistics {
             local_stats: crate::distributed_cache::CacheStatistics {
                 total_entries: 0,
@@ -291,9 +293,8 @@ impl HybridCache {
         let interval_seconds = self.config.background_sync_interval_seconds;
 
         let handle = tokio::spawn(async move {
-            let mut interval = tokio::time::interval(
-                std::time::Duration::from_secs(interval_seconds)
-            );
+            let mut interval =
+                tokio::time::interval(std::time::Duration::from_secs(interval_seconds));
 
             loop {
                 interval.tick().await;
@@ -312,7 +313,10 @@ impl HybridCache {
                     for key in &dirty_keys {
                         let local_entries_guard = local_entries.read().await;
                         if let Some(entry) = local_entries_guard.get(key) {
-                            match distributed_cache.set(key, entry.value.clone(), Some(entry.ttl_seconds)).await {
+                            match distributed_cache
+                                .set(key, entry.value.clone(), Some(entry.ttl_seconds))
+                                .await
+                            {
                                 Ok(_) => {
                                     synced_count += 1;
                                 }
@@ -330,11 +334,13 @@ impl HybridCache {
                         stats_guard.sync_stats.successful_syncs += synced_count;
                         stats_guard.sync_stats.failed_syncs += failed_count;
                         stats_guard.sync_stats.last_sync = Some(Utc::now());
-                        
+
                         let elapsed_us = start_time.elapsed().as_micros() as f64;
-                        stats_guard.sync_stats.avg_sync_time_us = 
-                            (stats_guard.sync_stats.avg_sync_time_us * (stats_guard.sync_stats.successful_syncs - 1) as f64 + elapsed_us) 
-                            / stats_guard.sync_stats.successful_syncs as f64;
+                        stats_guard.sync_stats.avg_sync_time_us =
+                            (stats_guard.sync_stats.avg_sync_time_us
+                                * (stats_guard.sync_stats.successful_syncs - 1) as f64
+                                + elapsed_us)
+                                / stats_guard.sync_stats.successful_syncs as f64;
                     }
 
                     // Clear synced entries from dirty set
@@ -357,7 +363,7 @@ impl HybridCache {
     /// Update hit breakdown statistics
     async fn update_hit_breakdown(&self, local_hit: bool, distributed_hit: bool) {
         let mut stats = self.stats.write().await;
-        
+
         if local_hit {
             stats.hit_breakdown.local_hits += 1;
         } else if distributed_hit {
@@ -366,12 +372,18 @@ impl HybridCache {
             stats.hit_breakdown.total_misses += 1;
         }
 
-        let total_requests = stats.hit_breakdown.local_hits + stats.hit_breakdown.distributed_hits + stats.hit_breakdown.total_misses;
-        
+        let total_requests = stats.hit_breakdown.local_hits
+            + stats.hit_breakdown.distributed_hits
+            + stats.hit_breakdown.total_misses;
+
         if total_requests > 0 {
-            stats.hit_breakdown.local_hit_ratio = stats.hit_breakdown.local_hits as f64 / total_requests as f64;
-            stats.hit_breakdown.distributed_hit_ratio = stats.hit_breakdown.distributed_hits as f64 / total_requests as f64;
-            stats.hit_breakdown.overall_hit_ratio = (stats.hit_breakdown.local_hits + stats.hit_breakdown.distributed_hits) as f64 / total_requests as f64;
+            stats.hit_breakdown.local_hit_ratio =
+                stats.hit_breakdown.local_hits as f64 / total_requests as f64;
+            stats.hit_breakdown.distributed_hit_ratio =
+                stats.hit_breakdown.distributed_hits as f64 / total_requests as f64;
+            stats.hit_breakdown.overall_hit_ratio =
+                (stats.hit_breakdown.local_hits + stats.hit_breakdown.distributed_hits) as f64
+                    / total_requests as f64;
         }
     }
 
@@ -385,10 +397,10 @@ impl HybridCache {
     /// Clean up expired local entries
     async fn cleanup_expired_entries(&self) -> Result<usize> {
         let mut expired_keys = Vec::new();
-        
+
         {
             let local_entries = self.local_entries.read().await;
-            
+
             for (key, entry) in local_entries.iter() {
                 if self.is_entry_expired(entry) {
                     expired_keys.push(key.clone());
@@ -399,10 +411,10 @@ impl HybridCache {
         // Remove expired entries
         for key in &expired_keys {
             let _ = self.local_cache.delete(key).await;
-            
+
             let mut local_entries = self.local_entries.write().await;
             local_entries.remove(key);
-            
+
             let mut dirty = self.dirty_entries.write().await;
             dirty.remove(key);
         }
@@ -425,7 +437,7 @@ impl DistributedCache for HybridCache {
                         return Ok(Some(value));
                     }
                 }
-                
+
                 // Entry is expired, fall through to distributed cache
             }
             Ok(None) => {
@@ -457,7 +469,10 @@ impl DistributedCache for HybridCache {
                 }
 
                 // Store in local cache
-                let _ = self.local_cache.set(key, value.clone(), Some(self.config.local_ttl_seconds)).await;
+                let _ = self
+                    .local_cache
+                    .set(key, value.clone(), Some(self.config.local_ttl_seconds))
+                    .await;
 
                 self.update_hit_breakdown(false, true).await;
                 Ok(Some(value))
@@ -472,7 +487,7 @@ impl DistributedCache for HybridCache {
 
     async fn set(&self, key: &str, value: Vec<u8>, ttl_seconds: Option<u64>) -> Result<()> {
         let ttl = ttl_seconds.unwrap_or(self.config.local_ttl_seconds);
-        
+
         // Create local entry
         let entry = HybridCacheEntry {
             value: value.clone(),
@@ -499,7 +514,7 @@ impl DistributedCache for HybridCache {
             WriteStrategy::WriteThrough => {
                 // Write to both caches immediately
                 self.distributed_cache.set(key, value, ttl_seconds).await?;
-                
+
                 let mut stats = self.stats.write().await;
                 stats.coordination_stats.write_through_ops += 1;
             }
@@ -509,19 +524,19 @@ impl DistributedCache for HybridCache {
                     let mut dirty = self.dirty_entries.write().await;
                     dirty.insert(key.to_string());
                 }
-                
+
                 let mut local_entries = self.local_entries.write().await;
                 if let Some(entry) = local_entries.get_mut(key) {
                     entry.is_dirty = true;
                 }
-                
+
                 let mut stats = self.stats.write().await;
                 stats.coordination_stats.write_behind_ops += 1;
             }
             WriteStrategy::WriteAround => {
                 // Write only to distributed cache
                 self.distributed_cache.set(key, value, ttl_seconds).await?;
-                
+
                 let mut stats = self.stats.write().await;
                 stats.coordination_stats.write_around_ops += 1;
             }
@@ -536,19 +551,19 @@ impl DistributedCache for HybridCache {
     async fn delete(&self, key: &str) -> Result<bool> {
         // Delete from local cache
         let local_deleted = self.local_cache.delete(key).await?;
-        
+
         // Delete from local entries metadata
         {
             let mut local_entries = self.local_entries.write().await;
             local_entries.remove(key);
         }
-        
+
         // Remove from dirty entries
         {
             let mut dirty = self.dirty_entries.write().await;
             dirty.remove(key);
         }
-        
+
         // Delete from distributed cache
         let distributed_deleted = self.distributed_cache.delete(key).await?;
 
@@ -566,7 +581,7 @@ impl DistributedCache for HybridCache {
                 }
             }
         }
-        
+
         // Check distributed cache
         self.distributed_cache.exists(key).await
     }
@@ -574,19 +589,19 @@ impl DistributedCache for HybridCache {
     async fn clear(&self) -> Result<()> {
         // Clear local cache
         self.local_cache.clear().await?;
-        
+
         // Clear local entries metadata
         {
             let mut local_entries = self.local_entries.write().await;
             local_entries.clear();
         }
-        
+
         // Clear dirty entries
         {
             let mut dirty = self.dirty_entries.write().await;
             dirty.clear();
         }
-        
+
         // Clear distributed cache
         self.distributed_cache.clear().await?;
 
@@ -595,12 +610,12 @@ impl DistributedCache for HybridCache {
 
     async fn mget(&self, keys: &[&str]) -> Result<Vec<Option<Vec<u8>>>> {
         let mut results = Vec::new();
-        
+
         for key in keys {
             let result = self.get(key).await?;
             results.push(result);
         }
-        
+
         Ok(results)
     }
 
@@ -614,57 +629,72 @@ impl DistributedCache for HybridCache {
     async fn increment(&self, key: &str, delta: i64) -> Result<i64> {
         // For increment, we need to go to distributed cache to ensure consistency
         let result = self.distributed_cache.increment(key, delta).await?;
-        
+
         // Update local cache with new value
         let new_value = result.to_string().into_bytes();
         let _ = self.set(key, new_value, None).await;
-        
+
         Ok(result)
     }
 
     async fn get_statistics(&self) -> Result<crate::distributed_cache::CacheStatistics> {
         // Update local stats
         let local_stats = self.local_cache.get_statistics().await?;
-        
+
         // Update distributed stats
         let distributed_stats = self.distributed_cache.get_statistics().await?;
-        
+
         // Update our statistics
         {
             let mut stats = self.stats.write().await;
             stats.local_stats = local_stats;
             stats.distributed_stats = distributed_stats;
         }
-        
+
         // Return combined statistics
         let stats = self.stats.read().await;
         #[cfg(feature = "distributed-cache")]
         Ok(crate::distributed_cache::CacheStatistics {
             total_entries: stats.local_stats.total_entries + stats.distributed_stats.total_entries,
-            cache_size_bytes: stats.local_stats.cache_size_bytes + stats.distributed_stats.cache_size_bytes,
+            cache_size_bytes: stats.local_stats.cache_size_bytes
+                + stats.distributed_stats.cache_size_bytes,
             hits: stats.local_stats.hits + stats.distributed_stats.hits,
             misses: stats.local_stats.misses + stats.distributed_stats.misses,
-            hit_ratio: if stats.local_stats.hits + stats.local_stats.misses + stats.distributed_stats.hits + stats.distributed_stats.misses > 0 {
-                (stats.local_stats.hits + stats.distributed_stats.hits) as f64 / 
-                (stats.local_stats.hits + stats.local_stats.misses + stats.distributed_stats.hits + stats.distributed_stats.misses) as f64
+            hit_ratio: if stats.local_stats.hits
+                + stats.local_stats.misses
+                + stats.distributed_stats.hits
+                + stats.distributed_stats.misses
+                > 0
+            {
+                (stats.local_stats.hits + stats.distributed_stats.hits) as f64
+                    / (stats.local_stats.hits
+                        + stats.local_stats.misses
+                        + stats.distributed_stats.hits
+                        + stats.distributed_stats.misses) as f64
             } else {
                 0.0
             },
             evictions: stats.local_stats.evictions + stats.distributed_stats.evictions,
             sets: stats.local_stats.sets + stats.distributed_stats.sets,
             deletes: stats.local_stats.deletes + stats.distributed_stats.deletes,
-            avg_get_time_us: (stats.local_stats.avg_get_time_us + stats.distributed_stats.avg_get_time_us) / 2.0,
-            avg_set_time_us: (stats.local_stats.avg_set_time_us + stats.distributed_stats.avg_set_time_us) / 2.0,
+            avg_get_time_us: (stats.local_stats.avg_get_time_us
+                + stats.distributed_stats.avg_get_time_us)
+                / 2.0,
+            avg_set_time_us: (stats.local_stats.avg_set_time_us
+                + stats.distributed_stats.avg_set_time_us)
+                / 2.0,
             last_reset: stats.local_stats.last_reset,
-        })
+        });
         #[cfg(not(feature = "distributed-cache"))]
-        Err(crate::error::FortressError::cache("Distributed cache not available"))
+        Err(crate::error::FortressError::cache(
+            "Distributed cache not available",
+        ))
     }
 
     async fn reset_statistics(&self) -> Result<()> {
         self.local_cache.reset_statistics().await?;
         self.distributed_cache.reset_statistics().await?;
-        
+
         let mut stats = self.stats.write().await;
         stats.coordination_stats = CoordinationStats {
             total_operations: 0,
@@ -690,7 +720,7 @@ impl DistributedCache for HybridCache {
             avg_sync_time_us: 0.0,
             last_sync: None,
         };
-        
+
         Ok(())
     }
 
@@ -698,7 +728,7 @@ impl DistributedCache for HybridCache {
         // Check both caches
         let local_healthy = self.local_cache.health_check().await?;
         let distributed_healthy = self.distributed_cache.health_check().await?;
-        
+
         Ok(local_healthy && distributed_healthy)
     }
 }
@@ -722,15 +752,15 @@ mod tests {
         // Test set and get
         let key = "test_key";
         let value = b"test_value".to_vec();
-        
+
         cache.set(key, value.clone(), None).await.unwrap();
         let retrieved = cache.get(key).await.unwrap();
-        
+
         assert_eq!(retrieved, Some(value));
-        
+
         // Test exists
         assert!(cache.exists(key).await.unwrap());
-        
+
         // Test delete
         assert!(cache.delete(key).await.unwrap());
         assert!(!cache.exists(key).await.unwrap());
@@ -742,18 +772,18 @@ mod tests {
             write_strategy: WriteStrategy::WriteThrough,
             ..Default::default()
         };
-        
+
         let cache = HybridCache::new(config).await.unwrap();
 
         let key = "write_through_test";
         let value = b"test_value".to_vec();
-        
+
         cache.set(key, value.clone(), None).await.unwrap();
-        
+
         // Should be in both caches
         let retrieved = cache.get(key).await.unwrap();
         assert_eq!(retrieved, Some(value));
-        
+
         let stats = cache.get_statistics().await.unwrap();
         assert!(stats.sets > 0);
     }
@@ -765,18 +795,18 @@ mod tests {
             background_sync_interval_seconds: 0, // Disable background sync for test
             ..Default::default()
         };
-        
+
         let cache = HybridCache::new(config).await.unwrap();
 
         let key = "write_back_test";
         let value = b"test_value".to_vec();
-        
+
         cache.set(key, value.clone(), None).await.unwrap();
-        
+
         // Should be in local cache
         let retrieved = cache.get(key).await.unwrap();
         assert_eq!(retrieved, Some(value));
-        
+
         // Check that it's marked as dirty
         let local_entries = cache.local_entries.read().await;
         if let Some(entry) = local_entries.get(key) {
@@ -793,7 +823,7 @@ mod tests {
         cache.set("key1", b"value1".to_vec(), None).await.unwrap();
         cache.get("key1").await.unwrap();
         cache.get("nonexistent").await.unwrap();
-        
+
         let stats = cache.get_statistics().await.unwrap();
         assert!(stats.sets > 0);
         assert!(stats.hits > 0);
@@ -820,12 +850,12 @@ mod tests {
             ("key2", b"value2".to_vec(), None),
             ("key3", b"value3".to_vec(), None),
         ];
-        
+
         cache.mset(&entries).await.unwrap();
-        
+
         let keys = vec!["key1", "key2", "key3"];
         let results = cache.mget(&keys).await.unwrap();
-        
+
         assert_eq!(results.len(), 3);
         assert_eq!(results[0], Some(b"value1".to_vec()));
         assert_eq!(results[1], Some(b"value2".to_vec()));

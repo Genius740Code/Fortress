@@ -4,7 +4,7 @@
 //! for different use cases - from maximum speed (Lightning) to maximum security (Fortress).
 //! Users can also create custom profiles with granular control over various parameters.
 
-use crate::error::{FortressError, Result, ConfigurationErrorCode};
+use crate::error::{ConfigurationErrorCode, FortressError, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
@@ -60,11 +60,11 @@ pub struct ResourceLimits {
 impl Default for ResourceLimits {
     fn default() -> Self {
         Self {
-            max_memory_mb: 1024,      // 1GB default
-            max_cpu_percent: 80,      // 80% CPU usage
-            max_concurrent_ops: 100,  // 100 concurrent operations
-            thread_pool_size: 4,      // 4 threads
-            cache_size_mb: 256,       // 256MB cache
+            max_memory_mb: 1024,     // 1GB default
+            max_cpu_percent: 80,     // 80% CPU usage
+            max_concurrent_ops: 100, // 100 concurrent operations
+            thread_pool_size: 4,     // 4 threads
+            cache_size_mb: 256,      // 256MB cache
         }
     }
 }
@@ -95,7 +95,7 @@ impl Default for EncryptionSettings {
         Self {
             algorithm: "aegis256".to_string(),
             kdf: "argon2id".to_string(),
-            kdf_memory_cost: 65536,     // 64 MiB
+            kdf_memory_cost: 65536, // 64 MiB
             kdf_iterations: 3,
             kdf_parallelism: 4,
             hardware_acceleration: true,
@@ -238,22 +238,22 @@ impl PerformanceProfileConfig {
             encryption: EncryptionSettings {
                 algorithm: "chacha20poly1305".to_string(),
                 kdf: "argon2id".to_string(),
-                kdf_memory_cost: 16384,  // 16 MiB - lower for speed
-                kdf_iterations: 1,       // Lower iterations for speed
+                kdf_memory_cost: 16384, // 16 MiB - lower for speed
+                kdf_iterations: 1,      // Lower iterations for speed
                 kdf_parallelism: 2,
                 hardware_acceleration: true,
                 simd_optimizations: true,
-                batch_size: 2048,        // Larger batches for throughput
+                batch_size: 2048, // Larger batches for throughput
             },
             storage: StorageSettings {
                 compression: "none".to_string(),
                 compression_level: 1,
-                enable_wal: false,       // Disable WAL for speed
+                enable_wal: false, // Disable WAL for speed
                 sync_mode: SyncMode::Off,
-                page_size: 8192,         // Larger pages
+                page_size: 8192, // Larger pages
                 cache_pages: 512,
                 async_writes: true,
-                batch_write_size: 200,   // Larger batches
+                batch_write_size: 200, // Larger batches
             },
             network: NetworkSettings {
                 connection_timeout_secs: 10,
@@ -261,10 +261,12 @@ impl PerformanceProfileConfig {
                 max_connections: 50,
                 connection_pool_size: 5,
                 keep_alive: true,
-                compression: false,       // Disable compression for speed
-                buffer_size: 16384,      // Larger buffers
+                compression: false, // Disable compression for speed
+                buffer_size: 16384, // Larger buffers
             },
-            description: Some("Maximum speed profile optimized for high-throughput scenarios".to_string()),
+            description: Some(
+                "Maximum speed profile optimized for high-throughput scenarios".to_string(),
+            ),
             tags: vec!["speed".to_string(), "high-throughput".to_string()],
         }
     }
@@ -284,7 +286,7 @@ impl PerformanceProfileConfig {
             encryption: EncryptionSettings {
                 algorithm: "aegis256".to_string(),
                 kdf: "argon2id".to_string(),
-                kdf_memory_cost: 65536,  // 64 MiB
+                kdf_memory_cost: 65536, // 64 MiB
                 kdf_iterations: 3,
                 kdf_parallelism: 4,
                 hardware_acceleration: true,
@@ -310,7 +312,9 @@ impl PerformanceProfileConfig {
                 compression: true,
                 buffer_size: 8192,
             },
-            description: Some("Balanced profile providing good performance and security".to_string()),
+            description: Some(
+                "Balanced profile providing good performance and security".to_string(),
+            ),
             tags: vec!["balanced".to_string(), "general-purpose".to_string()],
         }
     }
@@ -331,21 +335,21 @@ impl PerformanceProfileConfig {
                 algorithm: "aes256gcm".to_string(),
                 kdf: "argon2id".to_string(),
                 kdf_memory_cost: 262144, // 256 MiB - higher for security
-                kdf_iterations: 5,      // Higher iterations for security
+                kdf_iterations: 5,       // Higher iterations for security
                 kdf_parallelism: 8,
                 hardware_acceleration: true,
                 simd_optimizations: true,
-                batch_size: 512,         // Smaller batches for security
+                batch_size: 512, // Smaller batches for security
             },
             storage: StorageSettings {
                 compression: "flate2".to_string(),
-                compression_level: 9,    // Maximum compression
+                compression_level: 9, // Maximum compression
                 enable_wal: true,
                 sync_mode: SyncMode::Full,
-                page_size: 2048,         // Smaller pages for security
+                page_size: 2048, // Smaller pages for security
                 cache_pages: 2048,
-                async_writes: false,     // Synchronous writes for security
-                batch_write_size: 50,    // Smaller batches
+                async_writes: false,  // Synchronous writes for security
+                batch_write_size: 50, // Smaller batches
             },
             network: NetworkSettings {
                 connection_timeout_secs: 60,
@@ -354,7 +358,7 @@ impl PerformanceProfileConfig {
                 connection_pool_size: 20,
                 keep_alive: true,
                 compression: true,
-                buffer_size: 4096,      // Smaller buffers for security
+                buffer_size: 4096, // Smaller buffers for security
             },
             description: Some("Maximum security profile with comprehensive protection".to_string()),
             tags: vec!["security".to_string(), "high-protection".to_string()],
@@ -502,7 +506,7 @@ impl ProfileManager {
                 ConfigurationErrorCode::InvalidValue,
             ));
         }
-        
+
         if !self.profiles.contains_key(name) {
             return Err(FortressError::configuration(
                 format!("Profile '{}' not found", name),
@@ -570,11 +574,11 @@ impl SystemInfo {
         // This is a simplified implementation
         // In a real scenario, you'd use system APIs to get actual values
         Self {
-            total_memory_gb: 8,      // Default to 8GB
-            available_memory_gb: 4,   // Default to 4GB available
-            cpu_cores: 4,             // Default to 4 cores
+            total_memory_gb: 8,     // Default to 8GB
+            available_memory_gb: 4, // Default to 4GB available
+            cpu_cores: 4,           // Default to 4 cores
             cpu_arch: "x86_64".to_string(),
-            available_disk_gb: 100,   // Default to 100GB
+            available_disk_gb: 100,             // Default to 100GB
             network_bandwidth_mbps: Some(1000), // Default to 1Gbps
         }
     }
@@ -582,7 +586,8 @@ impl SystemInfo {
     /// Get system capabilities
     pub fn capabilities(&self) -> SystemCapabilities {
         SystemCapabilities {
-            supports_hardware_acceleration: self.cpu_arch.contains("x86_64") || self.cpu_arch.contains("aarch64"),
+            supports_hardware_acceleration: self.cpu_arch.contains("x86_64")
+                || self.cpu_arch.contains("aarch64"),
             supports_simd: self.cpu_arch.contains("x86_64") || self.cpu_arch.contains("aarch64"),
             high_memory: self.total_memory_gb >= 16,
             multi_core: self.cpu_cores >= 4,
@@ -646,7 +651,7 @@ mod tests {
     #[test]
     fn test_profile_validation() {
         let mut profile = PerformanceProfileConfig::new("test".to_string());
-        
+
         // Valid profile should pass
         assert!(profile.validate().is_ok());
 
@@ -663,18 +668,24 @@ mod tests {
     #[test]
     fn test_profile_manager() {
         let mut manager = ProfileManager::new();
-        
+
         // Should have default profiles
         assert!(manager.get_profile("lightning").is_some());
         assert!(manager.get_profile("balanced").is_some());
         assert!(manager.get_profile("fortress").is_some());
 
         // Default should be balanced
-        assert_eq!(manager.get_default_profile().unwrap().profile_type, PerformanceProfile::Balanced);
+        assert_eq!(
+            manager.get_default_profile().unwrap().profile_type,
+            PerformanceProfile::Balanced
+        );
 
         // Can set new default
         manager.set_default_profile("lightning").unwrap();
-        assert_eq!(manager.get_default_profile().unwrap().profile_type, PerformanceProfile::Lightning);
+        assert_eq!(
+            manager.get_default_profile().unwrap().profile_type,
+            PerformanceProfile::Lightning
+        );
 
         // Can add custom profile
         let custom = PerformanceProfileConfig::new("custom".to_string());
@@ -692,7 +703,7 @@ mod tests {
     #[test]
     fn test_auto_optimization() {
         let mut manager = ProfileManager::new();
-        
+
         // High-end system
         let high_end = SystemInfo {
             total_memory_gb: 32,
@@ -702,7 +713,7 @@ mod tests {
             available_disk_gb: 500,
             network_bandwidth_mbps: Some(10000),
         };
-        
+
         let profile = manager.auto_optimize(&high_end).unwrap();
         assert_eq!(profile, "fortress");
 
@@ -715,7 +726,7 @@ mod tests {
             available_disk_gb: 50,
             network_bandwidth_mbps: Some(100),
         };
-        
+
         let profile = manager.auto_optimize(&low_end).unwrap();
         assert_eq!(profile, "lightning");
     }

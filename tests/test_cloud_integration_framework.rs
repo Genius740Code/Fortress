@@ -1,6 +1,6 @@
 #![cfg(any())]
 //! Cloud Integration Testing Framework
-//! 
+//!
 //! This module provides a comprehensive framework for testing cloud integrations
 //! across multiple providers (AWS, Azure, GCP) with automated validation,
 //! performance benchmarking, and compliance checking.
@@ -8,13 +8,13 @@
 #[cfg(test)]
 mod cloud_integration_framework {
     use fortress_core::{
-        storage::{StorageBackend, S3Storage, AzureBlobStorage},
-        error::{FortressError, Result},
         encryption::{EncryptionAlgorithm, EncryptionProfile},
+        error::{FortressError, Result},
+        storage::{AzureBlobStorage, S3Storage, StorageBackend},
     };
+    use serde::{Deserialize, Serialize};
     use std::collections::HashMap;
     use std::time::{Duration, Instant};
-    use serde::{Deserialize, Serialize};
     use uuid::Uuid;
 
     /// Cloud provider types
@@ -106,7 +106,12 @@ mod cloud_integration_framework {
             let storage: Box<dyn StorageBackend> = match config.provider {
                 CloudProvider::Aws => {
                     // Set AWS environment variables
-                    if let CloudCredentials::Aws { ref access_key_id, ref secret_access_key, ref session_token } = config.credentials {
+                    if let CloudCredentials::Aws {
+                        ref access_key_id,
+                        ref secret_access_key,
+                        ref session_token,
+                    } = config.credentials
+                    {
                         std::env::set_var("AWS_ACCESS_KEY_ID", access_key_id);
                         std::env::set_var("AWS_SECRET_ACCESS_KEY", secret_access_key);
                         if let Some(token) = session_token {
@@ -115,24 +120,35 @@ mod cloud_integration_framework {
                         std::env::set_var("AWS_DEFAULT_REGION", &config.region);
                     }
 
-                    Box::new(S3Storage::new(
-                        config.bucket_container.clone(),
-                        config.region.clone(),
-                        Some(config.prefix.clone()),
-                    ).await?)
+                    Box::new(
+                        S3Storage::new(
+                            config.bucket_container.clone(),
+                            config.region.clone(),
+                            Some(config.prefix.clone()),
+                        )
+                        .await?,
+                    )
                 }
                 CloudProvider::Azure => {
                     // Set Azure environment variables
-                    if let CloudCredentials::Azure { ref tenant_id, ref client_id, ref client_secret } = config.credentials {
+                    if let CloudCredentials::Azure {
+                        ref tenant_id,
+                        ref client_id,
+                        ref client_secret,
+                    } = config.credentials
+                    {
                         std::env::set_var("AZURE_TENANT_ID", tenant_id);
                         std::env::set_var("AZURE_CLIENT_ID", client_id);
                         std::env::set_var("AZURE_CLIENT_SECRET", client_secret);
                     }
 
-                    Box::new(AzureBlobStorage::new(
-                        config.bucket_container.clone(),
-                        config.bucket_container.clone(), // Using bucket as account name for simplicity
-                    ).await?)
+                    Box::new(
+                        AzureBlobStorage::new(
+                            config.bucket_container.clone(),
+                            config.bucket_container.clone(), // Using bucket as account name for simplicity
+                        )
+                        .await?,
+                    )
                 }
                 CloudProvider::Gcp => {
                     return Err(FortressError::storage(
@@ -211,7 +227,9 @@ mod cloud_integration_framework {
                     results.passed_tests += 1;
                 }
                 Ok(_) => {
-                    results.errors.push("Get operation returned incorrect data".to_string());
+                    results
+                        .errors
+                        .push("Get operation returned incorrect data".to_string());
                     results.failed_tests += 1;
                     return;
                 }
@@ -228,12 +246,16 @@ mod cloud_integration_framework {
                     results.passed_tests += 1;
                 }
                 Ok(_) => {
-                    results.errors.push("Exists operation returned false for existing key".to_string());
+                    results
+                        .errors
+                        .push("Exists operation returned false for existing key".to_string());
                     results.failed_tests += 1;
                     return;
                 }
                 Err(e) => {
-                    results.errors.push(format!("Exists operation failed: {}", e));
+                    results
+                        .errors
+                        .push(format!("Exists operation failed: {}", e));
                     results.failed_tests += 1;
                     return;
                 }
@@ -241,7 +263,9 @@ mod cloud_integration_framework {
 
             // Test delete
             if let Err(e) = self.storage.delete(&test_key).await {
-                results.errors.push(format!("Delete operation failed: {}", e));
+                results
+                    .errors
+                    .push(format!("Delete operation failed: {}", e));
                 results.failed_tests += 1;
                 return;
             }
@@ -258,7 +282,9 @@ mod cloud_integration_framework {
             // Test large file upload
             let start = Instant::now();
             if let Err(e) = self.storage.put(&test_key, &large_data).await {
-                results.errors.push(format!("Large file upload failed: {}", e));
+                results
+                    .errors
+                    .push(format!("Large file upload failed: {}", e));
                 results.failed_tests += 1;
                 return;
             }
@@ -270,16 +296,23 @@ mod cloud_integration_framework {
             match self.storage.get(&test_key).await {
                 Ok(Some(retrieved)) if retrieved == large_data => {
                     let download_time = start.elapsed().as_millis() as u64;
-                    results.performance_metrics.download_times.push(download_time);
+                    results
+                        .performance_metrics
+                        .download_times
+                        .push(download_time);
                     results.passed_tests += 1;
                 }
                 Ok(_) => {
-                    results.errors.push("Large file download returned incorrect data".to_string());
+                    results
+                        .errors
+                        .push("Large file download returned incorrect data".to_string());
                     results.failed_tests += 1;
                     return;
                 }
                 Err(e) => {
-                    results.errors.push(format!("Large file download failed: {}", e));
+                    results
+                        .errors
+                        .push(format!("Large file download failed: {}", e));
                     results.failed_tests += 1;
                     return;
                 }
@@ -321,10 +354,14 @@ mod cloud_integration_framework {
                         let _ = self.storage.delete(&key).await;
                     }
                     Ok((Err(e), _, _)) => {
-                        results.errors.push(format!("Concurrent operation failed: {}", e));
+                        results
+                            .errors
+                            .push(format!("Concurrent operation failed: {}", e));
                     }
                     Err(e) => {
-                        results.errors.push(format!("Failed to join concurrent operation: {}", e));
+                        results
+                            .errors
+                            .push(format!("Failed to join concurrent operation: {}", e));
                     }
                 }
             }
@@ -333,7 +370,10 @@ mod cloud_integration_framework {
                 results.passed_tests += 1;
             } else {
                 results.failed_tests += 1;
-                results.errors.push(format!("Only {}/{} concurrent operations succeeded", successful_operations, num_operations));
+                results.errors.push(format!(
+                    "Only {}/{} concurrent operations succeeded",
+                    successful_operations, num_operations
+                ));
             }
         }
 
@@ -345,11 +385,15 @@ mod cloud_integration_framework {
             match self.storage.get("non-existent-key").await {
                 Ok(None) => results.passed_tests += 1,
                 Ok(Some(_)) => {
-                    results.errors.push("Get returned data for non-existent key".to_string());
+                    results
+                        .errors
+                        .push("Get returned data for non-existent key".to_string());
                     results.failed_tests += 1;
                 }
                 Err(e) => {
-                    results.errors.push(format!("Get failed for non-existent key: {}", e));
+                    results
+                        .errors
+                        .push(format!("Get failed for non-existent key: {}", e));
                     results.failed_tests += 1;
                 }
             }
@@ -358,11 +402,15 @@ mod cloud_integration_framework {
             match self.storage.exists("non-existent-key").await {
                 Ok(false) => results.passed_tests += 1,
                 Ok(true) => {
-                    results.errors.push("Exists returned true for non-existent key".to_string());
+                    results
+                        .errors
+                        .push("Exists returned true for non-existent key".to_string());
                     results.failed_tests += 1;
                 }
                 Err(e) => {
-                    results.errors.push(format!("Exists failed for non-existent key: {}", e));
+                    results
+                        .errors
+                        .push(format!("Exists failed for non-existent key: {}", e));
                     results.failed_tests += 1;
                 }
             }
@@ -371,7 +419,9 @@ mod cloud_integration_framework {
             match self.storage.delete("non-existent-key").await {
                 Ok(_) => results.passed_tests += 1,
                 Err(e) => {
-                    results.errors.push(format!("Delete failed for non-existent key: {}", e));
+                    results
+                        .errors
+                        .push(format!("Delete failed for non-existent key: {}", e));
                     results.failed_tests += 1;
                 }
             }
@@ -384,34 +434,53 @@ mod cloud_integration_framework {
             // Test throughput with different file sizes
             for (size_name, data) in &self.test_data {
                 let test_key = format!("perf-{}-{}", size_name, Uuid::new_v4());
-                
+
                 // Upload test
                 let start = Instant::now();
                 if let Err(e) = self.storage.put(&test_key, data).await {
-                    results.errors.push(format!("Performance upload test failed for {}: {}", size_name, e));
+                    results.errors.push(format!(
+                        "Performance upload test failed for {}: {}",
+                        size_name, e
+                    ));
                     results.failed_tests += 1;
                     continue;
                 }
                 let upload_time = start.elapsed();
-                results.performance_metrics.upload_times.push(upload_time.as_millis() as u64);
+                results
+                    .performance_metrics
+                    .upload_times
+                    .push(upload_time.as_millis() as u64);
 
                 // Calculate throughput
-                let throughput_mbps = (data.len() as f64) / (1024.0 * 1024.0) / upload_time.as_secs_f64();
-                results.performance_metrics.throughput_mbps.push(throughput_mbps);
+                let throughput_mbps =
+                    (data.len() as f64) / (1024.0 * 1024.0) / upload_time.as_secs_f64();
+                results
+                    .performance_metrics
+                    .throughput_mbps
+                    .push(throughput_mbps);
 
                 // Download test
                 let start = Instant::now();
                 match self.storage.get(&test_key).await {
                     Ok(Some(_)) => {
                         let download_time = start.elapsed();
-                        results.performance_metrics.download_times.push(download_time.as_millis() as u64);
+                        results
+                            .performance_metrics
+                            .download_times
+                            .push(download_time.as_millis() as u64);
                     }
                     Err(e) => {
-                        results.errors.push(format!("Performance download test failed for {}: {}", size_name, e));
+                        results.errors.push(format!(
+                            "Performance download test failed for {}: {}",
+                            size_name, e
+                        ));
                         results.failed_tests += 1;
                     }
                     _ => {
-                        results.errors.push(format!("Performance download test failed for {}: no data returned", size_name));
+                        results.errors.push(format!(
+                            "Performance download test failed for {}: no data returned",
+                            size_name
+                        ));
                         results.failed_tests += 1;
                     }
                 }
@@ -442,7 +511,9 @@ mod cloud_integration_framework {
             if metadata.supports_encryption_at_rest {
                 results.passed_tests += 1;
             } else {
-                results.errors.push("Storage backend does not support encryption at rest".to_string());
+                results
+                    .errors
+                    .push("Storage backend does not support encryption at rest".to_string());
                 results.failed_tests += 1;
             }
 
@@ -450,8 +521,11 @@ mod cloud_integration_framework {
             match self.storage.health_check().await {
                 Ok(health_status) => {
                     let start = Instant::now();
-                    results.performance_metrics.health_check_times.push(start.elapsed().as_millis() as u64);
-                    
+                    results
+                        .performance_metrics
+                        .health_check_times
+                        .push(start.elapsed().as_millis() as u64);
+
                     if health_status.healthy {
                         results.passed_tests += 1;
                     } else {
@@ -476,7 +550,9 @@ mod cloud_integration_framework {
             // Upload test files
             for key in &test_keys {
                 if let Err(e) = self.storage.put(key, b"test content").await {
-                    results.errors.push(format!("Failed to upload test file for list test: {}", e));
+                    results
+                        .errors
+                        .push(format!("Failed to upload test file for list test: {}", e));
                     results.failed_tests += 1;
                     return;
                 }
@@ -488,11 +564,15 @@ mod cloud_integration_framework {
                 Ok(listed_keys) => {
                     let list_time = start.elapsed().as_millis() as u64;
                     results.performance_metrics.list_times.push(list_time);
-                    
+
                     if listed_keys.len() == test_keys.len() {
                         results.passed_tests += 1;
                     } else {
-                        results.errors.push(format!("List operation returned {} keys, expected {}", listed_keys.len(), test_keys.len()));
+                        results.errors.push(format!(
+                            "List operation returned {} keys, expected {}",
+                            listed_keys.len(),
+                            test_keys.len()
+                        ));
                         results.failed_tests += 1;
                     }
                 }
@@ -522,9 +602,13 @@ mod cloud_integration_framework {
                 results.compliance_results.audit_logging,
                 results.compliance_results.data_residency,
                 results.compliance_results.retention_policies,
-            ].iter().map(|&x| if x { 1 } else { 0 }).sum::<usize>();
-            
-            results.compliance_results.security_score = (passed_compliance as f64) / (total_compliance as f64) * 100.0;
+            ]
+            .iter()
+            .map(|&x| if x { 1 } else { 0 })
+            .sum::<usize>();
+
+            results.compliance_results.security_score =
+                (passed_compliance as f64) / (total_compliance as f64) * 100.0;
         }
 
         /// Test security features
@@ -542,7 +626,9 @@ mod cloud_integration_framework {
             let encrypted_data = test_data.clone();
 
             if let Err(e) = self.storage.put(&test_key, &encrypted_data).await {
-                results.errors.push(format!("Failed to store encrypted data: {}", e));
+                results
+                    .errors
+                    .push(format!("Failed to store encrypted data: {}", e));
                 results.failed_tests += 1;
                 return;
             }
@@ -553,16 +639,22 @@ mod cloud_integration_framework {
                     if retrieved_encrypted == test_data {
                         results.passed_tests += 1;
                     } else {
-                        results.errors.push("Retrieved data does not match original".to_string());
+                        results
+                            .errors
+                            .push("Retrieved data does not match original".to_string());
                         results.failed_tests += 1;
                     }
                 }
                 Err(e) => {
-                    results.errors.push(format!("Failed to retrieve encrypted data: {}", e));
+                    results
+                        .errors
+                        .push(format!("Failed to retrieve encrypted data: {}", e));
                     results.failed_tests += 1;
                 }
                 _ => {
-                    results.errors.push("No data found for security test".to_string());
+                    results
+                        .errors
+                        .push("No data found for security test".to_string());
                     results.failed_tests += 1;
                 }
             }
@@ -617,7 +709,7 @@ mod cloud_integration_framework {
     async fn test_cloud_integration_framework_aws() {
         // This test demonstrates how to use the framework
         println!("Testing AWS integration framework");
-        
+
         let _config = CloudTestConfig {
             provider: CloudProvider::Aws,
             region: "us-east-1".to_string(),
@@ -638,7 +730,7 @@ mod cloud_integration_framework {
     #[ignore] // Requires cloud credentials
     async fn test_cloud_integration_framework_azure() {
         println!("Testing Azure integration framework");
-        
+
         let _config = CloudTestConfig {
             provider: CloudProvider::Azure,
             region: "eastus".to_string(),

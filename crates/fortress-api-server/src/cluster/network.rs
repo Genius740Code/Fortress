@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{RwLock, Mutex};
+use tokio::sync::{Mutex, RwLock};
 use tokio::time::interval;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
@@ -162,35 +162,35 @@ pub enum NetworkError {
     /// Connection establishment failed
     #[error("Connection failed: {0}")]
     ConnectionFailed(String),
-    
+
     /// Message sending failed
     #[error("Message send failed: {0}")]
     MessageSendFailed(String),
-    
+
     /// Message receiving failed
     #[error("Message receive failed: {0}")]
     MessageReceiveFailed(String),
-    
+
     /// Connection establishment timed out
     #[error("Connection timeout")]
     ConnectionTimeout,
-    
+
     /// Message exceeds maximum size
     #[error("Message too large: {0} bytes")]
     MessageTooLarge(usize),
-    
+
     /// Message format is invalid
     #[error("Invalid message format: {0}")]
     InvalidMessageFormat(String),
-    
+
     /// TLS/SSL error occurred
     #[error("TLS error: {0}")]
     TlsError(String),
-    
+
     /// Network partition detected
     #[error("Network partition detected")]
     NetworkPartition,
-    
+
     /// Failed to resolve network address
     #[error("Address resolution failed: {0}")]
     AddressResolutionFailed(String),
@@ -242,16 +242,16 @@ pub struct NetworkStatistics {
 pub trait NetworkCallback {
     /// Called when a new connection is established
     async fn on_connection_established(&self, node_id: Uuid, address: SocketAddr);
-    
+
     /// Called when a connection is lost
     async fn on_connection_lost(&self, node_id: Uuid, reason: &str);
-    
+
     /// Called when a message is sent
     async fn on_message_sent(&self, message: &NetworkMessage, success: bool);
-    
+
     /// Called when a message is received
     async fn on_message_received(&self, message: &NetworkMessage);
-    
+
     /// Called when a network partition is detected
     async fn on_network_partition(&self, affected_nodes: Vec<Uuid>);
 }
@@ -260,8 +260,11 @@ pub trait NetworkCallback {
 #[async_trait::async_trait]
 pub trait MessageHandler {
     /// Handle a network message
-    async fn handle_message(&self, message: NetworkMessage) -> ClusterResult<Option<NetworkMessage>>;
-    
+    async fn handle_message(
+        &self,
+        message: NetworkMessage,
+    ) -> ClusterResult<Option<NetworkMessage>>;
+
     /// Get the message type this handler processes
     fn message_type(&self) -> MessageType;
 }
@@ -284,7 +287,7 @@ impl NetworkManager {
     /// Start the network manager
     pub async fn start(&self) -> ClusterResult<()> {
         info!("Starting network manager for node {}", self.node_id);
-        
+
         // Start message processing loop
         let manager = self.clone();
         tokio::spawn(async move {
@@ -313,25 +316,25 @@ impl NetworkManager {
     async fn start_listener(&self) -> ClusterResult<()> {
         let listen_addr = format!("{}:{}", self.config.listen_addr, self.config.cluster_port);
         info!("Starting network listener on {}", listen_addr);
-        
+
         // In a real implementation, this would start a TCP/TLS listener
         // For now, this is a placeholder
-        
+
         Ok(())
     }
 
     /// Message processing loop
     async fn message_processing_loop(&self) {
         let mut interval = interval(Duration::from_millis(10));
-        
+
         loop {
             interval.tick().await;
-            
+
             // Process outgoing messages
             if let Err(e) = self.process_outgoing_messages().await {
                 error!("Failed to process outgoing messages: {}", e);
             }
-            
+
             // Process incoming messages
             if let Err(e) = self.process_incoming_messages().await {
                 error!("Failed to process incoming messages: {}", e);
@@ -342,10 +345,10 @@ impl NetworkManager {
     /// Connection management loop
     async fn connection_management_loop(&self) {
         let mut interval = interval(Duration::from_secs(30));
-        
+
         loop {
             interval.tick().await;
-            
+
             if let Err(e) = self.manage_connections().await {
                 error!("Connection management failed: {}", e);
             }
@@ -355,10 +358,10 @@ impl NetworkManager {
     /// Statistics collection loop
     async fn statistics_collection_loop(&self) {
         let mut interval = interval(Duration::from_secs(60));
-        
+
         loop {
             interval.tick().await;
-            
+
             if let Err(e) = self.update_statistics().await {
                 error!("Statistics collection failed: {}", e);
             }
@@ -403,9 +406,9 @@ impl NetworkManager {
     async fn manage_connections(&self) -> ClusterResult<()> {
         let now = Instant::now();
         let timeout_duration = Duration::from_secs(self.config.keep_alive_interval_secs);
-        
+
         let mut connections_to_remove = Vec::new();
-        
+
         {
             let connections = self.connections.read().await;
             for (node_id, conn_info) in connections.iter() {
@@ -433,14 +436,12 @@ impl NetworkManager {
     /// Update network statistics
     async fn update_statistics(&self) -> ClusterResult<()> {
         let connections = self.connections.read().await;
-        
+
         if !connections.is_empty() {
-            let total_latency: u64 = connections.values()
-                .map(|conn| conn.latency_ms)
-                .sum();
-            
+            let total_latency: u64 = connections.values().map(|conn| conn.latency_ms).sum();
+
             let average_latency = total_latency as f64 / connections.len() as f64;
-            
+
             let mut stats = self.statistics.write().await;
             stats.average_latency_ms = average_latency;
         }
@@ -449,7 +450,13 @@ impl NetworkManager {
     }
 
     /// Send a message to a specific node
-    pub async fn send_message(&self, destination: Uuid, message_type: MessageType, payload: Vec<u8>, priority: MessagePriority) -> ClusterResult<()> {
+    pub async fn send_message(
+        &self,
+        destination: Uuid,
+        message_type: MessageType,
+        payload: Vec<u8>,
+        priority: MessagePriority,
+    ) -> ClusterResult<()> {
         let message = NetworkMessage {
             message_id: Uuid::new_v4(),
             source: self.node_id,
@@ -472,7 +479,12 @@ impl NetworkManager {
     }
 
     /// Broadcast a message to all nodes
-    pub async fn broadcast_message(&self, message_type: MessageType, payload: Vec<u8>, priority: MessagePriority) -> ClusterResult<()> {
+    pub async fn broadcast_message(
+        &self,
+        message_type: MessageType,
+        payload: Vec<u8>,
+        priority: MessagePriority,
+    ) -> ClusterResult<()> {
         let message = NetworkMessage {
             message_id: Uuid::new_v4(),
             source: self.node_id,
@@ -520,34 +532,35 @@ impl NetworkManager {
     /// Send message to specific node
     async fn send_to_node(&self, destination: Uuid, message: NetworkMessage) -> ClusterResult<()> {
         let connections = self.connections.read().await;
-        
+
         if let Some(conn_info) = connections.get(&destination) {
             // Check if connection is active
             if conn_info.state == ConnectionState::Connected {
                 // Send message
                 if let Err(e) = self.transmit_message(conn_info.address, &message).await {
                     error!("Failed to transmit message to {}: {}", destination, e);
-                    
+
                     // Update statistics
                     {
                         let mut stats = self.statistics.write().await;
                         stats.failed_connections += 1;
                     }
-                    
+
                     return Err(e);
                 }
-                
+
                 // Update connection statistics
                 drop(connections);
-                self.update_connection_stats(destination, message.payload.len(), true).await;
-                
+                self.update_connection_stats(destination, message.payload.len(), true)
+                    .await;
+
                 // Update global statistics
                 {
                     let mut stats = self.statistics.write().await;
                     stats.messages_sent += 1;
                     stats.bytes_sent += message.payload.len() as u64;
                 }
-                
+
                 // Notify callbacks
                 let callbacks = self.callbacks.lock().await;
                 for callback in callbacks.iter() {
@@ -560,7 +573,7 @@ impl NetworkManager {
                     error!("Failed to establish connection to {}: {}", destination, e);
                     return Err(e);
                 }
-                
+
                 // Retry sending with a boxed future to avoid recursion
                 return Box::pin(self.send_to_node(destination, message)).await;
             }
@@ -570,7 +583,7 @@ impl NetworkManager {
                 error!("Failed to establish connection to {}: {}", destination, e);
                 return Err(e);
             }
-            
+
             // Retry sending with a boxed future to avoid recursion
             return Box::pin(self.send_to_node(destination, message)).await;
         }
@@ -594,21 +607,28 @@ impl NetworkManager {
     }
 
     /// Transmit message over network
-    async fn transmit_message(&self, address: SocketAddr, message: &NetworkMessage) -> ClusterResult<()> {
+    async fn transmit_message(
+        &self,
+        address: SocketAddr,
+        message: &NetworkMessage,
+    ) -> ClusterResult<()> {
         // Serialize message
-        let serialized = serde_json::to_vec(message)
-            .map_err(|e| ClusterError::Network(NetworkError::InvalidMessageFormat(e.to_string())))?;
+        let serialized = serde_json::to_vec(message).map_err(|e| {
+            ClusterError::Network(NetworkError::InvalidMessageFormat(e.to_string()))
+        })?;
 
         // Check message size
         if serialized.len() > self.config.max_message_size {
-            return Err(ClusterError::Network(NetworkError::MessageTooLarge(serialized.len())));
+            return Err(ClusterError::Network(NetworkError::MessageTooLarge(
+                serialized.len(),
+            )));
         }
 
         // In a real implementation, this would send the message over TCP/TLS
         // For now, this is a placeholder
-        
+
         debug!("Transmitting message {} to {}", message.message_id, address);
-        
+
         Ok(())
     }
 
@@ -623,7 +643,8 @@ impl NetworkManager {
 
         // Update connection activity
         let source = message.source;
-        self.update_connection_stats(source, message.payload.len(), false).await;
+        self.update_connection_stats(source, message.payload.len(), false)
+            .await;
 
         // Notify callbacks
         let callbacks = self.callbacks.lock().await;
@@ -647,12 +668,14 @@ impl NetworkManager {
     /// Establish connection to a node
     async fn establish_connection(&self, node_id: Uuid) -> ClusterResult<()> {
         info!("Establishing connection to node {}", node_id);
-        
+
         // In a real implementation, this would resolve the node's address
         // and establish a TCP/TLS connection
         let address = format!("127.0.0.1:{}", self.config.cluster_port)
             .parse::<SocketAddr>()
-            .map_err(|e| ClusterError::Network(NetworkError::AddressResolutionFailed(e.to_string())))?;
+            .map_err(|e| {
+                ClusterError::Network(NetworkError::AddressResolutionFailed(e.to_string()))
+            })?;
 
         let connection_info = ConnectionInfo {
             node_id,
@@ -684,7 +707,7 @@ impl NetworkManager {
     /// Remove connection
     async fn remove_connection(&self, node_id: Uuid, reason: &str) -> ClusterResult<()> {
         info!("Removing connection to node {}: {}", node_id, reason);
-        
+
         let address = {
             let mut connections = self.connections.write().await;
             connections.remove(&node_id).map(|conn| conn.address)
@@ -704,10 +727,10 @@ impl NetworkManager {
     /// Update connection statistics
     async fn update_connection_stats(&self, node_id: Uuid, bytes: usize, is_sent: bool) {
         let mut connections = self.connections.write().await;
-        
+
         if let Some(conn_info) = connections.get_mut(&node_id) {
             conn_info.last_activity = Instant::now();
-            
+
             if is_sent {
                 conn_info.messages_sent += 1;
                 conn_info.bytes_sent += bytes as u64;

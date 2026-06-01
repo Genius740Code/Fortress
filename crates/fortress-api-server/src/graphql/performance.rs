@@ -3,14 +3,14 @@
 //! Implements comprehensive performance tracking, query analysis,
 //! and real-time metrics collection for optimization and monitoring.
 
+use once_cell::sync::Lazy;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::ops::Deref;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
-use std::ops::Deref;
 use tokio::sync::RwLock;
-use serde::{Serialize, Deserialize};
 use uuid::Uuid;
-use once_cell::sync::Lazy;
 
 /// Performance metrics for a single operation
 #[derive(Debug, Clone, async_graphql::SimpleObject)]
@@ -148,14 +148,18 @@ impl PerformanceMonitor {
     }
 
     /// Start monitoring an operation
-    pub async fn start_operation(&self, operation_type: OperationType, operation_name: String) -> OperationTracker {
+    pub async fn start_operation(
+        &self,
+        operation_type: OperationType,
+        operation_name: String,
+    ) -> OperationTracker {
         let metrics = OperationMetrics::new(operation_type, operation_name);
         let operation_id = metrics.operation_id.clone();
-        
+
         {
             let mut operations = self.operations.write().await;
             operations.push(metrics);
-            
+
             // Maintain max size
             if operations.len() > self.max_operations {
                 operations.remove(0);
@@ -171,7 +175,7 @@ impl PerformanceMonitor {
     /// Get performance statistics
     pub async fn get_stats(&self) -> PerformanceStats {
         let operations = self.operations.read().await;
-        
+
         if operations.is_empty() {
             return PerformanceStats {
                 total_operations: 0,
@@ -187,17 +191,18 @@ impl PerformanceMonitor {
             };
         }
 
-        let completed_operations: Vec<_> = operations.iter()
+        let completed_operations: Vec<_> = operations
+            .iter()
             .filter(|op| op.duration_ms.is_some())
             .collect();
 
         let total_operations = operations.len() as u64;
-        let successful_operations = completed_operations.iter()
-            .filter(|op| op.success)
-            .count() as u64;
+        let successful_operations =
+            completed_operations.iter().filter(|op| op.success).count() as u64;
         let failed_operations = completed_operations.len() as u64 - successful_operations;
 
-        let durations: Vec<u64> = completed_operations.iter()
+        let durations: Vec<u64> = completed_operations
+            .iter()
             .filter_map(|op| op.duration_ms)
             .collect();
 
@@ -223,7 +228,8 @@ impl PerformanceMonitor {
             0.0
         };
 
-        let cache_hits = completed_operations.iter()
+        let cache_hits = completed_operations
+            .iter()
             .filter(|op| op.cache_hit)
             .count() as f64;
         let cache_hit_rate = if !completed_operations.is_empty() {
@@ -237,14 +243,17 @@ impl PerformanceMonitor {
         let operations_per_second = recent_operations / 60.0;
 
         let average_record_count = if !completed_operations.is_empty() {
-            completed_operations.iter()
+            completed_operations
+                .iter()
                 .filter_map(|op| op.record_count)
-                .sum::<usize>() as f64 / completed_operations.len() as f64
+                .sum::<usize>() as f64
+                / completed_operations.len() as f64
         } else {
             0.0
         };
 
-        let total_database_operations: u64 = completed_operations.iter()
+        let total_database_operations: u64 = completed_operations
+            .iter()
             .map(|op| op.database_operations as u64)
             .sum();
 
@@ -263,20 +272,29 @@ impl PerformanceMonitor {
     }
 
     /// Get slow operations
-    pub async fn get_slow_operations(&self, threshold_ms: u64) -> Vec<SerializableOperationMetrics> {
+    pub async fn get_slow_operations(
+        &self,
+        threshold_ms: u64,
+    ) -> Vec<SerializableOperationMetrics> {
         let operations = self.operations.read().await;
-        operations.iter()
+        operations
+            .iter()
             .filter(|op| {
-                op.duration_ms.map_or(false, |duration| duration > threshold_ms)
+                op.duration_ms
+                    .map_or(false, |duration| duration > threshold_ms)
             })
             .map(|op| SerializableOperationMetrics::from(op))
             .collect()
     }
 
     /// Get operations by type
-    pub async fn get_operations_by_type(&self, _operation_type: OperationType) -> Vec<OperationMetrics> {
+    pub async fn get_operations_by_type(
+        &self,
+        _operation_type: OperationType,
+    ) -> Vec<OperationMetrics> {
         let operations = self.operations.read().await;
-        operations.iter()
+        operations
+            .iter()
             .filter(|op| matches!(op.operation_type, _operation_type))
             .cloned()
             .collect()
@@ -286,26 +304,26 @@ impl PerformanceMonitor {
     pub fn start_cleanup_task(self: Arc<Self>) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(self.cleanup_interval);
-            
+
             loop {
                 interval.tick().await;
-                
+
                 // Enhanced cleanup with multiple strategies
                 let mut operations = self.operations.write().await;
                 let initial_count = operations.len();
-                
+
                 if initial_count == 0 {
                     continue; // Skip cleanup if empty
                 }
-                
+
                 let now = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap()
                     .as_secs();
-                
+
                 // Multi-tier cleanup strategy
                 let mut removed_count = 0;
-                
+
                 // 1. Remove very old operations (> 2 hours)
                 let _two_hours_ago = now - 7200;
                 operations.retain(|op| {
@@ -316,7 +334,7 @@ impl PerformanceMonitor {
                     }
                     keep
                 });
-                
+
                 // 2. If still too many, remove old operations (> 1 hour)
                 if operations.len() > self.max_operations {
                     let _one_hour_ago = now - 3600;
@@ -329,14 +347,14 @@ impl PerformanceMonitor {
                         keep
                     });
                 }
-                
+
                 // 3. If still over limit, remove by age and completion status
                 if operations.len() > self.max_operations {
                     // Sort by age (oldest first) and completion status
                     operations.sort_by(|a, b| {
                         let a_age = a.created_at_ms;
                         let b_age = b.created_at_ms;
-                        
+
                         // Prioritize keeping completed operations
                         match (a.duration_ms.is_some(), b.duration_ms.is_some()) {
                             (true, false) => std::cmp::Ordering::Less,
@@ -344,7 +362,7 @@ impl PerformanceMonitor {
                             _ => a_age.cmp(&b_age),
                         }
                     });
-                    
+
                     // Keep only the newest operations
                     let target_size = self.max_operations * 80 / 100; // Keep 80% to avoid frequent cleanup
                     let excess = operations.len().saturating_sub(target_size);
@@ -353,20 +371,20 @@ impl PerformanceMonitor {
                         removed_count += excess;
                     }
                 }
-                
+
                 // 4. Final safety check - hard limit
                 let hard_limit = self.max_operations + self.max_operations / 10; // 10% buffer
                 if operations.len() > hard_limit {
                     let emergency_removal = operations.len() - self.max_operations;
                     operations.drain(0..emergency_removal);
                     removed_count += emergency_removal;
-                    
+
                     tracing::warn!(
                         "Emergency cleanup: removed {} operations to prevent memory overflow",
                         emergency_removal
                     );
                 }
-                
+
                 // Log cleanup statistics
                 if removed_count > 0 {
                     tracing::debug!(
@@ -376,9 +394,11 @@ impl PerformanceMonitor {
                         operations.len()
                     );
                 }
-                
+
                 // Memory optimization: shrink capacity if significantly reduced
-                if operations.len() < initial_count / 2 && operations.capacity() > operations.len() * 2 {
+                if operations.len() < initial_count / 2
+                    && operations.capacity() > operations.len() * 2
+                {
                     operations.shrink_to_fit();
                 }
             }
@@ -396,8 +416,10 @@ impl OperationTracker {
     /// Complete the operation successfully
     pub async fn complete_success(self, record_count: Option<usize>) {
         let mut operations = self.monitor.operations.write().await;
-        if let Some(operation) = operations.iter_mut()
-            .find(|op| op.operation_id == self.operation_id) {
+        if let Some(operation) = operations
+            .iter_mut()
+            .find(|op| op.operation_id == self.operation_id)
+        {
             operation.complete(true, record_count);
         }
     }
@@ -405,8 +427,10 @@ impl OperationTracker {
     /// Complete the operation with an error
     pub async fn complete_error(self, error: &str) {
         let mut operations = self.monitor.operations.write().await;
-        if let Some(operation) = operations.iter_mut()
-            .find(|op| op.operation_id == self.operation_id) {
+        if let Some(operation) = operations
+            .iter_mut()
+            .find(|op| op.operation_id == self.operation_id)
+        {
             operation.set_error(error);
         }
     }
@@ -414,8 +438,10 @@ impl OperationTracker {
     /// Mark as cache hit
     pub async fn set_cache_hit(&self) {
         let mut operations = self.monitor.operations.write().await;
-        if let Some(operation) = operations.iter_mut()
-            .find(|op| op.operation_id == self.operation_id) {
+        if let Some(operation) = operations
+            .iter_mut()
+            .find(|op| op.operation_id == self.operation_id)
+        {
             operation.set_cache_hit();
         }
     }
@@ -423,8 +449,10 @@ impl OperationTracker {
     /// Increment database operations counter
     pub async fn increment_database_operations(&self) {
         let mut operations = self.monitor.operations.write().await;
-        if let Some(operation) = operations.iter_mut()
-            .find(|op| op.operation_id == self.operation_id) {
+        if let Some(operation) = operations
+            .iter_mut()
+            .find(|op| op.operation_id == self.operation_id)
+        {
             operation.increment_database_operations();
         }
     }
@@ -450,15 +478,16 @@ struct QueryPatterns {
 }
 
 // Global cached regex patterns for maximum performance
-static CACHED_PATTERNS: Lazy<QueryPatterns> = Lazy::new(|| {
-    QueryPatterns {
-        braces: regex::Regex::new(r"\{").unwrap_or_else(|_| regex::Regex::new(r"").unwrap()),
-        colons: regex::Regex::new(r":").unwrap_or_else(|_| regex::Regex::new(r"").unwrap()),
-        parentheses: regex::Regex::new(r"\(").unwrap_or_else(|_| regex::Regex::new(r"").unwrap()),
-        page_keyword: regex::Regex::new(r"\b(page|first|last|before|after)\b").unwrap_or_else(|_| regex::Regex::new(r"").unwrap()),
-        nested_fields: regex::Regex::new(r"\{[^{}]*\{").unwrap_or_else(|_| regex::Regex::new(r"").unwrap()),
-        fragment_spread: regex::Regex::new(r"\.\.\.").unwrap_or_else(|_| regex::Regex::new(r"").unwrap()),
-    }
+static CACHED_PATTERNS: Lazy<QueryPatterns> = Lazy::new(|| QueryPatterns {
+    braces: regex::Regex::new(r"\{").unwrap_or_else(|_| regex::Regex::new(r"").unwrap()),
+    colons: regex::Regex::new(r":").unwrap_or_else(|_| regex::Regex::new(r"").unwrap()),
+    parentheses: regex::Regex::new(r"\(").unwrap_or_else(|_| regex::Regex::new(r"").unwrap()),
+    page_keyword: regex::Regex::new(r"\b(page|first|last|before|after)\b")
+        .unwrap_or_else(|_| regex::Regex::new(r"").unwrap()),
+    nested_fields: regex::Regex::new(r"\{[^{}]*\{")
+        .unwrap_or_else(|_| regex::Regex::new(r"").unwrap()),
+    fragment_spread: regex::Regex::new(r"\.\.\.")
+        .unwrap_or_else(|_| regex::Regex::new(r"").unwrap()),
 });
 
 impl QueryAnalyzer {
@@ -474,7 +503,7 @@ impl QueryAnalyzer {
     pub fn analyze_query(&self, query: &str) -> QueryAnalysis {
         let complexity = self.calculate_complexity(query);
         let estimated_duration = self.estimate_duration(complexity);
-        
+
         QueryAnalysis {
             complexity,
             estimated_duration,
@@ -487,28 +516,28 @@ impl QueryAnalyzer {
     fn calculate_complexity(&self, query: &str) -> usize {
         // Ultra-efficient complexity calculation using globally cached regex patterns
         let mut complexity = 0;
-        
+
         // Count field selections (opening braces)
         complexity += self.patterns.braces.find_iter(query).count() * 2;
-        
+
         // Count field arguments/variables (colons)
         complexity += self.patterns.colons.find_iter(query).count();
-        
+
         // Count function calls/filters (parentheses)
         complexity += self.patterns.parentheses.find_iter(query).count() * 3;
-        
+
         // Count pagination keywords (weighted higher)
         complexity += self.patterns.page_keyword.find_iter(query).count() * 5;
-        
+
         // Count nested objects (complexity multiplier)
         complexity += self.patterns.nested_fields.find_iter(query).count() * 10;
-        
+
         // Count fragment spreads (complexity multiplier)
         complexity += self.patterns.fragment_spread.find_iter(query).count() * 7;
-        
+
         // Base complexity for query length
         complexity += query.len() / 100;
-        
+
         complexity
     }
 
@@ -521,19 +550,20 @@ impl QueryAnalyzer {
 
     fn generate_recommendations(&self, complexity: usize) -> Vec<String> {
         let mut recommendations = Vec::new();
-        
+
         if complexity > 100 {
             recommendations.push("Consider breaking this query into smaller parts".to_string());
         }
-        
+
         if complexity > 50 {
             recommendations.push("Add pagination to limit result size".to_string());
         }
-        
+
         if complexity > 200 {
-            recommendations.push("Consider using GraphQL subscriptions for real-time data".to_string());
+            recommendations
+                .push("Consider using GraphQL subscriptions for real-time data".to_string());
         }
-        
+
         recommendations
     }
 }

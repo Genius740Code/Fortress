@@ -1,5 +1,5 @@
 //! Advanced Authentication Tests
-//! 
+//!
 //! This module contains comprehensive tests for the advanced authentication features
 //! including MFA, risk assessment, device fingerprinting, and account lockout.
 
@@ -12,9 +12,11 @@ mod tests {
     #[tokio::test]
     async fn test_advanced_authentication_with_mfa() {
         let mut auth = AuthManager::new();
-        
+
         // Create a test user
-        let _user_id = auth.create_user("testuser".to_string(), "Password123!".to_string()).await
+        let _user_id = auth
+            .create_user("testuser".to_string(), "Password123!".to_string())
+            .await
             .expect("Failed to create test user");
 
         // Test authentication with TOTP
@@ -23,7 +25,9 @@ mod tests {
             password: "Password123!".to_string(),
             device_fingerprint: None,
             ip_address: Some("192.168.1.100".to_string()),
-            user_agent: Some("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36".to_string()),
+            user_agent: Some(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36".to_string(),
+            ),
             mfa_data: Some(MfaData {
                 totp_code: Some("123456".to_string()),
                 hardware_token: None,
@@ -69,7 +73,7 @@ mod tests {
 
         let result = auth.authenticate(login_request).await;
         assert!(result.is_ok(), "Authentication with MFA should succeed");
-        
+
         let response = result.unwrap();
         assert!(!response.token.is_empty());
         assert!(response.mfa_requirements.is_some());
@@ -208,7 +212,9 @@ mod tests {
         assert!(!trust_status.trusted);
         assert_eq!(trust_status.trust_score, 0);
         assert!(trust_status.first_seen.is_some());
-        assert!(trust_status.trust_reasons.contains(&"New device".to_string()));
+        assert!(trust_status
+            .trust_reasons
+            .contains(&"New device".to_string()));
     }
 
     #[tokio::test]
@@ -298,12 +304,16 @@ mod tests {
         let config = RiskBasedMfaMethods {
             low_risk: vec![MfaMethod::Password],
             medium_risk: vec![MfaMethod::Password, MfaMethod::Totp],
-            high_risk: vec![MfaMethod::Password, MfaMethod::Totp, MfaMethod::HardwareToken],
+            high_risk: vec![
+                MfaMethod::Password,
+                MfaMethod::Totp,
+                MfaMethod::HardwareToken,
+            ],
             critical_risk: vec![
-                MfaMethod::Password, 
-                MfaMethod::Totp, 
-                MfaMethod::HardwareToken, 
-                MfaMethod::Biometric
+                MfaMethod::Password,
+                MfaMethod::Totp,
+                MfaMethod::HardwareToken,
+                MfaMethod::Biometric,
             ],
         };
 
@@ -327,9 +337,11 @@ mod tests {
     #[tokio::test]
     async fn test_authentication_with_high_risk() {
         let mut auth = AuthManager::new();
-        
+
         // Create a test user
-        let _user_id = auth.create_user("testuser".to_string(), "Password123!".to_string()).await
+        let _user_id = auth
+            .create_user("testuser".to_string(), "Password123!".to_string())
+            .await
             .expect("Failed to create test user");
 
         // Test authentication from high-risk location (China)
@@ -367,17 +379,21 @@ mod tests {
         let result = auth.authenticate(login_request).await;
         // Should fail due to high risk and no MFA
         assert!(result.is_err());
-        
+
         let error = result.unwrap_err();
-        assert!(error.to_string().contains("Multi-factor authentication required"));
+        assert!(error
+            .to_string()
+            .contains("Multi-factor authentication required"));
     }
 
     #[tokio::test]
     async fn test_authentication_with_mfa_success() {
         let mut auth = AuthManager::new();
-        
+
         // Create a test user
-        let _user_id = auth.create_user("testuser".to_string(), "Password123!".to_string()).await
+        let _user_id = auth
+            .create_user("testuser".to_string(), "Password123!".to_string())
+            .await
             .expect("Failed to create test user");
 
         // Test authentication with proper MFA for high risk
@@ -422,17 +438,17 @@ mod tests {
         let result = auth.authenticate(login_request).await;
         // Should succeed with MFA
         assert!(result.is_ok());
-        
+
         let response = result.unwrap();
         assert!(!response.token.is_empty());
         assert!(response.mfa_requirements.is_some());
         assert!(response.risk_assessment.is_some());
-        
+
         // Check risk assessment
         let risk = response.risk_assessment.unwrap();
         assert!(risk.risk_score >= 75); // High risk due to geolocation
         assert!(matches!(risk.risk_level, RiskLevel::High));
-        
+
         // Check security measures
         assert!(!response.security_measures.is_empty());
     }
@@ -440,9 +456,11 @@ mod tests {
     #[tokio::test]
     async fn test_device_trust_escalation() {
         let mut auth = AuthManager::new();
-        
+
         // Create a test user
-        let _user_id = auth.create_user("testuser".to_string(), "Password123!".to_string()).await
+        let _user_id = auth
+            .create_user("testuser".to_string(), "Password123!".to_string())
+            .await
             .expect("Failed to create test user");
 
         let fingerprint = "test_device_fingerprint_12345";
@@ -467,17 +485,21 @@ mod tests {
 
         let result1 = auth.authenticate(login_request1).await;
         assert!(result1.is_ok());
-        
+
         let response1 = result1.unwrap();
         let trust1 = response1.device_trust.unwrap();
         assert!(!trust1.trusted); // New device not trusted initially
         assert_eq!(trust1.trust_score, 0);
 
         // Simulate multiple successful logins over time to build trust
-        for i in 1..=35 { // Simulate 35 days of logins
+        for i in 1..=35 {
+            // Simulate 35 days of logins
             let mut auth_mut = AuthManager::new();
-            auth_mut.create_user("testuser".to_string(), "Password123!".to_string()).await.unwrap();
-            
+            auth_mut
+                .create_user("testuser".to_string(), "Password123!".to_string())
+                .await
+                .unwrap();
+
             let login_request = LoginRequest {
                 username: "testuser".to_string(),
                 password: "Password123!".to_string(),
@@ -500,8 +522,11 @@ mod tests {
 
         // After 30+ days, device should be trusted
         let mut auth_final = AuthManager::new();
-        auth_final.create_user("testuser".to_string(), "Password123!".to_string()).await.unwrap();
-        
+        auth_final
+            .create_user("testuser".to_string(), "Password123!".to_string())
+            .await
+            .unwrap();
+
         let login_request_final = LoginRequest {
             username: "testuser".to_string(),
             password: "Password123!".to_string(),
@@ -521,11 +546,13 @@ mod tests {
 
         let result_final = auth_final.authenticate(login_request_final).await;
         assert!(result_final.is_ok());
-        
+
         let response_final = result_final.unwrap();
         let trust_final = response_final.device_trust.unwrap();
         assert!(trust_final.trusted); // Should be trusted after 30+ days
         assert!(trust_final.trust_score >= 30); // Trust score should be at least 30
-        assert!(trust_final.trust_reasons.contains(&"Established trust".to_string()));
+        assert!(trust_final
+            .trust_reasons
+            .contains(&"Established trust".to_string()));
     }
 }

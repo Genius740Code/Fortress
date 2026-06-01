@@ -3,22 +3,22 @@
 //! This module provides a high-level cache management interface that integrates
 //! all caching components and provides intelligent caching strategies.
 
-use crate::error::{FortressError, Result};
-#[cfg(feature = "distributed-cache")]
-use crate::distributed_cache::{DistributedCache, DistributedCacheConfig};
-use crate::cache_invalidation::{CacheInvalidation, InvalidationConfig, InvalidationReason};
 #[cfg(feature = "distributed-cache")]
 use crate::cache_hybrid::HybridCacheConfig;
-#[cfg(feature = "redis")]
-use crate::cache_redis::{RedisCache, RedisConfig};
+use crate::cache_invalidation::{CacheInvalidation, InvalidationConfig, InvalidationReason};
 #[cfg(feature = "memcached")]
 use crate::cache_memcached::{MemcachedCache, MemcachedConfig};
+#[cfg(feature = "redis")]
+use crate::cache_redis::{RedisCache, RedisConfig};
+#[cfg(feature = "distributed-cache")]
+use crate::distributed_cache::{DistributedCache, DistributedCacheConfig};
+use crate::error::{FortressError, Result};
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use std::collections::HashMap;
-use tokio::sync::RwLock;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 #[cfg(feature = "performance-optimization")]
 use dashmap::DashMap;
@@ -326,9 +326,11 @@ impl FortressCacheManager {
     pub async fn new(config: CacheManagerConfig) -> Result<Self> {
         // Create cache based on type
         let cache = Self::create_cache(&config).await?;
-        
+
         // Create invalidation manager
-        let invalidation_manager = Arc::new(CacheInvalidationManager::new(config.invalidation_config.clone()));
+        let invalidation_manager = Arc::new(CacheInvalidationManager::new(
+            config.invalidation_config.clone(),
+        ));
 
         #[cfg(not(feature = "performance-optimization"))]
         {
@@ -363,7 +365,7 @@ impl FortressCacheManager {
 
             Ok(manager)
         }
-        
+
         #[cfg(feature = "performance-optimization")]
         {
             let manager = Self {
@@ -416,12 +418,15 @@ impl FortressCacheManager {
                 #[cfg(feature = "distributed-cache")]
                 {
                     let cache_config = config.distributed_config.clone().unwrap_or_default();
-                    let cache = crate::distributed_cache::create_distributed_cache(cache_config).await?;
+                    let cache =
+                        crate::distributed_cache::create_distributed_cache(cache_config).await?;
                     Ok(Arc::from(cache))
                 }
                 #[cfg(not(feature = "distributed-cache"))]
                 {
-                    Err(crate::error::FortressError::cache("Distributed cache not available"))
+                    Err(crate::error::FortressError::cache(
+                        "Distributed cache not available",
+                    ))
                 }
             }
             CacheType::Redis => {
@@ -440,7 +445,8 @@ impl FortressCacheManager {
                 #[cfg(not(feature = "redis"))]
                 {
                     return Err(FortressError::storage(
-                        "Redis support not enabled. Enable the 'redis' feature in Cargo.toml".to_string(),
+                        "Redis support not enabled. Enable the 'redis' feature in Cargo.toml"
+                            .to_string(),
                         "cache_manager".to_string(),
                         crate::error::StorageErrorCode::BackendNotAvailable,
                     ));
@@ -456,7 +462,8 @@ impl FortressCacheManager {
                             crate::error::StorageErrorCode::InvalidConfiguration,
                         )
                     })?;
-                    let cache = crate::cache_memcached::create_memcached_cache(memcached_config).await?;
+                    let cache =
+                        crate::cache_memcached::create_memcached_cache(memcached_config).await?;
                     Ok(Arc::from(cache))
                 }
                 #[cfg(not(feature = "memcached"))]
@@ -487,7 +494,9 @@ impl FortressCacheManager {
                 }
                 #[cfg(not(feature = "distributed-cache"))]
                 {
-                    Err(crate::error::FortressError::cache("Distributed cache not available"))
+                    Err(crate::error::FortressError::cache(
+                        "Distributed cache not available",
+                    ))
                 }
             }
         }
@@ -521,7 +530,9 @@ impl FortressCacheManager {
         }
         #[cfg(not(feature = "distributed-cache"))]
         {
-            Err(crate::error::FortressError::cache("Distributed cache not available"))
+            Err(crate::error::FortressError::cache(
+                "Distributed cache not available",
+            ))
         }
     }
 
@@ -531,7 +542,7 @@ impl FortressCacheManager {
         {
             let mut response_times = self.response_times.write().await;
             response_times.push(response_time_us);
-            
+
             // Keep only last 1000 samples
             if response_times.len() > 1000 {
                 response_times.remove(0);
@@ -542,7 +553,7 @@ impl FortressCacheManager {
         {
             let mut operation_count = self.operation_count.write().await;
             *operation_count += 1;
-            
+
             if !success {
                 let mut error_count = self.error_count.write().await;
                 *error_count += 1;
@@ -571,9 +582,15 @@ impl FortressCacheManager {
         sorted_times.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
         let avg_response_time = response_times.iter().sum::<f64>() / response_times.len() as f64;
-        let p95_index = std::cmp::min((sorted_times.len() as f64 * 0.95) as usize, sorted_times.len().saturating_sub(1));
-        let p99_index = std::cmp::min((sorted_times.len() as f64 * 0.99) as usize, sorted_times.len().saturating_sub(1));
-        
+        let p95_index = std::cmp::min(
+            (sorted_times.len() as f64 * 0.95) as usize,
+            sorted_times.len().saturating_sub(1),
+        );
+        let p99_index = std::cmp::min(
+            (sorted_times.len() as f64 * 0.99) as usize,
+            sorted_times.len().saturating_sub(1),
+        );
+
         let p95_response_time = sorted_times.get(p95_index).unwrap_or(&avg_response_time);
         let p99_response_time = sorted_times.get(p99_index).unwrap_or(&avg_response_time);
 
@@ -613,11 +630,15 @@ impl FortressCacheManager {
         match self.cache.health_check().await {
             Ok(healthy) => {
                 if !healthy {
-                    health_status.issues.push("Cache health check failed".to_string());
+                    health_status
+                        .issues
+                        .push("Cache health check failed".to_string());
                 }
             }
             Err(e) => {
-                health_status.issues.push(format!("Cache health check error: {}", e));
+                health_status
+                    .issues
+                    .push(format!("Cache health check error: {}", e));
             }
         }
 
@@ -635,7 +656,8 @@ impl FortressCacheManager {
         if metrics.error_rate > thresholds.error_rate_threshold {
             health_status.issues.push(format!(
                 "Error rate ({:.2}%) exceeds threshold ({:.2}%)",
-                metrics.error_rate * 100.0, thresholds.error_rate_threshold * 100.0
+                metrics.error_rate * 100.0,
+                thresholds.error_rate_threshold * 100.0
             ));
         }
 
@@ -644,7 +666,8 @@ impl FortressCacheManager {
             if cache_stats.hit_ratio < thresholds.hit_ratio_threshold {
                 health_status.warnings.push(format!(
                     "Cache hit ratio ({:.2}%) below threshold ({:.2}%)",
-                    cache_stats.hit_ratio * 100.0, thresholds.hit_ratio_threshold * 100.0
+                    cache_stats.hit_ratio * 100.0,
+                    thresholds.hit_ratio_threshold * 100.0
                 ));
             }
         }
@@ -656,7 +679,7 @@ impl FortressCacheManager {
     #[cfg(feature = "distributed-cache")]
     async fn generate_recommendations(&self) -> Vec<String> {
         let mut recommendations = Vec::new();
-        
+
         let metrics = self.performance_metrics.read().await;
         let thresholds = &self.config.performance_thresholds;
 
@@ -679,14 +702,16 @@ impl FortressCacheManager {
         // Error rate recommendations
         if metrics.error_rate > thresholds.error_rate_threshold {
             recommendations.push(
-                "High error rate detected. Check cache configuration and network connectivity".to_string()
+                "High error rate detected. Check cache configuration and network connectivity"
+                    .to_string(),
             );
         }
 
         // Efficiency recommendations
         if metrics.efficiency_score < 0.7 {
             recommendations.push(
-                "Cache efficiency is suboptimal. Review cache configuration and usage patterns".to_string()
+                "Cache efficiency is suboptimal. Review cache configuration and usage patterns"
+                    .to_string(),
             );
         }
 
@@ -699,10 +724,10 @@ impl CacheManager for FortressCacheManager {
     #[cfg(feature = "distributed-cache")]
     async fn get(&self, key: &str) -> Result<Option<Vec<u8>>> {
         let start_time = std::time::Instant::now();
-        
+
         let result = self.cache.get(key).await;
         let success = result.is_ok();
-        
+
         let elapsed_us = start_time.elapsed().as_micros() as f64;
         self.update_performance_metrics(elapsed_us, success).await;
 
@@ -712,10 +737,10 @@ impl CacheManager for FortressCacheManager {
     #[cfg(feature = "distributed-cache")]
     async fn set(&self, key: &str, value: Vec<u8>, ttl_seconds: Option<u64>) -> Result<()> {
         let start_time = std::time::Instant::now();
-        
+
         let result = self.cache.set(key, value, ttl_seconds).await;
         let success = result.is_ok();
-        
+
         let elapsed_us = start_time.elapsed().as_micros() as f64;
         self.update_performance_metrics(elapsed_us, success).await;
 
@@ -725,15 +750,17 @@ impl CacheManager for FortressCacheManager {
     #[cfg(feature = "distributed-cache")]
     async fn delete(&self, key: &str) -> Result<bool> {
         let start_time = std::time::Instant::now();
-        
+
         let result = self.cache.delete(key).await;
         let success = result.is_ok();
-        
+
         let elapsed_us = start_time.elapsed().as_micros() as f64;
         self.update_performance_metrics(elapsed_us, success).await;
 
         // Also invalidate from invalidation manager
-        let _ = self.invalidation_manager.invalidate_key(key, InvalidationReason::Manual);
+        let _ = self
+            .invalidation_manager
+            .invalidate_key(key, InvalidationReason::Manual);
 
         result
     }
@@ -741,10 +768,10 @@ impl CacheManager for FortressCacheManager {
     #[cfg(feature = "distributed-cache")]
     async fn exists(&self, key: &str) -> Result<bool> {
         let start_time = std::time::Instant::now();
-        
+
         let result = self.cache.exists(key).await;
         let success = result.is_ok();
-        
+
         let elapsed_us = start_time.elapsed().as_micros() as f64;
         self.update_performance_metrics(elapsed_us, success).await;
 
@@ -754,10 +781,10 @@ impl CacheManager for FortressCacheManager {
     #[cfg(feature = "distributed-cache")]
     async fn clear(&self) -> Result<()> {
         let start_time = std::time::Instant::now();
-        
+
         let result = self.cache.clear().await;
         let success = result.is_ok();
-        
+
         let elapsed_us = start_time.elapsed().as_micros() as f64;
         self.update_performance_metrics(elapsed_us, success).await;
 
@@ -767,10 +794,10 @@ impl CacheManager for FortressCacheManager {
     #[cfg(feature = "distributed-cache")]
     async fn mget(&self, keys: &[&str]) -> Result<Vec<Option<Vec<u8>>>> {
         let start_time = std::time::Instant::now();
-        
+
         let result = self.cache.mget(keys).await;
         let success = result.is_ok();
-        
+
         let elapsed_us = start_time.elapsed().as_micros() as f64;
         self.update_performance_metrics(elapsed_us, success).await;
 
@@ -780,10 +807,10 @@ impl CacheManager for FortressCacheManager {
     #[cfg(feature = "distributed-cache")]
     async fn mset(&self, entries: &[(&str, Vec<u8>, Option<u64>)]) -> Result<()> {
         let start_time = std::time::Instant::now();
-        
+
         let result = self.cache.mset(entries).await;
         let success = result.is_ok();
-        
+
         let elapsed_us = start_time.elapsed().as_micros() as f64;
         self.update_performance_metrics(elapsed_us, success).await;
 
@@ -793,10 +820,10 @@ impl CacheManager for FortressCacheManager {
     #[cfg(feature = "distributed-cache")]
     async fn increment(&self, key: &str, delta: i64) -> Result<i64> {
         let start_time = std::time::Instant::now();
-        
+
         let result = self.cache.increment(key, delta).await;
         let success = result.is_ok();
-        
+
         let elapsed_us = start_time.elapsed().as_micros() as f64;
         self.update_performance_metrics(elapsed_us, success).await;
 
@@ -806,7 +833,7 @@ impl CacheManager for FortressCacheManager {
     #[cfg(feature = "distributed-cache")]
     async fn get_statistics(&self) -> Result<CacheManagerStatistics> {
         self.update_health_status().await;
-        
+
         let cache_stats = self.cache.get_statistics().await?;
         let invalidation_stats = self.invalidation_manager.get_invalidation_stats()?;
         let performance_metrics = self.performance_metrics.read().await.clone();
@@ -830,7 +857,7 @@ impl CacheManager for FortressCacheManager {
     #[cfg(feature = "distributed-cache")]
     async fn reset_statistics(&self) -> Result<()> {
         self.cache.reset_statistics().await?;
-        
+
         // Reset performance metrics
         {
             let mut metrics = self.performance_metrics.write().await;
@@ -849,12 +876,12 @@ impl CacheManager for FortressCacheManager {
             let mut response_times = self.response_times.write().await;
             response_times.clear();
         }
-        
+
         {
             let mut error_count = self.error_count.write().await;
             *error_count = 0;
         }
-        
+
         {
             let mut operation_count = self.operation_count.write().await;
             *operation_count = 0;
@@ -888,12 +915,13 @@ impl CacheManager for FortressCacheManager {
     }
 
     async fn invalidate_by_tag(&self, tag: &str) -> Result<usize> {
-        self.invalidation_manager.invalidate_by_tag(tag, InvalidationReason::Manual)
+        self.invalidation_manager
+            .invalidate_by_tag(tag, InvalidationReason::Manual)
     }
 
     async fn warm_up(&self, keys: Vec<String>) -> Result<usize> {
         let mut warmed_count = 0;
-        
+
         for key in keys {
             // In a real implementation, you would load the actual values
             // For now, we'll just check if they exist and cache them
@@ -901,7 +929,7 @@ impl CacheManager for FortressCacheManager {
                 warmed_count += 1;
             }
         }
-        
+
         Ok(warmed_count)
     }
 
@@ -915,7 +943,7 @@ impl CacheManager for FortressCacheManager {
         // Return default statistics when distributed cache is not available
         let performance_metrics = self.performance_metrics.read().await.clone();
         let health_status = self.health_status.read().await.clone();
-        
+
         Ok(CacheManagerStatistics {
             cache_stats_compat: CacheStatsCompat {
                 sets: 0,
@@ -941,7 +969,9 @@ impl CacheManager for FortressCacheManager {
     async fn health_check(&self) -> Result<HealthStatus> {
         let mut health_status = self.health_status.read().await.clone();
         health_status.healthy = true;
-        health_status.issues.push("Distributed cache not available".to_string());
+        health_status
+            .issues
+            .push("Distributed cache not available".to_string());
         Ok(health_status)
     }
 
@@ -1119,9 +1149,10 @@ impl CacheManager for MockCacheManager {
 
     async fn increment(&self, key: &str, delta: i64) -> Result<i64> {
         let mut cache = self.cache.write().await;
-        let current_value = cache.get(key).map(|bytes| {
-            String::from_utf8_lossy(bytes).parse::<i64>().unwrap_or(0)
-        }).unwrap_or(0);
+        let current_value = cache
+            .get(key)
+            .map(|bytes| String::from_utf8_lossy(bytes).parse::<i64>().unwrap_or(0))
+            .unwrap_or(0);
         let new_value = current_value + delta;
         cache.insert(key.to_string(), new_value.to_string().as_bytes().to_vec());
         Ok(new_value)
@@ -1224,15 +1255,15 @@ mod tests {
         // Test set and get
         let key = "test_key";
         let value = b"test_value".to_vec();
-        
+
         manager.set(key, value.clone(), None).await.unwrap();
         let retrieved = manager.get(key).await.unwrap();
-        
+
         assert_eq!(retrieved, Some(value));
-        
+
         // Test exists
         assert!(manager.exists(key).await.unwrap());
-        
+
         // Test delete
         assert!(manager.delete(key).await.unwrap());
         assert!(!manager.exists(key).await.unwrap());
@@ -1246,17 +1277,17 @@ mod tests {
         let key = "tagged_key";
         let value = b"tagged_value".to_vec();
         let tags = vec!["user".to_string(), "active".to_string()];
-        
+
         // Add tags
         manager.add_tags(key, &tags).await.unwrap();
-        
+
         // Set value
         manager.set(key, value, None).await.unwrap();
-        
+
         // Invalidate by tag
         let count = manager.invalidate_by_tag("user").await.unwrap();
         assert_eq!(count, 1);
-        
+
         // Value should be gone
         assert!(manager.get(key).await.unwrap().is_none());
     }
@@ -1270,7 +1301,7 @@ mod tests {
         manager.set("key1", b"value1".to_vec(), None).await.unwrap();
         manager.get("key1").await.unwrap();
         manager.get("nonexistent").await.unwrap();
-        
+
         let stats = manager.get_statistics().await.unwrap();
         assert!(stats.cache_stats.sets > 0);
         assert!(stats.cache_stats.hits > 0);
@@ -1298,12 +1329,12 @@ mod tests {
             ("key2", b"value2".to_vec(), None),
             ("key3", b"value3".to_vec(), None),
         ];
-        
+
         manager.mset(&entries).await.unwrap();
-        
+
         let keys = vec!["key1", "key2", "key3"];
         let results = manager.mget(&keys).await.unwrap();
-        
+
         assert_eq!(results.len(), 3);
         assert_eq!(results[0], Some(b"value1".to_vec()));
         assert_eq!(results[1], Some(b"value2".to_vec()));

@@ -1,23 +1,23 @@
 //! Cluster Discovery Module
-//! 
+//!
 //! This module provides automatic discovery of Fortress cluster nodes
 //! through multiple mechanisms including Kubernetes, DNS, Consul, and static configuration.
 
+use crate::error::{FortressError, Result};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use serde::{Serialize, Deserialize};
-use chrono::{DateTime, Utc};
-use crate::error::{FortressError, Result};
 
-pub mod kubernetes;
-pub mod dns;
 pub mod consul;
+pub mod dns;
+pub mod kubernetes;
 pub mod static_config;
 
-pub use kubernetes::KubernetesDiscovery;
-pub use dns::DnsDiscovery;
 pub use consul::ConsulDiscovery;
+pub use dns::DnsDiscovery;
+pub use kubernetes::KubernetesDiscovery;
 pub use static_config::StaticDiscovery;
 
 /// Node information discovered by discovery mechanisms
@@ -68,16 +68,16 @@ pub enum DiscoveryMechanism {
 pub trait DiscoveryProvider: Send + Sync {
     /// Name of the discovery provider
     fn name(&self) -> &str;
-    
+
     /// Initialize the discovery provider
     async fn initialize(&mut self, config: &DiscoveryConfig) -> Result<()>;
-    
+
     /// Discover nodes
     async fn discover_nodes(&self) -> Result<Vec<DiscoveredNode>>;
-    
+
     /// Check if a node is healthy
     async fn check_node_health(&self, node: &DiscoveredNode) -> Result<NodeHealthStatus>;
-    
+
     /// Shutdown the discovery provider
     async fn shutdown(&mut self) -> Result<()>;
 }
@@ -102,7 +102,11 @@ impl DiscoveryManager {
     }
 
     /// Add a discovery provider
-    pub async fn add_provider(&mut self, name: String, provider: Box<dyn DiscoveryProvider>) -> Result<()> {
+    pub async fn add_provider(
+        &mut self,
+        name: String,
+        provider: Box<dyn DiscoveryProvider>,
+    ) -> Result<()> {
         let mut providers = self.providers.write().await;
         providers.insert(name, provider);
         Ok(())
@@ -111,10 +115,11 @@ impl DiscoveryManager {
     /// Initialize all providers
     pub async fn initialize(&mut self) -> Result<()> {
         let mut providers = self.providers.write().await;
-        
+
         for (name, provider) in providers.iter_mut() {
-            provider.initialize(&self.config).await
-                .map_err(|e| FortressError::discovery(format!("Failed to initialize provider {}: {}", name, e)))?;
+            provider.initialize(&self.config).await.map_err(|e| {
+                FortressError::discovery(format!("Failed to initialize provider {}: {}", name, e))
+            })?;
         }
 
         Ok(())
@@ -163,7 +168,8 @@ impl DiscoveryManager {
     /// Get nodes by region
     pub async fn get_nodes_by_region(&self, region: &str) -> Vec<DiscoveredNode> {
         let nodes = self.nodes.read().await;
-        nodes.values()
+        nodes
+            .values()
             .filter(|node| node.region.as_ref().map_or(false, |r| r == region))
             .cloned()
             .collect()
@@ -172,7 +178,8 @@ impl DiscoveryManager {
     /// Get healthy nodes only
     pub async fn get_healthy_nodes(&self) -> Vec<DiscoveredNode> {
         let nodes = self.nodes.read().await;
-        nodes.values()
+        nodes
+            .values()
             .filter(|node| node.health_status == NodeHealthStatus::Healthy)
             .cloned()
             .collect()
@@ -228,15 +235,15 @@ impl DiscoveryManager {
 
         let task = tokio::spawn(async move {
             let mut interval = tokio::time::interval(poll_interval);
-            
+
             loop {
                 interval.tick().await;
-                
+
                 tracing::debug!("Running background node discovery");
-                
+
                 let mut all_nodes = Vec::new();
                 let providers_guard = providers.read().await;
-                
+
                 for (name, provider) in providers_guard.iter() {
                     match provider.discover_nodes().await {
                         Ok(mut discovered_nodes) => {
@@ -246,7 +253,11 @@ impl DiscoveryManager {
                             all_nodes.extend(discovered_nodes);
                         }
                         Err(e) => {
-                            tracing::warn!("Background discovery failed for provider {}: {}", name, e);
+                            tracing::warn!(
+                                "Background discovery failed for provider {}: {}",
+                                name,
+                                e
+                            );
                         }
                     }
                 }
@@ -266,7 +277,10 @@ impl DiscoveryManager {
                     *last_discovery_guard = Some(Utc::now());
                 }
 
-                tracing::debug!("Background discovery completed, found {} nodes", all_nodes.len());
+                tracing::debug!(
+                    "Background discovery completed, found {} nodes",
+                    all_nodes.len()
+                );
             }
         });
 
@@ -276,7 +290,7 @@ impl DiscoveryManager {
     /// Shutdown the discovery manager
     pub async fn shutdown(&mut self) -> Result<()> {
         let mut providers = self.providers.write().await;
-        
+
         for (name, provider) in providers.iter_mut() {
             if let Err(e) = provider.shutdown().await {
                 tracing::warn!("Failed to shutdown provider {}: {}", name, e);
@@ -322,10 +336,10 @@ mod tests {
     async fn test_discovery_manager_creation() {
         let config = DiscoveryConfig::default();
         let manager = DiscoveryManager::new(config);
-        
+
         let nodes = manager.get_cached_nodes().await;
         assert!(nodes.is_empty());
-        
+
         let last_discovery = manager.get_last_discovery_time().await;
         assert!(last_discovery.is_none());
     }

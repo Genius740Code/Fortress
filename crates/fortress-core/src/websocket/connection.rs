@@ -1,11 +1,11 @@
 //! WebSocket connection management
 
 use crate::error::{FortressError, Result};
-use crate::websocket::message::{WebSocketMessage, MessageType};
+use crate::websocket::message::{MessageType, WebSocketMessage};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::{mpsc, RwLock};
 use tokio_tungstenite::{tungstenite::Message, WebSocketStream};
 use uuid::Uuid;
 
@@ -115,7 +115,7 @@ impl ConnectionManager {
     /// Create new connection manager
     pub fn new() -> Self {
         let (broadcast_sender, _) = tokio::sync::broadcast::channel(1000);
-        
+
         Self {
             connections: Arc::new(RwLock::new(HashMap::new())),
             stats: Arc::new(RwLock::new(ConnectionStats::default())),
@@ -125,10 +125,10 @@ impl ConnectionManager {
 
     /// Add new connection
     pub async fn add_connection(
-        &self, 
+        &self,
         stream: WebSocketStream<tokio::net::TcpStream>,
         client_ip: String,
-        user_agent: Option<String>
+        user_agent: Option<String>,
     ) -> Result<Arc<WebSocketConnection>> {
         let connection_id = Uuid::new_v4().to_string();
         let info = ConnectionInfo {
@@ -155,8 +155,11 @@ impl ConnectionManager {
         });
 
         // Add to connections map
-        self.connections.write().await.insert(connection_id.to_string(), connection.clone());
-        
+        self.connections
+            .write()
+            .await
+            .insert(connection_id.to_string(), connection.clone());
+
         // Update statistics
         {
             let mut stats = self.stats.write().await;
@@ -176,7 +179,7 @@ impl ConnectionManager {
         if let Some(connection) = self.connections.write().await.remove(connection_id) {
             // Close connection
             let _ = connection.close().await;
-            
+
             // Update statistics
             {
                 let mut stats = self.stats.write().await;
@@ -184,7 +187,7 @@ impl ConnectionManager {
                     stats.active_connections -= 1;
                 }
             }
-            
+
             tracing::info!("WebSocket connection removed: {}", connection_id);
         }
     }
@@ -201,30 +204,42 @@ impl ConnectionManager {
 
     /// Get authenticated connections
     pub async fn get_authenticated_connections(&self) -> Vec<Arc<WebSocketConnection>> {
-        let connections = self.connections.read().await.values().cloned().collect::<Vec<_>>();
+        let connections = self
+            .connections
+            .read()
+            .await
+            .values()
+            .cloned()
+            .collect::<Vec<_>>();
         let mut authenticated_connections = Vec::new();
-        
+
         for conn in connections {
             if conn.is_authenticated().await {
                 authenticated_connections.push(conn);
             }
         }
-        
+
         authenticated_connections
     }
 
     /// Get connections by user ID
     pub async fn get_connections_by_user(&self, user_id: &str) -> Vec<Arc<WebSocketConnection>> {
-        let connections = self.connections.read().await.values().cloned().collect::<Vec<_>>();
+        let connections = self
+            .connections
+            .read()
+            .await
+            .values()
+            .cloned()
+            .collect::<Vec<_>>();
         let mut matching_connections = Vec::new();
-        
+
         for conn in connections {
             let info = conn.info.read().await;
             if info.user_id.as_ref().map_or(false, |uid| uid == user_id) {
                 matching_connections.push(conn.clone());
             }
         }
-        
+
         matching_connections
     }
 
@@ -235,23 +250,23 @@ impl ConnectionManager {
             target_connections: None,
             exclude_connections: Vec::new(),
         };
-        
+
         let _ = self.broadcast_sender.send(broadcast_msg);
         Ok(())
     }
 
     /// Send message to specific connections
     pub async fn send_to_connections(
-        &self, 
-        message: WebSocketMessage, 
-        connection_ids: Vec<String>
+        &self,
+        message: WebSocketMessage,
+        connection_ids: Vec<String>,
     ) -> Result<()> {
         let broadcast_msg = BroadcastMessage {
             message: Arc::new(message),
             target_connections: Some(connection_ids),
             exclude_connections: Vec::new(),
         };
-        
+
         let _ = self.broadcast_sender.send(broadcast_msg);
         Ok(())
     }
@@ -267,14 +282,14 @@ impl ConnectionManager {
             let connections = self.connections.read().await;
             let now = Instant::now();
             let mut idle_connections = Vec::new();
-            
+
             for (id, conn) in connections.iter() {
                 let info = conn.info.read().await;
                 if now.duration_since(info.last_activity) > timeout {
                     idle_connections.push(id.clone());
                 }
             }
-            
+
             idle_connections
         };
 
@@ -287,11 +302,11 @@ impl ConnectionManager {
     pub async fn start_broadcast_processor(&self) {
         let mut broadcast_receiver = self.broadcast_sender.subscribe();
         let connections = self.connections.clone();
-        
+
         tokio::spawn(async move {
             while let Ok(broadcast_msg) = broadcast_receiver.recv().await {
                 let connections_guard = connections.read().await;
-                
+
                 let target_connections = match broadcast_msg.target_connections {
                     Some(ids) => ids,
                     None => connections_guard.keys().cloned().collect(),
@@ -301,9 +316,12 @@ impl ConnectionManager {
                     if broadcast_msg.exclude_connections.contains(&connection_id) {
                         continue;
                     }
-                    
+
                     if let Some(connection) = connections_guard.get(&connection_id) {
-                        if let Err(e) = connection.send_message((*broadcast_msg.message).clone()).await {
+                        if let Err(e) = connection
+                            .send_message((*broadcast_msg.message).clone())
+                            .await
+                        {
                             tracing::error!("Failed to send message to {}: {}", connection_id, e);
                         }
                     }
@@ -317,13 +335,13 @@ impl WebSocketConnection {
     /// Start connection message processing
     pub async fn start_processing(&self) -> Result<()> {
         let connection = self.clone();
-        
+
         tokio::spawn(async move {
             if let Err(e) = connection.process_messages().await {
                 tracing::error!("Connection processing error: {}", e);
             }
         });
-        
+
         Ok(())
     }
 
@@ -331,14 +349,14 @@ impl WebSocketConnection {
     async fn process_messages(&self) -> Result<()> {
         let mut receiver = {
             let mut receiver_guard = self.message_receiver.write().await;
-            receiver_guard.take().ok_or_else(|| {
-                FortressError::websocket("Message receiver already taken")
-            })?
+            receiver_guard
+                .take()
+                .ok_or_else(|| FortressError::websocket("Message receiver already taken"))?
         };
 
         while let Some(message) = receiver.recv().await {
             self.update_last_activity().await;
-            
+
             match message.message_type {
                 MessageType::Ping => {
                     let pong = WebSocketMessage::pong();
@@ -361,10 +379,14 @@ impl WebSocketConnection {
     pub async fn send_message(&self, message: WebSocketMessage) -> Result<()> {
         let json = message.to_json()?;
         let _ws_message = Message::Text(json);
-        
+
         // Update statistics would be handled by the connection manager
-        tracing::debug!("Sending message to connection {}: {}", self.info.read().await.id, message.id);
-        
+        tracing::debug!(
+            "Sending message to connection {}: {}",
+            self.info.read().await.id,
+            message.id
+        );
+
         // In real implementation, this would send through the WebSocket stream
         // For now, we'll just log it
         Ok(())
@@ -373,13 +395,13 @@ impl WebSocketConnection {
     /// Close connection
     pub async fn close(&self) -> Result<()> {
         *self.state.write().await = ConnectionState::Disconnected;
-        
+
         // Close WebSocket stream if available
         if let Some(ref _stream) = self.stream {
             // Close the stream
             // In real implementation: stream.close(None).await
         }
-        
+
         Ok(())
     }
 
@@ -401,7 +423,10 @@ impl WebSocketConnection {
     pub async fn update_last_activity(&self) {
         // This would update the connection info
         // For now, we'll just log it
-        tracing::debug!("Updating last activity for connection {}", self.info.read().await.id);
+        tracing::debug!(
+            "Updating last activity for connection {}",
+            self.info.read().await.id
+        );
     }
 
     /// Get connection state
@@ -412,13 +437,21 @@ impl WebSocketConnection {
     /// Add subscription ID
     pub async fn add_subscription(&self, subscription_id: String) {
         // Add to connection's subscription list
-        tracing::debug!("Adding subscription {} to connection {}", subscription_id, self.info.read().await.id);
+        tracing::debug!(
+            "Adding subscription {} to connection {}",
+            subscription_id,
+            self.info.read().await.id
+        );
     }
 
     /// Remove subscription ID
     pub async fn remove_subscription(&self, subscription_id: &str) {
         // Remove from connection's subscription list
-        tracing::debug!("Removing subscription {} from connection {}", subscription_id, self.info.read().await.id);
+        tracing::debug!(
+            "Removing subscription {} from connection {}",
+            subscription_id,
+            self.info.read().await.id
+        );
     }
 }
 

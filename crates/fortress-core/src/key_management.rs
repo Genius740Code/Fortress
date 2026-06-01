@@ -5,7 +5,7 @@
 //! with the key system without needing to know about specific implementations.
 
 use crate::error::Result;
-use crate::key::{KeyManager, InMemoryKeyManager, SecureKey, KeyMetadata, KeyId};
+use crate::key::{InMemoryKeyManager, KeyId, KeyManager, KeyMetadata, SecureKey};
 use async_trait::async_trait;
 use std::sync::Arc;
 
@@ -33,7 +33,8 @@ impl UnifiedKeyManager {
     /// Get all key IDs with their metadata for richer completions
     pub async fn list_keys_with_metadata(&self) -> Result<Vec<(String, KeyMetadata)>> {
         let keys = self.inner.list_keys().await?;
-        Ok(keys.into_iter()
+        Ok(keys
+            .into_iter()
             .map(|(id, metadata)| (id.to_string(), metadata))
             .collect())
     }
@@ -41,8 +42,14 @@ impl UnifiedKeyManager {
     /// Filter keys by algorithm type
     pub async fn list_keys_by_algorithm(&self, algorithm: &str) -> Result<Vec<String>> {
         let keys = self.inner.list_keys().await?;
-        Ok(keys.into_iter()
-            .filter(|(_, metadata)| metadata.algorithm.to_lowercase().contains(&algorithm.to_lowercase()))
+        Ok(keys
+            .into_iter()
+            .filter(|(_, metadata)| {
+                metadata
+                    .algorithm
+                    .to_lowercase()
+                    .contains(&algorithm.to_lowercase())
+            })
             .map(|(id, _)| id.to_string())
             .collect())
     }
@@ -51,10 +58,9 @@ impl UnifiedKeyManager {
     pub async fn list_active_keys(&self) -> Result<Vec<String>> {
         let keys = self.inner.list_keys().await?;
         let now = chrono::Utc::now();
-        Ok(keys.into_iter()
-            .filter(|(_, metadata)| {
-                metadata.expires_at > now
-            })
+        Ok(keys
+            .into_iter()
+            .filter(|(_, metadata)| metadata.expires_at > now)
             .map(|(id, _)| id.to_string())
             .collect())
     }
@@ -62,11 +68,19 @@ impl UnifiedKeyManager {
 
 #[async_trait]
 impl KeyManager for UnifiedKeyManager {
-    async fn generate_key(&self, algorithm: &dyn crate::encryption::EncryptionAlgorithm) -> Result<SecureKey> {
+    async fn generate_key(
+        &self,
+        algorithm: &dyn crate::encryption::EncryptionAlgorithm,
+    ) -> Result<SecureKey> {
         self.inner.generate_key(algorithm).await
     }
 
-    async fn store_key(&self, key_id: &KeyId, key: &SecureKey, metadata: &KeyMetadata) -> Result<()> {
+    async fn store_key(
+        &self,
+        key_id: &KeyId,
+        key: &SecureKey,
+        metadata: &KeyMetadata,
+    ) -> Result<()> {
         self.inner.store_key(key_id, key, metadata).await
     }
 
@@ -82,12 +96,22 @@ impl KeyManager for UnifiedKeyManager {
         self.inner.list_keys().await
     }
 
-    async fn rotate_key(&self, key_id: &KeyId, algorithm: &dyn crate::encryption::EncryptionAlgorithm) -> Result<()> {
+    async fn rotate_key(
+        &self,
+        key_id: &KeyId,
+        algorithm: &dyn crate::encryption::EncryptionAlgorithm,
+    ) -> Result<()> {
         self.inner.rotate_key(key_id, algorithm).await
     }
 
-    async fn rotate_key_with_zero_downtime(&self, key_id: &KeyId, algorithm: &dyn crate::encryption::EncryptionAlgorithm) -> Result<()> {
-        self.inner.rotate_key_with_zero_downtime(key_id, algorithm).await
+    async fn rotate_key_with_zero_downtime(
+        &self,
+        key_id: &KeyId,
+        algorithm: &dyn crate::encryption::EncryptionAlgorithm,
+    ) -> Result<()> {
+        self.inner
+            .rotate_key_with_zero_downtime(key_id, algorithm)
+            .await
     }
 
     async fn key_exists(&self, key_id: &KeyId) -> Result<bool> {
@@ -102,20 +126,40 @@ impl KeyManager for UnifiedKeyManager {
         self.inner.get_active_key_version(key_id).await
     }
 
-    async fn initiate_key_transition(&self, key_id: &KeyId, algorithm: &dyn crate::encryption::EncryptionAlgorithm) -> Result<u32> {
+    async fn initiate_key_transition(
+        &self,
+        key_id: &KeyId,
+        algorithm: &dyn crate::encryption::EncryptionAlgorithm,
+    ) -> Result<u32> {
         self.inner.initiate_key_transition(key_id, algorithm).await
     }
 
     async fn complete_key_transition(&self, key_id: &KeyId, new_version: u32) -> Result<()> {
-        self.inner.complete_key_transition(key_id, new_version).await
+        self.inner
+            .complete_key_transition(key_id, new_version)
+            .await
     }
 
-    async fn validate_dual_keys(&self, key_id: &KeyId, old_version: u32, new_version: u32) -> Result<bool> {
-        self.inner.validate_dual_keys(key_id, old_version, new_version).await
+    async fn validate_dual_keys(
+        &self,
+        key_id: &KeyId,
+        old_version: u32,
+        new_version: u32,
+    ) -> Result<bool> {
+        self.inner
+            .validate_dual_keys(key_id, old_version, new_version)
+            .await
     }
 
-    async fn rollback_key_transition(&self, key_id: &KeyId, old_version: u32, new_version: u32) -> Result<()> {
-        self.inner.rollback_key_transition(key_id, old_version, new_version).await
+    async fn rollback_key_transition(
+        &self,
+        key_id: &KeyId,
+        old_version: u32,
+        new_version: u32,
+    ) -> Result<()> {
+        self.inner
+            .rollback_key_transition(key_id, old_version, new_version)
+            .await
     }
 
     async fn needs_rotation(&self, key_id: &KeyId) -> Result<bool> {
@@ -131,11 +175,19 @@ impl KeyManager for UnifiedKeyManager {
     }
 
     async fn validate_post_switch(&self, key_id: &KeyId, expected_version: u32) -> Result<()> {
-        self.inner.validate_post_switch(key_id, expected_version).await
+        self.inner
+            .validate_post_switch(key_id, expected_version)
+            .await
     }
 
-    async fn perform_key_transition_initiation(&self, key_id: &KeyId, algorithm: &dyn crate::encryption::EncryptionAlgorithm) -> Result<u32> {
-        self.inner.perform_key_transition_initiation(key_id, algorithm).await
+    async fn perform_key_transition_initiation(
+        &self,
+        key_id: &KeyId,
+        algorithm: &dyn crate::encryption::EncryptionAlgorithm,
+    ) -> Result<u32> {
+        self.inner
+            .perform_key_transition_initiation(key_id, algorithm)
+            .await
     }
 }
 
@@ -152,12 +204,12 @@ mod tests {
     #[tokio::test]
     async fn test_list_key_ids() {
         let manager = UnifiedKeyManager::new().await.unwrap();
-        
+
         // Generate a test key
         let algorithm = Aegis256::new();
         let key = manager.generate_key(&algorithm).await.unwrap();
         let key_id = uuid::Uuid::new_v4().to_string();
-        
+
         let metadata = KeyMetadata::new(
             key_id.clone(),
             algorithm.name().to_string(),
@@ -167,15 +219,15 @@ mod tests {
             "encryption".to_string(),
             crate::encryption::PerformanceProfile::Balanced,
         );
-        
+
         // Store the key
         manager.store_key(&key_id, &key, &metadata).await.unwrap();
-        
+
         // List key IDs
         let key_ids = manager.list_key_ids().await.unwrap();
         assert!(!key_ids.is_empty());
         assert!(key_ids.contains(&key_id.to_string()));
-        
+
         // Clean up
         manager.delete_key(&key_id).await.unwrap();
     }
@@ -183,12 +235,12 @@ mod tests {
     #[tokio::test]
     async fn test_list_keys_by_algorithm() {
         let manager = UnifiedKeyManager::new().await.unwrap();
-        
+
         // Generate test keys with different algorithms
         let algorithm1 = Aegis256::new();
         let key1 = manager.generate_key(&algorithm1).await.unwrap();
         let key_id1 = uuid::Uuid::new_v4().to_string();
-        
+
         let metadata1 = KeyMetadata::new(
             key_id1.clone(),
             algorithm1.name().to_string(),
@@ -198,14 +250,17 @@ mod tests {
             "encryption".to_string(),
             crate::encryption::PerformanceProfile::Balanced,
         );
-        
-        manager.store_key(&key_id1, &key1, &metadata1).await.unwrap();
-        
+
+        manager
+            .store_key(&key_id1, &key1, &metadata1)
+            .await
+            .unwrap();
+
         // List keys by algorithm
         let aegis_keys = manager.list_keys_by_algorithm("aegis").await.unwrap();
         assert!(!aegis_keys.is_empty());
         assert!(aegis_keys.contains(&key_id1.to_string()));
-        
+
         // Clean up
         manager.delete_key(&key_id1).await.unwrap();
     }

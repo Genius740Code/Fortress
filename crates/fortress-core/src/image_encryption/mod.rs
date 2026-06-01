@@ -8,33 +8,34 @@
 //! - Streaming encryption for large images
 //! - Multi-format support (JPEG, PNG, TIFF, BMP, WebP, HEIC, DICOM, RAW)
 
+pub mod api;
 pub mod encryptor;
 pub mod formats;
 pub mod metadata;
 pub mod streaming;
 pub mod thumbnails;
-pub mod api;
 
-use crate::error::{FortressError, Result};
-use crate::encryption::EncryptedData;
 use crate::compliance::framework::DataClassification;
+use crate::encryption::EncryptedData;
+use crate::error::{FortressError, Result};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use chrono::{DateTime, Utc};
 
+pub use api::{
+    DecryptImageRequest, DecryptImageResponse, DeleteImageRequest, DeleteImageResponse,
+    EncryptImageRequest, EncryptImageResponse, GenerateThumbnailsRequest,
+    GenerateThumbnailsResponse, GetImageMetadataRequest, GetImageMetadataResponse,
+    GetStreamingStatusRequest, GetStreamingStatusResponse, ImageEncryptionService, ImageStore,
+    KeyManager, SearchImagesRequest, SearchImagesResponse, StartStreamingRequest,
+    StartStreamingResponse,
+};
 /// Re-export main components
 pub use encryptor::ImageEncryptor;
 pub use formats::{ImageFormat, ImageFormatDetector};
-pub use metadata::{ImageMetadata, EncryptedMetadata};
-pub use streaming::{StreamingImageEncryptor, ChunkConfig};
-pub use thumbnails::{ThumbnailGenerator, ThumbnailSize, EncryptedThumbnail};
-pub use api::{
-    ImageEncryptionService, ImageStore, KeyManager,
-    EncryptImageRequest, EncryptImageResponse, DecryptImageRequest, DecryptImageResponse,
-    GenerateThumbnailsRequest, GenerateThumbnailsResponse, StartStreamingRequest, StartStreamingResponse,
-    GetStreamingStatusRequest, GetStreamingStatusResponse, SearchImagesRequest, SearchImagesResponse,
-    GetImageMetadataRequest, GetImageMetadataResponse, DeleteImageRequest, DeleteImageResponse,
-};
+pub use metadata::{EncryptedMetadata, ImageMetadata};
+pub use streaming::{ChunkConfig, StreamingImageEncryptor};
+pub use thumbnails::{EncryptedThumbnail, ThumbnailGenerator, ThumbnailSize};
 
 /// Image encryption options
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -351,31 +352,31 @@ pub enum ImageEncryptionError {
     #[error("Unsupported image format: {0}")]
     /// Unsupported image format error
     UnsupportedFormat(String),
-    
+
     #[error("Corrupted image data: {0}")]
     /// Corrupted image data error
     CorruptedData(String),
-    
+
     #[error("Invalid image dimensions: {0}x{1}")]
     /// Invalid image dimensions error
     InvalidDimensions(u32, u32),
-    
+
     #[error("Metadata extraction failed: {0}")]
     /// Metadata extraction error
     MetadataError(String),
-    
+
     #[error("Thumbnail generation failed: {0}")]
     /// Thumbnail generation error
     ThumbnailError(String),
-    
+
     #[error("Streaming error: {0}")]
     /// Streaming operation error
     StreamingError(String),
-    
+
     #[error("Format conversion failed: {0}")]
     /// Format conversion error
     ConversionError(String),
-    
+
     #[error("Processing error: {0}")]
     /// General processing error
     ProcessingError(String),
@@ -394,33 +395,33 @@ impl From<ImageEncryptionError> for FortressError {
 /// Utility functions
 pub mod utils {
     use super::*;
-    
+
     /// Detect image format from bytes
     pub fn detect_image_format(data: &[u8]) -> Result<ImageFormat> {
         ImageFormatDetector::detect(data)
     }
-    
+
     /// Validate image data integrity
     pub fn validate_image_data(data: &[u8], format: ImageFormat) -> Result<bool> {
         format.validate_data(data)
     }
-    
+
     /// Calculate optimal chunk size based on image size
     pub fn calculate_chunk_size(image_size: usize) -> usize {
         // Use 1MB chunks for small images, up to 10MB for large ones
         let base_chunk = 1024 * 1024; // 1MB
         let max_chunk = 10 * 1024 * 1024; // 10MB
-        
+
         if image_size <= base_chunk {
             base_chunk
         } else {
             std::cmp::min(base_chunk * (image_size / base_chunk), max_chunk)
         }
     }
-    
+
     /// Generate image fingerprint for deduplication
     pub fn generate_fingerprint(data: &[u8]) -> String {
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
         let hash = Sha256::digest(data);
         format!("{:x}", hash)
     }
@@ -429,7 +430,7 @@ pub mod utils {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_encryption_options_default() {
         let options = EncryptionOptions::default();
@@ -438,7 +439,7 @@ mod tests {
         assert!(options.encrypt_metadata);
         assert_eq!(options.chunk_size, Some(1024 * 1024));
     }
-    
+
     #[test]
     fn test_data_classification_security_level() {
         assert_eq!(DataClassification::Public.security_level(), 1);
@@ -446,7 +447,7 @@ mod tests {
         assert_eq!(DataClassification::Confidential.security_level(), 3);
         assert_eq!(DataClassification::Restricted.security_level(), 4);
     }
-    
+
     #[test]
     fn test_access_permissions_default() {
         let perms = AccessPermissions::default();

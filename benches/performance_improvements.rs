@@ -3,7 +3,7 @@
 //! This benchmarks the performance improvements made to:
 //! 1. Versioned Key Cache (cached vs format! strings)
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 
 fn bench_versioned_key_cache(c: &mut Criterion) {
     let mut group = c.benchmark_group("versioned_key_cache");
@@ -30,8 +30,5 @@ fn bench_versioned_key_cache(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(
-    benches,
-    bench_versioned_key_cache
-);
+criterion_group!(benches, bench_versioned_key_cache);
 criterion_main!(benches);

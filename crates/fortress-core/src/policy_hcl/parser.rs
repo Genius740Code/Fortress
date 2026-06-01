@@ -3,14 +3,14 @@
 //! This module provides functionality to parse HCL (HashiCorp Configuration Language)
 //! policy files and convert them into structured ParsedPolicy objects.
 
-use std::collections::HashMap;
-use serde_json::Value;
 use regex::Regex;
+use serde_json::Value;
+use std::collections::HashMap;
 
 use crate::error::{FortressError, Result};
 use crate::policy_hcl::types::{
-    ParsedPolicy, PolicyConstraint, ConstraintOperator, ParameterType,
-    PolicyCompilationError, PolicyErrorType, PolicyValidationResult,
+    ConstraintOperator, ParameterType, ParsedPolicy, PolicyCompilationError, PolicyConstraint,
+    PolicyErrorType, PolicyValidationResult,
 };
 
 /// HCL policy parser
@@ -29,10 +29,7 @@ impl HclPolicyParser {
 
     /// Parse HCL policy string
     pub fn parse(&mut self, hcl_content: &str) -> Result<ParsedPolicy> {
-        let mut policy = ParsedPolicy::new(
-            "unnamed".to_string(),
-            "*".to_string(),
-        );
+        let mut policy = ParsedPolicy::new("unnamed".to_string(), "*".to_string());
 
         // Parse HCL content line by line
         let lines: Vec<&str> = hcl_content.lines().collect();
@@ -41,7 +38,7 @@ impl HclPolicyParser {
 
         for (line_num, line) in lines.iter().enumerate() {
             let trimmed = line.trim();
-            
+
             // Skip empty lines and comments
             if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with("//") {
                 continue;
@@ -75,7 +72,12 @@ impl HclPolicyParser {
     }
 
     /// Parse top-level policy attributes
-    fn parse_top_level(&mut self, policy: &mut ParsedPolicy, line: &str, line_num: usize) -> Result<()> {
+    fn parse_top_level(
+        &mut self,
+        policy: &mut ParsedPolicy,
+        line: &str,
+        line_num: usize,
+    ) -> Result<()> {
         if let Some((key, value)) = self.split_assignment(line) {
             match key.trim() {
                 "name" => {
@@ -109,7 +111,13 @@ impl HclPolicyParser {
     }
 
     /// Parse block content
-    fn parse_block_content(&mut self, policy: &mut ParsedPolicy, block_name: &str, line: &str, line_num: usize) -> Result<()> {
+    fn parse_block_content(
+        &mut self,
+        policy: &mut ParsedPolicy,
+        block_name: &str,
+        line: &str,
+        line_num: usize,
+    ) -> Result<()> {
         match block_name {
             "parameters" => {
                 self.parse_parameters_block(policy, line, line_num)?;
@@ -119,7 +127,9 @@ impl HclPolicyParser {
             }
             _ => {
                 // Unknown block, add to metadata
-                policy.metadata.insert(format!("{}:{}", block_name, line_num), line.to_string());
+                policy
+                    .metadata
+                    .insert(format!("{}:{}", block_name, line_num), line.to_string());
             }
         }
 
@@ -127,10 +137,15 @@ impl HclPolicyParser {
     }
 
     /// Parse parameters block
-    fn parse_parameters_block(&mut self, policy: &mut ParsedPolicy, line: &str, line_num: usize) -> Result<()> {
+    fn parse_parameters_block(
+        &mut self,
+        policy: &mut ParsedPolicy,
+        line: &str,
+        line_num: usize,
+    ) -> Result<()> {
         if let Some((param_name, param_def)) = self.split_assignment(line) {
             let parts: Vec<&str> = param_def.split_whitespace().collect();
-            
+
             if parts.is_empty() {
                 return Err(FortressError::policy(format!(
                     "Invalid parameter definition at line {}: {}",
@@ -159,7 +174,9 @@ impl HclPolicyParser {
             let is_required = parts.iter().any(|&part| part == "required");
 
             if is_required {
-                policy.required_parameters.insert(param_name.to_string(), param_type);
+                policy
+                    .required_parameters
+                    .insert(param_name.to_string(), param_type);
             }
 
             // Parse allowed values if present
@@ -167,7 +184,9 @@ impl HclPolicyParser {
                 if let Some(allowed_end) = param_def.find(']') {
                     let allowed_str = &param_def[allowed_start + 1..allowed_end];
                     let allowed_values = self.parse_string_array(allowed_str)?;
-                    policy.allowed_parameters.insert(param_name.to_string(), allowed_values);
+                    policy
+                        .allowed_parameters
+                        .insert(param_name.to_string(), allowed_values);
                 }
             }
         }
@@ -176,10 +195,15 @@ impl HclPolicyParser {
     }
 
     /// Parse constraints block
-    fn parse_constraints_block(&mut self, policy: &mut ParsedPolicy, line: &str, line_num: usize) -> Result<()> {
+    fn parse_constraints_block(
+        &mut self,
+        policy: &mut ParsedPolicy,
+        line: &str,
+        line_num: usize,
+    ) -> Result<()> {
         if let Some((field, constraint_def)) = self.split_assignment(line) {
             let parts: Vec<&str> = constraint_def.split_whitespace().collect();
-            
+
             if parts.len() < 2 {
                 return Err(FortressError::policy(format!(
                     "Invalid constraint definition at line {}: {}",
@@ -241,7 +265,7 @@ impl HclPolicyParser {
     /// Parse string value
     fn parse_string_value(&self, value: &str) -> Result<String> {
         let value = value.trim();
-        
+
         if value.starts_with('"') && value.ends_with('"') {
             Ok(value[1..value.len() - 1].to_string())
         } else if value.starts_with('\'') && value.ends_with('\'') {
@@ -254,10 +278,10 @@ impl HclPolicyParser {
     /// Parse string array
     fn parse_string_array(&self, value: &str) -> Result<Vec<String>> {
         let value = value.trim();
-        
+
         if value.starts_with('[') && value.ends_with(']') {
             let inner = &value[1..value.len() - 1].trim();
-            
+
             if inner.is_empty() {
                 return Ok(Vec::new());
             }
@@ -282,7 +306,7 @@ impl HclPolicyParser {
     /// Parse duration value (in seconds)
     fn parse_duration_value(&self, value: &str) -> Result<i64> {
         let value = value.trim();
-        
+
         // Remove quotes if present
         let value = if value.starts_with('"') && value.ends_with('"') {
             &value[1..value.len() - 1]
@@ -291,11 +315,15 @@ impl HclPolicyParser {
         };
 
         // Parse duration format (e.g., "1h", "30m", "3600s")
-        let num_part: String = value.chars().take_while(|c| c.is_numeric() || *c == '-').collect();
+        let num_part: String = value
+            .chars()
+            .take_while(|c| c.is_numeric() || *c == '-')
+            .collect();
         if num_part.parse::<i64>().is_ok() {
             if let Some(time_unit) = value.chars().skip(num_part.len()).next() {
-                let num: i64 = num_part.parse()
-                    .map_err(|_| FortressError::policy(format!("Invalid duration number: {}", num_part)))?;
+                let num: i64 = num_part.parse().map_err(|_| {
+                    FortressError::policy(format!("Invalid duration number: {}", num_part))
+                })?;
 
                 let seconds = match time_unit {
                     's' => num,
@@ -304,8 +332,9 @@ impl HclPolicyParser {
                     'd' => num * 86400,
                     _ => {
                         // Assume it's already in seconds
-                        value.parse()
-                            .map_err(|_| FortressError::policy(format!("Invalid duration: {}", value)))?
+                        value.parse().map_err(|_| {
+                            FortressError::policy(format!("Invalid duration: {}", value))
+                        })?
                     }
                 };
 
@@ -314,19 +343,26 @@ impl HclPolicyParser {
         }
 
         // Try to parse as plain number of seconds
-        value.parse()
+        value
+            .parse()
             .map_err(|_| FortressError::policy(format!("Invalid duration format: {}", value)))
     }
 
     /// Parse constraint value
-    fn parse_constraint_value(&self, value_str: &str, operator: &ConstraintOperator) -> Result<Value> {
+    fn parse_constraint_value(
+        &self,
+        value_str: &str,
+        operator: &ConstraintOperator,
+    ) -> Result<Value> {
         let value_str = value_str.trim();
 
         match operator {
             ConstraintOperator::In | ConstraintOperator::NotIn => {
                 // Parse as array
                 let values = self.parse_string_array(value_str)?;
-                Ok(Value::Array(values.into_iter().map(Value::String).collect()))
+                Ok(Value::Array(
+                    values.into_iter().map(Value::String).collect(),
+                ))
             }
             ConstraintOperator::Matches | ConstraintOperator::NotMatches => {
                 // Parse as regex string
@@ -346,9 +382,14 @@ impl HclPolicyParser {
                     if let Ok(int_val) = value_str.parse::<i64>() {
                         Ok(Value::Number(int_val.into()))
                     } else if let Ok(float_val) = value_str.parse::<f64>() {
-                        Ok(Value::Number(serde_json::Number::from_f64(float_val).unwrap()))
+                        Ok(Value::Number(
+                            serde_json::Number::from_f64(float_val).unwrap(),
+                        ))
                     } else {
-                        Err(FortressError::policy(format!("Invalid number: {}", value_str)))
+                        Err(FortressError::policy(format!(
+                            "Invalid number: {}",
+                            value_str
+                        )))
                     }
                 } else {
                     // Default to string
@@ -446,14 +487,18 @@ impl HclPolicyParser {
         match constraint.operator {
             ConstraintOperator::In | ConstraintOperator::NotIn => {
                 if !constraint.value.is_array() {
-                    return Err(FortressError::policy("In/NotIn operators require array values"));
+                    return Err(FortressError::policy(
+                        "In/NotIn operators require array values",
+                    ));
                 }
             }
             ConstraintOperator::Matches | ConstraintOperator::NotMatches => {
                 if !constraint.value.is_string() {
-                    return Err(FortressError::policy("Matches operators require string values"));
+                    return Err(FortressError::policy(
+                        "Matches operators require string values",
+                    ));
                 }
-                
+
                 // Test if regex is valid
                 if let Value::String(regex_str) = &constraint.value {
                     Regex::new(regex_str).map_err(|_| {
@@ -476,10 +521,10 @@ impl HclPolicyParser {
         let mut brace_count = 0;
 
         let lines: Vec<&str> = hcl_content.lines().collect();
-        
+
         for (line_num, line) in lines.iter().enumerate() {
             let trimmed = line.trim();
-            
+
             // Skip comments and empty lines
             if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with("//") {
                 continue;
@@ -503,7 +548,11 @@ impl HclPolicyParser {
             // Check for basic syntax errors
             if !trimmed.contains('=') && !trimmed.ends_with('{') && trimmed != "}" {
                 if !trimmed.starts_with('#') && !trimmed.starts_with("//") {
-                    warnings.push(format!("Line {} may contain invalid syntax: {}", line_num + 1, line));
+                    warnings.push(format!(
+                        "Line {} may contain invalid syntax: {}",
+                        line_num + 1,
+                        line
+                    ));
                 }
             }
         }
@@ -548,7 +597,7 @@ max_ttl = 86400
 "#;
 
         let policy = parser.parse(hcl_content).unwrap();
-        
+
         assert_eq!(policy.name, "test-policy");
         assert_eq!(policy.path, "secret/*");
         assert_eq!(policy.capabilities, vec!["read", "list"]);
@@ -571,11 +620,11 @@ parameters {
 "#;
 
         let policy = parser.parse(hcl_content).unwrap();
-        
+
         assert!(policy.required_parameters.contains_key("key"));
         assert!(policy.required_parameters.contains_key("ttl"));
         assert!(!policy.required_parameters.contains_key("optional_param"));
-        
+
         assert!(policy.allowed_parameters.contains_key("key"));
         let allowed_keys = policy.allowed_parameters.get("key").unwrap();
         assert_eq!(allowed_keys, &vec!["key1", "key2", "key3"]);
@@ -598,25 +647,32 @@ constraints {
 "#;
 
         let policy = parser.parse(hcl_content).unwrap();
-        
+
         assert_eq!(policy.constraints.len(), 5);
-        
+
         // Check specific constraints
-        let ip_constraint = policy.constraints.iter()
+        let ip_constraint = policy
+            .constraints
+            .iter()
             .find(|c| c.field == "ip_address")
             .unwrap();
         assert_eq!(ip_constraint.operator, ConstraintOperator::Equals);
-        
-        let hour_constraint = policy.constraints.iter()
+
+        let hour_constraint = policy
+            .constraints
+            .iter()
             .find(|c| c.field == "hour")
             .unwrap();
-        assert_eq!(hour_constraint.operator, ConstraintOperator::GreaterThanOrEqual);
+        assert_eq!(
+            hour_constraint.operator,
+            ConstraintOperator::GreaterThanOrEqual
+        );
     }
 
     #[test]
     fn test_parse_duration_values() {
         let mut parser = HclPolicyParser::new();
-        
+
         assert_eq!(parser.parse_duration_value("3600").unwrap(), 3600);
         assert_eq!(parser.parse_duration_value("1h").unwrap(), 3600);
         assert_eq!(parser.parse_duration_value("30m").unwrap(), 1800);
@@ -627,13 +683,15 @@ constraints {
     #[test]
     fn test_parse_string_arrays() {
         let mut parser = HclPolicyParser::new();
-        
-        let array = parser.parse_string_array("[\"read\", \"write\", \"list\"]").unwrap();
+
+        let array = parser
+            .parse_string_array("[\"read\", \"write\", \"list\"]")
+            .unwrap();
         assert_eq!(array, vec!["read", "write", "list"]);
-        
+
         let single = parser.parse_string_array("\"read\"").unwrap();
         assert_eq!(single, vec!["read"]);
-        
+
         let empty = parser.parse_string_array("[]").unwrap();
         assert_eq!(empty, Vec::<String>::new());
     }
@@ -641,22 +699,22 @@ constraints {
     #[test]
     fn test_validate_syntax() {
         let mut parser = HclPolicyParser::new();
-        
+
         let valid_hcl = r#"
 name = "test"
 path = "secret/*"
 "#;
-        
+
         let result = parser.validate_syntax(valid_hcl);
         assert!(result.valid);
         assert!(result.errors.is_empty());
-        
+
         let invalid_hcl = r#"
 name = "test"
 path = "secret/*"
 {
 "#;
-        
+
         let result = parser.validate_syntax(invalid_hcl);
         assert!(!result.valid);
         assert!(!result.errors.is_empty());
@@ -665,14 +723,14 @@ path = "secret/*"
     #[test]
     fn test_path_matching() {
         let policy = ParsedPolicy::new("test".to_string(), "secret/*".to_string());
-        
+
         assert!(policy.matches_path("secret/data"));
         assert!(policy.matches_path("secret/metadata"));
         assert!(!policy.matches_path("public/data"));
-        
+
         let wildcard_policy = ParsedPolicy::new("test".to_string(), "*".to_string());
         assert!(wildcard_policy.matches_path("any/path"));
-        
+
         let exact_policy = ParsedPolicy::new("test".to_string(), "secret/data".to_string());
         assert!(exact_policy.matches_path("secret/data"));
         assert!(!exact_policy.matches_path("secret/metadata"));
@@ -681,36 +739,50 @@ path = "secret/*"
     #[test]
     fn test_constraint_operators() {
         let mut parser = HclPolicyParser::new();
-        
+
         // Test string constraint
-        let result = parser.parse_constraint_value("\"test\"", &ConstraintOperator::Equals).unwrap();
+        let result = parser
+            .parse_constraint_value("\"test\"", &ConstraintOperator::Equals)
+            .unwrap();
         assert_eq!(result, Value::String("test".to_string()));
-        
+
         // Test boolean constraint
-        let result = parser.parse_constraint_value("true", &ConstraintOperator::Equals).unwrap();
+        let result = parser
+            .parse_constraint_value("true", &ConstraintOperator::Equals)
+            .unwrap();
         assert_eq!(result, Value::Bool(true));
-        
+
         // Test number constraint
-        let result = parser.parse_constraint_value("42", &ConstraintOperator::Equals).unwrap();
+        let result = parser
+            .parse_constraint_value("42", &ConstraintOperator::Equals)
+            .unwrap();
         assert_eq!(result, Value::Number(42.into()));
-        
+
         // Test array constraint
-        let result = parser.parse_constraint_value("[\"a\", \"b\"]", &ConstraintOperator::In).unwrap();
-        assert_eq!(result, Value::Array(vec![Value::String("a".to_string()), Value::String("b".to_string())]));
+        let result = parser
+            .parse_constraint_value("[\"a\", \"b\"]", &ConstraintOperator::In)
+            .unwrap();
+        assert_eq!(
+            result,
+            Value::Array(vec![
+                Value::String("a".to_string()),
+                Value::String("b".to_string())
+            ])
+        );
     }
 
     #[test]
     fn test_policy_validation() {
         let mut parser = HclPolicyParser::new();
-        
+
         // Valid policy
         let valid_policy = ParsedPolicy::new("test".to_string(), "secret/*".to_string());
         assert!(parser.validate_policy(&valid_policy).is_ok());
-        
+
         // Invalid policy (empty name)
         let invalid_policy = ParsedPolicy::new("".to_string(), "secret/*".to_string());
         assert!(parser.validate_policy(&invalid_policy).is_err());
-        
+
         // Invalid policy (empty path)
         let invalid_policy = ParsedPolicy::new("test".to_string(), "".to_string());
         assert!(parser.validate_policy(&invalid_policy).is_err());
@@ -753,7 +825,7 @@ metadata {
 "#;
 
         let policy = parser.parse(hcl_content).unwrap();
-        
+
         assert_eq!(policy.name, "complex-policy");
         assert_eq!(policy.path, "secret/data/*");
         assert_eq!(policy.capabilities, vec!["read", "write", "delete", "list"]);
@@ -761,9 +833,12 @@ metadata {
         assert_eq!(policy.max_ttl, Some(7200));
         assert_eq!(policy.required_parameters.len(), 2);
         assert_eq!(policy.constraints.len(), 7);
-        
+
         // Check metadata
-        assert_eq!(policy.metadata.get("description"), Some(&"Complex policy for sensitive data".to_string()));
+        assert_eq!(
+            policy.metadata.get("description"),
+            Some(&"Complex policy for sensitive data".to_string())
+        );
         assert_eq!(policy.metadata.get("version"), Some(&"1.0".to_string()));
     }
 }

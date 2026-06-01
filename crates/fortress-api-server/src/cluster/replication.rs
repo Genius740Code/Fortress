@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{RwLock, Mutex};
+use tokio::sync::{Mutex, RwLock};
 use tokio::time::interval;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
@@ -139,7 +139,7 @@ pub enum ReplicationMessage {
         /// The replication operation to perform
         operation: ReplicationOperation,
     },
-    
+
     /// Replication response
     ReplicationResponse {
         /// Unique identifier for the operation
@@ -153,7 +153,7 @@ pub enum ReplicationMessage {
         /// Error message if the operation failed
         error_message: Option<String>,
     },
-    
+
     /// Anti-entropy request
     AntiEntropyRequest {
         /// ID of the requesting node
@@ -163,7 +163,7 @@ pub enum ReplicationMessage {
         /// When the request was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
-    
+
     /// Anti-entropy response
     AntiEntropyResponse {
         /// ID of the requesting node
@@ -173,7 +173,7 @@ pub enum ReplicationMessage {
         /// When the response was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
-    
+
     /// Read repair request
     ReadRepairRequest {
         /// Key to repair
@@ -183,7 +183,7 @@ pub enum ReplicationMessage {
         /// When the request was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
-    
+
     /// Read repair response
     ReadRepairResponse {
         /// Key being repaired
@@ -203,27 +203,27 @@ pub enum ReplicationError {
     /// Replication operation failed
     #[error("Replication failed: {0}")]
     ReplicationFailed(String),
-    
+
     /// Not enough replicas available
     #[error("Insufficient replicas: {0}/{1}")]
     InsufficientReplicas(usize, usize),
-    
+
     /// Replication operation timed out
     #[error("Replication timeout")]
     ReplicationTimeout,
-    
+
     /// Data inconsistency detected between replicas
     #[error("Data inconsistency detected")]
     DataInconsistency,
-    
+
     /// Invalid replication factor specified
     #[error("Invalid replication factor: {0}")]
     InvalidReplicationFactor(usize),
-    
+
     /// Node not available for replication
     #[error("Node not available for replication: {0}")]
     NodeNotAvailable(Uuid),
-    
+
     /// Anti-entropy process failed
     #[error("Anti-entropy failed: {0}")]
     AntiEntropyFailed(String),
@@ -252,10 +252,10 @@ pub struct DataReplicator {
 pub trait ReplicationCallback {
     /// Called when a replication operation completes successfully
     async fn on_replication_completed(&self, operation: &ReplicationOperation);
-    
+
     /// Called when a replication operation fails
     async fn on_replication_failed(&self, operation: &ReplicationOperation, error: &str);
-    
+
     /// Called when data inconsistency is detected
     async fn on_inconsistency_detected(&self, key: &str, conflicting_data: Vec<(Uuid, Vec<u8>)>);
 }
@@ -264,10 +264,15 @@ pub trait ReplicationCallback {
 #[async_trait::async_trait]
 pub trait ReplicationNetworkSender {
     /// Send a replication message to a specific node
-    async fn send_replication_message(&self, target: Uuid, message: ReplicationMessage) -> ClusterResult<()>;
-    
+    async fn send_replication_message(
+        &self,
+        target: Uuid,
+        message: ReplicationMessage,
+    ) -> ClusterResult<()>;
+
     /// Broadcast a replication message to all nodes
-    async fn broadcast_replication_message(&self, message: ReplicationMessage) -> ClusterResult<()>;
+    async fn broadcast_replication_message(&self, message: ReplicationMessage)
+        -> ClusterResult<()>;
 }
 
 /// Trait for local storage operations
@@ -275,18 +280,21 @@ pub trait ReplicationNetworkSender {
 pub trait ReplicationStorage {
     /// Get a value from storage
     async fn get(&self, key: &str) -> ClusterResult<Option<Vec<u8>>>;
-    
+
     /// Put a value into storage
     async fn put(&self, key: &str, value: Vec<u8>) -> ClusterResult<()>;
-    
+
     /// Delete a value from storage
     async fn delete(&self, key: &str) -> ClusterResult<()>;
-    
+
     /// List keys with optional prefix
     async fn list_keys(&self, prefix: Option<&str>) -> ClusterResult<Vec<String>>;
-    
+
     /// Get the timestamp for a key
-    async fn get_timestamp(&self, key: &str) -> ClusterResult<Option<chrono::DateTime<chrono::Utc>>>;
+    async fn get_timestamp(
+        &self,
+        key: &str,
+    ) -> ClusterResult<Option<chrono::DateTime<chrono::Utc>>>;
 }
 
 impl DataReplicator {
@@ -311,7 +319,7 @@ impl DataReplicator {
     /// Start the replicator
     pub async fn start(&self) -> ClusterResult<()> {
         info!("Starting data replicator for node {}", self.node_id);
-        
+
         // Start operation timeout checker
         let replicator = self.clone();
         tokio::spawn(async move {
@@ -333,9 +341,12 @@ impl DataReplicator {
     pub async fn replicate_write(&self, key: &str, value: Vec<u8>) -> ClusterResult<()> {
         let operation_id = Uuid::new_v4();
         let target_nodes = self.select_replication_nodes(key).await?;
-        
-        let required_acks = self.config.write_consistency.required_acks(target_nodes.len() + 1); // +1 for local
-        
+
+        let required_acks = self
+            .config
+            .write_consistency
+            .required_acks(target_nodes.len() + 1); // +1 for local
+
         let operation = ReplicationOperation {
             operation_id,
             operation_type: OperationType::Write,
@@ -369,7 +380,10 @@ impl DataReplicator {
 
             let sender = self.network_sender.lock().await;
             if let Err(e) = sender.send_replication_message(target_node, message).await {
-                warn!("Failed to send replication request to {}: {}", target_node, e);
+                warn!(
+                    "Failed to send replication request to {}: {}",
+                    target_node, e
+                );
             }
         }
 
@@ -381,9 +395,12 @@ impl DataReplicator {
     pub async fn replicate_delete(&self, key: &str) -> ClusterResult<()> {
         let operation_id = Uuid::new_v4();
         let target_nodes = self.select_replication_nodes(key).await?;
-        
-        let required_acks = self.config.write_consistency.required_acks(target_nodes.len() + 1);
-        
+
+        let required_acks = self
+            .config
+            .write_consistency
+            .required_acks(target_nodes.len() + 1);
+
         let operation = ReplicationOperation {
             operation_id,
             operation_type: OperationType::Delete,
@@ -417,7 +434,10 @@ impl DataReplicator {
 
             let sender = self.network_sender.lock().await;
             if let Err(e) = sender.send_replication_message(target_node, message).await {
-                warn!("Failed to send delete replication request to {}: {}", target_node, e);
+                warn!(
+                    "Failed to send delete replication request to {}: {}",
+                    target_node, e
+                );
             }
         }
 
@@ -428,7 +448,10 @@ impl DataReplicator {
     /// Read with consistency guarantee
     pub async fn consistent_read(&self, key: &str) -> ClusterResult<Option<Vec<u8>>> {
         let target_nodes = self.select_replication_nodes(key).await?;
-        let _required_reads = self.config.read_consistency.required_acks(target_nodes.len() + 1);
+        let _required_reads = self
+            .config
+            .read_consistency
+            .required_acks(target_nodes.len() + 1);
 
         // Read locally first
         let local_value = {
@@ -469,17 +492,19 @@ impl DataReplicator {
         drop(cluster_nodes);
 
         if available_nodes.len() < self.config.replication_factor - 1 {
-            return Err(ClusterError::Replication(ReplicationError::InsufficientReplicas(
-                available_nodes.len(),
-                self.config.replication_factor - 1,
-            )));
+            return Err(ClusterError::Replication(
+                ReplicationError::InsufficientReplicas(
+                    available_nodes.len(),
+                    self.config.replication_factor - 1,
+                ),
+            ));
         }
 
         // Simple hash-based selection for now
         // In a real implementation, this would use consistent hashing
         let mut nodes = Vec::new();
         let hash = self.hash_key(key);
-        
+
         for (i, &node_id) in available_nodes.iter().enumerate() {
             if (hash as usize + i) % available_nodes.len() < self.config.replication_factor - 1 {
                 nodes.push(node_id);
@@ -493,7 +518,7 @@ impl DataReplicator {
     fn hash_key(&self, key: &str) -> u32 {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
         key.hash(&mut hasher);
         hasher.finish() as u32
@@ -502,7 +527,7 @@ impl DataReplicator {
     /// Wait for replication completion
     async fn wait_for_replication_completion(&self, operation_id: Uuid) -> ClusterResult<()> {
         let timeout_duration = Duration::from_millis(self.config.replication_timeout_ms);
-        
+
         let start_time = Instant::now();
         while start_time.elapsed() < timeout_duration {
             {
@@ -511,14 +536,16 @@ impl DataReplicator {
                     if operation.status == ReplicationStatus::Completed {
                         return Ok(());
                     }
-                    if operation.status == ReplicationStatus::Failed || operation.status == ReplicationStatus::TimedOut {
-                        return Err(ClusterError::Replication(ReplicationError::ReplicationFailed(
-                            "Operation failed".to_string(),
-                        )));
+                    if operation.status == ReplicationStatus::Failed
+                        || operation.status == ReplicationStatus::TimedOut
+                    {
+                        return Err(ClusterError::Replication(
+                            ReplicationError::ReplicationFailed("Operation failed".to_string()),
+                        ));
                     }
                 }
             }
-            
+
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
 
@@ -530,38 +557,82 @@ impl DataReplicator {
             }
         }
 
-        Err(ClusterError::Replication(ReplicationError::ReplicationTimeout))
+        Err(ClusterError::Replication(
+            ReplicationError::ReplicationTimeout,
+        ))
     }
 
     /// Handle incoming replication message
-    pub async fn handle_message(&self, source: Uuid, message: ReplicationMessage) -> ClusterResult<Option<ReplicationMessage>> {
+    pub async fn handle_message(
+        &self,
+        source: Uuid,
+        message: ReplicationMessage,
+    ) -> ClusterResult<Option<ReplicationMessage>> {
         match message {
             ReplicationMessage::ReplicationRequest { operation } => {
                 self.handle_replication_request(source, operation).await
             }
-            ReplicationMessage::ReplicationResponse { operation_id, node_id, success, timestamp, error_message } => {
-                self.handle_replication_response(operation_id, node_id, success, timestamp, error_message).await?;
+            ReplicationMessage::ReplicationResponse {
+                operation_id,
+                node_id,
+                success,
+                timestamp,
+                error_message,
+            } => {
+                self.handle_replication_response(
+                    operation_id,
+                    node_id,
+                    success,
+                    timestamp,
+                    error_message,
+                )
+                .await?;
                 Ok(None)
             }
-            ReplicationMessage::AntiEntropyRequest { node_id, key_range, timestamp } => {
-                self.handle_anti_entropy_request(node_id, key_range, timestamp).await
+            ReplicationMessage::AntiEntropyRequest {
+                node_id,
+                key_range,
+                timestamp,
+            } => {
+                self.handle_anti_entropy_request(node_id, key_range, timestamp)
+                    .await
             }
-            ReplicationMessage::AntiEntropyResponse { requester_id, data, timestamp } => {
-                self.handle_anti_entropy_response(requester_id, data, timestamp).await?;
+            ReplicationMessage::AntiEntropyResponse {
+                requester_id,
+                data,
+                timestamp,
+            } => {
+                self.handle_anti_entropy_response(requester_id, data, timestamp)
+                    .await?;
                 Ok(None)
             }
-            ReplicationMessage::ReadRepairRequest { key, node_id, timestamp } => {
-                self.handle_read_repair_request(key, node_id, timestamp).await
+            ReplicationMessage::ReadRepairRequest {
+                key,
+                node_id,
+                timestamp,
+            } => {
+                self.handle_read_repair_request(key, node_id, timestamp)
+                    .await
             }
-            ReplicationMessage::ReadRepairResponse { key, value, timestamp, node_id } => {
-                self.handle_read_repair_response(key, value, timestamp, node_id).await?;
+            ReplicationMessage::ReadRepairResponse {
+                key,
+                value,
+                timestamp,
+                node_id,
+            } => {
+                self.handle_read_repair_response(key, value, timestamp, node_id)
+                    .await?;
                 Ok(None)
             }
         }
     }
 
     /// Handle replication request
-    async fn handle_replication_request(&self, _source: Uuid, operation: ReplicationOperation) -> ClusterResult<Option<ReplicationMessage>> {
+    async fn handle_replication_request(
+        &self,
+        _source: Uuid,
+        operation: ReplicationOperation,
+    ) -> ClusterResult<Option<ReplicationMessage>> {
         let success = match operation.operation_type {
             OperationType::Write => {
                 if let Some(value) = &operation.value {
@@ -586,23 +657,34 @@ impl DataReplicator {
             node_id: self.node_id,
             success,
             timestamp: chrono::Utc::now(),
-            error_message: if success { None } else { Some("Operation failed".to_string()) },
+            error_message: if success {
+                None
+            } else {
+                Some("Operation failed".to_string())
+            },
         };
 
         Ok(Some(response))
     }
 
     /// Handle replication response
-    async fn handle_replication_response(&self, operation_id: Uuid, _node_id: Uuid, success: bool, _timestamp: chrono::DateTime<chrono::Utc>, error_message: Option<String>) -> ClusterResult<()> {
+    async fn handle_replication_response(
+        &self,
+        operation_id: Uuid,
+        _node_id: Uuid,
+        success: bool,
+        _timestamp: chrono::DateTime<chrono::Utc>,
+        error_message: Option<String>,
+    ) -> ClusterResult<()> {
         let mut pending = self.pending_operations.write().await;
-        
+
         if let Some(operation) = pending.get_mut(&operation_id) {
             if success {
                 operation.ack_count += 1;
-                
+
                 if operation.ack_count >= operation.required_acks {
                     operation.status = ReplicationStatus::Completed;
-                    
+
                     // Notify callbacks
                     let callbacks = self.callbacks.lock().await;
                     for callback in callbacks.iter() {
@@ -611,11 +693,16 @@ impl DataReplicator {
                 }
             } else {
                 operation.status = ReplicationStatus::Failed;
-                
+
                 // Notify callbacks
                 let callbacks = self.callbacks.lock().await;
                 for callback in callbacks.iter() {
-                    callback.on_replication_failed(operation, error_message.as_deref().unwrap_or("Unknown error")).await;
+                    callback
+                        .on_replication_failed(
+                            operation,
+                            error_message.as_deref().unwrap_or("Unknown error"),
+                        )
+                        .await;
                 }
             }
         }
@@ -624,9 +711,16 @@ impl DataReplicator {
     }
 
     /// Handle anti-entropy request
-    async fn handle_anti_entropy_request(&self, node_id: Uuid, key_range: Option<(String, String)>, _timestamp: chrono::DateTime<chrono::Utc>) -> ClusterResult<Option<ReplicationMessage>> {
+    async fn handle_anti_entropy_request(
+        &self,
+        node_id: Uuid,
+        key_range: Option<(String, String)>,
+        _timestamp: chrono::DateTime<chrono::Utc>,
+    ) -> ClusterResult<Option<ReplicationMessage>> {
         let storage = self.storage.lock().await;
-        let keys = storage.list_keys(key_range.as_ref().map(|(start, _)| start.as_str())).await?;
+        let keys = storage
+            .list_keys(key_range.as_ref().map(|(start, _)| start.as_str()))
+            .await?;
         drop(storage);
 
         let mut data = Vec::new();
@@ -655,10 +749,15 @@ impl DataReplicator {
     }
 
     /// Handle anti-entropy response
-    async fn handle_anti_entropy_response(&self, _requester_id: Uuid, data: Vec<(String, Vec<u8>, chrono::DateTime<chrono::Utc>)>, _timestamp: chrono::DateTime<chrono::Utc>) -> ClusterResult<()> {
+    async fn handle_anti_entropy_response(
+        &self,
+        _requester_id: Uuid,
+        data: Vec<(String, Vec<u8>, chrono::DateTime<chrono::Utc>)>,
+        _timestamp: chrono::DateTime<chrono::Utc>,
+    ) -> ClusterResult<()> {
         for (key, value, ts) in data {
             let storage = self.storage.lock().await;
-            
+
             // Check if we need to update
             let should_update = match storage.get_timestamp(&key).await {
                 Ok(Some(local_ts)) => ts > local_ts,
@@ -677,7 +776,12 @@ impl DataReplicator {
     }
 
     /// Handle read repair request
-    async fn handle_read_repair_request(&self, key: String, _node_id: Uuid, _timestamp: chrono::DateTime<chrono::Utc>) -> ClusterResult<Option<ReplicationMessage>> {
+    async fn handle_read_repair_request(
+        &self,
+        key: String,
+        _node_id: Uuid,
+        _timestamp: chrono::DateTime<chrono::Utc>,
+    ) -> ClusterResult<Option<ReplicationMessage>> {
         let storage = self.storage.lock().await;
         let value = storage.get(&key).await?;
         drop(storage);
@@ -693,24 +797,38 @@ impl DataReplicator {
     }
 
     /// Handle read repair response
-    async fn handle_read_repair_response(&self, key: String, _value: Option<Vec<u8>>, _timestamp: chrono::DateTime<chrono::Utc>, node_id: Uuid) -> ClusterResult<()> {
+    async fn handle_read_repair_response(
+        &self,
+        key: String,
+        _value: Option<Vec<u8>>,
+        _timestamp: chrono::DateTime<chrono::Utc>,
+        node_id: Uuid,
+    ) -> ClusterResult<()> {
         // Read repair logic would go here
         // For now, this is a placeholder
-        debug!("Received read repair response for key {} from node {}", key, node_id);
+        debug!(
+            "Received read repair response for key {} from node {}",
+            key, node_id
+        );
         Ok(())
     }
 
     /// Perform read repair
-    async fn perform_read_repair(&self, key: &str, responses: &[(Uuid, Option<Vec<u8>>)]) -> ClusterResult<()> {
+    async fn perform_read_repair(
+        &self,
+        key: &str,
+        responses: &[(Uuid, Option<Vec<u8>>)],
+    ) -> ClusterResult<()> {
         // Simple read repair logic - in a real implementation, this would be more sophisticated
         let mut value_counts: HashMap<Option<Vec<u8>>, usize> = HashMap::new();
-        
+
         for (_, value) in responses {
             *value_counts.entry(value.clone()).or_insert(0) += 1;
         }
 
         // Find the most common value
-        let (most_common_value, _) = value_counts.iter()
+        let (most_common_value, _) = value_counts
+            .iter()
             .max_by_key(|(_, count)| *count)
             .map(|(value, count)| (value.clone(), *count))
             .unwrap_or((None, 0));
@@ -741,13 +859,13 @@ impl DataReplicator {
     /// Timeout checker for pending operations
     async fn timeout_checker(&self) {
         let mut interval = interval(Duration::from_secs(1));
-        
+
         loop {
             interval.tick().await;
-            
+
             let now = chrono::Utc::now();
             let mut operations_to_remove = Vec::new();
-            
+
             {
                 let mut pending = self.pending_operations.write().await;
                 for (operation_id, operation) in pending.iter_mut() {
@@ -764,7 +882,9 @@ impl DataReplicator {
                 if let Some(operation) = pending.remove(&operation_id) {
                     let callbacks = self.callbacks.lock().await;
                     for callback in callbacks.iter() {
-                        callback.on_replication_failed(&operation, "Operation timed out").await;
+                        callback
+                            .on_replication_failed(&operation, "Operation timed out")
+                            .await;
                     }
                 }
             }
@@ -774,10 +894,10 @@ impl DataReplicator {
     /// Anti-entropy loop
     async fn anti_entropy_loop(&self) {
         let mut interval = interval(Duration::from_secs(self.config.anti_entropy_interval_secs));
-        
+
         loop {
             interval.tick().await;
-            
+
             if let Err(e) = self.perform_anti_entropy().await {
                 error!("Anti-entropy failed: {}", e);
             }
@@ -787,7 +907,7 @@ impl DataReplicator {
     /// Perform anti-entropy repair
     async fn perform_anti_entropy(&self) -> ClusterResult<()> {
         let cluster_nodes = self.cluster_nodes.read().await;
-        
+
         for &node_id in cluster_nodes.iter() {
             let message = ReplicationMessage::AntiEntropyRequest {
                 node_id: self.node_id,

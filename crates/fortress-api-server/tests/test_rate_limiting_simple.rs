@@ -1,8 +1,8 @@
 //! Simple test for rate limiting functionality
 
-use fortress_api_server::middleware::{AdvancedRateLimiter, RateLimitAlgorithm};
-use fortress_api_server::config::{RateLimitConfig, DdosProtectionConfig};
+use fortress_api_server::config::{DdosProtectionConfig, RateLimitConfig};
 use fortress_api_server::error::ServerError;
+use fortress_api_server::middleware::{AdvancedRateLimiter, RateLimitAlgorithm};
 
 #[tokio::test]
 async fn test_basic_rate_limiting() {
@@ -14,18 +14,21 @@ async fn test_basic_rate_limiting() {
         algorithm: RateLimitAlgorithm::TokenBucket,
         ddos_protection: DdosProtectionConfig::default(),
     };
-    
+
     let rate_limiter = AdvancedRateLimiter::new(config);
-    
+
     // Should allow requests up to burst size
     for i in 0..3 {
         let result = rate_limiter.check_rate_limit("test_client").await;
         assert!(result.is_ok(), "Request {} should be allowed", i);
     }
-    
+
     // Next request should be denied
     let result = rate_limiter.check_rate_limit("test_client").await;
-    assert!(result.is_err(), "Request should be denied due to rate limit");
+    assert!(
+        result.is_err(),
+        "Request should be denied due to rate limit"
+    );
 }
 
 #[tokio::test]
@@ -38,19 +41,19 @@ async fn test_different_clients() {
         algorithm: RateLimitAlgorithm::TokenBucket,
         ddos_protection: DdosProtectionConfig::default(),
     };
-    
+
     let rate_limiter = AdvancedRateLimiter::new(config);
-    
+
     // Exhaust client1's limit
     for i in 0..2 {
         let result = rate_limiter.check_rate_limit("client1").await;
         assert!(result.is_ok(), "Client1 request {} should be allowed", i);
     }
-    
+
     // Client1 should be rate limited
     let result = rate_limiter.check_rate_limit("client1").await;
     assert!(result.is_err(), "Client1 should be rate limited");
-    
+
     // Client2 should still be allowed
     let result = rate_limiter.check_rate_limit("client2").await;
     assert!(result.is_ok(), "Client2 should be allowed");
@@ -67,13 +70,17 @@ async fn test_rate_limit_disabled() {
         ddos_protection: DdosProtectionConfig::default(),
     };
     config.enabled = false;
-    
+
     let rate_limiter = AdvancedRateLimiter::new(config);
-    
+
     // Should allow unlimited requests when disabled
     for i in 0..10 {
         let result = rate_limiter.check_rate_limit("test_client").await;
-        assert!(result.is_ok(), "Request {} should be allowed when rate limiting is disabled", i);
+        assert!(
+            result.is_ok(),
+            "Request {} should be allowed when rate limiting is disabled",
+            i
+        );
     }
 }
 
@@ -85,7 +92,7 @@ async fn test_algorithms() {
         RateLimitAlgorithm::FixedWindow,
         RateLimitAlgorithm::LeakyBucket,
     ];
-    
+
     for algorithm in algorithms {
         let config = RateLimitConfig {
             enabled: true,
@@ -95,19 +102,31 @@ async fn test_algorithms() {
             algorithm: algorithm.clone(),
             ddos_protection: DdosProtectionConfig::default(),
         };
-        
+
         let rate_limiter = AdvancedRateLimiter::new(config);
-        
+
         // Should allow some requests
         let mut allowed_count = 0;
         for i in 0..15 {
-            if rate_limiter.check_rate_limit(&format!("client_{:?}", algorithm)).await.is_ok() {
+            if rate_limiter
+                .check_rate_limit(&format!("client_{:?}", algorithm))
+                .await
+                .is_ok()
+            {
                 allowed_count += 1;
             }
         }
-        
-        assert!(allowed_count > 0, "Algorithm {:?} should allow some requests", algorithm);
-        assert!(allowed_count < 15, "Algorithm {:?} should block some requests", algorithm);
+
+        assert!(
+            allowed_count > 0,
+            "Algorithm {:?} should allow some requests",
+            algorithm
+        );
+        assert!(
+            allowed_count < 15,
+            "Algorithm {:?} should block some requests",
+            algorithm
+        );
     }
 }
 
@@ -121,14 +140,14 @@ async fn test_metrics() {
         algorithm: RateLimitAlgorithm::TokenBucket,
         ddos_protection: DdosProtectionConfig::default(),
     };
-    
+
     let rate_limiter = AdvancedRateLimiter::new(config);
-    
+
     // Make some requests
     for i in 0..10 {
         rate_limiter.check_rate_limit("test_client").await;
     }
-    
+
     // Check metrics
     let metrics = rate_limiter.get_metrics();
     assert_eq!(metrics.total_requests, 10);
@@ -147,11 +166,11 @@ fn test_config_serialization() {
         algorithm: RateLimitAlgorithm::TokenBucket,
         ddos_protection: DdosProtectionConfig::default(),
     };
-    
+
     // Test serialization
     let json = serde_json::to_string(&config).unwrap();
     assert!(!json.is_empty());
-    
+
     // Test deserialization
     let deserialized: RateLimitConfig = serde_json::from_str(&json).unwrap();
     assert_eq!(deserialized.requests_per_minute, config.requests_per_minute);

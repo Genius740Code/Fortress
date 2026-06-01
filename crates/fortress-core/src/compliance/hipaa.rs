@@ -3,14 +3,14 @@
 //! Implements Health Insurance Portability and Accountability Act compliance features including
 //! PHI protection, security safeguards, business associate agreements, and breach notification.
 
-use crate::error::{FortressError, Result};
-use crate::compliance::framework::*;
 use crate::compliance::framework::ComplianceDeadline;
+use crate::compliance::framework::*;
+use crate::error::{FortressError, Result};
 use async_trait::async_trait;
-use chrono::{DateTime, Utc, Duration};
+use chrono::{DateTime, Duration, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
-use serde::{Deserialize, Serialize};
 
 /// Breach assessment result for intelligent analysis
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -418,12 +418,12 @@ impl HipaaComplianceManager {
             notification_tracking: std::sync::Arc::new(tokio::sync::RwLock::new(Vec::new())),
         }
     }
-    
+
     /// Register a covered entity
     pub async fn register_covered_entity(&self, entity: CoveredEntity) -> Result<()> {
         let mut entities = self.covered_entities.write().await;
         entities.insert(entity.id.clone(), entity);
-        
+
         let event = ComplianceEvent {
             id: Uuid::new_v4(),
             timestamp: Utc::now(),
@@ -436,16 +436,16 @@ impl HipaaComplianceManager {
             outcome: ComplianceEventOutcome::Success,
             metadata: HashMap::new(),
         };
-        
+
         self.base_manager.log_event(&event).await?;
         Ok(())
     }
-    
+
     /// Register a business associate
     pub async fn register_business_associate(&self, associate: BusinessAssociate) -> Result<()> {
         let mut associates = self.business_associates.write().await;
         associates.insert(associate.id.clone(), associate);
-        
+
         let event = ComplianceEvent {
             id: Uuid::new_v4(),
             timestamp: Utc::now(),
@@ -458,16 +458,16 @@ impl HipaaComplianceManager {
             outcome: ComplianceEventOutcome::Success,
             metadata: HashMap::new(),
         };
-        
+
         self.base_manager.log_event(&event).await?;
         Ok(())
     }
-    
+
     /// Report a security incident
     pub async fn report_security_incident(&self, incident: HipaaSecurityIncident) -> Result<()> {
         let mut incidents = self.security_incidents.write().await;
         incidents.push(incident.clone());
-        
+
         let event = ComplianceEvent {
             id: Uuid::new_v4(),
             timestamp: Utc::now(),
@@ -485,15 +485,15 @@ impl HipaaComplianceManager {
             outcome: ComplianceEventOutcome::Success,
             metadata: HashMap::new(),
         };
-        
+
         self.base_manager.log_event(&event).await?;
         Ok(())
     }
-    
+
     /// Check if breach notification is required
     pub async fn check_breach_notification_required(&self, incident_id: &str) -> Result<bool> {
         let incidents = self.security_incidents.read().await;
-        
+
         if let Some(incident) = incidents.iter().find(|i| i.id == incident_id) {
             // HIPAA requires notification for breaches affecting 500+ individuals
             // Or any breach of unsecured PHI
@@ -504,9 +504,15 @@ impl HipaaComplianceManager {
     }
 
     /// Intelligent breach detection with automated analysis and severity classification
-    pub async fn detect_breach(&self, incident: &HipaaSecurityIncident) -> Result<BreachAssessment> {
-        log::info!("Starting intelligent breach analysis for incident: {}", incident.id);
-        
+    pub async fn detect_breach(
+        &self,
+        incident: &HipaaSecurityIncident,
+    ) -> Result<BreachAssessment> {
+        log::info!(
+            "Starting intelligent breach analysis for incident: {}",
+            incident.id
+        );
+
         let now = Utc::now();
         let mut assessment = BreachAssessment {
             id: Uuid::new_v4(),
@@ -527,46 +533,62 @@ impl HipaaComplianceManager {
             recommended_actions: Vec::new(),
             confidence_score: 0,
         };
-        
+
         // Analyze incident characteristics against HIPAA breach criteria
         let (is_breach, confidence_score) = self.analyze_breach_criteria(incident).await?;
         assessment.is_breach = is_breach;
         assessment.confidence_score = confidence_score;
-        
+
         if is_breach {
             // Determine breach severity
             assessment.severity = self.classify_breach_severity(incident).await?;
-            
+
             // Calculate notification requirements
-            assessment.notification_requirements = self.calculate_notification_requirements(&assessment.severity, incident).await?;
-            
+            assessment.notification_requirements = self
+                .calculate_notification_requirements(&assessment.severity, incident)
+                .await?;
+
             // Identify risk factors
             assessment.risk_factors = self.identify_risk_factors(incident).await?;
-            
+
             // Generate recommended actions
-            assessment.recommended_actions = self.generate_breach_recommendations(&assessment).await?;
-            
+            assessment.recommended_actions =
+                self.generate_breach_recommendations(&assessment).await?;
+
             log::warn!("BREACH DETECTED: Incident {} classified as {} severity breach affecting {} individuals", 
                        incident.id, assessment.severity, incident.individuals_affected);
         } else {
-            log::info!("Incident {} analyzed: Not a breach under HIPAA criteria", incident.id);
+            log::info!(
+                "Incident {} analyzed: Not a breach under HIPAA criteria",
+                incident.id
+            );
         }
-        
+
         // Store assessment
         let mut assessments = self.breach_assessments.write().await;
         assessments.push(assessment.clone());
-        
+
         // Log assessment event
         let event = ComplianceEvent {
             id: Uuid::new_v4(),
             timestamp: now,
             framework: ComplianceFramework::HIPAA,
             event_type: "breach_assessment_completed".to_string(),
-            severity: if assessment.is_breach { EventSeverity::Critical } else { EventSeverity::Info },
-            description: format!("Breach assessment completed for incident {}: {} - Severity: {}", 
-                             incident.id, 
-                             if assessment.is_breach { "BREACH" } else { "NO BREACH" },
-                             format!("{:?}", assessment.severity)),
+            severity: if assessment.is_breach {
+                EventSeverity::Critical
+            } else {
+                EventSeverity::Info
+            },
+            description: format!(
+                "Breach assessment completed for incident {}: {} - Severity: {}",
+                incident.id,
+                if assessment.is_breach {
+                    "BREACH"
+                } else {
+                    "NO BREACH"
+                },
+                format!("{:?}", assessment.severity)
+            ),
             affected_resources: vec![incident.id.clone()],
             actor: "automated_system".to_string(),
             outcome: ComplianceEventOutcome::Success,
@@ -575,45 +597,54 @@ impl HipaaComplianceManager {
                 meta.insert("incident_id".to_string(), incident.id.clone());
                 meta.insert("is_breach".to_string(), assessment.is_breach.to_string());
                 meta.insert("severity".to_string(), format!("{:?}", assessment.severity));
-                meta.insert("confidence_score".to_string(), assessment.confidence_score.to_string());
-                meta.insert("individuals_affected".to_string(), assessment.individuals_affected.to_string());
+                meta.insert(
+                    "confidence_score".to_string(),
+                    assessment.confidence_score.to_string(),
+                );
+                meta.insert(
+                    "individuals_affected".to_string(),
+                    assessment.individuals_affected.to_string(),
+                );
                 meta
             },
         };
-        
+
         self.base_manager.log_event(&event).await?;
-        
+
         Ok(assessment)
     }
 
     /// Analyze incident against HIPAA breach criteria
-    async fn analyze_breach_criteria(&self, incident: &HipaaSecurityIncident) -> Result<(bool, u8)> {
+    async fn analyze_breach_criteria(
+        &self,
+        incident: &HipaaSecurityIncident,
+    ) -> Result<(bool, u8)> {
         let mut is_breach = false;
         let mut confidence_score = 50u8; // Base confidence
-        
+
         // HIPAA Breach Notification Rule criteria
         let phi_accessed = !incident.affected_phi_types.is_empty();
-        let unsecured_phi = incident.incident_type.contains("unauthorized") || 
-                          incident.incident_type.contains("theft") || 
-                          incident.incident_type.contains("hacking") ||
-                          incident.incident_type.contains("loss");
-        
+        let unsecured_phi = incident.incident_type.contains("unauthorized")
+            || incident.incident_type.contains("theft")
+            || incident.incident_type.contains("hacking")
+            || incident.incident_type.contains("loss");
+
         // Check for PHI acquisition, access, use, or disclosure
         if phi_accessed && unsecured_phi {
             is_breach = true;
             confidence_score += 30;
         }
-        
+
         // Check if information is unsecured PHI
         if incident.affected_phi_types.iter().any(|phi_type| {
-            phi_type.to_lowercase().contains("diagnosis") ||
-            phi_type.to_lowercase().contains("treatment") ||
-            phi_type.to_lowercase().contains("payment") ||
-            phi_type.to_lowercase().contains("enrollment")
+            phi_type.to_lowercase().contains("diagnosis")
+                || phi_type.to_lowercase().contains("treatment")
+                || phi_type.to_lowercase().contains("payment")
+                || phi_type.to_lowercase().contains("enrollment")
         }) {
             confidence_score += 15;
         }
-        
+
         // Consider number of individuals affected
         match incident.individuals_affected {
             0 => confidence_score -= 20,
@@ -622,38 +653,41 @@ impl HipaaComplianceManager {
             101..=500 => confidence_score += 15,
             _ => confidence_score += 25, // 500+
         }
-        
+
         // Consider incident severity
         match incident.severity.as_str() {
             "Critical" => {
                 is_breach = true;
                 confidence_score += 20;
-            },
+            }
             "High" => {
                 confidence_score += 15;
                 if confidence_score >= 70 {
                     is_breach = true;
                 }
-            },
+            }
             "Medium" => confidence_score += 10,
             "Low" => confidence_score += 5,
             _ => {}
         }
-        
+
         // Adjust confidence based on incident type
         if incident.incident_type.to_lowercase().contains("breach") {
             is_breach = true;
             confidence_score += 20;
         }
-        
+
         // Cap confidence score at 100
         confidence_score = confidence_score.min(100);
-        
+
         Ok((is_breach, confidence_score))
     }
 
     /// Classify breach severity based on incident characteristics
-    async fn classify_breach_severity(&self, incident: &HipaaSecurityIncident) -> Result<BreachSeverity> {
+    async fn classify_breach_severity(
+        &self,
+        incident: &HipaaSecurityIncident,
+    ) -> Result<BreachSeverity> {
         let severity = match incident.individuals_affected {
             0 => BreachSeverity::Minimal,
             1..=50 => {
@@ -662,48 +696,55 @@ impl HipaaComplianceManager {
                 } else {
                     BreachSeverity::Minimal
                 }
-            },
+            }
             51..=500 => {
                 if incident.severity == "Critical" || incident.affected_phi_types.len() > 5 {
                     BreachSeverity::Significant
                 } else {
                     BreachSeverity::Moderate
                 }
-            },
+            }
             501..=5000 => BreachSeverity::Significant,
             _ => BreachSeverity::Critical, // 5000+
         };
-        
-        log::info!("Breach severity classified as {:?} for {} individuals affected", 
-                  severity, incident.individuals_affected);
-        
+
+        log::info!(
+            "Breach severity classified as {:?} for {} individuals affected",
+            severity,
+            incident.individuals_affected
+        );
+
         Ok(severity)
     }
 
     /// Calculate notification requirements based on breach severity
-    async fn calculate_notification_requirements(&self, severity: &BreachSeverity, _incident: &HipaaSecurityIncident) -> Result<NotificationRequirements> {
+    async fn calculate_notification_requirements(
+        &self,
+        severity: &BreachSeverity,
+        _incident: &HipaaSecurityIncident,
+    ) -> Result<NotificationRequirements> {
         let (individual_deadline, hhs_deadline, media_required) = match severity {
             BreachSeverity::Minimal | BreachSeverity::Moderate => {
                 // Less than 500 individuals: 60 days for HHS, no media requirement
                 (60 * 24, 60 * 24, false)
-            },
+            }
             BreachSeverity::Significant | BreachSeverity::Critical => {
                 // 500+ individuals: 60 days for individuals, immediate HHS notification, media required
                 (60 * 24, 24, true)
-            },
+            }
         };
-        
+
         let mut required_methods = vec!["first_class_mail".to_string(), "email".to_string()];
-        
+
         // Add additional methods based on severity
         match severity {
             BreachSeverity::Significant | BreachSeverity::Critical => {
                 required_methods.push("telephone".to_string());
                 required_methods.push("secure_portal".to_string());
-            },
+            }
             _ => {}
         }
-        
+
         Ok(NotificationRequirements {
             notification_required: true,
             individual_notification_deadline_hours: individual_deadline,
@@ -716,135 +757,176 @@ impl HipaaComplianceManager {
     /// Identify risk factors for the breach
     async fn identify_risk_factors(&self, incident: &HipaaSecurityIncident) -> Result<Vec<String>> {
         let mut risk_factors = Vec::new();
-        
+
         // Analyze incident type for risk factors
         if incident.incident_type.to_lowercase().contains("hacking") {
-            risk_factors.push("External cyberattack - potential for sophisticated attacker".to_string());
+            risk_factors
+                .push("External cyberattack - potential for sophisticated attacker".to_string());
         }
-        
+
         if incident.incident_type.to_lowercase().contains("theft") {
             risk_factors.push("Physical theft - potential for organized crime".to_string());
         }
-        
+
         if incident.incident_type.to_lowercase().contains("insider") {
             risk_factors.push("Insider threat - potential for repeated access".to_string());
         }
-        
+
         // Analyze PHI types for sensitivity
         for phi_type in &incident.affected_phi_types {
             if phi_type.to_lowercase().contains("diagnosis") {
-                risk_factors.push("Diagnostic information compromised - high clinical sensitivity".to_string());
+                risk_factors.push(
+                    "Diagnostic information compromised - high clinical sensitivity".to_string(),
+                );
             }
             if phi_type.to_lowercase().contains("treatment") {
-                risk_factors.push("Treatment information compromised - ongoing care impact".to_string());
+                risk_factors
+                    .push("Treatment information compromised - ongoing care impact".to_string());
             }
             if phi_type.to_lowercase().contains("payment") {
-                risk_factors.push("Payment information compromised - financial fraud risk".to_string());
+                risk_factors
+                    .push("Payment information compromised - financial fraud risk".to_string());
             }
         }
-        
+
         // Consider number of individuals
         if incident.individuals_affected > 1000 {
-            risk_factors.push("Large-scale breach - high public interest and regulatory scrutiny".to_string());
+            risk_factors.push(
+                "Large-scale breach - high public interest and regulatory scrutiny".to_string(),
+            );
         }
-        
+
         if incident.individuals_affected > 10000 {
             risk_factors.push("Massive breach - potential for class-action litigation".to_string());
         }
-        
+
         Ok(risk_factors)
     }
 
     /// Generate recommended actions based on breach assessment
-    async fn generate_breach_recommendations(&self, assessment: &BreachAssessment) -> Result<Vec<String>> {
+    async fn generate_breach_recommendations(
+        &self,
+        assessment: &BreachAssessment,
+    ) -> Result<Vec<String>> {
         let mut recommendations = Vec::new();
-        
+
         // Immediate actions
-        recommendations.push("Immediately contain the breach to prevent further data loss".to_string());
+        recommendations
+            .push("Immediately contain the breach to prevent further data loss".to_string());
         recommendations.push("Preserve all evidence and forensic data".to_string());
         recommendations.push("Document all breach response activities".to_string());
-        
+
         // Severity-specific recommendations
         match assessment.severity {
             BreachSeverity::Minimal => {
                 recommendations.push("Review and strengthen access controls".to_string());
                 recommendations.push("Conduct staff training on PHI handling".to_string());
-            },
+            }
             BreachSeverity::Moderate => {
                 recommendations.push("Engage cybersecurity forensics team".to_string());
                 recommendations.push("Review all system access logs".to_string());
                 recommendations.push("Implement additional monitoring controls".to_string());
-            },
+            }
             BreachSeverity::Significant => {
                 recommendations.push("Engage external breach response experts".to_string());
                 recommendations.push("Consider offering credit monitoring services".to_string());
                 recommendations.push("Prepare for regulatory investigation".to_string());
-            },
+            }
             BreachSeverity::Critical => {
                 recommendations.push("Activate full incident response plan".to_string());
                 recommendations.push("Engage legal counsel and PR team".to_string());
                 recommendations.push("Prepare for regulatory enforcement action".to_string());
                 recommendations.push("Consider system-wide security overhaul".to_string());
-            },
+            }
         }
-        
+
         // Notification-specific recommendations
         if assessment.notification_requirements.notification_required {
-            recommendations.push(format!("Initiate individual notifications within {} hours", 
-                                     assessment.notification_requirements.individual_notification_deadline_hours));
-            recommendations.push(format!("Submit HHS breach notification within {} hours", 
-                                     assessment.notification_requirements.hhs_notification_deadline_hours));
+            recommendations.push(format!(
+                "Initiate individual notifications within {} hours",
+                assessment
+                    .notification_requirements
+                    .individual_notification_deadline_hours
+            ));
+            recommendations.push(format!(
+                "Submit HHS breach notification within {} hours",
+                assessment
+                    .notification_requirements
+                    .hhs_notification_deadline_hours
+            ));
         }
-        
-        if assessment.notification_requirements.media_notification_required {
+
+        if assessment
+            .notification_requirements
+            .media_notification_required
+        {
             recommendations.push("Prepare media notification and press release".to_string());
         }
-        
+
         // Follow-up recommendations
         recommendations.push("Conduct post-incident security assessment".to_string());
         recommendations.push("Update breach response procedures".to_string());
         recommendations.push("Review and update security policies".to_string());
-        
+
         Ok(recommendations)
     }
 
     /// Automated breach notification workflow with timeline enforcement
     pub async fn initiate_breach_notification(&self, breach: &BreachAssessment) -> Result<()> {
-        log::info!("Starting automated breach notification workflow for breach assessment: {}", breach.id);
-        
+        log::info!(
+            "Starting automated breach notification workflow for breach assessment: {}",
+            breach.id
+        );
+
         let now = Utc::now();
-        
+
         // Calculate notification deadlines
-        let individual_deadline = breach.assessed_at + chrono::Duration::hours(breach.notification_requirements.individual_notification_deadline_hours as i64);
-        let hhs_deadline = breach.assessed_at + chrono::Duration::hours(breach.notification_requirements.hhs_notification_deadline_hours as i64);
-        
+        let individual_deadline = breach.assessed_at
+            + chrono::Duration::hours(
+                breach
+                    .notification_requirements
+                    .individual_notification_deadline_hours as i64,
+            );
+        let hhs_deadline = breach.assessed_at
+            + chrono::Duration::hours(
+                breach
+                    .notification_requirements
+                    .hhs_notification_deadline_hours as i64,
+            );
+
         // Check if deadlines are approaching or passed
         let individual_urgent = now >= individual_deadline - chrono::Duration::hours(24);
         let hhs_urgent = now >= hhs_deadline - chrono::Duration::hours(12);
-        
-        log::info!("Notification deadlines calculated - Individual: {}, HHS: {}, Current: {}", 
-                  individual_deadline.format("%Y-%m-%d %H:%M UTC"),
-                  hhs_deadline.format("%Y-%m-%d %H:%M UTC"),
-                  now.format("%Y-%m-%d %H:%M UTC"));
-        
+
+        log::info!(
+            "Notification deadlines calculated - Individual: {}, HHS: {}, Current: {}",
+            individual_deadline.format("%Y-%m-%d %H:%M UTC"),
+            hhs_deadline.format("%Y-%m-%d %H:%M UTC"),
+            now.format("%Y-%m-%d %H:%M UTC")
+        );
+
         // Generate notification content
         let notification_content = self.generate_notification_content(breach).await?;
-        
+
         // Send individual notifications
-        let individual_results = self.send_individual_notifications(breach, &notification_content).await?;
-        
+        let individual_results = self
+            .send_individual_notifications(breach, &notification_content)
+            .await?;
+
         // Submit HHS report if required
         let mut hhs_submission = None;
         if breach.notification_requirements.notification_required {
             hhs_submission = Some(self.submit_hhs_breach_report(breach).await?);
         }
-        
+
         // Send media notifications if required
         let mut media_results = Vec::new();
         if breach.notification_requirements.media_notification_required {
-            media_results = self.send_media_notifications(breach, &notification_content).await?;
+            media_results = self
+                .send_media_notifications(breach, &notification_content)
+                .await?;
         }
-        
+
         // Create notification tracking record
         let tracking_record = NotificationTracking {
             id: Uuid::new_v4(),
@@ -856,13 +938,17 @@ impl HipaaComplianceManager {
             hhs_submission_id: hhs_submission.as_ref().map(|s| s.id),
             media_notifications_sent: media_results.len() as u32,
             status: NotificationStatus::InProgress,
-            completion_percentage: self.calculate_completion_percentage(&individual_results, &hhs_submission, &media_results),
+            completion_percentage: self.calculate_completion_percentage(
+                &individual_results,
+                &hhs_submission,
+                &media_results,
+            ),
         };
-        
+
         // Store tracking record
         let mut _tracking_records = self.notification_tracking.write().await;
         _tracking_records.push(tracking_record.clone());
-        
+
         // Log notification initiation
         let event = ComplianceEvent {
             id: Uuid::new_v4(),
@@ -888,18 +974,24 @@ impl HipaaComplianceManager {
                 meta
             },
         };
-        
+
         self.base_manager.log_event(&event).await?;
-        
+
         // Schedule deadline monitoring
         self.schedule_deadline_monitoring(&tracking_record).await?;
-        
-        log::info!("Breach notification workflow initiated successfully for assessment {}", breach.id);
+
+        log::info!(
+            "Breach notification workflow initiated successfully for assessment {}",
+            breach.id
+        );
         Ok(())
     }
 
     /// Generate notification content based on breach assessment
-    async fn generate_notification_content(&self, breach: &BreachAssessment) -> Result<NotificationContent> {
+    async fn generate_notification_content(
+        &self,
+        breach: &BreachAssessment,
+    ) -> Result<NotificationContent> {
         let content = NotificationContent {
             subject: format!("IMPORTANT: Security Breach Notification - {}", breach.severity),
             greeting: "Dear Patient/Individual,".to_string(),
@@ -932,18 +1024,22 @@ impl HipaaComplianceManager {
                 breach.notification_requirements.hhs_notification_deadline_hours
             ),
         };
-        
+
         Ok(content)
     }
 
     /// Send individual notifications via multiple channels
-    async fn send_individual_notifications(&self, breach: &BreachAssessment, content: &NotificationContent) -> Result<Vec<NotificationResult>> {
+    async fn send_individual_notifications(
+        &self,
+        breach: &BreachAssessment,
+        content: &NotificationContent,
+    ) -> Result<Vec<NotificationResult>> {
         let mut results = Vec::new();
-        
+
         // Get affected individuals from incident
         let incidents = self.security_incidents.read().await;
         let incident = incidents.iter().find(|i| i.id == breach.incident_id);
-        
+
         if let Some(_inc) = incident {
             // In a real implementation, this would query the actual affected individuals
             let simulated_individuals = vec![
@@ -964,29 +1060,38 @@ impl HipaaComplianceManager {
                     preferred_contact: ContactMethod::Phone,
                 },
             ];
-            
+
             for individual in &simulated_individuals {
                 let result = match individual.preferred_contact {
-                    ContactMethod::Email => self.send_email_notification(individual, content).await?,
+                    ContactMethod::Email => {
+                        self.send_email_notification(individual, content).await?
+                    }
                     ContactMethod::Phone => self.send_sms_notification(individual, content).await?,
                     ContactMethod::Mail => self.send_mail_notification(individual, content).await?,
                 };
-                
+
                 results.push(result);
             }
         }
-        
-        log::info!("Sent {} individual notifications for breach assessment {}", 
-                  results.len(), breach.id);
-        
+
+        log::info!(
+            "Sent {} individual notifications for breach assessment {}",
+            results.len(),
+            breach.id
+        );
+
         Ok(results)
     }
 
     /// Send email notification
-    async fn send_email_notification(&self, individual: &IndividualContact, _content: &NotificationContent) -> Result<NotificationResult> {
+    async fn send_email_notification(
+        &self,
+        individual: &IndividualContact,
+        _content: &NotificationContent,
+    ) -> Result<NotificationResult> {
         // Simulate email sending
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        
+
         let result = NotificationResult {
             individual_id: individual.id.clone(),
             method: ContactMethod::Email,
@@ -995,16 +1100,24 @@ impl HipaaComplianceManager {
             delivery_address: individual.email.clone(),
             tracking_id: Some(format!("email_{}", Uuid::new_v4())),
         };
-        
-        log::info!("Email notification sent to {} at {}", individual.email, result.sent_at);
+
+        log::info!(
+            "Email notification sent to {} at {}",
+            individual.email,
+            result.sent_at
+        );
         Ok(result)
     }
 
     /// Send SMS notification
-    async fn send_sms_notification(&self, individual: &IndividualContact, _content: &NotificationContent) -> Result<NotificationResult> {
+    async fn send_sms_notification(
+        &self,
+        individual: &IndividualContact,
+        _content: &NotificationContent,
+    ) -> Result<NotificationResult> {
         // Simulate SMS sending
         tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-        
+
         let result = NotificationResult {
             individual_id: individual.id.clone(),
             method: ContactMethod::Phone,
@@ -1013,19 +1126,23 @@ impl HipaaComplianceManager {
             delivery_address: individual.phone.clone().unwrap_or_default(),
             tracking_id: Some(format!("sms_{}", Uuid::new_v4())),
         };
-        
+
         if let Some(phone) = &individual.phone {
             log::info!("SMS notification sent to {} at {}", phone, result.sent_at);
         }
-        
+
         Ok(result)
     }
 
     /// Send mail notification
-    async fn send_mail_notification(&self, individual: &IndividualContact, _content: &NotificationContent) -> Result<NotificationResult> {
+    async fn send_mail_notification(
+        &self,
+        individual: &IndividualContact,
+        _content: &NotificationContent,
+    ) -> Result<NotificationResult> {
         // Simulate mail sending
         tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-        
+
         let result = NotificationResult {
             individual_id: individual.id.clone(),
             method: ContactMethod::Mail,
@@ -1034,15 +1151,23 @@ impl HipaaComplianceManager {
             delivery_address: individual.address.clone().unwrap_or_default(),
             tracking_id: Some(format!("mail_{}", Uuid::new_v4())),
         };
-        
-        log::info!("Mail notification sent to {} at {}", individual.name, result.sent_at);
+
+        log::info!(
+            "Mail notification sent to {} at {}",
+            individual.name,
+            result.sent_at
+        );
         Ok(result)
     }
 
     /// Send media notifications
-    async fn send_media_notifications(&self, breach: &BreachAssessment, _content: &NotificationContent) -> Result<Vec<MediaNotificationResult>> {
+    async fn send_media_notifications(
+        &self,
+        breach: &BreachAssessment,
+        _content: &NotificationContent,
+    ) -> Result<Vec<MediaNotificationResult>> {
         let mut results = Vec::new();
-        
+
         // Generate press release
         let press_release = PressRelease {
             id: Uuid::new_v4(),
@@ -1059,10 +1184,10 @@ impl HipaaComplianceManager {
             created_at: Utc::now(),
             status: MediaStatus::Draft,
         };
-        
+
         // Store press release for audit trail
         let _press_release_id = press_release.id;
-        
+
         // Simulate media distribution using the press release
         let media_outlets = vec![
             "Associated Press".to_string(),
@@ -1070,7 +1195,7 @@ impl HipaaComplianceManager {
             "Bloomberg".to_string(),
             "Healthcare IT News".to_string(),
         ];
-        
+
         for outlet in &media_outlets {
             let result = MediaNotificationResult {
                 outlet: outlet.clone(),
@@ -1080,10 +1205,13 @@ impl HipaaComplianceManager {
             };
             results.push(result);
         }
-        
-        log::info!("Media notifications sent to {} outlets for breach assessment {}", 
-                  media_outlets.len(), breach.id);
-        
+
+        log::info!(
+            "Media notifications sent to {} outlets for breach assessment {}",
+            media_outlets.len(),
+            breach.id
+        );
+
         Ok(results)
     }
 
@@ -1116,22 +1244,27 @@ impl HipaaComplianceManager {
     }
 
     /// Calculate completion percentage for notification workflow
-    fn calculate_completion_percentage(&self, individual_results: &[NotificationResult], hhs_submission: &Option<ReportSubmission>, media_results: &[MediaNotificationResult]) -> f64 {
+    fn calculate_completion_percentage(
+        &self,
+        individual_results: &[NotificationResult],
+        hhs_submission: &Option<ReportSubmission>,
+        media_results: &[MediaNotificationResult],
+    ) -> f64 {
         let mut completed_tasks = 0f64;
         let total_tasks = 3f64; // Individual notifications, HHS submission, Media notifications
-        
+
         if !individual_results.is_empty() {
             completed_tasks += 1f64;
         }
-        
+
         if hhs_submission.is_some() {
             completed_tasks += 1f64;
         }
-        
+
         if !media_results.is_empty() {
             completed_tasks += 1f64;
         }
-        
+
         (completed_tasks / total_tasks) * 100.0
     }
 
@@ -1142,23 +1275,26 @@ impl HipaaComplianceManager {
         // - Send escalation alerts when deadlines approach
         // - Trigger automatic notifications for overdue tasks
         // - Update tracking records automatically
-        
-        log::info!("Scheduled deadline monitoring for notification tracking {}", tracking.id);
+
+        log::info!(
+            "Scheduled deadline monitoring for notification tracking {}",
+            tracking.id
+        );
         Ok(())
     }
-    
+
     /// Get comprehensive compliance status
     pub async fn get_compliance_status(&self) -> Result<HipaaComplianceStatus> {
         let _covered_entities = self.covered_entities.read().await;
         let _business_associates = self.business_associates.read().await;
         let _incidents = self.security_incidents.read().await;
-        
+
         let active_issues = self.assess_compliance_issues().await?;
         let open_requests = self.get_open_rights_requests().await?;
         let upcoming_deadlines = self.get_upcoming_deadlines().await?;
-        
+
         let overall_score = self.calculate_compliance_score(&active_issues).await?;
-        
+
         Ok(HipaaComplianceStatus {
             overall_score,
             active_issues: active_issues.clone(),
@@ -1169,14 +1305,21 @@ impl HipaaComplianceManager {
             last_assessment: Utc::now(),
         })
     }
-    
+
     /// Collect compliance findings for a period
-    pub async fn collect_findings(&self, start_date: DateTime<Utc>, end_date: DateTime<Utc>) -> Result<Vec<ComplianceFinding>> {
+    pub async fn collect_findings(
+        &self,
+        start_date: DateTime<Utc>,
+        end_date: DateTime<Utc>,
+    ) -> Result<Vec<ComplianceFinding>> {
         let mut findings = Vec::new();
-        
+
         // Analyze security incidents in the period
         let incidents = self.security_incidents.read().await;
-        for incident in incidents.iter().filter(|i| i.discovered_at >= start_date && i.discovered_at <= end_date) {
+        for incident in incidents
+            .iter()
+            .filter(|i| i.discovered_at >= start_date && i.discovered_at <= end_date)
+        {
             findings.push(ComplianceFinding {
                 id: Uuid::new_v4(),
                 severity: EventSeverity::Error,
@@ -1190,54 +1333,57 @@ impl HipaaComplianceManager {
                 ],
             });
         }
-        
+
         Ok(findings)
     }
-    
+
     /// Generate daily report
     pub async fn generate_daily_report(&self) -> Result<()> {
         let now = Utc::now();
         let start_date = now - Duration::days(1);
-        
+
         let findings = self.collect_findings(start_date, now).await?;
         let metrics = self.collect_metrics().await?;
-        
-        log::info!("HIPAA Daily Report: {} findings, compliance score: {:.1}%", 
-                  findings.len(), metrics.compliance_score);
-        
+
+        log::info!(
+            "HIPAA Daily Report: {} findings, compliance score: {:.1}%",
+            findings.len(),
+            metrics.compliance_score
+        );
+
         Ok(())
     }
-    
+
     /// Assess compliance issues
     async fn assess_compliance_issues(&self) -> Result<Vec<ComplianceIssue>> {
         Ok(Vec::new())
     }
-    
+
     /// Get open rights requests
     async fn get_open_rights_requests(&self) -> Result<Vec<RightsRequest>> {
         Ok(Vec::new())
     }
-    
+
     /// Get upcoming deadlines
     async fn get_upcoming_deadlines(&self) -> Result<Vec<ComplianceDeadline>> {
         Ok(Vec::new())
     }
-    
+
     /// Calculate compliance score
     async fn calculate_compliance_score(&self, _issues: &[ComplianceIssue]) -> Result<f64> {
         Ok(95.0) // Placeholder high score
     }
-    
+
     /// Generate recommendations
     async fn generate_recommendations(&self, _issues: &[ComplianceIssue]) -> Result<Vec<String>> {
         Ok(vec!["Continue maintaining HIPAA compliance".to_string()])
     }
-    
+
     /// Collect compliance metrics
     async fn collect_metrics(&self) -> Result<HipaaMetrics> {
         let covered_entities = self.covered_entities.read().await;
         let business_associates = self.business_associates.read().await;
-        
+
         Ok(HipaaMetrics {
             total_covered_entities: covered_entities.len(),
             total_business_associates: business_associates.len(),
@@ -1246,18 +1392,23 @@ impl HipaaComplianceManager {
             last_updated: Utc::now(),
         })
     }
-    
+
     /// Generate HIPAA-specific report
-    pub async fn generate_hipaa_report(&self, start_date: DateTime<Utc>, end_date: DateTime<Utc>) -> Result<HipaaReport> {
+    pub async fn generate_hipaa_report(
+        &self,
+        start_date: DateTime<Utc>,
+        end_date: DateTime<Utc>,
+    ) -> Result<HipaaReport> {
         let phi_records = self.phi_registry.read().await;
         let policies = self.security_policies.read().await;
-        
+
         // Filter PHI records for the period
-        let period_phi: Vec<_> = phi_records.values()
+        let period_phi: Vec<_> = phi_records
+            .values()
             .filter(|_phi| true) // In a real implementation, filter by creation/update date
             .cloned()
             .collect();
-        
+
         let report = HipaaReport {
             id: Uuid::new_v4(),
             generated_at: Utc::now(),
@@ -1272,23 +1423,23 @@ impl HipaaComplianceManager {
                 "Review security policies regularly".to_string(),
             ],
         };
-        
+
         Ok(report)
     }
-    
+
     /// Get comprehensive compliance status (HIPAA-specific)
     pub async fn get_hipaa_compliance_status(&self) -> Result<HipaaComplianceStatus> {
         let _covered_entities = self.covered_entities.read().await;
         let _business_associates = self.business_associates.read().await;
         let _phi_records = self.phi_registry.read().await;
         let _security_policies = self.security_policies.read().await;
-        
+
         Ok(HipaaComplianceStatus {
-            overall_score: 95.0, // Placeholder calculation
-            active_issues: Vec::new(), // Placeholder implementation
-            open_requests: Vec::new(), // Placeholder implementation
+            overall_score: 95.0,                 // Placeholder calculation
+            active_issues: Vec::new(),           // Placeholder implementation
+            open_requests: Vec::new(),           // Placeholder implementation
             expired_consent_records: Vec::new(), // HIPAA doesn't use consent records
-            upcoming_deadlines: Vec::new(), // Placeholder implementation
+            upcoming_deadlines: Vec::new(),      // Placeholder implementation
             recommendations: vec![
                 "Continue monitoring PHI access controls".to_string(),
                 "Review security policies regularly".to_string(),
@@ -1298,12 +1449,18 @@ impl HipaaComplianceManager {
     }
 
     /// Submit breach report to HHS
-    async fn submit_hhs_breach_report(&self, breach: &BreachAssessment) -> Result<ReportSubmission> {
-        log::info!("Submitting HHS breach report for breach assessment: {}", breach.id);
-        
+    async fn submit_hhs_breach_report(
+        &self,
+        breach: &BreachAssessment,
+    ) -> Result<ReportSubmission> {
+        log::info!(
+            "Submitting HHS breach report for breach assessment: {}",
+            breach.id
+        );
+
         // Simulate HHS submission process
         let start_time = std::time::Instant::now();
-        
+
         // Create HHS breach report
         let _hhs_report = HhsBreachReport {
             id: Uuid::new_v4(),
@@ -1333,14 +1490,19 @@ impl HipaaComplianceManager {
                 breach_type: "Unauthorized Access".to_string(),
                 individuals_affected: breach.individuals_affected,
                 phi_types_disclosed: breach.phi_types_compromised.clone(),
-                breach_description: "Unauthorized access to patient records through compromised credentials".to_string(),
+                breach_description:
+                    "Unauthorized access to patient records through compromised credentials"
+                        .to_string(),
             },
             notification_timeline: NotificationTimeline {
                 discovery_to_assessment_days: 3,
                 assessment_to_notification_days: 5,
                 notification_method: "Email".to_string(),
-                individual_notification_date: (breach.assessed_at + chrono::Duration::days(3)).to_rfc3339(),
-                media_notification_date: Some((breach.assessed_at + chrono::Duration::days(7)).to_rfc3339()),
+                individual_notification_date: (breach.assessed_at + chrono::Duration::days(3))
+                    .to_rfc3339(),
+                media_notification_date: Some(
+                    (breach.assessed_at + chrono::Duration::days(7)).to_rfc3339(),
+                ),
             },
             protective_measures: vec![
                 "Immediate password reset for all affected accounts".to_string(),
@@ -1376,15 +1538,17 @@ impl HipaaComplianceManager {
 
         // Simulate API call to HHS
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-        
+
         let processing_time = start_time.elapsed().as_millis() as u64;
-        
+
         // Create HHS submission result
         let result = HhsSubmissionResult {
             status: SubmissionStatus::Confirmed,
-            confirmation_number: Some(format!("HHS-{}-{:06}", 
-                Utc::now().format("%Y"), 
-                rand::random::<u32>() % 999999 + 1)),
+            confirmation_number: Some(format!(
+                "HHS-{}-{:06}",
+                Utc::now().format("%Y"),
+                rand::random::<u32>() % 999999 + 1
+            )),
             processing_time_ms: processing_time,
             response_code: Some(200),
         };
@@ -1408,8 +1572,10 @@ impl HipaaComplianceManager {
         let mut submissions = self.report_submissions.write().await;
         submissions.push(submission.clone());
 
-        log::info!("HHS breach report submitted successfully with confirmation: {:?}", 
-                  result.confirmation_number);
+        log::info!(
+            "HHS breach report submitted successfully with confirmation: {:?}",
+            result.confirmation_number
+        );
 
         Ok(submission)
     }
@@ -1466,23 +1632,26 @@ impl ComplianceManager for HipaaComplianceManager {
     }
 
     async fn process_rights_request(&self, request: &RightsRequest) -> Result<()> {
-        log::info!("Processing HIPAA-related rights request: {:?}", request.request_type);
-        
+        log::info!(
+            "Processing HIPAA-related rights request: {:?}",
+            request.request_type
+        );
+
         // HIPAA-specific processing logic
         match request.request_type {
             RightsRequestType::Access => {
                 log::info!("Processing HIPAA right of access request");
                 // Implement HIPAA-specific access logic with minimum necessary
-            },
+            }
             RightsRequestType::Rectification => {
                 log::info!("Processing HIPAA amendment request");
                 // Implement HIPAA-specific amendment logic
-            },
+            }
             _ => {
                 log::info!("Processing rights request: {:?}", request.request_type);
             }
         }
-        
+
         self.base_manager.process_rights_request(request).await
     }
 
@@ -1499,8 +1668,10 @@ impl ComplianceManager for HipaaComplianceManager {
         if framework == ComplianceFramework::HIPAA {
             // HIPAA specific checks: minimum necessary, need-to-know
         }
-        
-        self.base_manager.check_access_compliance(user_id, data_id, framework).await
+
+        self.base_manager
+            .check_access_compliance(user_id, data_id, framework)
+            .await
     }
 
     async fn generate_report(
@@ -1512,7 +1683,7 @@ impl ComplianceManager for HipaaComplianceManager {
     ) -> Result<ComplianceReport> {
         if framework == ComplianceFramework::HIPAA {
             let hipaa_report = self.generate_hipaa_report(start_date, end_date).await?;
-            
+
             return Ok(ComplianceReport {
                 id: hipaa_report.id,
                 framework,
@@ -1526,18 +1697,26 @@ impl ComplianceManager for HipaaComplianceManager {
                 evidence: HashMap::new(),
             });
         }
-        
-        self.base_manager.generate_report(framework, report_type, start_date, end_date).await
+
+        self.base_manager
+            .generate_report(framework, report_type, start_date, end_date)
+            .await
     }
 
-    async fn validate_configuration(&self, config: &ComplianceConfig) -> Result<Vec<ComplianceIssue>> {
+    async fn validate_configuration(
+        &self,
+        config: &ComplianceConfig,
+    ) -> Result<Vec<ComplianceIssue>> {
         let mut issues = self.base_manager.validate_configuration(config).await?;
-        
+
         // HIPAA specific validations
-        if !config.enabled_frameworks.contains(&ComplianceFramework::HIPAA) {
+        if !config
+            .enabled_frameworks
+            .contains(&ComplianceFramework::HIPAA)
+        {
             return Ok(issues);
         }
-        
+
         // Validate audit log requirements
         if !config.audit_logging.enabled {
             issues.push(ComplianceIssue {
@@ -1547,27 +1726,24 @@ impl ComplianceManager for HipaaComplianceManager {
                 recommendation: "Enable audit logging for HIPAA compliance".to_string(),
             });
         }
-        
+
         Ok(issues)
     }
 
-    
-    async fn calculate_compliance_score(
-        &self,
-        _issues: &[ComplianceIssue],
-    ) -> Result<f64> {
+    async fn calculate_compliance_score(&self, _issues: &[ComplianceIssue]) -> Result<f64> {
         // Placeholder implementation
         Ok(95.0)
     }
 
-    async fn generate_recommendations(
-        &self,
-        _issues: &[ComplianceIssue],
-    ) -> Result<Vec<String>> {
+    async fn generate_recommendations(&self, _issues: &[ComplianceIssue]) -> Result<Vec<String>> {
         Ok(vec!["Continue maintaining HIPAA compliance".to_string()])
     }
 
-    async fn collect_findings(&self, _start_date: DateTime<Utc>, _end_date: DateTime<Utc>) -> Result<Vec<ComplianceFinding>> {
+    async fn collect_findings(
+        &self,
+        _start_date: DateTime<Utc>,
+        _end_date: DateTime<Utc>,
+    ) -> Result<Vec<ComplianceFinding>> {
         Ok(Vec::new()) // Placeholder implementation
     }
 
@@ -1605,10 +1781,10 @@ impl ComplianceManager for HipaaComplianceManager {
     async fn get_compliance_status(&self) -> Result<ComplianceStatus> {
         let issues = self.assess_compliance_issues().await?;
         let score = self.calculate_compliance_score(&issues).await?;
-        
+
         let mut framework_status = std::collections::HashMap::new();
         framework_status.insert("HIPAA".to_string(), score);
-        
+
         Ok(ComplianceStatus {
             compliance_percentage: score,
             active_issues: issues.len() as u32,

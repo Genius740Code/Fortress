@@ -3,8 +3,8 @@
 //! This module provides a centralized registry for encryption algorithms,
 //! making it extremely easy to add new algorithms and manage them efficiently.
 
+use crate::encryption::{create_algorithm, EncryptionAlgorithm};
 use crate::error::Result;
-use crate::encryption::{EncryptionAlgorithm, create_algorithm};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -53,7 +53,7 @@ impl AlgorithmRegistry {
 
         // Register all available algorithms
         registry.register_all_algorithms()?;
-        
+
         Ok(registry)
     }
 
@@ -61,67 +61,226 @@ impl AlgorithmRegistry {
     fn register_all_algorithms(&mut self) -> Result<()> {
         let algorithm_configs = vec![
             // Existing algorithms
-            ("chacha20poly1305", "ChaCha20-Poly1305", 
-             "Balanced performance and security", 256, 32, 12, 16, true, 2015,
-             "ChaCha20", vec!["general-purpose".to_string(), "mobile".to_string(), "balanced".to_string()], 
-             "Excellent performance on all platforms"),
-            
-            ("xchacha20poly1305", "XChaCha20-Poly1305", 
-             "Extended nonce size for better security", 256, 32, 24, 16, true, 2018,
-             "ChaCha20", vec!["high-security".to_string(), "nonce-critical".to_string(), "balanced".to_string()], 
-             "192-bit nonce prevents reuse attacks"),
-            
-            ("aes256gcm", "AES-256-GCM", 
-             "Industry standard with hardware acceleration", 256, 32, 12, 16, true, 2001,
-             "AES", vec!["enterprise".to_string(), "hardware-accelerated".to_string(), "compliance".to_string()], 
-             "Hardware acceleration available on most CPUs"),
-            
+            (
+                "chacha20poly1305",
+                "ChaCha20-Poly1305",
+                "Balanced performance and security",
+                256,
+                32,
+                12,
+                16,
+                true,
+                2015,
+                "ChaCha20",
+                vec![
+                    "general-purpose".to_string(),
+                    "mobile".to_string(),
+                    "balanced".to_string(),
+                ],
+                "Excellent performance on all platforms",
+            ),
+            (
+                "xchacha20poly1305",
+                "XChaCha20-Poly1305",
+                "Extended nonce size for better security",
+                256,
+                32,
+                24,
+                16,
+                true,
+                2018,
+                "ChaCha20",
+                vec![
+                    "high-security".to_string(),
+                    "nonce-critical".to_string(),
+                    "balanced".to_string(),
+                ],
+                "192-bit nonce prevents reuse attacks",
+            ),
+            (
+                "aes256gcm",
+                "AES-256-GCM",
+                "Industry standard with hardware acceleration",
+                256,
+                32,
+                12,
+                16,
+                true,
+                2001,
+                "AES",
+                vec![
+                    "enterprise".to_string(),
+                    "hardware-accelerated".to_string(),
+                    "compliance".to_string(),
+                ],
+                "Hardware acceleration available on most CPUs",
+            ),
             // Previously added algorithms
-            ("blake3encrypt", "Blake3 Encrypt", 
-             "Modern hash-based encryption with SIMD", 256, 32, 16, 32, true, 2020,
-             "Blake3", vec!["high-performance".to_string(), "streaming".to_string(), "hardware-optimized".to_string()], 
-             "SIMD optimized, excellent parallel performance"),
-            
-            ("hmacsha512encrypt", "HMAC-SHA512 Encrypt", 
-             "High security with 512-bit protection", 512, 64, 32, 64, true, 2008,
-             "SHA-2", vec!["maximum-security".to_string(), "long-term".to_string(), "compliance".to_string()], 
-             "512-bit security level for future-proofing"),
-            
+            (
+                "blake3encrypt",
+                "Blake3 Encrypt",
+                "Modern hash-based encryption with SIMD",
+                256,
+                32,
+                16,
+                32,
+                true,
+                2020,
+                "Blake3",
+                vec![
+                    "high-performance".to_string(),
+                    "streaming".to_string(),
+                    "hardware-optimized".to_string(),
+                ],
+                "SIMD optimized, excellent parallel performance",
+            ),
+            (
+                "hmacsha512encrypt",
+                "HMAC-SHA512 Encrypt",
+                "High security with 512-bit protection",
+                512,
+                64,
+                32,
+                64,
+                true,
+                2008,
+                "SHA-2",
+                vec![
+                    "maximum-security".to_string(),
+                    "long-term".to_string(),
+                    "compliance".to_string(),
+                ],
+                "512-bit security level for future-proofing",
+            ),
             // Newly added algorithms
-            ("aes256ctr", "AES-256-CTR", 
-             "Fast streaming encryption mode", 256, 32, 16, 0, false, 2000,
-             "AES", vec!["streaming".to_string(), "high-throughput".to_string(), "large-files".to_string()], 
-             "Counter mode, ideal for streaming large data"),
-            
-            ("argon2idencrypt", "Argon2id Encrypt", 
-             "Memory-hard key derivation with encryption", 256, 32, 16, 16, true, 2019,
-             "Argon2", vec!["password-based".to_string(), "brute-force-resistant".to_string(), "key-derivation".to_string()], 
-             "Memory-hard algorithm resistant to GPU attacks"),
-            
-            ("compositeencrypt", "Composite Encrypt", 
-             "Multiple algorithms for maximum security", 512, 32, 56, 32, true, 2024,
-             "Composite", vec!["maximum-security".to_string(), "quantum-resistant".to_string(), "defense-in-depth".to_string()], 
-             "Combines Blake3, XChaCha20, and HMAC-SHA256"),
-            
+            (
+                "aes256ctr",
+                "AES-256-CTR",
+                "Fast streaming encryption mode",
+                256,
+                32,
+                16,
+                0,
+                false,
+                2000,
+                "AES",
+                vec![
+                    "streaming".to_string(),
+                    "high-throughput".to_string(),
+                    "large-files".to_string(),
+                ],
+                "Counter mode, ideal for streaming large data",
+            ),
+            (
+                "argon2idencrypt",
+                "Argon2id Encrypt",
+                "Memory-hard key derivation with encryption",
+                256,
+                32,
+                16,
+                16,
+                true,
+                2019,
+                "Argon2",
+                vec![
+                    "password-based".to_string(),
+                    "brute-force-resistant".to_string(),
+                    "key-derivation".to_string(),
+                ],
+                "Memory-hard algorithm resistant to GPU attacks",
+            ),
+            (
+                "compositeencrypt",
+                "Composite Encrypt",
+                "Multiple algorithms for maximum security",
+                512,
+                32,
+                56,
+                32,
+                true,
+                2024,
+                "Composite",
+                vec![
+                    "maximum-security".to_string(),
+                    "quantum-resistant".to_string(),
+                    "defense-in-depth".to_string(),
+                ],
+                "Combines Blake3, XChaCha20, and HMAC-SHA256",
+            ),
             // Newly added important algorithms
-            ("salsa20", "Salsa20", 
-             "Ultra-fast stream cipher", 256, 32, 8, 16, true, 2005,
-             "Salsa", vec!["streaming".to_string(), "high-performance".to_string(), "legacy-compatible".to_string()], 
-             "Bernstein's stream cipher, predecessor to ChaCha20"),
-            
-            ("ascon", "ASCON", 
-             "Lightweight AEAD for IoT", 128, 16, 16, 16, true, 2023,
-             "ASCON", vec!["lightweight".to_string(), "iot".to_string(), "embedded".to_string(), "nist-finalist".to_string()], 
-             "NIST lightweight cryptography finalist, optimized for small devices"),
-            
-            ("kmac256", "KMAC256", 
-             "SHA-3 based keyed encryption", 256, 32, 32, 32, true, 2016,
-             "SHA-3", vec!["standards-based".to_string(), "nist".to_string(), "compliance".to_string(), "hash-based".to_string()], 
-             "NIST SP 800-185 standardized keyed hash function"),
+            (
+                "salsa20",
+                "Salsa20",
+                "Ultra-fast stream cipher",
+                256,
+                32,
+                8,
+                16,
+                true,
+                2005,
+                "Salsa",
+                vec![
+                    "streaming".to_string(),
+                    "high-performance".to_string(),
+                    "legacy-compatible".to_string(),
+                ],
+                "Bernstein's stream cipher, predecessor to ChaCha20",
+            ),
+            (
+                "ascon",
+                "ASCON",
+                "Lightweight AEAD for IoT",
+                128,
+                16,
+                16,
+                16,
+                true,
+                2023,
+                "ASCON",
+                vec![
+                    "lightweight".to_string(),
+                    "iot".to_string(),
+                    "embedded".to_string(),
+                    "nist-finalist".to_string(),
+                ],
+                "NIST lightweight cryptography finalist, optimized for small devices",
+            ),
+            (
+                "kmac256",
+                "KMAC256",
+                "SHA-3 based keyed encryption",
+                256,
+                32,
+                32,
+                32,
+                true,
+                2016,
+                "SHA-3",
+                vec![
+                    "standards-based".to_string(),
+                    "nist".to_string(),
+                    "compliance".to_string(),
+                    "hash-based".to_string(),
+                ],
+                "NIST SP 800-185 standardized keyed hash function",
+            ),
         ];
 
-        for (name, display_name, description, security_level, key_size, nonce_size, 
-             tag_size, is_aead, year, family, use_cases, performance_notes) in algorithm_configs {
+        for (
+            name,
+            display_name,
+            description,
+            security_level,
+            key_size,
+            nonce_size,
+            tag_size,
+            is_aead,
+            year,
+            family,
+            use_cases,
+            performance_notes,
+        ) in algorithm_configs
+        {
             let algorithm = create_algorithm(name)?;
             let metadata = AlgorithmMetadata {
                 name: name.to_string(),
@@ -137,8 +296,9 @@ impl AlgorithmRegistry {
                 use_cases,
                 performance_notes: performance_notes.to_string(),
             };
-            
-            self.algorithms.insert(name.to_string(), Arc::from(algorithm));
+
+            self.algorithms
+                .insert(name.to_string(), Arc::from(algorithm));
             self.metadata.insert(name.to_string(), metadata);
         }
 
@@ -162,9 +322,11 @@ impl AlgorithmRegistry {
 
     /// List algorithms by family
     pub fn list_by_family(&self, family: &str) -> Vec<&str> {
-        self.algorithms.keys()
+        self.algorithms
+            .keys()
             .filter(|name| {
-                self.metadata.get(*name)
+                self.metadata
+                    .get(*name)
                     .map(|meta| meta.family == family)
                     .unwrap_or(false)
             })
@@ -174,9 +336,11 @@ impl AlgorithmRegistry {
 
     /// Find algorithms by security level
     pub fn find_by_security_level(&self, min_security: usize) -> Vec<&str> {
-        self.algorithms.keys()
+        self.algorithms
+            .keys()
             .filter(|name| {
-                self.metadata.get(*name)
+                self.metadata
+                    .get(*name)
                     .map(|meta| meta.security_level >= min_security)
                     .unwrap_or(false)
             })
@@ -186,9 +350,11 @@ impl AlgorithmRegistry {
 
     /// Find algorithms by use case
     pub fn find_by_use_case(&self, use_case: &str) -> Vec<&str> {
-        self.algorithms.keys()
+        self.algorithms
+            .keys()
             .filter(|name| {
-                self.metadata.get(*name)
+                self.metadata
+                    .get(*name)
                     .map(|meta| meta.use_cases.contains(&use_case.to_string()))
                     .unwrap_or(false)
             })
@@ -198,14 +364,19 @@ impl AlgorithmRegistry {
 
     /// Get recommended algorithm for specific requirements
     pub fn recommend(&self, requirements: &AlgorithmRequirements) -> Option<&str> {
-        let candidates: Vec<&str> = self.algorithms.keys()
+        let candidates: Vec<&str> = self
+            .algorithms
+            .keys()
             .filter(|name| {
                 if let Some(meta) = self.metadata.get(*name) {
                     meta.security_level >= requirements.min_security_level
                         && meta.is_aead == requirements.require_aead.unwrap_or(true)
                         && meta.key_size <= requirements.max_key_size.unwrap_or(usize::MAX)
-                        && (requirements.use_cases.is_empty() || 
-                            requirements.use_cases.iter().any(|uc| meta.use_cases.contains(uc)))
+                        && (requirements.use_cases.is_empty()
+                            || requirements
+                                .use_cases
+                                .iter()
+                                .any(|uc| meta.use_cases.contains(uc)))
                 } else {
                     false
                 }
@@ -214,36 +385,48 @@ impl AlgorithmRegistry {
             .collect();
 
         // Select the best candidate based on security level and performance
-        candidates.into_iter()
-            .max_by_key(|name| {
-                let meta = self.metadata.get(*name).unwrap();
-                (meta.security_level, meta.year) // Prefer newer, more secure algorithms
-            })
+        candidates.into_iter().max_by_key(|name| {
+            let meta = self.metadata.get(*name).unwrap();
+            (meta.security_level, meta.year) // Prefer newer, more secure algorithms
+        })
     }
 
     /// Get algorithm statistics
     pub fn statistics(&self) -> AlgorithmStatistics {
         let total_algorithms = self.algorithms.len();
-        let families: std::collections::HashSet<_> = self.metadata.values()
+        let families: std::collections::HashSet<_> = self
+            .metadata
+            .values()
             .map(|meta| meta.family.clone())
             .collect();
         let total_families = families.len();
-        
-        let aead_count = self.metadata.values()
-            .filter(|meta| meta.is_aead)
-            .count();
-        
-        let avg_security = self.metadata.values()
+
+        let aead_count = self.metadata.values().filter(|meta| meta.is_aead).count();
+
+        let avg_security = self
+            .metadata
+            .values()
             .map(|meta| meta.security_level)
-            .sum::<usize>() as f64 / total_algorithms as f64;
+            .sum::<usize>() as f64
+            / total_algorithms as f64;
 
         AlgorithmStatistics {
             total_algorithms,
             total_families,
             aead_count,
             average_security_level: avg_security,
-            newest_year: self.metadata.values().map(|meta| meta.year).max().unwrap_or(0),
-            oldest_year: self.metadata.values().map(|meta| meta.year).min().unwrap_or(0),
+            newest_year: self
+                .metadata
+                .values()
+                .map(|meta| meta.year)
+                .max()
+                .unwrap_or(0),
+            oldest_year: self
+                .metadata
+                .values()
+                .map(|meta| meta.year)
+                .min()
+                .unwrap_or(0),
         }
     }
 }
@@ -297,7 +480,7 @@ mod tests {
     #[test]
     fn test_algorithm_registry() {
         let registry = AlgorithmRegistry::new().unwrap();
-        
+
         // Test listing algorithms
         let algorithms = registry.list_algorithms();
         assert!(!algorithms.is_empty());
@@ -307,11 +490,11 @@ mod tests {
         assert!(algorithms.contains(&"salsa20"));
         assert!(algorithms.contains(&"ascon"));
         assert!(algorithms.contains(&"kmac256"));
-        
+
         // Test getting algorithm
         let algorithm = registry.get_algorithm("xchacha20poly1305").unwrap();
         assert_eq!(algorithm.name(), "xchacha20poly1305");
-        
+
         // Test metadata
         let metadata = registry.get_metadata("blake3encrypt").unwrap();
         assert_eq!(metadata.display_name, "Blake3 Encrypt");
@@ -322,12 +505,12 @@ mod tests {
     #[test]
     fn test_algorithm_families() {
         let registry = AlgorithmRegistry::new().unwrap();
-        
+
         let aes_algorithms = registry.list_by_family("AES");
         assert!(!aes_algorithms.is_empty());
         assert!(aes_algorithms.contains(&"aes256gcm"));
         assert!(aes_algorithms.contains(&"aes256ctr"));
-        
+
         let chacha_algorithms = registry.list_by_family("ChaCha20");
         assert!(!chacha_algorithms.is_empty());
         assert!(chacha_algorithms.contains(&"chacha20poly1305"));
@@ -337,17 +520,17 @@ mod tests {
     #[test]
     fn test_algorithm_recommendation() {
         let registry = AlgorithmRegistry::new().unwrap();
-        
+
         let requirements = AlgorithmRequirements {
             min_security_level: 256,
             require_aead: Some(true),
             use_cases: vec!["maximum-security".to_string()],
             ..Default::default()
         };
-        
+
         let recommended = registry.recommend(&requirements);
         assert!(recommended.is_some());
-        
+
         // Should recommend a high-security algorithm
         let rec_name = recommended.unwrap();
         let metadata = registry.get_metadata(rec_name).unwrap();
@@ -359,7 +542,7 @@ mod tests {
     fn test_algorithm_statistics() {
         let registry = AlgorithmRegistry::new().unwrap();
         let stats = registry.statistics();
-        
+
         assert!(stats.total_algorithms >= 11); // At least our algorithms
         assert!(stats.total_families >= 4); // AES, ChaCha20, ASCON, SHA-3, etc.
         assert!(stats.aead_count > 0);

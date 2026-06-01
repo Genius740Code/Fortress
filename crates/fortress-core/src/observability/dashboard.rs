@@ -168,8 +168,15 @@ impl Default for WidgetConfig {
     fn default() -> Self {
         Self {
             max_widgets_per_dashboard: 20,
-            default_size: WidgetSize { width: 4, height: 3 },
-            grid: GridConfig { columns: 12, rows: 8, gap: 16 },
+            default_size: WidgetSize {
+                width: 4,
+                height: 3,
+            },
+            grid: GridConfig {
+                columns: 12,
+                rows: 8,
+                gap: 16,
+            },
             data_retention_hours: 24,
         }
     }
@@ -645,7 +652,11 @@ impl DashboardManager {
     }
 
     /// Register a data provider
-    pub fn register_data_provider(&mut self, source_type: DataSourceType, provider: Box<dyn DataProvider + Send + Sync>) {
+    pub fn register_data_provider(
+        &mut self,
+        source_type: DataSourceType,
+        provider: Box<dyn DataProvider + Send + Sync>,
+    ) {
         self.data_providers.insert(source_type, provider);
     }
 
@@ -656,9 +667,13 @@ impl DashboardManager {
         }
 
         let mut dashboards = self.dashboards.write().await;
-        
+
         if dashboards.len() >= self.config.max_dashboards {
-            return Err(FortressError::validation("Maximum number of dashboards reached".to_string(), None, None));
+            return Err(FortressError::validation(
+                "Maximum number of dashboards reached".to_string(),
+                None,
+                None,
+            ));
         }
 
         if dashboards.contains_key(&dashboard.id) {
@@ -678,7 +693,7 @@ impl DashboardManager {
     /// Update a dashboard
     pub async fn update_dashboard(&self, dashboard: Dashboard) -> Result<()> {
         let mut dashboards = self.dashboards.write().await;
-        
+
         if !dashboards.contains_key(&dashboard.id) {
             return Err(FortressError::validation(
                 format!("Dashboard '{}' not found", dashboard.id),
@@ -689,7 +704,7 @@ impl DashboardManager {
 
         let mut updated_dashboard = dashboard.clone();
         updated_dashboard.updated_at = chrono::Utc::now();
-        
+
         dashboards.insert(dashboard.id.clone(), updated_dashboard);
         tracing::info!("Updated dashboard: {}", dashboard.id);
 
@@ -699,7 +714,7 @@ impl DashboardManager {
     /// Delete a dashboard
     pub async fn delete_dashboard(&self, dashboard_id: &str) -> Result<()> {
         let mut dashboards = self.dashboards.write().await;
-        
+
         if dashboards.remove(dashboard_id).is_none() {
             return Err(FortressError::validation(
                 format!("Dashboard '{}' not found", dashboard_id),
@@ -740,15 +755,26 @@ impl DashboardManager {
     /// Refresh widget data
     pub async fn refresh_widget_data(&self, widget: &Widget) -> Result<WidgetData> {
         if !self.config.enabled {
-            return Err(FortressError::validation("Dashboard system is disabled".to_string(), None, None));
+            return Err(FortressError::validation(
+                "Dashboard system is disabled".to_string(),
+                None,
+                None,
+            ));
         }
 
-        let provider = self.data_providers.get(&widget.data_source.source_type)
-            .ok_or_else(|| FortressError::validation(
-                format!("No data provider for source type: {:?}", widget.data_source.source_type),
-                None,
-                None,
-            ))?;
+        let provider = self
+            .data_providers
+            .get(&widget.data_source.source_type)
+            .ok_or_else(|| {
+                FortressError::validation(
+                    format!(
+                        "No data provider for source type: {:?}",
+                        widget.data_source.source_type
+                    ),
+                    None,
+                    None,
+                )
+            })?;
 
         let data = provider.get_data(widget).await?;
 
@@ -762,12 +788,13 @@ impl DashboardManager {
     /// Refresh all widgets in a dashboard
     pub async fn refresh_dashboard(&self, dashboard_id: &str) -> Result<Vec<WidgetData>> {
         let dashboards = self.dashboards.read().await;
-        let dashboard = dashboards.get(dashboard_id)
-            .ok_or_else(|| FortressError::validation(
+        let dashboard = dashboards.get(dashboard_id).ok_or_else(|| {
+            FortressError::validation(
                 format!("Dashboard '{}' not found", dashboard_id),
                 None,
                 None,
-            ))?;
+            )
+        })?;
 
         let mut widget_data_list = Vec::new();
 
@@ -784,13 +811,18 @@ impl DashboardManager {
     }
 
     /// Export dashboard
-    pub async fn export_dashboard(&self, dashboard_id: &str, format: ExportFormat) -> Result<Vec<u8>> {
-        let dashboard = self.get_dashboard(dashboard_id).await?
-            .ok_or_else(|| FortressError::validation(
+    pub async fn export_dashboard(
+        &self,
+        dashboard_id: &str,
+        format: ExportFormat,
+    ) -> Result<Vec<u8>> {
+        let dashboard = self.get_dashboard(dashboard_id).await?.ok_or_else(|| {
+            FortressError::validation(
                 format!("Dashboard '{}' not found", dashboard_id),
                 None,
                 None,
-            ))?;
+            )
+        })?;
 
         match format {
             ExportFormat::Json => {
@@ -801,13 +833,15 @@ impl DashboardManager {
                 // Export widget data as CSV
                 let widget_data = self.refresh_dashboard(dashboard_id).await?;
                 let mut csv_content = Vec::new();
-                
+
                 for data in widget_data {
                     match data.data {
                         WidgetDataContent::TimeSeries(points) => {
                             csv_content.extend_from_slice(b"timestamp,value\n");
                             for point in points {
-                                csv_content.extend_from_slice(format!("{},{}\n", point.timestamp, point.value).as_bytes());
+                                csv_content.extend_from_slice(
+                                    format!("{},{}\n", point.timestamp, point.value).as_bytes(),
+                                );
                             }
                         }
                         _ => {
@@ -815,7 +849,7 @@ impl DashboardManager {
                         }
                     }
                 }
-                
+
                 Ok(csv_content)
             }
             ExportFormat::Html => {
@@ -859,13 +893,18 @@ impl DashboardManager {
             "#,
             title = dashboard.name,
             description = dashboard.description,
-            widgets = dashboard.widgets.iter().map(|w| format!(
-                r#"<div class="widget">
+            widgets = dashboard
+                .widgets
+                .iter()
+                .map(|w| format!(
+                    r#"<div class="widget">
                     <div class="widget-title">{title}</div>
                     <div>Widget data would be rendered here</div>
                 </div>"#,
-                title = w.title
-            )).collect::<Vec<_>>().join("\n")
+                    title = w.title
+                ))
+                .collect::<Vec<_>>()
+                .join("\n")
         );
 
         Ok(html)
@@ -899,10 +938,10 @@ impl DashboardManager {
 
         tokio::spawn(async move {
             let mut timer = tokio::time::interval(interval);
-            
+
             loop {
                 timer.tick().await;
-                
+
                 let dashboards = dashboard_manager.list_dashboards().await;
                 for dashboard in dashboards {
                     if let Err(e) = dashboard_manager.refresh_dashboard(&dashboard.id).await {
@@ -932,7 +971,7 @@ pub struct MockDataProvider {
 
 impl MockDataProvider {
     /// Create a new mock data provider
-    /// 
+    ///
     /// # Arguments
     /// * `provider_type` - Type of data source to mock
     pub fn new(provider_type: DataSourceType) -> Self {
@@ -944,9 +983,7 @@ impl MockDataProvider {
 impl DataProvider for MockDataProvider {
     async fn get_data(&self, widget: &Widget) -> Result<WidgetData> {
         let data = match self.provider_type {
-            DataSourceType::Metrics => {
-                WidgetDataContent::Metric(rand::random::<f64>() * 100.0)
-            }
+            DataSourceType::Metrics => WidgetDataContent::Metric(rand::random::<f64>() * 100.0),
             DataSourceType::TimeSeries => {
                 let points = vec![
                     TimeSeriesPoint {
@@ -969,13 +1006,16 @@ impl DataProvider for MockDataProvider {
             }
             DataSourceType::Health => {
                 let mut components = HashMap::new();
-                components.insert("database".to_string(), ComponentHealthInfo {
-                    name: "database".to_string(),
-                    status: "healthy".to_string(),
-                    last_check: chrono::Utc::now(),
-                    response_time_ms: 50,
-                });
-                
+                components.insert(
+                    "database".to_string(),
+                    ComponentHealthInfo {
+                        name: "database".to_string(),
+                        status: "healthy".to_string(),
+                        last_check: chrono::Utc::now(),
+                        response_time_ms: 50,
+                    },
+                );
+
                 WidgetDataContent::HealthStatus(HealthInfo {
                     status: "healthy".to_string(),
                     components,
@@ -1033,7 +1073,7 @@ mod tests {
 
         // Create
         manager.create_dashboard(dashboard.clone()).await.unwrap();
-        
+
         // Read
         let retrieved = manager.get_dashboard("test_dashboard").await.unwrap();
         assert!(retrieved.is_some());
@@ -1050,7 +1090,7 @@ mod tests {
 
         // Delete
         manager.delete_dashboard("test_dashboard").await.unwrap();
-        
+
         let dashboards = manager.list_dashboards().await;
         assert_eq!(dashboards.len(), 0);
     }
@@ -1059,9 +1099,12 @@ mod tests {
     async fn test_widget_data_refresh() {
         let config = DashboardConfig::default();
         let mut manager = DashboardManager::new(config);
-        
+
         // Register mock data provider
-        manager.register_data_provider(DataSourceType::Metrics, Box::new(MockDataProvider::new(DataSourceType::Metrics)));
+        manager.register_data_provider(
+            DataSourceType::Metrics,
+            Box::new(MockDataProvider::new(DataSourceType::Metrics)),
+        );
 
         let widget = Widget {
             id: "test_widget".to_string(),
@@ -1082,8 +1125,16 @@ mod tests {
                 query: "test_metric".to_string(),
                 refresh_interval_seconds: 60,
             },
-            position: WidgetPosition { x: 0, y: 0, width: 4, height: 3 },
-            size: WidgetSize { width: 4, height: 3 },
+            position: WidgetPosition {
+                x: 0,
+                y: 0,
+                width: 4,
+                height: 3,
+            },
+            size: WidgetSize {
+                width: 4,
+                height: 3,
+            },
             refresh_interval_seconds: 60,
             enabled: true,
         };

@@ -1,16 +1,14 @@
 //! Tenant management commands for Fortress CLI
 
-use clap::{Subcommand, Args};
+use clap::{Args, Subcommand};
 use color_eyre::eyre::Result;
-use fortress_core::{
-    tenant::{
-        TenantManager, InMemoryTenantManager, CreateTenantRequest,
-        TenantResourceLimits, GlobalResourceLimits
-    },
+use dialoguer::Confirm;
+use fortress_core::tenant::{
+    CreateTenantRequest, GlobalResourceLimits, InMemoryTenantManager, TenantManager,
+    TenantResourceLimits,
 };
 use std::str::FromStr;
 use uuid::Uuid;
-use dialoguer::Confirm;
 
 /// Tenant management commands
 #[derive(Debug, Subcommand)]
@@ -45,23 +43,23 @@ pub struct CreateArgs {
     /// Tenant name
     #[arg(short, long)]
     pub name: String,
-    
+
     /// Tenant description
     #[arg(short, long)]
     pub description: Option<String>,
-    
+
     /// Maximum databases allowed
     #[arg(long)]
     pub max_databases: Option<u32>,
-    
+
     /// Maximum storage size in bytes
     #[arg(long)]
     pub max_storage: Option<u64>,
-    
+
     /// Maximum connections allowed
     #[arg(long)]
     pub max_connections: Option<u32>,
-    
+
     /// Resource configuration
     #[arg(long)]
     pub resources: Option<String>,
@@ -73,11 +71,11 @@ pub struct ListArgs {
     /// Show detailed information
     #[arg(long)]
     pub detailed: bool,
-    
+
     /// Filter by status
     #[arg(long)]
     pub status: Option<String>,
-    
+
     /// Limit number of results
     #[arg(long)]
     pub limit: Option<usize>,
@@ -88,20 +86,24 @@ pub async fn execute_tenant_command(command: TenantCommands) -> Result<()> {
     // Create tenant manager with default global limits
     let global_limits = GlobalResourceLimits::default();
     let tenant_manager = InMemoryTenantManager::with_global_limits(global_limits);
-    
+
     match command {
         TenantCommands::Create(args) => {
-            create_tenant(&tenant_manager, args.name, args.description, args.max_databases, args.max_storage, args.max_connections).await
+            create_tenant(
+                &tenant_manager,
+                args.name,
+                args.description,
+                args.max_databases,
+                args.max_storage,
+                args.max_connections,
+            )
+            .await
         }
         TenantCommands::List(args) => {
             list_tenants(&tenant_manager, args.detailed, args.status, args.limit).await
         }
-        TenantCommands::Show { tenant_id } => {
-            show_tenant(&tenant_manager, &tenant_id).await
-        }
-        TenantCommands::Stats { tenant_id } => {
-            show_tenant_stats(&tenant_manager, &tenant_id).await
-        }
+        TenantCommands::Show { tenant_id } => show_tenant(&tenant_manager, &tenant_id).await,
+        TenantCommands::Stats { tenant_id } => show_tenant_stats(&tenant_manager, &tenant_id).await,
         TenantCommands::Delete { tenant_id, force } => {
             delete_tenant(&tenant_manager, &tenant_id, force).await
         }
@@ -118,26 +120,27 @@ async fn create_tenant(
     max_connections: Option<u32>,
 ) -> Result<()> {
     println!("Creating new tenant...");
-    
-    let resource_limits = if max_databases.is_some() || max_storage.is_some() || max_connections.is_some() {
-        Some(TenantResourceLimits {
-            max_databases,
-            max_storage_size: max_storage,
-            max_connections,
-            cpu_quota: None,
-            memory_quota: None,
-        })
-    } else {
-        None
-    };
-    
+
+    let resource_limits =
+        if max_databases.is_some() || max_storage.is_some() || max_connections.is_some() {
+            Some(TenantResourceLimits {
+                max_databases,
+                max_storage_size: max_storage,
+                max_connections,
+                cpu_quota: None,
+                memory_quota: None,
+            })
+        } else {
+            None
+        };
+
     let request = CreateTenantRequest {
         name: name.clone(),
         description,
         encryption_config: None,
         resource_limits,
     };
-    
+
     match manager.create_tenant(request).await {
         Ok(tenant) => {
             println!("✓ Tenant created successfully");
@@ -155,13 +158,16 @@ async fn create_tenant(
             if let Some(connections) = tenant.resource_limits.max_connections {
                 println!("Max connections: {}", connections);
             }
-            println!("Created: {}", tenant.created_at.format("%Y-%m-%d %H:%M:%S UTC"));
+            println!(
+                "Created: {}",
+                tenant.created_at.format("%Y-%m-%d %H:%M:%S UTC")
+            );
         }
         Err(e) => {
             return Err(color_eyre::eyre::eyre!("Failed to create tenant: {}", e));
         }
     }
-    
+
     Ok(())
 }
 
@@ -174,25 +180,31 @@ async fn list_tenants(
 ) -> Result<()> {
     println!("Fortress Tenants");
     println!("==================");
-    
+
     match manager.list_tenants().await {
         Ok(tenants) => {
             if tenants.is_empty() {
                 println!("No tenants found");
                 return Ok(());
             }
-            
+
             println!("Total tenants: {}\n", tenants.len());
-            
+
             for tenant in tenants {
                 println!("{}", tenant.name);
                 println!("   ID: {}", tenant.id);
                 if let Some(desc) = tenant.description {
                     println!("   Description: {}", desc);
                 }
-                println!("   Status: {}", if tenant.active { "Active" } else { "Inactive" });
-                println!("   Created: {}", tenant.created_at.format("%Y-%m-%d %H:%M:%S UTC"));
-                
+                println!(
+                    "   Status: {}",
+                    if tenant.active { "Active" } else { "Inactive" }
+                );
+                println!(
+                    "   Created: {}",
+                    tenant.created_at.format("%Y-%m-%d %H:%M:%S UTC")
+                );
+
                 if detailed {
                     println!("   Resource Limits:");
                     if let Some(max_dbs) = tenant.resource_limits.max_databases {
@@ -212,7 +224,7 @@ async fn list_tenants(
             return Err(color_eyre::eyre::eyre!("Failed to list tenants: {}", e));
         }
     }
-    
+
     Ok(())
 }
 
@@ -224,10 +236,10 @@ async fn show_tenant(manager: &InMemoryTenantManager, tenant_id_str: &str) -> Re
             return Err(color_eyre::eyre::eyre!("Invalid tenant ID format"));
         }
     };
-    
+
     println!("Tenant Details");
     println!("=================");
-    
+
     match manager.get_tenant(&tenant_id).await {
         Ok(Some(tenant)) => {
             println!("ID: {}", tenant.id);
@@ -235,8 +247,11 @@ async fn show_tenant(manager: &InMemoryTenantManager, tenant_id_str: &str) -> Re
             if let Some(desc) = tenant.description {
                 println!("Description: {}", desc);
             }
-            println!("✓ Status: {}", if tenant.active { "Active" } else { "Inactive" });
-            
+            println!(
+                "✓ Status: {}",
+                if tenant.active { "Active" } else { "Inactive" }
+            );
+
             println!("\nResource Limits:");
             if let Some(max_dbs) = tenant.resource_limits.max_databases {
                 println!("   Max databases: {}", max_dbs);
@@ -253,10 +268,16 @@ async fn show_tenant(manager: &InMemoryTenantManager, tenant_id_str: &str) -> Re
             if let Some(mem_quota) = tenant.resource_limits.memory_quota {
                 println!("   Memory quota: {}%", mem_quota);
             }
-            
+
             println!("\nTimestamps:");
-            println!("   Created: {}", tenant.created_at.format("%Y-%m-%d %H:%M:%S UTC"));
-            println!("   Modified: {}", tenant.modified_at.format("%Y-%m-%d %H:%M:%S UTC"));
+            println!(
+                "   Created: {}",
+                tenant.created_at.format("%Y-%m-%d %H:%M:%S UTC")
+            );
+            println!(
+                "   Modified: {}",
+                tenant.modified_at.format("%Y-%m-%d %H:%M:%S UTC")
+            );
         }
         Ok(None) => {
             println!("✗ Tenant not found");
@@ -265,7 +286,7 @@ async fn show_tenant(manager: &InMemoryTenantManager, tenant_id_str: &str) -> Re
             return Err(color_eyre::eyre::eyre!("Failed to get tenant: {}", e));
         }
     }
-    
+
     Ok(())
 }
 
@@ -277,10 +298,10 @@ async fn show_tenant_stats(manager: &InMemoryTenantManager, tenant_id_str: &str)
             return Err(color_eyre::eyre::eyre!("Invalid tenant ID format"));
         }
     };
-    
+
     println!("Tenant Statistics");
     println!("====================");
-    
+
     match manager.get_tenant_stats(&tenant_id).await {
         Ok(stats) => {
             println!("Databases: {}", stats.database_count);
@@ -288,35 +309,46 @@ async fn show_tenant_stats(manager: &InMemoryTenantManager, tenant_id_str: &str)
             println!("Active connections: {}", stats.active_connections);
             println!("CPU usage: {:.2}%", stats.cpu_usage);
             println!("Memory usage: {:.2}%", stats.memory_usage);
-            
+
             // Also show resource usage from isolation manager
-            if let Ok(Some(usage)) = manager.resource_isolation().get_tenant_usage(&tenant_id).await {
+            if let Ok(Some(usage)) = manager
+                .resource_isolation()
+                .get_tenant_usage(&tenant_id)
+                .await
+            {
                 println!("\nResource Usage Details:");
                 println!("   Database count: {}", usage.database_count);
                 println!("   Storage allocated: {} bytes", usage.storage_used);
                 println!("   Active connections: {}", usage.active_connections);
                 println!("   CPU usage: {:.2}%", usage.cpu_usage);
                 println!("   Memory usage: {:.2}%", usage.memory_usage);
-                println!("   Last updated: {}", usage.last_updated.format("%Y-%m-%d %H:%M:%S UTC"));
+                println!(
+                    "   Last updated: {}",
+                    usage.last_updated.format("%Y-%m-%d %H:%M:%S UTC")
+                );
             }
         }
         Err(e) => {
             return Err(color_eyre::eyre::eyre!("Failed to get tenant stats: {}", e));
         }
     }
-    
+
     Ok(())
 }
 
 /// Delete a tenant
-async fn delete_tenant(manager: &InMemoryTenantManager, tenant_id_str: &str, force: bool) -> Result<()> {
+async fn delete_tenant(
+    manager: &InMemoryTenantManager,
+    tenant_id_str: &str,
+    force: bool,
+) -> Result<()> {
     let tenant_id = match Uuid::from_str(tenant_id_str) {
         Ok(id) => id,
         Err(_) => {
             return Err(color_eyre::eyre::eyre!("Invalid tenant ID format"));
         }
     };
-    
+
     // First, show tenant details
     if let Ok(Some(tenant)) = manager.get_tenant(&tenant_id).await {
         println!("Tenant to delete:");
@@ -330,7 +362,7 @@ async fn delete_tenant(manager: &InMemoryTenantManager, tenant_id_str: &str, for
         println!("✗ Tenant not found");
         return Ok(());
     }
-    
+
     // Confirm deletion unless forced
     if !force {
         if !Confirm::new()
@@ -342,9 +374,9 @@ async fn delete_tenant(manager: &InMemoryTenantManager, tenant_id_str: &str, for
             return Ok(());
         }
     }
-    
+
     println!("Deleting tenant...");
-    
+
     match manager.delete_tenant(&tenant_id).await {
         Ok(_) => {
             println!("✓ Tenant deleted successfully");
@@ -353,6 +385,6 @@ async fn delete_tenant(manager: &InMemoryTenantManager, tenant_id_str: &str, for
             return Err(color_eyre::eyre::eyre!("Failed to delete tenant: {}", e));
         }
     }
-    
+
     Ok(())
 }

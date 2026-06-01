@@ -1,25 +1,29 @@
 //! Performance optimization module
-//! 
+//!
 //! This module provides comprehensive performance optimizations including:
 //! - SIMD optimizations for cryptographic operations
 //! - Async processing with batch operations
 //! - Memory management with pooling
 //! - Performance metrics and monitoring
 
-pub mod simd;
 pub mod async_ops;
 pub mod memory;
 pub mod metrics;
+pub mod simd;
 
 // Re-export commonly used items
-pub use simd::{SimdEncryptor, AdaptiveEncryptor, StandardEncryptor};
-pub use async_ops::{encrypt_data_async, decrypt_data_async, BatchEncryptor, AsyncEncryptionService};
-pub use memory::{MemoryPool, PooledBuffer, MemoryMonitor, MemoryStats, allocation_tracker};
-pub use metrics::{PerformanceMetrics, PerformanceTimer, PerformanceProfiler, global_metrics, global_profiler};
+pub use async_ops::{
+    decrypt_data_async, encrypt_data_async, AsyncEncryptionService, BatchEncryptor,
+};
+pub use memory::{allocation_tracker, MemoryMonitor, MemoryPool, MemoryStats, PooledBuffer};
+pub use metrics::{
+    global_metrics, global_profiler, PerformanceMetrics, PerformanceProfiler, PerformanceTimer,
+};
+pub use simd::{AdaptiveEncryptor, SimdEncryptor, StandardEncryptor};
 
-use crate::key::SecureKey;
-use crate::error::FortressError;
 use crate::encryption::EncryptionAlgorithm;
+use crate::error::FortressError;
+use crate::key::SecureKey;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -79,7 +83,11 @@ pub struct HighPerformanceEncryptor {
 
 impl HighPerformanceEncryptor {
     /// Create a new high-performance encryptor
-    pub fn new(algorithm: Box<dyn EncryptionAlgorithm>, config: PerformanceConfig, key: SecureKey) -> Result<Self, FortressError> {
+    pub fn new(
+        algorithm: Box<dyn EncryptionAlgorithm>,
+        config: PerformanceConfig,
+        key: SecureKey,
+    ) -> Result<Self, FortressError> {
         let algorithm: Arc<dyn EncryptionAlgorithm> = Arc::from(algorithm);
         let metrics = Arc::new(PerformanceMetrics::new());
         let profiler = Arc::new(PerformanceProfiler::new());
@@ -102,8 +110,9 @@ impl HighPerformanceEncryptor {
         };
 
         let memory_monitor = if config.enable_memory_pooling {
-            let mut monitor = MemoryMonitor::new(config.memory_threshold, config.memory_monitor_interval);
-            
+            let mut monitor =
+                MemoryMonitor::new(config.memory_threshold, config.memory_monitor_interval);
+
             // Add cleanup callbacks
             let metrics_clone = metrics.clone();
             monitor.add_cleanup_callback(move || {
@@ -111,7 +120,7 @@ impl HighPerformanceEncryptor {
                 tracing::info!("Clearing performance caches and metrics");
                 metrics_clone.reset();
             });
-            
+
             Some(monitor)
         } else {
             None
@@ -132,7 +141,7 @@ impl HighPerformanceEncryptor {
     /// Encrypt data with optimal performance
     pub async fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>, FortressError> {
         let _timer = PerformanceTimer::new(self.metrics.clone());
-        
+
         // Use the most appropriate encryption method
         if let Some(async_service) = &self.async_service {
             if data.len() >= 1024 {
@@ -160,7 +169,9 @@ impl HighPerformanceEncryptor {
     /// Encrypt multiple items with batch processing
     pub async fn encrypt_batch(&self, data_batch: &[&[u8]]) -> Result<Vec<Vec<u8>>, FortressError> {
         if let Some(async_service) = &self.async_service {
-            async_service.encrypt_batch(data_batch, &self.key.as_bytes()).await
+            async_service
+                .encrypt_batch(data_batch, &self.key.as_bytes())
+                .await
         } else {
             // Fallback to individual encryption
             let mut results = Vec::with_capacity(data_batch.len());
@@ -194,7 +205,9 @@ impl HighPerformanceEncryptor {
     }
 
     /// Get profiling statistics
-    pub fn get_profiling_stats(&self) -> std::collections::HashMap<String, crate::performance::metrics::OperationStats> {
+    pub fn get_profiling_stats(
+        &self,
+    ) -> std::collections::HashMap<String, crate::performance::metrics::OperationStats> {
         self.profiler.get_all_stats()
     }
 
@@ -220,24 +233,28 @@ impl HighPerformanceEncryptor {
     }
 
     /// Benchmark the encryptor
-    pub async fn benchmark(&self, data_size: usize, iterations: usize) -> Result<BenchmarkResults, FortressError> {
+    pub async fn benchmark(
+        &self,
+        data_size: usize,
+        iterations: usize,
+    ) -> Result<BenchmarkResults, FortressError> {
         let data = vec![1u8; data_size];
         let mut durations = Vec::with_capacity(iterations);
-        
+
         for _ in 0..iterations {
             let start = std::time::Instant::now();
             let _result = self.encrypt(&data).await?;
             let duration = start.elapsed();
             durations.push(duration);
         }
-        
+
         let total_duration: Duration = durations.iter().sum();
         let avg_duration = total_duration / iterations as u32;
         let min_duration = durations.iter().min().unwrap();
         let max_duration = durations.iter().max().unwrap();
-        
+
         let throughput = (data_size * iterations) as f64 / total_duration.as_secs_f64();
-        
+
         Ok(BenchmarkResults {
             data_size,
             iterations,
@@ -292,32 +309,36 @@ pub struct PerformanceUtils;
 
 impl PerformanceUtils {
     /// Create an optimized encryptor with default configuration
-    pub fn create_optimized_encryptor(algorithm: Box<dyn EncryptionAlgorithm>) -> Result<HighPerformanceEncryptor, FortressError> {
+    pub fn create_optimized_encryptor(
+        algorithm: Box<dyn EncryptionAlgorithm>,
+    ) -> Result<HighPerformanceEncryptor, FortressError> {
         let key = crate::key::SecureKey::generate(32)?; // Generate a random 32-byte key
         HighPerformanceEncryptor::new(algorithm, PerformanceConfig::default(), key)
     }
 
     /// Create an optimized encryptor with custom configuration
     pub fn create_optimized_encryptor_with_config(
-        algorithm: Box<dyn EncryptionAlgorithm>, 
+        algorithm: Box<dyn EncryptionAlgorithm>,
         config: PerformanceConfig,
-        key: SecureKey
+        key: SecureKey,
     ) -> Result<HighPerformanceEncryptor, FortressError> {
         HighPerformanceEncryptor::new(algorithm, config, key)
     }
 
     /// Run a comprehensive performance test
-    pub async fn run_performance_test(encryptor: &HighPerformanceEncryptor) -> Result<PerformanceTestResults, FortressError> {
+    pub async fn run_performance_test(
+        encryptor: &HighPerformanceEncryptor,
+    ) -> Result<PerformanceTestResults, FortressError> {
         let mut results = PerformanceTestResults::new();
-        
+
         // Test different data sizes
         let data_sizes = vec![1024, 4096, 16384, 65536]; // 1KB, 4KB, 16KB, 64KB
-        
+
         for &size in &data_sizes {
             let benchmark = encryptor.benchmark(size, 100).await?;
             results.add_benchmark(format!("{}KB", size / 1024), benchmark);
         }
-        
+
         // Test batch processing
         let batch_data: Vec<Vec<u8>> = (0..32).map(|_| vec![1u8; 1024]).collect();
         let batch_refs: Vec<&[u8]> = batch_data.iter().map(|v| v.as_slice()).collect();
@@ -325,28 +346,28 @@ impl PerformanceUtils {
         let _batch_result = encryptor.encrypt_batch(&batch_refs).await?;
         let batch_duration = start.elapsed();
         results.set_batch_duration(batch_duration);
-        
+
         // Collect metrics
         results.set_metrics(encryptor.get_metrics());
         results.set_memory_stats(encryptor.get_memory_stats()?);
         results.set_simd_features(encryptor.supported_simd_features());
-        
+
         Ok(results)
     }
 
     /// Generate performance report
     pub fn generate_performance_report(results: &PerformanceTestResults) -> String {
         let mut report = String::new();
-        
+
         report.push_str("# Performance Optimization Report\n\n");
-        
+
         // SIMD Features
         report.push_str("## SIMD Features\n");
         for feature in &results.simd_features {
             report.push_str(&format!("- {}\n", feature));
         }
         report.push_str("\n");
-        
+
         // Benchmarks
         report.push_str("## Benchmarks\n");
         for (name, benchmark) in &results.benchmarks {
@@ -354,25 +375,31 @@ impl PerformanceUtils {
             report.push_str(&benchmark.format());
             report.push_str("\n");
         }
-        
+
         // Batch Performance
         if let Some(batch_duration) = results.batch_duration {
             report.push_str("## Batch Performance\n");
             report.push_str(&format!("Batch Duration: {:?}\n", batch_duration));
             report.push_str("\n");
         }
-        
+
         // Metrics
         report.push_str("## Performance Metrics\n");
         report.push_str(&results.metrics.format());
         report.push_str("\n");
-        
+
         // Memory Stats
         report.push_str("## Memory Statistics\n");
-        report.push_str(&format!("Buffer Pool Size: {}\n", results.memory_stats.buffer_pool_size));
-        report.push_str(&format!("Pool Hit Rate: {:.2}%\n", results.memory_stats.buffer_pool_stats.hit_rate * 100.0));
+        report.push_str(&format!(
+            "Buffer Pool Size: {}\n",
+            results.memory_stats.buffer_pool_size
+        ));
+        report.push_str(&format!(
+            "Pool Hit Rate: {:.2}%\n",
+            results.memory_stats.buffer_pool_stats.hit_rate * 100.0
+        ));
         report.push_str("\n");
-        
+
         report
     }
 }
@@ -461,25 +488,25 @@ mod tests {
         let config = PerformanceConfig::default();
         let key = crate::key::SecureKey::generate_random(32).unwrap();
         let mut encryptor = HighPerformanceEncryptor::new(algorithm, config, key).unwrap();
-        
+
         // Start monitoring
         encryptor.start_monitoring().await.unwrap();
-        
+
         // Test encryption
         let data = vec![1u8; 1024];
         let result = encryptor.encrypt(&data).await;
         assert!(result.is_ok());
-        
+
         // Test batch encryption
         let batch_data: Vec<&[u8]> = vec![&[1u8; 512], &[2u8; 512], &[3u8; 512]];
         let batch_result = encryptor.encrypt_batch(&batch_data).await;
         assert!(batch_result.is_ok());
         assert_eq!(batch_result.unwrap().len(), 3);
-        
+
         // Get metrics
         let metrics = encryptor.get_metrics();
         assert!(metrics.total_encryptions > 0);
-        
+
         // Stop monitoring
         encryptor.stop_monitoring().unwrap();
     }
@@ -488,11 +515,12 @@ mod tests {
     async fn test_benchmark() {
         let algorithm = Box::new(Aegis256::new());
         let key = crate::key::SecureKey::generate_random(32).unwrap();
-        let encryptor = HighPerformanceEncryptor::new(algorithm, PerformanceConfig::default(), key).unwrap();
-        
+        let encryptor =
+            HighPerformanceEncryptor::new(algorithm, PerformanceConfig::default(), key).unwrap();
+
         let results = encryptor.benchmark(1024, 10).await;
         assert!(results.is_ok());
-        
+
         let benchmark = results.unwrap();
         assert_eq!(benchmark.data_size, 1024);
         assert_eq!(benchmark.iterations, 10);
@@ -503,13 +531,13 @@ mod tests {
     async fn test_performance_utils() {
         let algorithm = Box::new(Aegis256::new());
         let encryptor = PerformanceUtils::create_optimized_encryptor(algorithm).unwrap();
-        
+
         let results = PerformanceUtils::run_performance_test(&encryptor).await;
         assert!(results.is_ok());
-        
+
         let test_results = results.unwrap();
         assert!(!test_results.benchmarks.is_empty());
-        
+
         let report = PerformanceUtils::generate_performance_report(&test_results);
         assert!(report.contains("Performance Optimization Report"));
         assert!(report.contains("SIMD Features"));
@@ -538,7 +566,7 @@ mod tests {
             throughput_bytes_per_sec: 102400.0,
             throughput_mb_per_sec: 0.09765625,
         };
-        
+
         let formatted = results.format();
         assert!(formatted.contains("Data Size: 1024 bytes"));
         assert!(formatted.contains("Iterations: 100"));

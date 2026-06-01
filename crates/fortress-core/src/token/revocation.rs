@@ -3,8 +3,8 @@
 //! This module provides token revocation functionality including revocation lists,
 //! revocation reasons, and revocation propagation.
 
-use chrono::{DateTime, Utc, Timelike};
-use serde::{Serialize, Deserialize};
+use chrono::{DateTime, Timelike, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -55,9 +55,9 @@ impl RevocationReason {
     pub fn is_security_related(&self) -> bool {
         matches!(
             self,
-            RevocationReason::Compromised |
-            RevocationReason::SecurityViolation |
-            RevocationReason::EntityDisabled
+            RevocationReason::Compromised
+                | RevocationReason::SecurityViolation
+                | RevocationReason::EntityDisabled
         )
     }
 }
@@ -87,11 +87,7 @@ pub struct RevocationEntry {
 
 impl RevocationEntry {
     /// Create a new revocation entry
-    pub fn new(
-        token_id: String,
-        reason: RevocationReason,
-        revoked_by: String,
-    ) -> Self {
+    pub fn new(token_id: String, reason: RevocationReason, revoked_by: String) -> Self {
         Self {
             revocation_id: Uuid::new_v4().to_string(),
             token_id,
@@ -186,7 +182,11 @@ impl RevocationList {
 
         // Update time index (group by hour for efficiency)
         {
-            let hour_key = revoked_at.with_minute(0).and_then(|dt| dt.with_second(0)).and_then(|dt| dt.with_nanosecond(0)).unwrap();
+            let hour_key = revoked_at
+                .with_minute(0)
+                .and_then(|dt| dt.with_second(0))
+                .and_then(|dt| dt.with_nanosecond(0))
+                .unwrap();
             let mut time_index = self.time_index.write().await;
             time_index
                 .entry(hour_key)
@@ -310,7 +310,11 @@ impl RevocationList {
 
             // Update time index
             {
-                let hour_key = revoked_at.with_minute(0).and_then(|dt| dt.with_second(0)).and_then(|dt| dt.with_nanosecond(0)).unwrap();
+                let hour_key = revoked_at
+                    .with_minute(0)
+                    .and_then(|dt| dt.with_second(0))
+                    .and_then(|dt| dt.with_nanosecond(0))
+                    .unwrap();
                 let mut time_index = self.time_index.write().await;
                 if let Some(tokens) = time_index.get_mut(&hour_key) {
                     tokens.remove(token_id);
@@ -542,7 +546,10 @@ mod tests {
         assert_eq!(entry.token_id, "token123");
         assert_eq!(entry.reason, RevocationReason::Compromised);
         assert_eq!(entry.revoked_by, "admin");
-        assert_eq!(entry.notes, Some("Suspicious activity detected".to_string()));
+        assert_eq!(
+            entry.notes,
+            Some("Suspicious activity detected".to_string())
+        );
         assert_eq!(entry.source_ip, Some("192.168.1.1".to_string()));
         assert!(entry.emergency);
     }
@@ -551,7 +558,10 @@ mod tests {
     async fn test_revocation_reasons() {
         assert_eq!(RevocationReason::Expired.display_name(), "Expired");
         assert_eq!(RevocationReason::Compromised.display_name(), "Compromised");
-        assert_eq!(RevocationReason::Custom("Other".to_string()).display_name(), "Other");
+        assert_eq!(
+            RevocationReason::Custom("Other".to_string()).display_name(),
+            "Other"
+        );
 
         assert!(RevocationReason::Compromised.is_security_related());
         assert!(RevocationReason::SecurityViolation.is_security_related());
@@ -612,12 +622,16 @@ mod tests {
         revocation_list.revoke_token(entry3).await.unwrap();
 
         // Test reason index
-        let expired_tokens = revocation_list.get_tokens_by_reason(&RevocationReason::Expired).await;
+        let expired_tokens = revocation_list
+            .get_tokens_by_reason(&RevocationReason::Expired)
+            .await;
         assert_eq!(expired_tokens.len(), 2);
         assert!(expired_tokens.contains(&"token1".to_string()));
         assert!(expired_tokens.contains(&"token3".to_string()));
 
-        let compromised_tokens = revocation_list.get_tokens_by_reason(&RevocationReason::Compromised).await;
+        let compromised_tokens = revocation_list
+            .get_tokens_by_reason(&RevocationReason::Compromised)
+            .await;
         assert_eq!(compromised_tokens.len(), 1);
         assert!(compromised_tokens.contains(&"token2".to_string()));
 
@@ -651,8 +665,14 @@ mod tests {
         );
 
         revocation_list.revoke_token(expired_entry).await.unwrap();
-        revocation_list.revoke_token(compromised_entry).await.unwrap();
-        revocation_list.revoke_token(security_violation_entry).await.unwrap();
+        revocation_list
+            .revoke_token(compromised_entry)
+            .await
+            .unwrap();
+        revocation_list
+            .revoke_token(security_violation_entry)
+            .await
+            .unwrap();
 
         // Test emergency revocations
         let emergency_revocations = revocation_list.get_emergency_revocations().await;
@@ -761,11 +781,11 @@ mod tests {
             RevocationReason::Expired,
             "system".to_string(),
         );
-        
+
         // Manually set old timestamp
         let mut old_entry = old_entry;
         old_entry.revoked_at = Utc::now() - chrono::Duration::days(30);
-        
+
         revocation_list.revoke_token(old_entry).await.unwrap();
 
         // Add a recent revocation
@@ -781,7 +801,10 @@ mod tests {
 
         // Cleanup old revocations (older than 1 day)
         let cutoff = Utc::now() - chrono::Duration::days(1);
-        let removed_count = revocation_list.cleanup_old_revocations(cutoff).await.unwrap();
+        let removed_count = revocation_list
+            .cleanup_old_revocations(cutoff)
+            .await
+            .unwrap();
         assert_eq!(removed_count, 1);
 
         // Should have 1 revocation left

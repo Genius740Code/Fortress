@@ -1,13 +1,13 @@
 //! TestPlugin Working Demo
-//! 
+//!
 //! This example demonstrates a working plugin system that matches
 //! the functionality of the testplugin in the testplugin/ directory.
 //! This shows that plugin infrastructure works and can be built upon.
 
-use std::collections::HashMap;
-use std::sync::Arc;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
 
 // Plugin metadata structure matching testplugin
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,7 +58,10 @@ pub struct PluginHealth {
 #[async_trait]
 pub trait Plugin: Send + Sync {
     fn metadata(&self) -> &PluginMetadata;
-    async fn execute(&self, input: PluginInput) -> Result<PluginResult, Box<dyn std::error::Error + Send + Sync>>;
+    async fn execute(
+        &self,
+        input: PluginInput,
+    ) -> Result<PluginResult, Box<dyn std::error::Error + Send + Sync>>;
     async fn health_check(&self) -> Result<PluginHealth, Box<dyn std::error::Error + Send + Sync>>;
 }
 
@@ -89,28 +92,28 @@ impl Plugin for TestPlugin {
         &self.metadata
     }
 
-    async fn execute(&self, input: PluginInput) -> Result<PluginResult, Box<dyn std::error::Error + Send + Sync>> {
+    async fn execute(
+        &self,
+        input: PluginInput,
+    ) -> Result<PluginResult, Box<dyn std::error::Error + Send + Sync>> {
         let start_time = std::time::Instant::now();
-        
-        let result: Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> = match input.action.as_str() {
-            "hello" => {
-                let name = input.data["name"]
-                    .as_str()
-                    .unwrap_or("World");
-                
-                Ok(serde_json::json!({
-                    "message": format!("Hello, {}!", name),
-                    "timestamp": chrono::Utc::now()
-                }))
-            }
-            "echo" => {
-                Ok(input.data.clone())
-            }
-            _ => Err(format!("Unknown action: {}", input.action).into()),
-        };
+
+        let result: Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> =
+            match input.action.as_str() {
+                "hello" => {
+                    let name = input.data["name"].as_str().unwrap_or("World");
+
+                    Ok(serde_json::json!({
+                        "message": format!("Hello, {}!", name),
+                        "timestamp": chrono::Utc::now()
+                    }))
+                }
+                "echo" => Ok(input.data.clone()),
+                _ => Err(format!("Unknown action: {}", input.action).into()),
+            };
 
         let execution_time = start_time.elapsed().as_millis() as u64;
-        
+
         match result {
             Ok(data) => Ok(PluginResult {
                 success: true,
@@ -156,7 +159,10 @@ impl PluginManager {
         }
     }
 
-    pub async fn register_plugin(&self, plugin: Arc<dyn Plugin>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn register_plugin(
+        &self,
+        plugin: Arc<dyn Plugin>,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let plugin_id = plugin.metadata().id.clone();
         let mut plugins = self.plugins.write().await;
         plugins.insert(plugin_id, plugin);
@@ -169,7 +175,8 @@ impl PluginManager {
         input: PluginInput,
     ) -> Result<PluginResult, Box<dyn std::error::Error + Send + Sync>> {
         let plugins = self.plugins.read().await;
-        let plugin = plugins.get(plugin_id)
+        let plugin = plugins
+            .get(plugin_id)
             .ok_or_else(|| format!("Plugin '{}' not found", plugin_id))?;
 
         plugin.execute(input).await
@@ -177,7 +184,8 @@ impl PluginManager {
 
     pub async fn list_plugins(&self) -> Vec<PluginMetadata> {
         let plugins = self.plugins.read().await;
-        plugins.values()
+        plugins
+            .values()
             .map(|plugin| plugin.metadata().clone())
             .collect()
     }
@@ -185,13 +193,13 @@ impl PluginManager {
     pub async fn health_check_all(&self) -> HashMap<String, PluginHealth> {
         let plugins = self.plugins.read().await;
         let mut results = HashMap::new();
-        
+
         for (id, plugin) in plugins.iter() {
             if let Ok(health) = plugin.health_check().await {
                 results.insert(id.clone(), health);
             }
         }
-        
+
         results
     }
 }
@@ -205,14 +213,16 @@ async fn main() -> color_eyre::eyre::Result<()> {
 
     // Create plugin manager
     let plugin_manager = PluginManager::new();
-    
+
     // Create and register the TestPlugin
     println!("\nLoading TestPlugin...");
     let test_plugin = Arc::new(TestPlugin::new());
-    
-    plugin_manager.register_plugin(test_plugin.clone()).await
+
+    plugin_manager
+        .register_plugin(test_plugin.clone())
+        .await
         .map_err(|e| color_eyre::eyre::eyre!("Failed to register plugin: {}", e))?;
-    
+
     println!("✓ TestPlugin registered successfully");
     println!("   Plugin ID: {}", test_plugin.metadata().id);
     println!("   Plugin Name: {}", test_plugin.metadata().name);
@@ -231,15 +241,20 @@ async fn main() -> color_eyre::eyre::Result<()> {
         parameters: HashMap::new(),
     };
 
-    let hello_result = plugin_manager.execute_plugin("TestPlugin", hello_input).await
+    let hello_result = plugin_manager
+        .execute_plugin("TestPlugin", hello_input)
+        .await
         .map_err(|e| color_eyre::eyre::eyre!("Failed to execute hello action: {}", e))?;
-    
+
     if hello_result.success {
         println!("✓ Hello action successful");
         if let Some(data) = hello_result.data {
             println!("   Response: {}", serde_json::to_string_pretty(&data)?);
         }
-        println!("   Execution time: {}ms", hello_result.metrics.execution_time_ms);
+        println!(
+            "   Execution time: {}ms",
+            hello_result.metrics.execution_time_ms
+        );
     } else {
         println!("✗ Hello action failed: {:?}", hello_result.error);
     }
@@ -259,15 +274,20 @@ async fn main() -> color_eyre::eyre::Result<()> {
         parameters: HashMap::new(),
     };
 
-    let echo_result = plugin_manager.execute_plugin("TestPlugin", echo_input).await
+    let echo_result = plugin_manager
+        .execute_plugin("TestPlugin", echo_input)
+        .await
         .map_err(|e| color_eyre::eyre::eyre!("Failed to execute echo action: {}", e))?;
-    
+
     if echo_result.success {
         println!("✓ Echo action successful");
         if let Some(data) = echo_result.data {
             println!("   Echoed data: {}", serde_json::to_string_pretty(&data)?);
         }
-        println!("   Execution time: {}ms", echo_result.metrics.execution_time_ms);
+        println!(
+            "   Execution time: {}ms",
+            echo_result.metrics.execution_time_ms
+        );
     } else {
         println!("✗ Echo action failed: {:?}", echo_result.error);
     }
@@ -280,9 +300,11 @@ async fn main() -> color_eyre::eyre::Result<()> {
         parameters: HashMap::new(),
     };
 
-    let invalid_result = plugin_manager.execute_plugin("TestPlugin", invalid_input).await
+    let invalid_result = plugin_manager
+        .execute_plugin("TestPlugin", invalid_input)
+        .await
         .map_err(|e| color_eyre::eyre::eyre!("Failed to execute invalid action: {}", e))?;
-    
+
     if !invalid_result.success {
         println!("✓ Error handling working correctly");
         println!("   Expected error: {:?}", invalid_result.error);
@@ -301,18 +323,33 @@ async fn main() -> color_eyre::eyre::Result<()> {
     println!("\nPlugin health status:");
     let health_status = plugin_manager.health_check_all().await;
     for (plugin_id, health) in health_status {
-        println!("   {}: {} - {}", plugin_id, 
-            if health.healthy { "✓ Healthy" } else { "✗ Unhealthy" },
+        println!(
+            "   {}: {} - {}",
+            plugin_id,
+            if health.healthy {
+                "✓ Healthy"
+            } else {
+                "✗ Unhealthy"
+            },
             health.message
         );
     }
 
     // Test plugin health check directly
     println!("\nDirect plugin health check:");
-    let health = test_plugin.health_check().await
+    let health = test_plugin
+        .health_check()
+        .await
         .map_err(|e| color_eyre::eyre::eyre!("Health check failed: {}", e))?;
-    
-    println!("   Health: {}", if health.healthy { "✓ Healthy" } else { "✗ Unhealthy" });
+
+    println!(
+        "   Health: {}",
+        if health.healthy {
+            "✓ Healthy"
+        } else {
+            "✗ Unhealthy"
+        }
+    );
     println!("   Message: {}", health.message);
     println!("   Last Check: {}", health.last_check);
 

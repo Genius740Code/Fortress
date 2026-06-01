@@ -41,33 +41,33 @@
 #![allow(clippy::module_name_repetitions)]
 #![allow(dead_code)]
 
+pub mod auth;
+pub mod cluster;
 pub mod config;
 pub mod error;
+pub mod graphql;
+pub mod grpc;
 pub mod handlers;
+pub mod health;
+pub mod metrics;
 pub mod middleware;
 pub mod models;
 pub mod server;
-pub mod auth;
-pub mod metrics;
-pub mod health;
-pub mod grpc;
-pub mod cluster;
-pub mod graphql;
 
 /// Re-export commonly used types
 pub mod prelude {
+    pub use crate::auth::{require_jwt_middleware, AuthManager, TokenClaims};
     pub use crate::config::ServerConfig;
+    pub use crate::config::{DdosProtectionConfig, RateLimitAlgorithm, RateLimitConfig};
     pub use crate::error::{ServerError, ServerResult};
-    pub use crate::server::FortressServer;
-    pub use crate::models::*;
-    pub use crate::auth::{AuthManager, TokenClaims, require_jwt_middleware};
+    pub use crate::grpc::server::GrpcServer;
+    pub use crate::grpc::service::FortressGrpcService;
     pub use crate::health::HealthChecker;
     pub use crate::metrics::MetricsCollector;
     pub use crate::middleware::AdvancedRateLimiter;
-    pub use crate::config::{RateLimitAlgorithm, RateLimitConfig, DdosProtectionConfig};
     pub use crate::middleware::RateLimitMetricsSnapshot;
-    pub use crate::grpc::server::GrpcServer;
-    pub use crate::grpc::service::FortressGrpcService;
+    pub use crate::models::*;
+    pub use crate::server::FortressServer;
 }
 
 /// Fortress server version information

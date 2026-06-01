@@ -16,8 +16,8 @@ pub enum CacheBackend {
     /// In-memory cache (for single-node deployments)
     InMemory,
     /// Redis cluster
-/// Redis cluster configuration
-    Redis { 
+    /// Redis cluster configuration
+    Redis {
         /// List of Redis node addresses
         nodes: Vec<String>,
         /// Authentication password
@@ -26,13 +26,13 @@ pub enum CacheBackend {
         db: i64,
     },
     /// Memcached cluster
-/// Memcached cluster configuration
+    /// Memcached cluster configuration
     Memcached {
         /// List of Memcached server addresses
         servers: Vec<String>,
     },
     /// Hybrid cache (local + distributed)
-/// Hybrid cache configuration (local + distributed)
+    /// Hybrid cache configuration (local + distributed)
     Hybrid {
         /// Size of local cache
         local_cache_size: usize,
@@ -257,8 +257,8 @@ impl InMemoryCache {
         let mut entries = self.entries.write().await;
 
         // Find entry with lowest access count
-        if let Some((key_to_remove, _)) = entries.iter()
-            .min_by_key(|(_, entry)| entry.access_count) {
+        if let Some((key_to_remove, _)) = entries.iter().min_by_key(|(_, entry)| entry.access_count)
+        {
             let key = key_to_remove.clone();
             entries.remove(&key);
             self.update_eviction_stats().await;
@@ -272,8 +272,7 @@ impl InMemoryCache {
         let mut entries = self.entries.write().await;
 
         // Find oldest entry
-        if let Some((key_to_remove, _)) = entries.iter()
-            .min_by_key(|(_, entry)| entry.created_at) {
+        if let Some((key_to_remove, _)) = entries.iter().min_by_key(|(_, entry)| entry.created_at) {
             let key = key_to_remove.clone();
             entries.remove(&key);
             self.update_eviction_stats().await;
@@ -327,7 +326,7 @@ impl InMemoryCache {
     /// Update access order for LRU
     async fn update_access_order(&self, key: &str) {
         let mut access_order = self.access_order.write().await;
-        
+
         // Remove key if it exists
         access_order.retain(|k| k != key);
         // Add key to the end (most recently used)
@@ -338,12 +337,13 @@ impl InMemoryCache {
     fn compress_data(&self, data: &[u8]) -> Result<Vec<u8>> {
         if self.config.enable_compression {
             // Use LZ4 compression for speed
-            let compressed = lz4::block::compress(data, None, true)
-                .map_err(|e| FortressError::storage(
+            let compressed = lz4::block::compress(data, None, true).map_err(|e| {
+                FortressError::storage(
                     format!("Compression failed: {}", e),
                     "distributed_cache".to_string(),
                     crate::error::StorageErrorCode::CorruptedData,
-                ))?;
+                )
+            })?;
             Ok(compressed)
         } else {
             Ok(data.to_vec())
@@ -353,12 +353,13 @@ impl InMemoryCache {
     /// Decompress data if needed
     fn decompress_data(&self, data: &[u8]) -> Result<Vec<u8>> {
         if self.config.enable_compression {
-            let decompressed = lz4::block::decompress(data, None)
-                .map_err(|e| FortressError::storage(
+            let decompressed = lz4::block::decompress(data, None).map_err(|e| {
+                FortressError::storage(
                     format!("Decompression failed: {}", e),
                     "distributed_cache".to_string(),
                     crate::error::StorageErrorCode::CorruptedData,
-                ))?;
+                )
+            })?;
             Ok(decompressed)
         } else {
             Ok(data.to_vec())
@@ -381,15 +382,17 @@ impl DistributedCache for InMemoryCache {
             if age.num_seconds() > entry.ttl_seconds as i64 {
                 entries.remove(&full_key);
                 drop(entries);
-                
+
                 // Update statistics
                 let mut stats = self.statistics.write().await;
                 stats.misses += 1;
                 stats.hit_ratio = stats.hits as f64 / (stats.hits + stats.misses) as f64;
-                
+
                 let elapsed = start.elapsed().as_micros() as f64;
-                stats.avg_get_time_us = (stats.avg_get_time_us * (stats.hits + stats.misses - 1) as f64 + elapsed) / (stats.hits + stats.misses) as f64;
-                
+                stats.avg_get_time_us =
+                    (stats.avg_get_time_us * (stats.hits + stats.misses - 1) as f64 + elapsed)
+                        / (stats.hits + stats.misses) as f64;
+
                 return Ok(None);
             }
 
@@ -397,7 +400,7 @@ impl DistributedCache for InMemoryCache {
             entry.last_accessed = now;
             entry.access_count += 1;
             let value = self.decompress_data(&entry.value)?;
-            
+
             drop(entries);
             self.update_access_order(&full_key).await;
 
@@ -405,21 +408,25 @@ impl DistributedCache for InMemoryCache {
             let mut stats = self.statistics.write().await;
             stats.hits += 1;
             stats.hit_ratio = stats.hits as f64 / (stats.hits + stats.misses) as f64;
-            
+
             let elapsed = start.elapsed().as_micros() as f64;
-            stats.avg_get_time_us = (stats.avg_get_time_us * (stats.hits + stats.misses - 1) as f64 + elapsed) / (stats.hits + stats.misses) as f64;
+            stats.avg_get_time_us =
+                (stats.avg_get_time_us * (stats.hits + stats.misses - 1) as f64 + elapsed)
+                    / (stats.hits + stats.misses) as f64;
 
             Ok(Some(value))
         } else {
             drop(entries);
-            
+
             // Update statistics
             let mut stats = self.statistics.write().await;
             stats.misses += 1;
             stats.hit_ratio = stats.hits as f64 / (stats.hits + stats.misses) as f64;
-            
+
             let elapsed = start.elapsed().as_micros() as f64;
-            stats.avg_get_time_us = (stats.avg_get_time_us * (stats.hits + stats.misses - 1) as f64 + elapsed) / (stats.hits + stats.misses) as f64;
+            stats.avg_get_time_us =
+                (stats.avg_get_time_us * (stats.hits + stats.misses - 1) as f64 + elapsed)
+                    / (stats.hits + stats.misses) as f64;
 
             Ok(None)
         }
@@ -456,23 +463,27 @@ impl DistributedCache for InMemoryCache {
         let mut stats = self.statistics.write().await;
         stats.sets += 1;
         stats.total_entries = self.entries.read().await.len() as u64;
-        stats.cache_size_bytes = self.entries.read().await
+        stats.cache_size_bytes = self
+            .entries
+            .read()
+            .await
             .values()
             .map(|e| e.size_bytes as u64)
             .sum();
-        
+
         let elapsed = start.elapsed().as_micros() as f64;
-        stats.avg_set_time_us = (stats.avg_set_time_us * (stats.sets - 1) as f64 + elapsed) / stats.sets as f64;
+        stats.avg_set_time_us =
+            (stats.avg_set_time_us * (stats.sets - 1) as f64 + elapsed) / stats.sets as f64;
 
         Ok(())
     }
 
     async fn delete(&self, key: &str) -> Result<bool> {
         let full_key = format!("{}{}", self.config.key_prefix, key);
-        
+
         let mut entries = self.entries.write().await;
         let removed = entries.remove(&full_key).is_some();
-        
+
         if removed {
             // Update statistics
             let mut stats = self.statistics.write().await;
@@ -493,7 +504,7 @@ impl DistributedCache for InMemoryCache {
     async fn clear(&self) -> Result<()> {
         let mut entries = self.entries.write().await;
         entries.clear();
-        
+
         // Update statistics
         let mut stats = self.statistics.write().await;
         stats.total_entries = 0;
@@ -519,28 +530,31 @@ impl DistributedCache for InMemoryCache {
 
     async fn increment(&self, key: &str, delta: i64) -> Result<i64> {
         let current_value = self.get(key).await?;
-        
+
         let current_int = match current_value {
             Some(bytes) => {
-                let str_val = String::from_utf8(bytes)
-                    .map_err(|_| FortressError::storage(
+                let str_val = String::from_utf8(bytes).map_err(|_| {
+                    FortressError::storage(
                         "Cache value is not a valid string".to_string(),
                         "distributed_cache".to_string(),
                         crate::error::StorageErrorCode::CorruptedData,
-                    ))?;
-                str_val.parse::<i64>()
-                    .map_err(|_| FortressError::storage(
+                    )
+                })?;
+                str_val.parse::<i64>().map_err(|_| {
+                    FortressError::storage(
                         "Cache value is not a valid integer".to_string(),
                         "distributed_cache".to_string(),
                         crate::error::StorageErrorCode::CorruptedData,
-                    ))?
+                    )
+                })?
             }
             None => 0,
         };
 
         let new_value = current_int + delta;
-        self.set(key, new_value.to_string().into_bytes(), None).await?;
-        
+        self.set(key, new_value.to_string().into_bytes(), None)
+            .await?;
+
         Ok(new_value)
     }
 
@@ -567,10 +581,10 @@ impl DistributedCache for InMemoryCache {
         // Try to set and get a test value
         let test_key = "health_check";
         let test_value = b"test".to_vec();
-        
+
         self.set(test_key, test_value.clone(), Some(1)).await?;
         let retrieved = self.get(test_key).await?;
-        
+
         if retrieved.as_ref() == Some(&test_value) {
             self.delete(test_key).await?;
             Ok(true)
@@ -589,11 +603,11 @@ pub struct RedisCache {
 }
 
 /// Factory function to create cache based on configuration
-pub async fn create_distributed_cache(config: DistributedCacheConfig) -> Result<Box<dyn DistributedCache>> {
+pub async fn create_distributed_cache(
+    config: DistributedCacheConfig,
+) -> Result<Box<dyn DistributedCache>> {
     match config.backend {
-        CacheBackend::InMemory => {
-            Ok(Box::new(InMemoryCache::new(config)))
-        }
+        CacheBackend::InMemory => Ok(Box::new(InMemoryCache::new(config))),
         CacheBackend::Redis { .. } => {
             #[cfg(feature = "redis")]
             {
@@ -613,20 +627,16 @@ pub async fn create_distributed_cache(config: DistributedCacheConfig) -> Result<
                 ))
             }
         }
-        CacheBackend::Memcached { .. } => {
-            Err(FortressError::storage(
-                "Memcached cache not yet implemented".to_string(),
-                "distributed_cache".to_string(),
-                crate::error::StorageErrorCode::BackendNotAvailable,
-            ))
-        }
-        CacheBackend::Hybrid { .. } => {
-            Err(FortressError::storage(
-                "Hybrid cache not yet implemented".to_string(),
-                "distributed_cache".to_string(),
-                crate::error::StorageErrorCode::BackendNotAvailable,
-            ))
-        }
+        CacheBackend::Memcached { .. } => Err(FortressError::storage(
+            "Memcached cache not yet implemented".to_string(),
+            "distributed_cache".to_string(),
+            crate::error::StorageErrorCode::BackendNotAvailable,
+        )),
+        CacheBackend::Hybrid { .. } => Err(FortressError::storage(
+            "Hybrid cache not yet implemented".to_string(),
+            "distributed_cache".to_string(),
+            crate::error::StorageErrorCode::BackendNotAvailable,
+        )),
     }
 }
 
@@ -642,15 +652,15 @@ mod tests {
         // Test set and get
         let key = "test_key";
         let value = b"test_value".to_vec();
-        
+
         cache.set(key, value.clone(), None).await.unwrap();
         let retrieved = cache.get(key).await.unwrap();
-        
+
         assert_eq!(retrieved, Some(value));
-        
+
         // Test exists
         assert!(cache.exists(key).await.unwrap());
-        
+
         // Test delete
         assert!(cache.delete(key).await.unwrap());
         assert!(!cache.exists(key).await.unwrap());
@@ -666,15 +676,15 @@ mod tests {
 
         let key = "ttl_test";
         let value = b"test_value".to_vec();
-        
+
         cache.set(key, value.clone(), Some(1)).await.unwrap();
-        
+
         // Should be available immediately
         assert!(cache.get(key).await.unwrap().is_some());
-        
+
         // Wait for expiration
         tokio::time::sleep(Duration::from_secs(2)).await;
-        
+
         // Should be expired
         assert!(cache.get(key).await.unwrap().is_none());
     }
@@ -686,13 +696,13 @@ mod tests {
 
         let key = "stats_test";
         let value = b"test_value".to_vec();
-        
+
         // Perform operations
         cache.set(key, value.clone(), None).await.unwrap();
         cache.get(key).await.unwrap();
         cache.get(key).await.unwrap();
         cache.get("nonexistent").await.unwrap();
-        
+
         let stats = cache.get_statistics().await.unwrap();
         assert_eq!(stats.sets, 1);
         assert_eq!(stats.hits, 2);
@@ -713,7 +723,7 @@ mod tests {
         cache.set("key1", b"value1".to_vec(), None).await.unwrap();
         cache.set("key2", b"value2".to_vec(), None).await.unwrap();
         cache.set("key3", b"value3".to_vec(), None).await.unwrap();
-        
+
         // First key should be evicted
         assert!(!cache.exists("key1").await.unwrap());
         assert!(cache.exists("key2").await.unwrap());
@@ -726,15 +736,15 @@ mod tests {
         let cache = InMemoryCache::new(config);
 
         let key = "counter";
-        
+
         // Increment from non-existent (should start at 0)
         let result = cache.increment(key, 5).await.unwrap();
         assert_eq!(result, 5);
-        
+
         // Increment existing value
         let result = cache.increment(key, 3).await.unwrap();
         assert_eq!(result, 8);
-        
+
         // Verify stored value
         let stored = cache.get(key).await.unwrap();
         assert_eq!(stored, Some(b"8".to_vec()));

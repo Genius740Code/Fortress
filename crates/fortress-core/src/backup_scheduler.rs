@@ -4,18 +4,17 @@
 //! scheduling, retry logic, and automated retention management.
 
 use crate::backup::{
-    BackupManager, BackupConfig, BackupStrategy, BackupSchedule, 
-    ScheduledRunResult
+    BackupConfig, BackupManager, BackupSchedule, BackupStrategy, ScheduledRunResult,
 };
-use crate::storage::StorageBackend;
-use crate::error::{FortressError, Result};
 use crate::error::StorageErrorCode;
+use crate::error::{FortressError, Result};
+use crate::storage::StorageBackend;
 use chrono::Utc;
-use std::sync::Arc;
+use cron::Schedule as CronSchedule;
 use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
-use cron::Schedule as CronSchedule;
 
 /// Backup scheduler manager
 #[derive(Debug)]
@@ -52,12 +51,14 @@ impl BackupScheduler {
         }
 
         // Validate cron expression
-        let cron_schedule = CronSchedule::try_from(schedule.cron_expression.as_str())
-            .map_err(|e| FortressError::configuration(
-                format!("Invalid cron expression: {}", e),
-                Some("cron_expression".to_string()),
-                crate::error::ConfigurationErrorCode::InvalidValue,
-            ))?;
+        let cron_schedule =
+            CronSchedule::try_from(schedule.cron_expression.as_str()).map_err(|e| {
+                FortressError::configuration(
+                    format!("Invalid cron expression: {}", e),
+                    Some("cron_expression".to_string()),
+                    crate::error::ConfigurationErrorCode::InvalidValue,
+                )
+            })?;
 
         // Calculate next run time
         let _now = Utc::now();
@@ -91,7 +92,7 @@ impl BackupScheduler {
         let task = tokio::spawn(async move {
             let schedule_id = schedule_id_for_task.clone();
             let mut interval = tokio::time::interval(
-                tokio::time::Duration::from_secs(60) // Check every minute
+                tokio::time::Duration::from_secs(60), // Check every minute
             );
 
             loop {
@@ -110,7 +111,8 @@ impl BackupScheduler {
                                 &backup_manager,
                                 &source_storage,
                                 current_schedule,
-                            ).await;
+                            )
+                            .await;
 
                             // Update schedule with run result
                             drop(schedules_guard);
@@ -121,12 +123,16 @@ impl BackupScheduler {
 
                                 // Keep only last 50 run results
                                 if schedule.run_history.len() > 50 {
-                                    schedule.run_history.sort_by(|a, b| b.started_at.cmp(&a.started_at));
+                                    schedule
+                                        .run_history
+                                        .sort_by(|a, b| b.started_at.cmp(&a.started_at));
                                     schedule.run_history.truncate(50);
                                 }
 
                                 // Calculate next run time
-                                if let Ok(cron_schedule) = CronSchedule::try_from(schedule.cron_expression.as_str()) {
+                                if let Ok(cron_schedule) =
+                                    CronSchedule::try_from(schedule.cron_expression.as_str())
+                                {
                                     if let Some(next) = cron_schedule.upcoming(Utc).take(1).next() {
                                         schedule.next_run = Some(next);
                                     }
@@ -179,11 +185,15 @@ impl BackupScheduler {
         for attempt in 0..=schedule.max_retries {
             if attempt > 0 {
                 tokio::time::sleep(tokio::time::Duration::from_secs(
-                    schedule.retry_delay_seconds as u64
-                )).await;
+                    schedule.retry_delay_seconds as u64,
+                ))
+                .await;
             }
 
-            match backup_manager.create_backup(&**source_storage, &config).await {
+            match backup_manager
+                .create_backup(&**source_storage, &config)
+                .await
+            {
                 Ok(backup_metadata) => {
                     run_result.success = true;
                     run_result.backup_id = Some(backup_metadata.backup_id.clone());
@@ -203,9 +213,8 @@ impl BackupScheduler {
 
         let completed_at = Utc::now();
         run_result.completed_at = Some(completed_at);
-        run_result.duration_seconds = Some(
-            completed_at.signed_duration_since(started_at).num_seconds() as u64
-        );
+        run_result.duration_seconds =
+            Some(completed_at.signed_duration_since(started_at).num_seconds() as u64);
 
         run_result
     }
@@ -253,7 +262,7 @@ impl BackupScheduler {
         let mut schedules = self.schedules.write().await;
         if let Some(schedule) = schedules.get_mut(schedule_id) {
             schedule.enabled = enabled;
-            
+
             if enabled {
                 drop(schedules);
                 // Restart the task
@@ -278,16 +287,20 @@ impl BackupScheduler {
     }
 
     /// Get schedule run history
-    pub async fn get_run_history(&self, schedule_id: &str, limit: Option<usize>) -> Result<Vec<ScheduledRunResult>> {
+    pub async fn get_run_history(
+        &self,
+        schedule_id: &str,
+        limit: Option<usize>,
+    ) -> Result<Vec<ScheduledRunResult>> {
         let schedules = self.schedules.read().await;
         if let Some(schedule) = schedules.get(schedule_id) {
             let mut history = schedule.run_history.clone();
             history.sort_by(|a, b| b.started_at.cmp(&a.started_at));
-            
+
             if let Some(limit) = limit {
                 history.truncate(limit);
             }
-            
+
             Ok(history)
         } else {
             Err(FortressError::storage(
@@ -319,8 +332,8 @@ impl BackupScheduler {
         let hourly_incremental = BackupSchedule {
             schedule_id: "hourly_incremental".to_string(),
             name: "Hourly Incremental Backup".to_string(),
-            strategy: BackupStrategy::Incremental { 
-                base_backup_id: "daily_full".to_string() 
+            strategy: BackupStrategy::Incremental {
+                base_backup_id: "daily_full".to_string(),
             },
             cron_expression: "0 * * * *".to_string(), // Every hour
             enabled: true,
@@ -376,29 +389,31 @@ mod tests {
     async fn test_backup_scheduler_creation() {
         let source_storage = Arc::new(InMemoryStorage::new());
         let backup_storage = Arc::new(InMemoryStorage::new());
-        let backup_manager = Arc::new(DefaultBackupManager::new(
-            backup_storage.clone(),
-            None,
-            BackupConfig::default(),
-        ).unwrap());
+        let backup_manager = Arc::new(
+            DefaultBackupManager::new(backup_storage.clone(), None, BackupConfig::default())
+                .unwrap(),
+        );
 
         let scheduler = BackupScheduler::new(backup_manager, source_storage);
-        
-        assert!(!scheduler.schedules.try_read().map(|guard| !guard.is_empty()).unwrap_or(false));
+
+        assert!(!scheduler
+            .schedules
+            .try_read()
+            .map(|guard| !guard.is_empty())
+            .unwrap_or(false));
     }
 
     #[tokio::test]
     async fn test_add_schedule() {
         let source_storage = Arc::new(InMemoryStorage::new());
         let backup_storage = Arc::new(InMemoryStorage::new());
-        let backup_manager = Arc::new(DefaultBackupManager::new(
-            backup_storage.clone(),
-            None,
-            BackupConfig::default(),
-        ).unwrap());
+        let backup_manager = Arc::new(
+            DefaultBackupManager::new(backup_storage.clone(), None, BackupConfig::default())
+                .unwrap(),
+        );
 
         let scheduler = BackupScheduler::new(backup_manager, source_storage);
-        
+
         let schedule = BackupSchedule {
             schedule_id: "test_schedule".to_string(),
             name: "Test Schedule".to_string(),
@@ -414,7 +429,7 @@ mod tests {
         };
 
         assert!(scheduler.add_schedule(schedule).await.is_ok());
-        
+
         let schedules = scheduler.list_schedules().await.unwrap();
         assert_eq!(schedules.len(), 1);
         assert_eq!(schedules[0].schedule_id, "test_schedule");
@@ -424,14 +439,13 @@ mod tests {
     async fn test_remove_schedule() {
         let source_storage = Arc::new(InMemoryStorage::new());
         let backup_storage = Arc::new(InMemoryStorage::new());
-        let backup_manager = Arc::new(DefaultBackupManager::new(
-            backup_storage.clone(),
-            None,
-            BackupConfig::default(),
-        ).unwrap());
+        let backup_manager = Arc::new(
+            DefaultBackupManager::new(backup_storage.clone(), None, BackupConfig::default())
+                .unwrap(),
+        );
 
         let scheduler = BackupScheduler::new(backup_manager, source_storage);
-        
+
         let schedule = BackupSchedule {
             schedule_id: "test_schedule".to_string(),
             name: "Test Schedule".to_string(),
@@ -448,7 +462,7 @@ mod tests {
 
         scheduler.add_schedule(schedule).await.unwrap();
         assert!(scheduler.remove_schedule("test_schedule").await.is_ok());
-        
+
         let schedules = scheduler.list_schedules().await.unwrap();
         assert_eq!(schedules.len(), 0);
     }

@@ -6,17 +6,17 @@
 //! - Advanced Token System with leases, TTL, and revocation
 //! - HCL Policy Engine with fine-grained access control
 
+use chrono::{DateTime, Duration, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use chrono::{DateTime, Utc, Duration};
 
 use fortress_core::{
-    seal::{SealManager, SealConfig},
-    shamir::ShamirSecretSharing,
-    token::{TokenManager, TokenManagerConfig, TokenType, TokenRole, CreateTokenRequest},
-    policy_hcl::{HclPolicyEngine, ParsedPolicy, PolicyContext, RoleStore},
     error::{FortressError, Result},
+    policy_hcl::{HclPolicyEngine, ParsedPolicy, PolicyContext, RoleStore},
+    seal::{SealConfig, SealManager},
+    shamir::ShamirSecretSharing,
+    token::{CreateTokenRequest, TokenManager, TokenManagerConfig, TokenRole, TokenType},
 };
 
 /// Test role store for integration tests
@@ -33,7 +33,8 @@ impl TestRoleStore {
 
     async fn add_role(&self, entity_id: &str, role: &str) -> Result<()> {
         let mut roles = self.roles.write().await;
-        roles.entry(entity_id.to_string())
+        roles
+            .entry(entity_id.to_string())
             .or_insert_with(Vec::new)
             .push(role.to_string());
         Ok(())
@@ -53,7 +54,8 @@ impl RoleStore for TestRoleStore {
 
     fn add_role(&self, entity_id: &str, role: &str) -> Result<()> {
         let mut roles = self.roles.blocking_write();
-        roles.entry(entity_id.to_string())
+        roles
+            .entry(entity_id.to_string())
             .or_insert_with(Vec::new)
             .push(role.to_string());
         Ok(())
@@ -73,13 +75,13 @@ impl RoleStore for TestRoleStore {
     fn list_entities_with_role(&self, role: &str) -> Result<Vec<String>> {
         let roles = self.roles.blocking_read();
         let mut entities = Vec::new();
-        
+
         for (entity_id, entity_roles) in roles.iter() {
             if entity_roles.contains(&role.to_string()) {
                 entities.push(entity_id.clone());
             }
         }
-        
+
         Ok(entities)
     }
 }
@@ -87,7 +89,7 @@ impl RoleStore for TestRoleStore {
 #[cfg(test)]
 mod seal_tests {
     use super::*;
-    use fortress_core::seal::{SecretShare, MasterKey};
+    use fortress_core::seal::{MasterKey, SecretShare};
 
     #[tokio::test]
     async fn test_seal_unseal_complete_workflow() {
@@ -181,7 +183,9 @@ mod seal_tests {
 
         // Use recovery key to unseal
         seal_manager.seal().unwrap();
-        let unseal_result = seal_manager.unseal_with_recovery_key(&recovery_key).unwrap();
+        let unseal_result = seal_manager
+            .unseal_with_recovery_key(&recovery_key)
+            .unwrap();
         assert!(unseal_result);
 
         let retrieved_key = seal_manager.get_master_key().unwrap();
@@ -192,7 +196,7 @@ mod seal_tests {
 #[cfg(test)]
 mod token_tests {
     use super::*;
-    use fortress_core::token::{TokenInfo, TokenUsageStats, TokenCreationContext};
+    use fortress_core::token::{TokenCreationContext, TokenInfo, TokenUsageStats};
 
     #[tokio::test]
     async fn test_token_creation_and_validation() {
@@ -215,7 +219,10 @@ mod token_tests {
         assert!(token_info.token.has_policy("default"));
 
         // Validate the token
-        let validation_result = token_manager.validate_token(&token_info.token).await.unwrap();
+        let validation_result = token_manager
+            .validate_token(&token_info.token)
+            .await
+            .unwrap();
         assert!(validation_result.valid);
         assert!(!validation_result.expired);
         assert!(!validation_result.revoked);
@@ -239,12 +246,15 @@ mod token_tests {
         let token_info = token_manager.create_token(request).await.unwrap();
 
         // Create a lease
-        let lease_id = token_manager.create_lease(
-            &token_info.token,
-            "secret/data".to_string(),
-            Duration::minutes(30),
-            HashMap::new(),
-        ).await.unwrap();
+        let lease_id = token_manager
+            .create_lease(
+                &token_info.token,
+                "secret/data".to_string(),
+                Duration::minutes(30),
+                HashMap::new(),
+            )
+            .await
+            .unwrap();
 
         assert!(!lease_id.is_empty());
 
@@ -254,7 +264,10 @@ mod token_tests {
         assert_eq!(lease_info.unwrap().path, "secret/data");
 
         // Renew lease
-        let renewed_lease = token_manager.renew_lease(&lease_id, Duration::minutes(45)).await.unwrap();
+        let renewed_lease = token_manager
+            .renew_lease(&lease_id, Duration::minutes(45))
+            .await
+            .unwrap();
         assert!(renewed_lease.is_some());
 
         // Revoke lease
@@ -284,15 +297,24 @@ mod token_tests {
         let token_info = token_manager.create_token(request).await.unwrap();
 
         // Validate token (should be valid)
-        let validation_result = token_manager.validate_token(&token_info.token).await.unwrap();
+        let validation_result = token_manager
+            .validate_token(&token_info.token)
+            .await
+            .unwrap();
         assert!(validation_result.valid);
 
         // Revoke token
-        let revoke_result = token_manager.revoke_token(&token_info.token.id, "Test revocation").await.unwrap();
+        let revoke_result = token_manager
+            .revoke_token(&token_info.token.id, "Test revocation")
+            .await
+            .unwrap();
         assert!(revoke_result);
 
         // Validate token again (should be revoked)
-        let validation_result = token_manager.validate_token(&token_info.token).await.unwrap();
+        let validation_result = token_manager
+            .validate_token(&token_info.token)
+            .await
+            .unwrap();
         assert!(!validation_result.valid);
         assert!(validation_result.revoked);
     }
@@ -315,7 +337,10 @@ mod token_tests {
         let token_info = token_manager.create_token(request).await.unwrap();
 
         // Renew token
-        let renewed_token = token_manager.renew_token(&token_info.token.id, Duration::hours(2)).await.unwrap();
+        let renewed_token = token_manager
+            .renew_token(&token_info.token.id, Duration::hours(2))
+            .await
+            .unwrap();
         assert!(renewed_token.is_some());
 
         let renewed_info = renewed_token.unwrap();
@@ -406,33 +431,57 @@ mod integration_tests {
         let user_token = token_manager.create_token(user_request).await.unwrap();
 
         // Step 5: Test policy evaluation
-        let admin_context = PolicyContext::new(admin_token, "admin/secrets".to_string(), "read".to_string());
-        let user_context = PolicyContext::new(user_token, "user/data".to_string(), "read".to_string());
+        let admin_context =
+            PolicyContext::new(admin_token, "admin/secrets".to_string(), "read".to_string());
+        let user_context =
+            PolicyContext::new(user_token, "user/data".to_string(), "read".to_string());
 
-        let admin_result = policy_engine.evaluate_policies(&admin_context).await.unwrap();
-        let user_result = policy_engine.evaluate_policies(&user_context).await.unwrap();
+        let admin_result = policy_engine
+            .evaluate_policies(&admin_context)
+            .await
+            .unwrap();
+        let user_result = policy_engine
+            .evaluate_policies(&user_context)
+            .await
+            .unwrap();
 
         assert!(admin_result.allowed);
         assert!(user_result.allowed);
 
         // Step 6: Test unauthorized access
-        let unauthorized_context = PolicyContext::new(user_token.clone(), "admin/secrets".to_string(), "read".to_string());
-        let unauthorized_result = policy_engine.evaluate_policies(&unauthorized_context).await.unwrap();
+        let unauthorized_context = PolicyContext::new(
+            user_token.clone(),
+            "admin/secrets".to_string(),
+            "read".to_string(),
+        );
+        let unauthorized_result = policy_engine
+            .evaluate_policies(&unauthorized_context)
+            .await
+            .unwrap();
         assert!(!unauthorized_result.allowed);
 
         // Step 7: Create leases
-        let lease_id = token_manager.create_lease(
-            &user_token.token,
-            "user/data/record123".to_string(),
-            Duration::minutes(30),
-            HashMap::new(),
-        ).await.unwrap();
+        let lease_id = token_manager
+            .create_lease(
+                &user_token.token,
+                "user/data/record123".to_string(),
+                Duration::minutes(30),
+                HashMap::new(),
+            )
+            .await
+            .unwrap();
 
         assert!(!lease_id.is_empty());
 
         // Step 8: Test token validation
-        let admin_validation = token_manager.validate_token(&admin_token.token.id, &TokenValidationContext::default()).await.unwrap();
-        let user_validation = token_manager.validate_token(&user_token.token.id, &TokenValidationContext::default()).await.unwrap();
+        let admin_validation = token_manager
+            .validate_token(&admin_token.token.id, &TokenValidationContext::default())
+            .await
+            .unwrap();
+        let user_validation = token_manager
+            .validate_token(&user_token.token.id, &TokenValidationContext::default())
+            .await
+            .unwrap();
 
         assert!(admin_validation.valid);
         assert!(user_validation.valid);
@@ -446,18 +495,24 @@ mod integration_tests {
         assert!(!seal_manager.is_sealed());
 
         // Step 10: Cleanup
-        let revoke_admin = token_manager.revoke_token(RevokeTokenRequest {
-            token_id: admin_token.token.id.clone(),
-            reason: "Test cleanup".to_string(),
-            requester_token: "test_requester".to_string(),
-            force: false,
-        }).await.unwrap();
-        let revoke_user = token_manager.revoke_token(RevokeTokenRequest {
-            token_id: user_token.token.id.clone(),
-            reason: "Test cleanup".to_string(),
-            requester_token: "test_requester".to_string(),
-            force: false,
-        }).await.unwrap();
+        let revoke_admin = token_manager
+            .revoke_token(RevokeTokenRequest {
+                token_id: admin_token.token.id.clone(),
+                reason: "Test cleanup".to_string(),
+                requester_token: "test_requester".to_string(),
+                force: false,
+            })
+            .await
+            .unwrap();
+        let revoke_user = token_manager
+            .revoke_token(RevokeTokenRequest {
+                token_id: user_token.token.id.clone(),
+                reason: "Test cleanup".to_string(),
+                requester_token: "test_requester".to_string(),
+                force: false,
+            })
+            .await
+            .unwrap();
         let revoke_lease = token_manager.revoke_lease(&lease_id).await.unwrap();
 
         assert!(revoke_admin);
@@ -465,8 +520,14 @@ mod integration_tests {
         assert!(revoke_lease);
 
         // Verify cleanup
-        let admin_validation_after = token_manager.validate_token(&admin_token.token.id, &TokenValidationContext::default()).await.unwrap();
-        let user_validation_after = token_manager.validate_token(&user_token.token.id, &TokenValidationContext::default()).await.unwrap();
+        let admin_validation_after = token_manager
+            .validate_token(&admin_token.token.id, &TokenValidationContext::default())
+            .await
+            .unwrap();
+        let user_validation_after = token_manager
+            .validate_token(&user_token.token.id, &TokenValidationContext::default())
+            .await
+            .unwrap();
 
         assert!(!admin_validation_after.valid);
         assert!(!user_validation_after.valid);
@@ -478,7 +539,7 @@ mod integration_tests {
     #[tokio::test]
     async fn test_error_handling_and_recovery() {
         // Test error handling across all Phase 1 components
-        
+
         // Seal errors
         let seal_config = SealConfig::new(3, 5);
         let mut seal_manager = SealManager::new(seal_config);
@@ -495,30 +556,39 @@ mod integration_tests {
         let token_manager = TokenManager::new();
 
         // Try to validate non-existent token
-        let fake_token = token_manager.create_token(CreateTokenRequest {
-            token_type: TokenType::Batch,
-            role: TokenRole::Reader,
-            policies: vec!["default".to_string()],
-            ttl: Duration::hours(1),
-            renewable: false,
-            max_renewals: None,
-            path_suffixes: None,
-            parent_token: None,
-            entity_id: "fake_user".to_string(),
-            metadata: None,
-            ip_restrictions: None,
-            user_agent_restrictions: None,
-            display_name: None,
-            description: None,
-        }).await.unwrap();
+        let fake_token = token_manager
+            .create_token(CreateTokenRequest {
+                token_type: TokenType::Batch,
+                role: TokenRole::Reader,
+                policies: vec!["default".to_string()],
+                ttl: Duration::hours(1),
+                renewable: false,
+                max_renewals: None,
+                path_suffixes: None,
+                parent_token: None,
+                entity_id: "fake_user".to_string(),
+                metadata: None,
+                ip_restrictions: None,
+                user_agent_restrictions: None,
+                display_name: None,
+                description: None,
+            })
+            .await
+            .unwrap();
 
-        token_manager.revoke_token(RevokeTokenRequest {
-            token_id: fake_token.token.id.clone(),
-            reason: "Test".to_string(),
-            requester_token: "test_requester".to_string(),
-            force: false,
-        }).await.unwrap();
-        let validation_result = token_manager.validate_token(&fake_token.token.id, &TokenValidationContext::default()).await.unwrap();
+        token_manager
+            .revoke_token(RevokeTokenRequest {
+                token_id: fake_token.token.id.clone(),
+                reason: "Test".to_string(),
+                requester_token: "test_requester".to_string(),
+                force: false,
+            })
+            .await
+            .unwrap();
+        let validation_result = token_manager
+            .validate_token(&fake_token.token.id, &TokenValidationContext::default())
+            .await
+            .unwrap();
         assert!(!validation_result.valid);
 
         // Policy errors
@@ -526,22 +596,25 @@ mod integration_tests {
         let engine = HclPolicyEngine::new(role_store);
 
         // Try to evaluate with no matching policies
-        let token = token_manager.create_token(CreateTokenRequest {
-            token_type: TokenType::Batch,
-            role: TokenRole::Reader,
-            policies: vec!["read-only".to_string()],
-            ttl: Duration::minutes(30),
-            renewable: false,
-            max_renewals: None,
-            path_suffixes: None,
-            parent_token: None,
-            entity_id: "service_account".to_string(),
-            metadata: None,
-            ip_restrictions: None,
-            user_agent_restrictions: None,
-            display_name: None,
-            description: None,
-        }).await.unwrap();
+        let token = token_manager
+            .create_token(CreateTokenRequest {
+                token_type: TokenType::Batch,
+                role: TokenRole::Reader,
+                policies: vec!["read-only".to_string()],
+                ttl: Duration::minutes(30),
+                renewable: false,
+                max_renewals: None,
+                path_suffixes: None,
+                parent_token: None,
+                entity_id: "service_account".to_string(),
+                metadata: None,
+                ip_restrictions: None,
+                user_agent_restrictions: None,
+                display_name: None,
+                description: None,
+            })
+            .await
+            .unwrap();
 
         let context = PolicyContext::new(token, "unknown/path".to_string(), "read".to_string());
         let result = engine.evaluate_policies(&context).await.unwrap();
@@ -551,7 +624,7 @@ mod integration_tests {
     #[tokio::test]
     async fn test_performance_and_scalability() {
         // Test performance characteristics of Phase 1 components
-        
+
         let token_manager = TokenManager::new();
 
         let role_store = Arc::new(TestRoleStore::new());
@@ -582,7 +655,8 @@ mod integration_tests {
         // Measure policy evaluation performance
         let start = std::time::Instant::now();
         for token in &tokens {
-            let context = PolicyContext::new(token.clone(), "path5/data".to_string(), "read".to_string());
+            let context =
+                PolicyContext::new(token.clone(), "path5/data".to_string(), "read".to_string());
             engine.evaluate_policies(&context).await.unwrap();
         }
         let duration = start.elapsed();

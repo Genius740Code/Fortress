@@ -1,18 +1,18 @@
 //! Rate Limiting Manager
-//! 
+//!
 //! This module provides the main rate limiting manager
 //! that coordinates algorithms, storage, and configuration.
 
+use super::{
+    RateLimitAlgorithm, RateLimitAlgorithmType, RateLimitConfig, RateLimitContext, RateLimitResult,
+    RateLimitRule, RateLimitStorage, RateLimitStorageType,
+};
+use crate::error::{FortressError, Result};
+use chrono::{DateTime, Duration, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use chrono::{DateTime, Utc, Duration};
-use serde::{Serialize, Deserialize};
-use crate::error::{FortressError, Result};
-use super::{
-    RateLimitAlgorithm, RateLimitStorage, RateLimitRule, RateLimitResult, RateLimitContext,
-    RateLimitConfig, RateLimitAlgorithmType, RateLimitStorageType
-};
 
 /// Main rate limiting manager
 pub struct RateLimitManager {
@@ -29,13 +29,26 @@ pub struct RateLimitManager {
 impl RateLimitManager {
     /// Create a new rate limit manager
     pub fn new(config: RateLimitConfig) -> Self {
-        let mut algorithms: HashMap<RateLimitAlgorithmType, Arc<dyn RateLimitAlgorithm>> = HashMap::new();
-        algorithms.insert(RateLimitAlgorithmType::TokenBucket, Arc::new(super::algorithms::TokenBucketAlgorithm::new()));
-        algorithms.insert(RateLimitAlgorithmType::SlidingWindow, Arc::new(super::algorithms::SlidingWindowAlgorithm::new()));
-        algorithms.insert(RateLimitAlgorithmType::FixedWindow, Arc::new(super::algorithms::FixedWindowAlgorithm::new()));
+        let mut algorithms: HashMap<RateLimitAlgorithmType, Arc<dyn RateLimitAlgorithm>> =
+            HashMap::new();
+        algorithms.insert(
+            RateLimitAlgorithmType::TokenBucket,
+            Arc::new(super::algorithms::TokenBucketAlgorithm::new()),
+        );
+        algorithms.insert(
+            RateLimitAlgorithmType::SlidingWindow,
+            Arc::new(super::algorithms::SlidingWindowAlgorithm::new()),
+        );
+        algorithms.insert(
+            RateLimitAlgorithmType::FixedWindow,
+            Arc::new(super::algorithms::FixedWindowAlgorithm::new()),
+        );
 
         let mut storage: HashMap<RateLimitStorageType, Arc<dyn RateLimitStorage>> = HashMap::new();
-        storage.insert(RateLimitStorageType::Memory, Arc::new(super::storage::MemoryStorage::new()));
+        storage.insert(
+            RateLimitStorageType::Memory,
+            Arc::new(super::storage::MemoryStorage::new()),
+        );
 
         Self {
             config: Arc::new(RwLock::new(config)),
@@ -54,15 +67,22 @@ impl RateLimitManager {
     ) -> Result<RateLimitResult> {
         let config = self.config.read().await;
         let rules = self.rules.read().await;
-        
+
         // Get rule for this key
-        let rule = rules.get(rule_name)
+        let rule = rules
+            .get(rule_name)
             .or_else(|| config.default_rules.get(rule_name))
-            .ok_or_else(|| FortressError::rate_limit(format!("Rate limit rule '{}' not found", rule_name)))?;
+            .ok_or_else(|| {
+                FortressError::rate_limit(format!("Rate limit rule '{}' not found", rule_name))
+            })?;
 
         // Get algorithm
-        let algorithm = self.algorithms.get(&config.algorithm)
-            .ok_or_else(|| FortressError::rate_limit(format!("Rate limit algorithm '{:?}' not found", config.algorithm)))?;
+        let algorithm = self.algorithms.get(&config.algorithm).ok_or_else(|| {
+            FortressError::rate_limit(format!(
+                "Rate limit algorithm '{:?}' not found",
+                config.algorithm
+            ))
+        })?;
 
         // Check rate limit
         algorithm.check_rate_limit(key, rule, context).await
@@ -116,7 +136,7 @@ mod tests {
     async fn test_manager_creation() {
         let config = RateLimitConfig::default();
         let manager = RateLimitManager::new(config);
-        
+
         let rules = manager.get_rules().await.unwrap();
         assert!(rules.is_empty());
     }
@@ -125,7 +145,7 @@ mod tests {
     async fn test_add_rule() {
         let config = RateLimitConfig::default();
         let manager = RateLimitManager::new(config);
-        
+
         let rule = RateLimitRule {
             name: "test".to_string(),
             limit: 100,
@@ -138,7 +158,7 @@ mod tests {
         };
 
         manager.add_rule(rule).await.unwrap();
-        
+
         let rules = manager.get_rules().await.unwrap();
         assert_eq!(rules.len(), 1);
         assert!(rules.contains_key("test"));

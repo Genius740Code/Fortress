@@ -3,8 +3,8 @@
 //! This module provides lease management functionality for dynamic secrets
 //! and other time-limited resources.
 
-use chrono::{DateTime, Utc, Duration};
-use serde::{Serialize, Deserialize};
+use chrono::{DateTime, Duration, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -64,12 +64,7 @@ pub struct LeaseInfo {
 
 impl LeaseInfo {
     /// Create a new lease
-    pub fn new(
-        resource: String,
-        entity_id: String,
-        token_id: String,
-        ttl: Duration,
-    ) -> Self {
+    pub fn new(resource: String, entity_id: String, token_id: String, ttl: Duration) -> Self {
         let now = Utc::now();
         let lease_id = Uuid::new_v4().to_string();
 
@@ -209,7 +204,7 @@ impl LeaseManager {
     /// Create a new lease
     pub async fn create_lease(&mut self, lease_info: LeaseInfo) -> Result<String> {
         let lease_id = lease_info.lease_id.clone();
-        
+
         {
             let mut leases = self.leases.write().await;
             leases.insert(lease_id.clone(), lease_info);
@@ -226,24 +221,25 @@ impl LeaseManager {
     /// Get lease information
     pub async fn get_lease(&self, lease_id: &str) -> Result<LeaseInfo> {
         let leases = self.leases.read().await;
-        leases.get(lease_id)
-            .cloned()
-            .ok_or_else(|| FortressError::token_with_id(
+        leases.get(lease_id).cloned().ok_or_else(|| {
+            FortressError::token_with_id(
                 "Lease not found",
                 Some(lease_id.to_string()),
                 TokenErrorCode::LeaseNotFound,
-            ))
+            )
+        })
     }
 
     /// Renew a lease
     pub async fn renew_lease(&self, lease_id: &str, increment: Duration) -> Result<Duration> {
         let mut leases = self.leases.write().await;
-        let lease = leases.get_mut(lease_id)
-            .ok_or_else(|| FortressError::token_with_id(
+        let lease = leases.get_mut(lease_id).ok_or_else(|| {
+            FortressError::token_with_id(
                 "Lease not found",
                 Some(lease_id.to_string()),
                 TokenErrorCode::LeaseNotFound,
-            ))?;
+            )
+        })?;
 
         lease.renew(increment)?;
         Ok(lease.ttl)
@@ -252,12 +248,13 @@ impl LeaseManager {
     /// Revoke a lease
     pub async fn revoke_lease(&self, lease_id: &str) -> Result<()> {
         let mut leases = self.leases.write().await;
-        let lease = leases.get_mut(lease_id)
-            .ok_or_else(|| FortressError::token_with_id(
+        let lease = leases.get_mut(lease_id).ok_or_else(|| {
+            FortressError::token_with_id(
                 "Lease not found",
                 Some(lease_id.to_string()),
                 TokenErrorCode::LeaseNotFound,
-            ))?;
+            )
+        })?;
 
         lease.revoke();
         Ok(())
@@ -315,7 +312,7 @@ impl LeaseManager {
     pub async fn cleanup_expired_leases(&self) -> Result<u64> {
         let mut leases = self.leases.write().await;
         let now = Utc::now();
-        
+
         let mut expired_count = 0;
         let mut expired_lease_ids = Vec::new();
 
@@ -340,12 +337,12 @@ impl LeaseManager {
     /// Get lease statistics
     pub async fn get_lease_statistics(&self) -> Result<LeaseStatistics> {
         let leases = self.leases.read().await;
-        
+
         let mut stats = LeaseStatistics::default();
-        
+
         for lease in leases.values() {
             stats.total_leases += 1;
-            
+
             match lease.status {
                 LeaseStatus::Active => {
                     stats.active_leases += 1;
@@ -358,7 +355,7 @@ impl LeaseManager {
                 LeaseStatus::Renewing => stats.renewing_leases += 1,
                 LeaseStatus::Pending => stats.pending_leases += 1,
             }
-            
+
             if lease.renewable {
                 stats.renewable_leases += 1;
             }
@@ -373,19 +370,23 @@ impl LeaseManager {
         let interval = self.cleanup_interval;
 
         let task = tokio::spawn(async move {
-            let mut interval_timer = tokio::time::interval(std::time::Duration::from_secs(interval.num_seconds() as u64));
-            
+            let mut interval_timer = tokio::time::interval(std::time::Duration::from_secs(
+                interval.num_seconds() as u64,
+            ));
+
             loop {
                 interval_timer.tick().await;
-                
+
                 // Clean up expired leases
                 {
                     let mut leases_guard = leases.write().await;
                     let now = Utc::now();
-                    
+
                     let expired_lease_ids: Vec<String> = leases_guard
                         .iter()
-                        .filter(|(_, lease)| lease.expires_time < now && lease.status != LeaseStatus::Revoked)
+                        .filter(|(_, lease)| {
+                            lease.expires_time < now && lease.status != LeaseStatus::Revoked
+                        })
                         .map(|(id, _)| id.clone())
                         .collect();
 
@@ -536,7 +537,7 @@ mod tests {
         );
 
         assert!(!lease.is_expired());
-        
+
         // Manually set expiration to past
         lease.expires_time = Utc::now() - Duration::seconds(1);
         assert!(lease.is_expired());
@@ -553,18 +554,18 @@ mod tests {
         );
 
         lease.max_renewals = Some(2);
-        
+
         assert!(lease.is_renewable());
-        
+
         // First renewal
         lease.renew(Duration::minutes(30)).unwrap();
         assert_eq!(lease.renewal_count, 1);
         assert!(lease.last_renewal.is_some());
-        
+
         // Second renewal
         lease.renew(Duration::minutes(30)).unwrap();
         assert_eq!(lease.renewal_count, 2);
-        
+
         // Third renewal should fail
         assert!(lease.renew(Duration::minutes(30)).is_err());
     }
@@ -579,7 +580,7 @@ mod tests {
         );
 
         assert_eq!(lease.status, LeaseStatus::Active);
-        
+
         lease.revoke();
         assert_eq!(lease.status, LeaseStatus::Revoked);
         assert!(!lease.is_active());
@@ -598,7 +599,10 @@ mod tests {
         lease.add_metadata("environment".to_string(), "production".to_string());
         lease.add_metadata("region".to_string(), "us-west-2".to_string());
 
-        assert_eq!(lease.get_metadata("environment"), Some(&"production".to_string()));
+        assert_eq!(
+            lease.get_metadata("environment"),
+            Some(&"production".to_string())
+        );
         assert_eq!(lease.get_metadata("region"), Some(&"us-west-2".to_string()));
         assert_eq!(lease.get_metadata("nonexistent"), None);
     }
@@ -625,7 +629,7 @@ mod tests {
     #[tokio::test]
     async fn test_lease_manager() {
         let mut lease_manager = LeaseManager::new(Duration::minutes(5));
-        
+
         let lease = LeaseInfo::new(
             "resource1".to_string(),
             "user123".to_string(),
@@ -634,20 +638,23 @@ mod tests {
         );
 
         let lease_id = lease_manager.create_lease(lease.clone()).await.unwrap();
-        
+
         // Retrieve lease
         let retrieved = lease_manager.get_lease(&lease_id).await.unwrap();
         assert_eq!(retrieved.lease_id, lease.lease_id);
         assert_eq!(retrieved.resource, lease.resource);
-        
+
         // List entity leases
         let entity_leases = lease_manager.list_entity_leases("user123").await.unwrap();
         assert_eq!(entity_leases.len(), 1);
-        
+
         // List resource leases
-        let resource_leases = lease_manager.list_resource_leases("resource1").await.unwrap();
+        let resource_leases = lease_manager
+            .list_resource_leases("resource1")
+            .await
+            .unwrap();
         assert_eq!(resource_leases.len(), 1);
-        
+
         // List active leases
         let active_leases = lease_manager.list_active_leases().await.unwrap();
         assert_eq!(active_leases.len(), 1);
@@ -656,7 +663,7 @@ mod tests {
     #[tokio::test]
     async fn test_lease_renewal_through_manager() {
         let mut lease_manager = LeaseManager::new(Duration::minutes(5));
-        
+
         let lease = LeaseInfo::new(
             "resource1".to_string(),
             "user123".to_string(),
@@ -665,11 +672,14 @@ mod tests {
         );
 
         let lease_id = lease_manager.create_lease(lease).await.unwrap();
-        
+
         // Renew lease
-        let new_ttl = lease_manager.renew_lease(&lease_id, Duration::minutes(30)).await.unwrap();
+        let new_ttl = lease_manager
+            .renew_lease(&lease_id, Duration::minutes(30))
+            .await
+            .unwrap();
         assert_eq!(new_ttl, Duration::hours(1)); // TTL stays the same
-        
+
         // Verify renewal
         let renewed_lease = lease_manager.get_lease(&lease_id).await.unwrap();
         assert_eq!(renewed_lease.renewal_count, 1);
@@ -679,7 +689,7 @@ mod tests {
     #[tokio::test]
     async fn test_lease_revocation_through_manager() {
         let mut lease_manager = LeaseManager::new(Duration::minutes(5));
-        
+
         let lease = LeaseInfo::new(
             "resource1".to_string(),
             "user123".to_string(),
@@ -688,10 +698,10 @@ mod tests {
         );
 
         let lease_id = lease_manager.create_lease(lease).await.unwrap();
-        
+
         // Revoke lease
         lease_manager.revoke_lease(&lease_id).await.unwrap();
-        
+
         // Verify revocation
         let revoked_lease = lease_manager.get_lease(&lease_id).await.unwrap();
         assert_eq!(revoked_lease.status, LeaseStatus::Revoked);
@@ -700,7 +710,7 @@ mod tests {
     #[tokio::test]
     async fn test_lease_statistics() {
         let mut lease_manager = LeaseManager::new(Duration::minutes(5));
-        
+
         // Create multiple leases
         for i in 0..5 {
             let lease = LeaseInfo::new(
@@ -711,10 +721,10 @@ mod tests {
             );
             lease_manager.create_lease(lease).await.unwrap();
         }
-        
+
         // Revoke one lease
         lease_manager.revoke_lease("resource1").await.ok();
-        
+
         // Get statistics
         let stats = lease_manager.get_lease_statistics().await.unwrap();
         assert_eq!(stats.total_leases, 5);
@@ -729,10 +739,10 @@ mod tests {
         stats.total_leases = 100;
         stats.active_leases = 75;
         stats.expired_leases = 25;
-        
+
         assert_eq!(stats.active_percentage(), 75.0);
         assert_eq!(stats.expired_percentage(), 25.0);
-        
+
         // Edge case: zero total leases
         let empty_stats = LeaseStatistics::default();
         assert_eq!(empty_stats.active_percentage(), 0.0);

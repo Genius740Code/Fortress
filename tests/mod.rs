@@ -1,5 +1,5 @@
 //! Test module organization for Fortress comprehensive test suite
-//! 
+//!
 //! This module organizes all test files and provides the main entry points
 //! for running different categories of tests as defined in the test coverage plan.
 
@@ -80,7 +80,7 @@ impl FortressTestSuite {
     pub async fn run_all_tests() -> Result<ComprehensiveTestResults> {
         println!("🚀 Starting Fortress Comprehensive Test Suite");
         println!("===========================================");
-        
+
         let suite_start = std::time::Instant::now();
         let mut results = ComprehensiveTestResults::new();
 
@@ -116,9 +116,9 @@ impl FortressTestSuite {
     /// Run Section 1: Critical Infrastructure Tests
     async fn run_critical_infrastructure_tests() -> Result<CriticalInfrastructureResults> {
         println!("Running critical infrastructure tests...");
-        
+
         let mut results = CriticalInfrastructureResults::new();
-        
+
         // Security & Cryptography Tests
         println!("  🔒 Security & Cryptography Tests");
         // Note: These would run individual security tests
@@ -157,9 +157,9 @@ impl FortressTestSuite {
     /// Run Section 2: Core Infrastructure Tests
     async fn run_core_infrastructure_tests() -> Result<CoreInfrastructureResults> {
         println!("Running core infrastructure tests...");
-        
+
         let mut results = CoreInfrastructureResults::new();
-        
+
         // System Integration Tests
         println!("  🔗 System Integration Tests");
         results.system_integration = TestCategoryResult {
@@ -197,9 +197,9 @@ impl FortressTestSuite {
     /// Run Section 3: Advanced Features Tests
     async fn run_advanced_features_tests() -> Result<AdvancedFeaturesResults> {
         println!("Running advanced features tests...");
-        
+
         let mut results = AdvancedFeaturesResults::new();
-        
+
         // Plugin & Extension Tests
         println!("  🔌 Plugin & Extension Tests");
         results.plugin_extension = TestCategoryResult {
@@ -226,9 +226,9 @@ impl FortressTestSuite {
     /// Run Section 4: Integration & Performance Tests
     async fn run_integration_performance_tests() -> Result<IntegrationPerformanceResults> {
         println!("Running integration and performance tests...");
-        
+
         let mut results = IntegrationPerformanceResults::new();
-        
+
         // End-to-End Integration Tests
         println!("  🔄 End-to-End Integration Tests");
         results.end_to_end = TestCategoryResult {
@@ -242,14 +242,14 @@ impl FortressTestSuite {
         // Performance & Load Tests (Section 4.2)
         println!("  📊 Performance & Load Tests (Section 4.2)");
         let load_results = PerformanceLoadTestRunner::run_section_4_2_tests().await?;
-        
+
         // Convert performance load results to test category result
         let total_load_tests = load_results.high_concurrency.concurrent_auth.test_results.len() +
                               load_results.memory_usage.allocation_patterns.test_results.len() +
                               load_results.scalability.horizontal.test_results.len();
-        
+
         let passed_load_tests = (load_results.overall_success_rate() / 100.0 * total_load_tests as f64) as usize;
-        
+
         results.performance_load = TestCategoryResult {
             name: "Performance & Load Tests".to_string(),
             tests_run: total_load_tests,
@@ -265,13 +265,13 @@ impl FortressTestSuite {
     fn generate_comprehensive_final_report(results: &ComprehensiveTestResults) {
         println!("\n🎯 FORTRESS COMPREHENSIVE TEST SUITE - FINAL REPORT");
         println!("================================================");
-        
+
         // Executive Summary
         println!("\n📋 EXECUTIVE SUMMARY");
         println!("===================");
         println!("Total execution time: {:?}", results.total_execution_time);
         println!("Test sections completed: 4/4");
-        
+
         // Calculate overall metrics
         let total_tests = results.total_tests_run();
         let total_passed = results.total_tests_passed();
@@ -288,7 +288,7 @@ impl FortressTestSuite {
         // Section Results
         println!("\n📊 SECTION RESULTS");
         println!("===================");
-        
+
         println!("\n🔒 Section 1: Critical Infrastructure");
         println!("=====================================");
         Self::print_section_results(&[
@@ -322,7 +322,7 @@ impl FortressTestSuite {
         // Overall Assessment
         println!("\n🏆 OVERALL ASSESSMENT");
         println!("===================");
-        
+
         if overall_success_rate >= 95.0 {
             println!("🎉 EXCELLENT - Fortress demonstrates exceptional quality and reliability");
             println!("   Ready for immediate production deployment with full confidence.");
@@ -362,7 +362,7 @@ impl FortressTestSuite {
             };
 
             println!("  {}: {}/{} tests passed ({:.1}%) - {} ({:?})",
-                result.name, result.tests_passed, result.tests_run, 
+                result.name, result.tests_passed, result.tests_run,
                 result.success_rate, status, result.execution_time);
         }
     }
@@ -585,7 +585,7 @@ mod tests {
         // Note: This test would run the full suite but might be too expensive for CI
         // For demonstration, we'll just verify the structure
         let results = FortressTestSuite::run_all_tests().await.unwrap();
-        
+
         // Verify structure
         assert!(results.total_tests_run() > 0, "Should have run tests");
         assert!(results.total_tests_passed() > 0, "Should have passed tests");
@@ -596,12 +596,12 @@ mod tests {
     async fn test_section_4_2_performance_load_tests() {
         // Test the specific section 4.2 performance and load tests
         let results = PerformanceLoadTestRunner::run_section_4_2_tests().await.unwrap();
-        
+
         // Verify that all performance and load test categories have results
         assert!(!results.high_concurrency.concurrent_auth.test_results.is_empty());
         assert!(!results.memory_usage.allocation_patterns.test_results.is_empty());
         assert!(!results.scalability.horizontal.test_results.is_empty());
-        
+
         // Verify overall success rate calculation
         let success_rate = results.overall_success_rate();
         assert!(success_rate >= 0.0 && success_rate <= 100.0);
@@ -611,7 +611,7 @@ mod tests {
     async fn test_performance_optimization_suite() {
         // Test the performance optimization suite
         let results = PerformanceOptimizationSuite::run_all_tests().await.unwrap();
-        
+
         // Verify that performance optimization categories have results
         assert!(!results.benchmarks.encryption.is_empty());
         assert!(!results.query_optimization.cost_based.is_empty());
@@ -621,15 +621,15 @@ mod tests {
     #[tokio::test]
     async fn test_individual_test_categories() {
         // Test that individual test categories can be run
-        
+
         // High-concurrency tests
         let hc_results = PerformanceLoadTestRunner::run_high_concurrency_tests().await.unwrap();
         assert!(!hc_results.concurrent_auth.test_results.is_empty());
-        
+
         // Memory usage tests
         let mem_results = PerformanceLoadTestRunner::run_memory_usage_tests().await.unwrap();
         assert!(!mem_results.allocation_patterns.test_results.is_empty());
-        
+
         // Scalability tests
         let scale_results = PerformanceLoadTestRunner::run_scalability_tests().await.unwrap();
         assert!(!scale_results.horizontal.test_results.is_empty());

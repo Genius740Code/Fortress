@@ -5,7 +5,7 @@
 
 use crate::error::{FortressError, Result, StorageErrorCode};
 use async_trait::async_trait;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use sha2::Digest;
 use std::collections::HashMap;
 use std::fmt;
@@ -15,15 +15,15 @@ use uuid::Uuid;
 #[cfg(feature = "cloud-storage")]
 use aws_config::from_env;
 #[cfg(feature = "cloud-storage")]
-use aws_sdk_s3::{Client as S3Client, config::Region as S3Region};
+use aws_sdk_s3::{config::Region as S3Region, Client as S3Client};
 
 // Azure storage imports (only available with cloud-storage feature)
+#[cfg(feature = "cloud-storage")]
+use azure_identity::DefaultAzureCredential;
 #[cfg(feature = "cloud-storage")]
 use azure_storage::BlobServiceClient;
 #[cfg(feature = "cloud-storage")]
 use azure_storage_blobs::prelude::*;
-#[cfg(feature = "cloud-storage")]
-use azure_identity::DefaultAzureCredential;
 
 /// Trait for storage backends
 ///
@@ -49,36 +49,45 @@ pub trait StorageBackend: Send + Sync + fmt::Debug {
     }
 
     /// List keys with pagination support
-    async fn list_prefix_paginated(&self, prefix: &str, limit: Option<usize>, offset: Option<usize>) -> Result<Vec<String>>;
+    async fn list_prefix_paginated(
+        &self,
+        prefix: &str,
+        limit: Option<usize>,
+        offset: Option<usize>,
+    ) -> Result<Vec<String>>;
 
     /// Batch get multiple keys efficiently
     async fn batch_get(&self, keys: &[String]) -> Result<Vec<(String, Option<Vec<u8>>)>> {
+        use futures::future::join_all;
         use std::sync::Arc;
         use tokio::sync::Semaphore;
-        use futures::future::join_all;
-        
+
         // Bound concurrency to 10 concurrent requests to avoid resource exhaustion
         let semaphore = Arc::new(Semaphore::new(10));
-        
-        let futures: Vec<_> = keys.iter()
+
+        let futures: Vec<_> = keys
+            .iter()
             .map(|key| {
                 let sem = semaphore.clone();
                 async move {
-                    let _permit = sem.acquire().await.map_err(|e| FortressError::storage(
-                        format!("Concurrency limit error: {}", e),
-                        self.metadata().backend_type,
-                        StorageErrorCode::ConnectionFailed,
-                    ))?;
+                    let _permit = sem.acquire().await.map_err(|e| {
+                        FortressError::storage(
+                            format!("Concurrency limit error: {}", e),
+                            self.metadata().backend_type,
+                            StorageErrorCode::ConnectionFailed,
+                        )
+                    })?;
                     let value = self.get(key).await?;
                     Ok::<_, FortressError>((key.clone(), value))
                 }
             })
             .collect();
-        
-        let results = join_all(futures).await
+
+        let results = join_all(futures)
+            .await
             .into_iter()
             .collect::<Result<Vec<_>>>()?;
-        
+
         Ok(results)
     }
 
@@ -89,7 +98,7 @@ pub trait StorageBackend: Send + Sync + fmt::Debug {
     async fn health_check(&self) -> Result<HealthStatus>;
 
     // Transaction support methods
-    
+
     /// Begin a new transaction
     async fn begin_transaction(&self) -> Result<TransactionId> {
         Err(FortressError::storage(
@@ -118,7 +127,10 @@ pub trait StorageBackend: Send + Sync + fmt::Debug {
     }
 
     /// Get transaction status
-    async fn get_transaction_status(&self, _transaction_id: &TransactionId) -> Result<TransactionStatus> {
+    async fn get_transaction_status(
+        &self,
+        _transaction_id: &TransactionId,
+    ) -> Result<TransactionStatus> {
         Err(FortressError::storage(
             "Transactions not supported by this backend",
             &self.metadata().backend_type,
@@ -127,7 +139,7 @@ pub trait StorageBackend: Send + Sync + fmt::Debug {
     }
 
     // Streaming support methods
-    
+
     /// Create a new stream for data streaming
     async fn create_stream(&self, _stream_config: StreamConfig) -> Result<StreamId> {
         Err(FortressError::storage(
@@ -165,7 +177,7 @@ pub trait StorageBackend: Send + Sync + fmt::Debug {
     }
 
     // Backup/restore support methods
-    
+
     /// Create a backup of the storage
     async fn create_backup(&self, _backup_config: BackupConfig) -> Result<BackupId> {
         Err(FortressError::storage(
@@ -176,7 +188,11 @@ pub trait StorageBackend: Send + Sync + fmt::Debug {
     }
 
     /// Restore from a backup
-    async fn restore_backup(&self, _backup_id: &BackupId, _restore_config: RestoreConfig) -> Result<()> {
+    async fn restore_backup(
+        &self,
+        _backup_id: &BackupId,
+        _restore_config: RestoreConfig,
+    ) -> Result<()> {
         Err(FortressError::storage(
             "Backups not supported by this backend",
             &self.metadata().backend_type,
@@ -203,7 +219,7 @@ pub trait StorageBackend: Send + Sync + fmt::Debug {
     }
 
     // Audit logging support methods
-    
+
     /// Log an audit event
     async fn log_audit_event(&self, _event: AuditEvent) -> Result<()> {
         Err(FortressError::storage(
@@ -306,12 +322,13 @@ impl StorageBackend for InMemoryStorage {
 
     async fn delete(&self, key: &str) -> Result<()> {
         let mut data = self.data.write().await;
-        data.remove(key)
-            .ok_or_else(|| FortressError::storage(
+        data.remove(key).ok_or_else(|| {
+            FortressError::storage(
                 format!("Key not found: {}", key),
                 "in_memory".to_string(),
                 StorageErrorCode::NotFound,
-            ))?;
+            )
+        })?;
         Ok(())
     }
 
@@ -325,25 +342,30 @@ impl StorageBackend for InMemoryStorage {
         self.list_prefix_paginated(prefix, None, None).await
     }
 
-    async fn list_prefix_paginated(&self, prefix: &str, limit: Option<usize>, offset: Option<usize>) -> Result<Vec<String>> {
+    async fn list_prefix_paginated(
+        &self,
+        prefix: &str,
+        limit: Option<usize>,
+        offset: Option<usize>,
+    ) -> Result<Vec<String>> {
         let data = self.data.read().await;
         let keys: Vec<_> = data
             .keys()
             .filter(|key| key.starts_with(prefix))
             .cloned()
             .collect();
-        
+
         // Apply pagination
         let start_idx = offset.unwrap_or(0);
         let end_idx = match limit {
             Some(limit) => std::cmp::min(start_idx + limit, keys.len()),
             None => keys.len(),
         };
-        
+
         if start_idx >= keys.len() {
             return Ok(Vec::new());
         }
-        
+
         Ok(keys[start_idx..end_idx].to_vec())
     }
 
@@ -386,29 +408,34 @@ impl FileSystemStorage {
     /// Create a new file system storage backend
     pub fn new<P: Into<std::path::PathBuf>>(base_path: P) -> Result<Self> {
         let path = base_path.into();
-        
+
         // Create directory if it doesn't exist
-        std::fs::create_dir_all(&path)
-            .map_err(|e| FortressError::storage(
+        std::fs::create_dir_all(&path).map_err(|e| {
+            FortressError::storage(
                 format!("Failed to create directory: {}", e),
                 "filesystem".to_string(),
                 StorageErrorCode::ConnectionFailed,
-            ))?;
+            )
+        })?;
 
         Ok(Self { base_path: path })
     }
 
     /// Create a new file system storage backend with configuration
-    pub fn with_config<P: Into<std::path::PathBuf>>(base_path: P, config: StorageConfig) -> Result<Self> {
+    pub fn with_config<P: Into<std::path::PathBuf>>(
+        base_path: P,
+        config: StorageConfig,
+    ) -> Result<Self> {
         let path = base_path.into();
-        
+
         // Create directory if it doesn't exist
-        std::fs::create_dir_all(&path)
-            .map_err(|e| FortressError::storage(
+        std::fs::create_dir_all(&path).map_err(|e| {
+            FortressError::storage(
                 format!("Failed to create directory: {}", e),
                 "filesystem".to_string(),
                 StorageErrorCode::ConnectionFailed,
-            ))?;
+            )
+        })?;
 
         // Log connection pool configuration
         tracing::info!(
@@ -439,20 +466,21 @@ impl FileSystemStorage {
     /// Save metadata for a key
     async fn save_metadata(&self, key: &str, metadata: &FileMetadata) -> Result<()> {
         let meta_path = self.get_metadata_path(key);
-        let json = serde_json::to_string(metadata)
-            .map_err(|e| FortressError::storage(
+        let json = serde_json::to_string(metadata).map_err(|e| {
+            FortressError::storage(
                 format!("Failed to serialize metadata: {}", e),
                 "filesystem".to_string(),
                 StorageErrorCode::InvalidOperation,
-            ))?;
+            )
+        })?;
 
-        tokio::fs::write(&meta_path, json)
-            .await
-            .map_err(|e| FortressError::storage(
+        tokio::fs::write(&meta_path, json).await.map_err(|e| {
+            FortressError::storage(
                 format!("Failed to write metadata: {}", e),
                 "filesystem".to_string(),
                 StorageErrorCode::InvalidOperation,
-            ))?;
+            )
+        })?;
 
         Ok(())
     }
@@ -460,15 +488,16 @@ impl FileSystemStorage {
     /// Load metadata for a key
     async fn load_metadata(&self, key: &str) -> Result<Option<FileMetadata>> {
         let meta_path = self.get_metadata_path(key);
-        
+
         match tokio::fs::read(&meta_path).await {
             Ok(data) => {
-                let metadata = serde_json::from_slice(&data)
-                    .map_err(|e| FortressError::storage(
+                let metadata = serde_json::from_slice(&data).map_err(|e| {
+                    FortressError::storage(
                         format!("Failed to deserialize metadata: {}", e),
                         "filesystem".to_string(),
                         StorageErrorCode::CorruptedData,
-                    ))?;
+                    )
+                })?;
                 Ok(Some(metadata))
             }
             Err(_) => Ok(None),
@@ -486,9 +515,11 @@ impl FileSystemStorage {
                     let meta_path_clone = meta_path.clone();
 
                     // Use spawn_blocking to offload synchronous I/O to blocking thread pool
-                    let metadata_data = tokio::task::spawn_blocking(move || {
-                        std::fs::read(&meta_path_clone)
-                    }).await.ok()?.ok()?;
+                    let metadata_data =
+                        tokio::task::spawn_blocking(move || std::fs::read(&meta_path_clone))
+                            .await
+                            .ok()?
+                            .ok()?;
 
                     if let Ok(metadata) = serde_json::from_slice::<FileMetadata>(&metadata_data) {
                         return Some(metadata.key);
@@ -504,15 +535,15 @@ impl FileSystemStorage {
 impl StorageBackend for FileSystemStorage {
     async fn put(&self, key: &str, value: &[u8]) -> Result<()> {
         let path = self.get_path(key);
-        
+
         // Write the data
-        tokio::fs::write(&path, value)
-            .await
-            .map_err(|e| FortressError::storage(
+        tokio::fs::write(&path, value).await.map_err(|e| {
+            FortressError::storage(
                 format!("Failed to write file: {}", e),
                 "filesystem".to_string(),
                 StorageErrorCode::InvalidOperation,
-            ))?;
+            )
+        })?;
 
         // Save metadata
         let metadata = FileMetadata {
@@ -529,7 +560,7 @@ impl StorageBackend for FileSystemStorage {
 
     async fn get(&self, key: &str) -> Result<Option<Vec<u8>>> {
         let path = self.get_path(key);
-        
+
         match tokio::fs::read(&path).await {
             Ok(data) => {
                 // Verify checksum if available
@@ -590,23 +621,28 @@ impl StorageBackend for FileSystemStorage {
         self.list_prefix_paginated(prefix, None, None).await
     }
 
-    async fn list_prefix_paginated(&self, prefix: &str, limit: Option<usize>, offset: Option<usize>) -> Result<Vec<String>> {
-        let mut entries = tokio::fs::read_dir(&self.base_path)
-            .await
-            .map_err(|e| FortressError::storage(
+    async fn list_prefix_paginated(
+        &self,
+        prefix: &str,
+        limit: Option<usize>,
+        offset: Option<usize>,
+    ) -> Result<Vec<String>> {
+        let mut entries = tokio::fs::read_dir(&self.base_path).await.map_err(|e| {
+            FortressError::storage(
                 format!("Failed to read directory: {}", e),
                 "filesystem".to_string(),
                 StorageErrorCode::ConnectionFailed,
-            ))?;
+            )
+        })?;
 
         let start_idx = offset.unwrap_or(0);
         let limit = limit.unwrap_or(usize::MAX);
-        
+
         // Streaming pagination - process entries one by one to avoid memory overhead
         let mut keys = Vec::new();
         let mut current_idx = 0;
         let mut collected = 0;
-        
+
         // Skip entries until we reach the offset
         while current_idx < start_idx {
             match entries.next_entry().await {
@@ -622,14 +658,16 @@ impl StorageBackend for FileSystemStorage {
                     }
                 }
                 Ok(None) => break, // No more entries
-                Err(e) => return Err(FortressError::storage(
-                    format!("Failed to read directory entry: {}", e),
-                    "filesystem".to_string(),
-                    StorageErrorCode::ConnectionFailed,
-                )),
+                Err(e) => {
+                    return Err(FortressError::storage(
+                        format!("Failed to read directory entry: {}", e),
+                        "filesystem".to_string(),
+                        StorageErrorCode::ConnectionFailed,
+                    ))
+                }
             }
         }
-        
+
         // Collect entries up to the limit
         while collected < limit {
             match entries.next_entry().await {
@@ -646,17 +684,18 @@ impl StorageBackend for FileSystemStorage {
                     }
                 }
                 Ok(None) => break, // No more entries
-                Err(e) => return Err(FortressError::storage(
-                    format!("Failed to read directory entry: {}", e),
-                    "filesystem".to_string(),
-                    StorageErrorCode::ConnectionFailed,
-                )),
+                Err(e) => {
+                    return Err(FortressError::storage(
+                        format!("Failed to read directory entry: {}", e),
+                        "filesystem".to_string(),
+                        StorageErrorCode::ConnectionFailed,
+                    ))
+                }
             }
         }
-        
+
         Ok(keys)
     }
-    
 
     fn metadata(&self) -> StorageMetadata {
         StorageMetadata {
@@ -676,15 +715,15 @@ impl StorageBackend for FileSystemStorage {
 
     async fn health_check(&self) -> Result<HealthStatus> {
         let start = std::time::Instant::now();
-        
+
         // Try to read the directory
-        let _entries = tokio::fs::read_dir(&self.base_path)
-            .await
-            .map_err(|e| FortressError::storage(
+        let _entries = tokio::fs::read_dir(&self.base_path).await.map_err(|e| {
+            FortressError::storage(
                 format!("Health check failed: {}", e),
                 "filesystem".to_string(),
                 StorageErrorCode::ConnectionFailed,
-            ))?;
+            )
+        })?;
 
         let response_time = start.elapsed().as_millis() as u64;
 
@@ -719,11 +758,8 @@ pub struct S3Storage {
 impl S3Storage {
     /// Create a new S3 storage backend
     pub async fn new(bucket: String, region: String, prefix: Option<String>) -> Result<Self> {
-        let config = from_env()
-            .region(S3Region::new(region))
-            .load()
-            .await;
-        
+        let config = from_env().region(S3Region::new(region)).load().await;
+
         let client = S3Client::new(&config);
 
         Ok(Self {
@@ -747,7 +783,7 @@ impl S3Storage {
 impl StorageBackend for S3Storage {
     async fn put(&self, key: &str, value: &[u8]) -> Result<()> {
         let s3_key = self.get_s3_key(key);
-        
+
         self.client
             .put_object()
             .bucket(&self.bucket)
@@ -755,19 +791,22 @@ impl StorageBackend for S3Storage {
             .body(value.to_vec().into())
             .send()
             .await
-            .map_err(|e| FortressError::storage(
-                format!("Failed to put object to S3: {}", e),
-                "s3".to_string(),
-                StorageErrorCode::InvalidOperation,
-            ))?;
+            .map_err(|e| {
+                FortressError::storage(
+                    format!("Failed to put object to S3: {}", e),
+                    "s3".to_string(),
+                    StorageErrorCode::InvalidOperation,
+                )
+            })?;
 
         Ok(())
     }
 
     async fn get(&self, key: &str) -> Result<Option<Vec<u8>>> {
         let s3_key = self.get_s3_key(key);
-        
-        match self.client
+
+        match self
+            .client
             .get_object()
             .bucket(&self.bucket)
             .key(&s3_key)
@@ -775,12 +814,17 @@ impl StorageBackend for S3Storage {
             .await
         {
             Ok(response) => {
-                let data = response.body.collect().await
-                    .map_err(|e| FortressError::storage(
-                        format!("Failed to read S3 object data: {}", e),
-                        "s3".to_string(),
-                        StorageErrorCode::InvalidOperation,
-                    ))?
+                let data = response
+                    .body
+                    .collect()
+                    .await
+                    .map_err(|e| {
+                        FortressError::storage(
+                            format!("Failed to read S3 object data: {}", e),
+                            "s3".to_string(),
+                            StorageErrorCode::InvalidOperation,
+                        )
+                    })?
                     .into_bytes()
                     .to_vec();
                 Ok(Some(data))
@@ -792,7 +836,7 @@ impl StorageBackend for S3Storage {
                         return Ok(None);
                     }
                 }
-                
+
                 // Fallback to string matching as safety
                 if e.to_string().contains("NoSuchKey") {
                     Ok(None)
@@ -809,26 +853,29 @@ impl StorageBackend for S3Storage {
 
     async fn delete(&self, key: &str) -> Result<()> {
         let s3_key = self.get_s3_key(key);
-        
+
         self.client
             .delete_object()
             .bucket(&self.bucket)
             .key(&s3_key)
             .send()
             .await
-            .map_err(|e| FortressError::storage(
-                format!("Failed to delete object from S3: {}", e),
-                "s3".to_string(),
-                StorageErrorCode::InvalidOperation,
-            ))?;
+            .map_err(|e| {
+                FortressError::storage(
+                    format!("Failed to delete object from S3: {}", e),
+                    "s3".to_string(),
+                    StorageErrorCode::InvalidOperation,
+                )
+            })?;
 
         Ok(())
     }
 
     async fn exists(&self, key: &str) -> Result<bool> {
         let s3_key = self.get_s3_key(key);
-        
-        match self.client
+
+        match self
+            .client
             .head_object()
             .bucket(&self.bucket)
             .key(&s3_key)
@@ -843,7 +890,7 @@ impl StorageBackend for S3Storage {
                         return Ok(false);
                     }
                 }
-                
+
                 // Fallback to string matching as safety
                 if e.to_string().contains("NoSuchKey") {
                     Ok(false)
@@ -862,59 +909,63 @@ impl StorageBackend for S3Storage {
         self.list_prefix_paginated(prefix, None, None).await
     }
 
-    async fn list_prefix_paginated(&self, prefix: &str, limit: Option<usize>, offset: Option<usize>) -> Result<Vec<String>> {
+    async fn list_prefix_paginated(
+        &self,
+        prefix: &str,
+        limit: Option<usize>,
+        offset: Option<usize>,
+    ) -> Result<Vec<String>> {
         let s3_prefix = match &self.prefix {
             Some(storage_prefix) => format!("{}/{}", storage_prefix, prefix),
             None => prefix.to_string(),
         };
-        
+
         let mut keys = Vec::new();
         let mut continuation_token = None;
         let mut current_count = 0;
-        
+
         // Apply offset
         if let Some(offset_val) = offset {
             if offset_val > 0 {
                 // Skip to offset by discarding initial results
                 while current_count < offset_val && continuation_token.is_some() {
-                    let mut request = self.client
+                    let mut request = self
+                        .client
                         .list_objects_v2()
                         .bucket(&self.bucket)
                         .prefix(&s3_prefix);
-                    
+
                     if let Some(token) = continuation_token {
                         request = request.continuation_token(token);
                     }
-                    
-                    let response = request
-                        .send()
-                        .await
-                        .map_err(|e| FortressError::storage(
+
+                    let response = request.send().await.map_err(|e| {
+                        FortressError::storage(
                             format!("Failed to list objects in S3: {}", e),
                             "s3".to_string(),
                             StorageErrorCode::InvalidOperation,
-                        ))?;
-                    
+                        )
+                    })?;
+
                     if let Some(objects) = response.contents() {
                         current_count += objects.len();
-                        
+
                         for object in objects {
                             if let Some(key) = object.key() {
                                 // Remove the storage prefix to get the original key
                                 let original_key = match &self.prefix {
-                                    Some(storage_prefix) => {
-                                        key.strip_prefix(&format!("{}/", storage_prefix))
-                                            .unwrap_or(key)
-                                    }
+                                    Some(storage_prefix) => key
+                                        .strip_prefix(&format!("{}/", storage_prefix))
+                                        .unwrap_or(key),
                                     None => key,
                                 };
                                 keys.push(original_key.to_string());
                             }
                         }
                     }
-                    
+
                     continuation_token = response.next_continuation_token();
-                    
+
                     // Break if we've reached the offset
                     if current_count >= offset_val || continuation_token.is_none() {
                         break;
@@ -922,14 +973,14 @@ impl StorageBackend for S3Storage {
                 }
             }
         }
-        
+
         // Apply limit
         if let Some(limit_val) = limit {
             if keys.len() > limit_val {
                 keys = keys.into_iter().take(limit_val).collect();
             }
         }
-        
+
         Ok(keys)
     }
 
@@ -958,7 +1009,7 @@ impl StorageBackend for S3Storage {
 
     async fn health_check(&self) -> Result<HealthStatus> {
         let start = std::time::Instant::now();
-        
+
         // Try to list the bucket (this is a lightweight operation)
         self.client
             .list_objects_v2()
@@ -966,11 +1017,13 @@ impl StorageBackend for S3Storage {
             .max_keys(1)
             .send()
             .await
-            .map_err(|e| FortressError::storage(
-                format!("S3 health check failed: {}", e),
-                "s3".to_string(),
-                StorageErrorCode::ConnectionFailed,
-            ))?;
+            .map_err(|e| {
+                FortressError::storage(
+                    format!("S3 health check failed: {}", e),
+                    "s3".to_string(),
+                    StorageErrorCode::ConnectionFailed,
+                )
+            })?;
 
         let response_time = start.elapsed().as_millis() as u64;
 
@@ -999,25 +1052,24 @@ impl AzureBlobStorage {
     /// Create a new Azure Blob storage backend
     pub async fn new(container: String, account: String) -> Result<Self> {
         // Create Azure credential and client
-        let credential = DefaultAzureCredential::new()
-            .map_err(|e| FortressError::storage(
+        let credential = DefaultAzureCredential::new().map_err(|e| {
+            FortressError::storage(
                 format!("Failed to create Azure credential: {}", e),
                 "azure_blob",
                 StorageErrorCode::AuthenticationError,
-            ))?;
+            )
+        })?;
 
         let account_url = format!("https://{}.blob.core.windows.net", account);
-        let client = BlobServiceClient::new(&account_url, credential)
-            .map_err(|e| FortressError::storage(
+        let client = BlobServiceClient::new(&account_url, credential).map_err(|e| {
+            FortressError::storage(
                 format!("Failed to create Azure Blob client: {}", e),
                 "azure_blob",
                 StorageErrorCode::ConnectionFailed,
-            ))?;
+            )
+        })?;
 
-        Ok(AzureBlobStorage {
-            client,
-            container,
-        })
+        Ok(AzureBlobStorage { client, container })
     }
 }
 
@@ -1027,23 +1079,22 @@ impl StorageBackend for AzureBlobStorage {
     async fn put(&self, key: &str, value: &[u8]) -> Result<()> {
         let container_client = self.client.container_client(&self.container);
         let blob_client = container_client.blob_client(key);
-        
-        blob_client
-            .put_block_blob(value)
-            .await
-            .map_err(|e| FortressError::storage(
+
+        blob_client.put_block_blob(value).await.map_err(|e| {
+            FortressError::storage(
                 format!("Failed to put blob {}: {}", key, e),
                 "azure_blob",
                 StorageErrorCode::WriteError,
-            ))?;
-        
+            )
+        })?;
+
         Ok(())
     }
 
     async fn get(&self, key: &str) -> Result<Option<Vec<u8>>> {
         let container_client = self.client.container_client(&self.container);
         let blob_client = container_client.blob_client(key);
-        
+
         match blob_client.get().await {
             Ok(response) => {
                 let data = response.data.to_vec();
@@ -1066,23 +1117,22 @@ impl StorageBackend for AzureBlobStorage {
     async fn delete(&self, key: &str) -> Result<()> {
         let container_client = self.client.container_client(&self.container);
         let blob_client = container_client.blob_client(key);
-        
-        blob_client
-            .delete()
-            .await
-            .map_err(|e| FortressError::storage(
+
+        blob_client.delete().await.map_err(|e| {
+            FortressError::storage(
                 format!("Failed to delete blob {}: {}", key, e),
                 "azure_blob",
                 StorageErrorCode::DeleteError,
-            ))?;
-        
+            )
+        })?;
+
         Ok(())
     }
 
     async fn exists(&self, key: &str) -> Result<bool> {
         let container_client = self.client.container_client(&self.container);
         let blob_client = container_client.blob_client(key);
-        
+
         match blob_client.get_properties().await {
             Ok(_) => Ok(true),
             Err(err) => {
@@ -1103,17 +1153,19 @@ impl StorageBackend for AzureBlobStorage {
         self.list_prefix_paginated(prefix, None, None).await
     }
 
-    async fn list_prefix_paginated(&self, prefix: &str, limit: Option<usize>, offset: Option<usize>) -> Result<Vec<String>> {
+    async fn list_prefix_paginated(
+        &self,
+        prefix: &str,
+        limit: Option<usize>,
+        offset: Option<usize>,
+    ) -> Result<Vec<String>> {
         let container_client = self.client.container_client(&self.container);
-        
-        let mut stream = container_client
-            .list_blobs()
-            .prefix(prefix)
-            .into_stream();
-        
+
+        let mut stream = container_client.list_blobs().prefix(prefix).into_stream();
+
         let mut keys = Vec::new();
         let mut current_count = 0;
-        
+
         // Apply offset
         if let Some(offset_val) = offset {
             if offset_val > 0 {
@@ -1121,7 +1173,7 @@ impl StorageBackend for AzureBlobStorage {
                 while current_count < offset_val {
                     if let Some(blob_response) = stream.next().await {
                         current_count += blob_response.blobs.blobs.len();
-                        
+
                         for blob in blob_response.blobs.blobs {
                             keys.push(blob.name.clone());
                         }
@@ -1131,14 +1183,14 @@ impl StorageBackend for AzureBlobStorage {
                 }
             }
         }
-        
+
         // Apply limit
         if let Some(limit_val) = limit {
             if keys.len() > limit_val {
                 keys = keys.into_iter().take(limit_val).collect();
             }
         }
-        
+
         Ok(keys)
     }
 
@@ -1164,14 +1216,17 @@ impl StorageBackend for AzureBlobStorage {
 
     async fn health_check(&self) -> Result<HealthStatus> {
         let container_client = self.client.container_client(&self.container);
-        
+
         match container_client.get_properties().await {
             Ok(_) => Ok(HealthStatus {
                 healthy: true,
                 response_time_ms: 100,
                 details: {
                     let mut details = HashMap::new();
-                    details.insert("message".to_string(), "Azure Blob storage is healthy".to_string());
+                    details.insert(
+                        "message".to_string(),
+                        "Azure Blob storage is healthy".to_string(),
+                    );
                     details.insert("last_check".to_string(), chrono::Utc::now().to_rfc3339());
                     details
                 },
@@ -1203,9 +1258,15 @@ pub struct StorageConfig {
     pub max_connections: usize,
 }
 
-fn default_connection_pool_size() -> usize { 10 }
-fn default_connection_timeout() -> u64 { 30 }
-fn default_max_connections() -> usize { 100 }
+fn default_connection_pool_size() -> usize {
+    10
+}
+fn default_connection_timeout() -> u64 {
+    30
+}
+fn default_max_connections() -> usize {
+    100
+}
 
 /// Storage backend types
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1692,36 +1753,32 @@ pub struct TimeRange {
 /// Factory function to create storage backends
 pub async fn create_storage_backend(config: StorageConfig) -> Result<Box<dyn StorageBackend>> {
     match config.backend_type {
-        StorageBackendType::InMemory => {
-            Ok(Box::new(InMemoryStorage::new()))
-        }
+        StorageBackendType::InMemory => Ok(Box::new(InMemoryStorage::new())),
         StorageBackendType::FileSystem { base_path } => {
             Ok(Box::new(FileSystemStorage::new(base_path)?))
         }
         #[cfg(feature = "cloud-storage")]
-        StorageBackendType::S3 { bucket, region, prefix } => {
-            Ok(Box::new(S3Storage::new(bucket, region, prefix).await?))
-        }
+        StorageBackendType::S3 {
+            bucket,
+            region,
+            prefix,
+        } => Ok(Box::new(S3Storage::new(bucket, region, prefix).await?)),
         #[cfg(feature = "cloud-storage")]
         StorageBackendType::AzureBlob { container, account } => {
             Ok(Box::new(AzureBlobStorage::new(container, account).await?))
         }
         #[cfg(not(feature = "cloud-storage"))]
-        StorageBackendType::S3 { .. } => {
-            Err(FortressError::storage(
-                "S3 storage backend requires 'cloud-storage' feature to be enabled",
-                "s3",
-                StorageErrorCode::BackendNotAvailable,
-            ))
-        }
+        StorageBackendType::S3 { .. } => Err(FortressError::storage(
+            "S3 storage backend requires 'cloud-storage' feature to be enabled",
+            "s3",
+            StorageErrorCode::BackendNotAvailable,
+        )),
         #[cfg(not(feature = "cloud-storage"))]
-        StorageBackendType::AzureBlob { .. } => {
-            Err(FortressError::storage(
-                "Azure Blob storage backend requires 'cloud-storage' feature to be enabled",
-                "azure_blob",
-                StorageErrorCode::BackendNotAvailable,
-            ))
-        }
+        StorageBackendType::AzureBlob { .. } => Err(FortressError::storage(
+            "Azure Blob storage backend requires 'cloud-storage' feature to be enabled",
+            "azure_blob",
+            StorageErrorCode::BackendNotAvailable,
+        )),
     }
 }
 
@@ -1732,7 +1789,7 @@ mod tests {
     #[tokio::test]
     async fn test_in_memory_storage() -> Result<()> {
         let storage = InMemoryStorage::new();
-        
+
         // Test put and get
         storage.put("test_key", b"test_value").await.unwrap();
         let value = storage.get("test_key").await.unwrap();
@@ -1762,7 +1819,7 @@ mod tests {
     async fn test_filesystem_storage() -> Result<()> {
         let temp_dir = tempfile::tempdir().unwrap();
         let storage = FileSystemStorage::new(temp_dir.path()).unwrap();
-        
+
         // Test put and get
         storage.put("test_key", b"test_value").await.unwrap();
         let value = storage.get("test_key").await.unwrap();
@@ -1791,19 +1848,22 @@ mod tests {
     async fn test_filesystem_storage_integrity() -> Result<()> {
         let temp_dir = tempfile::tempdir().unwrap();
         let storage = FileSystemStorage::new(temp_dir.path()).unwrap();
-        
+
         // Store data
         let original_data = b"important data that must not be corrupted";
         storage.put("integrity_test", original_data).await.unwrap();
-        
+
         // Verify integrity
         let retrieved_data = storage.get("integrity_test").await.unwrap();
         assert_eq!(retrieved_data, Some(original_data.to_vec()));
-        
+
         // Test corruption detection
         let corrupted_data = b"corrupted data";
-        storage.put("corruption_test", corrupted_data).await.unwrap();
-        
+        storage
+            .put("corruption_test", corrupted_data)
+            .await
+            .unwrap();
+
         // Simulate corruption by modifying the file directly (this is a simplified test)
         let metadata = storage.metadata();
         assert_eq!(metadata.backend_type, "filesystem");
@@ -1858,28 +1918,32 @@ mod tests {
             max_connections: 100,
         };
 
-        let json = serde_json::to_string(&config)
-            .map_err(|e| FortressError::storage(
+        let json = serde_json::to_string(&config).map_err(|e| {
+            FortressError::storage(
                 format!("Failed to serialize storage config: {}", e),
                 "serialization".to_string(),
                 StorageErrorCode::CorruptedData,
-            ))?;
-        let deserialized: StorageConfig = serde_json::from_str(&json)
-            .map_err(|e| FortressError::storage(
+            )
+        })?;
+        let deserialized: StorageConfig = serde_json::from_str(&json).map_err(|e| {
+            FortressError::storage(
                 format!("Failed to deserialize storage config: {}", e),
                 "serialization".to_string(),
                 StorageErrorCode::CorruptedData,
-            ))?;
+            )
+        })?;
 
         Ok(match deserialized.backend_type {
             StorageBackendType::FileSystem { base_path } => {
                 assert_eq!(base_path, "/tmp/test");
             }
-            _ => return Err(FortressError::storage(
-                "Expected FileSystem backend type".to_string(),
-                "test".to_string(),
-                StorageErrorCode::InvalidOperation,
-            )),
+            _ => {
+                return Err(FortressError::storage(
+                    "Expected FileSystem backend type".to_string(),
+                    "test".to_string(),
+                    StorageErrorCode::InvalidOperation,
+                ))
+            }
         })
     }
 
@@ -1898,21 +1962,27 @@ mod tests {
             max_connections: 100,
         };
 
-        let json = serde_json::to_string(&s3_config)
-            .map_err(|e| FortressError::storage(
+        let json = serde_json::to_string(&s3_config).map_err(|e| {
+            FortressError::storage(
                 format!("Failed to serialize S3 config: {}", e),
                 "serialization".to_string(),
                 StorageErrorCode::CorruptedData,
-            ))?;
-        let deserialized: StorageConfig = serde_json::from_str(&json)
-            .map_err(|e| FortressError::storage(
+            )
+        })?;
+        let deserialized: StorageConfig = serde_json::from_str(&json).map_err(|e| {
+            FortressError::storage(
                 format!("Failed to deserialize S3 config: {}", e),
                 "serialization".to_string(),
                 StorageErrorCode::CorruptedData,
-            ))?;
+            )
+        })?;
 
         match deserialized.backend_type {
-            StorageBackendType::S3 { bucket, region, prefix } => {
+            StorageBackendType::S3 {
+                bucket,
+                region,
+                prefix,
+            } => {
                 assert_eq!(bucket, "test-bucket");
                 assert_eq!(region, "us-east-1");
                 assert_eq!(prefix, Some("fortress".to_string()));
@@ -1932,18 +2002,20 @@ mod tests {
             max_connections: 100,
         };
 
-        let json = serde_json::to_string(&azure_config)
-            .map_err(|e| FortressError::storage(
+        let json = serde_json::to_string(&azure_config).map_err(|e| {
+            FortressError::storage(
                 format!("Failed to serialize Azure config: {}", e),
                 "serialization".to_string(),
                 StorageErrorCode::CorruptedData,
-            ))?;
-        let deserialized: StorageConfig = serde_json::from_str(&json)
-            .map_err(|e| FortressError::storage(
+            )
+        })?;
+        let deserialized: StorageConfig = serde_json::from_str(&json).map_err(|e| {
+            FortressError::storage(
                 format!("Failed to deserialize Azure config: {}", e),
                 "serialization".to_string(),
                 StorageErrorCode::CorruptedData,
-            ))?;
+            )
+        })?;
 
         match deserialized.backend_type {
             StorageBackendType::AzureBlob { container, account } => {

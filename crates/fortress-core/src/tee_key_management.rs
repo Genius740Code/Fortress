@@ -5,13 +5,13 @@
 //! enclaves, providing the highest level of protection for sensitive keys.
 
 use crate::error::{FortressError, Result};
-use crate::tee::{TeeManager, TeeType, EnclaveConfig, SecurityPolicy};
+use crate::tee::{EnclaveConfig, SecurityPolicy, TeeManager, TeeType};
+use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
-use base64::Engine;
 
 /// TEE-aware key manager for enclave-protected keys
 pub struct TeeAwareKeyManager {
@@ -195,12 +195,12 @@ impl TeeAwareKeyManager {
             usage_metrics: Arc::new(RwLock::new(HashMap::new())),
         }
     }
-    
+
     /// Add a key policy
     pub async fn add_key_policy(&mut self, policy_name: String, policy: KeyPolicy) {
         self.key_policies.insert(policy_name, policy);
     }
-    
+
     /// Create a secure enclave for key management
     pub async fn create_key_enclave(
         &self,
@@ -208,16 +208,17 @@ impl TeeAwareKeyManager {
         policy_name: Option<&str>,
     ) -> Result<String> {
         let policy = if let Some(name) = policy_name {
-            self.key_policies.get(name)
-                .ok_or_else(|| FortressError::tee(
+            self.key_policies.get(name).ok_or_else(|| {
+                FortressError::tee(
                     format!("Key policy not found: {}", name),
-                    "TeeAwareKeyManager::create_key_enclave".to_string()
-                ))?
+                    "TeeAwareKeyManager::create_key_enclave".to_string(),
+                )
+            })?
         } else {
             // Use default policy
             &self.get_default_policy(tee_type.clone())
         };
-        
+
         // Create enclave configuration
         let config = EnclaveConfig {
             enclave_id: Uuid::new_v4().to_string(),
@@ -236,11 +237,11 @@ impl TeeAwareKeyManager {
             },
             parameters: HashMap::new(),
         };
-        
+
         // Create and start enclave
         let enclave_id = self.tee_manager.create_enclave(config).await?;
         self.tee_manager.start_enclave(&enclave_id).await?;
-        
+
         // Perform attestation if required
         if policy.require_attestation {
             let attestation = self.tee_manager.attest_enclave(&enclave_id).await?;
@@ -248,15 +249,18 @@ impl TeeAwareKeyManager {
                 // Clean up failed enclave
                 let _ = self.tee_manager.terminate_enclave(&enclave_id).await;
                 return Err(FortressError::tee(
-                    format!("Enclave attestation failed: {:?}", attestation.security_issues),
-                    "TeeAwareKeyManager::create_key_enclave".to_string()
+                    format!(
+                        "Enclave attestation failed: {:?}",
+                        attestation.security_issues
+                    ),
+                    "TeeAwareKeyManager::create_key_enclave".to_string(),
                 ));
             }
         }
-        
+
         Ok(enclave_id)
     }
-    
+
     /// Generate a new key within an enclave
     pub async fn generate_key_in_enclave(
         &self,
@@ -270,34 +274,37 @@ impl TeeAwareKeyManager {
         if status != crate::tee::EnclaveStatus::Running {
             return Err(FortressError::tee(
                 format!("Enclave {} is not running", enclave_id),
-                "TeeAwareKeyManager::generate_key_in_enclave".to_string()
+                "TeeAwareKeyManager::generate_key_in_enclave".to_string(),
             ));
         }
-        
+
         // Validate against policy
         if let Some(name) = policy_name {
-            let policy = self.key_policies.get(name)
-                .ok_or_else(|| FortressError::tee(
+            let policy = self.key_policies.get(name).ok_or_else(|| {
+                FortressError::tee(
                     format!("Key policy not found: {}", name),
-                    "TeeAwareKeyManager::generate_key_in_enclave".to_string()
-                ))?;
-            
+                    "TeeAwareKeyManager::generate_key_in_enclave".to_string(),
+                )
+            })?;
+
             if !policy.allowed_algorithms.contains(&algorithm.to_string()) {
                 return Err(FortressError::tee(
                     format!("Algorithm {} not allowed by policy", algorithm),
-                    "TeeAwareKeyManager::generate_key_in_enclave".to_string()
+                    "TeeAwareKeyManager::generate_key_in_enclave".to_string(),
                 ));
             }
-            
+
             if key_size < policy.min_key_size || key_size > policy.max_key_size {
                 return Err(FortressError::tee(
-                    format!("Key size {} not within policy bounds [{}, {}]", 
-                           key_size, policy.min_key_size, policy.max_key_size),
-                    "TeeAwareKeyManager::generate_key_in_enclave".to_string()
+                    format!(
+                        "Key size {} not within policy bounds [{}, {}]",
+                        key_size, policy.min_key_size, policy.max_key_size
+                    ),
+                    "TeeAwareKeyManager::generate_key_in_enclave".to_string(),
                 ));
             }
         }
-        
+
         // Generate key generation request
         let request = KeyGenerationRequest {
             operation: "generate_key".to_string(),
@@ -306,34 +313,41 @@ impl TeeAwareKeyManager {
             key_id: Uuid::new_v4().to_string(),
             parameters: HashMap::new(),
         };
-        
-        let request_bytes = serde_json::to_vec(&request)
-            .map_err(|e| FortressError::tee(
+
+        let request_bytes = serde_json::to_vec(&request).map_err(|e| {
+            FortressError::tee(
                 format!("Failed to serialize key generation request: {}", e),
-                "TeeAwareKeyManager::generate_key_in_enclave".to_string()
-            ))?;
-        
+                "TeeAwareKeyManager::generate_key_in_enclave".to_string(),
+            )
+        })?;
+
         // Send request to enclave
         let start_time = chrono::Utc::now();
-        let response = self.tee_manager.send_message(enclave_id, &request_bytes).await?;
+        let response = self
+            .tee_manager
+            .send_message(enclave_id, &request_bytes)
+            .await?;
         let duration = (chrono::Utc::now() - start_time).num_milliseconds() as f64;
-        
+
         // Parse response
-        let response: KeyGenerationResponse = serde_json::from_slice(&response)
-            .map_err(|e| FortressError::tee(
+        let response: KeyGenerationResponse = serde_json::from_slice(&response).map_err(|e| {
+            FortressError::tee(
                 format!("Failed to deserialize key generation response: {}", e),
-                "TeeAwareKeyManager::generate_key_in_enclave".to_string()
-            ))?;
-        
+                "TeeAwareKeyManager::generate_key_in_enclave".to_string(),
+            )
+        })?;
+
         if !response.success {
             return Err(FortressError::tee(
-                response.error.unwrap_or_else(|| "Key generation failed".to_string()),
-                "TeeAwareKeyManager::generate_key_in_enclave".to_string()
+                response
+                    .error
+                    .unwrap_or_else(|| "Key generation failed".to_string()),
+                "TeeAwareKeyManager::generate_key_in_enclave".to_string(),
             ));
         }
-        
+
         let key_id = response.key_id.unwrap();
-        
+
         // Store key info
         let key_info = EnclaveKeyInfo {
             key_id: key_id.clone(),
@@ -346,23 +360,26 @@ impl TeeAwareKeyManager {
             status: KeyStatus::Active,
             metadata: HashMap::new(),
         };
-        
+
         let mut enclave_keys = self.enclave_keys.write().await;
         enclave_keys.insert(key_id.clone(), key_info);
-        
+
         // Initialize usage metrics
         let mut metrics = self.usage_metrics.write().await;
-        metrics.insert(key_id.clone(), KeyUsageMetrics {
-            total_operations: 0,
-            operations_by_type: HashMap::new(),
-            last_operation: chrono::Utc::now(),
-            avg_operation_duration_ms: duration,
-            error_count: 0,
-        });
-        
+        metrics.insert(
+            key_id.clone(),
+            KeyUsageMetrics {
+                total_operations: 0,
+                operations_by_type: HashMap::new(),
+                last_operation: chrono::Utc::now(),
+                avg_operation_duration_ms: duration,
+                error_count: 0,
+            },
+        );
+
         Ok(key_id)
     }
-    
+
     /// Perform cryptographic operation in enclave
     pub async fn perform_operation(
         &self,
@@ -372,20 +389,24 @@ impl TeeAwareKeyManager {
         parameters: Option<HashMap<String, String>>,
     ) -> Result<Vec<u8>> {
         let enclave_keys = self.enclave_keys.read().await;
-        let key_info = enclave_keys.get(key_id)
-            .ok_or_else(|| FortressError::tee(
+        let key_info = enclave_keys.get(key_id).ok_or_else(|| {
+            FortressError::tee(
                 format!("Key not found: {}", key_id),
-                "TeeAwareKeyManager::perform_operation".to_string()
-            ))?;
-        
+                "TeeAwareKeyManager::perform_operation".to_string(),
+            )
+        })?;
+
         // Check key status
         if key_info.status != KeyStatus::Active {
             return Err(FortressError::tee(
-                format!("Key {} is not active (status: {:?})", key_id, key_info.status),
-                "TeeAwareKeyManager::perform_operation".to_string()
+                format!(
+                    "Key {} is not active (status: {:?})",
+                    key_id, key_info.status
+                ),
+                "TeeAwareKeyManager::perform_operation".to_string(),
             ));
         }
-        
+
         // Check usage limits if policy exists
         if let Some(policy_name) = key_info.metadata.get("policy_name") {
             if let Some(policy) = self.key_policies.get(policy_name) {
@@ -393,13 +414,13 @@ impl TeeAwareKeyManager {
                     if key_info.access_count >= max_usage {
                         return Err(FortressError::tee(
                             format!("Key {} has exceeded maximum usage count", key_id),
-                            "TeeAwareKeyManager::perform_operation".to_string()
+                            "TeeAwareKeyManager::perform_operation".to_string(),
                         ));
                     }
                 }
             }
         }
-        
+
         // Create operation request
         let request = CryptographicOperationRequest {
             operation: operation.to_string(),
@@ -407,25 +428,31 @@ impl TeeAwareKeyManager {
             data: base64::engine::general_purpose::STANDARD.encode(data),
             parameters: parameters.unwrap_or_default(),
         };
-        
-        let request_bytes = serde_json::to_vec(&request)
-            .map_err(|e| FortressError::tee(
+
+        let request_bytes = serde_json::to_vec(&request).map_err(|e| {
+            FortressError::tee(
                 format!("Failed to serialize operation request: {}", e),
-                "TeeAwareKeyManager::perform_operation".to_string()
-            ))?;
-        
+                "TeeAwareKeyManager::perform_operation".to_string(),
+            )
+        })?;
+
         // Send request to enclave
         let start_time = chrono::Utc::now();
-        let response = self.tee_manager.send_message(&key_info.enclave_id, &request_bytes).await?;
+        let response = self
+            .tee_manager
+            .send_message(&key_info.enclave_id, &request_bytes)
+            .await?;
         let duration = (chrono::Utc::now() - start_time).num_milliseconds() as f64;
-        
+
         // Parse response
-        let response: CryptographicOperationResponse = serde_json::from_slice(&response)
-            .map_err(|e| FortressError::tee(
-                format!("Failed to deserialize operation response: {}", e),
-                "TeeAwareKeyManager::perform_operation".to_string()
-            ))?;
-        
+        let response: CryptographicOperationResponse =
+            serde_json::from_slice(&response).map_err(|e| {
+                FortressError::tee(
+                    format!("Failed to deserialize operation response: {}", e),
+                    "TeeAwareKeyManager::perform_operation".to_string(),
+                )
+            })?;
+
         if !response.success {
             // Update error metrics
             drop(enclave_keys);
@@ -433,13 +460,15 @@ impl TeeAwareKeyManager {
             if let Some(key_metrics) = metrics.get_mut(key_id) {
                 key_metrics.error_count += 1;
             }
-            
+
             return Err(FortressError::tee(
-                response.error.unwrap_or_else(|| "Operation failed".to_string()),
-                "TeeAwareKeyManager::perform_operation".to_string()
+                response
+                    .error
+                    .unwrap_or_else(|| "Operation failed".to_string()),
+                "TeeAwareKeyManager::perform_operation".to_string(),
             ));
         }
-        
+
         // Update access info and metrics
         drop(enclave_keys);
         let mut enclave_keys = self.enclave_keys.write().await;
@@ -447,37 +476,47 @@ impl TeeAwareKeyManager {
             key_info.last_accessed = chrono::Utc::now();
             key_info.access_count += 1;
         }
-        
+
         let mut metrics = self.usage_metrics.write().await;
         if let Some(key_metrics) = metrics.get_mut(key_id) {
             key_metrics.total_operations += 1;
-            key_metrics.operations_by_type
+            key_metrics
+                .operations_by_type
                 .entry(operation.to_string())
                 .and_modify(|count| *count += 1)
                 .or_insert(1);
             key_metrics.last_operation = chrono::Utc::now();
             // Update average duration
             let total_ops = key_metrics.total_operations;
-            key_metrics.avg_operation_duration_ms = 
-                (key_metrics.avg_operation_duration_ms * (total_ops - 1) as f64 + duration) / total_ops as f64;
+            key_metrics.avg_operation_duration_ms =
+                (key_metrics.avg_operation_duration_ms * (total_ops - 1) as f64 + duration)
+                    / total_ops as f64;
         }
-        
+
         // Return result
         if let Some(result_data) = response.result {
-            base64::engine::general_purpose::STANDARD.decode(&result_data).map_err(|e| FortressError::tee(
-                format!("Failed to decode operation result: {}", e),
-                "TeeAwareKeyManager::perform_operation".to_string()
-            ))
+            base64::engine::general_purpose::STANDARD
+                .decode(&result_data)
+                .map_err(|e| {
+                    FortressError::tee(
+                        format!("Failed to decode operation result: {}", e),
+                        "TeeAwareKeyManager::perform_operation".to_string(),
+                    )
+                })
         } else if let Some(signature) = response.signature {
-            base64::engine::general_purpose::STANDARD.decode(&signature).map_err(|e| FortressError::tee(
-                format!("Failed to decode signature: {}", e),
-                "TeeAwareKeyManager::perform_operation".to_string()
-            ))
+            base64::engine::general_purpose::STANDARD
+                .decode(&signature)
+                .map_err(|e| {
+                    FortressError::tee(
+                        format!("Failed to decode signature: {}", e),
+                        "TeeAwareKeyManager::perform_operation".to_string(),
+                    )
+                })
         } else {
             Ok(vec![]) // For operations like verify that return boolean result
         }
     }
-    
+
     /// Rotate a key within the same or different enclave
     pub async fn rotate_key(
         &self,
@@ -487,12 +526,13 @@ impl TeeAwareKeyManager {
         rotation_reason: &str,
     ) -> Result<String> {
         let enclave_keys = self.enclave_keys.read().await;
-        let key_info = enclave_keys.get(key_id)
-            .ok_or_else(|| FortressError::tee(
+        let key_info = enclave_keys.get(key_id).ok_or_else(|| {
+            FortressError::tee(
                 format!("Key not found: {}", key_id),
-                "TeeAwareKeyManager::rotate_key".to_string()
-            ))?;
-        
+                "TeeAwareKeyManager::rotate_key".to_string(),
+            )
+        })?;
+
         // Create rotation request
         let request = KeyRotationRequest {
             operation: "rotate_key".to_string(),
@@ -501,112 +541,130 @@ impl TeeAwareKeyManager {
             new_key_size,
             rotation_reason: rotation_reason.to_string(),
         };
-        
-        let request_bytes = serde_json::to_vec(&request)
-            .map_err(|e| FortressError::tee(
+
+        let request_bytes = serde_json::to_vec(&request).map_err(|e| {
+            FortressError::tee(
                 format!("Failed to serialize rotation request: {}", e),
-                "TeeAwareKeyManager::rotate_key".to_string()
-            ))?;
-        
+                "TeeAwareKeyManager::rotate_key".to_string(),
+            )
+        })?;
+
         // Send request to enclave
-        let response = self.tee_manager.send_message(&key_info.enclave_id, &request_bytes).await?;
-        
+        let response = self
+            .tee_manager
+            .send_message(&key_info.enclave_id, &request_bytes)
+            .await?;
+
         // Parse response
-        let response: KeyRotationResponse = serde_json::from_slice(&response)
-            .map_err(|e| FortressError::tee(
+        let response: KeyRotationResponse = serde_json::from_slice(&response).map_err(|e| {
+            FortressError::tee(
                 format!("Failed to deserialize rotation response: {}", e),
-                "TeeAwareKeyManager::rotate_key".to_string()
-            ))?;
-        
+                "TeeAwareKeyManager::rotate_key".to_string(),
+            )
+        })?;
+
         if !response.success {
             return Err(FortressError::tee(
-                response.error.unwrap_or_else(|| "Key rotation failed".to_string()),
-                "TeeAwareKeyManager::rotate_key".to_string()
+                response
+                    .error
+                    .unwrap_or_else(|| "Key rotation failed".to_string()),
+                "TeeAwareKeyManager::rotate_key".to_string(),
             ));
         }
-        
+
         let new_key_id = response.new_key_id.unwrap();
-        
+
         // Update key status
         drop(enclave_keys);
         let mut enclave_keys = self.enclave_keys.write().await;
         if let Some(key_info) = enclave_keys.get_mut(key_id) {
             key_info.status = KeyStatus::PendingRotation;
         }
-        
+
         Ok(new_key_id)
     }
-    
+
     /// Destroy a key
     pub async fn destroy_key(&self, key_id: &str) -> Result<()> {
         let mut enclave_keys = self.enclave_keys.write().await;
-        let key_info = enclave_keys.get_mut(key_id)
-            .ok_or_else(|| FortressError::tee(
+        let key_info = enclave_keys.get_mut(key_id).ok_or_else(|| {
+            FortressError::tee(
                 format!("Key not found: {}", key_id),
-                "TeeAwareKeyManager::destroy_key".to_string()
-            ))?;
-        
+                "TeeAwareKeyManager::destroy_key".to_string(),
+            )
+        })?;
+
         // Mark key as destroying
         key_info.status = KeyStatus::Destroying;
-        
+
         // Create destroy request
         let request = serde_json::json!({
             "operation": "destroy_key",
             "key_id": key_id
         });
-        
-        let request_bytes = serde_json::to_vec(&request)
-            .map_err(|e| FortressError::tee(
+
+        let request_bytes = serde_json::to_vec(&request).map_err(|e| {
+            FortressError::tee(
                 format!("Failed to serialize destroy request: {}", e),
-                "TeeAwareKeyManager::destroy_key".to_string()
-            ))?;
-        
+                "TeeAwareKeyManager::destroy_key".to_string(),
+            )
+        })?;
+
         // Send request to enclave
-        let response = self.tee_manager.send_message(&key_info.enclave_id, &request_bytes).await?;
-        
+        let response = self
+            .tee_manager
+            .send_message(&key_info.enclave_id, &request_bytes)
+            .await?;
+
         // Parse response
-        let response: serde_json::Value = serde_json::from_slice(&response)
-            .map_err(|e| FortressError::tee(
+        let response: serde_json::Value = serde_json::from_slice(&response).map_err(|e| {
+            FortressError::tee(
                 format!("Failed to deserialize destroy response: {}", e),
-                "TeeAwareKeyManager::destroy_key".to_string()
-            ))?;
-        
-        if response.get("success").and_then(|v| v.as_bool()).unwrap_or(false) {
+                "TeeAwareKeyManager::destroy_key".to_string(),
+            )
+        })?;
+
+        if response
+            .get("success")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+        {
             // Mark key as destroyed
             key_info.status = KeyStatus::Destroyed;
-            
+
             // Remove from active storage
             enclave_keys.remove(key_id);
-            
+
             // Remove usage metrics
             let mut metrics = self.usage_metrics.write().await;
             metrics.remove(key_id);
-            
+
             Ok(())
         } else {
-            let error = response.get("error")
+            let error = response
+                .get("error")
                 .and_then(|v| v.as_str())
                 .unwrap_or("Key destruction failed");
-            
+
             Err(FortressError::tee(
                 error.to_string(),
-                "TeeAwareKeyManager::destroy_key".to_string()
+                "TeeAwareKeyManager::destroy_key".to_string(),
             ))
         }
     }
-    
+
     /// List all enclave-protected keys
     pub async fn list_keys(&self) -> Vec<EnclaveKeyInfo> {
         let enclave_keys = self.enclave_keys.read().await;
         enclave_keys.values().cloned().collect()
     }
-    
+
     /// Get key usage metrics
     pub async fn get_key_metrics(&self, key_id: &str) -> Option<KeyUsageMetrics> {
         let metrics = self.usage_metrics.read().await;
         metrics.get(key_id).cloned()
     }
-    
+
     /// Get default policy for TEE type
     fn get_default_policy(&self, tee_type: TeeType) -> KeyPolicy {
         match tee_type {
@@ -655,7 +713,7 @@ impl TeeAwareKeyManager {
             },
         }
     }
-    
+
     /// Get enclave image path for TEE type
     fn get_enclave_image_path(&self, tee_type: &TeeType) -> Result<String> {
         match tee_type {
@@ -667,16 +725,17 @@ impl TeeAwareKeyManager {
             )),
         }
     }
-    
+
     /// Check if key needs rotation
     pub async fn needs_rotation(&self, key_id: &str) -> Result<bool> {
         let enclave_keys = self.enclave_keys.read().await;
-        let key_info = enclave_keys.get(key_id)
-            .ok_or_else(|| FortressError::tee(
+        let key_info = enclave_keys.get(key_id).ok_or_else(|| {
+            FortressError::tee(
                 format!("Key not found: {}", key_id),
-                "TeeAwareKeyManager::needs_rotation".to_string()
-            ))?;
-        
+                "TeeAwareKeyManager::needs_rotation".to_string(),
+            )
+        })?;
+
         // Check if key has policy with rotation interval
         if let Some(policy_name) = key_info.metadata.get("policy_name") {
             if let Some(policy) = self.key_policies.get(policy_name) {
@@ -686,15 +745,15 @@ impl TeeAwareKeyManager {
                 }
             }
         }
-        
+
         Ok(false)
     }
-    
+
     /// Get keys that need rotation
     pub async fn get_keys_needing_rotation(&self) -> Vec<String> {
         let enclave_keys = self.enclave_keys.read().await;
         let mut keys_needing_rotation = Vec::new();
-        
+
         for (key_id, key_info) in enclave_keys.iter() {
             if key_info.status == KeyStatus::Active {
                 if let Ok(needs_rotation) = self.needs_rotation(key_id).await {
@@ -704,7 +763,7 @@ impl TeeAwareKeyManager {
                 }
             }
         }
-        
+
         keys_needing_rotation
     }
 }
@@ -712,19 +771,19 @@ impl TeeAwareKeyManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tee::{TeeManager, SecurityPolicy};
-    
+    use crate::tee::{SecurityPolicy, TeeManager};
+
     #[tokio::test]
     async fn test_tee_aware_key_manager_creation() {
         let policy = SecurityPolicy::default();
         let tee_manager = Arc::new(TeeManager::new(policy));
         let key_manager = TeeAwareKeyManager::new(tee_manager);
-        
+
         // Should be able to create manager
         let keys = key_manager.list_keys().await;
         assert!(keys.is_empty());
     }
-    
+
     #[tokio::test]
     async fn test_key_policy() {
         let policy = KeyPolicy {
@@ -737,24 +796,24 @@ mod tests {
             max_usage_count: Some(1000),
             access_control: vec!["admin".to_string()],
         };
-        
+
         assert_eq!(policy.min_key_size, 2048);
         assert!(policy.allowed_algorithms.contains(&"rsa-2048".to_string()));
         assert!(policy.require_attestation);
     }
-    
+
     #[tokio::test]
     async fn test_key_status_transitions() {
         let mut status = KeyStatus::Active;
         assert_eq!(status, KeyStatus::Active);
-        
+
         status = KeyStatus::PendingRotation;
         assert_eq!(status, KeyStatus::PendingRotation);
-        
+
         status = KeyStatus::Destroyed;
         assert_eq!(status, KeyStatus::Destroyed);
     }
-    
+
     #[tokio::test]
     async fn test_usage_metrics() {
         let mut metrics = KeyUsageMetrics {
@@ -764,31 +823,35 @@ mod tests {
             avg_operation_duration_ms: 0.0,
             error_count: 0,
         };
-        
+
         assert_eq!(metrics.total_operations, 0);
         assert_eq!(metrics.error_count, 0);
-        
+
         // Simulate operation
         metrics.total_operations += 1;
         metrics.operations_by_type.insert("encrypt".to_string(), 1);
         metrics.avg_operation_duration_ms = 50.0;
-        
+
         assert_eq!(metrics.total_operations, 1);
         assert_eq!(metrics.operations_by_type.get("encrypt"), Some(&1));
     }
-    
+
     #[tokio::test]
     async fn test_default_policies() {
         let policy = SecurityPolicy::default();
         let tee_manager = Arc::new(TeeManager::new(policy));
         let key_manager = TeeAwareKeyManager::new(tee_manager);
-        
+
         let nitro_policy = key_manager.get_default_policy(TeeType::AwsNitro);
         assert_eq!(nitro_policy.required_tee_type, TeeType::AwsNitro);
-        assert!(nitro_policy.allowed_algorithms.contains(&"aes-256-gcm".to_string()));
-        
+        assert!(nitro_policy
+            .allowed_algorithms
+            .contains(&"aes-256-gcm".to_string()));
+
         let sgx_policy = key_manager.get_default_policy(TeeType::IntelSgx);
         assert_eq!(sgx_policy.required_tee_type, TeeType::IntelSgx);
-        assert!(sgx_policy.allowed_algorithms.contains(&"rsa-2048".to_string()));
+        assert!(sgx_policy
+            .allowed_algorithms
+            .contains(&"rsa-2048".to_string()));
     }
 }

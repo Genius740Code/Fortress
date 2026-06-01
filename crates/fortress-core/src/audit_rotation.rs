@@ -3,14 +3,14 @@
 //! This module provides automated log rotation, retention management,
 //! and cleanup capabilities for audit logs.
 
+use chrono::DateTime;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH, Duration};
-use serde::{Deserialize, Serialize};
-use chrono::DateTime;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use crate::error::{FortressError, Result};
 use crate::audit::AuditConfig;
+use crate::error::{FortressError, Result};
 
 /// Log rotation strategy
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -24,9 +24,9 @@ pub enum RotationStrategy {
     /// Rotate logs when file size exceeds limit
     SizeBased,
     /// Rotate logs after specified time interval
-    Interval { 
+    Interval {
         /// Interval in seconds
-        seconds: u64 
+        seconds: u64,
     },
 }
 
@@ -71,7 +71,8 @@ impl LogRotationManager {
         retention_policy: RetentionPolicy,
         rotation_strategy: RotationStrategy,
     ) -> Result<Self> {
-        let log_directory = config.log_path
+        let log_directory = config
+            .log_path
             .as_ref()
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("logs"))
@@ -79,17 +80,19 @@ impl LogRotationManager {
             .unwrap_or_else(|| Path::new("."))
             .to_path_buf();
 
-        let current_log_file = config.log_path
+        let current_log_file = config
+            .log_path
             .as_ref()
             .map(PathBuf::from)
             .unwrap_or_else(|| log_directory.join("audit.log"));
 
         // Ensure log directory exists
-        fs::create_dir_all(&log_directory)
-            .map_err(|e| FortressError::io(
+        fs::create_dir_all(&log_directory).map_err(|e| {
+            FortressError::io(
                 format!("Failed to create log directory: {}", e),
                 Some(log_directory.to_string_lossy().to_string()),
-            ))?;
+            )
+        })?;
 
         Ok(Self {
             config,
@@ -108,7 +111,7 @@ impl LogRotationManager {
         }
 
         let needs_rotation = self.needs_rotation()?;
-        
+
         if needs_rotation {
             self.rotate_logs()?;
             self.cleanup_old_logs()?;
@@ -124,11 +127,12 @@ impl LogRotationManager {
             RotationStrategy::Daily => {
                 if let Some(last_rotation) = self.last_rotation_time {
                     let now = SystemTime::now();
-                    let duration = now.duration_since(last_rotation)
-                        .map_err(|e| FortressError::internal(
+                    let duration = now.duration_since(last_rotation).map_err(|e| {
+                        FortressError::internal(
                             format!("Time error checking rotation: {}", e),
                             "TIME_ERROR".to_string(),
-                        ))?;
+                        )
+                    })?;
                     Ok(duration >= Duration::from_secs(24 * 60 * 60))
                 } else {
                     Ok(true) // First time, need to check existing file
@@ -137,11 +141,12 @@ impl LogRotationManager {
             RotationStrategy::Weekly => {
                 if let Some(last_rotation) = self.last_rotation_time {
                     let now = SystemTime::now();
-                    let duration = now.duration_since(last_rotation)
-                        .map_err(|e| FortressError::internal(
+                    let duration = now.duration_since(last_rotation).map_err(|e| {
+                        FortressError::internal(
                             format!("Time error checking rotation: {}", e),
                             "TIME_ERROR".to_string(),
-                        ))?;
+                        )
+                    })?;
                     Ok(duration >= Duration::from_secs(7 * 24 * 60 * 60))
                 } else {
                     Ok(true)
@@ -150,11 +155,12 @@ impl LogRotationManager {
             RotationStrategy::Monthly => {
                 if let Some(last_rotation) = self.last_rotation_time {
                     let now = SystemTime::now();
-                    let duration = now.duration_since(last_rotation)
-                        .map_err(|e| FortressError::internal(
+                    let duration = now.duration_since(last_rotation).map_err(|e| {
+                        FortressError::internal(
                             format!("Time error checking rotation: {}", e),
                             "TIME_ERROR".to_string(),
-                        ))?;
+                        )
+                    })?;
                     Ok(duration >= Duration::from_secs(30 * 24 * 60 * 60))
                 } else {
                     Ok(true)
@@ -170,11 +176,12 @@ impl LogRotationManager {
             RotationStrategy::Interval { seconds } => {
                 if let Some(last_rotation) = self.last_rotation_time {
                     let now = SystemTime::now();
-                    let duration = now.duration_since(last_rotation)
-                        .map_err(|e| FortressError::internal(
+                    let duration = now.duration_since(last_rotation).map_err(|e| {
+                        FortressError::internal(
                             format!("Time error checking rotation: {}", e),
                             "TIME_ERROR".to_string(),
-                        ))?;
+                        )
+                    })?;
                     Ok(duration >= Duration::from_secs(*seconds))
                 } else {
                     Ok(true)
@@ -187,10 +194,12 @@ impl LogRotationManager {
     fn rotate_logs(&mut self) -> Result<()> {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map_err(|e| FortressError::internal(
-                format!("Failed to get current time: {}", e),
-                "TIME_ERROR".to_string(),
-            ))?
+            .map_err(|e| {
+                FortressError::internal(
+                    format!("Failed to get current time: {}", e),
+                    "TIME_ERROR".to_string(),
+                )
+            })?
             .as_secs();
 
         let rotated_filename = format!(
@@ -204,11 +213,12 @@ impl LogRotationManager {
 
         // Move current log to rotated file
         if self.current_log_file.exists() {
-            fs::rename(&self.current_log_file, &rotated_path)
-                .map_err(|e| FortressError::io(
+            fs::rename(&self.current_log_file, &rotated_path).map_err(|e| {
+                FortressError::io(
                     format!("Failed to rotate log file: {}", e),
                     Some(self.current_log_file.to_string_lossy().to_string()),
-                ))?;
+                )
+            })?;
 
             // Compress if enabled
             if self.retention_policy.compress_old_logs {
@@ -225,13 +235,14 @@ impl LogRotationManager {
     /// Compress a log file using gzip
     fn compress_log_file(&self, log_path: &Path) -> Result<()> {
         let compressed_path = log_path.with_extension("log.gz");
-        
+
         // Read the original file
-        let content = fs::read(log_path)
-            .map_err(|e| FortressError::io(
+        let content = fs::read(log_path).map_err(|e| {
+            FortressError::io(
                 format!("Failed to read log file for compression: {}", e),
                 Some(log_path.to_string_lossy().to_string()),
-            ))?;
+            )
+        })?;
 
         // Compress using flate2
         use flate2::write::GzEncoder;
@@ -240,32 +251,39 @@ impl LogRotationManager {
 
         let encoder = GzEncoder::new(Vec::new(), Compression::default());
         let mut encoder = encoder;
-        
-        encoder.write_all(&content)
-            .map_err(|e| FortressError::io(
+
+        encoder.write_all(&content).map_err(|e| {
+            FortressError::io(
                 format!("Failed to compress log file: {}", e),
                 Some(log_path.to_string_lossy().to_string()),
-            ))?;
+            )
+        })?;
 
-        let compressed_data = encoder.finish()
-            .map_err(|e| FortressError::io(
+        let compressed_data = encoder.finish().map_err(|e| {
+            FortressError::io(
                 format!("Failed to finish compression: {}", e),
                 Some(log_path.to_string_lossy().to_string()),
-            ))?;
+            )
+        })?;
 
         // Write compressed file
-        fs::write(&compressed_path, compressed_data)
-            .map_err(|e| FortressError::io(
+        fs::write(&compressed_path, compressed_data).map_err(|e| {
+            FortressError::io(
                 format!("Failed to write compressed log file: {}", e),
                 Some(compressed_path.to_string_lossy().to_string()),
-            ))?;
+            )
+        })?;
 
         // Remove original file
-        fs::remove_file(log_path)
-            .map_err(|e| FortressError::io(
-                format!("Failed to remove original log file after compression: {}", e),
+        fs::remove_file(log_path).map_err(|e| {
+            FortressError::io(
+                format!(
+                    "Failed to remove original log file after compression: {}",
+                    e
+                ),
                 Some(log_path.to_string_lossy().to_string()),
-            ))?;
+            )
+        })?;
 
         Ok(())
     }
@@ -273,9 +291,8 @@ impl LogRotationManager {
     /// Clean up old log files based on retention policy
     fn cleanup_old_logs(&self) -> Result<()> {
         let entries = self.list_log_files()?;
-        let cutoff_time = SystemTime::now() - Duration::from_secs(
-            self.retention_policy.retention_days as u64 * 24 * 60 * 60
-        );
+        let cutoff_time = SystemTime::now()
+            - Duration::from_secs(self.retention_policy.retention_days as u64 * 24 * 60 * 60);
 
         let mut files_to_delete = Vec::new();
         let mut file_count = 0;
@@ -303,8 +320,11 @@ impl LogRotationManager {
         if self.retention_policy.auto_delete {
             for file_path in files_to_delete {
                 if let Err(e) = fs::remove_file(&file_path) {
-                    eprintln!("Failed to delete old log file {}: {}", 
-                             file_path.display(), e);
+                    eprintln!(
+                        "Failed to delete old log file {}: {}",
+                        file_path.display(),
+                        e
+                    );
                 }
             }
         }
@@ -317,23 +337,23 @@ impl LogRotationManager {
         let mut entries = Vec::new();
 
         if self.log_directory.exists() {
-            for entry in fs::read_dir(&self.log_directory)
-                .map_err(|e| FortressError::io(
+            for entry in fs::read_dir(&self.log_directory).map_err(|e| {
+                FortressError::io(
                     format!("Failed to read log directory: {}", e),
                     Some(self.log_directory.to_string_lossy().to_string()),
-                ))? {
-                let entry = entry
-                    .map_err(|e| FortressError::io(
-                        format!("Failed to read directory entry: {}", e),
-                        None,
-                    ))?;
+                )
+            })? {
+                let entry = entry.map_err(|e| {
+                    FortressError::io(format!("Failed to read directory entry: {}", e), None)
+                })?;
 
                 let file_name = entry.file_name();
                 let file_name_str = file_name.to_string_lossy();
 
                 // Include audit log files (current and rotated)
-                if file_name_str.starts_with("audit_") && 
-                   (file_name_str.ends_with(".log") || file_name_str.ends_with(".log.gz")) {
+                if file_name_str.starts_with("audit_")
+                    && (file_name_str.ends_with(".log") || file_name_str.ends_with(".log.gz"))
+                {
                     entries.push(entry);
                 }
             }
@@ -341,10 +361,12 @@ impl LogRotationManager {
 
         // Sort by modification time (newest first)
         entries.sort_by(|a, b| {
-            let time_a = a.metadata()
+            let time_a = a
+                .metadata()
                 .and_then(|m| m.modified())
                 .unwrap_or(UNIX_EPOCH);
-            let time_b = b.metadata()
+            let time_b = b
+                .metadata()
                 .and_then(|m| m.modified())
                 .unwrap_or(UNIX_EPOCH);
             time_b.cmp(&time_a)
@@ -365,11 +387,12 @@ impl LogRotationManager {
         for entry in entries {
             file_count += 1;
 
-            let metadata = entry.metadata()
-                .map_err(|e| FortressError::io(
+            let metadata = entry.metadata().map_err(|e| {
+                FortressError::io(
                     format!("Failed to get file metadata: {}", e),
                     Some(entry.path().to_string_lossy().to_string()),
-                ))?;
+                )
+            })?;
 
             total_size += metadata.len();
 
@@ -434,10 +457,7 @@ pub struct RotationTask {
 
 impl RotationTask {
     /// Create a new rotation task
-    pub fn new(
-        manager: LogRotationManager,
-        check_interval: Duration,
-    ) -> Self {
+    pub fn new(manager: LogRotationManager, check_interval: Duration) -> Self {
         Self {
             manager,
             check_interval,
@@ -448,7 +468,7 @@ impl RotationTask {
     pub fn run(&mut self) -> Result<()> {
         loop {
             std::thread::sleep(self.check_interval);
-            
+
             if let Err(e) = self.manager.check_and_rotate() {
                 eprintln!("Log rotation error: {}", e);
             }
@@ -458,15 +478,15 @@ impl RotationTask {
     /// Run the rotation task with a timeout
     pub fn run_with_timeout(&mut self, timeout: Duration) -> Result<()> {
         let start = SystemTime::now();
-        
+
         while start.elapsed().unwrap_or(Duration::MAX) < timeout {
             std::thread::sleep(self.check_interval.min(Duration::from_secs(60)));
-            
+
             if let Err(e) = self.manager.check_and_rotate() {
                 eprintln!("Log rotation error: {}", e);
             }
         }
-        
+
         Ok(())
     }
 }
@@ -490,7 +510,7 @@ mod tests {
     fn test_log_rotation_manager_creation() {
         let temp_dir = TempDir::new().unwrap();
         let log_path = temp_dir.path().join("test_audit.log");
-        
+
         let config = AuditConfig {
             enabled: true,
             log_path: Some(log_path.to_string_lossy().to_string()),
@@ -501,11 +521,7 @@ mod tests {
         let retention_policy = RetentionPolicy::default();
         let rotation_strategy = RotationStrategy::Daily;
 
-        let manager = LogRotationManager::new(
-            config,
-            retention_policy,
-            rotation_strategy,
-        ).unwrap();
+        let manager = LogRotationManager::new(config, retention_policy, rotation_strategy).unwrap();
 
         assert!(manager.log_directory.exists());
     }
@@ -514,7 +530,7 @@ mod tests {
     fn test_size_based_rotation() {
         let temp_dir = TempDir::new().unwrap();
         let log_path = temp_dir.path().join("test_audit.log");
-        
+
         // Create a small log file
         fs::write(&log_path, "test log content").unwrap();
 
@@ -529,11 +545,7 @@ mod tests {
         let retention_policy = RetentionPolicy::default();
         let rotation_strategy = RotationStrategy::SizeBased;
 
-        let manager = LogRotationManager::new(
-            config,
-            retention_policy,
-            rotation_strategy,
-        ).unwrap();
+        let manager = LogRotationManager::new(config, retention_policy, rotation_strategy).unwrap();
 
         // Should need rotation
         assert!(manager.needs_rotation().unwrap());
@@ -542,7 +554,7 @@ mod tests {
     #[test]
     fn test_log_statistics() {
         let temp_dir = TempDir::new().unwrap();
-        
+
         // Create some test log files
         fs::write(temp_dir.path().join("audit_20231201_120000.log"), "log1").unwrap();
         fs::write(temp_dir.path().join("audit_20231202_120000.log.gz"), "log2").unwrap();
@@ -550,7 +562,13 @@ mod tests {
 
         let config = AuditConfig {
             enabled: true,
-            log_path: Some(temp_dir.path().join("audit.log").to_string_lossy().to_string()),
+            log_path: Some(
+                temp_dir
+                    .path()
+                    .join("audit.log")
+                    .to_string_lossy()
+                    .to_string(),
+            ),
             enable_rotation: true,
             ..Default::default()
         };
@@ -558,11 +576,7 @@ mod tests {
         let retention_policy = RetentionPolicy::default();
         let rotation_strategy = RotationStrategy::Daily;
 
-        let manager = LogRotationManager::new(
-            config,
-            retention_policy,
-            rotation_strategy,
-        ).unwrap();
+        let manager = LogRotationManager::new(config, retention_policy, rotation_strategy).unwrap();
 
         let stats = manager.get_log_statistics().unwrap();
         assert_eq!(stats.total_files, 2); // Only audit log files

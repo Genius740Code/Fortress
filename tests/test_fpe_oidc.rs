@@ -4,10 +4,10 @@ use fortress_core::prelude::*;
 
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     println!("Testing OIDC and FPE functionality...");
-    
+
     // Test FPE with a simple approach
     let key = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
-    
+
     // Test numeric FPE
     let config = FpeConfig {
         algorithm: FpeAlgorithm::FF1,
@@ -15,7 +15,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         key: key.clone(),
         parameters: std::collections::HashMap::new(),
     };
-    
+
     match FormatPreservingEncryption::new(config) {
         Ok(fpe) => {
             let test_number = "12345678";
@@ -39,7 +39,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         }
         Err(e) => println!("✗ FPE creation error: {}", e),
     }
-    
+
     println!("Test completed!");
     Ok(())
 }

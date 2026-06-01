@@ -322,7 +322,7 @@ lru = "0.12"
 
 # HSM and PKCS#11 support
 
-# pkcs11 = { version = "0.5", optional = true }  # Commented out to use mock implementation
+
 
 aws-sdk-cloudhsmv2 = { version = "0.28", optional = true }
 

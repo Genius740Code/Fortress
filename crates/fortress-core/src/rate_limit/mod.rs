@@ -1,25 +1,25 @@
 //! Advanced Rate Limiting Module
-//! 
+//!
 //! This module provides enterprise-grade rate limiting capabilities
 //! with multiple algorithms, storage backends, and middleware integration.
 
+use crate::error::{FortressError, Result};
+use async_trait::async_trait;
+use chrono::{DateTime, Duration, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use serde::{Serialize, Deserialize};
-use chrono::{DateTime, Utc, Duration};
-use crate::error::{FortressError, Result};
-use async_trait::async_trait;
 
-pub mod manager;
 pub mod algorithms;
-pub mod storage;
+pub mod manager;
 pub mod middleware;
+pub mod storage;
 
+pub use algorithms::{FixedWindowAlgorithm, SlidingWindowAlgorithm, TokenBucketAlgorithm};
 pub use manager::RateLimitManager;
-pub use algorithms::{TokenBucketAlgorithm, SlidingWindowAlgorithm, FixedWindowAlgorithm};
-pub use storage::{MemoryStorage, RedisStorage, RateLimitStorage};
 pub use middleware::RateLimitMiddleware;
+pub use storage::{MemoryStorage, RateLimitStorage, RedisStorage};
 
 /// Rate limiting configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -157,16 +157,21 @@ pub struct RateLimitMetrics {
 pub trait RateLimitAlgorithm: Send + Sync {
     /// Name of the algorithm
     fn name(&self) -> &str;
-    
+
     /// Check if request is allowed
-    async fn check_rate_limit(&self, key: &str, rule: &RateLimitRule, context: &RateLimitContext) -> Result<RateLimitResult>;
-    
+    async fn check_rate_limit(
+        &self,
+        key: &str,
+        rule: &RateLimitRule,
+        context: &RateLimitContext,
+    ) -> Result<RateLimitResult>;
+
     /// Reset rate limit for a key
     async fn reset_rate_limit(&self, key: &str, rule: &RateLimitRule) -> Result<()>;
-    
+
     /// Get current usage for a key
     async fn get_usage(&self, key: &str, rule: &RateLimitRule) -> Result<Option<u64>>;
-    
+
     /// Cleanup expired data
     async fn cleanup(&self) -> Result<()>;
 }
@@ -175,25 +180,37 @@ pub trait RateLimitAlgorithm: Send + Sync {
 pub trait RateLimitStorage: Send + Sync {
     /// Name of the storage backend
     fn name(&self) -> &str;
-    
+
     /// Get counter value
     async fn get_counter(&self, key: &str, rule_name: &str) -> Result<Option<u64>>;
-    
+
     /// Set counter value
-    async fn set_counter(&self, key: str, rule_name: str, value: u64, ttl: Option<Duration>) -> Result<()>;
-    
+    async fn set_counter(
+        &self,
+        key: str,
+        rule_name: str,
+        value: u64,
+        ttl: Option<Duration>,
+    ) -> Result<()>;
+
     /// Increment counter
-    async fn increment_counter(&self, key: str, rule_name: str, amount: u64, ttl: Option<Duration>) -> Result<u64>;
-    
+    async fn increment_counter(
+        &self,
+        key: str,
+        rule_name: str,
+        amount: u64,
+        ttl: Option<Duration>,
+    ) -> Result<u64>;
+
     /// Decrement counter
     async fn decrement_counter(&self, key: str, rule_name: str, amount: u64) -> Result<u64>;
-    
+
     /// Delete counter
     async fn delete_counter(&self, key: &str, rule_name: &str) -> Result<()>;
-    
+
     /// Get all keys for a rule
     async fn get_keys(&self, rule_name: &str) -> Result<Vec<String>>;
-    
+
     /// Cleanup expired data
     async fn cleanup(&self) -> Result<()>;
 }
@@ -255,7 +272,10 @@ impl RateLimitManager {
         // Start cleanup task
         self.start_cleanup_task().await?;
 
-        tracing::info!("Rate limit manager initialized with {} rules", self.rules.read().await.len());
+        tracing::info!(
+            "Rate limit manager initialized with {} rules",
+            self.rules.read().await.len()
+        );
         Ok(())
     }
 
@@ -298,7 +318,10 @@ impl RateLimitManager {
     }
 
     /// Check rate limits for a request
-    pub async fn check_rate_limits(&self, context: &RateLimitContext) -> Result<Vec<RateLimitResult>> {
+    pub async fn check_rate_limits(
+        &self,
+        context: &RateLimitContext,
+    ) -> Result<Vec<RateLimitResult>> {
         let rules = self.rules.read().await;
         let mut results = Vec::new();
         let start_time = std::time::Instant::now();
@@ -319,24 +342,26 @@ impl RateLimitManager {
 
             // Extract key
             let key = self.extract_key(&rule.key_extractor, context);
-            
+
             // Check rate limit
             let result = self.algorithm.check_rate_limit(&key, rule, context).await;
-            
+
             // Update metrics
             {
                 let mut metrics = self.metrics.write().await;
                 metrics.total_requests += 1;
-                
+
                 if result.allowed {
                     metrics.allowed_requests += 1;
                 } else {
                     metrics.rejected_requests += 1;
                 }
-                
+
                 let response_time = start_time.elapsed().as_millis() as f64;
-                metrics.average_response_time_ms = 
-                    (metrics.average_response_time_ms * (metrics.total_requests - 1) as f64 + response_time) / metrics.total_requests as f64;
+                metrics.average_response_time_ms = (metrics.average_response_time_ms
+                    * (metrics.total_requests - 1) as f64
+                    + response_time)
+                    / metrics.total_requests as f64;
                 metrics.last_updated = Utc::now();
             }
 
@@ -357,7 +382,10 @@ impl RateLimitManager {
         if let Some(rule) = rules.get(rule_name) {
             self.algorithm.reset_rate_limit(key, rule).await
         } else {
-            Err(FortressError::rate_limit(format!("Rate limit rule '{}' not found", rule_name)))
+            Err(FortressError::rate_limit(format!(
+                "Rate limit rule '{}' not found",
+                rule_name
+            )))
         }
     }
 
@@ -376,7 +404,10 @@ impl RateLimitManager {
         if let Some(rule) = rules.get(rule_name) {
             self.algorithm.get_usage(key, rule).await
         } else {
-            Err(FortressError::rate_limit(format!("Rate limit rule '{}' not found", rule_name)))
+            Err(FortressError::rate_limit(format!(
+                "Rate limit rule '{}' not found",
+                rule_name
+            )))
         }
     }
     /// Get rate limit metrics
@@ -385,7 +416,11 @@ impl RateLimitManager {
         metrics.clone()
     }
 
-    fn check_conditions(&self, conditions: &[RateLimitCondition], context: &RateLimitContext) -> bool {
+    fn check_conditions(
+        &self,
+        conditions: &[RateLimitCondition],
+        context: &RateLimitContext,
+    ) -> bool {
         conditions.iter().all(|condition| {
             let value = self.extract_field_value(&condition.field, context);
             self.evaluate_condition(&condition.operator, &value, &condition.value)
@@ -393,32 +428,33 @@ impl RateLimitManager {
     }
 
     /// Evaluate condition
-    fn evaluate_condition(&self, operator: &ConditionOperator, actual: &str, expected: &str) -> bool {
+    fn evaluate_condition(
+        &self,
+        operator: &ConditionOperator,
+        actual: &str,
+        expected: &str,
+    ) -> bool {
         match operator {
             ConditionOperator::Equals => actual == expected,
             ConditionOperator::NotEquals => actual != expected,
             ConditionOperator::Contains => actual.contains(expected),
             ConditionOperator::NotContains => !actual.contains(expected),
-            ConditionOperator::In => {
-                expected.split(',').any(|v| actual.trim() == v.trim())
-            }
-            ConditionOperator::NotIn => {
-                !expected.split(',').any(|v| actual.trim() == v.trim())
-            }
+            ConditionOperator::In => expected.split(',').any(|v| actual.trim() == v.trim()),
+            ConditionOperator::NotIn => !expected.split(',').any(|v| actual.trim() == v.trim()),
             ConditionOperator::Regex => {
                 // Simple regex evaluation (would need regex crate in production)
                 actual == expected // Placeholder
             }
-            ConditionOperator::GreaterThan => {
-                actual.parse::<i64>().ok()
-                    .map(|a| a > expected.parse().unwrap_or(0))
-                    .unwrap_or(false)
-            }
-            ConditionOperator::LessThan => {
-                actual.parse::<i64>().ok()
-                    .map(|a| a < expected.parse().unwrap_or(i64::MAX))
-                    .unwrap_or(false)
-            }
+            ConditionOperator::GreaterThan => actual
+                .parse::<i64>()
+                .ok()
+                .map(|a| a > expected.parse().unwrap_or(0))
+                .unwrap_or(false),
+            ConditionOperator::LessThan => actual
+                .parse::<i64>()
+                .ok()
+                .map(|a| a < expected.parse().unwrap_or(i64::MAX))
+                .unwrap_or(false),
         }
     }
 
@@ -426,22 +462,28 @@ impl RateLimitManager {
     fn extract_key(&self, extractor: &KeyExtractor, context: &RateLimitContext) -> String {
         match extractor {
             KeyExtractor::IP => context.ip_address.clone(),
-            KeyExtractor::User => context.user_id.clone().unwrap_or_else(|| "anonymous".to_string()),
+            KeyExtractor::User => context
+                .user_id
+                .clone()
+                .unwrap_or_else(|| "anonymous".to_string()),
             KeyExtractor::APIKey => context.api_key.clone().unwrap_or_default(),
             KeyExtractor::Token => context.token.clone().unwrap_or_default(),
             KeyExtractor::Path => context.path.clone(),
             KeyExtractor::Method => context.method.clone(),
-            KeyExtractor::Header(header_name) => {
-                context.headers.get(header_name).cloned().unwrap_or_default()
-            }
-            KeyExtractor::Custom(custom_key) => {
-                context.metadata.get(custom_key)
-                    .and_then(|v| v.as_str())
-                    .unwrap_or_default()
-                    .to_string()
-            }
+            KeyExtractor::Header(header_name) => context
+                .headers
+                .get(header_name)
+                .cloned()
+                .unwrap_or_default(),
+            KeyExtractor::Custom(custom_key) => context
+                .metadata
+                .get(custom_key)
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string(),
             KeyExtractor::Composite(extractors) => {
-                let parts: Vec<String> = extractors.iter()
+                let parts: Vec<String> = extractors
+                    .iter()
                     .map(|e| self.extract_key(e, context))
                     .collect();
                 parts.join(":")
@@ -457,17 +499,17 @@ impl RateLimitManager {
 
         let task = tokio::spawn(async move {
             let mut interval_timer = tokio::time::interval(interval);
-            
+
             loop {
                 interval_timer.tick().await;
-                
+
                 tracing::debug!("Running rate limit cleanup task");
-                
+
                 // Cleanup storage
                 if let Err(e) = storage.cleanup().await {
                     tracing::error!("Storage cleanup failed: {}", e);
                 }
-                
+
                 // Cleanup algorithm
                 if let Err(e) = algorithm.cleanup().await {
                     tracing::error!("Algorithm cleanup failed: {}", e);
@@ -512,7 +554,10 @@ mod tests {
     #[test]
     fn test_rate_limit_config_default() {
         let config = RateLimitConfig::default();
-        assert!(matches!(config.algorithm, RateLimitAlgorithmType::TokenBucket));
+        assert!(matches!(
+            config.algorithm,
+            RateLimitAlgorithmType::TokenBucket
+        ));
         assert!(matches!(config.storage, RateLimitStorageType::Memory));
         assert_eq!(config.cleanup_interval_seconds, 300);
         assert!(config.metrics_enabled);
@@ -532,7 +577,7 @@ mod tests {
             priority: 100,
             enabled: true,
         };
-        
+
         assert_eq!(rule.name, "test-rule");
         assert_eq!(rule.limit, 100);
         assert_eq!(rule.window_seconds, 60);
@@ -557,7 +602,7 @@ mod tests {
             timestamp: Utc::now(),
             metadata: HashMap::new(),
         };
-        
+
         assert_eq!(context.request_id, "req-123");
         assert_eq!(context.ip_address, "192.168.1.1");
         assert_eq!(context.user_id, Some("user-456"));
@@ -601,11 +646,14 @@ mod tests {
         assert_eq!(key, "GET");
 
         // Test composite extractor
-        let key = manager.extract_key(&KeyExtractor::Composite(vec![
-            KeyExtractor::IP,
-            KeyExtractor::User,
-            KeyExtractor::Path,
-        ]), &context);
+        let key = manager.extract_key(
+            &KeyExtractor::Composite(vec![
+                KeyExtractor::IP,
+                KeyExtractor::User,
+                KeyExtractor::Path,
+            ]),
+            &context,
+        );
         assert_eq!(key, "192.168.1.1:user-456:/api/test");
     }
 
@@ -634,10 +682,10 @@ mod tests {
     async fn test_rate_limit_manager_creation() {
         let config = RateLimitConfig::default();
         let manager = RateLimitManager::new(config);
-        
+
         let rules = manager.list_rules().await;
         assert!(rules.is_empty());
-        
+
         let metrics = manager.get_metrics().await;
         assert_eq!(metrics.total_requests, 0);
         assert_eq!(metrics.allowed_requests, 0);

@@ -1,15 +1,15 @@
 use std::path::PathBuf;
 
 /// Normalize a path string to an absolute PathBuf
-/// 
+///
 /// # Arguments
 /// * `path` - The path string to normalize
-/// 
+///
 /// # Returns
 /// An absolute PathBuf
 pub fn _normalize_path(path: &str) -> PathBuf {
     let path_buf = PathBuf::from(path);
-    
+
     // Convert to absolute path if relative
     if path_buf.is_relative() {
         std::env::current_dir()
@@ -21,10 +21,10 @@ pub fn _normalize_path(path: &str) -> PathBuf {
 }
 
 /// Ensure a directory exists, creating it if necessary
-/// 
+///
 /// # Arguments
 /// * `path` - The directory path to ensure exists
-/// 
+///
 /// # Returns
 /// Ok(()) if successful, Err(io::Error) if creation fails
 pub fn _ensure_dir_exists(path: &PathBuf) -> Result<(), std::io::Error> {
@@ -35,7 +35,7 @@ pub fn _ensure_dir_exists(path: &PathBuf) -> Result<(), std::io::Error> {
 }
 
 /// Get the default data directory for Fortress
-/// 
+///
 /// # Returns
 /// A PathBuf pointing to the default data directory
 pub fn _get_default_data_dir() -> PathBuf {

@@ -3,10 +3,10 @@
 //! This module tests the complete API functionality including
 //! authentication, data storage, retrieval, and key management.
 
-use fortress_api_server::prelude::*;
-use serde_json::json;
 use axum::body::Body;
+use fortress_api_server::prelude::*;
 use http::{Request, StatusCode};
+use serde_json::json;
 use tower::ServiceExt;
 use uuid::Uuid;
 
@@ -91,7 +91,9 @@ impl AuthedRouter {
 async fn request_json(app: axum::Router, req: Request<Body>) -> (StatusCode, serde_json::Value) {
     let resp = app.oneshot(req).await.unwrap();
     let status = resp.status();
-    let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+    let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let json: serde_json::Value = match serde_json::from_slice(&bytes) {
         Ok(v) => v,
         Err(e) => {
@@ -107,7 +109,9 @@ async fn request_json(app: axum::Router, req: Request<Body>) -> (StatusCode, ser
 async fn request_text(app: axum::Router, req: Request<Body>) -> (StatusCode, String) {
     let resp = app.oneshot(req).await.unwrap();
     let status = resp.status();
-    let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+    let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+        .await
+        .unwrap();
     (status, String::from_utf8(bytes.to_vec()).unwrap())
 }
 
@@ -119,7 +123,11 @@ async fn test_health_check() {
 
     let (status, body) = request_json(
         router,
-        Request::builder().method("GET").uri("/health").body(Body::empty()).unwrap(),
+        Request::builder()
+            .method("GET")
+            .uri("/health")
+            .body(Body::empty())
+            .unwrap(),
     )
     .await;
 
@@ -131,7 +139,7 @@ async fn test_health_check() {
 #[tokio::test]
 async fn test_store_and_retrieve_data() {
     let app = AuthedRouter::new().await;
-    
+
     // Test data to store
     let test_data = json!({
         "name": "John Doe",
@@ -143,7 +151,7 @@ async fn test_store_and_retrieve_data() {
             "country": "USA"
         }
     });
-    
+
     // Store data
     let store_request = json!({
         "data": test_data,
@@ -153,7 +161,6 @@ async fn test_store_and_retrieve_data() {
         },
         "algorithm": "aegis256"
     });
-    
 
     let (status, store_body) = request_json(
         app.router.clone(),
@@ -163,26 +170,23 @@ async fn test_store_and_retrieve_data() {
 
     assert_eq!(status, StatusCode::OK, "store response: {store_body}");
     assert!(store_body["success"].as_bool().unwrap());
-    
+
     let data_id = store_body["data"]["id"].as_str().unwrap();
     let key_id = store_body["data"]["key_id"].as_str().unwrap();
-    
+
     // Retrieve data
 
-    let (status, retrieve_body) = request_json(
-        app.router,
-        app.get(format!("/api/v1/data/{data_id}")),
-    )
-    .await;
+    let (status, retrieve_body) =
+        request_json(app.router, app.get(format!("/api/v1/data/{data_id}"))).await;
 
     assert_eq!(status, StatusCode::OK, "retrieve response: {retrieve_body}");
     assert!(retrieve_body["success"].as_bool().unwrap());
-    
+
     let retrieved_data = &retrieve_body["data"]["data"];
     assert_eq!(retrieved_data["name"], "John Doe");
     assert_eq!(retrieved_data["email"], "john@example.com");
     assert_eq!(retrieved_data["age"], 30);
-    
+
     // Verify the stored algorithm and key_id match
     assert_eq!(retrieve_body["data"]["algorithm"], "aegis256");
     assert_eq!(retrieve_body["data"]["key_id"], key_id);
@@ -191,19 +195,19 @@ async fn test_store_and_retrieve_data() {
 #[tokio::test]
 async fn test_list_data() {
     let app = AuthedRouter::new().await;
-    
+
     // Store multiple items
     for i in 1..=3 {
         let test_data = json!({
             "name": format!("User {}", i),
             "index": i
         });
-        
+
         let store_request = json!({
             "data": test_data,
             "algorithm": "aegis256"
         });
-        
+
         let (status, _body) = request_json(
             app.router.clone(),
             app.post_json("/api/v1/data", store_request.to_string()),
@@ -212,17 +216,17 @@ async fn test_list_data() {
 
         assert_eq!(status, StatusCode::OK);
     }
-    
+
     // List data
     let (status, list_body) = request_json(app.router, app.get("/api/v1/data")).await;
 
     assert_eq!(status, StatusCode::OK);
     assert!(list_body["success"].as_bool().unwrap());
-    
+
     let items = list_body["data"]["items"].as_array().unwrap();
     assert_eq!(items.len(), 3);
     assert_eq!(list_body["data"]["total_count"], 3);
-    
+
     // Verify items are sorted by creation time (descending)
     for (_i, item) in items.iter().enumerate() {
         assert!(item["id"].is_string());
@@ -235,18 +239,17 @@ async fn test_list_data() {
 #[tokio::test]
 async fn test_delete_data() {
     let app = AuthedRouter::new().await;
-    
+
     // Store data first
     let test_data = json!({
         "name": "To Be Deleted",
         "temp": true
     });
-    
+
     let store_request = json!({
         "data": test_data,
         "algorithm": "aegis256"
     });
-    
 
     let (status, store_body) = request_json(
         app.router.clone(),
@@ -256,17 +259,19 @@ async fn test_delete_data() {
 
     assert_eq!(status, StatusCode::OK, "store response: {store_body}");
     let data_id = store_body["data"]["id"].as_str().unwrap();
-    
+
     // Delete data
     let delete_request = json!({
         "id": data_id,
         "soft_delete": false
     });
-    
 
     let (status, delete_body) = request_json(
         app.router.clone(),
-        app.delete_json(format!("/api/v1/data/{data_id}"), delete_request.to_string()),
+        app.delete_json(
+            format!("/api/v1/data/{data_id}"),
+            delete_request.to_string(),
+        ),
     )
     .await;
 
@@ -274,14 +279,11 @@ async fn test_delete_data() {
     assert!(delete_body["success"].as_bool().unwrap());
     assert_eq!(delete_body["data"]["id"], data_id);
     assert_eq!(delete_body["data"]["soft_delete"], false);
-    
+
     // Verify data is gone
 
-    let (status, _body) = request_json(
-        app.router,
-        app.get(format!("/api/v1/data/{data_id}")),
-    )
-    .await;
+    let (status, _body) =
+        request_json(app.router, app.get(format!("/api/v1/data/{data_id}"))).await;
 
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
@@ -289,7 +291,7 @@ async fn test_delete_data() {
 #[tokio::test]
 async fn test_generate_key() {
     let app = AuthedRouter::new().await;
-    
+
     // Generate key request
     let key_request = json!({
         "algorithm": "aegis256",
@@ -299,7 +301,6 @@ async fn test_generate_key() {
             "created_by": "integration_test"
         }
     });
-    
 
     let (status, body) = request_json(
         app.router,
@@ -309,14 +310,14 @@ async fn test_generate_key() {
 
     assert_eq!(status, StatusCode::OK);
     assert!(body["success"].as_bool().unwrap());
-    
+
     let key_data = &body["data"];
     assert!(key_data["id"].is_string());
     assert_eq!(key_data["algorithm"], "aegis256");
     assert_eq!(key_data["key_size"], 256);
     assert!(key_data["fingerprint"].is_string());
     assert!(key_data["created_at"].is_string());
-    
+
     // Verify fingerprint is 16 characters long (SHA256 truncated)
     let fingerprint = key_data["fingerprint"].as_str().unwrap();
     assert_eq!(fingerprint.len(), 16);
@@ -329,7 +330,7 @@ async fn test_field_level_encryption() {
     let server = FortressServer::new(config).await.unwrap();
     let router = server.router().await.unwrap();
     let token = login_access_token(&router).await;
-    
+
     // Test data with sensitive fields
     let test_data = json!({
         "name": "John Doe",
@@ -337,7 +338,7 @@ async fn test_field_level_encryption() {
         "credit_card": "4111-1111-1111-1111",
         "email": "john@example.com"
     });
-    
+
     // Field encryption configuration
     let field_config = json!({
         "fields": {
@@ -351,7 +352,7 @@ async fn test_field_level_encryption() {
             }
         }
     });
-    
+
     let store_request = json!({
         "data": test_data,
         "field_encryption": field_config,
@@ -372,16 +373,16 @@ async fn test_field_level_encryption() {
 
     assert_eq!(status, StatusCode::OK);
     assert!(store_body["success"].as_bool().unwrap());
-    
+
     // Verify field metadata is present
     let field_metadata = &store_body["data"]["field_metadata"];
     if field_metadata.is_object() {
         // Field encryption metadata may be empty depending on key availability / implementation
         assert!(field_metadata.as_object().is_some());
     }
-    
+
     let data_id = store_body["data"]["id"].as_str().unwrap();
-    
+
     // Retrieve and verify data integrity
 
     let (status, retrieve_body) = request_json(
@@ -397,7 +398,7 @@ async fn test_field_level_encryption() {
 
     assert_eq!(status, StatusCode::OK);
     assert!(retrieve_body["success"].as_bool().unwrap());
-    
+
     let retrieved_data = &retrieve_body["data"]["data"];
     assert_eq!(retrieved_data["name"], "John Doe");
     assert_eq!(retrieved_data["email"], "john@example.com");
@@ -407,16 +408,15 @@ async fn test_field_level_encryption() {
 async fn test_authentication_flow() {
     let mut config = default_test_config();
     config.features.auth_enabled = true;
-    
+
     let server = FortressServer::new(config).await.unwrap();
     let router = server.router().await.unwrap();
-    
+
     // Test login with bootstrapped admin credentials
     let auth_request = json!({
         "username": "admin",
         "password": "admin123"
     });
-    
 
     let (status, body) = request_json(
         router,
@@ -445,7 +445,11 @@ async fn test_metrics_endpoint() {
     // JSON metrics are exposed at /api/v1/metrics
     let (status, body) = request_json(
         router.clone(),
-        Request::builder().method("GET").uri("/api/v1/metrics").body(Body::empty()).unwrap(),
+        Request::builder()
+            .method("GET")
+            .uri("/api/v1/metrics")
+            .body(Body::empty())
+            .unwrap(),
     )
     .await;
 
@@ -456,7 +460,11 @@ async fn test_metrics_endpoint() {
     // Prometheus exposition is served as plain text on /metrics
     let (status, prometheus_body) = request_text(
         router,
-        Request::builder().method("GET").uri("/metrics").body(Body::empty()).unwrap(),
+        Request::builder()
+            .method("GET")
+            .uri("/metrics")
+            .body(Body::empty())
+            .unwrap(),
     )
     .await;
 
@@ -468,13 +476,13 @@ async fn test_metrics_endpoint() {
 #[tokio::test]
 async fn test_storage_backend_integration() {
     let app = AuthedRouter::new().await;
-    
+
     // Store and retrieve data
     let test_data = json!({
         "test": "storage_backend_integration",
         "backend": "memory"
     });
-    
+
     let store_request = json!({
         "data": test_data
     });
@@ -487,17 +495,17 @@ async fn test_storage_backend_integration() {
 
     assert_eq!(status, StatusCode::OK);
     let data_id = store_body["data"]["id"].as_str().unwrap();
-    
+
     // Retrieve the data
 
-    let (status, retrieve_body) = request_json(
-        app.router,
-        app.get(format!("/api/v1/data/{data_id}")),
-    )
-    .await;
+    let (status, retrieve_body) =
+        request_json(app.router, app.get(format!("/api/v1/data/{data_id}"))).await;
 
     assert_eq!(status, StatusCode::OK, "retrieve response: {retrieve_body}");
-    assert_eq!(retrieve_body["data"]["data"]["test"], "storage_backend_integration");
+    assert_eq!(
+        retrieve_body["data"]["data"]["test"],
+        "storage_backend_integration"
+    );
 }
 
 #[tokio::test]
@@ -521,10 +529,10 @@ async fn test_error_handling() {
 #[tokio::test]
 async fn test_concurrent_requests() {
     let app = AuthedRouter::new().await;
-    
+
     // Create multiple concurrent requests
     let mut handles = Vec::new();
-    
+
     for i in 0..10 {
         let router = app.router.clone();
         let token = app.token.clone();
@@ -533,11 +541,11 @@ async fn test_concurrent_requests() {
                 "id": i,
                 "message": format!("Concurrent test {}", i)
             });
-            
+
             let store_request = json!({
                 "data": test_data
             });
-            
+
             request_json(
                 router,
                 Request::builder()
@@ -552,10 +560,10 @@ async fn test_concurrent_requests() {
         });
         handles.push(handle);
     }
-    
+
     // Wait for all requests to complete
     let results = futures::future::join_all(handles).await;
-    
+
     // All requests should succeed
     for result in results {
         let (status, _body) = result.unwrap();
@@ -566,14 +574,14 @@ async fn test_concurrent_requests() {
 #[tokio::test]
 async fn test_large_data_handling() {
     let app = AuthedRouter::new().await;
-    
+
     // Create large test data (within the API limit)
     // The API currently validates JSON payloads with a 100KB max size.
     let large_data = json!({
         "data": "x".repeat(80 * 1024),
         "size": 80 * 1024
     });
-    
+
     let store_request = json!({
         "data": large_data
     });
@@ -586,13 +594,10 @@ async fn test_large_data_handling() {
 
     assert_eq!(status, StatusCode::OK);
     let data_id = store_body["data"]["id"].as_str().unwrap();
-    
+
     // Retrieve the large data
-    let (status, retrieve_body) = request_json(
-        app.router,
-        app.get(format!("/api/v1/data/{data_id}")),
-    )
-    .await;
+    let (status, retrieve_body) =
+        request_json(app.router, app.get(format!("/api/v1/data/{data_id}"))).await;
 
     assert_eq!(status, StatusCode::OK, "retrieve response: {retrieve_body}");
     let retrieved_size = retrieve_body["data"]["data"]["size"].as_u64().unwrap();

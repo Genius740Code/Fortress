@@ -4,11 +4,11 @@
 //! allowing JWT, OAuth, SAML, and other auth methods to be hot-swapped
 //! and updated independently using the WASM runtime.
 
-use crate::error::{FortressError, Result};
-use crate::plugin::PluginInput;
 use crate::auth::AuthToken;
 #[cfg(test)]
 use crate::auth::{BiometricType, HardwareTokenType};
+use crate::error::{FortressError, Result};
+use crate::plugin::PluginInput;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -130,33 +130,33 @@ pub struct AuthUserInfo {
 pub trait AuthPlugin: Send + Sync {
     /// Get plugin metadata
     fn metadata(&self) -> &AuthPluginMetadata;
-    
+
     /// Initialize the plugin with configuration
     async fn initialize(&mut self, config: serde_json::Value) -> Result<()>;
-    
+
     /// Authenticate a request
     async fn authenticate(&self, request: AuthRequest) -> Result<AuthResult>;
-    
+
     /// Validate an existing token
     async fn validate_token(&self, token: &str) -> Result<AuthUserInfo>;
-    
+
     /// Refresh an authentication token
     async fn refresh_token(&self, refresh_token: &str) -> Result<AuthResult>;
-    
+
     /// Logout/revoke a token
     async fn logout(&self, token: &str) -> Result<()>;
-    
+
     /// Get supported authentication methods
     fn supported_methods(&self) -> Vec<AuthMethod>;
-    
+
     /// Check if plugin supports a specific method
     fn supports_method(&self, method: &AuthMethod) -> bool {
         self.supported_methods().contains(method)
     }
-    
+
     /// Health check for the plugin
     async fn health_check(&self) -> Result<bool>;
-    
+
     /// Cleanup resources
     async fn cleanup(&mut self) -> Result<()>;
 }
@@ -300,10 +300,11 @@ impl WasmAuthPlugin {
                     "success": false,
                     "error": "WASM runtime not yet integrated"
                 }))
-            },
-            _ => {
-                Err(FortressError::plugin(format!("Function '{}' not yet implemented", function_name)))
             }
+            _ => Err(FortressError::plugin(format!(
+                "Function '{}' not yet implemented",
+                function_name
+            ))),
         }
     }
 }
@@ -316,27 +317,30 @@ impl AuthPlugin for WasmAuthPlugin {
 
     async fn initialize(&mut self, config: serde_json::Value) -> Result<()> {
         self.config = config;
-        
+
         let input = serde_json::json!({
             "action": "initialize",
             "config": self.config
         });
 
         let result = self.call_auth_function("initialize", &input).await?;
-        
+
         if let Some(success) = result.get("success").and_then(|v| v.as_bool()) {
             if success {
                 self.state.write().await.initialized = true;
                 Ok(())
             } else {
                 Err(FortressError::plugin(
-                    result.get("error")
+                    result
+                        .get("error")
                         .and_then(|v| v.as_str())
-                        .unwrap_or("Plugin initialization failed")
+                        .unwrap_or("Plugin initialization failed"),
                 ))
             }
         } else {
-            Err(FortressError::plugin("Invalid plugin initialization response"))
+            Err(FortressError::plugin(
+                "Invalid plugin initialization response",
+            ))
         }
     }
 
@@ -349,7 +353,7 @@ impl AuthPlugin for WasmAuthPlugin {
         });
 
         let result = self.call_auth_function("authenticate", &input).await?;
-        
+
         serde_json::from_value(result)
             .map_err(|e| FortressError::plugin(format!("Failed to parse auth result: {}", e)))
     }
@@ -361,7 +365,7 @@ impl AuthPlugin for WasmAuthPlugin {
         });
 
         let result = self.call_auth_function("validate_token", &input).await?;
-        
+
         if let Some(valid) = result.get("valid").and_then(|v| v.as_bool()) {
             if valid {
                 serde_json::from_value(result.get("user_info").cloned().unwrap_or_default())
@@ -381,7 +385,7 @@ impl AuthPlugin for WasmAuthPlugin {
         });
 
         let result = self.call_auth_function("refresh_token", &input).await?;
-        
+
         serde_json::from_value(result)
             .map_err(|e| FortressError::plugin(format!("Failed to parse refresh result: {}", e)))
     }
@@ -393,16 +397,17 @@ impl AuthPlugin for WasmAuthPlugin {
         });
 
         let result = self.call_auth_function("logout", &input).await?;
-        
+
         if let Some(success) = result.get("success").and_then(|v| v.as_bool()) {
             if success {
                 Ok(())
             } else {
                 Err(FortressError::authentication(
-                    result.get("error")
+                    result
+                        .get("error")
                         .and_then(|v| v.as_str())
                         .unwrap_or("Logout failed"),
-                    None
+                    None,
                 ))
             }
         } else {
@@ -420,8 +425,9 @@ impl AuthPlugin for WasmAuthPlugin {
         });
 
         let result = self.call_auth_function("health_check", &input).await?;
-        
-        Ok(result.get("healthy")
+
+        Ok(result
+            .get("healthy")
             .and_then(|v| v.as_bool())
             .unwrap_or(false))
     }
@@ -432,12 +438,12 @@ impl AuthPlugin for WasmAuthPlugin {
         });
 
         let _result = self.call_auth_function("cleanup", &input).await?;
-        
+
         // Clear local state
         let mut state = self.state.write().await;
         state.sessions.clear();
         state.token_cache.clear();
-        
+
         Ok(())
     }
 }
@@ -501,21 +507,25 @@ impl AuthPluginManager {
         plugin.initialize(config).await?;
 
         let mut plugins = self.plugins.write().await;
-        
+
         if plugins.len() >= self.config.max_plugins {
             return Err(FortressError::plugin("Maximum plugin limit reached"));
         }
 
         plugins.insert(name.to_string(), Box::new(plugin));
-        
-        tracing::info!("Loaded authentication plugin: {} v{}", name, metadata.version);
+
+        tracing::info!(
+            "Loaded authentication plugin: {} v{}",
+            name,
+            metadata.version
+        );
         Ok(())
     }
 
     /// Unload a plugin
     pub async fn unload_plugin(&self, name: &str) -> Result<()> {
         let mut plugins = self.plugins.write().await;
-        
+
         if let Some(mut plugin) = plugins.remove(name) {
             plugin.cleanup().await?;
             tracing::info!("Unloaded authentication plugin: {}", name);
@@ -528,13 +538,13 @@ impl AuthPluginManager {
     /// Get a plugin that supports the specified authentication method
     pub async fn get_plugin_for_method(&self, method: &AuthMethod) -> Result<Box<dyn AuthPlugin>> {
         let plugins = self.plugins.read().await;
-        
+
         for plugin in plugins.values() {
             if plugin.supports_method(method) {
                 // Note: In a real implementation, we'd need to handle cloning properly
                 // For now, we'll return an error since we can't clone trait objects
                 return Err(FortressError::plugin(
-                    "Plugin cloning not implemented - use get_plugin_by_name instead"
+                    "Plugin cloning not implemented - use get_plugin_by_name instead",
                 ));
             }
         }
@@ -548,16 +558,19 @@ impl AuthPluginManager {
     /// Get a plugin by name
     pub async fn get_plugin_by_name(&self, name: &str) -> Option<Box<dyn AuthPlugin>> {
         let plugins = self.plugins.read().await;
-        
+
         // Note: This is a simplified implementation
         // In a real implementation, we'd need proper plugin reference handling
         // For now, return None since we can't clone the plugin trait object
         // In practice, you'd use Arc<dyn AuthPlugin> for shared ownership
-        plugins.get(name).map(|_| {
-            // Plugin cloning not supported - this is a known limitation
-            // Use Arc<dyn AuthPlugin> for shared plugin instances
-            None
-        }).flatten()
+        plugins
+            .get(name)
+            .map(|_| {
+                // Plugin cloning not supported - this is a known limitation
+                // Use Arc<dyn AuthPlugin> for shared plugin instances
+                None
+            })
+            .flatten()
     }
 
     /// List all loaded plugins
@@ -611,7 +624,7 @@ impl AuthPluginManager {
         context: &AuthContext,
     ) -> Result<AuthToken> {
         let plugins = self.plugins.read().await;
-        
+
         if let Some(plugin) = plugins.get(plugin_name) {
             let credentials = AuthCredentials {
                 username: Some(username.to_string()),
@@ -624,37 +637,47 @@ impl AuthPluginManager {
                 api_key: None,
                 additional_data: HashMap::new(),
             };
-            
+
             let auth_request = AuthRequest {
                 method: AuthMethod::Basic,
                 credentials,
                 context: context.clone(),
             };
-            
+
             let auth_result = plugin.authenticate(auth_request).await?;
-            
+
             // Convert AuthResult to AuthToken
             if let Some(token_str) = auth_result.token {
                 let now = chrono::Utc::now().timestamp() as u64;
                 Ok(AuthToken {
                     token: token_str,
-                    user_id: auth_result.user_info.as_ref().map(|u| u.id.clone()).unwrap_or_default(),
+                    user_id: auth_result
+                        .user_info
+                        .as_ref()
+                        .map(|u| u.id.clone())
+                        .unwrap_or_default(),
                     issued_at: now,
                     expires_at: auth_result.expires_at.unwrap_or(now + 3600), // Default 1 hour
                     permissions: vec![],
                 })
             } else {
-                Err(FortressError::authentication("Authentication failed: no token returned", None))
+                Err(FortressError::authentication(
+                    "Authentication failed: no token returned",
+                    None,
+                ))
             }
         } else {
-            Err(FortressError::plugin(format!("Plugin not found: {}", plugin_name)))
+            Err(FortressError::plugin(format!(
+                "Plugin not found: {}",
+                plugin_name
+            )))
         }
     }
 
     /// Get plugin statistics (placeholder implementation)
     pub async fn get_plugin_statistics(&self, plugin_name: &str) -> Result<serde_json::Value> {
         let plugins = self.plugins.read().await;
-        
+
         if let Some(plugin) = plugins.get(plugin_name) {
             let metadata = plugin.metadata();
             Ok(serde_json::json!({
@@ -664,7 +687,10 @@ impl AuthPluginManager {
                 "auth_methods": metadata.supported_methods
             }))
         } else {
-            Err(FortressError::plugin(format!("Plugin not found: {}", plugin_name)))
+            Err(FortressError::plugin(format!(
+                "Plugin not found: {}",
+                plugin_name
+            )))
         }
     }
 
@@ -672,13 +698,16 @@ impl AuthPluginManager {
     pub async fn restart_plugin(&self, plugin_name: &str) -> Result<()> {
         // For now, just perform health check as restart simulation
         let plugins = self.plugins.read().await;
-        
+
         if let Some(plugin) = plugins.get(plugin_name) {
             plugin.health_check().await?;
             tracing::info!("Restarted authentication plugin: {}", plugin_name);
             Ok(())
         } else {
-            Err(FortressError::plugin(format!("Plugin not found: {}", plugin_name)))
+            Err(FortressError::plugin(format!(
+                "Plugin not found: {}",
+                plugin_name
+            )))
         }
     }
 
@@ -778,8 +807,14 @@ mod tests {
     #[test]
     fn test_oauth_authentication_request() {
         let mut additional_data = HashMap::new();
-        additional_data.insert("provider".to_string(), serde_json::Value::String("google".to_string()));
-        additional_data.insert("scope".to_string(), serde_json::Value::String("openid profile email".to_string()));
+        additional_data.insert(
+            "provider".to_string(),
+            serde_json::Value::String("google".to_string()),
+        );
+        additional_data.insert(
+            "scope".to_string(),
+            serde_json::Value::String("openid profile email".to_string()),
+        );
 
         let request = AuthRequest {
             method: AuthMethod::OAuth,
@@ -840,11 +875,17 @@ mod tests {
     #[test]
     fn test_api_key_authentication_request() {
         let mut additional_data = HashMap::new();
-        additional_data.insert("key_type".to_string(), serde_json::Value::String("production".to_string()));
-        additional_data.insert("permissions".to_string(), serde_json::Value::Array(vec![
-            serde_json::Value::String("read".to_string()),
-            serde_json::Value::String("write".to_string()),
-        ]));
+        additional_data.insert(
+            "key_type".to_string(),
+            serde_json::Value::String("production".to_string()),
+        );
+        additional_data.insert(
+            "permissions".to_string(),
+            serde_json::Value::Array(vec![
+                serde_json::Value::String("read".to_string()),
+                serde_json::Value::String("write".to_string()),
+            ]),
+        );
 
         let request = AuthRequest {
             method: AuthMethod::ApiKey,
@@ -876,11 +917,17 @@ mod tests {
     #[test]
     fn test_custom_authentication_request() {
         let mut additional_data = HashMap::new();
-        additional_data.insert("custom_field".to_string(), serde_json::Value::String("custom_value".to_string()));
-        additional_data.insert("metadata".to_string(), serde_json::json!({
-            "version": "1.0",
-            "provider": "custom_auth_provider"
-        }));
+        additional_data.insert(
+            "custom_field".to_string(),
+            serde_json::Value::String("custom_value".to_string()),
+        );
+        additional_data.insert(
+            "metadata".to_string(),
+            serde_json::json!({
+                "version": "1.0",
+                "provider": "custom_auth_provider"
+            }),
+        );
 
         let request = AuthRequest {
             method: AuthMethod::Custom("biometric_auth".to_string()),
@@ -904,15 +951,24 @@ mod tests {
             },
         };
 
-        assert_eq!(request.method, AuthMethod::Custom("biometric_auth".to_string()));
+        assert_eq!(
+            request.method,
+            AuthMethod::Custom("biometric_auth".to_string())
+        );
         assert!(request.credentials.username.is_some());
-        assert!(request.credentials.additional_data.contains_key("custom_field"));
+        assert!(request
+            .credentials
+            .additional_data
+            .contains_key("custom_field"));
     }
 
     #[test]
     fn test_auth_result_creation() {
         let mut metadata = HashMap::new();
-        metadata.insert("login_method".to_string(), serde_json::Value::String("password".to_string()));
+        metadata.insert(
+            "login_method".to_string(),
+            serde_json::Value::String("password".to_string()),
+        );
         metadata.insert("mfa_used".to_string(), serde_json::Value::Bool(false));
 
         let result = AuthResult {
@@ -969,7 +1025,7 @@ mod tests {
     async fn test_plugin_manager_creation() {
         let config = AuthPluginManagerConfig::default();
         let manager = AuthPluginManager::new(config);
-        
+
         assert_eq!(manager.default_method(), &AuthMethod::JWT);
         assert_eq!(manager.list_plugins().await.len(), 0);
     }
@@ -985,7 +1041,7 @@ mod tests {
         };
 
         let manager = AuthPluginManager::new(config);
-        
+
         assert_eq!(manager.default_method(), &AuthMethod::OAuth);
         assert_eq!(manager.list_plugins().await.len(), 0);
     }
@@ -994,12 +1050,12 @@ mod tests {
     async fn test_plugin_manager_default_method_change() {
         let config = AuthPluginManagerConfig::default();
         let mut manager = AuthPluginManager::new(config);
-        
+
         assert_eq!(manager.default_method(), &AuthMethod::JWT);
-        
+
         manager.set_default_method(AuthMethod::SAML);
         assert_eq!(manager.default_method(), &AuthMethod::SAML);
-        
+
         manager.set_default_method(AuthMethod::ApiKey);
         assert_eq!(manager.default_method(), &AuthMethod::ApiKey);
     }
@@ -1041,12 +1097,21 @@ mod tests {
     #[test]
     fn test_credentials_with_additional_data() {
         let mut additional_data = HashMap::new();
-        additional_data.insert("client_id".to_string(), serde_json::Value::String("client_123".to_string()));
-        additional_data.insert("client_version".to_string(), serde_json::Value::String("1.0.0".to_string()));
-        additional_data.insert("features".to_string(), serde_json::Value::Array(vec![
-            serde_json::Value::String("mfa".to_string()),
-            serde_json::Value::String("sso".to_string()),
-        ]));
+        additional_data.insert(
+            "client_id".to_string(),
+            serde_json::Value::String("client_123".to_string()),
+        );
+        additional_data.insert(
+            "client_version".to_string(),
+            serde_json::Value::String("1.0.0".to_string()),
+        );
+        additional_data.insert(
+            "features".to_string(),
+            serde_json::Value::Array(vec![
+                serde_json::Value::String("mfa".to_string()),
+                serde_json::Value::String("sso".to_string()),
+            ]),
+        );
 
         let credentials = AuthCredentials {
             username: Some("user@example.com".to_string()),
@@ -1108,8 +1173,14 @@ mod tests {
     #[test]
     fn test_auth_user_info() {
         let mut user_metadata = HashMap::new();
-        user_metadata.insert("department".to_string(), serde_json::Value::String("engineering".to_string()));
-        user_metadata.insert("last_login".to_string(), serde_json::Value::Number(serde_json::Number::from(1234567890)));
+        user_metadata.insert(
+            "department".to_string(),
+            serde_json::Value::String("engineering".to_string()),
+        );
+        user_metadata.insert(
+            "last_login".to_string(),
+            serde_json::Value::Number(serde_json::Number::from(1234567890)),
+        );
 
         let user_info = AuthUserInfo {
             id: "user_456".to_string(),
@@ -1118,7 +1189,11 @@ mod tests {
             email: Some("john.doe@example.com".to_string()),
             display_name: Some("John Doe".to_string()),
             roles: vec!["admin".to_string(), "developer".to_string()],
-            permissions: vec!["read".to_string(), "write".to_string(), "delete".to_string()],
+            permissions: vec![
+                "read".to_string(),
+                "write".to_string(),
+                "delete".to_string(),
+            ],
             tenant_id: None,
             attributes: HashMap::new(),
             metadata: user_metadata,
@@ -1172,13 +1247,22 @@ mod tests {
     fn test_complex_authentication_flow() {
         // Simulate a complex authentication flow with multiple steps
         let mut additional_data = HashMap::new();
-        additional_data.insert("flow_type".to_string(), serde_json::Value::String("multi_step".to_string()));
-        additional_data.insert("step".to_string(), serde_json::Value::Number(serde_json::Number::from(1)));
-        additional_data.insert("required_factors".to_string(), serde_json::Value::Array(vec![
-            serde_json::Value::String("password".to_string()),
-            serde_json::Value::String("totp".to_string()),
-            serde_json::Value::String("biometric".to_string()),
-        ]));
+        additional_data.insert(
+            "flow_type".to_string(),
+            serde_json::Value::String("multi_step".to_string()),
+        );
+        additional_data.insert(
+            "step".to_string(),
+            serde_json::Value::Number(serde_json::Number::from(1)),
+        );
+        additional_data.insert(
+            "required_factors".to_string(),
+            serde_json::Value::Array(vec![
+                serde_json::Value::String("password".to_string()),
+                serde_json::Value::String("totp".to_string()),
+                serde_json::Value::String("biometric".to_string()),
+            ]),
+        );
 
         let request = AuthRequest {
             method: AuthMethod::Custom("multi_factor".to_string()),
@@ -1203,19 +1287,32 @@ mod tests {
         };
 
         // Verify the complex request structure
-        assert_eq!(request.method, AuthMethod::Custom("multi_factor".to_string()));
+        assert_eq!(
+            request.method,
+            AuthMethod::Custom("multi_factor".to_string())
+        );
         assert!(request.credentials.username.is_some());
         assert!(request.credentials.password.is_some());
         assert!(request.credentials.state.is_some());
-        assert!(request.credentials.additional_data.contains_key("flow_type"));
+        assert!(request
+            .credentials
+            .additional_data
+            .contains_key("flow_type"));
         assert!(request.credentials.additional_data.contains_key("step"));
-        assert!(request.credentials.additional_data.contains_key("required_factors"));
-        
+        assert!(request
+            .credentials
+            .additional_data
+            .contains_key("required_factors"));
+
         if let Some(flow_type) = request.credentials.additional_data.get("flow_type") {
-            assert_eq!(flow_type, &serde_json::Value::String("multi_step".to_string()));
+            assert_eq!(
+                flow_type,
+                &serde_json::Value::String("multi_step".to_string())
+            );
         }
-        
-        if let Some(required_factors) = request.credentials.additional_data.get("required_factors") {
+
+        if let Some(required_factors) = request.credentials.additional_data.get("required_factors")
+        {
             if let serde_json::Value::Array(factors) = required_factors {
                 assert_eq!(factors.len(), 3);
             }

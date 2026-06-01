@@ -1,13 +1,13 @@
 //! JWT Authentication Plugin for Fortress
-//! 
+//!
 //! This is a WebAssembly plugin that provides JWT-based authentication
 //! including token generation, validation, and refresh capabilities.
 
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use serde::{Deserialize, Serialize};
-use subtle::ConstantTimeEq;
 use std::collections::HashMap;
 use std::sync::OnceLock;
-use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+use subtle::ConstantTimeEq;
 
 // Plugin metadata
 const PLUGIN_NAME: &str = "jwt_auth";
@@ -40,16 +40,16 @@ impl Default for JwtConfig {
 // JWT claims structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct JwtClaims {
-    sub: String,           // Subject (user ID)
-    iss: String,           // Issuer
-    aud: String,           // Audience
-    exp: u64,             // Expiration time
-    iat: u64,             // Issued at
-    jti: String,           // JWT ID
-    username: String,       // Username
-    email: Option<String>,  // Email
-    roles: Vec<String>,     // User roles
-    permissions: Vec<String>, // User permissions
+    sub: String,               // Subject (user ID)
+    iss: String,               // Issuer
+    aud: String,               // Audience
+    exp: u64,                  // Expiration time
+    iat: u64,                  // Issued at
+    jti: String,               // JWT ID
+    username: String,          // Username
+    email: Option<String>,     // Email
+    roles: Vec<String>,        // User roles
+    permissions: Vec<String>,  // User permissions
     tenant_id: Option<String>, // Tenant ID
 }
 
@@ -115,16 +115,60 @@ static PLUGIN_INITIALIZED: OnceLock<bool> = OnceLock::new();
 #[allow(dead_code)]
 extern "C" {
     fn auth_log(level: i32, ptr: *const u8, len: usize);
-    fn auth_store_session(session_id_ptr: *const u8, session_id_len: usize, user_data_ptr: *const u8, user_data_len: usize) -> i32;
-    fn auth_get_session(session_id_ptr: *const u8, session_id_len: usize, out_ptr: *mut u8, out_len: usize) -> i32;
+    fn auth_store_session(
+        session_id_ptr: *const u8,
+        session_id_len: usize,
+        user_data_ptr: *const u8,
+        user_data_len: usize,
+    ) -> i32;
+    fn auth_get_session(
+        session_id_ptr: *const u8,
+        session_id_len: usize,
+        out_ptr: *mut u8,
+        out_len: usize,
+    ) -> i32;
     fn auth_delete_session(session_id_ptr: *const u8, session_id_len: usize) -> i32;
-    fn auth_cache_token(token_ptr: *const u8, token_len: usize, user_data_ptr: *const u8, user_data_len: usize) -> i32;
-    fn auth_get_cached_token(token_ptr: *const u8, token_len: usize, out_ptr: *mut u8, out_len: usize) -> i32;
-    fn auth_generate_token(user_id_ptr: *const u8, user_id_len: usize, out_ptr: *mut u8, out_len: usize) -> i32;
+    fn auth_cache_token(
+        token_ptr: *const u8,
+        token_len: usize,
+        user_data_ptr: *const u8,
+        user_data_len: usize,
+    ) -> i32;
+    fn auth_get_cached_token(
+        token_ptr: *const u8,
+        token_len: usize,
+        out_ptr: *mut u8,
+        out_len: usize,
+    ) -> i32;
+    fn auth_generate_token(
+        user_id_ptr: *const u8,
+        user_id_len: usize,
+        out_ptr: *mut u8,
+        out_len: usize,
+    ) -> i32;
     fn auth_validate_token(token_ptr: *const u8, token_len: usize) -> i32;
-    fn auth_hash_password(password_ptr: *const u8, password_len: usize, out_ptr: *mut u8, out_len: usize) -> i32;
-    fn auth_verify_password(password_ptr: *const u8, password_len: usize, hash_ptr: *const u8, hash_len: usize) -> i32;
-    fn auth_make_http_request(url_ptr: *const u8, url_len: usize, method_ptr: *const u8, method_len: usize, body_ptr: *const u8, body_len: usize, out_ptr: *mut u8, out_len: usize) -> i32;
+    fn auth_hash_password(
+        password_ptr: *const u8,
+        password_len: usize,
+        out_ptr: *mut u8,
+        out_len: usize,
+    ) -> i32;
+    fn auth_verify_password(
+        password_ptr: *const u8,
+        password_len: usize,
+        hash_ptr: *const u8,
+        hash_len: usize,
+    ) -> i32;
+    fn auth_make_http_request(
+        url_ptr: *const u8,
+        url_len: usize,
+        method_ptr: *const u8,
+        method_len: usize,
+        body_ptr: *const u8,
+        body_len: usize,
+        out_ptr: *mut u8,
+        out_len: usize,
+    ) -> i32;
     fn get_config(key_ptr: *const u8, key_len: usize, out_ptr: *mut u8, out_len: usize) -> i32;
     fn get_timestamp() -> i64;
 }
@@ -135,11 +179,11 @@ extern "C" {
 fn write_string_to_wasm(s: &str, ptr: *mut u8, len: usize) -> usize {
     let bytes = s.as_bytes();
     let write_len = std::cmp::min(bytes.len(), len);
-    
+
     unsafe {
         std::ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, write_len);
     }
-    
+
     write_len
 }
 
@@ -160,22 +204,19 @@ fn log_message(level: i32, message: &str) {
 // JWT operations
 fn create_jwt_token(claims: &JwtClaims, config: &JwtConfig) -> Result<String, String> {
     // Simple JWT implementation (in production, use proper JWT library)
-    let header = format!(
-        "{{\"alg\":\"{}\",\"typ\":\"JWT\"}}",
-        config.algorithm
-    );
-    
-    let claims_json = serde_json::to_string(claims)
-        .map_err(|e| format!("Failed to serialize claims: {}", e))?;
-    
+    let header = format!("{{\"alg\":\"{}\",\"typ\":\"JWT\"}}", config.algorithm);
+
+    let claims_json =
+        serde_json::to_string(claims).map_err(|e| format!("Failed to serialize claims: {}", e))?;
+
     // Encode header and claims (base64url encoding)
     let header_encoded = URL_SAFE_NO_PAD.encode(header.as_bytes());
     let claims_encoded = URL_SAFE_NO_PAD.encode(claims_json.as_bytes());
-    
+
     // Create signature (simplified - in production, use proper crypto)
     let signing_input = format!("{}.{}", header_encoded, claims_encoded);
     let signature = create_signature(&signing_input, &config.secret)?;
-    
+
     let token = format!("{}.{}.{}", header_encoded, claims_encoded, signature);
     Ok(token)
 }
@@ -185,33 +226,39 @@ fn validate_jwt_token(token: &str, config: &JwtConfig) -> Result<JwtClaims, Stri
     if parts.len() != 3 {
         return Err("Invalid token format".to_string());
     }
-    
+
     // Decode header and claims
-    let _header = URL_SAFE_NO_PAD.decode(parts[0])
+    let _header = URL_SAFE_NO_PAD
+        .decode(parts[0])
         .map_err(|_| "Failed to decode header".to_string())?;
-    
-    let claims_json = URL_SAFE_NO_PAD.decode(parts[1])
+
+    let claims_json = URL_SAFE_NO_PAD
+        .decode(parts[1])
         .map_err(|_| "Failed to decode claims".to_string())?;
-    
+
     let claims_json = String::from_utf8_lossy(&claims_json).to_string();
-    let claims: JwtClaims = serde_json::from_str(&claims_json)
-        .map_err(|e| format!("Failed to parse claims: {}", e))?;
-    
+    let claims: JwtClaims =
+        serde_json::from_str(&claims_json).map_err(|e| format!("Failed to parse claims: {}", e))?;
+
     // Validate expiration
     let current_time = unsafe { get_timestamp() } as u64;
     if claims.exp <= current_time {
         return Err("Token has expired".to_string());
     }
-    
+
     // Validate signature (simplified)
     let signing_input = format!("{}.{}", parts[0], parts[1]);
     let expected_signature = create_signature(&signing_input, &config.secret)?;
     let provided_signature = parts[2];
-    
-    if !bool::from(provided_signature.as_bytes().ct_eq(expected_signature.as_bytes())) {
+
+    if !bool::from(
+        provided_signature
+            .as_bytes()
+            .ct_eq(expected_signature.as_bytes()),
+    ) {
         return Err("Invalid signature".to_string());
     }
-    
+
     Ok(claims)
 }
 
@@ -235,8 +282,6 @@ fn create_signature(data: &str, secret: &str) -> Result<String, String> {
     Ok(base64url_encode(&result))
 }
 
-
-
 #[derive(Debug, Clone)]
 struct UserRecord {
     id: String,
@@ -249,31 +294,32 @@ struct UserRecord {
     active: bool,
 }
 
-
-
 fn get_user(username: &str) -> Option<UserRecord> {
     use std::sync::{Mutex, OnceLock};
-    
+
     static USER_DB_SAFE: OnceLock<Mutex<HashMap<String, UserRecord>>> = OnceLock::new();
-    
+
     let db = USER_DB_SAFE.get_or_init(|| {
         let mut db = HashMap::new();
-        
+
         // Add test user
-        db.insert("admin".to_string(), UserRecord {
-            id: "user-1".to_string(),
-            username: "admin".to_string(),
-            password_hash: hash_password("admin123").unwrap_or_default(),
-            email: Some("admin@fortress.com".to_string()),
-            roles: vec!["admin".to_string(), "user".to_string()],
-            permissions: vec!["*".to_string()],
-            tenant_id: None,
-            active: true,
-        });
-        
+        db.insert(
+            "admin".to_string(),
+            UserRecord {
+                id: "user-1".to_string(),
+                username: "admin".to_string(),
+                password_hash: hash_password("admin123").unwrap_or_default(),
+                email: Some("admin@fortress.com".to_string()),
+                roles: vec!["admin".to_string(), "user".to_string()],
+                permissions: vec!["*".to_string()],
+                tenant_id: None,
+                active: true,
+            },
+        );
+
         Mutex::new(db)
     });
-    
+
     db.lock().ok()?.get(username).cloned()
 }
 
@@ -284,7 +330,7 @@ fn hash_password(password: &str) -> Result<String, String> {
             password.as_ptr(),
             password.len(),
             output.as_mut_ptr(),
-            output.len()
+            output.len(),
         );
         if len > 0 {
             Ok(read_string_from_wasm(output.as_ptr(), len as usize))
@@ -296,12 +342,7 @@ fn hash_password(password: &str) -> Result<String, String> {
 
 fn verify_password(password: &str, hash: &str) -> bool {
     unsafe {
-        auth_verify_password(
-            password.as_ptr(),
-            password.len(),
-            hash.as_ptr(),
-            hash.len()
-        ) == 1
+        auth_verify_password(password.as_ptr(), password.len(), hash.as_ptr(), hash.len()) == 1
     }
 }
 
@@ -309,7 +350,7 @@ fn verify_password(password: &str, hash: &str) -> bool {
 #[no_mangle]
 pub extern "C" fn jwt_initialize() -> i32 {
     log_message(2, "Initializing JWT authentication plugin");
-    
+
     // Load configuration
     let config_key = "jwt_config";
     let mut config_buffer = [0u8; 1024];
@@ -318,9 +359,9 @@ pub extern "C" fn jwt_initialize() -> i32 {
             config_key.as_ptr(),
             config_key.len(),
             config_buffer.as_mut_ptr(),
-            config_buffer.len()
+            config_buffer.len(),
         );
-        
+
         if len > 0 {
             let config_json = read_string_from_wasm(config_buffer.as_ptr(), len as usize);
             match serde_json::from_str::<JwtConfig>(&config_json) {
@@ -350,12 +391,12 @@ pub extern "C" fn authenticate(
     request_ptr: *const u8,
     request_len: usize,
     response_ptr: *mut u8,
-    response_len: usize
+    response_len: usize,
 ) -> i32 {
     if !*PLUGIN_INITIALIZED.get().unwrap_or(&false) {
         return 0;
     }
-    
+
     let request_json = read_string_from_wasm(request_ptr, request_len);
     let auth_request: AuthRequest = match serde_json::from_str(&request_json) {
         Ok(req) => req,
@@ -364,11 +405,17 @@ pub extern "C" fn authenticate(
             return 0;
         }
     };
-    
-    log_message(2, &format!("Processing authentication request for method: {}", auth_request.method));
-    
+
+    log_message(
+        2,
+        &format!(
+            "Processing authentication request for method: {}",
+            auth_request.method
+        ),
+    );
+
     let config = PLUGIN_CONFIG.get().unwrap();
-    
+
     match auth_request.method.as_str() {
         "JWT" => {
             // Handle JWT token validation
@@ -385,7 +432,7 @@ pub extern "C" fn authenticate(
                             tenant_id: claims.tenant_id.clone(),
                             attributes: HashMap::new(),
                         };
-                        
+
                         let result = AuthResult {
                             success: true,
                             user_info: Some(user_info),
@@ -395,9 +442,10 @@ pub extern "C" fn authenticate(
                             error: None,
                             metadata: HashMap::new(),
                         };
-                        
+
                         let result_json = serde_json::to_string(&result).unwrap_or_default();
-                        return write_string_to_wasm(&result_json, response_ptr, response_len) as i32;
+                        return write_string_to_wasm(&result_json, response_ptr, response_len)
+                            as i32;
                     }
                     Err(e) => {
                         let result = AuthResult {
@@ -409,9 +457,10 @@ pub extern "C" fn authenticate(
                             error: Some(e),
                             metadata: HashMap::new(),
                         };
-                        
+
                         let result_json = serde_json::to_string(&result).unwrap_or_default();
-                        return write_string_to_wasm(&result_json, response_ptr, response_len) as i32;
+                        return write_string_to_wasm(&result_json, response_ptr, response_len)
+                            as i32;
                     }
                 }
             } else {
@@ -424,14 +473,17 @@ pub extern "C" fn authenticate(
                     error: Some("No token provided".to_string()),
                     metadata: HashMap::new(),
                 };
-                
+
                 let result_json = serde_json::to_string(&result).unwrap_or_default();
                 return write_string_to_wasm(&result_json, response_ptr, response_len) as i32;
             }
         }
         "Basic" => {
             // Handle username/password authentication
-            if let (Some(username), Some(password)) = (&auth_request.credentials.username, &auth_request.credentials.password) {
+            if let (Some(username), Some(password)) = (
+                &auth_request.credentials.username,
+                &auth_request.credentials.password,
+            ) {
                 if let Some(user) = get_user(username) {
                     if user.active && verify_password(password, &user.password_hash) {
                         // Create JWT token
@@ -449,7 +501,7 @@ pub extern "C" fn authenticate(
                             permissions: user.permissions.clone(),
                             tenant_id: user.tenant_id.clone(),
                         };
-                        
+
                         match create_jwt_token(&claims, config) {
                             Ok(token) => {
                                 let user_info = AuthUserInfo {
@@ -462,7 +514,7 @@ pub extern "C" fn authenticate(
                                     tenant_id: user.tenant_id.clone(),
                                     attributes: HashMap::new(),
                                 };
-                                
+
                                 let result = AuthResult {
                                     success: true,
                                     user_info: Some(user_info),
@@ -472,9 +524,14 @@ pub extern "C" fn authenticate(
                                     error: None,
                                     metadata: HashMap::new(),
                                 };
-                                
-                                let result_json = serde_json::to_string(&result).unwrap_or_default();
-                                return write_string_to_wasm(&result_json, response_ptr, response_len) as i32;
+
+                                let result_json =
+                                    serde_json::to_string(&result).unwrap_or_default();
+                                return write_string_to_wasm(
+                                    &result_json,
+                                    response_ptr,
+                                    response_len,
+                                ) as i32;
                             }
                             Err(e) => {
                                 let result = AuthResult {
@@ -486,9 +543,14 @@ pub extern "C" fn authenticate(
                                     error: Some(format!("Failed to create token: {}", e)),
                                     metadata: HashMap::new(),
                                 };
-                                
-                                let result_json = serde_json::to_string(&result).unwrap_or_default();
-                                return write_string_to_wasm(&result_json, response_ptr, response_len) as i32;
+
+                                let result_json =
+                                    serde_json::to_string(&result).unwrap_or_default();
+                                return write_string_to_wasm(
+                                    &result_json,
+                                    response_ptr,
+                                    response_len,
+                                ) as i32;
                             }
                         }
                     } else {
@@ -501,9 +563,10 @@ pub extern "C" fn authenticate(
                             error: Some("Invalid credentials".to_string()),
                             metadata: HashMap::new(),
                         };
-                        
+
                         let result_json = serde_json::to_string(&result).unwrap_or_default();
-                        return write_string_to_wasm(&result_json, response_ptr, response_len) as i32;
+                        return write_string_to_wasm(&result_json, response_ptr, response_len)
+                            as i32;
                     }
                 } else {
                     let result = AuthResult {
@@ -515,7 +578,7 @@ pub extern "C" fn authenticate(
                         error: Some("User not found".to_string()),
                         metadata: HashMap::new(),
                     };
-                    
+
                     let result_json = serde_json::to_string(&result).unwrap_or_default();
                     return write_string_to_wasm(&result_json, response_ptr, response_len) as i32;
                 }
@@ -529,7 +592,7 @@ pub extern "C" fn authenticate(
                     error: Some("Username and password required".to_string()),
                     metadata: HashMap::new(),
                 };
-                
+
                 let result_json = serde_json::to_string(&result).unwrap_or_default();
                 return write_string_to_wasm(&result_json, response_ptr, response_len) as i32;
             }
@@ -541,10 +604,13 @@ pub extern "C" fn authenticate(
                 token: None,
                 refresh_token: None,
                 expires_at: None,
-                error: Some(format!("Unsupported authentication method: {}", auth_request.method)),
+                error: Some(format!(
+                    "Unsupported authentication method: {}",
+                    auth_request.method
+                )),
                 metadata: HashMap::new(),
             };
-            
+
             let result_json = serde_json::to_string(&result).unwrap_or_default();
             return write_string_to_wasm(&result_json, response_ptr, response_len) as i32;
         }
@@ -556,15 +622,15 @@ pub extern "C" fn jwt_validate_token(
     token_ptr: *const u8,
     token_len: usize,
     response_ptr: *mut u8,
-    response_len: usize
+    response_len: usize,
 ) -> i32 {
     if !*PLUGIN_INITIALIZED.get().unwrap_or(&false) {
         return 0;
     }
-    
+
     let token = read_string_from_wasm(token_ptr, token_len);
     let config = PLUGIN_CONFIG.get().unwrap();
-    
+
     match validate_jwt_token(&token, config) {
         Ok(claims) => {
             let user_info = AuthUserInfo {
@@ -577,12 +643,12 @@ pub extern "C" fn jwt_validate_token(
                 tenant_id: claims.tenant_id.clone(),
                 attributes: HashMap::new(),
             };
-            
+
             let response = serde_json::json!({
                 "valid": true,
                 "user_info": user_info
             });
-            
+
             let response_json = serde_json::to_string(&response).unwrap_or_default();
             return write_string_to_wasm(&response_json, response_ptr, response_len) as i32;
         }
@@ -591,7 +657,7 @@ pub extern "C" fn jwt_validate_token(
                 "valid": false,
                 "error": e
             });
-            
+
             let response_json = serde_json::to_string(&response).unwrap_or_default();
             return write_string_to_wasm(&response_json, response_ptr, response_len) as i32;
         }
@@ -603,19 +669,19 @@ pub extern "C" fn jwt_refresh_token(
     refresh_token_ptr: *const u8,
     refresh_token_len: usize,
     response_ptr: *mut u8,
-    response_len: usize
+    response_len: usize,
 ) -> i32 {
     if !*PLUGIN_INITIALIZED.get().unwrap_or(&false) {
         return 0;
     }
-    
+
     let refresh_token = read_string_from_wasm(refresh_token_ptr, refresh_token_len);
-    
+
     // Simple refresh token validation (in production, use proper refresh token logic)
     if refresh_token.starts_with("refresh-") {
         let config = PLUGIN_CONFIG.get().unwrap();
         let now = unsafe { get_timestamp() } as u64;
-        
+
         // Create new token for user "admin" (simplified)
         let claims = JwtClaims {
             sub: "user-1".to_string(),
@@ -630,7 +696,7 @@ pub extern "C" fn jwt_refresh_token(
             permissions: vec!["*".to_string()],
             tenant_id: None,
         };
-        
+
         match create_jwt_token(&claims, config) {
             Ok(new_token) => {
                 let result = AuthResult {
@@ -642,7 +708,7 @@ pub extern "C" fn jwt_refresh_token(
                     error: None,
                     metadata: HashMap::new(),
                 };
-                
+
                 let result_json = serde_json::to_string(&result).unwrap_or_default();
                 return write_string_to_wasm(&result_json, response_ptr, response_len) as i32;
             }
@@ -656,7 +722,7 @@ pub extern "C" fn jwt_refresh_token(
                     error: Some(format!("Failed to create new token: {}", e)),
                     metadata: HashMap::new(),
                 };
-                
+
                 let result_json = serde_json::to_string(&result).unwrap_or_default();
                 return write_string_to_wasm(&result_json, response_ptr, response_len) as i32;
             }
@@ -671,24 +737,21 @@ pub extern "C" fn jwt_refresh_token(
             error: Some("Invalid refresh token".to_string()),
             metadata: HashMap::new(),
         };
-        
+
         let result_json = serde_json::to_string(&result).unwrap_or_default();
         return write_string_to_wasm(&result_json, response_ptr, response_len) as i32;
     }
 }
 
 #[no_mangle]
-pub extern "C" fn jwt_logout(
-    token_ptr: *const u8,
-    token_len: usize
-) -> i32 {
+pub extern "C" fn jwt_logout(token_ptr: *const u8, token_len: usize) -> i32 {
     if !*PLUGIN_INITIALIZED.get().unwrap_or(&false) {
         return 0;
     }
-    
+
     let token = read_string_from_wasm(token_ptr, token_len);
     log_message(2, &format!("Logging out token: {}", token));
-    
+
     // In a real implementation, this would invalidate the token
     // For now, we'll just log it
     1 // Success
@@ -706,10 +769,10 @@ pub extern "C" fn jwt_health_check() -> i32 {
 #[no_mangle]
 pub extern "C" fn cleanup() -> i32 {
     log_message(2, "Cleaning up JWT authentication plugin");
-    
+
     // Note: OnceLock doesn't support clearing, so we just log the cleanup
     log_message(2, "JWT plugin cleanup completed");
-    
+
     1 // Success
 }
 

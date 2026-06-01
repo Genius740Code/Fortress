@@ -1,5 +1,5 @@
 //! Plugin System for Fortress
-//! 
+//!
 //! This module provides a flexible plugin architecture that allows users to create
 //! custom plugins that can integrate with external APIs and services. Plugins can
 //! be used for various purposes such as signing transactions, interacting with
@@ -107,25 +107,29 @@ pub struct PluginMetrics {
 pub trait Plugin: Send + Sync {
     /// Get plugin metadata
     fn metadata(&self) -> &PluginMetadata;
-    
+
     /// Initialize plugin with given context
     async fn initialize(&self, context: PluginContext) -> Result<()>;
-    
+
     /// Execute plugin with given input
     async fn execute(&self, input: PluginInput) -> Result<PluginResult>;
-    
+
     /// Execute plugin with given input and context
-    async fn execute_with_context(&self, input: PluginInput, _context: &PluginContext) -> Result<PluginResult> {
+    async fn execute_with_context(
+        &self,
+        input: PluginInput,
+        _context: &PluginContext,
+    ) -> Result<PluginResult> {
         // Default implementation just calls execute without context
         self.execute(input).await
     }
-    
+
     /// Cleanup resources when the plugin is being unloaded
     async fn cleanup(&self) -> Result<()>;
-    
+
     /// Validate plugin configuration
     fn validate_config(&self, config: &HashMap<String, serde_json::Value>) -> Result<()>;
-    
+
     /// Get plugin health status
     async fn health_check(&self) -> Result<PluginHealth>;
 }
@@ -166,9 +170,22 @@ pub struct PluginRegistry {
 impl std::fmt::Debug for PluginRegistry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PluginRegistry")
-            .field("plugin_count", &self.plugins.try_read().map(|p| p.len()).unwrap_or(0))
-            .field("metadata_count", &self.metadata.try_read().map(|m| m.len()).unwrap_or(0))
-            .field("plugin_contexts_count", &self.plugin_contexts.try_read().map(|p| p.len()).unwrap_or(0))
+            .field(
+                "plugin_count",
+                &self.plugins.try_read().map(|p| p.len()).unwrap_or(0),
+            )
+            .field(
+                "metadata_count",
+                &self.metadata.try_read().map(|m| m.len()).unwrap_or(0),
+            )
+            .field(
+                "plugin_contexts_count",
+                &self
+                    .plugin_contexts
+                    .try_read()
+                    .map(|p| p.len())
+                    .unwrap_or(0),
+            )
             .finish()
     }
 }
@@ -182,29 +199,29 @@ impl PluginRegistry {
             plugin_contexts: Arc::new(RwLock::new(HashMap::new())),
         }
     }
-    
+
     /// Register a new plugin
     pub async fn register_plugin(&self, plugin: Arc<dyn Plugin>) -> Result<()> {
         let metadata = plugin.metadata().clone();
         let plugin_id = metadata.id.clone();
-        
+
         // Validate plugin configuration
         plugin.validate_config(&HashMap::new())?;
-        
+
         // Store plugin and metadata
         {
             let mut plugins = self.plugins.write().await;
             plugins.insert(plugin_id.clone(), plugin);
         }
-        
+
         {
             let mut metadata_map = self.metadata.write().await;
             metadata_map.insert(plugin_id, metadata);
         }
-        
+
         Ok(())
     }
-    
+
     /// Get a plugin by ID
     pub async fn get_plugin(&self, plugin_id: &str) -> Result<Arc<dyn Plugin>> {
         let plugins = self.plugins.read().await;
@@ -213,27 +230,30 @@ impl PluginRegistry {
             .cloned()
             .ok_or_else(|| FortressError::plugin(format!("Plugin '{}' not found", plugin_id)))
     }
-    
+
     /// Get plugin context by ID
     pub async fn get_plugin_context(&self, plugin_id: &str) -> Option<PluginContext> {
         let contexts = self.plugin_contexts.read().await;
         contexts.get(plugin_id).cloned()
     }
-    
+
     /// Set plugin context
     pub async fn set_plugin_context(&self, plugin_id: &str, context: PluginContext) {
         let mut contexts = self.plugin_contexts.write().await;
         contexts.insert(plugin_id.to_string(), context);
     }
-    
+
     /// List all registered plugins
     pub async fn list_plugins(&self) -> Vec<PluginMetadata> {
         let metadata = self.metadata.read().await;
         metadata.values().cloned().collect()
     }
-    
+
     /// Get plugins by capability
-    pub async fn get_plugins_by_capability(&self, capability: &PluginCapability) -> Vec<PluginMetadata> {
+    pub async fn get_plugins_by_capability(
+        &self,
+        capability: &PluginCapability,
+    ) -> Vec<PluginMetadata> {
         let metadata = self.metadata.read().await;
         metadata
             .values()
@@ -241,7 +261,7 @@ impl PluginRegistry {
             .cloned()
             .collect()
     }
-    
+
     /// Unregister a plugin
     pub async fn unregister_plugin(&self, plugin_id: &str) -> Result<()> {
         // Get plugin for cleanup
@@ -249,30 +269,30 @@ impl PluginRegistry {
             let plugins = self.plugins.read().await;
             plugins.get(plugin_id).cloned()
         };
-        
+
         if let Some(plugin) = plugin {
             // Cleanup plugin
             plugin.cleanup().await?;
         }
-        
+
         // Remove from registry
         {
             let mut plugins = self.plugins.write().await;
             plugins.remove(plugin_id);
         }
-        
+
         // Remove from metadata
         {
             let mut metadata = self.metadata.write().await;
             metadata.remove(plugin_id);
         }
-        
+
         // Remove from contexts
         {
             let mut contexts = self.plugin_contexts.write().await;
             contexts.remove(plugin_id);
         }
-        
+
         Ok(())
     }
 }
@@ -298,7 +318,7 @@ impl PluginManager {
             plugin_configs: Arc::new(RwLock::new(HashMap::new())),
         }
     }
-    
+
     /// Load and initialize a plugin
     pub async fn load_plugin(
         &self,
@@ -309,13 +329,13 @@ impl PluginManager {
             let metadata = plugin.metadata();
             metadata.id.clone()
         };
-        
+
         // Store configuration
         {
             let mut configs = self.plugin_configs.write().await;
             configs.insert(plugin_id.clone(), config);
         }
-        
+
         // Create plugin context
         let context = PluginContext {
             config: {
@@ -329,16 +349,16 @@ impl PluginManager {
             session_id: None,
             request_id: None,
         };
-        
+
         // Store plugin context in registry
         self.registry.set_plugin_context(&plugin_id, context).await;
-        
+
         // Register plugin
         self.registry.register_plugin(plugin).await?;
-        
+
         Ok(())
     }
-    
+
     /// Execute a plugin
     pub async fn execute_plugin(
         &self,
@@ -348,23 +368,23 @@ impl PluginManager {
         let plugin = self.registry.get_plugin(plugin_id).await?;
         plugin.execute(input).await
     }
-    
+
     /// Get plugin registry
     pub fn registry(&self) -> &Arc<PluginRegistry> {
         &self.registry
     }
-    
+
     /// Get health status of all plugins
     pub async fn get_all_health_status(&self) -> HashMap<String, PluginHealth> {
         let plugins = self.registry.plugins.read().await;
         let mut health_status = HashMap::new();
-        
+
         for (id, plugin) in plugins.iter() {
             if let Ok(health) = plugin.health_check().await {
                 health_status.insert(id.clone(), health);
             }
         }
-        
+
         health_status
     }
 }
@@ -397,7 +417,7 @@ macro_rules! fortress_plugin {
             $($field_name: $field_type,)*
             metadata: $crate::plugin::PluginMetadata,
         }
-        
+
         impl $struct_name {
             fn new() -> Self {
                 Self {
@@ -414,26 +434,26 @@ macro_rules! fortress_plugin {
                 }
             }
         }
-        
+
         #[async_trait::async_trait]
         impl $crate::plugin::Plugin for $struct_name {
             fn metadata(&self) -> &$crate::plugin::PluginMetadata {
                 &self.metadata
             }
-            
+
             async fn initialize(&self, _context: $crate::plugin::PluginContext) -> $crate::error::Result<()> {
                 // Context is handled by the plugin manager
                 Ok(())
             }
-            
+
             async fn cleanup(&self) -> $crate::error::Result<()> {
                 Ok(())
             }
-            
+
             fn validate_config(&self, _config: &std::collections::HashMap<String, serde_json::Value>) -> $crate::error::Result<()> {
                 Ok(())
             }
-            
+
             async fn health_check(&self) -> $crate::error::Result<$crate::plugin::PluginHealth> {
                 Ok($crate::plugin::PluginHealth {
                     healthy: true,
@@ -441,7 +461,7 @@ macro_rules! fortress_plugin {
                     last_check: chrono::Utc::now(),
                 })
             }
-            
+
             async fn execute(&self, input: $crate::plugin::PluginInput) -> $crate::error::Result<$crate::plugin::PluginResult> {
                 // Default implementation
                 self.execute_with_context(input, &$crate::plugin::PluginContext {
@@ -454,7 +474,7 @@ macro_rules! fortress_plugin {
                     request_id: None,
                 }).await
             }
-            
+
             async fn execute_with_context(&self, input: $crate::plugin::PluginInput, context: &$crate::plugin::PluginContext) -> $crate::error::Result<$crate::plugin::PluginResult> {
                 // Default implementation - can be overridden by specific plugins
                 self.execute(input).await
@@ -552,7 +572,12 @@ mod tests {
             let initialized = *self.initialized.read().await;
             Ok(PluginHealth {
                 healthy: initialized,
-                message: if initialized { "Plugin is healthy" } else { "Plugin not initialized" }.to_string(),
+                message: if initialized {
+                    "Plugin is healthy"
+                } else {
+                    "Plugin not initialized"
+                }
+                .to_string(),
                 last_check: chrono::Utc::now(),
             })
         }
@@ -565,7 +590,7 @@ mod tests {
             PluginCapability::Encrypt,
             PluginCapability::ApiIntegration,
         ];
-        
+
         let plugin = TestPlugin::new("test-plugin", "Test Plugin", capabilities);
         let metadata = plugin.metadata();
 
@@ -575,16 +600,20 @@ mod tests {
         assert_eq!(metadata.description, "Test plugin");
         assert_eq!(metadata.author, "Test Author");
         assert_eq!(metadata.capabilities.len(), 3);
-        assert!(metadata.capabilities.contains(&PluginCapability::SignTransaction));
+        assert!(metadata
+            .capabilities
+            .contains(&PluginCapability::SignTransaction));
         assert!(metadata.capabilities.contains(&PluginCapability::Encrypt));
-        assert!(metadata.capabilities.contains(&PluginCapability::ApiIntegration));
+        assert!(metadata
+            .capabilities
+            .contains(&PluginCapability::ApiIntegration));
         assert!(metadata.config_schema.is_none());
     }
 
     #[tokio::test]
     async fn test_plugin_lifecycle() -> Result<()> {
         let plugin = TestPlugin::new("lifecycle-test", "Lifecycle Test", vec![]);
-        
+
         // Initially not initialized
         assert!(!plugin.is_initialized().await);
         assert_eq!(plugin.get_execution_count().await, 0);
@@ -599,7 +628,7 @@ mod tests {
             session_id: None,
             request_id: None,
         };
-        
+
         plugin.initialize(context).await?;
         assert!(plugin.is_initialized().await);
 
@@ -632,7 +661,7 @@ mod tests {
     #[tokio::test]
     async fn test_plugin_registry() -> Result<()> {
         let registry = PluginRegistry::new();
-        
+
         // Create test plugin
         let plugin = TestPlugin::new(
             "registry-test",
@@ -654,11 +683,15 @@ mod tests {
         assert_eq!(retrieved_plugin.metadata().id, "registry-test");
 
         // Get plugins by capability
-        let signing_plugins = registry.get_plugins_by_capability(&PluginCapability::SignTransaction).await;
+        let signing_plugins = registry
+            .get_plugins_by_capability(&PluginCapability::SignTransaction)
+            .await;
         assert_eq!(signing_plugins.len(), 1);
         assert_eq!(signing_plugins[0].id, "registry-test");
 
-        let encrypt_plugins = registry.get_plugins_by_capability(&PluginCapability::Encrypt).await;
+        let encrypt_plugins = registry
+            .get_plugins_by_capability(&PluginCapability::Encrypt)
+            .await;
         assert_eq!(encrypt_plugins.len(), 0);
 
         // Plugin context management
@@ -672,7 +705,9 @@ mod tests {
             request_id: None,
         };
 
-        registry.set_plugin_context("registry-test", context.clone()).await;
+        registry
+            .set_plugin_context("registry-test", context.clone())
+            .await;
         let retrieved_context = registry.get_plugin_context("registry-test").await;
         assert!(retrieved_context.is_some());
         let retrieved_context = retrieved_context.unwrap();
@@ -694,7 +729,7 @@ mod tests {
     #[tokio::test]
     async fn test_plugin_manager() -> Result<()> {
         let manager = PluginManager::new();
-        
+
         // Create test plugin
         let plugin = TestPlugin::new(
             "manager-test",
@@ -736,7 +771,7 @@ mod tests {
     #[tokio::test]
     async fn test_plugin_execution_with_context() -> Result<()> {
         let plugin = TestPlugin::new("context-test", "Context Test", vec![]);
-        
+
         let input = PluginInput {
             action: "test_action".to_string(),
             data: serde_json::json!({"test": "data"}),
@@ -835,10 +870,19 @@ mod tests {
 
     #[tokio::test]
     async fn test_plugin_capability_equality() {
-        assert_eq!(PluginCapability::SignTransaction, PluginCapability::SignTransaction);
+        assert_eq!(
+            PluginCapability::SignTransaction,
+            PluginCapability::SignTransaction
+        );
         assert_ne!(PluginCapability::SignTransaction, PluginCapability::Encrypt);
-        assert_eq!(PluginCapability::Custom("test".to_string()), PluginCapability::Custom("test".to_string()));
-        assert_ne!(PluginCapability::Custom("test1".to_string()), PluginCapability::Custom("test2".to_string()));
+        assert_eq!(
+            PluginCapability::Custom("test".to_string()),
+            PluginCapability::Custom("test".to_string())
+        );
+        assert_ne!(
+            PluginCapability::Custom("test1".to_string()),
+            PluginCapability::Custom("test2".to_string())
+        );
     }
 
     #[tokio::test]
@@ -864,7 +908,8 @@ mod tests {
         assert!(!json.is_empty());
 
         // Test deserialization
-        let deserialized: PluginMetadata = serde_json::from_str(&json).expect("Failed to deserialize metadata");
+        let deserialized: PluginMetadata =
+            serde_json::from_str(&json).expect("Failed to deserialize metadata");
         assert_eq!(deserialized.id, metadata.id);
         assert_eq!(deserialized.name, metadata.name);
         assert_eq!(deserialized.capabilities, metadata.capabilities);
@@ -896,12 +941,16 @@ mod tests {
         assert!(!json.is_empty());
 
         // Test deserialization
-        let deserialized: PluginResult = serde_json::from_str(&json).expect("Failed to deserialize result");
+        let deserialized: PluginResult =
+            serde_json::from_str(&json).expect("Failed to deserialize result");
         assert_eq!(deserialized.success, result.success);
         assert!(deserialized.data.is_some());
         assert_eq!(deserialized.metrics.execution_time_ms, 100);
         assert_eq!(deserialized.metrics.memory_usage_bytes, 2048);
-        assert!(deserialized.metrics.custom_metrics.contains_key("custom_metric"));
+        assert!(deserialized
+            .metrics
+            .custom_metrics
+            .contains_key("custom_metric"));
     }
 
     #[tokio::test]
@@ -917,7 +966,8 @@ mod tests {
         assert!(!json.is_empty());
 
         // Test deserialization
-        let deserialized: PluginHealth = serde_json::from_str(&json).expect("Failed to deserialize health");
+        let deserialized: PluginHealth =
+            serde_json::from_str(&json).expect("Failed to deserialize health");
         assert_eq!(deserialized.healthy, health.healthy);
         assert_eq!(deserialized.message, health.message);
     }
@@ -925,7 +975,7 @@ mod tests {
     #[tokio::test]
     async fn test_concurrent_plugin_access() -> Result<()> {
         let registry = Arc::new(PluginRegistry::new());
-        
+
         // Create and register multiple plugins
         for i in 0..5 {
             let plugin = TestPlugin::new(
@@ -945,7 +995,7 @@ mod tests {
                 let plugin_id = format!("concurrent-test-{}", i % 5);
                 let result = registry_clone.get_plugin(&plugin_id).await;
                 assert!(result.is_ok());
-                
+
                 let plugins = registry_clone.list_plugins().await;
                 assert_eq!(plugins.len(), 5);
             });
@@ -1031,11 +1081,11 @@ mod tests {
     #[tokio::test]
     async fn test_plugin_registry_debug_format() {
         let registry = PluginRegistry::new();
-        
+
         // Add some plugins
         let plugin1 = TestPlugin::new("debug-test-1", "Debug Test 1", vec![]);
         let plugin2 = TestPlugin::new("debug-test-2", "Debug Test 2", vec![]);
-        
+
         registry.register_plugin(Arc::new(plugin1)).await.unwrap();
         registry.register_plugin(Arc::new(plugin2)).await.unwrap();
 
@@ -1064,9 +1114,9 @@ mod tests {
     async fn test_plugin_capability_custom() {
         let custom_cap1 = PluginCapability::Custom("custom_capability".to_string());
         let custom_cap2 = PluginCapability::Custom("another_capability".to_string());
-        
+
         assert_ne!(custom_cap1, custom_cap2);
-        
+
         // Test serialization of custom capabilities
         let metadata = PluginMetadata {
             id: "custom-test".to_string(),
@@ -1080,8 +1130,9 @@ mod tests {
         };
 
         let json = serde_json::to_string(&metadata).expect("Failed to serialize");
-        let deserialized: PluginMetadata = serde_json::from_str(&json).expect("Failed to deserialize");
-        
+        let deserialized: PluginMetadata =
+            serde_json::from_str(&json).expect("Failed to deserialize");
+
         assert_eq!(deserialized.capabilities.len(), 2);
         assert!(deserialized.capabilities.contains(&custom_cap1));
         assert!(deserialized.capabilities.contains(&custom_cap2));
@@ -1090,45 +1141,70 @@ mod tests {
     #[tokio::test]
     async fn test_plugin_complex_scenario() -> Result<()> {
         let manager = PluginManager::new();
-        
+
         // Create multiple plugins with different capabilities
         let signing_plugin = TestPlugin::new(
             "signing-plugin",
             "Signing Plugin",
-            vec![PluginCapability::SignTransaction, PluginCapability::VerifySignature],
+            vec![
+                PluginCapability::SignTransaction,
+                PluginCapability::VerifySignature,
+            ],
         );
-        
+
         let crypto_plugin = TestPlugin::new(
             "crypto-plugin",
             "Crypto Plugin",
-            vec![PluginCapability::Encrypt, PluginCapability::Decrypt, PluginCapability::GenerateKey],
+            vec![
+                PluginCapability::Encrypt,
+                PluginCapability::Decrypt,
+                PluginCapability::GenerateKey,
+            ],
         );
-        
+
         let api_plugin = TestPlugin::new(
             "api-plugin",
             "API Plugin",
-            vec![PluginCapability::ApiIntegration, PluginCapability::SecretManagement],
+            vec![
+                PluginCapability::ApiIntegration,
+                PluginCapability::SecretManagement,
+            ],
         );
 
         // Load all plugins
-        manager.load_plugin(Arc::new(signing_plugin), HashMap::new()).await?;
-        manager.load_plugin(Arc::new(crypto_plugin), HashMap::new()).await?;
-        manager.load_plugin(Arc::new(api_plugin), HashMap::new()).await?;
+        manager
+            .load_plugin(Arc::new(signing_plugin), HashMap::new())
+            .await?;
+        manager
+            .load_plugin(Arc::new(crypto_plugin), HashMap::new())
+            .await?;
+        manager
+            .load_plugin(Arc::new(api_plugin), HashMap::new())
+            .await?;
 
         // Verify all plugins are loaded
         let plugins = manager.registry().list_plugins().await;
         assert_eq!(plugins.len(), 3);
 
         // Test capability filtering
-        let signing_plugins = manager.registry().get_plugins_by_capability(&PluginCapability::SignTransaction).await;
+        let signing_plugins = manager
+            .registry()
+            .get_plugins_by_capability(&PluginCapability::SignTransaction)
+            .await;
         assert_eq!(signing_plugins.len(), 1);
         assert_eq!(signing_plugins[0].id, "signing-plugin");
 
-        let encrypt_plugins = manager.registry().get_plugins_by_capability(&PluginCapability::Encrypt).await;
+        let encrypt_plugins = manager
+            .registry()
+            .get_plugins_by_capability(&PluginCapability::Encrypt)
+            .await;
         assert_eq!(encrypt_plugins.len(), 1);
         assert_eq!(encrypt_plugins[0].id, "crypto-plugin");
 
-        let api_plugins = manager.registry().get_plugins_by_capability(&PluginCapability::ApiIntegration).await;
+        let api_plugins = manager
+            .registry()
+            .get_plugins_by_capability(&PluginCapability::ApiIntegration)
+            .await;
         assert_eq!(api_plugins.len(), 1);
         assert_eq!(api_plugins[0].id, "api-plugin");
 
@@ -1149,7 +1225,7 @@ mod tests {
         // Check health of all plugins
         let health_status = manager.get_all_health_status().await;
         assert_eq!(health_status.len(), 3);
-        
+
         for (plugin_id, health) in health_status.iter() {
             assert!(health.healthy, "Plugin {} should be healthy", plugin_id);
         }

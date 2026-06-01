@@ -403,7 +403,7 @@ impl AlertManager {
         }
 
         let mut rules = self.rules.write().await;
-        
+
         if rules.contains_key(&rule.id) {
             return Err(FortressError::validation(
                 format!("Alert rule '{}' already exists", rule.id),
@@ -421,7 +421,7 @@ impl AlertManager {
     /// Remove an alert rule
     pub async fn remove_rule(&self, rule_id: &str) -> Result<()> {
         let mut rules = self.rules.write().await;
-        
+
         if rules.remove(rule_id).is_none() {
             return Err(FortressError::validation(
                 format!("Alert rule '{}' not found", rule_id),
@@ -459,13 +459,13 @@ impl AlertManager {
     /// Acknowledge an alert
     pub async fn acknowledge_alert(&self, alert_id: &str, acknowledged_by: &str) -> Result<()> {
         let mut alerts = self.alerts.write().await;
-        
+
         if let Some(alert) = alerts.get_mut(alert_id) {
             alert.status = AlertStatus::Acknowledged;
             alert.acknowledged_at = Some(chrono::Utc::now());
             alert.acknowledged_by = Some(acknowledged_by.to_string());
             alert.updated_at = chrono::Utc::now();
-            
+
             tracing::info!("Alert {} acknowledged by {}", alert_id, acknowledged_by);
             Ok(())
         } else {
@@ -480,12 +480,12 @@ impl AlertManager {
     /// Resolve an alert
     pub async fn resolve_alert(&self, alert_id: &str) -> Result<()> {
         let mut alerts = self.alerts.write().await;
-        
+
         if let Some(alert) = alerts.get_mut(alert_id) {
             alert.status = AlertStatus::Resolved;
             alert.resolved_at = Some(chrono::Utc::now());
             alert.updated_at = chrono::Utc::now();
-            
+
             tracing::info!("Alert {} resolved", alert_id);
             Ok(())
         } else {
@@ -500,11 +500,11 @@ impl AlertManager {
     /// Suppress an alert
     pub async fn suppress_alert(&self, alert_id: &str) -> Result<()> {
         let mut alerts = self.alerts.write().await;
-        
+
         if let Some(alert) = alerts.get_mut(alert_id) {
             alert.status = AlertStatus::Suppressed;
             alert.updated_at = chrono::Utc::now();
-            
+
             tracing::info!("Alert {} suppressed", alert_id);
             Ok(())
         } else {
@@ -554,12 +554,18 @@ impl AlertManager {
             // Check if we already have an active alert for this rule
             let alerts = self.alerts.read().await;
             let existing_alert = alerts.values().find(|alert| {
-                alert.rule_id == rule.id && matches!(alert.status, AlertStatus::Active | AlertStatus::Acknowledged)
+                alert.rule_id == rule.id
+                    && matches!(
+                        alert.status,
+                        AlertStatus::Active | AlertStatus::Acknowledged
+                    )
             });
 
             if let Some(existing) = existing_alert {
                 // Check cooldown period
-                let cooldown_passed = existing.updated_at + Duration::from_secs(rule.cooldown_seconds) <= chrono::Utc::now();
+                let cooldown_passed = existing.updated_at
+                    + Duration::from_secs(rule.cooldown_seconds)
+                    <= chrono::Utc::now();
                 if !cooldown_passed {
                     return Ok(None);
                 }
@@ -575,7 +581,7 @@ impl AlertManager {
                 title: format!("{}: {}", rule.name, rule.description),
                 message: self.generate_alert_message(rule).await?,
                 details: rule.metadata.clone(),
-                current_value: 0.0, // Would be set by condition evaluation
+                current_value: 0.0,   // Would be set by condition evaluation
                 threshold_value: 0.0, // Would be set by condition evaluation
                 created_at: chrono::Utc::now(),
                 updated_at: chrono::Utc::now(),
@@ -602,12 +608,20 @@ impl AlertManager {
     }
 
     /// Evaluate alert condition
-    fn evaluate_condition<'a>(&'a self, condition: &'a AlertCondition) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<bool>> + Send + 'a>> {
+    fn evaluate_condition<'a>(
+        &'a self,
+        condition: &'a AlertCondition,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<bool>> + Send + 'a>> {
         Box::pin(async move {
             match condition {
-                AlertCondition::Threshold { metric, operator, threshold, duration_seconds: _ } => {
+                AlertCondition::Threshold {
+                    metric,
+                    operator,
+                    threshold,
+                    duration_seconds: _,
+                } => {
                     let value = self.metrics_provider.get_metric(metric).await?;
-                    
+
                     if let Some(value) = value {
                         let condition_met = match operator {
                             ComparisonOperator::GreaterThan => value > *threshold,
@@ -615,7 +629,9 @@ impl AlertManager {
                             ComparisonOperator::LessThan => value < *threshold,
                             ComparisonOperator::LessThanOrEqual => value <= *threshold,
                             ComparisonOperator::Equal => (value - *threshold).abs() < f64::EPSILON,
-                            ComparisonOperator::NotEqual => (value - *threshold).abs() >= f64::EPSILON,
+                            ComparisonOperator::NotEqual => {
+                                (value - *threshold).abs() >= f64::EPSILON
+                            }
                         };
 
                         // For duration-based conditions, we'd need to check historical data
@@ -625,7 +641,10 @@ impl AlertManager {
                         Ok(false)
                     }
                 }
-                AlertCondition::Composite { operator, conditions } => {
+                AlertCondition::Composite {
+                    operator,
+                    conditions,
+                } => {
                     let mut results = Vec::new();
                     for condition in conditions {
                         let result = self.evaluate_condition(condition).await?;
@@ -638,7 +657,10 @@ impl AlertManager {
                         LogicalOperator::Not => results.iter().all(|&r| !r),
                     })
                 }
-                AlertCondition::Custom { expression: _, parameters: _ } => {
+                AlertCondition::Custom {
+                    expression: _,
+                    parameters: _,
+                } => {
                     // Custom conditions would require expression evaluation
                     // For now, return false
                     Ok(false)
@@ -650,9 +672,14 @@ impl AlertManager {
     /// Generate alert message
     async fn generate_alert_message(&self, rule: &AlertRule) -> Result<String> {
         match &rule.condition {
-            AlertCondition::Threshold { metric, operator, threshold, .. } => {
+            AlertCondition::Threshold {
+                metric,
+                operator,
+                threshold,
+                ..
+            } => {
                 let value = self.metrics_provider.get_metric(metric).await?;
-                
+
                 if let Some(value) = value {
                     let operator_str = match operator {
                         ComparisonOperator::GreaterThan => ">",
@@ -678,13 +705,18 @@ impl AlertManager {
     /// Resolve alerts for a rule
     async fn resolve_alerts_for_rule(&self, rule_id: &str) -> Result<()> {
         let mut alerts = self.alerts.write().await;
-        
+
         for alert in alerts.values_mut() {
-            if alert.rule_id == rule_id && matches!(alert.status, AlertStatus::Active | AlertStatus::Acknowledged) {
+            if alert.rule_id == rule_id
+                && matches!(
+                    alert.status,
+                    AlertStatus::Active | AlertStatus::Acknowledged
+                )
+            {
                 alert.status = AlertStatus::Resolved;
                 alert.resolved_at = Some(chrono::Utc::now());
                 alert.updated_at = chrono::Utc::now();
-                
+
                 tracing::info!("Auto-resolved alert {} for rule {}", alert.id, rule_id);
             }
         }
@@ -701,7 +733,13 @@ impl AlertManager {
         let rules = self.rules.read().await;
         if let Some(rule) = rules.get(&alert.rule_id) {
             for channel_id in &rule.notification_channels {
-                if let Some(channel) = self.config.notifications.channels.iter().find(|c| c.id == *channel_id) {
+                if let Some(channel) = self
+                    .config
+                    .notifications
+                    .channels
+                    .iter()
+                    .find(|c| c.id == *channel_id)
+                {
                     if channel.enabled {
                         self.send_notification(channel, alert).await?;
                     }
@@ -722,7 +760,7 @@ impl AlertManager {
                     alert.title,
                     alert.message
                 );
-                
+
                 NotificationStatus {
                     channel_id: channel.id.clone(),
                     sent_at: chrono::Utc::now(),
@@ -819,10 +857,10 @@ impl AlertManager {
 
         tokio::spawn(async move {
             let mut timer = tokio::time::interval(interval);
-            
+
             loop {
                 timer.tick().await;
-                
+
                 if let Err(e) = alert_manager.evaluate_rules().await {
                     tracing::error!("Alert evaluation failed: {}", e);
                 }
@@ -856,7 +894,7 @@ impl MockMetricsProvider {
     }
 
     /// Set a metric value for testing
-    /// 
+    ///
     /// # Arguments
     /// * `name` - Name of the metric
     /// * `value` - Metric value to set
@@ -910,13 +948,13 @@ mod tests {
         };
 
         manager.add_rule(rule.clone()).await.unwrap();
-        
+
         let rules = manager.get_rules().await;
         assert_eq!(rules.len(), 1);
         assert_eq!(rules[0].id, rule.id);
 
         manager.remove_rule(&rule.id).await.unwrap();
-        
+
         let rules = manager.get_rules().await;
         assert_eq!(rules.len(), 0);
     }
@@ -925,7 +963,7 @@ mod tests {
     async fn test_alert_evaluation() {
         let config = AlertConfig::default();
         let metrics_provider = Arc::new(MockMetricsProvider::new());
-        
+
         // Set metric value that should trigger alert
         metrics_provider.set_metric("cpu_usage", 85.0).await;
 
@@ -949,7 +987,7 @@ mod tests {
         };
 
         manager.add_rule(rule).await.unwrap();
-        
+
         let alerts = manager.evaluate_rules().await.unwrap();
         assert_eq!(alerts.len(), 1);
         assert_eq!(alerts[0].severity, AlertSeverity::Warning);
@@ -985,8 +1023,11 @@ mod tests {
         alerts.insert(alert.id.clone(), alert.clone());
         drop(alerts);
 
-        manager.acknowledge_alert(&alert.id, "test_user").await.unwrap();
-        
+        manager
+            .acknowledge_alert(&alert.id, "test_user")
+            .await
+            .unwrap();
+
         let alerts = manager.get_all_alerts().await;
         let updated_alert = alerts.iter().find(|a| a.id == alert.id).unwrap();
         assert_eq!(updated_alert.status, AlertStatus::Acknowledged);

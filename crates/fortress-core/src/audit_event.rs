@@ -77,7 +77,9 @@ impl AuditEvent {
 
     /// Get the age of the event in seconds
     pub fn age_seconds(&self) -> i64 {
-        Utc::now().signed_duration_since(self.timestamp).num_seconds()
+        Utc::now()
+            .signed_duration_since(self.timestamp)
+            .num_seconds()
     }
 
     /// Create a key creation event
@@ -104,17 +106,12 @@ impl AuditEvent {
 
     /// Create a login event
     pub fn login(user_id: String, outcome: String, ip_address: Option<String>) -> Self {
-        let mut event = Self::new(
-            "login".to_string(),
-            Some(user_id),
-            None,
-            outcome,
-        );
-        
+        let mut event = Self::new("login".to_string(), Some(user_id), None, outcome);
+
         if let Some(ip) = ip_address {
             event = event.add_detail("ip_address".to_string(), ip);
         }
-        
+
         event
     }
 
@@ -145,12 +142,7 @@ impl AuditEvent {
 
 impl Default for AuditEvent {
     fn default() -> Self {
-        Self::new(
-            "unknown".to_string(),
-            None,
-            None,
-            "unknown".to_string(),
-        )
+        Self::new("unknown".to_string(), None, None, "unknown".to_string())
     }
 }
 
@@ -182,14 +174,9 @@ mod tests {
         details.insert("key1".to_string(), "value1".to_string());
         details.insert("key2".to_string(), "value2".to_string());
 
-        let event = AuditEvent::new(
-            "test_event".to_string(),
-            None,
-            None,
-            "failure".to_string(),
-        )
-        .add_details(details)
-        .add_detail("key3".to_string(), "value3".to_string());
+        let event = AuditEvent::new("test_event".to_string(), None, None, "failure".to_string())
+            .add_details(details)
+            .add_detail("key3".to_string(), "value3".to_string());
 
         assert_eq!(event.get_detail("key1"), Some(&"value1".to_string()));
         assert_eq!(event.get_detail("key2"), Some(&"value2".to_string()));
@@ -200,32 +187,17 @@ mod tests {
 
     #[test]
     fn test_audit_event_outcome_checks() {
-        let success_event = AuditEvent::new(
-            "test".to_string(),
-            None,
-            None,
-            "success".to_string(),
-        );
+        let success_event = AuditEvent::new("test".to_string(), None, None, "success".to_string());
         assert!(success_event.is_success());
         assert!(!success_event.is_failure());
         assert!(!success_event.is_denied());
 
-        let failure_event = AuditEvent::new(
-            "test".to_string(),
-            None,
-            None,
-            "failure".to_string(),
-        );
+        let failure_event = AuditEvent::new("test".to_string(), None, None, "failure".to_string());
         assert!(!failure_event.is_success());
         assert!(failure_event.is_failure());
         assert!(!failure_event.is_denied());
 
-        let denied_event = AuditEvent::new(
-            "test".to_string(),
-            None,
-            None,
-            "denied".to_string(),
-        );
+        let denied_event = AuditEvent::new("test".to_string(), None, None, "denied".to_string());
         assert!(!denied_event.is_success());
         assert!(!denied_event.is_failure());
         assert!(denied_event.is_denied());
@@ -233,12 +205,7 @@ mod tests {
 
     #[test]
     fn test_audit_event_age() {
-        let event = AuditEvent::new(
-            "test".to_string(),
-            None,
-            None,
-            "success".to_string(),
-        );
+        let event = AuditEvent::new("test".to_string(), None, None, "success".to_string());
 
         // Age should be very small (less than 1 second)
         let age = event.age_seconds();
@@ -287,14 +254,13 @@ mod tests {
         assert_eq!(event.event_type, "login");
         assert_eq!(event.user_id, Some("user123".to_string()));
         assert_eq!(event.outcome, "success");
-        assert_eq!(event.get_detail("ip_address"), Some(&"192.168.1.1".to_string()));
+        assert_eq!(
+            event.get_detail("ip_address"),
+            Some(&"192.168.1.1".to_string())
+        );
 
         // Test login without IP address
-        let event_no_ip = AuditEvent::login(
-            "user123".to_string(),
-            "failure".to_string(),
-            None,
-        );
+        let event_no_ip = AuditEvent::login("user123".to_string(), "failure".to_string(), None);
         assert_eq!(event_no_ip.get_detail("ip_address"), None);
     }
 
@@ -326,7 +292,10 @@ mod tests {
         assert_eq!(event.resource_id, None);
         assert_eq!(event.outcome, "failure");
         assert_eq!(event.get_detail("error_code"), Some(&"E001".to_string()));
-        assert_eq!(event.get_detail("error_message"), Some(&"Database connection failed".to_string()));
+        assert_eq!(
+            event.get_detail("error_message"),
+            Some(&"Database connection failed".to_string())
+        );
         assert_eq!(event.get_detail("component"), Some(&"database".to_string()));
     }
 
@@ -345,12 +314,16 @@ mod tests {
         assert!(!json.is_empty());
 
         // Test deserialization from JSON
-        let deserialized: AuditEvent = serde_json::from_str(&json).expect("Failed to deserialize event");
+        let deserialized: AuditEvent =
+            serde_json::from_str(&json).expect("Failed to deserialize event");
         assert_eq!(deserialized.event_type, event.event_type);
         assert_eq!(deserialized.user_id, event.user_id);
         assert_eq!(deserialized.resource_id, event.resource_id);
         assert_eq!(deserialized.outcome, event.outcome);
-        assert_eq!(deserialized.get_detail("test_key"), Some(&"test_value".to_string()));
+        assert_eq!(
+            deserialized.get_detail("test_key"),
+            Some(&"test_value".to_string())
+        );
     }
 
     #[test]
@@ -404,15 +377,10 @@ mod tests {
 
     #[test]
     fn test_multiple_details_addition() {
-        let event = AuditEvent::new(
-            "test".to_string(),
-            None,
-            None,
-            "success".to_string(),
-        )
-        .add_detail("key1".to_string(), "value1".to_string())
-        .add_detail("key2".to_string(), "value2".to_string())
-        .add_detail("key3".to_string(), "value3".to_string());
+        let event = AuditEvent::new("test".to_string(), None, None, "success".to_string())
+            .add_detail("key1".to_string(), "value1".to_string())
+            .add_detail("key2".to_string(), "value2".to_string())
+            .add_detail("key3".to_string(), "value3".to_string());
 
         assert_eq!(event.details.len(), 3);
         assert_eq!(event.get_detail("key1"), Some(&"value1".to_string()));
@@ -423,13 +391,8 @@ mod tests {
     #[test]
     fn test_audit_event_with_empty_details() {
         let empty_details = HashMap::new();
-        let event = AuditEvent::new(
-            "test".to_string(),
-            None,
-            None,
-            "success".to_string(),
-        )
-        .add_details(empty_details);
+        let event = AuditEvent::new("test".to_string(), None, None, "success".to_string())
+            .add_details(empty_details);
 
         assert!(event.details.is_empty());
     }
@@ -463,32 +426,34 @@ mod tests {
 
         // Verify all details are present
         assert_eq!(event.details.len(), 6);
-        assert_eq!(event.get_detail("source_ip"), Some(&"192.168.1.100".to_string()));
-        assert_eq!(event.get_detail("user_agent"), Some(&"Mozilla/5.0".to_string()));
-        assert_eq!(event.get_detail("request_id"), Some(&"req-12345".to_string()));
+        assert_eq!(
+            event.get_detail("source_ip"),
+            Some(&"192.168.1.100".to_string())
+        );
+        assert_eq!(
+            event.get_detail("user_agent"),
+            Some(&"Mozilla/5.0".to_string())
+        );
+        assert_eq!(
+            event.get_detail("request_id"),
+            Some(&"req-12345".to_string())
+        );
         assert_eq!(event.get_detail("duration_ms"), Some(&"150".to_string()));
         assert_eq!(event.get_detail("auth_method"), Some(&"jwt".to_string()));
-        assert_eq!(event.get_detail("permissions_used"), Some(&"read,write".to_string()));
+        assert_eq!(
+            event.get_detail("permissions_used"),
+            Some(&"read,write".to_string())
+        );
     }
 
     #[test]
     fn test_audit_event_timestamp_consistency() {
-        let event1 = AuditEvent::new(
-            "test1".to_string(),
-            None,
-            None,
-            "success".to_string(),
-        );
+        let event1 = AuditEvent::new("test1".to_string(), None, None, "success".to_string());
 
         // Wait a tiny bit to ensure different timestamps
         std::thread::sleep(std::time::Duration::from_millis(1));
 
-        let event2 = AuditEvent::new(
-            "test2".to_string(),
-            None,
-            None,
-            "success".to_string(),
-        );
+        let event2 = AuditEvent::new("test2".to_string(), None, None, "success".to_string());
 
         // Event 2 should have a later timestamp
         assert!(event2.timestamp > event1.timestamp);

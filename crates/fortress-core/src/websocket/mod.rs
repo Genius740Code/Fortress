@@ -3,16 +3,22 @@
 //! Provides secure WebSocket server with real-time capabilities,
 //! authentication, subscription system, and monitoring.
 
-pub mod server;
-pub mod connection;
 pub mod auth;
-pub mod subscription;
-pub mod metrics;
+pub mod connection;
 pub mod message;
+pub mod metrics;
+pub mod server;
+pub mod subscription;
 
+pub use auth::{AuthConfig, AuthResult, WebSocketAuthenticator};
+pub use connection::{ConnectionInfo, ConnectionManager, WebSocketConnection};
+pub use message::{
+    FilterOperator, MessagePayload, MessageType, SubscriptionFilter, WebSocketMessage,
+};
+pub use metrics::{
+    ConnectionMetrics, ErrorMetrics, MessageMetrics, PerformanceMetrics, WebSocketMetrics,
+};
 pub use server::{WebSocketServer, WebSocketServerConfig};
-pub use connection::{WebSocketConnection, ConnectionInfo, ConnectionManager};
-pub use auth::{WebSocketAuthenticator, AuthResult, AuthConfig};
-pub use subscription::{SubscriptionManager, Subscription, SubscriptionOptions, SubscriptionStatus};
-pub use metrics::{WebSocketMetrics, ConnectionMetrics, MessageMetrics, PerformanceMetrics, ErrorMetrics};
-pub use message::{WebSocketMessage, MessageType, MessagePayload, SubscriptionFilter, FilterOperator};
+pub use subscription::{
+    Subscription, SubscriptionManager, SubscriptionOptions, SubscriptionStatus,
+};

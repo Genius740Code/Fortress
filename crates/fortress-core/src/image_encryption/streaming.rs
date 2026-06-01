@@ -7,19 +7,18 @@
 //! - Resumable encryption operations
 //! - Memory-efficient streaming for very large files
 
+use crate::encryption::{EncryptedData, EncryptionAlgorithm, SecureKey};
 use crate::error::{FortressError, Result};
-use crate::encryption::{EncryptionAlgorithm, SecureKey, EncryptedData};
 use crate::image_encryption::{
-    ImageFormat, EncryptionOptions, EncryptionMode, ImageEncryptionError, 
-    encryptor::ImageEncryptorFactory, EncryptedImage, ImageFormatInfo, 
-    CompressionInfo
+    encryptor::ImageEncryptorFactory, CompressionInfo, EncryptedImage, EncryptionMode,
+    EncryptionOptions, ImageEncryptionError, ImageFormat, ImageFormatInfo,
 };
+use bytes::Bytes;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use chrono::{DateTime, Utc};
-use bytes::Bytes;
 
 /// Chunk configuration for streaming encryption
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -165,14 +164,17 @@ pub async fn decompress_chunk(data: &[u8], _compression_info: &CompressionInfo) 
 
 /// Calculate checksum for data integrity
 fn calculate_checksum(data: &[u8]) -> String {
-    use sha2::{Sha256, Digest};
+    use sha2::{Digest, Sha256};
     let hash = Sha256::digest(data);
     format!("{:x}", hash)
 }
 
 impl StreamingImageEncryptor {
     /// Create a new streaming image encryptor
-    pub fn new(encryption_algorithm: Box<dyn EncryptionAlgorithm>, chunk_config: ChunkConfig) -> Self {
+    pub fn new(
+        encryption_algorithm: Box<dyn EncryptionAlgorithm>,
+        chunk_config: ChunkConfig,
+    ) -> Self {
         Self {
             encryption_algorithm,
             chunk_config,
@@ -210,7 +212,9 @@ impl StreamingImageEncryptor {
 
         tracing::info!(
             "Started streaming encryption session: {}, size: {}, chunks: {}",
-            session_id, total_size, total_chunks
+            session_id,
+            total_size,
+            total_chunks
         );
 
         Ok(session_id)
@@ -230,12 +234,16 @@ impl StreamingImageEncryptor {
         self.validate_session(session_id).await?;
 
         // Update session status to in progress
-        self.update_session_status(session_id, StreamingStatus::InProgress).await?;
+        self.update_session_status(session_id, StreamingStatus::InProgress)
+            .await?;
 
         // Detect image format
         let format = crate::image_encryption::ImageFormatDetector::detect(image_data)?;
         if format == crate::image_encryption::ImageFormat::Unknown {
-            return Err(ImageEncryptionError::UnsupportedFormat("Unknown image format".to_string()).into());
+            return Err(ImageEncryptionError::UnsupportedFormat(
+                "Unknown image format".to_string(),
+            )
+            .into());
         }
 
         // Process image based on encryption mode
@@ -253,12 +261,16 @@ impl StreamingImageEncryptor {
         let encrypted_chunks = self.encrypt_chunks_parallel(chunks, key).await?;
 
         // Update final state
-        let final_state = self.update_session_completion(session_id, processed_data.len()).await?;
+        let final_state = self
+            .update_session_completion(session_id, processed_data.len())
+            .await?;
 
         // Calculate statistics
         let total_time = start_time.elapsed();
         let throughput_bps = processed_data.len() as f64 / total_time.as_secs_f64();
-        let statistics = self.calculate_statistics(&encrypted_chunks, &processed_data).await?;
+        let statistics = self
+            .calculate_statistics(&encrypted_chunks, &processed_data)
+            .await?;
 
         let result = StreamingResult {
             session_id: session_id.to_string(),
@@ -286,7 +298,9 @@ impl StreamingImageEncryptor {
         key: &SecureKey,
     ) -> Result<Vec<u8>> {
         if encrypted_chunks.is_empty() {
-            return Err(ImageEncryptionError::CorruptedData("No chunks to decrypt".to_string()).into());
+            return Err(
+                ImageEncryptionError::CorruptedData("No chunks to decrypt".to_string()).into(),
+            );
         }
 
         // Sort chunks by index
@@ -313,8 +327,9 @@ impl StreamingImageEncryptor {
 
     /// Cancel streaming session
     pub async fn cancel_session(&self, session_id: &str) -> Result<()> {
-        self.update_session_status(session_id, StreamingStatus::Cancelled).await?;
-        
+        self.update_session_status(session_id, StreamingStatus::Cancelled)
+            .await?;
+
         // Remove session from active sessions
         {
             let mut sessions = self.active_sessions.write().await;
@@ -327,14 +342,16 @@ impl StreamingImageEncryptor {
 
     /// Pause streaming session
     pub async fn pause_session(&self, session_id: &str) -> Result<()> {
-        self.update_session_status(session_id, StreamingStatus::Paused).await?;
+        self.update_session_status(session_id, StreamingStatus::Paused)
+            .await?;
         tracing::info!("Paused streaming encryption session: {}", session_id);
         Ok(())
     }
 
     /// Resume streaming session
     pub async fn resume_session(&self, session_id: &str) -> Result<()> {
-        self.update_session_status(session_id, StreamingStatus::InProgress).await?;
+        self.update_session_status(session_id, StreamingStatus::InProgress)
+            .await?;
         tracing::info!("Resumed streaming encryption session: {}", session_id);
         Ok(())
     }
@@ -379,7 +396,11 @@ impl StreamingImageEncryptor {
     }
 
     /// Update session completion
-    async fn update_session_completion(&self, session_id: &str, processed_bytes: usize) -> Result<StreamingState> {
+    async fn update_session_completion(
+        &self,
+        session_id: &str,
+        processed_bytes: usize,
+    ) -> Result<StreamingState> {
         let mut sessions = self.active_sessions.write().await;
         if let Some(state) = sessions.get_mut(session_id) {
             state.status = StreamingStatus::Completed;
@@ -392,16 +413,19 @@ impl StreamingImageEncryptor {
                 format!("Session not found: {}", session_id),
                 "streaming_encryptor".to_string(),
                 crate::error::EncryptionErrorCode::EncryptionFailed,
-            ))
+            ));
         }
     }
 
     /// Extract image data only for data-only encryption
     fn extract_image_data_only(&self, data: &[u8], format: ImageFormat) -> Result<Vec<u8>> {
         let header_size = format.header_size();
-        
+
         if data.len() <= header_size {
-            return Err(ImageEncryptionError::CorruptedData("Image too small for data-only encryption".to_string()).into());
+            return Err(ImageEncryptionError::CorruptedData(
+                "Image too small for data-only encryption".to_string(),
+            )
+            .into());
         }
 
         // Return only the image data portion
@@ -425,11 +449,17 @@ impl StreamingImageEncryptor {
     }
 
     /// Encrypt chunks in parallel
-    async fn encrypt_chunks_parallel(&self, chunks: Vec<Bytes>, key: &SecureKey) -> Result<Vec<EncryptedChunk>> {
-        let semaphore = Arc::new(tokio::sync::Semaphore::new(self.chunk_config.parallel_workers));
+    async fn encrypt_chunks_parallel(
+        &self,
+        chunks: Vec<Bytes>,
+        key: &SecureKey,
+    ) -> Result<Vec<EncryptedChunk>> {
+        let semaphore = Arc::new(tokio::sync::Semaphore::new(
+            self.chunk_config.parallel_workers,
+        ));
         let key = Arc::new(key.clone());
         let chunk_config = self.chunk_config.clone();
-        
+
         let mut tasks = Vec::with_capacity(chunks.len());
 
         for (index, chunk) in chunks.into_iter().enumerate() {
@@ -459,7 +489,9 @@ impl StreamingImageEncryptor {
                 // Encrypt chunk using the algorithm name
                 let encrypted_image = {
                     let encryptor = ImageEncryptorFactory::create_encryptor("chacha20poly1305")?;
-                    encryptor.encrypt(processed_chunk, EncryptionOptions::default(), &key).await?
+                    encryptor
+                        .encrypt(processed_chunk, EncryptionOptions::default(), &key)
+                        .await?
                 };
                 let encrypted_data = encrypted_image.encrypted_data.ciphertext;
 
@@ -481,7 +513,10 @@ impl StreamingImageEncryptor {
                 let mut metadata = HashMap::new();
                 metadata.insert("chunk_index".to_string(), index.to_string());
                 metadata.insert("original_size".to_string(), chunk.len().to_string());
-                metadata.insert("encrypted_size".to_string(), encrypted_data.len().to_string());
+                metadata.insert(
+                    "encrypted_size".to_string(),
+                    encrypted_data.len().to_string(),
+                );
 
                 Ok(EncryptedChunk {
                     index,
@@ -518,8 +553,14 @@ impl StreamingImageEncryptor {
     }
 
     /// Decrypt chunks in parallel
-    async fn decrypt_chunks_parallel(&self, chunks: Vec<EncryptedChunk>, key: &SecureKey) -> Result<Vec<Vec<u8>>> {
-        let semaphore = Arc::new(tokio::sync::Semaphore::new(self.chunk_config.parallel_workers));
+    async fn decrypt_chunks_parallel(
+        &self,
+        chunks: Vec<EncryptedChunk>,
+        key: &SecureKey,
+    ) -> Result<Vec<Vec<u8>>> {
+        let semaphore = Arc::new(tokio::sync::Semaphore::new(
+            self.chunk_config.parallel_workers,
+        ));
         let key = Arc::new(key.clone());
 
         let mut tasks = Vec::with_capacity(chunks.len());
@@ -577,12 +618,16 @@ impl StreamingImageEncryptor {
 
                 // Decompress if needed
                 let final_data = if let Some(_compression_info) = &chunk.compression_info {
-                    decompress_chunk(&decrypted_data, &CompressionInfo {
-                        compression_type: "lz4".to_string(),
-                        level: None,
-                        is_lossy: false,
-                        ratio: Some(0.0),
-                    }).await?
+                    decompress_chunk(
+                        &decrypted_data,
+                        &CompressionInfo {
+                            compression_type: "lz4".to_string(),
+                            level: None,
+                            is_lossy: false,
+                            ratio: Some(0.0),
+                        },
+                    )
+                    .await?
                 } else {
                     decrypted_data.to_vec()
                 };
@@ -615,29 +660,35 @@ impl StreamingImageEncryptor {
     }
 
     /// Calculate streaming statistics
-    async fn calculate_statistics(&self, chunks: &[EncryptedChunk], original_data: &[u8]) -> Result<StreamingStatistics> {
+    async fn calculate_statistics(
+        &self,
+        chunks: &[EncryptedChunk],
+        original_data: &[u8],
+    ) -> Result<StreamingStatistics> {
         let total_chunks = chunks.len();
         let total_bytes = original_data.len();
-        
+
         let chunk_sizes: Vec<usize> = chunks.iter().map(|chunk| chunk.original_size).collect();
         let avg_chunk_size = if !chunk_sizes.is_empty() {
             chunk_sizes.iter().sum::<usize>() as f64 / chunk_sizes.len() as f64
         } else {
             0.0
         };
-        
+
         let min_chunk_size = chunk_sizes.iter().min().copied().unwrap_or(0);
         let max_chunk_size = chunk_sizes.iter().max().copied().unwrap_or(0);
 
         // Calculate total compression ratio
-        let total_compression_ratio = if chunks.iter().any(|chunk| chunk.compression_info.is_some()) {
+        let total_compression_ratio = if chunks.iter().any(|chunk| chunk.compression_info.is_some())
+        {
             // Since we don't have original_size and compressed_size fields in the new CompressionInfo,
             // we'll use the ratio field directly if available
-            let ratios: Vec<f64> = chunks.iter()
+            let ratios: Vec<f64> = chunks
+                .iter()
                 .filter_map(|chunk| chunk.compression_info.as_ref())
                 .filter_map(|info| info.ratio)
                 .collect();
-            
+
             if !ratios.is_empty() {
                 Some(ratios.iter().sum::<f64>() / ratios.len() as f64)
             } else {
@@ -669,14 +720,17 @@ impl StreamingImageEncryptor {
     pub async fn cleanup_completed_sessions(&self) -> Result<usize> {
         let mut sessions = self.active_sessions.write().await;
         let initial_count = sessions.len();
-        
+
         sessions.retain(|_, state| {
-            matches!(state.status, StreamingStatus::NotStarted | StreamingStatus::InProgress | StreamingStatus::Paused)
+            matches!(
+                state.status,
+                StreamingStatus::NotStarted | StreamingStatus::InProgress | StreamingStatus::Paused
+            )
         });
-        
+
         let cleaned_count = initial_count - sessions.len();
         tracing::info!("Cleaned up {} completed streaming sessions", cleaned_count);
-        
+
         Ok(cleaned_count)
     }
 }
@@ -709,7 +763,9 @@ impl StreamingImageDecryptor {
 
         for (index, chunk) in encrypted_chunks.iter().enumerate() {
             // Decrypt chunk
-            let decrypted_chunk = self.encryption_algorithm.decrypt(&chunk.data, key.as_bytes())?;
+            let decrypted_chunk = self
+                .encryption_algorithm
+                .decrypt(&chunk.data, key.as_bytes())?;
 
             // Verify checksum
             let calculated_checksum = calculate_checksum(&chunk.data);
@@ -768,7 +824,7 @@ mod tests {
         let algorithm = Box::new(ChaCha20Poly1305::new());
         let config = ChunkConfig::default();
         let encryptor = StreamingImageEncryptor::new(algorithm, config);
-        
+
         assert_eq!(encryptor.get_active_sessions_count().await, 0);
     }
 
@@ -777,29 +833,32 @@ mod tests {
         let algorithm = Box::new(ChaCha20Poly1305::new());
         let config = ChunkConfig::default();
         let encryptor = StreamingImageEncryptor::new(algorithm, config);
-        
+
         let image_data = vec![0u8; 1024 * 1024]; // 1MB test data
         let options = crate::image_encryption::EncryptionOptions::default();
-        
+
         // Start session
-        let session_id = encryptor.start_encryption_session(&image_data, options.clone()).await.unwrap();
+        let session_id = encryptor
+            .start_encryption_session(&image_data, options.clone())
+            .await
+            .unwrap();
         assert_eq!(encryptor.get_active_sessions_count().await, 1);
-        
+
         // Check session status
         let status = encryptor.get_session_status(&session_id).await.unwrap();
         assert!(status.is_some());
         assert_eq!(status.unwrap().status, StreamingStatus::NotStarted);
-        
+
         // Pause session
         encryptor.pause_session(&session_id).await.unwrap();
         let status = encryptor.get_session_status(&session_id).await.unwrap();
         assert_eq!(status.unwrap().status, StreamingStatus::Paused);
-        
+
         // Resume session
         encryptor.resume_session(&session_id).await.unwrap();
         let status = encryptor.get_session_status(&session_id).await.unwrap();
         assert_eq!(status.unwrap().status, StreamingStatus::InProgress);
-        
+
         // Cancel session
         encryptor.cancel_session(&session_id).await.unwrap();
         assert_eq!(encryptor.get_active_sessions_count().await, 0);
@@ -813,7 +872,7 @@ mod tests {
             ..Default::default()
         };
         let encryptor = StreamingImageEncryptor::new(algorithm, config);
-        
+
         // Test various sizes
         assert_eq!(encryptor.calculate_chunk_count(0), 0);
         assert_eq!(encryptor.calculate_chunk_count(512), 1);
@@ -828,20 +887,26 @@ mod tests {
         let algorithm = Box::new(ChaCha20Poly1305::new());
         let config = ChunkConfig::default();
         let encryptor = StreamingImageEncryptor::new(algorithm, config);
-        
+
         let image_data = vec![0u8; 1024];
         let options = crate::image_encryption::EncryptionOptions::default();
-        
+
         // Start multiple sessions
-        let session1 = encryptor.start_encryption_session(&image_data, options.clone()).await.unwrap();
-        let _session2 = encryptor.start_encryption_session(&image_data, options.clone()).await.unwrap();
-        
+        let session1 = encryptor
+            .start_encryption_session(&image_data, options.clone())
+            .await
+            .unwrap();
+        let _session2 = encryptor
+            .start_encryption_session(&image_data, options.clone())
+            .await
+            .unwrap();
+
         assert_eq!(encryptor.get_active_sessions_count().await, 2);
-        
+
         // Cancel one session
         encryptor.cancel_session(&session1).await.unwrap();
         assert_eq!(encryptor.get_active_sessions_count().await, 1);
-        
+
         // Cleanup completed sessions
         let cleaned = encryptor.cleanup_completed_sessions().await.unwrap();
         assert_eq!(cleaned, 1);
@@ -858,7 +923,7 @@ mod tests {
             compression_info: None,
             metadata: HashMap::new(),
         };
-        
+
         assert_eq!(chunk.index, 0);
         assert_eq!(chunk.original_size, 9);
         assert_eq!(chunk.checksum, "test_checksum");
@@ -872,7 +937,7 @@ mod tests {
             is_lossy: false,
             ratio: Some(0.5),
         };
-        
+
         assert_eq!(info.compression_type, "lz4");
         assert_eq!(info.level, Some(6));
         assert_eq!(info.is_lossy, false);

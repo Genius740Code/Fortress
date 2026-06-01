@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{RwLock, Mutex};
+use tokio::sync::{Mutex, RwLock};
 use tokio::time::interval;
 use tracing::{error, info};
 use uuid::Uuid;
@@ -277,7 +277,7 @@ pub enum ManagementMessage {
         /// When the request was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
-    
+
     /// Cluster state response
     ClusterStateResponse {
         /// ID of the requesting node
@@ -287,7 +287,7 @@ pub enum ManagementMessage {
         /// When the response was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
-    
+
     /// Node join request
     NodeJoinRequest {
         /// Information about the joining node
@@ -295,7 +295,7 @@ pub enum ManagementMessage {
         /// When the request was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
-    
+
     /// Node join response
     NodeJoinResponse {
         /// ID of the responding node
@@ -309,7 +309,7 @@ pub enum ManagementMessage {
         /// When the response was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
-    
+
     /// Node leave request
     NodeLeaveRequest {
         /// ID of the leaving node
@@ -319,7 +319,7 @@ pub enum ManagementMessage {
         /// When the request was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
-    
+
     /// Configuration update request
     ConfigUpdateRequest {
         /// New cluster configuration
@@ -327,7 +327,7 @@ pub enum ManagementMessage {
         /// When the request was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
-    
+
     /// Configuration update response
     ConfigUpdateResponse {
         /// Whether the update was successful
@@ -337,7 +337,7 @@ pub enum ManagementMessage {
         /// When the response was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
-    
+
     /// Metrics request
     MetricsRequest {
         /// ID of the requesting node
@@ -345,7 +345,7 @@ pub enum ManagementMessage {
         /// When the request was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
-    
+
     /// Metrics response
     MetricsResponse {
         /// ID of the requesting node
@@ -355,7 +355,7 @@ pub enum ManagementMessage {
         /// When the response was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
-    
+
     /// Rebalance request
     RebalanceRequest {
         /// Reason for rebalancing
@@ -363,7 +363,7 @@ pub enum ManagementMessage {
         /// When the request was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
-    
+
     /// Rebalance response
     RebalanceResponse {
         /// Whether rebalancing was successful
@@ -381,35 +381,35 @@ pub enum ManagementError {
     /// Cluster not found
     #[error("Cluster not found")]
     ClusterNotFound,
-    
+
     /// Node not found in cluster
     #[error("Node not found: {0}")]
     NodeNotFound(Uuid),
-    
+
     /// Invalid cluster configuration
     #[error("Invalid configuration: {0}")]
     InvalidConfiguration(String),
-    
+
     /// Operation not allowed in current state
     #[error("Operation not allowed: {0}")]
     OperationNotAllowed(String),
-    
+
     /// Cluster is not ready for operation
     #[error("Cluster is not ready")]
     ClusterNotReady,
-    
+
     /// Rebalancing operation failed
     #[error("Rebalancing failed: {0}")]
     RebalancingFailed(String),
-    
+
     /// Auto-scaling operation failed
     #[error("Auto-scaling failed: {0}")]
     AutoScalingFailed(String),
-    
+
     /// Backup operation failed
     #[error("Backup failed: {0}")]
     BackupFailed(String),
-    
+
     /// Management operation timed out
     #[error("Management timeout")]
     ManagementTimeout,
@@ -436,19 +436,23 @@ pub struct ClusterManager {
 pub trait ManagementCallback {
     /// Called when a new node joins the cluster
     async fn on_node_joined(&self, node_info: &ClusterMember);
-    
+
     /// Called when a node leaves the cluster
     async fn on_node_left(&self, node_id: Uuid, reason: &str);
-    
+
     /// Called when cluster configuration is updated
-    async fn on_configuration_updated(&self, old_config: &ClusterConfiguration, new_config: &ClusterConfiguration);
-    
+    async fn on_configuration_updated(
+        &self,
+        old_config: &ClusterConfiguration,
+        new_config: &ClusterConfiguration,
+    );
+
     /// Called when rebalancing starts
     async fn on_rebalancing_started(&self, reason: &str);
-    
+
     /// Called when rebalancing completes
     async fn on_rebalancing_completed(&self, success: bool, message: &str);
-    
+
     /// Called when auto-scaling is triggered
     async fn on_auto_scaling_triggered(&self, action: &str, reason: &str);
 }
@@ -457,8 +461,12 @@ pub trait ManagementCallback {
 #[async_trait::async_trait]
 pub trait ManagementNetworkSender {
     /// Send a management message to a specific node
-    async fn send_management_message(&self, target: Uuid, message: ManagementMessage) -> ClusterResult<()>;
-    
+    async fn send_management_message(
+        &self,
+        target: Uuid,
+        message: ManagementMessage,
+    ) -> ClusterResult<()>;
+
     /// Broadcast a management message to all nodes
     async fn broadcast_management_message(&self, message: ManagementMessage) -> ClusterResult<()>;
 }
@@ -468,12 +476,15 @@ pub trait ManagementNetworkSender {
 pub trait MetricsCollector {
     /// Collect metrics for the entire cluster
     async fn collect_cluster_metrics(&self) -> ClusterResult<ClusterMetrics>;
-    
+
     /// Collect metrics for a specific node
     async fn collect_node_metrics(&self, node_id: Uuid) -> ClusterResult<NodeMetrics>;
-    
+
     /// Get historical metrics for a time period
-    async fn get_historical_metrics(&self, duration: Duration) -> ClusterResult<Vec<ClusterMetrics>>;
+    async fn get_historical_metrics(
+        &self,
+        duration: Duration,
+    ) -> ClusterResult<Vec<ClusterMetrics>>;
 }
 
 impl ClusterManager {
@@ -509,7 +520,7 @@ impl ClusterManager {
     /// Start the cluster manager
     pub async fn start(&self) -> ClusterResult<()> {
         info!("Starting cluster manager for node {}", self.node_id);
-        
+
         // Start metrics collection loop
         if self.config.enable_metrics {
             let manager = self.clone();
@@ -548,10 +559,10 @@ impl ClusterManager {
     /// Metrics collection loop
     async fn metrics_collection_loop(&self) {
         let mut interval = interval(Duration::from_secs(self.config.metrics_interval_secs));
-        
+
         loop {
             interval.tick().await;
-            
+
             if let Err(e) = self.collect_metrics().await {
                 error!("Metrics collection failed: {}", e);
             }
@@ -561,10 +572,10 @@ impl ClusterManager {
     /// Auto-scaling loop
     async fn auto_scaling_loop(&self) {
         let mut interval = interval(Duration::from_secs(300)); // Check every 5 minutes
-        
+
         loop {
             interval.tick().await;
-            
+
             if let Err(e) = self.check_auto_scaling().await {
                 error!("Auto-scaling check failed: {}", e);
             }
@@ -574,10 +585,10 @@ impl ClusterManager {
     /// Rebalancing loop
     async fn rebalancing_loop(&self) {
         let mut interval = interval(Duration::from_secs(self.config.rebalancing_interval_secs));
-        
+
         loop {
             interval.tick().await;
-            
+
             if let Err(e) = self.check_rebalancing().await {
                 error!("Rebalancing check failed: {}", e);
             }
@@ -587,10 +598,10 @@ impl ClusterManager {
     /// Backup loop
     async fn backup_loop(&self) {
         let mut interval = interval(Duration::from_secs(self.config.backup_interval_secs));
-        
+
         loop {
             interval.tick().await;
-            
+
             if let Err(e) = self.perform_backup().await {
                 error!("Backup failed: {}", e);
             }
@@ -621,20 +632,26 @@ impl ClusterManager {
         let current_size = state.size;
 
         // Check if we need to scale up
-        if metrics.cpu_usage > thresholds.cpu_threshold_up ||
-           metrics.memory_usage > thresholds.memory_threshold_up ||
-           metrics.error_rate > 10.0 { // High error rate
+        if metrics.cpu_usage > thresholds.cpu_threshold_up
+            || metrics.memory_usage > thresholds.memory_threshold_up
+            || metrics.error_rate > 10.0
+        {
+            // High error rate
             if current_size < thresholds.max_nodes {
-                self.trigger_auto_scaling("scale_up", "High resource usage").await?;
+                self.trigger_auto_scaling("scale_up", "High resource usage")
+                    .await?;
             }
         }
 
         // Check if we need to scale down
-        if metrics.cpu_usage < thresholds.cpu_threshold_down &&
-           metrics.memory_usage < thresholds.memory_threshold_down &&
-           metrics.error_rate < 1.0 { // Low error rate
+        if metrics.cpu_usage < thresholds.cpu_threshold_down
+            && metrics.memory_usage < thresholds.memory_threshold_down
+            && metrics.error_rate < 1.0
+        {
+            // Low error rate
             if current_size > thresholds.min_nodes {
-                self.trigger_auto_scaling("scale_down", "Low resource usage").await?;
+                self.trigger_auto_scaling("scale_down", "Low resource usage")
+                    .await?;
             }
         }
 
@@ -644,7 +661,7 @@ impl ClusterManager {
     /// Trigger auto-scaling action
     async fn trigger_auto_scaling(&self, action: &str, reason: &str) -> ClusterResult<()> {
         info!("Triggering auto-scaling: {} - {}", action, reason);
-        
+
         // Notify callbacks
         let callbacks = self.callbacks.lock().await;
         for callback in callbacks.iter() {
@@ -653,14 +670,14 @@ impl ClusterManager {
 
         // In a real implementation, this would interact with cloud provider APIs
         // or container orchestration systems to add/remove nodes
-        
+
         Ok(())
     }
 
     /// Check if rebalancing is needed
     async fn check_rebalancing(&self) -> ClusterResult<()> {
         let state = self.cluster_state.read().await;
-        
+
         // Check if cluster is imbalanced
         let members: Vec<&ClusterMember> = state.members.values().collect();
         let mut cpu_usage_sum = 0.0;
@@ -683,7 +700,8 @@ impl ClusterManager {
                 if cpu_diff > 20.0 || memory_diff > 20.0 {
                     // Trigger rebalancing
                     drop(state);
-                    self.trigger_rebalancing("Resource imbalance detected").await?;
+                    self.trigger_rebalancing("Resource imbalance detected")
+                        .await?;
                     break;
                 }
             }
@@ -695,7 +713,7 @@ impl ClusterManager {
     /// Trigger rebalancing
     async fn trigger_rebalancing(&self, reason: &str) -> ClusterResult<()> {
         info!("Triggering rebalancing: {}", reason);
-        
+
         // Update cluster status
         {
             let mut state = self.cluster_state.write().await;
@@ -711,10 +729,10 @@ impl ClusterManager {
 
         // In a real implementation, this would move data between nodes
         // to achieve better balance
-        
+
         // Simulate rebalancing completion
         tokio::time::sleep(Duration::from_secs(30)).await;
-        
+
         // Update cluster status back to healthy
         {
             let mut state = self.cluster_state.write().await;
@@ -734,32 +752,51 @@ impl ClusterManager {
     /// Perform cluster backup
     async fn perform_backup(&self) -> ClusterResult<()> {
         info!("Performing cluster backup");
-        
+
         // In a real implementation, this would create a consistent snapshot
         // of the cluster state and data
-        
+
         Ok(())
     }
 
     /// Handle incoming management message
-    pub async fn handle_message(&self, _source: Uuid, message: ManagementMessage) -> ClusterResult<Option<ManagementMessage>> {
+    pub async fn handle_message(
+        &self,
+        _source: Uuid,
+        message: ManagementMessage,
+    ) -> ClusterResult<Option<ManagementMessage>> {
         match message {
-            ManagementMessage::ClusterStateRequest { requester_id, timestamp } => {
-                self.handle_cluster_state_request(requester_id, timestamp).await
+            ManagementMessage::ClusterStateRequest {
+                requester_id,
+                timestamp,
+            } => {
+                self.handle_cluster_state_request(requester_id, timestamp)
+                    .await
             }
-            ManagementMessage::NodeJoinRequest { node_info, timestamp } => {
-                self.handle_node_join_request(node_info, timestamp).await
-            }
-            ManagementMessage::NodeLeaveRequest { node_id, reason, timestamp } => {
-                self.handle_node_leave_request(node_id, reason, timestamp).await?;
+            ManagementMessage::NodeJoinRequest {
+                node_info,
+                timestamp,
+            } => self.handle_node_join_request(node_info, timestamp).await,
+            ManagementMessage::NodeLeaveRequest {
+                node_id,
+                reason,
+                timestamp,
+            } => {
+                self.handle_node_leave_request(node_id, reason, timestamp)
+                    .await?;
                 Ok(None)
             }
-            ManagementMessage::ConfigUpdateRequest { configuration, timestamp } => {
-                self.handle_config_update_request(configuration, timestamp).await
+            ManagementMessage::ConfigUpdateRequest {
+                configuration,
+                timestamp,
+            } => {
+                self.handle_config_update_request(configuration, timestamp)
+                    .await
             }
-            ManagementMessage::MetricsRequest { requester_id, timestamp } => {
-                self.handle_metrics_request(requester_id, timestamp).await
-            }
+            ManagementMessage::MetricsRequest {
+                requester_id,
+                timestamp,
+            } => self.handle_metrics_request(requester_id, timestamp).await,
             ManagementMessage::RebalanceRequest { reason, timestamp } => {
                 self.handle_rebalance_request(reason, timestamp).await
             }
@@ -771,9 +808,13 @@ impl ClusterManager {
     }
 
     /// Handle cluster state request
-    async fn handle_cluster_state_request(&self, requester_id: Uuid, _timestamp: chrono::DateTime<chrono::Utc>) -> ClusterResult<Option<ManagementMessage>> {
+    async fn handle_cluster_state_request(
+        &self,
+        requester_id: Uuid,
+        _timestamp: chrono::DateTime<chrono::Utc>,
+    ) -> ClusterResult<Option<ManagementMessage>> {
         let state = self.cluster_state.read().await;
-        
+
         let response = ManagementMessage::ClusterStateResponse {
             requester_id,
             cluster_state: state.clone(),
@@ -784,27 +825,31 @@ impl ClusterManager {
     }
 
     /// Handle node join request
-    async fn handle_node_join_request(&self, node_info: ClusterMember, _timestamp: chrono::DateTime<chrono::Utc>) -> ClusterResult<Option<ManagementMessage>> {
+    async fn handle_node_join_request(
+        &self,
+        node_info: ClusterMember,
+        _timestamp: chrono::DateTime<chrono::Utc>,
+    ) -> ClusterResult<Option<ManagementMessage>> {
         info!("Handling node join request from {}", node_info.node_id);
-        
+
         let cluster_config = {
             let mut state = self.cluster_state.write().await;
-            
+
             // Check if node can join
             let accepted = state.members.len() < self.config.auto_scaling_thresholds.max_nodes;
-            
+
             if accepted {
                 // Add node to cluster
                 state.members.insert(node_info.node_id, node_info.clone());
                 state.size = state.members.len();
                 state.last_updated = chrono::Utc::now();
-                
+
                 // Update cluster status
                 if state.status == ClusterStatus::Forming {
                     state.status = ClusterStatus::Healthy;
                 }
             }
-            
+
             if accepted {
                 Some(state.configuration.clone())
             } else {
@@ -824,7 +869,11 @@ impl ClusterManager {
             node_id: node_info.node_id,
             accepted: cluster_config.is_some(),
             cluster_config: cluster_config.clone(),
-            message: if cluster_config.is_some() { "Node accepted".to_string() } else { "Cluster full".to_string() },
+            message: if cluster_config.is_some() {
+                "Node accepted".to_string()
+            } else {
+                "Cluster full".to_string()
+            },
             timestamp: chrono::Utc::now(),
         };
 
@@ -832,15 +881,20 @@ impl ClusterManager {
     }
 
     /// Handle node leave request
-    async fn handle_node_leave_request(&self, node_id: Uuid, reason: String, _timestamp: chrono::DateTime<chrono::Utc>) -> ClusterResult<()> {
+    async fn handle_node_leave_request(
+        &self,
+        node_id: Uuid,
+        reason: String,
+        _timestamp: chrono::DateTime<chrono::Utc>,
+    ) -> ClusterResult<()> {
         info!("Handling node leave request from {}: {}", node_id, reason);
-        
+
         let mut state = self.cluster_state.write().await;
-        
+
         if state.members.remove(&node_id).is_some() {
             state.size = state.members.len();
             state.last_updated = chrono::Utc::now();
-            
+
             // Update cluster status if needed
             if state.members.is_empty() {
                 state.status = ClusterStatus::Failed;
@@ -848,7 +902,7 @@ impl ClusterManager {
                 state.status = ClusterStatus::Degraded;
             }
         }
-        
+
         drop(state);
 
         // Notify callbacks
@@ -861,9 +915,13 @@ impl ClusterManager {
     }
 
     /// Handle configuration update request
-    async fn handle_config_update_request(&self, configuration: ClusterConfiguration, _timestamp: chrono::DateTime<chrono::Utc>) -> ClusterResult<Option<ManagementMessage>> {
+    async fn handle_config_update_request(
+        &self,
+        configuration: ClusterConfiguration,
+        _timestamp: chrono::DateTime<chrono::Utc>,
+    ) -> ClusterResult<Option<ManagementMessage>> {
         info!("Handling configuration update request");
-        
+
         let mut state = self.cluster_state.write().await;
         let old_config = state.configuration.clone();
         state.configuration = configuration.clone();
@@ -873,7 +931,9 @@ impl ClusterManager {
         // Notify callbacks
         let callbacks = self.callbacks.lock().await;
         for callback in callbacks.iter() {
-            callback.on_configuration_updated(&old_config, &configuration).await;
+            callback
+                .on_configuration_updated(&old_config, &configuration)
+                .await;
         }
 
         let response = ManagementMessage::ConfigUpdateResponse {
@@ -886,7 +946,11 @@ impl ClusterManager {
     }
 
     /// Handle metrics request
-    async fn handle_metrics_request(&self, requester_id: Uuid, _timestamp: chrono::DateTime<chrono::Utc>) -> ClusterResult<Option<ManagementMessage>> {
+    async fn handle_metrics_request(
+        &self,
+        requester_id: Uuid,
+        _timestamp: chrono::DateTime<chrono::Utc>,
+    ) -> ClusterResult<Option<ManagementMessage>> {
         let state = self.cluster_state.read().await;
         let metrics = state.metrics.clone();
         drop(state);
@@ -901,9 +965,13 @@ impl ClusterManager {
     }
 
     /// Handle rebalance request
-    async fn handle_rebalance_request(&self, reason: String, _timestamp: chrono::DateTime<chrono::Utc>) -> ClusterResult<Option<ManagementMessage>> {
+    async fn handle_rebalance_request(
+        &self,
+        reason: String,
+        _timestamp: chrono::DateTime<chrono::Utc>,
+    ) -> ClusterResult<Option<ManagementMessage>> {
         info!("Handling rebalance request: {}", reason);
-        
+
         match self.trigger_rebalancing(&reason).await {
             Ok(()) => {
                 let response = ManagementMessage::RebalanceResponse {
@@ -936,7 +1004,10 @@ impl ClusterManager {
     }
 
     /// Update cluster configuration
-    pub async fn update_configuration(&self, configuration: ClusterConfiguration) -> ClusterResult<()> {
+    pub async fn update_configuration(
+        &self,
+        configuration: ClusterConfiguration,
+    ) -> ClusterResult<()> {
         let mut state = self.cluster_state.write().await;
         let old_config = state.configuration.clone();
         state.configuration = configuration.clone();
@@ -946,7 +1017,9 @@ impl ClusterManager {
         // Notify callbacks
         let callbacks = self.callbacks.lock().await;
         for callback in callbacks.iter() {
-            callback.on_configuration_updated(&old_config, &configuration).await;
+            callback
+                .on_configuration_updated(&old_config, &configuration)
+                .await;
         }
 
         Ok(())

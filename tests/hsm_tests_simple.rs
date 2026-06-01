@@ -1,13 +1,16 @@
 #![cfg(any())]
 //! Simple HSM Integration Tests
-//! 
+//!
 //! Basic test suite for HSM functionality with simplified approach.
 
-use fortress_core::hsm::{HsmProvider, HsmConfig, HsmProviderType, HsmConnection, HsmCredentials, HsmKeySettings, Pkcs11UserType};
+use fortress_core::error::FortressError;
+use fortress_core::hsm::{
+    HsmConfig, HsmConnection, HsmCredentials, HsmKeySettings, HsmProvider, HsmProviderType,
+    Pkcs11UserType,
+};
 use fortress_core::hsm_aws::AwsCloudHsmProvider;
 use fortress_core::hsm_pkcs11_fixed::Pkcs11Provider;
-use fortress_core::key::{HsmKeyManager};
-use fortress_core::error::FortressError;
+use fortress_core::key::HsmKeyManager;
 use std::time::Instant;
 
 #[cfg(test)]
@@ -32,9 +35,12 @@ mod tests {
 
         let provider = AwsCloudHsmProvider::new(config);
         let result = provider.initialize().await;
-        
+
         // Test that initialization works
-        assert!(result.is_ok(), "HSM provider should initialize successfully");
+        assert!(
+            result.is_ok(),
+            "HSM provider should initialize successfully"
+        );
     }
 
     /// Test PKCS#11 provider initialization
@@ -56,9 +62,12 @@ mod tests {
 
         let provider = Pkcs11Provider::new(config);
         let result = provider.initialize().await;
-        
+
         // Test that initialization works
-        assert!(result.is_ok(), "PKCS#11 provider should initialize successfully");
+        assert!(
+            result.is_ok(),
+            "PKCS#11 provider should initialize successfully"
+        );
     }
 
     /// Test HSM error handling
@@ -80,7 +89,10 @@ mod tests {
 
         let provider = AwsCloudHsmProvider::new(invalid_config);
         let init_result = provider.initialize().await;
-        assert!(init_result.is_err(), "Invalid config should fail initialization");
+        assert!(
+            init_result.is_err(),
+            "Invalid config should fail initialization"
+        );
     }
 
     /// Test HSM health checks
@@ -100,8 +112,11 @@ mod tests {
         };
 
         let provider = AwsCloudHsmProvider::new(config);
-        provider.initialize().await.expect("Provider should initialize");
-        
+        provider
+            .initialize()
+            .await
+            .expect("Provider should initialize");
+
         // Test health check
         let health_result = provider.health_check().await;
         assert!(health_result.is_ok(), "Health check should succeed");
@@ -124,8 +139,11 @@ mod tests {
         };
 
         let provider = AwsCloudHsmProvider::new(config);
-        provider.initialize().await.expect("Provider should initialize");
-        
+        provider
+            .initialize()
+            .await
+            .expect("Provider should initialize");
+
         // Test graceful shutdown
         let shutdown_result = provider.shutdown().await;
         assert!(shutdown_result.is_ok(), "Graceful shutdown should succeed");

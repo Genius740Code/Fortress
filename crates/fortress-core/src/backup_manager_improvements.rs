@@ -3,11 +3,11 @@
 //! This module contains improvements and fixes for the backup system
 //! to address production readiness concerns.
 
-use crate::backup::{BackupManager, BackupConfig, BackupStrategy, BackupMetadata};
-use crate::storage::StorageBackend;
-use crate::error::{FortressError, Result};
+use crate::backup::{BackupConfig, BackupManager, BackupMetadata, BackupStrategy};
 use crate::error::StorageErrorCode;
-use chrono::{Utc, DateTime};
+use crate::error::{FortressError, Result};
+use crate::storage::StorageBackend;
+use chrono::{DateTime, Utc};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -35,10 +35,19 @@ pub struct BackupOperation {
 
 #[derive(Debug, Clone)]
 pub enum BackupOperationType {
-    CreateBackup { backup_id: String, strategy: BackupStrategy },
-    RestoreBackup { backup_id: String },
-    VerifyBackup { backup_id: String },
-    DeleteBackup { backup_id: String },
+    CreateBackup {
+        backup_id: String,
+        strategy: BackupStrategy,
+    },
+    RestoreBackup {
+        backup_id: String,
+    },
+    VerifyBackup {
+        backup_id: String,
+    },
+    DeleteBackup {
+        backup_id: String,
+    },
     ListBackups,
     CleanupOldBackups,
 }
@@ -60,9 +69,10 @@ impl EnhancedBackupManager {
     ) -> Result<Self> {
         // Validate configuration with enhanced checks
         Self::validate_config_enhanced(&config)?;
-        
-        let inner = crate::backup_manager::DefaultBackupManager::new(backup_storage, encryption, config)?;
-        
+
+        let inner =
+            crate::backup_manager::DefaultBackupManager::new(backup_storage, encryption, config)?;
+
         Ok(Self {
             inner,
             operation_history: Arc::new(RwLock::new(Vec::new())),
@@ -74,7 +84,7 @@ impl EnhancedBackupManager {
     fn validate_config_enhanced(config: &BackupConfig) -> Result<()> {
         // Basic validation (already done in DefaultBackupManager)
         crate::backup::utils::validate_backup_config(config)?;
-        
+
         // Additional enhanced validations
         if config.parallel_settings.enabled {
             if config.parallel_settings.max_workers == 0 {
@@ -84,7 +94,7 @@ impl EnhancedBackupManager {
                     StorageErrorCode::InvalidOperation,
                 ));
             }
-            
+
             if config.parallel_settings.max_workers > 100 {
                 return Err(FortressError::storage(
                     "max_workers exceeds safe limit of 100".to_string(),
@@ -93,7 +103,7 @@ impl EnhancedBackupManager {
                 ));
             }
         }
-        
+
         // Validate retention policy
         let policy = &config.retention_policy;
         if policy.max_full_backups == 0 {
@@ -103,7 +113,7 @@ impl EnhancedBackupManager {
                 StorageErrorCode::InvalidOperation,
             ));
         }
-        
+
         if policy.max_age_days == 0 {
             return Err(FortressError::storage(
                 "Retention policy max_age_days must be greater than 0".to_string(),
@@ -111,7 +121,7 @@ impl EnhancedBackupManager {
                 StorageErrorCode::InvalidOperation,
             ));
         }
-        
+
         Ok(())
     }
 
@@ -119,7 +129,7 @@ impl EnhancedBackupManager {
     async fn record_operation(&self, operation: BackupOperation) {
         let mut history = self.operation_history.write().await;
         history.push(operation);
-        
+
         // Keep only last 1000 operations to prevent memory leaks
         let len = history.len();
         if len > 1000 {
@@ -136,7 +146,11 @@ impl EnhancedBackupManager {
     pub async fn get_recent_operations(&self, limit: usize) -> Vec<BackupOperation> {
         let history = self.operation_history.read().await;
         let history_clone = history.clone();
-        let start = if history_clone.len() > limit { history_clone.len() - limit } else { 0 };
+        let start = if history_clone.len() > limit {
+            history_clone.len() - limit
+        } else {
+            0
+        };
         history_clone[start..].to_vec()
     }
 
@@ -148,7 +162,7 @@ impl EnhancedBackupManager {
     ) -> Result<BackupMetadata> {
         let operation_id = crate::backup::utils::generate_backup_id();
         let started_at = Utc::now();
-        
+
         // Record operation start
         self.record_operation(BackupOperation {
             operation_id: operation_id.clone(),
@@ -162,7 +176,8 @@ impl EnhancedBackupManager {
             items_processed: 0,
             total_items: 0,
             error_message: None,
-        }).await;
+        })
+        .await;
 
         // Validate configuration cache
         {
@@ -170,9 +185,12 @@ impl EnhancedBackupManager {
             match cache.as_ref() {
                 Some(cached_config) => {
                     // Compare relevant fields for validation
-                    if cached_config.default_strategy != config.default_strategy ||
-                        cached_config.parallel_settings.enabled != config.parallel_settings.enabled ||
-                        cached_config.parallel_settings.max_workers != config.parallel_settings.max_workers {
+                    if cached_config.default_strategy != config.default_strategy
+                        || cached_config.parallel_settings.enabled
+                            != config.parallel_settings.enabled
+                        || cached_config.parallel_settings.max_workers
+                            != config.parallel_settings.max_workers
+                    {
                         Self::validate_config_enhanced(config)?;
                         *cache = Some(config.clone());
                     }
@@ -187,7 +205,7 @@ impl EnhancedBackupManager {
         // Perform backup with error handling
         let result = self.inner.create_backup(source_storage, config).await;
         let completed_at = Utc::now();
-        
+
         match &result {
             Ok(metadata) => {
                 // Record successful completion
@@ -203,7 +221,8 @@ impl EnhancedBackupManager {
                     items_processed: metadata.item_count,
                     total_items: metadata.item_count,
                     error_message: None,
-                }).await;
+                })
+                .await;
             }
             Err(e) => {
                 // Record failure
@@ -219,10 +238,11 @@ impl EnhancedBackupManager {
                     items_processed: 0,
                     total_items: 0,
                     error_message: Some(format!("{}", e)),
-                }).await;
+                })
+                .await;
             }
         }
-        
+
         result
     }
 
@@ -235,7 +255,7 @@ impl EnhancedBackupManager {
     ) -> Result<crate::backup::RestoreStatus> {
         let operation_id = crate::backup::utils::generate_restore_id();
         let started_at = Utc::now();
-        
+
         // Record operation start
         self.record_operation(BackupOperation {
             operation_id: operation_id.clone(),
@@ -248,12 +268,16 @@ impl EnhancedBackupManager {
             items_processed: 0,
             total_items: 0,
             error_message: None,
-        }).await;
+        })
+        .await;
 
         // Perform restore with error handling
-        let result = self.inner.restore_backup(backup_id, target_storage, config).await;
+        let result = self
+            .inner
+            .restore_backup(backup_id, target_storage, config)
+            .await;
         let completed_at = Utc::now();
-        
+
         match &result {
             Ok(status) => {
                 // Record successful completion
@@ -264,7 +288,10 @@ impl EnhancedBackupManager {
                     },
                     started_at,
                     completed_at: Some(completed_at),
-                    status: if matches!(status.status, crate::backup::RestoreOperationStatus::Completed) {
+                    status: if matches!(
+                        status.status,
+                        crate::backup::RestoreOperationStatus::Completed
+                    ) {
                         OperationStatus::Completed
                     } else {
                         OperationStatus::Failed
@@ -276,7 +303,8 @@ impl EnhancedBackupManager {
                     } else {
                         None
                     },
-                }).await;
+                })
+                .await;
             }
             Err(e) => {
                 // Record failure
@@ -291,10 +319,11 @@ impl EnhancedBackupManager {
                     items_processed: 0,
                     total_items: 0,
                     error_message: Some(format!("{}", e)),
-                }).await;
+                })
+                .await;
             }
         }
-        
+
         result
     }
 
@@ -302,25 +331,28 @@ impl EnhancedBackupManager {
     pub async fn get_health_metrics(&self) -> BackupHealthMetrics {
         let history = self.operation_history.read().await;
         let now = Utc::now();
-        
-        let recent_operations: Vec<_> = history.iter()
+
+        let recent_operations: Vec<_> = history
+            .iter()
             .filter(|op| now.signed_duration_since(op.started_at).num_hours() < 24)
             .collect();
-        
-        let successful_operations = recent_operations.iter()
+
+        let successful_operations = recent_operations
+            .iter()
             .filter(|op| matches!(op.status, OperationStatus::Completed))
             .count();
-        
-        let failed_operations = recent_operations.iter()
+
+        let failed_operations = recent_operations
+            .iter()
             .filter(|op| matches!(op.status, OperationStatus::Failed))
             .count();
-        
+
         let success_rate = if recent_operations.is_empty() {
             100.0
         } else {
             (successful_operations as f64 / recent_operations.len() as f64) * 100.0
         };
-        
+
         BackupHealthMetrics {
             total_operations_24h: recent_operations.len(),
             successful_operations_24h: successful_operations,
@@ -333,34 +365,43 @@ impl EnhancedBackupManager {
 
     /// Calculate average operation duration
     fn calculate_average_duration(&self, history: &[BackupOperation]) -> Option<chrono::Duration> {
-        let completed_operations: Vec<_> = history.iter()
+        let completed_operations: Vec<_> = history
+            .iter()
             .filter(|op| op.completed_at.is_some())
             .collect();
-        
+
         if completed_operations.is_empty() {
             return None;
         }
-        
+
         let total_duration: chrono::Duration = completed_operations
             .iter()
             .map(|op| op.completed_at.unwrap() - op.started_at)
             .sum();
-        
+
         Some(total_duration / completed_operations.len() as i32)
     }
 
     /// Validate backup integrity before critical operations
-    pub async fn validate_backup_integrity(&self, backup_id: &str) -> Result<BackupIntegrityReport> {
+    pub async fn validate_backup_integrity(
+        &self,
+        backup_id: &str,
+    ) -> Result<BackupIntegrityReport> {
         let start_time = Utc::now();
-        
+
         // Get backup metadata using public interface
-        let metadata = self.inner.get_backup_metadata(backup_id).await?
-            .ok_or_else(|| FortressError::storage(
-                format!("Backup not found: {}", backup_id),
-                "backup_integrity_validation".to_string(),
-                StorageErrorCode::NotFound,
-            ))?;
-        
+        let metadata = self
+            .inner
+            .get_backup_metadata(backup_id)
+            .await?
+            .ok_or_else(|| {
+                FortressError::storage(
+                    format!("Backup not found: {}", backup_id),
+                    "backup_integrity_validation".to_string(),
+                    StorageErrorCode::NotFound,
+                )
+            })?;
+
         // For now, return a basic validation report
         // Full validation would require access to private methods
         Ok(BackupIntegrityReport {
@@ -402,7 +443,7 @@ pub struct BackupIntegrityReport {
     pub items_valid: usize,
     pub items_total: usize,
     pub corrupted_items: Vec<String>,
-/// List of missing backup items
+    /// List of missing backup items
     pub missing_items: Vec<String>,
     /// Overall validation status
     pub overall_valid: bool,
@@ -419,13 +460,9 @@ mod tests {
     async fn test_enhanced_backup_manager_creation() {
         let storage = Arc::new(InMemoryStorage::new());
         let config = BackupConfig::default();
-        
-        let manager = EnhancedBackupManager::new(
-            storage.clone(),
-            None,
-            config,
-        );
-        
+
+        let manager = EnhancedBackupManager::new(storage.clone(), None, config);
+
         assert!(manager.is_ok());
     }
 
@@ -435,11 +472,11 @@ mod tests {
         let mut config = BackupConfig::default();
         config.parallel_settings.enabled = true;
         config.parallel_settings.max_workers = 0;
-        
+
         let storage = Arc::new(InMemoryStorage::new());
         let result = EnhancedBackupManager::new(storage.clone(), None, config);
         assert!(result.is_err());
-        
+
         // Test invalid retention policy
         let mut config = BackupConfig::default();
         config.retention_policy = crate::backup::RetentionPolicy {
@@ -448,7 +485,7 @@ mod tests {
             max_age_days: 30,
             auto_cleanup: true,
         };
-        
+
         let result = EnhancedBackupManager::new(storage.clone(), None, config);
         assert!(result.is_err());
     }
@@ -458,15 +495,18 @@ mod tests {
         let storage = Arc::new(InMemoryStorage::new());
         let source_storage = Arc::new(InMemoryStorage::new());
         let config = BackupConfig::default();
-        
+
         let manager = EnhancedBackupManager::new(storage.clone(), None, config).unwrap();
-        
+
         // Add test data
         source_storage.put("test_key", b"test_data").await.unwrap();
-        
+
         // Create backup
-        let _backup = manager.create_backup_enhanced(&*source_storage, &manager.inner.get_config().await).await.unwrap();
-        
+        let _backup = manager
+            .create_backup_enhanced(&*source_storage, &manager.inner.get_config().await)
+            .await
+            .unwrap();
+
         // Check operation history
         let history = manager.get_operation_history().await;
         assert_eq!(history.len(), 1);
@@ -477,9 +517,9 @@ mod tests {
     async fn test_health_metrics() {
         let storage = Arc::new(InMemoryStorage::new());
         let config = BackupConfig::default();
-        
+
         let manager = EnhancedBackupManager::new(storage.clone(), None, config).unwrap();
-        
+
         let metrics = manager.get_health_metrics().await;
         assert_eq!(metrics.total_operations_24h, 0);
         assert_eq!(metrics.success_rate_24h, 100.0);
@@ -490,15 +530,21 @@ mod tests {
         let storage = Arc::new(InMemoryStorage::new());
         let source_storage = Arc::new(InMemoryStorage::new());
         let config = BackupConfig::default();
-        
+
         let manager = EnhancedBackupManager::new(storage.clone(), None, config).unwrap();
-        
+
         // Add test data and create backup
         source_storage.put("test_key", b"test_data").await.unwrap();
-        let backup = manager.create_backup_enhanced(&*source_storage, &manager.inner.get_config().await).await.unwrap();
-        
+        let backup = manager
+            .create_backup_enhanced(&*source_storage, &manager.inner.get_config().await)
+            .await
+            .unwrap();
+
         // Validate integrity
-        let report = manager.validate_backup_integrity(&backup.backup_id).await.unwrap();
+        let report = manager
+            .validate_backup_integrity(&backup.backup_id)
+            .await
+            .unwrap();
         assert!(report.overall_valid);
         assert_eq!(report.items_valid, 1);
         assert_eq!(report.items_total, 1);

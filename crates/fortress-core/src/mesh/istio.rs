@@ -1,14 +1,17 @@
 //! Istio Service Mesh Integration
-//! 
+//!
 //! This module provides integration with Istio service mesh for advanced
 //! traffic management, security, and observability features.
 
+use crate::error::{FortressError, Result};
+use crate::mesh::{
+    MeshConfig, MeshMetrics, MeshNode, MeshNodeHealthStatus, MeshProvider, MeshType,
+    SecurityPolicy, TrafficPolicy,
+};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
-use serde::{Serialize, Deserialize};
-use chrono::{DateTime, Utc};
-use crate::error::{FortressError, Result};
-use crate::mesh::{MeshProvider, MeshConfig, MeshNode, MeshNodeHealthStatus, TrafficPolicy, SecurityPolicy, MeshMetrics, MeshType};
 
 /// Istio mesh provider configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -71,42 +74,54 @@ impl IstioMesh {
 
     /// Get Istio services from Pilot API
     async fn get_istio_services(&self) -> Result<Vec<IstioService>> {
-        let client = self.client.as_ref()
+        let client = self
+            .client
+            .as_ref()
             .ok_or_else(|| FortressError::mesh("Istio client not initialized"))?;
 
         let url = format!("{}/v1/registration", self.config.pilot_address);
-        
-        let response = client.get(&url)
-            .send()
-            .await
-            .map_err(|e| FortressError::mesh(format!("Istio Pilot API request failed: {}", e)))?;
+
+        let response =
+            client.get(&url).send().await.map_err(|e| {
+                FortressError::mesh(format!("Istio Pilot API request failed: {}", e))
+            })?;
 
         if !response.status().is_success() {
-            return Err(FortressError::mesh(format!("Istio Pilot API returned status: {}", response.status())));
+            return Err(FortressError::mesh(format!(
+                "Istio Pilot API returned status: {}",
+                response.status()
+            )));
         }
 
-        let services: Vec<IstioService> = response.json()
-            .await
-            .map_err(|e| FortressError::mesh(format!("Failed to parse Istio services response: {}", e)))?;
+        let services: Vec<IstioService> = response.json().await.map_err(|e| {
+            FortressError::mesh(format!("Failed to parse Istio services response: {}", e))
+        })?;
 
         Ok(services)
     }
 
     /// Get Istio virtual services
     async fn get_istio_virtual_services(&self) -> Result<Vec<IstioVirtualService>> {
-        let client = self.client.as_ref()
+        let client = self
+            .client
+            .as_ref()
             .ok_or_else(|| FortressError::mesh("Istio client not initialized"))?;
 
         // Get virtual services from Kubernetes API
-        let url = format!("http://localhost:8080/apis/networking.istio.io/v1beta1/virtualservices?namespace={}", self.config.namespace);
-        
-        let response = client.get(&url)
-            .send()
-            .await
-            .map_err(|e| FortressError::mesh(format!("Istio VirtualService API request failed: {}", e)))?;
+        let url = format!(
+            "http://localhost:8080/apis/networking.istio.io/v1beta1/virtualservices?namespace={}",
+            self.config.namespace
+        );
+
+        let response = client.get(&url).send().await.map_err(|e| {
+            FortressError::mesh(format!("Istio VirtualService API request failed: {}", e))
+        })?;
 
         if !response.status().is_success() {
-            return Err(FortressError::mesh(format!("Istio VirtualService API returned status: {}", response.status())));
+            return Err(FortressError::mesh(format!(
+                "Istio VirtualService API returned status: {}",
+                response.status()
+            )));
         }
 
         #[derive(Deserialize)]
@@ -114,27 +129,37 @@ impl IstioMesh {
             items: Vec<IstioVirtualService>,
         }
 
-        let vsvc_list: VirtualServiceList = response.json()
-            .await
-            .map_err(|e| FortressError::mesh(format!("Failed to parse Istio VirtualService response: {}", e)))?;
+        let vsvc_list: VirtualServiceList = response.json().await.map_err(|e| {
+            FortressError::mesh(format!(
+                "Failed to parse Istio VirtualService response: {}",
+                e
+            ))
+        })?;
 
         Ok(vsvc_list.items)
     }
 
     /// Get Istio destination rules
     async fn get_istio_destination_rules(&self) -> Result<Vec<IstioDestinationRule>> {
-        let client = self.client.as_ref()
+        let client = self
+            .client
+            .as_ref()
             .ok_or_else(|| FortressError::mesh("Istio client not initialized"))?;
 
-        let url = format!("http://localhost:8080/apis/networking.istio.io/v1beta1/destinationrules?namespace={}", self.config.namespace);
-        
-        let response = client.get(&url)
-            .send()
-            .await
-            .map_err(|e| FortressError::mesh(format!("Istio DestinationRule API request failed: {}", e)))?;
+        let url = format!(
+            "http://localhost:8080/apis/networking.istio.io/v1beta1/destinationrules?namespace={}",
+            self.config.namespace
+        );
+
+        let response = client.get(&url).send().await.map_err(|e| {
+            FortressError::mesh(format!("Istio DestinationRule API request failed: {}", e))
+        })?;
 
         if !response.status().is_success() {
-            return Err(FortressError::mesh(format!("Istio DestinationRule API returned status: {}", response.status())));
+            return Err(FortressError::mesh(format!(
+                "Istio DestinationRule API returned status: {}",
+                response.status()
+            )));
         }
 
         #[derive(Deserialize)]
@@ -142,27 +167,34 @@ impl IstioMesh {
             items: Vec<IstioDestinationRule>,
         }
 
-        let dr_list: DestinationRuleList = response.json()
-            .await
-            .map_err(|e| FortressError::mesh(format!("Failed to parse Istio DestinationRule response: {}", e)))?;
+        let dr_list: DestinationRuleList = response.json().await.map_err(|e| {
+            FortressError::mesh(format!(
+                "Failed to parse Istio DestinationRule response: {}",
+                e
+            ))
+        })?;
 
         Ok(dr_list.items)
     }
 
     /// Get Istio authorization policies
     async fn get_istio_authz_policies(&self) -> Result<Vec<IstioAuthzPolicy>> {
-        let client = self.client.as_ref()
+        let client = self
+            .client
+            .as_ref()
             .ok_or_else(|| FortressError::mesh("Istio client not initialized"))?;
 
         let url = format!("http://localhost:8080/apis/security.istio.io/v1beta1/authorizationpolicies?namespace={}", self.config.namespace);
-        
-        let response = client.get(&url)
-            .send()
-            .await
-            .map_err(|e| FortressError::mesh(format!("Istio AuthzPolicy API request failed: {}", e)))?;
+
+        let response = client.get(&url).send().await.map_err(|e| {
+            FortressError::mesh(format!("Istio AuthzPolicy API request failed: {}", e))
+        })?;
 
         if !response.status().is_success() {
-            return Err(FortressError::mesh(format!("Istio AuthzPolicy API returned status: {}", response.status())));
+            return Err(FortressError::mesh(format!(
+                "Istio AuthzPolicy API returned status: {}",
+                response.status()
+            )));
         }
 
         #[derive(Deserialize)]
@@ -170,9 +202,9 @@ impl IstioMesh {
             items: Vec<IstioAuthzPolicy>,
         }
 
-        let authz_list: AuthzPolicyList = response.json()
-            .await
-            .map_err(|e| FortressError::mesh(format!("Failed to parse Istio AuthzPolicy response: {}", e)))?;
+        let authz_list: AuthzPolicyList = response.json().await.map_err(|e| {
+            FortressError::mesh(format!("Failed to parse Istio AuthzPolicy response: {}", e))
+        })?;
 
         Ok(authz_list.items)
     }
@@ -180,14 +212,18 @@ impl IstioMesh {
     /// Convert Istio service to mesh node
     fn istio_service_to_mesh_node(&self, service: &IstioService) -> Result<MeshNode> {
         let node_id = format!("istio-service-{}", service.name);
-        
+
         // Extract IP address from service endpoints
-        let ip_address = service.endpoints.first()
+        let ip_address = service
+            .endpoints
+            .first()
             .and_then(|endpoint| endpoint.address.as_ref())
             .cloned()
             .unwrap_or_else(|| "127.0.0.1".to_string());
 
-        let port = service.endpoints.first()
+        let port = service
+            .endpoints
+            .first()
             .map(|endpoint| endpoint.port)
             .unwrap_or(8080);
 
@@ -196,7 +232,7 @@ impl IstioMesh {
         labels.insert("mesh_provider".to_string(), "istio".to_string());
         labels.insert("service_name".to_string(), service.name.clone());
         labels.insert("service_type".to_string(), service.service_type.clone());
-        
+
         for (key, value) in &service.labels {
             labels.insert(key.clone(), value.clone());
         }
@@ -206,7 +242,10 @@ impl IstioMesh {
         metadata.insert("service_name".to_string(), service.name.clone());
         metadata.insert("service_type".to_string(), service.service_type.clone());
         metadata.insert("namespace".to_string(), service.namespace.clone());
-        metadata.insert("total_endpoints".to_string(), service.endpoints.len().to_string());
+        metadata.insert(
+            "total_endpoints".to_string(),
+            service.endpoints.len().to_string(),
+        );
 
         // Determine health status
         let healthy_endpoints = service.endpoints.iter().filter(|e| e.healthy).count();
@@ -243,28 +282,36 @@ impl IstioMesh {
     }
 
     /// Convert Istio virtual service to traffic policy
-    fn istio_virtual_service_to_traffic_policy(&self, vsvc: &IstioVirtualService) -> Result<TrafficPolicy> {
+    fn istio_virtual_service_to_traffic_policy(
+        &self,
+        vsvc: &IstioVirtualService,
+    ) -> Result<TrafficPolicy> {
         let mut rules = Vec::new();
 
         for http_route in &vsvc.spec.http {
             for route in &http_route.route {
                 let rule = TrafficRule {
-                    name: format!("{}-{}", vsvc.metadata.name, route.destination.subset.clone().unwrap_or_default()),
+                    name: format!(
+                        "{}-{}",
+                        vsvc.metadata.name,
+                        route.destination.subset.clone().unwrap_or_default()
+                    ),
                     priority: route.weight.unwrap_or(100) as u32,
                     match_conditions: Vec::new(), // Would need to parse match conditions
-                    actions: vec![
-                        TrafficAction {
-                            action_type: crate::mesh::ActionType::Route,
-                            parameters: serde_json::json!({
-                                "cluster": route.destination.subset.clone().unwrap_or_default(),
-                                "host": route.destination.host.clone(),
-                                "port": route.destination.port.unwrap_or(80),
-                                "weight": route.weight.unwrap_or(100)
-                            }),
-                        }
-                    ],
+                    actions: vec![TrafficAction {
+                        action_type: crate::mesh::ActionType::Route,
+                        parameters: serde_json::json!({
+                            "cluster": route.destination.subset.clone().unwrap_or_default(),
+                            "host": route.destination.host.clone(),
+                            "port": route.destination.port.unwrap_or(80),
+                            "weight": route.weight.unwrap_or(100)
+                        }),
+                    }],
                     timeout_seconds: http_route.timeout.as_ref().map(|t| t.parse().unwrap_or(30)),
-                    retries: http_route.retries.as_ref().map(|r| r.attempts.parse().unwrap_or(3)),
+                    retries: http_route
+                        .retries
+                        .as_ref()
+                        .map(|r| r.attempts.parse().unwrap_or(3)),
                 };
                 rules.push(rule);
             }
@@ -273,22 +320,40 @@ impl IstioMesh {
         Ok(TrafficPolicy {
             name: vsvc.metadata.name.clone(),
             namespace: vsvc.metadata.namespace.clone(),
-            selector: vsvc.spec.hosts.iter().map(|h| ("host".to_string(), h.clone())).collect(),
+            selector: vsvc
+                .spec
+                .hosts
+                .iter()
+                .map(|h| ("host".to_string(), h.clone()))
+                .collect(),
             rules,
-            created_at: vsvc.metadata.creation_timestamp.unwrap_or_else(|| Utc::now()),
-            updated_at: vsvc.metadata.creation_timestamp.unwrap_or_else(|| Utc::now()),
+            created_at: vsvc
+                .metadata
+                .creation_timestamp
+                .unwrap_or_else(|| Utc::now()),
+            updated_at: vsvc
+                .metadata
+                .creation_timestamp
+                .unwrap_or_else(|| Utc::now()),
         })
     }
 
     /// Convert Istio authorization policy to security policy
-    fn istio_authz_policy_to_security_policy(&self, authz: &IstioAuthzPolicy) -> Result<SecurityPolicy> {
+    fn istio_authz_policy_to_security_policy(
+        &self,
+        authz: &IstioAuthzPolicy,
+    ) -> Result<SecurityPolicy> {
         let mut auth_rules = Vec::new();
         let mut authz_rules = Vec::new();
 
         // Convert Istio authz rules to our format
         for rule in &authz.spec.rules {
             let auth_rule = crate::mesh::AuthRule {
-                name: format!("{}-{}", authz.metadata.name, rule.name.clone().unwrap_or_default()),
+                name: format!(
+                    "{}-{}",
+                    authz.metadata.name,
+                    rule.name.clone().unwrap_or_default()
+                ),
                 method: crate::mesh::AuthMethod::JWT, // Default to JWT
                 jwt_rules: Some(crate::mesh::JwtRule {
                     issuer: "istio".to_string(),
@@ -308,11 +373,19 @@ impl IstioMesh {
                 } else {
                     crate::mesh::AuthzAction::Deny
                 },
-                when: rule.when.as_ref().map(|w| w.iter().map(|condition| crate::mesh::AuthzCondition {
-                    key: condition.key.clone(),
-                    values: condition.values.clone().unwrap_or_default(),
-                    not_values: condition.not_values.clone().unwrap_or_default(),
-                }).collect()).unwrap_or_default(),
+                when: rule
+                    .when
+                    .as_ref()
+                    .map(|w| {
+                        w.iter()
+                            .map(|condition| crate::mesh::AuthzCondition {
+                                key: condition.key.clone(),
+                                values: condition.values.clone().unwrap_or_default(),
+                                not_values: condition.not_values.clone().unwrap_or_default(),
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default(),
                 deny: !rule.action.as_ref().map(|a| a.allow).unwrap_or(true),
             };
             authz_rules.push(authz_rule);
@@ -321,12 +394,23 @@ impl IstioMesh {
         Ok(SecurityPolicy {
             name: authz.metadata.name.clone(),
             namespace: authz.metadata.namespace.clone(),
-            selector: authz.spec.selector.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+            selector: authz
+                .spec
+                .selector
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
             authentication_rules: auth_rules,
             authorization_rules: authz_rules,
             mtls_enabled: authz.spec.action.as_ref().map(|a| a.allow).unwrap_or(true),
-            created_at: authz.metadata.creation_timestamp.unwrap_or_else(|| Utc::now()),
-            updated_at: authz.metadata.creation_timestamp.unwrap_or_else(|| Utc::now()),
+            created_at: authz
+                .metadata
+                .creation_timestamp
+                .unwrap_or_else(|| Utc::now()),
+            updated_at: authz
+                .metadata
+                .creation_timestamp
+                .unwrap_or_else(|| Utc::now()),
         })
     }
 
@@ -334,7 +418,7 @@ impl IstioMesh {
     async fn apply_istio_traffic_policy(&self, policy: &TrafficPolicy) -> Result<()> {
         // Convert traffic policy to Istio VirtualService
         let vsvc = self.convert_traffic_policy_to_istio_virtual_service(policy)?;
-        
+
         // Apply via Kubernetes API
         self.apply_istio_virtual_service(&vsync).await
     }
@@ -343,33 +427,36 @@ impl IstioMesh {
     async fn apply_istio_security_policy(&self, policy: &SecurityPolicy) -> Result<()> {
         // Convert security policy to Istio AuthorizationPolicy
         let authz = self.convert_security_policy_to_istio_authz_policy(policy)?;
-        
+
         // Apply via Kubernetes API
         self.apply_istio_authz_policy(&authz).await
     }
 
     /// Convert traffic policy to Istio VirtualService
-    fn convert_traffic_policy_to_istio_virtual_service(&self, policy: &TrafficPolicy) -> Result<IstioVirtualService> {
+    fn convert_traffic_policy_to_istio_virtual_service(
+        &self,
+        policy: &TrafficPolicy,
+    ) -> Result<IstioVirtualService> {
         let mut http_routes = Vec::new();
 
         for rule in &policy.rules {
             let http_route = IstioHttpRoute {
-                match: Vec::new(), // Would need to convert match conditions
-                route: vec![
-                    IstioRouteDestination {
-                        destination: IstioDestination {
-                            host: "fortress.default.svc.cluster.local".to_string(),
-                            subset: Some("v1".to_string()),
-                            port: Some(8080),
-                        },
-                        weight: Some(100),
-                    }
-                ],
+                r#match: Vec::new(), // Would need to convert match conditions
+                route: vec![IstioRouteDestination {
+                    destination: IstioDestination {
+                        host: "fortress.default.svc.cluster.local".to_string(),
+                        subset: Some("v1".to_string()),
+                        port: Some(8080),
+                    },
+                    weight: Some(100),
+                }],
                 timeout: rule.timeout_seconds.map(|t| format!("{}s", t)),
                 retries: rule.retries.map(|r| IstioRetry {
                     attempts: r,
                     per_try_timeout: Some("10s".to_string()),
-                    retry_on: Some("5xx,gateway-error,reset,connect-failure,refused-stream".to_string()),
+                    retry_on: Some(
+                        "5xx,gateway-error,reset,connect-failure,refused-stream".to_string(),
+                    ),
                 }),
             };
             http_routes.push(http_route);
@@ -390,17 +477,24 @@ impl IstioMesh {
     }
 
     /// Convert security policy to Istio AuthorizationPolicy
-    fn convert_security_policy_to_istio_authz_policy(&self, policy: &SecurityPolicy) -> Result<IstioAuthzPolicy> {
+    fn convert_security_policy_to_istio_authz_policy(
+        &self,
+        policy: &SecurityPolicy,
+    ) -> Result<IstioAuthzPolicy> {
         let mut rules = Vec::new();
 
         for authz_rule in &policy.authorization_rules {
             let rule = IstioAuthzPolicyRule {
                 name: Some(authz_rule.name.clone()),
-                when: authz_rule.when.iter().map(|condition| IstioAuthzCondition {
-                    key: condition.key.clone(),
-                    values: Some(condition.values.clone()),
-                    not_values: Some(condition.not_values.clone()),
-                }).collect(),
+                when: authz_rule
+                    .when
+                    .iter()
+                    .map(|condition| IstioAuthzCondition {
+                        key: condition.key.clone(),
+                        values: Some(condition.values.clone()),
+                        not_values: Some(condition.not_values.clone()),
+                    })
+                    .collect(),
                 action: Some(IstioAuthzAction {
                     allow: matches!(authz_rule.action, crate::mesh::AuthzAction::Allow),
                 }),
@@ -419,32 +513,39 @@ impl IstioMesh {
                     match_labels: policy.selector.clone(),
                 },
                 rules,
-                action: Some(IstioAuthzAction {
-                    allow: true,
-                }),
+                action: Some(IstioAuthzAction { allow: true }),
             },
         })
     }
 
     /// Apply Istio VirtualService via Kubernetes API
     async fn apply_istio_virtual_service(&self, vsvc: &IstioVirtualService) -> Result<()> {
-        let client = self.client.as_ref()
+        let client = self
+            .client
+            .as_ref()
             .ok_or_else(|| FortressError::mesh("Istio client not initialized"))?;
 
         let url = format!("http://localhost:8080/apis/networking.istio.io/v1beta1/namespaces/{}/virtualservices/{}", 
                         vsvc.metadata.namespace, vsvc.metadata.name);
-        
-        let vsvc_json = serde_json::to_value(vsvc)
-            .map_err(|e| FortressError::mesh(format!("Failed to serialize VirtualService: {}", e)))?;
 
-        let response = client.put(&url)
+        let vsvc_json = serde_json::to_value(vsvc).map_err(|e| {
+            FortressError::mesh(format!("Failed to serialize VirtualService: {}", e))
+        })?;
+
+        let response = client
+            .put(&url)
             .json(&vsvc_json)
             .send()
             .await
-            .map_err(|e| FortressError::mesh(format!("Istio VirtualService API request failed: {}", e)))?;
+            .map_err(|e| {
+                FortressError::mesh(format!("Istio VirtualService API request failed: {}", e))
+            })?;
 
         if !response.status().is_success() {
-            return Err(FortressError::mesh(format!("Istio VirtualService API returned status: {}", response.status())));
+            return Err(FortressError::mesh(format!(
+                "Istio VirtualService API returned status: {}",
+                response.status()
+            )));
         }
 
         tracing::info!("Applied Istio VirtualService: {}", vsvc.metadata.name);
@@ -453,23 +554,35 @@ impl IstioMesh {
 
     /// Apply Istio AuthorizationPolicy via Kubernetes API
     async fn apply_istio_authz_policy(&self, authz: &IstioAuthzPolicy) -> Result<()> {
-        let client = self.client.as_ref()
+        let client = self
+            .client
+            .as_ref()
             .ok_or_else(|| FortressError::mesh("Istio client not initialized"))?;
 
         let url = format!("http://localhost:8080/apis/security.istio.io/v1beta1/namespaces/{}/authorizationpolicies/{}", 
                         authz.metadata.namespace, authz.metadata.name);
-        
-        let authz_json = serde_json::to_value(authz)
-            .map_err(|e| FortressError::mesh(format!("Failed to serialize AuthorizationPolicy: {}", e)))?;
 
-        let response = client.put(&url)
+        let authz_json = serde_json::to_value(authz).map_err(|e| {
+            FortressError::mesh(format!("Failed to serialize AuthorizationPolicy: {}", e))
+        })?;
+
+        let response = client
+            .put(&url)
             .json(&authz_json)
             .send()
             .await
-            .map_err(|e| FortressError::mesh(format!("Istio AuthorizationPolicy API request failed: {}", e)))?;
+            .map_err(|e| {
+                FortressError::mesh(format!(
+                    "Istio AuthorizationPolicy API request failed: {}",
+                    e
+                ))
+            })?;
 
         if !response.status().is_success() {
-            return Err(FortressError::mesh(format!("Istio AuthorizationPolicy API returned status: {}", response.status())));
+            return Err(FortressError::mesh(format!(
+                "Istio AuthorizationPolicy API returned status: {}",
+                response.status()
+            )));
         }
 
         tracing::info!("Applied Istio AuthorizationPolicy: {}", authz.metadata.name);
@@ -479,23 +592,28 @@ impl IstioMesh {
     /// Get Istio metrics
     async fn get_istio_metrics(&self) -> Result<IstioMetrics> {
         // Get metrics from Istio telemetry
-        let client = self.client.as_ref()
+        let client = self
+            .client
+            .as_ref()
             .ok_or_else(|| FortressError::mesh("Istio client not initialized"))?;
 
         let url = "http://localhost:15090/stats";
-        
-        let response = client.get(url)
-            .send()
-            .await
-            .map_err(|e| FortressError::mesh(format!("Istio metrics API request failed: {}", e)))?;
+
+        let response =
+            client.get(url).send().await.map_err(|e| {
+                FortressError::mesh(format!("Istio metrics API request failed: {}", e))
+            })?;
 
         if !response.status().is_success() {
-            return Err(FortressError::mesh(format!("Istio metrics API returned status: {}", response.status())));
+            return Err(FortressError::mesh(format!(
+                "Istio metrics API returned status: {}",
+                response.status()
+            )));
         }
 
-        let metrics_text = response.text()
-            .await
-            .map_err(|e| FortressError::mesh(format!("Failed to read Istio metrics response: {}", e)))?;
+        let metrics_text = response.text().await.map_err(|e| {
+            FortressError::mesh(format!("Failed to read Istio metrics response: {}", e))
+        })?;
 
         self.parse_istio_metrics(&metrics_text)
     }
@@ -547,9 +665,9 @@ impl MeshProvider for IstioMesh {
 
     async fn initialize(&mut self, config: &MeshConfig) -> Result<()> {
         // Extract Istio-specific config
-        let istio_config: IstioMeshConfig = serde_json::from_value(
-            serde_json::to_value(&config.settings).unwrap_or_default()
-        ).unwrap_or_default();
+        let istio_config: IstioMeshConfig =
+            serde_json::from_value(serde_json::to_value(&config.settings).unwrap_or_default())
+                .unwrap_or_default();
 
         self.config = istio_config;
 
@@ -603,7 +721,10 @@ impl MeshProvider for IstioMesh {
                     match self.istio_virtual_service_to_traffic_policy(&vsync) {
                         Ok(policy) => policies.push(policy),
                         Err(e) => {
-                            tracing::warn!("Failed to convert Istio VirtualService to traffic policy: {}", e);
+                            tracing::warn!(
+                                "Failed to convert Istio VirtualService to traffic policy: {}",
+                                e
+                            );
                         }
                     }
                 }
@@ -665,13 +786,14 @@ impl MeshProvider for IstioMesh {
         }
 
         let istio_metrics = self.get_istio_metrics().await?;
-        
+
         Ok(MeshMetrics {
             request_count: istio_metrics.request_total,
             request_duration_ms: 0, // Would need to calculate from histogram stats
             request_error_count: istio_metrics.request_failure_total,
             request_success_rate: if istio_metrics.request_total > 0 {
-                (istio_metrics.request_total - istio_metrics.request_failure_total) as f64 / istio_metrics.request_total as f64
+                (istio_metrics.request_total - istio_metrics.request_failure_total) as f64
+                    / istio_metrics.request_total as f64
             } else {
                 0.0
             },
@@ -687,11 +809,13 @@ impl MeshProvider for IstioMesh {
         }
 
         // Check if Istio Pilot API is accessible
-        let client = self.client.as_ref()
+        let client = self
+            .client
+            .as_ref()
             .ok_or_else(|| FortressError::mesh("Istio client not initialized"))?;
 
         let url = format!("{}/v1/registration", self.config.pilot_address);
-        
+
         match client.get(&url).send().await {
             Ok(response) => {
                 if response.status().is_success() {
@@ -707,7 +831,7 @@ impl MeshProvider for IstioMesh {
     async fn shutdown(&mut self) -> Result<()> {
         self.client = None;
         self.initialized = false;
-        
+
         // Clear caches
         {
             let mut node_cache = self.node_cache.write().await;
@@ -717,7 +841,7 @@ impl MeshProvider for IstioMesh {
             let mut service_cache = self.service_cache.write().await;
             service_cache.clear();
         }
-        
+
         tracing::info!("Istio mesh provider shutdown");
         Ok(())
     }
@@ -763,7 +887,7 @@ pub struct IstioVirtualServiceSpec {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IstioHttpRoute {
-    pub match: Vec<IstioMatchCondition>,
+    pub r#match: Vec<IstioMatchCondition>,
     pub route: Vec<IstioRouteDestination>,
     pub timeout: Option<String>,
     pub retries: Option<IstioRetry>,
@@ -902,7 +1026,10 @@ mod tests {
     #[test]
     fn test_istio_config_default() {
         let config = IstioMeshConfig::default();
-        assert_eq!(config.pilot_address, "http://istio-pilot.istio-system:15014");
+        assert_eq!(
+            config.pilot_address,
+            "http://istio-pilot.istio-system:15014"
+        );
         assert_eq!(config.namespace, "default");
         assert!(config.service_discovery_enabled);
         assert!(config.traffic_management_enabled);
@@ -913,7 +1040,7 @@ mod tests {
     fn test_istio_mesh_creation() {
         let config = IstioMeshConfig::default();
         let mesh = IstioMesh::new(config);
-        
+
         assert_eq!(mesh.name(), "istio");
         assert_eq!(mesh.mesh_type(), MeshType::Istio);
         assert!(!mesh.initialized);

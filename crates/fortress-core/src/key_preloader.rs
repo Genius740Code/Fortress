@@ -58,10 +58,7 @@ impl Default for KeyPreloadConfig {
                 "authentication".to_string(),
                 "session".to_string(),
             ],
-            priority_performance_profiles: vec![
-                "lightning".to_string(),
-                "balanced".to_string(),
-            ],
+            priority_performance_profiles: vec!["lightning".to_string(), "balanced".to_string()],
             enable_background_preload: true,
             background_preload_interval: Duration::minutes(30),
             track_preload_stats: true,
@@ -212,7 +209,7 @@ impl KeyPreloader {
     /// Perform initial preloading based on configuration
     async fn perform_initial_preload(&self) -> Result<()> {
         let start_time = std::time::Instant::now();
-        
+
         if self.config.preload_all_keys {
             self.preload_all_keys().await?;
         } else {
@@ -220,17 +217,17 @@ impl KeyPreloader {
             if self.config.preload_frequently_used {
                 self.preload_frequently_used_keys().await?;
             }
-            
+
             if self.config.preload_by_purpose {
                 self.preload_keys_by_purpose().await?;
             }
-            
+
             self.preload_expiring_keys().await?;
         }
 
         let elapsed = start_time.elapsed();
         self.update_preload_stats(elapsed).await;
-        
+
         Ok(())
     }
 
@@ -244,13 +241,14 @@ impl KeyPreloader {
             if current_memory + key.len() > self.config.max_memory_usage_bytes {
                 break;
             }
-            
+
             if preloaded_count >= self.config.max_keys_to_preload {
                 break;
             }
 
             let key_len = key.len();
-            self.preload_key(key_id, key, metadata, PreloadStrategy::All).await?;
+            self.preload_key(key_id, key, metadata, PreloadStrategy::All)
+                .await?;
             preloaded_count += 1;
             current_memory += key_len;
         }
@@ -265,9 +263,13 @@ impl KeyPreloader {
             .iter()
             .filter(|(_, access_stats)| access_stats.access_frequency > 1.0) // More than 1 access per hour
             .collect();
-        
+
         // Sort by access frequency (descending)
-        frequent_keys.sort_by(|a, b| b.1.access_frequency.partial_cmp(&a.1.access_frequency).unwrap());
+        frequent_keys.sort_by(|a, b| {
+            b.1.access_frequency
+                .partial_cmp(&a.1.access_frequency)
+                .unwrap()
+        });
 
         let mut preloaded_count = 0;
         let mut current_memory = 0;
@@ -276,7 +278,7 @@ impl KeyPreloader {
             if current_memory > self.config.max_memory_usage_bytes {
                 break;
             }
-            
+
             if preloaded_count >= self.config.max_keys_to_preload {
                 break;
             }
@@ -287,7 +289,13 @@ impl KeyPreloader {
                 }
 
                 let key_len = key.len();
-                self.preload_key(key_id.clone(), key, metadata, PreloadStrategy::FrequentlyUsed).await?;
+                self.preload_key(
+                    key_id.clone(),
+                    key,
+                    metadata,
+                    PreloadStrategy::FrequentlyUsed,
+                )
+                .await?;
                 preloaded_count += 1;
                 current_memory += key_len;
             }
@@ -306,7 +314,7 @@ impl KeyPreloader {
             if current_memory > self.config.max_memory_usage_bytes {
                 break;
             }
-            
+
             if preloaded_count >= self.config.max_keys_to_preload {
                 break;
             }
@@ -319,7 +327,8 @@ impl KeyPreloader {
                     }
 
                     let key_len = key.len();
-                    self.preload_key(key_id.clone(), key, metadata, PreloadStrategy::ByPurpose).await?;
+                    self.preload_key(key_id.clone(), key, metadata, PreloadStrategy::ByPurpose)
+                        .await?;
                     preloaded_count += 1;
                     current_memory += key_len;
                 }
@@ -340,7 +349,7 @@ impl KeyPreloader {
             if current_memory > self.config.max_memory_usage_bytes {
                 break;
             }
-            
+
             if preloaded_count >= self.config.max_keys_to_preload {
                 break;
             }
@@ -353,7 +362,8 @@ impl KeyPreloader {
                     }
 
                     let key_len = key.len();
-                    self.preload_key(key_id.clone(), key, metadata, PreloadStrategy::ExpiringSoon).await?;
+                    self.preload_key(key_id.clone(), key, metadata, PreloadStrategy::ExpiringSoon)
+                        .await?;
                     preloaded_count += 1;
                     current_memory += key_len;
                 }
@@ -364,7 +374,13 @@ impl KeyPreloader {
     }
 
     /// Preload a specific key into memory
-    async fn preload_key(&self, key_id: KeyId, key: SecureKey, metadata: KeyMetadata, strategy: PreloadStrategy) -> Result<()> {
+    async fn preload_key(
+        &self,
+        key_id: KeyId,
+        key: SecureKey,
+        metadata: KeyMetadata,
+        strategy: PreloadStrategy,
+    ) -> Result<()> {
         let mut preloaded_keys = self.preloaded_keys.write().await;
         let mut preload_metadata = self.preload_metadata.write().await;
         let mut access_stats = self.access_stats.write().await;
@@ -374,22 +390,28 @@ impl KeyPreloader {
         preload_metadata.insert(key_id.clone(), metadata.clone());
 
         // Update access statistics
-        let stats = access_stats.entry(key_id.clone()).or_insert(KeyAccessStats {
-            access_count: 0,
-            last_accessed: Utc::now(),
-            last_access_time: Utc::now(),
-            first_accessed: Utc::now(),
-            access_frequency: 0.0,
-            key_size_bytes: metadata.algorithm.len(), // Approximate size
-            is_preloaded: true,
-        });
+        let stats = access_stats
+            .entry(key_id.clone())
+            .or_insert(KeyAccessStats {
+                access_count: 0,
+                last_accessed: Utc::now(),
+                last_access_time: Utc::now(),
+                first_accessed: Utc::now(),
+                access_frequency: 0.0,
+                key_size_bytes: metadata.algorithm.len(), // Approximate size
+                is_preloaded: true,
+            });
         stats.is_preloaded = true;
 
         // Update strategy statistics
         if self.config.track_preload_stats {
             let mut stats_guard = self.stats.write().await;
-            *stats_guard.keys_by_strategy.entry(strategy.clone()).or_insert(0) += 1;
-            *stats_guard.memory_by_strategy.entry(strategy).or_insert(0) += metadata.algorithm.len();
+            *stats_guard
+                .keys_by_strategy
+                .entry(strategy.clone())
+                .or_insert(0) += 1;
+            *stats_guard.memory_by_strategy.entry(strategy).or_insert(0) +=
+                metadata.algorithm.len();
         }
 
         Ok(())
@@ -420,7 +442,7 @@ impl KeyPreloader {
 
         let mut stats = self.access_stats.write().await;
         let now = Utc::now();
-        
+
         let entry = stats.entry(key_id.clone()).or_insert(KeyAccessStats {
             access_count: 0,
             last_accessed: Utc::now(),
@@ -459,7 +481,7 @@ impl KeyPreloader {
             // Find keys that should be preloaded but aren't
             let all_keys = database.list_keys(None, None).await?;
             let preloaded_set: HashSet<_> = preloaded_keys.read().await.keys().cloned().collect();
-            
+
             for (key_id, metadata) in all_keys {
                 if preloaded_set.contains(&key_id) {
                     continue;
@@ -520,17 +542,17 @@ impl KeyPreloader {
     /// Update preloading statistics
     async fn update_preload_stats(&self, elapsed: std::time::Duration) {
         let mut stats = self.stats.write().await;
-        
+
         let preloaded_keys = self.preloaded_keys.read().await;
         stats.total_preloaded_keys = preloaded_keys.len();
         stats.total_memory_usage_bytes = preloaded_keys.values().map(|key| key.len()).sum();
         stats.last_preload_time = Some(Utc::now());
-        
+
         let elapsed_ms = elapsed.as_millis() as f64;
         if stats.total_preloaded_keys > 0 {
             stats.avg_preload_time_ms = elapsed_ms / stats.total_preloaded_keys as f64;
         }
-        
+
         stats.preload_success_rate = if stats.total_preloaded_keys > 0 {
             1.0 // All attempted preloads were successful
         } else {
@@ -553,7 +575,7 @@ impl KeyPreloader {
         if !self.config.enable_background_preload {
             return Ok(());
         }
-        
+
         // For now, just mark as started - actual implementation would spawn a background task
         Ok(())
     }
@@ -586,7 +608,13 @@ impl KeyPreloader {
     /// Force preload a specific key
     pub async fn force_preload_key(&self, key_id: &KeyId) -> Result<bool> {
         if let Some((key, metadata)) = self.database.retrieve_key(key_id).await? {
-            self.preload_key(key_id.clone(), key, metadata, PreloadStrategy::Custom("force".to_string())).await?;
+            self.preload_key(
+                key_id.clone(),
+                key,
+                metadata,
+                PreloadStrategy::Custom("force".to_string()),
+            )
+            .await?;
             Ok(true)
         } else {
             Ok(false)
@@ -601,7 +629,7 @@ impl KeyPreloader {
 
         let key_evicted = preloaded_keys.remove(key_id).is_some();
         preload_metadata.remove(key_id);
-        
+
         if let Some(stats) = access_stats.get_mut(key_id) {
             stats.is_preloaded = false;
         }
@@ -613,7 +641,7 @@ impl KeyPreloader {
     pub async fn get_preloaded_keys(&self) -> Vec<(KeyId, SecureKey, KeyMetadata)> {
         let preloaded_keys = self.preloaded_keys.read().await;
         let preload_metadata = self.preload_metadata.read().await;
-        
+
         let mut result = Vec::new();
         for (key_id, key) in preloaded_keys.iter() {
             if let Some(metadata) = preload_metadata.get(key_id) {
@@ -637,7 +665,7 @@ impl KeyPreloader {
         let count = preloaded_keys.len();
         preloaded_keys.clear();
         preload_metadata.clear();
-        
+
         // Update all access stats to reflect not preloaded
         for stats in access_stats.values_mut() {
             stats.is_preloaded = false;
@@ -666,29 +694,29 @@ impl KeyPreloader {
             PreloadStrategy::All => {
                 self.preload_all_keys().await?;
                 Ok(())
-            },
+            }
             PreloadStrategy::FrequentlyUsed => {
                 self.preload_frequently_used_keys().await?;
                 Ok(())
-            },
+            }
             PreloadStrategy::ByPurpose => {
                 self.preload_keys_by_purpose().await?;
                 Ok(())
-            },
+            }
             PreloadStrategy::ExpiringSoon => {
                 self.preload_expiring_keys().await?;
                 Ok(())
-            },
+            }
             PreloadStrategy::ByPerformanceProfile => {
                 // For now, treat as same as frequently used
                 self.preload_frequently_used_keys().await?;
                 Ok(())
-            },
+            }
             PreloadStrategy::Custom(_) => {
                 // For now, treat as same as frequently used
                 self.preload_frequently_used_keys().await?;
                 Ok(())
-            },
+            }
         }
     }
 
@@ -698,8 +726,10 @@ impl KeyPreloader {
         let mut recommendations = Vec::new();
 
         // Memory usage recommendations
-        if stats.total_memory_usage_bytes > 50 * 1024 * 1024 { // 50MB
-            recommendations.push("Consider reducing max_keys_to_preload to lower memory usage".to_string());
+        if stats.total_memory_usage_bytes > 50 * 1024 * 1024 {
+            // 50MB
+            recommendations
+                .push("Consider reducing max_keys_to_preload to lower memory usage".to_string());
         }
 
         // Hit rate recommendations
@@ -707,18 +737,25 @@ impl KeyPreloader {
         if total_requests > 0 {
             let hit_rate = stats.preload_hits as f64 / total_requests as f64;
             if hit_rate < 0.8 {
-                recommendations.push("Low cache hit rate detected. Consider adjusting preload strategies.".to_string());
+                recommendations.push(
+                    "Low cache hit rate detected. Consider adjusting preload strategies."
+                        .to_string(),
+                );
             }
         }
 
         // Success rate recommendations
         if stats.preload_success_rate < 0.9 {
-            recommendations.push("Low preload success rate. Check key accessibility and configuration.".to_string());
+            recommendations.push(
+                "Low preload success rate. Check key accessibility and configuration.".to_string(),
+            );
         }
 
         // Performance recommendations
         if stats.avg_preload_time_ms > 100.0 {
-            recommendations.push("High preload time detected. Consider optimizing key database queries.".to_string());
+            recommendations.push(
+                "High preload time detected. Consider optimizing key database queries.".to_string(),
+            );
         }
 
         recommendations
@@ -729,8 +766,14 @@ impl std::fmt::Debug for KeyPreloader {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("KeyPreloader")
             .field("config", &self.config)
-            .field("preloaded_keys_count", &self.preloaded_keys.try_read().map(|g| g.len()).unwrap_or(0))
-            .field("access_stats_count", &self.access_stats.try_read().map(|g| g.len()).unwrap_or(0))
+            .field(
+                "preloaded_keys_count",
+                &self.preloaded_keys.try_read().map(|g| g.len()).unwrap_or(0),
+            )
+            .field(
+                "access_stats_count",
+                &self.access_stats.try_read().map(|g| g.len()).unwrap_or(0),
+            )
             .finish()
     }
 }
@@ -739,26 +782,30 @@ impl std::fmt::Debug for KeyPreloader {
 mod tests {
     use super::*;
     use crate::aes256gcm_wrapper::Aes256GcmWrapper;
-use crate::encryption::EncryptionAlgorithm;
+    use crate::encryption::EncryptionAlgorithm;
+    use crate::encryption::PerformanceProfile;
     use crate::error::{FortressError, Result, StorageErrorCode};
     use crate::key::{KeyId, KeyMetadata, KeyPurpose};
-use crate::encryption::PerformanceProfile;
-    use crate::key_database::{KeyDatabase, KeyDatabaseConfig, KeyDatabaseBackend, SqliteKeyDatabase, create_key_database};
-    use chrono::{DateTime, Utc, Duration as ChronoDuration};
+    use crate::key_database::{
+        create_key_database, KeyDatabase, KeyDatabaseBackend, KeyDatabaseConfig, SqliteKeyDatabase,
+    };
+    use chrono::{DateTime, Duration as ChronoDuration, Utc};
     use std::sync::Arc;
     use tempfile::tempdir;
 
     /// Create a test database for preloader tests
     async fn create_test_database_with_keys() -> Result<Arc<dyn KeyDatabase>> {
-        let temp_dir = tempdir().map_err(|e| FortressError::storage(
-            format!("Failed to create temp dir: {}", e),
-            "tempdir".to_string(),
-            StorageErrorCode::IoError
-        ))?;
-        
+        let temp_dir = tempdir().map_err(|e| {
+            FortressError::storage(
+                format!("Failed to create temp dir: {}", e),
+                "tempdir".to_string(),
+                StorageErrorCode::IoError,
+            )
+        })?;
+
         let db_path = temp_dir.path().join("test_preload.db");
         let connection_string = format!("sqlite:{}", db_path.display());
-        
+
         let config = KeyDatabaseConfig {
             backend: KeyDatabaseBackend::Sqlite,
             connection_string,
@@ -767,13 +814,13 @@ use crate::encryption::PerformanceProfile;
             encrypt_at_rest: false,
             master_key: None,
         };
-        
+
         let db: Arc<dyn KeyDatabase> = Arc::from(create_key_database(config).await?);
         db.initialize().await?;
-        
+
         // Add test keys with different characteristics
         let algorithm = Aes256GcmWrapper::new();
-        
+
         // Key for encryption purpose
         let key1 = SecureKey::generate(algorithm.key_size()).expect("Failed to generate test key");
         let metadata1 = KeyMetadata::new(
@@ -785,8 +832,9 @@ use crate::encryption::PerformanceProfile;
             "DataEncryption".to_string(),
             PerformanceProfile::Balanced,
         );
-        db.store_key(&"encryption_key".to_string(), &key1, &metadata1).await?;
-        
+        db.store_key(&"encryption_key".to_string(), &key1, &metadata1)
+            .await?;
+
         // Key for authentication purpose
         let key2 = SecureKey::generate(algorithm.key_size()).expect("Failed to generate test key");
         let metadata2 = KeyMetadata::new(
@@ -798,8 +846,9 @@ use crate::encryption::PerformanceProfile;
             "Authentication".to_string(),
             PerformanceProfile::Lightning,
         );
-        db.store_key(&"auth_key".to_string(), &key2, &metadata2).await?;
-        
+        db.store_key(&"auth_key".to_string(), &key2, &metadata2)
+            .await?;
+
         // Key for session purpose
         let key3 = SecureKey::generate(algorithm.key_size()).expect("Failed to generate test key");
         let metadata3 = KeyMetadata::new(
@@ -811,8 +860,9 @@ use crate::encryption::PerformanceProfile;
             "SessionManagement".to_string(),
             PerformanceProfile::Lightning,
         );
-        db.store_key(&"session_key".to_string(), &key3, &metadata3).await?;
-        
+        db.store_key(&"session_key".to_string(), &key3, &metadata3)
+            .await?;
+
         // Key with custom purpose
         let key4 = SecureKey::generate(algorithm.key_size()).expect("Failed to generate test key");
         let metadata4 = KeyMetadata::new(
@@ -824,8 +874,9 @@ use crate::encryption::PerformanceProfile;
             "KeyEncryption".to_string(),
             PerformanceProfile::Balanced,
         );
-        db.store_key(&"custom_key".to_string(), &key4, &metadata4).await?;
-        
+        db.store_key(&"custom_key".to_string(), &key4, &metadata4)
+            .await?;
+
         Ok(db)
     }
 
@@ -844,10 +895,7 @@ use crate::encryption::PerformanceProfile;
                 "authentication".to_string(),
                 "session".to_string(),
             ],
-            priority_performance_profiles: vec![
-                "lightning".to_string(),
-                "balanced".to_string(),
-            ],
+            priority_performance_profiles: vec!["lightning".to_string(), "balanced".to_string()],
             enable_background_preload: false, // Disable for testing
             background_preload_interval: ChronoDuration::minutes(30),
             track_preload_stats: true,
@@ -859,16 +907,16 @@ use crate::encryption::PerformanceProfile;
     async fn test_preloader_creation() -> Result<()> {
         let db = create_test_database_with_keys().await?;
         let config = create_test_preloader_config();
-        
+
         let preloader = KeyPreloader::new(db.clone(), config);
-        
+
         // Verify initial state
         let stats = preloader.get_stats().await;
         assert_eq!(stats.total_preloaded_keys, 0);
         assert_eq!(stats.preload_hits, 0);
         assert_eq!(stats.preload_misses, 0);
         assert_eq!(stats.total_memory_usage_bytes, 0);
-        
+
         Ok(())
     }
 
@@ -877,15 +925,15 @@ use crate::encryption::PerformanceProfile;
         let db = create_test_database_with_keys().await?;
         let mut config = create_test_preloader_config();
         config.preload_all_keys = true; // Preload all keys for this test
-        
+
         let preloader = KeyPreloader::new(db.clone(), config);
         preloader.initialize().await?;
-        
+
         // Check that keys were preloaded
         let stats = preloader.get_stats().await;
         assert!(stats.total_preloaded_keys > 0);
         assert!(stats.total_memory_usage_bytes > 0);
-        
+
         Ok(())
     }
 
@@ -895,18 +943,20 @@ use crate::encryption::PerformanceProfile;
         let mut config = create_test_preloader_config();
         config.preload_by_purpose = true;
         config.preload_all_keys = false;
-        
+
         let preloader = KeyPreloader::new(db.clone(), config);
         preloader.initialize().await?;
-        
+
         // Check that priority purpose keys were preloaded
         let stats = preloader.get_stats().await;
         assert!(stats.total_preloaded_keys > 0);
-        
+
         // Verify encryption key is preloaded (it's in priority purposes)
-        let preloaded_key = preloader.get_preloaded_key(&"encryption_key".to_string()).await;
+        let preloaded_key = preloader
+            .get_preloaded_key(&"encryption_key".to_string())
+            .await;
         assert!(preloaded_key.is_some());
-        
+
         Ok(())
     }
 
@@ -917,18 +967,20 @@ use crate::encryption::PerformanceProfile;
         config.preload_expiring_soon = ChronoDuration::hours(8); // Keys expiring within 8 hours
         config.preload_all_keys = false;
         config.preload_by_purpose = false;
-        
+
         let preloader = KeyPreloader::new(db.clone(), config);
         preloader.initialize().await?;
-        
+
         // Check that expiring keys were preloaded
         let stats = preloader.get_stats().await;
         assert!(stats.total_preloaded_keys > 0);
-        
+
         // Verify session key (expires in 6 hours) is preloaded
-        let preloaded_key = preloader.get_preloaded_key(&"session_key".to_string()).await;
+        let preloaded_key = preloader
+            .get_preloaded_key(&"session_key".to_string())
+            .await;
         assert!(preloaded_key.is_some());
-        
+
         Ok(())
     }
 
@@ -938,21 +990,21 @@ use crate::encryption::PerformanceProfile;
         let config = create_test_preloader_config();
         let preloader = KeyPreloader::new(db.clone(), config);
         preloader.initialize().await?;
-        
+
         // Force preload a specific key
         let key_id = "custom_key".to_string();
         let preloaded = preloader.force_preload_key(&key_id).await?;
         assert!(preloaded);
-        
+
         // Verify key is now preloaded
         let preloaded_key = preloader.get_preloaded_key(&key_id).await;
         assert!(preloaded_key.is_some());
-        
+
         // Try to preload non-existent key
         let non_existent_id = "non_existent".to_string();
         let not_preloaded = preloader.force_preload_key(&non_existent_id).await?;
         assert!(!not_preloaded);
-        
+
         Ok(())
     }
 
@@ -961,28 +1013,28 @@ use crate::encryption::PerformanceProfile;
         let db = create_test_database_with_keys().await?;
         let mut config = create_test_preloader_config();
         config.preload_all_keys = true;
-        
+
         let preloader = KeyPreloader::new(db.clone(), config);
         preloader.initialize().await?;
-        
+
         // Verify key is preloaded
         let key_id = "encryption_key".to_string();
         let preloaded_before = preloader.get_preloaded_key(&key_id).await;
         assert!(preloaded_before.is_some());
-        
+
         // Evict the key
         let evicted = preloader.evict_key(&key_id).await?;
         assert!(evicted);
-        
+
         // Verify key is no longer preloaded
         let preloaded_after = preloader.get_preloaded_key(&key_id).await;
         assert!(preloaded_after.is_none());
-        
+
         // Try to evict non-existent key
         let non_existent_id = "non_existent".to_string();
         let not_evicted = preloader.evict_key(&non_existent_id).await?;
         assert!(!not_evicted);
-        
+
         Ok(())
     }
 
@@ -991,23 +1043,23 @@ use crate::encryption::PerformanceProfile;
         let db = create_test_database_with_keys().await?;
         let mut config = create_test_preloader_config();
         config.preload_all_keys = true;
-        
+
         let preloader = KeyPreloader::new(db.clone(), config);
         preloader.initialize().await?;
-        
+
         // Verify keys are preloaded
         let stats_before = preloader.get_stats().await;
         assert!(stats_before.total_preloaded_keys > 0);
-        
+
         // Clear all preloaded keys
         let cleared_count = preloader.clear_preloaded_keys().await?;
         assert!(cleared_count > 0);
-        
+
         // Verify no keys are preloaded
         let stats_after = preloader.get_stats().await;
         assert_eq!(stats_after.total_preloaded_keys, 0);
         assert_eq!(stats_after.total_memory_usage_bytes, 0);
-        
+
         Ok(())
     }
 
@@ -1016,31 +1068,31 @@ use crate::encryption::PerformanceProfile;
         let db = create_test_database_with_keys().await?;
         let mut config = create_test_preloader_config();
         config.enable_access_tracking = true;
-        
+
         let preloader = KeyPreloader::new(db.clone(), config);
         preloader.initialize().await?;
-        
+
         // Simulate key access
         let key_id = "encryption_key".to_string();
         preloader.record_key_access(&key_id).await;
-        
+
         // Get access stats
         let access_stats = preloader.get_access_stats().await;
         assert!(access_stats.contains_key(&key_id));
-        
+
         let stats = access_stats.get(&key_id).unwrap();
         assert_eq!(stats.access_count, 1);
         assert!(stats.last_access_time > DateTime::from_timestamp(0, 0).unwrap());
-        
+
         // Record multiple accesses
         for _ in 0..5 {
             preloader.record_key_access(&key_id).await;
         }
-        
+
         let updated_stats = preloader.get_access_stats().await;
         let updated_key_stats = updated_stats.get(&key_id).unwrap();
         assert_eq!(updated_key_stats.access_count, 6);
-        
+
         Ok(())
     }
 
@@ -1051,23 +1103,23 @@ use crate::encryption::PerformanceProfile;
         config.preload_frequently_used = true;
         config.preload_all_keys = false;
         config.enable_access_tracking = true;
-        
+
         let preloader = KeyPreloader::new(db.clone(), config);
         preloader.initialize().await?;
-        
+
         // Record frequent access to a specific key
         let key_id = "custom_key".to_string();
         for _ in 0..10 {
             preloader.record_key_access(&key_id).await;
         }
-        
+
         // Trigger frequently used preloading
         preloader.preload_frequently_used_keys().await?;
-        
+
         // Verify the frequently used key is preloaded
         let preloaded_key = preloader.get_preloaded_key(&key_id).await;
         assert!(preloaded_key.is_some());
-        
+
         Ok(())
     }
 
@@ -1078,15 +1130,15 @@ use crate::encryption::PerformanceProfile;
         config.max_keys_to_preload = 2; // Very small limit
         config.max_memory_usage_bytes = 1000; // Very small memory limit
         config.preload_all_keys = true;
-        
+
         let preloader = KeyPreloader::new(db.clone(), config);
         preloader.initialize().await?;
-        
+
         // Verify memory limits are respected
         let stats = preloader.get_stats().await;
         assert!(stats.total_preloaded_keys <= 2);
         assert!(stats.total_memory_usage_bytes <= 1000);
-        
+
         Ok(())
     }
 
@@ -1095,7 +1147,7 @@ use crate::encryption::PerformanceProfile;
         let db = create_test_database_with_keys().await?;
         let config = create_test_preloader_config();
         let preloader = KeyPreloader::new(db.clone(), config);
-        
+
         // Test different strategies
         let strategies = vec![
             PreloadStrategy::All,
@@ -1105,20 +1157,20 @@ use crate::encryption::PerformanceProfile;
             PreloadStrategy::ByPerformanceProfile,
             PreloadStrategy::Custom("test_strategy".to_string()),
         ];
-        
+
         for strategy in strategies {
             // Clear preloaded keys before each strategy test
             let _ = preloader.clear_preloaded_keys().await;
-            
+
             // Apply strategy
             preloader.apply_preload_strategy(&strategy).await?;
-            
+
             // Verify some keys might be preloaded (depending on strategy)
             let stats = preloader.get_stats().await;
             // The exact number depends on the strategy implementation
             assert!(stats.total_preloaded_keys >= 0);
         }
-        
+
         Ok(())
     }
 
@@ -1127,21 +1179,21 @@ use crate::encryption::PerformanceProfile;
         let db = create_test_database_with_keys().await?;
         let mut config = create_test_preloader_config();
         config.preload_all_keys = true;
-        
+
         let preloader = KeyPreloader::new(db.clone(), config);
         preloader.initialize().await?;
-        
+
         // Verify keys are preloaded
         let stats_before = preloader.get_stats().await;
         assert!(stats_before.total_preloaded_keys > 0);
-        
+
         // Shutdown preloader
         preloader.shutdown().await?;
-        
+
         // Verify no keys are preloaded after shutdown
         let stats_after = preloader.get_stats().await;
         assert_eq!(stats_after.total_preloaded_keys, 0);
-        
+
         Ok(())
     }
 
@@ -1151,39 +1203,39 @@ use crate::encryption::PerformanceProfile;
         let config = create_test_preloader_config();
         let preloader = KeyPreloader::new(db.clone(), config);
         preloader.initialize().await?;
-        
+
         // Spawn multiple concurrent tasks
         let mut handles = Vec::new();
-        
+
         for i in 0..10 {
             let preloader_clone = preloader.clone();
             let handle = tokio::spawn(async move {
                 let key_id = format!("concurrent_test_{}", i);
-                
+
                 // Force preload key
                 let preload_result = preloader_clone.force_preload_key(&key_id).await;
                 assert!(preload_result.is_ok());
-                
+
                 // Record access
                 preloader_clone.record_key_access(&key_id).await;
-                
+
                 // Get preloaded key
                 let get_result = preloader_clone.get_preloaded_key(&key_id).await;
                 assert!(get_result.is_some());
             });
-            
+
             handles.push(handle);
         }
-        
+
         // Wait for all tasks to complete
         for handle in handles {
             let _ = handle.await;
         }
-        
+
         // Verify preloader is still in consistent state
         let stats = preloader.get_stats().await;
         assert!(stats.total_preloaded_keys >= 0);
-        
+
         Ok(())
     }
 
@@ -1193,35 +1245,37 @@ use crate::encryption::PerformanceProfile;
         let config = create_test_preloader_config();
         let preloader = KeyPreloader::new(db.clone(), config);
         preloader.initialize().await?;
-        
+
         // Get recommendations
         let recommendations = preloader.get_performance_recommendations().await;
         assert!(!recommendations.is_empty());
-        
+
         // Add some access patterns and get new recommendations
         for i in 0..5 {
             let key_id = format!("rec_test_{}", i);
             preloader.record_key_access(&key_id).await;
         }
-        
+
         let updated_recommendations = preloader.get_performance_recommendations().await;
         assert!(!updated_recommendations.is_empty());
-        
+
         Ok(())
     }
 
     #[tokio::test]
     async fn test_preloader_with_no_keys() -> Result<()> {
         // Create empty database
-        let temp_dir = tempdir().map_err(|e| FortressError::storage(
-            format!("Failed to create temp dir: {}", e),
-            "tempdir".to_string(),
-            crate::error::StorageErrorCode::IoError
-        ))?;
-        
+        let temp_dir = tempdir().map_err(|e| {
+            FortressError::storage(
+                format!("Failed to create temp dir: {}", e),
+                "tempdir".to_string(),
+                crate::error::StorageErrorCode::IoError,
+            )
+        })?;
+
         let db_path = temp_dir.path().join("empty_test.db");
         let connection_string = format!("sqlite:{}", db_path.display());
-        
+
         let config = KeyDatabaseConfig {
             backend: KeyDatabaseBackend::Sqlite,
             connection_string,
@@ -1230,26 +1284,26 @@ use crate::encryption::PerformanceProfile;
             encrypt_at_rest: false,
             master_key: None,
         };
-        
+
         let db: Arc<dyn KeyDatabase> = Arc::from(create_key_database(config).await?);
         db.initialize().await?;
-        
+
         let preloader_config = create_test_preloader_config();
         let preloader = KeyPreloader::new(db.clone(), preloader_config);
         preloader.initialize().await?;
-        
+
         // Verify no keys are preloaded
         let stats = preloader.get_stats().await;
         assert_eq!(stats.total_preloaded_keys, 0);
-        
+
         // Try operations that should handle empty state gracefully
         let cleared_count = preloader.clear_preloaded_keys().await?;
         assert_eq!(cleared_count, 0);
-        
+
         let recommendations = preloader.get_performance_recommendations().await;
         // Should still provide recommendations even for empty state
         assert!(!recommendations.is_empty());
-        
+
         Ok(())
     }
 
@@ -1259,21 +1313,21 @@ use crate::encryption::PerformanceProfile;
         let config = create_test_preloader_config();
         let preloader = KeyPreloader::new(db.clone(), config);
         preloader.initialize().await?;
-        
+
         // Test operations with non-existent keys
         let non_existent_id = "non_existent_key".to_string();
-        
+
         // Try to get non-existent preloaded key
         let result = preloader.get_preloaded_key(&non_existent_id).await;
         assert!(result.is_none());
-        
+
         // Try to evict non-existent key
         let evicted = preloader.evict_key(&non_existent_id).await?;
         assert!(!evicted);
-        
+
         // Try to record access for non-existent key (should handle gracefully)
         preloader.record_key_access(&non_existent_id).await; // Should not error
-        
+
         Ok(())
     }
 
@@ -1283,40 +1337,42 @@ use crate::encryption::PerformanceProfile;
         let mut config = create_test_preloader_config();
         config.preload_all_keys = true;
         config.enable_access_tracking = true;
-        
+
         let preloader = KeyPreloader::new(db.clone(), config);
         preloader.initialize().await?;
-        
+
         // Perform known operations
         let key_id = "encryption_key".to_string();
-        
+
         // Force preload (should increment hits if already preloaded)
         let _ = preloader.force_preload_key(&key_id).await?;
-        
+
         // Get preloaded key (should increment hits)
         let _ = preloader.get_preloaded_key(&key_id).await;
         let _ = preloader.get_preloaded_key(&key_id).await;
-        
+
         // Get non-existent key (should increment misses)
-        let _ = preloader.get_preloaded_key(&"non_existent".to_string()).await;
-        
+        let _ = preloader
+            .get_preloaded_key(&"non_existent".to_string())
+            .await;
+
         // Record access
         preloader.record_key_access(&key_id).await;
-        
+
         // Verify statistics
         let stats = preloader.get_stats().await;
         assert!(stats.total_preloaded_keys > 0);
         assert!(stats.preload_hits >= 2); // At least 2 hits from our operations
         assert!(stats.preload_misses >= 1); // At least 1 miss
         assert!(stats.total_memory_usage_bytes > 0);
-        
+
         // Verify access statistics
         let access_stats = preloader.get_access_stats().await;
         assert!(access_stats.contains_key(&key_id));
-        
+
         let key_access_stats = access_stats.get(&key_id).unwrap();
         assert_eq!(key_access_stats.access_count, 1);
-        
+
         Ok(())
     }
 }

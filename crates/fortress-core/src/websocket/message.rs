@@ -251,9 +251,9 @@ impl WebSocketMessage {
 
     /// Create message with correlation ID
     pub fn with_correlation_id(
-        message_type: MessageType, 
-        payload: MessagePayload, 
-        correlation_id: String
+        message_type: MessageType,
+        payload: MessagePayload,
+        correlation_id: String,
     ) -> Self {
         let mut msg = Self::new(message_type, payload);
         msg.correlation_id = Some(correlation_id);
@@ -271,7 +271,11 @@ impl WebSocketMessage {
     }
 
     /// Create subscription message
-    pub fn subscribe(topic: String, filters: Vec<SubscriptionFilter>, options: SubscriptionOptions) -> Self {
+    pub fn subscribe(
+        topic: String,
+        filters: Vec<SubscriptionFilter>,
+        options: SubscriptionOptions,
+    ) -> Self {
         let payload = MessagePayload::Subscribe(SubscribePayload {
             topic,
             filters,
@@ -282,14 +286,16 @@ impl WebSocketMessage {
 
     /// Create unsubscribe message
     pub fn unsubscribe(subscription_id: String) -> Self {
-        let payload = MessagePayload::Unsubscribe(UnsubscribePayload {
-            subscription_id,
-        });
+        let payload = MessagePayload::Unsubscribe(UnsubscribePayload { subscription_id });
         Self::new(MessageType::Unsubscribe, payload)
     }
 
     /// Create data update message
-    pub fn data_update(topic: String, data: serde_json::Value, metadata: HashMap<String, String>) -> Self {
+    pub fn data_update(
+        topic: String,
+        data: serde_json::Value,
+        metadata: HashMap<String, String>,
+    ) -> Self {
         let payload = MessagePayload::DataUpdate(DataUpdatePayload {
             topic,
             data,
@@ -323,16 +329,14 @@ impl WebSocketMessage {
 
     /// Serialize message to JSON
     pub fn to_json(&self) -> Result<String> {
-        serde_json::to_string(self).map_err(|e| {
-            FortressError::websocket(format!("Failed to serialize message: {}", e))
-        })
+        serde_json::to_string(self)
+            .map_err(|e| FortressError::websocket(format!("Failed to serialize message: {}", e)))
     }
 
     /// Deserialize message from JSON
     pub fn from_json(json: &str) -> Result<Self> {
-        serde_json::from_str(json).map_err(|e| {
-            FortressError::websocket(format!("Failed to deserialize message: {}", e))
-        })
+        serde_json::from_str(json)
+            .map_err(|e| FortressError::websocket(format!("Failed to deserialize message: {}", e)))
     }
 
     /// Validate message structure
@@ -348,7 +352,9 @@ impl WebSocketMessage {
             MessageType::Subscribe => {
                 if let MessagePayload::Subscribe(sub_payload) = &self.payload {
                     if sub_payload.topic.is_empty() {
-                        return Err(FortressError::websocket("Subscription topic cannot be empty"));
+                        return Err(FortressError::websocket(
+                            "Subscription topic cannot be empty",
+                        ));
                     }
                 }
             }

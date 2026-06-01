@@ -4,10 +4,8 @@
 //! system including different algorithms, strategies, and edge cases.
 
 use fortress_core::{
-    field_encryption::*,
-    field_encryption_manager::*,
+    encryption::PerformanceProfile, field_encryption::*, field_encryption_manager::*,
     key::InMemoryKeyManager,
-    encryption::PerformanceProfile,
 };
 use std::collections::HashMap;
 
@@ -20,7 +18,10 @@ async fn test_basic_field_encryption() {
     let plaintext = b"test@example.com";
 
     // Test encryption
-    let encrypted = field_manager.encrypt_field(&field, plaintext).await.unwrap();
+    let encrypted = field_manager
+        .encrypt_field(&field, plaintext)
+        .await
+        .unwrap();
     assert!(!encrypted.ciphertext.is_empty());
     assert_ne!(encrypted.ciphertext, plaintext);
     assert_eq!(encrypted.metadata.field, field);
@@ -43,7 +44,10 @@ async fn test_nested_field_encryption() {
     let field = FieldIdentifier::path(vec!["user", "profile", "email"]);
     let plaintext = b"nested@example.com";
 
-    let encrypted = field_manager.encrypt_field(&field, plaintext).await.unwrap();
+    let encrypted = field_manager
+        .encrypt_field(&field, plaintext)
+        .await
+        .unwrap();
     let decrypted = field_manager
         .decrypt_field(&encrypted.ciphertext, &encrypted.metadata)
         .await
@@ -61,7 +65,10 @@ async fn test_indexed_field_encryption() {
     let field = FieldIdentifier::indexed(vec!["users", "0", "email"], 1);
     let plaintext = b"indexed@example.com";
 
-    let encrypted = field_manager.encrypt_field(&field, plaintext).await.unwrap();
+    let encrypted = field_manager
+        .encrypt_field(&field, plaintext)
+        .await
+        .unwrap();
     let decrypted = field_manager
         .decrypt_field(&encrypted.ciphertext, &encrypted.metadata)
         .await
@@ -92,7 +99,10 @@ async fn test_field_configuration_management() {
     .with_compliance_tag("PCI-DSS")
     .with_metadata("department".to_string(), "hr".to_string());
 
-    field_manager.set_field_config(new_config.clone()).await.unwrap();
+    field_manager
+        .set_field_config(new_config.clone())
+        .await
+        .unwrap();
 
     // Retrieve configuration
     let retrieved = field_manager.get_field_config(&field).await.unwrap();
@@ -105,7 +115,10 @@ async fn test_field_configuration_management() {
     assert_eq!(retrieved.compliance_tags.len(), 2);
     assert!(retrieved.compliance_tags.contains(&"HIPAA".to_string()));
     assert!(retrieved.compliance_tags.contains(&"PCI-DSS".to_string()));
-    assert_eq!(retrieved.metadata.get("department"), Some(&"hr".to_string()));
+    assert_eq!(
+        retrieved.metadata.get("department"),
+        Some(&"hr".to_string())
+    );
 
     // List all configurations
     let configs = field_manager.list_field_configs().await.unwrap();
@@ -130,7 +143,10 @@ async fn test_different_encryption_strategies() {
     let config1 = FieldEncryptionConfig::new(field1.clone(), FieldEncryptionStrategy::Default);
     field_manager.set_field_config(config1).await.unwrap();
 
-    let encrypted1 = field_manager.encrypt_field(&field1, plaintext).await.unwrap();
+    let encrypted1 = field_manager
+        .encrypt_field(&field1, plaintext)
+        .await
+        .unwrap();
     assert!(encrypted1.ciphertext != plaintext);
 
     // Test specific algorithm strategy
@@ -141,7 +157,10 @@ async fn test_different_encryption_strategies() {
     );
     field_manager.set_field_config(config2).await.unwrap();
 
-    let encrypted2 = field_manager.encrypt_field(&field2, plaintext).await.unwrap();
+    let encrypted2 = field_manager
+        .encrypt_field(&field2, plaintext)
+        .await
+        .unwrap();
     assert!(encrypted2.ciphertext != plaintext);
     assert_ne!(encrypted1.ciphertext, encrypted2.ciphertext); // Different algorithms
 
@@ -186,7 +205,10 @@ async fn test_batch_encryption() {
     }
 
     // Decrypt batch
-    let decrypted_fields = field_manager.decrypt_fields_batch(&decrypt_inputs).await.unwrap();
+    let decrypted_fields = field_manager
+        .decrypt_fields_batch(&decrypt_inputs)
+        .await
+        .unwrap();
     assert_eq!(decrypted_fields.len(), 3);
 
     // Verify decryption results
@@ -200,7 +222,7 @@ async fn test_batch_encryption() {
 #[tokio::test]
 async fn test_field_encryption_builder() {
     let key_manager = std::sync::Arc::new(InMemoryKeyManager::new());
-    
+
     // Test builder with default settings
     let manager1 = FieldEncryptionManagerBuilder::new()
         .with_key_manager(key_manager.clone())
@@ -242,7 +264,7 @@ async fn test_algorithm_selector() {
 
     // Test strategy-based selection
     let field = FieldIdentifier::name("test");
-    
+
     let algorithm = selector
         .select_algorithm(
             &field,
@@ -385,21 +407,31 @@ async fn test_compliance_tag_handling() {
     field_manager.set_field_config(pci_config).await.unwrap();
 
     // Configure standard field
-    let standard_config = FieldEncryptionConfig::new(
-        standard_field.clone(),
-        FieldEncryptionStrategy::Default,
-    );
+    let standard_config =
+        FieldEncryptionConfig::new(standard_field.clone(), FieldEncryptionStrategy::Default);
 
-    field_manager.set_field_config(standard_config).await.unwrap();
+    field_manager
+        .set_field_config(standard_config)
+        .await
+        .unwrap();
 
     // Test encryption with different compliance requirements
     let phi_data = b"patient_medical_history";
     let pci_data = b"4111111111111111";
     let standard_data = b"john_doe";
 
-    let phi_encrypted = field_manager.encrypt_field(&phi_field, phi_data).await.unwrap();
-    let pci_encrypted = field_manager.encrypt_field(&pci_field, pci_data).await.unwrap();
-    let standard_encrypted = field_manager.encrypt_field(&standard_field, standard_data).await.unwrap();
+    let phi_encrypted = field_manager
+        .encrypt_field(&phi_field, phi_data)
+        .await
+        .unwrap();
+    let pci_encrypted = field_manager
+        .encrypt_field(&pci_field, pci_data)
+        .await
+        .unwrap();
+    let standard_encrypted = field_manager
+        .encrypt_field(&standard_field, standard_data)
+        .await
+        .unwrap();
 
     // All should be encrypted
     assert_ne!(phi_encrypted.ciphertext, phi_data);
@@ -447,8 +479,11 @@ async fn test_error_handling() {
     // Test decryption with corrupted ciphertext
     let field = FieldIdentifier::name("test");
     let plaintext = b"test_data";
-    
-    let encrypted = field_manager.encrypt_field(&field, plaintext).await.unwrap();
+
+    let encrypted = field_manager
+        .encrypt_field(&field, plaintext)
+        .await
+        .unwrap();
     let mut corrupted = encrypted.ciphertext;
     corrupted[0] ^= 0xFF; // Corrupt first byte
 
@@ -467,47 +502,68 @@ async fn test_performance_profiles() {
 
     // Test Lightning profile
     let lightning_field = FieldIdentifier::name("lightning_field");
-    let lightning_config = FieldEncryptionConfig::new(
-        lightning_field.clone(),
-        FieldEncryptionStrategy::Default,
-    )
-    .with_performance_profile(PerformanceProfile::Lightning);
+    let lightning_config =
+        FieldEncryptionConfig::new(lightning_field.clone(), FieldEncryptionStrategy::Default)
+            .with_performance_profile(PerformanceProfile::Lightning);
 
-    field_manager.set_field_config(lightning_config).await.unwrap();
+    field_manager
+        .set_field_config(lightning_config)
+        .await
+        .unwrap();
 
     // Test Balanced profile
     let balanced_field = FieldIdentifier::name("balanced_field");
-    let balanced_config = FieldEncryptionConfig::new(
-        balanced_field.clone(),
-        FieldEncryptionStrategy::Default,
-    )
-    .with_performance_profile(PerformanceProfile::Balanced);
+    let balanced_config =
+        FieldEncryptionConfig::new(balanced_field.clone(), FieldEncryptionStrategy::Default)
+            .with_performance_profile(PerformanceProfile::Balanced);
 
-    field_manager.set_field_config(balanced_config).await.unwrap();
+    field_manager
+        .set_field_config(balanced_config)
+        .await
+        .unwrap();
 
     // Test Fortress profile
     let fortress_field = FieldIdentifier::name("fortress_field");
-    let fortress_config = FieldEncryptionConfig::new(
-        fortress_field.clone(),
-        FieldEncryptionStrategy::Default,
-    )
-    .with_performance_profile(PerformanceProfile::Fortress);
+    let fortress_config =
+        FieldEncryptionConfig::new(fortress_field.clone(), FieldEncryptionStrategy::Default)
+            .with_performance_profile(PerformanceProfile::Fortress);
 
-    field_manager.set_field_config(fortress_config).await.unwrap();
+    field_manager
+        .set_field_config(fortress_config)
+        .await
+        .unwrap();
 
     // Encrypt with different profiles
-    let lightning_encrypted = field_manager.encrypt_field(&lightning_field, plaintext).await.unwrap();
-    let balanced_encrypted = field_manager.encrypt_field(&balanced_field, plaintext).await.unwrap();
-    let fortress_encrypted = field_manager.encrypt_field(&fortress_field, plaintext).await.unwrap();
+    let lightning_encrypted = field_manager
+        .encrypt_field(&lightning_field, plaintext)
+        .await
+        .unwrap();
+    let balanced_encrypted = field_manager
+        .encrypt_field(&balanced_field, plaintext)
+        .await
+        .unwrap();
+    let fortress_encrypted = field_manager
+        .encrypt_field(&fortress_field, plaintext)
+        .await
+        .unwrap();
 
     // All should produce different ciphertexts (different algorithms)
-    assert_ne!(lightning_encrypted.ciphertext, balanced_encrypted.ciphertext);
+    assert_ne!(
+        lightning_encrypted.ciphertext,
+        balanced_encrypted.ciphertext
+    );
     assert_ne!(balanced_encrypted.ciphertext, fortress_encrypted.ciphertext);
-    assert_ne!(lightning_encrypted.ciphertext, fortress_encrypted.ciphertext);
+    assert_ne!(
+        lightning_encrypted.ciphertext,
+        fortress_encrypted.ciphertext
+    );
 
     // All should decrypt correctly
     let lightning_decrypted = field_manager
-        .decrypt_field(&lightning_encrypted.ciphertext, &lightning_encrypted.metadata)
+        .decrypt_field(
+            &lightning_encrypted.ciphertext,
+            &lightning_encrypted.metadata,
+        )
         .await
         .unwrap();
     let balanced_decrypted = field_manager

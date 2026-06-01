@@ -3,10 +3,10 @@
 //! This module provides configuration structures for the Fortress server,
 //! including network settings, security options, and feature flags.
 
+use fortress_core::config::Config as CoreConfig;
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use fortress_core::config::Config as CoreConfig;
 
 /// Default server host
 pub const DEFAULT_HOST: &str = "0.0.0.0";
@@ -28,22 +28,22 @@ pub const DEFAULT_CORS_ORIGINS: &[&str] = &["*"];
 pub struct ServerConfig {
     /// Network configuration
     pub network: NetworkConfig,
-    
+
     /// Security configuration
     pub security: SecurityConfig,
-    
+
     /// Core Fortress configuration
     pub core: CoreConfig,
-    
+
     /// Feature flags
     pub features: FeatureFlags,
-    
+
     /// Logging configuration
     pub logging: LoggingConfig,
-    
+
     /// Metrics configuration
     pub metrics: MetricsConfig,
-    
+
     /// Storage configuration
     pub storage: CoreConfig,
 }
@@ -67,19 +67,19 @@ impl Default for ServerConfig {
 pub struct NetworkConfig {
     /// Server bind address
     pub host: String,
-    
+
     /// Server port
     pub port: u16,
-    
+
     /// Maximum request body size in bytes
     pub max_body_size: usize,
-    
+
     /// Request timeout in seconds
     pub request_timeout: u64,
-    
+
     /// Keep-alive timeout in seconds
     pub keep_alive: u64,
-    
+
     /// Maximum concurrent connections
     pub max_connections: usize,
 }
@@ -109,16 +109,16 @@ impl NetworkConfig {
 pub struct SecurityConfig {
     /// JWT secret for authentication
     pub jwt_secret: String,
-    
+
     /// Token expiration time in seconds
     pub token_expiration: u64,
-    
+
     /// CORS configuration
     pub cors: CorsConfig,
-    
+
     /// Rate limiting
     pub rate_limit: RateLimitConfig,
-    
+
     /// TLS configuration
     pub tls: Option<TlsConfig>,
 }
@@ -140,13 +140,13 @@ impl Default for SecurityConfig {
 pub struct CorsConfig {
     /// Allowed origins
     pub allowed_origins: Vec<String>,
-    
+
     /// Allowed methods
     pub allowed_methods: Vec<String>,
-    
+
     /// Allowed headers
     pub allowed_headers: Vec<String>,
-    
+
     /// Allow credentials
     pub allow_credentials: bool,
 }
@@ -178,20 +178,20 @@ impl Default for CorsConfig {
 pub struct RateLimitConfig {
     /// Enable rate limiting
     pub enabled: bool,
-    
+
     /// Maximum requests per minute
     pub requests_per_minute: u32,
-    
+
     /// Maximum requests per hour
     pub requests_per_hour: u32,
-    
+
     /// Burst size
     pub burst_size: u32,
-    
+
     /// Rate limiting algorithm
     #[serde(default = "default_rate_limit_algorithm")]
     pub algorithm: RateLimitAlgorithm,
-    
+
     /// DDoS protection settings
     #[serde(default)]
     pub ddos_protection: DdosProtectionConfig,
@@ -215,19 +215,19 @@ pub enum RateLimitAlgorithm {
 pub struct DdosProtectionConfig {
     /// Enable DDoS protection
     pub enabled: bool,
-    
+
     /// Global requests per second threshold
     pub global_rps_threshold: Option<u32>,
-    
+
     /// IP requests per second threshold
     pub ip_rps_threshold: Option<u32>,
-    
+
     /// Auto-block threshold
     pub auto_block_threshold: Option<u32>,
-    
+
     /// Block duration in seconds
     pub block_duration_seconds: u64,
-    
+
     /// Reputation decay rate per hour
     pub reputation_decay_rate: u8,
 }
@@ -267,10 +267,10 @@ impl Default for DdosProtectionConfig {
 pub struct TlsConfig {
     /// Path to certificate file
     pub cert_path: PathBuf,
-    
+
     /// Path to private key file
     pub key_path: PathBuf,
-    
+
     /// CA certificate path (optional)
     pub ca_path: Option<PathBuf>,
 }
@@ -280,19 +280,19 @@ pub struct TlsConfig {
 pub struct OidcConfig {
     /// OIDC issuer URL
     pub issuer_url: String,
-    
+
     /// Client ID
     pub client_id: String,
-    
+
     /// Client secret
     pub client_secret: String,
-    
+
     /// Redirect URI
     pub redirect_uri: String,
-    
+
     /// Scopes to request
     pub scopes: Vec<String>,
-    
+
     /// Enable PKCE
     pub enable_pkce: bool,
 }
@@ -302,22 +302,22 @@ pub struct OidcConfig {
 pub struct FeatureFlags {
     /// Enable authentication
     pub auth_enabled: bool,
-    
+
     /// Enable audit logging
     pub audit_enabled: bool,
-    
+
     /// Enable metrics collection
     pub metrics_enabled: bool,
-    
+
     /// Enable health checks
     pub health_enabled: bool,
-    
+
     /// Enable multi-tenant support
     pub multi_tenant: bool,
-    
+
     /// Enable field-level encryption
     pub field_encryption: bool,
-    
+
     /// Enable OIDC/OAuth2 authentication
     pub oidc_enabled: bool,
 
@@ -350,13 +350,13 @@ impl Default for FeatureFlags {
 pub struct LoggingConfig {
     /// Log level (trace, debug, info, warn, error)
     pub level: String,
-    
+
     /// Enable JSON logging
     pub json_format: bool,
-    
+
     /// Log file path (optional)
     pub file_path: Option<PathBuf>,
-    
+
     /// Enable request logging
     pub log_requests: bool,
 }
@@ -377,10 +377,10 @@ impl Default for LoggingConfig {
 pub struct MetricsConfig {
     /// Enable Prometheus metrics
     pub prometheus_enabled: bool,
-    
+
     /// Metrics endpoint path
     pub metrics_path: String,
-    
+
     /// Metrics collection interval in seconds
     pub collection_interval: u64,
 }
@@ -400,12 +400,12 @@ fn generate_default_jwt_secret() -> String {
     use rand::Rng;
     let mut secret = String::with_capacity(64);
     let mut rng = rand::thread_rng();
-    
+
     for _ in 0..64 {
         let chars = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         secret.push(chars[rng.gen_range(0..chars.len())] as char);
     }
-    
+
     secret
 }
 
@@ -416,7 +416,7 @@ mod tests {
     #[test]
     fn test_default_config() {
         let config = ServerConfig::default();
-        
+
         assert_eq!(config.network.host, DEFAULT_HOST);
         assert_eq!(config.network.port, DEFAULT_PORT);
         assert_eq!(config.security.token_expiration, 3600);
@@ -427,7 +427,9 @@ mod tests {
     #[test]
     fn test_bind_address() {
         let network = NetworkConfig::default();
-        let addr = network.bind_address().expect("Default bind address should be valid");
+        let addr = network
+            .bind_address()
+            .expect("Default bind address should be valid");
         assert_eq!(addr.port(), DEFAULT_PORT);
     }
 
@@ -435,7 +437,7 @@ mod tests {
     fn test_jwt_secret_generation() {
         let secret1 = generate_default_jwt_secret();
         let secret2 = generate_default_jwt_secret();
-        
+
         assert_eq!(secret1.len(), 64);
         assert_eq!(secret2.len(), 64);
         assert_ne!(secret1, secret2);

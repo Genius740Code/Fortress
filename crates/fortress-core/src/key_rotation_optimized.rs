@@ -1,12 +1,12 @@
 //! Optimized Zero-Downtime Key Rotation
-//! 
+//!
 //! This module provides high-performance, scalable, and secure key rotation
 //! with advanced optimizations for production environments.
 
-use crate::error::{FortressError, Result, KeyErrorCode};
+use crate::audit::SecurityLevel;
 use crate::encryption::EncryptionAlgorithm;
-use crate::audit::{SecurityLevel};
-use crate::key::{KeyManager, KeyMetadata, KeyId, SecureKey};
+use crate::error::{FortressError, KeyErrorCode, Result};
+use crate::key::{KeyId, KeyManager, KeyMetadata, SecureKey};
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -30,7 +30,8 @@ impl VersionedKeyCache {
 
     pub async fn get_or_create(&self, key_id: &str, version: u32) -> Arc<String> {
         let mut cache = self.cache.write().await;
-        cache.entry((key_id.to_string(), version))
+        cache
+            .entry((key_id.to_string(), version))
             .or_insert_with(|| Arc::new(format!("{}_v{}", key_id, version)))
             .clone()
     }
@@ -107,10 +108,10 @@ impl Default for OptimizedRotationConfig {
     fn default() -> Self {
         Self {
             max_concurrent_rotations: 10,
-            backup_timeout_secs: 15, // Reduced from 30 for faster response
+            backup_timeout_secs: 15,    // Reduced from 30 for faster response
             validation_timeout_secs: 5, // Reduced from 10
             post_switch_timeout_secs: 3, // Reduced from 5
-            rollback_timeout_secs: 8, // Reduced from 10
+            rollback_timeout_secs: 8,   // Reduced from 10
             enable_performance_monitoring: true,
             enable_security_hardening: true,
             batch_size: 100,
@@ -198,7 +199,7 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
     pub fn new(key_manager: Arc<T>, config: OptimizedRotationConfig) -> Self {
         let semaphore = Arc::new(Semaphore::new(config.max_concurrent_rotations as usize));
         let memory_pool_size = config.memory_pool_size;
-        
+
         Self {
             key_manager,
             config: config.clone(),
@@ -220,22 +221,24 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
     ) -> Result<String> {
         let start_time = Instant::now();
         let rotation_id = Uuid::new_v4().to_string();
-        
+
         // Check concurrency limits
-        let _permit = timeout(
-            Duration::from_secs(5),
-            self.rotation_semaphore.acquire()
-        ).await
-        .map_err(|_| FortressError::key_management(
-            "Rotation semaphore acquisition timeout",
-            Some(key_id.clone()),
-            KeyErrorCode::RotationFailed,
-        ))?
-        .map_err(|_| FortressError::key_management(
-            "Failed to acquire rotation permit",
-            Some(key_id.clone()),
-            KeyErrorCode::RotationFailed,
-        ))?;
+        let _permit = timeout(Duration::from_secs(5), self.rotation_semaphore.acquire())
+            .await
+            .map_err(|_| {
+                FortressError::key_management(
+                    "Rotation semaphore acquisition timeout",
+                    Some(key_id.clone()),
+                    KeyErrorCode::RotationFailed,
+                )
+            })?
+            .map_err(|_| {
+                FortressError::key_management(
+                    "Failed to acquire rotation permit",
+                    Some(key_id.clone()),
+                    KeyErrorCode::RotationFailed,
+                )
+            })?;
 
         // Create rotation context
         let context = RotationContext {
@@ -250,10 +253,11 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
         {
             let mut active = self.active_rotations.write().await;
             active.insert(key_id.clone(), context.clone());
-            
+
             // Update concurrent peak
             let mut metrics = self.metrics.write().await;
-            metrics.concurrent_rotations_peak = metrics.concurrent_rotations_peak.max(active.len() as u32);
+            metrics.concurrent_rotations_peak =
+                metrics.concurrent_rotations_peak.max(active.len() as u32);
             metrics.keys_rotating = active.len() as u32;
         }
 
@@ -265,7 +269,8 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
             &security_context,
             true,
             HashMap::new(),
-        ).await;
+        )
+        .await;
 
         let result = self.perform_optimized_rotation(&context, algorithm).await;
         let rotation_time = start_time.elapsed().as_millis() as f64;
@@ -275,17 +280,18 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
             let mut metrics = self.metrics.write().await;
             metrics.total_rotations += 1;
             metrics.last_rotation_time = Some(Utc::now());
-            
+
             if result.is_ok() {
                 metrics.successful_rotations += 1;
             } else {
                 metrics.failed_rotations += 1;
             }
-            
+
             // Update timing metrics
-            metrics.avg_rotation_time_ms = 
-                (metrics.avg_rotation_time_ms * (metrics.total_rotations - 1) as f64 + rotation_time) / 
-                metrics.total_rotations as f64;
+            metrics.avg_rotation_time_ms = (metrics.avg_rotation_time_ms
+                * (metrics.total_rotations - 1) as f64
+                + rotation_time)
+                / metrics.total_rotations as f64;
             metrics.fastest_rotation_ms = metrics.fastest_rotation_ms.min(rotation_time);
             metrics.slowest_rotation_ms = metrics.slowest_rotation_ms.max(rotation_time);
         }
@@ -312,7 +318,8 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
                 metadata.insert("success".to_string(), success.to_string());
                 metadata
             },
-        ).await;
+        )
+        .await;
 
         result.map(|()| rotation_id)
     }
@@ -325,15 +332,20 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
     ) -> Result<()> {
         // Phase 1: Optimized backup creation
         let (old_key, old_metadata) = self.key_manager.retrieve_key(&context.key_id).await?;
-        let old_versioned_id = self.versioned_key_cache.get_or_create(&context.key_id, old_metadata.version).await;
-        
+        let old_versioned_id = self
+            .versioned_key_cache
+            .get_or_create(&context.key_id, old_metadata.version)
+            .await;
+
         // Use memory pool for backup key
         let _backup_key = self.get_pooled_key().await;
-        
+
         let backup_result = timeout(
             Duration::from_secs(context.config.backup_timeout_secs),
-            self.key_manager.store_key(&old_versioned_id, &old_key, &old_metadata)
-        ).await;
+            self.key_manager
+                .store_key(&old_versioned_id, &old_key, &old_metadata),
+        )
+        .await;
 
         if backup_result.is_err() {
             return Err(FortressError::key_management(
@@ -342,16 +354,18 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
                 KeyErrorCode::RotationFailed,
             ));
         }
-        let _ = backup_result.map_err(|e| FortressError::key_management(
-            format!("Backup creation failed: {}", e),
-            Some(context.key_id.clone()),
-            KeyErrorCode::RotationFailed,
-        ));
+        let _ = backup_result.map_err(|e| {
+            FortressError::key_management(
+                format!("Backup creation failed: {}", e),
+                Some(context.key_id.clone()),
+                KeyErrorCode::RotationFailed,
+            )
+        });
 
         // Phase 2: Optimized key generation
         let new_key = self.key_manager.generate_key(algorithm).await?;
         let new_version = old_metadata.version + 1;
-        
+
         let new_metadata = KeyMetadata::new(
             context.key_id.clone(),
             algorithm.name().to_string(),
@@ -360,22 +374,30 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
             Utc::now() + ChronoDuration::days(90),
             old_metadata.purpose.clone(),
             old_metadata.performance_profile,
-        ).with_metadata("rotation_id".to_string(), context.rotation_id.clone())
-         .with_metadata("transition_status".to_string(), "preparing".to_string())
-         .with_metadata("security_context".to_string(), format!("{:?}", context.security_context.security_level));
+        )
+        .with_metadata("rotation_id".to_string(), context.rotation_id.clone())
+        .with_metadata("transition_status".to_string(), "preparing".to_string())
+        .with_metadata(
+            "security_context".to_string(),
+            format!("{:?}", context.security_context.security_level),
+        );
 
         // Phase 3: Optimized validation
         let validation_result = timeout(
             Duration::from_secs(context.config.validation_timeout_secs),
-            self.validate_key_optimized(&new_key, &new_metadata)
-        ).await;
+            self.validate_key_optimized(&new_key, &new_metadata),
+        )
+        .await;
 
         if validation_result.is_err() || validation_result.as_ref().unwrap().is_err() {
             // Cleanup and rollback
-            let new_versioned_id = self.versioned_key_cache.get_or_create(&context.key_id, new_version).await;
+            let new_versioned_id = self
+                .versioned_key_cache
+                .get_or_create(&context.key_id, new_version)
+                .await;
             let _ = self.key_manager.delete_key(&new_versioned_id).await;
             let _ = self.key_manager.delete_key(&old_versioned_id).await;
-            
+
             return Err(FortressError::key_management(
                 "New key validation failed during optimized rotation",
                 Some(context.key_id.clone()),
@@ -384,26 +406,35 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
         }
 
         // Phase 4: Atomic switch with optimized metadata
-        let switch_metadata = new_metadata.clone()
+        let switch_metadata = new_metadata
+            .clone()
             .with_metadata("transition_status".to_string(), "active".to_string())
             .with_metadata("switch_time".to_string(), Utc::now().to_rfc3339());
 
         // Atomic switch - the critical point
-        self.key_manager.store_key(&context.key_id, &new_key, &switch_metadata).await?;
+        self.key_manager
+            .store_key(&context.key_id, &new_key, &switch_metadata)
+            .await?;
 
         // Phase 5: Optimized post-switch validation
         let post_switch_result = timeout(
             Duration::from_secs(context.config.post_switch_timeout_secs),
-            self.validate_post_switch_optimized(&context.key_id, new_version)
-        ).await;
+            self.validate_post_switch_optimized(&context.key_id, new_version),
+        )
+        .await;
 
         if post_switch_result.is_err() || post_switch_result.as_ref().unwrap().is_err() {
             // Emergency rollback
-            let rollback_result = self.rollback_key_optimized(&context, old_metadata.version, new_version).await;
-            
+            let rollback_result = self
+                .rollback_key_optimized(&context, old_metadata.version, new_version)
+                .await;
+
             if let Err(rollback_err) = rollback_result {
                 return Err(FortressError::key_management(
-                    format!("Critical rotation failure and rollback failed: {}", rollback_err),
+                    format!(
+                        "Critical rotation failure and rollback failed: {}",
+                        rollback_err
+                    ),
                     Some(context.key_id.clone()),
                     KeyErrorCode::RotationFailed,
                 ));
@@ -417,7 +448,8 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
         }
 
         // Phase 6: Optimized cleanup
-        self.cleanup_rotation_optimized(&context, new_version).await?;
+        self.cleanup_rotation_optimized(&context, new_version)
+            .await?;
 
         Ok(())
     }
@@ -450,12 +482,19 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
     }
 
     /// Optimized post-switch validation
-    async fn validate_post_switch_optimized(&self, key_id: &KeyId, expected_version: u32) -> Result<()> {
+    async fn validate_post_switch_optimized(
+        &self,
+        key_id: &KeyId,
+        expected_version: u32,
+    ) -> Result<()> {
         let (_, metadata) = self.key_manager.retrieve_key(key_id).await?;
-        
+
         if metadata.version != expected_version {
             return Err(FortressError::key_management(
-                format!("Version mismatch after switch: expected {}, got {}", expected_version, metadata.version),
+                format!(
+                    "Version mismatch after switch: expected {}, got {}",
+                    expected_version, metadata.version
+                ),
                 Some(key_id.clone()),
                 KeyErrorCode::RotationFailed,
             ));
@@ -473,13 +512,22 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
     }
 
     /// Optimized rollback
-    async fn rollback_key_optimized(&self, context: &RotationContext, old_version: u32, new_version: u32) -> Result<()> {
-        let old_versioned_id = self.versioned_key_cache.get_or_create(&context.key_id, old_version).await;
-        
+    async fn rollback_key_optimized(
+        &self,
+        context: &RotationContext,
+        old_version: u32,
+        new_version: u32,
+    ) -> Result<()> {
+        let old_versioned_id = self
+            .versioned_key_cache
+            .get_or_create(&context.key_id, old_version)
+            .await;
+
         let rollback_validation = timeout(
             Duration::from_secs(context.config.rollback_timeout_secs),
-            self.validate_rollback_possible(&old_versioned_id, new_version)
-        ).await;
+            self.validate_rollback_possible(&old_versioned_id, new_version),
+        )
+        .await;
 
         if rollback_validation.is_err() || rollback_validation.as_ref().unwrap().is_err() {
             return Err(FortressError::key_management(
@@ -491,7 +539,7 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
 
         // Perform rollback
         let (old_key, old_metadata) = self.key_manager.retrieve_key(&old_versioned_id).await?;
-        
+
         let restored_metadata = KeyMetadata::new(
             context.key_id.clone(),
             old_metadata.algorithm.clone(),
@@ -500,26 +548,40 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
             old_metadata.expires_at,
             old_metadata.purpose.clone(),
             old_metadata.performance_profile,
-        ).with_metadata("transition_status".to_string(), "rolled_back".to_string())
-         .with_metadata("rollback_completed".to_string(), Utc::now().to_rfc3339())
-         .with_metadata("original_version".to_string(), new_version.to_string());
+        )
+        .with_metadata("transition_status".to_string(), "rolled_back".to_string())
+        .with_metadata("rollback_completed".to_string(), Utc::now().to_rfc3339())
+        .with_metadata("original_version".to_string(), new_version.to_string());
 
-        self.key_manager.store_key(&context.key_id, &old_key, &restored_metadata).await?;
+        self.key_manager
+            .store_key(&context.key_id, &old_key, &restored_metadata)
+            .await?;
 
         // Validate rollback
-        self.validate_post_switch_optimized(&context.key_id, old_version).await?;
+        self.validate_post_switch_optimized(&context.key_id, old_version)
+            .await?;
 
         // Cleanup failed version
-        let new_versioned_id = self.versioned_key_cache.get_or_create(&context.key_id, new_version).await;
+        let new_versioned_id = self
+            .versioned_key_cache
+            .get_or_create(&context.key_id, new_version)
+            .await;
         let _ = self.key_manager.delete_key(&new_versioned_id).await;
 
         Ok(())
     }
 
     /// Optimized cleanup
-    async fn cleanup_rotation_optimized(&self, context: &RotationContext, new_version: u32) -> Result<()> {
+    async fn cleanup_rotation_optimized(
+        &self,
+        context: &RotationContext,
+        new_version: u32,
+    ) -> Result<()> {
         // Cleanup old version
-        let old_versioned_id = self.versioned_key_cache.get_or_create(&context.key_id, new_version - 1).await;
+        let old_versioned_id = self
+            .versioned_key_cache
+            .get_or_create(&context.key_id, new_version - 1)
+            .await;
         let cleanup_result = self.key_manager.delete_key(&old_versioned_id).await;
 
         if let Err(e) = cleanup_result {
@@ -527,7 +589,10 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
         }
 
         // Cleanup versioned new key
-        let new_versioned_id = self.versioned_key_cache.get_or_create(&context.key_id, new_version).await;
+        let new_versioned_id = self
+            .versioned_key_cache
+            .get_or_create(&context.key_id, new_version)
+            .await;
         let _ = self.key_manager.delete_key(&new_versioned_id).await;
 
         // Return key to memory pool
@@ -537,9 +602,13 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
     }
 
     /// Validate rollback is possible
-    async fn validate_rollback_possible(&self, old_versioned_id: &KeyId, new_version: u32) -> Result<()> {
+    async fn validate_rollback_possible(
+        &self,
+        old_versioned_id: &KeyId,
+        new_version: u32,
+    ) -> Result<()> {
         let (old_key, old_metadata) = self.key_manager.retrieve_key(old_versioned_id).await?;
-        
+
         if old_key.is_empty() {
             return Err(FortressError::key_management(
                 "Backup key is empty",
@@ -560,7 +629,11 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
     }
 
     /// Perform additional security validations
-    async fn perform_security_validations(&self, key: &SecureKey, metadata: &KeyMetadata) -> Result<()> {
+    async fn perform_security_validations(
+        &self,
+        key: &SecureKey,
+        metadata: &KeyMetadata,
+    ) -> Result<()> {
         // Key entropy validation
         if key.len() < 32 {
             return Err(FortressError::key_management(
@@ -585,7 +658,8 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
     /// Get pooled key for operations
     async fn get_pooled_key(&self) -> SecureKey {
         let mut pool = self.memory_pool.write().await;
-        pool.pop().unwrap_or_else(|| SecureKey::generate(256).expect("Failed to generate secure key"))
+        pool.pop()
+            .unwrap_or_else(|| SecureKey::generate(256).expect("Failed to generate secure key"))
     }
 
     /// Return key to memory pool
@@ -656,25 +730,30 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
     ) -> Result<Vec<String>> {
         let batch_size = self.config.batch_size.min(key_ids.len());
         let mut results = Vec::new();
-        
+
         for chunk in key_ids.chunks(batch_size) {
             let _batch_results: Vec<String> = Vec::new();
-            
+
             // Process batch concurrently
-            let tasks: Vec<_> = chunk.iter().map(|key_id| {
-                let manager = self;
-                let algorithm = algorithm;
-                let security_context = security_context.clone();
-                let key_id = key_id.clone();
-                
-                async move {
-                    let result = manager.rotate_key_optimized(&key_id, algorithm, security_context).await;
-                    result
-                }
-            }).collect();
+            let tasks: Vec<_> = chunk
+                .iter()
+                .map(|key_id| {
+                    let manager = self;
+                    let algorithm = algorithm;
+                    let security_context = security_context.clone();
+                    let key_id = key_id.clone();
+
+                    async move {
+                        let result = manager
+                            .rotate_key_optimized(&key_id, algorithm, security_context)
+                            .await;
+                        result
+                    }
+                })
+                .collect();
 
             let batch_results_futures = futures::future::join_all(tasks).await;
-            
+
             for result in batch_results_futures {
                 match result {
                     Ok(rotation_id) => results.push(rotation_id),
@@ -693,15 +772,15 @@ impl<T: KeyManager> OptimizedKeyRotationManager<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::key::InMemoryKeyManager;
     use crate::encryption::create_algorithm;
+    use crate::key::InMemoryKeyManager;
 
     #[tokio::test]
     async fn test_optimized_rotation_performance() -> Result<()> {
         let key_manager = Arc::new(InMemoryKeyManager::new());
         let config = OptimizedRotationConfig::default();
         let rotation_manager = OptimizedKeyRotationManager::new(key_manager, config);
-        
+
         let algorithm = create_algorithm("aegis256")?;
         let security_context = SecurityContext {
             requestor_id: "test_user".to_string(),
@@ -713,7 +792,10 @@ mod tests {
 
         // Create test key
         let key_id = "performance_test_key".to_string();
-        let key = rotation_manager.key_manager.generate_key(algorithm.as_ref()).await?;
+        let key = rotation_manager
+            .key_manager
+            .generate_key(algorithm.as_ref())
+            .await?;
         let metadata = KeyMetadata::new(
             key_id.clone(),
             algorithm.name().to_string(),
@@ -723,15 +805,24 @@ mod tests {
             "test".to_string(),
             crate::encryption::PerformanceProfile::Balanced,
         );
-        
-        rotation_manager.key_manager.store_key(&key_id, &key, &metadata).await?;
+
+        rotation_manager
+            .key_manager
+            .store_key(&key_id, &key, &metadata)
+            .await?;
 
         // Perform optimized rotation
         let start_time = Instant::now();
-        let rotation_id = rotation_manager.rotate_key_optimized(&key_id, algorithm.as_ref(), security_context).await?;
+        let rotation_id = rotation_manager
+            .rotate_key_optimized(&key_id, algorithm.as_ref(), security_context)
+            .await?;
         let rotation_time = start_time.elapsed();
 
-        tracing::info!("Optimized rotation completed in {:?} with ID: {}", rotation_time, rotation_id);
+        tracing::info!(
+            "Optimized rotation completed in {:?} with ID: {}",
+            rotation_time,
+            rotation_id
+        );
 
         // Verify metrics
         let metrics = rotation_manager.get_metrics().await;
@@ -748,7 +839,7 @@ mod tests {
         let mut config = OptimizedRotationConfig::default();
         config.batch_size = 3;
         let rotation_manager = OptimizedKeyRotationManager::new(key_manager, config);
-        
+
         let algorithm = create_algorithm("aegis256")?;
         let security_context = SecurityContext {
             requestor_id: "test_user".to_string(),
@@ -760,9 +851,12 @@ mod tests {
 
         // Create multiple test keys
         let key_ids: Vec<KeyId> = (1..=5).map(|i| format!("bulk_test_key_{}", i)).collect();
-        
+
         for key_id in &key_ids {
-            let key = rotation_manager.key_manager.generate_key(algorithm.as_ref()).await?;
+            let key = rotation_manager
+                .key_manager
+                .generate_key(algorithm.as_ref())
+                .await?;
             let metadata = KeyMetadata::new(
                 key_id.clone(),
                 algorithm.name().to_string(),
@@ -772,16 +866,25 @@ mod tests {
                 "test".to_string(),
                 crate::encryption::PerformanceProfile::Balanced,
             );
-            
-            rotation_manager.key_manager.store_key(key_id, &key, &metadata).await?;
+
+            rotation_manager
+                .key_manager
+                .store_key(key_id, &key, &metadata)
+                .await?;
         }
 
         // Perform bulk rotation
         let start_time = Instant::now();
-        let rotation_ids = rotation_manager.bulk_rotate_keys(&key_ids, algorithm.as_ref(), security_context).await?;
+        let rotation_ids = rotation_manager
+            .bulk_rotate_keys(&key_ids, algorithm.as_ref(), security_context)
+            .await?;
         let bulk_time = start_time.elapsed();
 
-        tracing::info!("Bulk rotation completed in {:?} for {} keys", bulk_time, rotation_ids.len());
+        tracing::info!(
+            "Bulk rotation completed in {:?} for {} keys",
+            bulk_time,
+            rotation_ids.len()
+        );
         assert_eq!(rotation_ids.len(), key_ids.len());
 
         // Verify all keys were rotated

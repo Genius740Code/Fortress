@@ -4,30 +4,32 @@
 //! for the Fortress REST API.
 
 use crate::error::{ServerError, ServerResult};
-use crate::models::{AuthRequest, AuthResponse, RefreshTokenRequest, RefreshTokenResponse, UserInfo};
-use sha2::Digest;
+use crate::models::{
+    AuthRequest, AuthResponse, RefreshTokenRequest, RefreshTokenResponse, UserInfo,
+};
+use argon2::{
+    password_hash::{rand_core::OsRng, SaltString},
+    Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
+};
 use axum::{
-    extract::{Request, State, FromRequestParts},
-    http::{header, StatusCode, request::Parts},
+    async_trait,
+    extract::{FromRequestParts, Request, State},
+    http::{header, request::Parts, StatusCode},
     middleware::Next,
     response::Response,
-    async_trait,
 };
+use base64::{engine::general_purpose, Engine as _};
 use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
-use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
-use std::collections::HashMap;
-use std::sync::Arc;
-use argon2::{
-    Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
-    password_hash::{rand_core::OsRng, SaltString}
-};
-use uuid::Uuid;
-use base64::{Engine as _, engine::general_purpose};
 use percent_encoding;
-use sha2;
 use rand::RngCore;
+use serde::{Deserialize, Serialize};
+use sha2;
+use sha2::Digest;
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::sync::Arc;
+use uuid::Uuid;
 
 /// JWT claims structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -80,7 +82,8 @@ where
     type Rejection = StatusCode;
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        parts.extensions
+        parts
+            .extensions
             .get::<TokenClaims>()
             .cloned()
             .map(RequiredTokenClaims)
@@ -106,16 +109,16 @@ pub struct AuthManager {
 pub trait UserStore: Send + Sync {
     /// Authenticate user credentials
     async fn authenticate(&self, request: AuthRequest) -> ServerResult<UserInfo>;
-    
+
     /// Get user by ID
     async fn get_user(&self, user_id: &str) -> ServerResult<Option<UserInfo>>;
-    
+
     /// Validate refresh token
     async fn validate_refresh_token(&self, refresh_token: &str) -> ServerResult<UserInfo>;
-    
+
     /// Store refresh token
     async fn store_refresh_token(&self, user_id: &str, refresh_token: &str) -> ServerResult<()>;
-    
+
     /// Revoke refresh token
     async fn revoke_refresh_token(&self, refresh_token: &str) -> ServerResult<()>;
 }
@@ -246,13 +249,14 @@ impl OidcUserStore {
 
     /// Discover OIDC provider endpoints
     pub async fn discover_endpoints(&self) -> ServerResult<OidcDiscoveryDocument> {
-        let discovery_url = format!("{}/.well-known/openid_configuration", self.provider_config.issuer_url);
-        
-        let response = self.client
-            .get(&discovery_url)
-            .send()
-            .await
-            .map_err(|e| ServerError::internal(format!("Failed to fetch discovery document: {}", e)))?;
+        let discovery_url = format!(
+            "{}/.well-known/openid_configuration",
+            self.provider_config.issuer_url
+        );
+
+        let response = self.client.get(&discovery_url).send().await.map_err(|e| {
+            ServerError::internal(format!("Failed to fetch discovery document: {}", e))
+        })?;
 
         if !response.status().is_success() {
             return Err(ServerError::internal(format!(
@@ -261,24 +265,36 @@ impl OidcUserStore {
             )));
         }
 
-        let discovery: OidcDiscoveryDocument = response
-            .json()
-            .await
-            .map_err(|e| ServerError::internal(format!("Failed to parse discovery document: {}", e)))?;
+        let discovery: OidcDiscoveryDocument = response.json().await.map_err(|e| {
+            ServerError::internal(format!("Failed to parse discovery document: {}", e))
+        })?;
 
         tracing::info!("Discovered OIDC endpoints for issuer: {}", discovery.issuer);
         Ok(discovery)
     }
 
     /// Get authorization URL for OIDC flow
-    pub fn get_authorization_url(&self, _state: &str, code_verifier: Option<&str>) -> ServerResult<String> {
-        let auth_endpoint = self.provider_config.authorization_endpoint.as_ref()
+    pub fn get_authorization_url(
+        &self,
+        _state: &str,
+        code_verifier: Option<&str>,
+    ) -> ServerResult<String> {
+        let auth_endpoint = self
+            .provider_config
+            .authorization_endpoint
+            .as_ref()
             .ok_or_else(|| ServerError::internal("Authorization endpoint not configured"))?;
 
         let mut params: HashMap<String, String> = std::collections::HashMap::new();
         params.insert("response_type".to_string(), "code".to_string());
-        params.insert("client_id".to_string(), self.provider_config.client_id.clone());
-        params.insert("redirect_uri".to_string(), self.provider_config.redirect_uri.clone());
+        params.insert(
+            "client_id".to_string(),
+            self.provider_config.client_id.clone(),
+        );
+        params.insert(
+            "redirect_uri".to_string(),
+            self.provider_config.redirect_uri.clone(),
+        );
 
         // Add PKCE challenge if enabled
         if let Some(verifier) = code_verifier {
@@ -290,8 +306,15 @@ impl OidcUserStore {
             }
         }
 
-        let query_string = params.iter()
-            .map(|(k, v)| format!("{}={}", percent_encoding::utf8_percent_encode(k, &percent_encoding::NON_ALPHANUMERIC), percent_encoding::utf8_percent_encode(v, &percent_encoding::NON_ALPHANUMERIC)))
+        let query_string = params
+            .iter()
+            .map(|(k, v)| {
+                format!(
+                    "{}={}",
+                    percent_encoding::utf8_percent_encode(k, &percent_encoding::NON_ALPHANUMERIC),
+                    percent_encoding::utf8_percent_encode(v, &percent_encoding::NON_ALPHANUMERIC)
+                )
+            })
             .collect::<Vec<_>>()
             .join("&");
 
@@ -299,8 +322,14 @@ impl OidcUserStore {
     }
 
     /// Exchange authorization code for tokens
-    pub async fn exchange_code_for_tokens(&self, request: OidcAuthRequest) -> ServerResult<OidcTokenResponse> {
-        let token_endpoint = self.provider_config.token_endpoint.as_ref()
+    pub async fn exchange_code_for_tokens(
+        &self,
+        request: OidcAuthRequest,
+    ) -> ServerResult<OidcTokenResponse> {
+        let token_endpoint = self
+            .provider_config
+            .token_endpoint
+            .as_ref()
             .ok_or_else(|| ServerError::internal("Token endpoint not configured"))?;
 
         let mut params = std::collections::HashMap::new();
@@ -315,20 +344,22 @@ impl OidcUserStore {
             params.insert("code_verifier", verifier);
         }
 
-        let response = self.client
+        let response = self
+            .client
             .post(token_endpoint)
             .form(&params)
             .send()
             .await
-            .map_err(|e| ServerError::internal(format!("Failed to exchange code for tokens: {}", e)))?;
+            .map_err(|e| {
+                ServerError::internal(format!("Failed to exchange code for tokens: {}", e))
+            })?;
 
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
             return Err(ServerError::internal(format!(
                 "Token exchange failed: {} - {}",
-                status,
-                error_text
+                status, error_text
             )));
         }
 
@@ -360,10 +391,14 @@ impl OidcUserStore {
             }
         }
 
-        let userinfo_endpoint = self.provider_config.userinfo_endpoint.as_ref()
+        let userinfo_endpoint = self
+            .provider_config
+            .userinfo_endpoint
+            .as_ref()
             .ok_or_else(|| ServerError::internal("UserInfo endpoint not configured"))?;
 
-        let response = self.client
+        let response = self
+            .client
             .get(userinfo_endpoint)
             .header("Authorization", format!("Bearer {}", access_token))
             .send()
@@ -387,7 +422,10 @@ impl OidcUserStore {
         let cached_user = CachedUser {
             user_info: UserInfo {
                 id: user_info.sub.clone(),
-                username: user_info.preferred_username.clone().unwrap_or_else(|| user_info.sub.clone()),
+                username: user_info
+                    .preferred_username
+                    .clone()
+                    .unwrap_or_else(|| user_info.sub.clone()),
                 email: user_info.email.clone(),
                 roles: user_info.roles.clone().unwrap_or_default(),
                 tenant_id: None,
@@ -410,7 +448,7 @@ impl OidcUserStore {
         // 2. Fetch the JWKS from the provider
         // 3. Validate the signature using the public keys
         // 4. Validate the claims (issuer, audience, expiration, etc.)
-        
+
         // For now, we'll do a simplified validation
         let parts: Vec<&str> = id_token.split('.').collect();
         if parts.len() != 3 {
@@ -418,22 +456,26 @@ impl OidcUserStore {
         }
 
         // Decode payload (simplified - in production, use proper JWT library)
-        let payload = general_purpose::STANDARD.decode(parts[1])
+        let payload = general_purpose::STANDARD
+            .decode(parts[1])
             .map_err(|_| ServerError::auth("Failed to decode ID token payload"))?;
 
         let claims: serde_json::Value = serde_json::from_slice(&payload)
             .map_err(|_| ServerError::auth("Failed to parse ID token claims"))?;
 
         // Extract basic claims
-        let sub = claims.get("sub")
+        let sub = claims
+            .get("sub")
             .and_then(|v| v.as_str())
             .ok_or_else(|| ServerError::auth("Missing subject claim"))?;
 
-        let exp = claims.get("exp")
+        let exp = claims
+            .get("exp")
             .and_then(|v| v.as_i64())
             .ok_or_else(|| ServerError::auth("Missing expiration claim"))?;
 
-        let iat = claims.get("iat")
+        let iat = claims
+            .get("iat")
             .and_then(|v| v.as_i64())
             .ok_or_else(|| ServerError::auth("Missing issued at claim"))?;
 
@@ -447,10 +489,18 @@ impl OidcUserStore {
         Ok(TokenClaims {
             sub: sub.to_string(),
             username: sub.to_string(),
-            email: claims.get("email").and_then(|v| v.as_str()).map(|s| s.to_string()),
-            roles: claims.get("roles")
+            email: claims
+                .get("email")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            roles: claims
+                .get("roles")
                 .and_then(|v| v.as_array())
-                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
                 .unwrap_or_default(),
             tenant_id: None,
             iat,
@@ -460,7 +510,10 @@ impl OidcUserStore {
     }
 
     /// Authenticate with OIDC authorization code
-    pub async fn authenticate_with_code(&self, request: OidcAuthRequest) -> ServerResult<OidcAuthResult> {
+    pub async fn authenticate_with_code(
+        &self,
+        request: OidcAuthRequest,
+    ) -> ServerResult<OidcAuthResult> {
         // Exchange code for tokens
         let token_response = self.exchange_code_for_tokens(request.clone()).await?;
 
@@ -470,7 +523,10 @@ impl OidcUserStore {
         // Convert to UserInfo format
         let user = UserInfo {
             id: user_info.sub.clone(),
-            username: user_info.preferred_username.clone().unwrap_or_else(|| user_info.sub.clone()),
+            username: user_info
+                .preferred_username
+                .clone()
+                .unwrap_or_else(|| user_info.sub.clone()),
             email: user_info.email.clone(),
             roles: user_info.roles.clone().unwrap_or_default(),
             tenant_id: None,
@@ -491,8 +547,14 @@ impl OidcUserStore {
     }
 
     /// Refresh access token
-    pub async fn refresh_access_token(&self, refresh_token: &str) -> ServerResult<OidcTokenResponse> {
-        let token_endpoint = self.provider_config.token_endpoint.as_ref()
+    pub async fn refresh_access_token(
+        &self,
+        refresh_token: &str,
+    ) -> ServerResult<OidcTokenResponse> {
+        let token_endpoint = self
+            .provider_config
+            .token_endpoint
+            .as_ref()
             .ok_or_else(|| ServerError::internal("Token endpoint not configured"))?;
 
         let mut params = std::collections::HashMap::new();
@@ -501,7 +563,8 @@ impl OidcUserStore {
         params.insert("client_id", &self.provider_config.client_id);
         params.insert("client_secret", &self.provider_config.client_secret);
 
-        let response = self.client
+        let response = self
+            .client
             .post(token_endpoint)
             .form(&params)
             .send()
@@ -515,10 +578,9 @@ impl OidcUserStore {
             )));
         }
 
-        let token_response: OidcTokenResponse = response
-            .json()
-            .await
-            .map_err(|e| ServerError::internal(format!("Failed to parse refresh response: {}", e)))?;
+        let token_response: OidcTokenResponse = response.json().await.map_err(|e| {
+            ServerError::internal(format!("Failed to parse refresh response: {}", e))
+        })?;
 
         Ok(token_response)
     }
@@ -535,7 +597,8 @@ impl OidcUserStore {
 /// In-memory user store for development/testing
 pub struct InMemoryUserStore {
     users: Arc<parking_lot::RwLock<HashMap<String, UserRecord>>>,
-    refresh_tokens: Arc<parking_lot::RwLock<HashMap<String, (String, chrono::DateTime<chrono::Utc>)>>>, // token -> (user_id, expiry)
+    refresh_tokens:
+        Arc<parking_lot::RwLock<HashMap<String, (String, chrono::DateTime<chrono::Utc>)>>>, // token -> (user_id, expiry)
 }
 
 /// User record for in-memory store
@@ -555,9 +618,11 @@ pub struct UserRecord {
 impl UserStore for OidcUserStore {
     async fn authenticate(&self, _request: AuthRequest) -> ServerResult<UserInfo> {
         // OIDC doesn't use username/password authentication
-        Err(ServerError::auth("OIDC user store doesn't support username/password authentication"))
+        Err(ServerError::auth(
+            "OIDC user store doesn't support username/password authentication",
+        ))
     }
-    
+
     async fn get_user(&self, user_id: &str) -> ServerResult<Option<UserInfo>> {
         // Check cache first
         let cache_key = format!("user:{}", user_id);
@@ -569,16 +634,17 @@ impl UserStore for OidcUserStore {
                 }
             }
         }
-        
+
         // For OIDC, we would need to fetch from the provider or return None
         // In a real implementation, you might use the access token to fetch fresh user info
         Ok(None)
     }
-    
+
     async fn validate_refresh_token(&self, refresh_token: &str) -> ServerResult<UserInfo> {
         let _user_id = {
             let refresh_tokens = self.refresh_tokens.read();
-            let entry = refresh_tokens.get(refresh_token)
+            let entry = refresh_tokens
+                .get(refresh_token)
                 .ok_or_else(|| ServerError::auth("Invalid refresh token"))?;
 
             if entry.expiry < chrono::Utc::now() {
@@ -586,28 +652,37 @@ impl UserStore for OidcUserStore {
             }
             entry.user_id.clone()
         };
-        
+
         // Refresh the access token and get fresh user info
         let token_response = self.refresh_access_token(refresh_token).await?;
         let user_info = self.get_user_info(&token_response.access_token).await?;
-        
+
         // Convert to UserInfo format
         Ok(UserInfo {
             id: user_info.sub.clone(),
-            username: user_info.preferred_username.clone().unwrap_or_else(|| user_info.sub.clone()),
+            username: user_info
+                .preferred_username
+                .clone()
+                .unwrap_or_else(|| user_info.sub.clone()),
             email: user_info.email.clone(),
             roles: user_info.roles.clone().unwrap_or_default(),
             tenant_id: None,
         })
     }
-    
+
     async fn store_refresh_token(&self, user_id: &str, refresh_token: &str) -> ServerResult<()> {
         let mut refresh_tokens = self.refresh_tokens.write();
         let expiry = chrono::Utc::now() + chrono::Duration::days(7);
-        refresh_tokens.insert(refresh_token.to_string(), TokenEntry { user_id: user_id.to_string(), expiry });
+        refresh_tokens.insert(
+            refresh_token.to_string(),
+            TokenEntry {
+                user_id: user_id.to_string(),
+                expiry,
+            },
+        );
         Ok(())
     }
-    
+
     async fn revoke_refresh_token(&self, refresh_token: &str) -> ServerResult<()> {
         let mut refresh_tokens = self.refresh_tokens.write();
         refresh_tokens.remove(refresh_token);
@@ -617,7 +692,11 @@ impl UserStore for OidcUserStore {
 
 impl AuthManager {
     /// Create a new authentication manager
-    pub fn new(jwt_secret: &str, token_expiration: Duration, user_store: Arc<dyn UserStore>) -> Self {
+    pub fn new(
+        jwt_secret: &str,
+        token_expiration: Duration,
+        user_store: Arc<dyn UserStore>,
+    ) -> Self {
         Self {
             encoding_key: EncodingKey::from_secret(jwt_secret.as_ref()),
             decoding_key: DecodingKey::from_secret(jwt_secret.as_ref()),
@@ -630,14 +709,16 @@ impl AuthManager {
     pub async fn authenticate(&self, request: AuthRequest) -> ServerResult<AuthResponse> {
         // Validate credentials
         let user = self.user_store.authenticate(request).await?;
-        
+
         // Generate access token
         let access_token = self.generate_access_token(&user)?;
-        
+
         // Generate refresh token
         let refresh_token = self.generate_refresh_token();
-        self.user_store.store_refresh_token(&user.id, &refresh_token).await?;
-        
+        self.user_store
+            .store_refresh_token(&user.id, &refresh_token)
+            .await?;
+
         Ok(AuthResponse {
             access_token,
             token_type: "Bearer".to_string(),
@@ -648,20 +729,30 @@ impl AuthManager {
     }
 
     /// Refresh access token
-    pub async fn refresh_token(&self, request: RefreshTokenRequest) -> ServerResult<RefreshTokenResponse> {
+    pub async fn refresh_token(
+        &self,
+        request: RefreshTokenRequest,
+    ) -> ServerResult<RefreshTokenResponse> {
         // Validate refresh token
-        let user = self.user_store.validate_refresh_token(&request.refresh_token).await?;
-        
+        let user = self
+            .user_store
+            .validate_refresh_token(&request.refresh_token)
+            .await?;
+
         // Generate new access token
         let access_token = self.generate_access_token(&user)?;
-        
+
         // Generate new refresh token
         let new_refresh_token = self.generate_refresh_token();
-        
+
         // Store new refresh token and revoke old one
-        self.user_store.store_refresh_token(&user.id, &new_refresh_token).await?;
-        self.user_store.revoke_refresh_token(&request.refresh_token).await?;
-        
+        self.user_store
+            .store_refresh_token(&user.id, &new_refresh_token)
+            .await?;
+        self.user_store
+            .revoke_refresh_token(&request.refresh_token)
+            .await?;
+
         Ok(RefreshTokenResponse {
             access_token,
             token_type: "Bearer".to_string(),
@@ -679,10 +770,10 @@ impl AuthManager {
         validation.validate_exp = true;
         validation.validate_nbf = true;
         validation.leeway = 0; // No leeway for time-based claims
-        
+
         let token_data = decode::<TokenClaims>(token, &self.decoding_key, &validation)
             .map_err(|e| ServerError::auth(format!("Invalid token: {}", e)))?;
-        
+
         Ok(token_data.claims)
     }
 
@@ -740,8 +831,6 @@ impl InMemoryUserStore {
         }
     }
 
-
-
     /// Add a user to the store
     pub fn add_user(&self, user: UserRecord) {
         let mut users = self.users.write();
@@ -753,7 +842,10 @@ impl InMemoryUserStore {
         let mut refresh_tokens = self.refresh_tokens.write();
         let now = chrono::Utc::now();
         refresh_tokens.retain(|_, (_, expiry)| *expiry > now);
-        tracing::debug!("Cleaned up expired refresh tokens. {} tokens remaining.", refresh_tokens.len());
+        tracing::debug!(
+            "Cleaned up expired refresh tokens. {} tokens remaining.",
+            refresh_tokens.len()
+        );
     }
 }
 
@@ -761,28 +853,31 @@ impl InMemoryUserStore {
 impl UserStore for InMemoryUserStore {
     async fn authenticate(&self, request: AuthRequest) -> ServerResult<UserInfo> {
         let mut users = self.users.write();
-        
-        let user_record = users.get_mut(&request.username)
+
+        let user_record = users
+            .get_mut(&request.username)
             .ok_or_else(|| ServerError::auth("Invalid username or password"))?;
-        
+
         // Check if account is locked
         if let Some(locked_until) = user_record.locked_until {
             if chrono::Utc::now() < locked_until {
-                return Err(ServerError::auth("Account is temporarily locked due to multiple failed login attempts"));
+                return Err(ServerError::auth(
+                    "Account is temporarily locked due to multiple failed login attempts",
+                ));
             } else {
                 // Lock expired, reset
                 user_record.locked_until = None;
                 user_record.failed_login_attempts = 0;
             }
         }
-        
+
         // Verify password using Argon2id
         match verify_password_secure(&request.password, &user_record.password_hash) {
             Ok(true) => {
                 // Reset failed attempts on successful login
                 user_record.failed_login_attempts = 0;
                 user_record.locked_until = None;
-                
+
                 Ok(UserInfo {
                     id: user_record.id.clone(),
                     username: user_record.username.clone(),
@@ -794,12 +889,13 @@ impl UserStore for InMemoryUserStore {
             Ok(false) => {
                 // Increment failed attempts
                 user_record.failed_login_attempts += 1;
-                
+
                 // Lock account after 5 failed attempts for 30 minutes
                 if user_record.failed_login_attempts >= 5 {
-                    user_record.locked_until = Some(chrono::Utc::now() + chrono::Duration::minutes(30));
+                    user_record.locked_until =
+                        Some(chrono::Utc::now() + chrono::Duration::minutes(30));
                 }
-                
+
                 Err(ServerError::auth("Invalid username or password"))
             }
             Err(e) => {
@@ -811,7 +907,7 @@ impl UserStore for InMemoryUserStore {
 
     async fn get_user(&self, user_id: &str) -> ServerResult<Option<UserInfo>> {
         let users = self.users.read();
-        
+
         for user_record in users.values() {
             if user_record.id == user_id {
                 return Ok(Some(UserInfo {
@@ -823,14 +919,15 @@ impl UserStore for InMemoryUserStore {
                 }));
             }
         }
-        
+
         Ok(None)
     }
 
     async fn validate_refresh_token(&self, refresh_token: &str) -> ServerResult<UserInfo> {
         let user_id = {
             let refresh_tokens = self.refresh_tokens.read();
-            let (user_id, expiry) = refresh_tokens.get(refresh_token)
+            let (user_id, expiry) = refresh_tokens
+                .get(refresh_token)
                 .ok_or_else(|| ServerError::auth("Invalid refresh token"))?;
 
             if *expiry < chrono::Utc::now() {
@@ -839,7 +936,8 @@ impl UserStore for InMemoryUserStore {
             user_id.clone()
         };
 
-        self.get_user(&user_id).await
+        self.get_user(&user_id)
+            .await
             .map_err(|_| ServerError::auth("User not found"))?
             .ok_or_else(|| ServerError::auth("User not found"))
     }
@@ -863,24 +961,29 @@ impl UserStore for InMemoryUserStore {
 pub fn hash_password_secure(password: &str) -> Result<String, argon2::password_hash::Error> {
     let salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();
-    
+
     let password_hash = argon2.hash_password(password.as_bytes(), &salt)?;
     Ok(password_hash.to_string())
 }
 
 /// Secure password verification using Argon2id
-fn verify_password_secure(password: &str, hash: &str) -> Result<bool, argon2::password_hash::Error> {
+fn verify_password_secure(
+    password: &str,
+    hash: &str,
+) -> Result<bool, argon2::password_hash::Error> {
     let parsed_hash = PasswordHash::new(hash)?;
     let argon2 = Argon2::default();
-    
-    Ok(argon2.verify_password(password.as_bytes(), &parsed_hash).is_ok())
+
+    Ok(argon2
+        .verify_password(password.as_bytes(), &parsed_hash)
+        .is_ok())
 }
 
 /// Legacy password hashing for migration purposes (DEPRECATED)
 /// Only used for verifying old SHA-256 hashes during migration
 #[deprecated(note = "Use hash_password_secure instead")]
 fn hash_password_legacy(password: &str) -> String {
-    use sha2::{Sha256, Digest};
+    use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
     hasher.update(password.as_bytes());
     format!("{:x}", hasher.finalize())
@@ -951,7 +1054,7 @@ pub fn require_role(role: &'static str) -> impl Fn(&Request) -> bool {
 /// Multi-role authorization middleware
 pub fn require_any_role(roles: &'static [&'static str]) -> impl Fn(&Request) -> bool {
     let required_roles: HashSet<String> = roles.iter().map(|&r| r.to_string()).collect();
-    
+
     move |request: &Request| {
         // Extract claims from request extensions
         if let Some(claims) = request.extensions().get::<TokenClaims>() {
@@ -973,11 +1076,11 @@ mod tests {
     fn test_secure_password_hashing() {
         let password = "test123";
         let hash = hash_password_secure(password).unwrap();
-        
+
         // Verify the hash works
         assert!(verify_password_secure(password, &hash).unwrap());
         assert!(!verify_password_secure("wrong", &hash).unwrap());
-        
+
         // Verify hashes are unique (due to random salt)
         let hash2 = hash_password_secure(password).unwrap();
         assert_ne!(hash, hash2);
@@ -994,13 +1097,15 @@ mod tests {
     #[tokio::test]
     async fn test_in_memory_user_store() {
         let store = InMemoryUserStore::new();
-        
+
         // Manually add admin user for the test
-        let admin_password = std::env::var("ADMIN_PASSWORD").unwrap_or_else(|_| "admin123".to_string());
+        let admin_password =
+            std::env::var("ADMIN_PASSWORD").unwrap_or_else(|_| "admin123".to_string());
         let admin_user = UserRecord {
             id: "admin".to_string(),
             username: "admin".to_string(),
-            password_hash: hash_password_secure(admin_password).expect("Failed to hash admin password"),
+            password_hash: hash_password_secure(admin_password)
+                .expect("Failed to hash admin password"),
             email: Some("admin@fortress-db.com".to_string()),
             roles: vec!["admin".to_string(), "user".to_string()],
             tenant_id: None,
@@ -1014,7 +1119,7 @@ mod tests {
             password: "admin123".to_string(),
             tenant_id: None,
         };
-        
+
         let user = store.authenticate(auth_request).await.unwrap();
         assert_eq!(user.username, "admin");
         assert!(user.roles.contains(&"admin".to_string()));
@@ -1023,24 +1128,22 @@ mod tests {
     #[tokio::test]
     async fn test_token_generation() {
         let store = Arc::new(InMemoryUserStore::new());
-        let auth_manager = AuthManager::new(
-            "test_secret",
-            Duration::hours(1),
-            store,
-        );
-        
+        let auth_manager = AuthManager::new("test_secret", Duration::hours(1), store);
+
         let auth_request = AuthRequest {
             username: "admin".to_string(),
             password: "admin123".to_string(),
             tenant_id: None,
         };
-        
+
         let auth_response = auth_manager.authenticate(auth_request).await.unwrap();
         assert!(!auth_response.access_token.is_empty());
         assert_eq!(auth_response.token_type, "Bearer");
-        
+
         // Validate the token
-        let claims = auth_manager.validate_token(&auth_response.access_token).unwrap();
+        let claims = auth_manager
+            .validate_token(&auth_response.access_token)
+            .unwrap();
         assert_eq!(claims.username, "admin");
     }
 }
@@ -1048,20 +1151,20 @@ mod tests {
 #[cfg(test)]
 mod auth_security_tests {
     use super::*;
-    
+
     #[test]
     fn test_secure_password_hashing() {
         let password = "test123";
         let hash = hash_password_secure(password).unwrap();
-        
+
         // Verify the hash works
         assert!(verify_password_secure(password, &hash).unwrap());
         assert!(!verify_password_secure("wrong", &hash).unwrap());
-        
+
         // Verify hashes are unique (due to random salt)
         let hash2 = hash_password_secure(password).unwrap();
         assert_ne!(hash, hash2);
-        
+
         println!("✓ Secure password hashing test passed");
     }
 
@@ -1070,14 +1173,14 @@ mod auth_security_tests {
         // Test that Argon2id is properly configured
         let password = "secure_password_123!";
         let hash = hash_password_secure(password).unwrap();
-        
+
         // Verify hash contains Argon2id identifier
         assert!(hash.starts_with("$argon2id$"));
-        
+
         // Verify it's not vulnerable to simple attacks
         assert!(hash.len() > 50); // Argon2id hashes are long
         assert!(hash.contains('$')); // Contains delimiter
-        
+
         println!("✓ Argon2id security test passed");
     }
 }

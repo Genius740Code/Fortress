@@ -1,8 +1,8 @@
 //! Benchmark tests for rate limiting performance
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
-use fortress_server::prelude::*;
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use fortress_server::middleware::{AdvancedRateLimiter, RateLimitAlgorithm};
+use fortress_server::prelude::*;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::runtime::Runtime;
@@ -35,9 +35,9 @@ fn create_benchmark_config_with_algorithm(algorithm: RateLimitAlgorithm) -> Rate
 /// Benchmark single request rate limiting
 fn bench_single_request(c: &mut Criterion) {
     let rt = Runtime::new().unwrap();
-    
+
     let mut group = c.benchmark_group("single_request");
-    
+
     for algorithm in [
         RateLimitAlgorithm::TokenBucket,
         RateLimitAlgorithm::SlidingWindow,
@@ -45,10 +45,8 @@ fn bench_single_request(c: &mut Criterion) {
         RateLimitAlgorithm::LeakyBucket,
     ] {
         let config = create_benchmark_config_with_algorithm(algorithm);
-        let rate_limiter = rt.block_on(async {
-            AdvancedRateLimiter::new(config)
-        });
-        
+        let rate_limiter = rt.block_on(async { AdvancedRateLimiter::new(config) });
+
         group.bench_with_input(
             BenchmarkId::new("rate_limit_check", format!("{:?}", algorithm)),
             &rate_limiter,
@@ -60,40 +58,38 @@ fn bench_single_request(c: &mut Criterion) {
             },
         );
     }
-    
+
     group.finish();
 }
 
 /// Benchmark concurrent requests
 fn bench_concurrent_requests(c: &mut Criterion) {
     let rt = Runtime::new().unwrap();
-    
+
     let mut group = c.benchmark_group("concurrent_requests");
-    
+
     for concurrency in [10, 50, 100, 500] {
         let config = create_benchmark_config();
-        let rate_limiter = Arc::new(rt.block_on(async {
-            AdvancedRateLimiter::new(config)
-        }));
-        
+        let rate_limiter = Arc::new(rt.block_on(async { AdvancedRateLimiter::new(config) }));
+
         group.bench_with_input(
             BenchmarkId::new("concurrent_rate_limit", concurrency),
             &concurrency,
             |b, &concurrency| {
                 b.to_async(&rt).iter(|| async {
                     let mut handles = vec![];
-                    
+
                     for i in 0..concurrency {
                         let rate_limiter = rate_limiter.clone();
                         let client_id = format!("client_{}", i % 10); // 10 different clients
-                        
+
                         let handle = tokio::spawn(async move {
                             black_box(rate_limiter.check_rate_limit(&client_id).await);
                         });
-                        
+
                         handles.push(handle);
                     }
-                    
+
                     for handle in handles {
                         black_box(handle.await.unwrap());
                     }
@@ -101,19 +97,17 @@ fn bench_concurrent_requests(c: &mut Criterion) {
             },
         );
     }
-    
+
     group.finish();
 }
 
 /// Benchmark rate limit headers
 fn bench_rate_limit_headers(c: &mut Criterion) {
     let rt = Runtime::new().unwrap();
-    
+
     let config = create_benchmark_config();
-    let rate_limiter = rt.block_on(async {
-        AdvancedRateLimiter::new(config)
-    });
-    
+    let rate_limiter = rt.block_on(async { AdvancedRateLimiter::new(config) });
+
     // Pre-populate some data
     rt.block_on(async {
         for i in 0..10 {
@@ -123,7 +117,7 @@ fn bench_rate_limit_headers(c: &mut Criterion) {
             }
         }
     });
-    
+
     c.bench_function("rate_limit_headers", |b| {
         b.to_async(&rt).iter(|| async {
             let client_id = "benchmark_client";
@@ -135,12 +129,10 @@ fn bench_rate_limit_headers(c: &mut Criterion) {
 /// Benchmark metrics collection
 fn bench_metrics_collection(c: &mut Criterion) {
     let rt = Runtime::new().unwrap();
-    
+
     let config = create_benchmark_config();
-    let rate_limiter = rt.block_on(async {
-        AdvancedRateLimiter::new(config)
-    });
-    
+    let rate_limiter = rt.block_on(async { AdvancedRateLimiter::new(config) });
+
     // Pre-populate with some activity
     rt.block_on(async {
         for i in 0..1000 {
@@ -148,7 +140,7 @@ fn bench_metrics_collection(c: &mut Criterion) {
             rate_limiter.check_rate_limit(&client_id).await;
         }
     });
-    
+
     c.bench_function("metrics_collection", |b| {
         b.iter(|| {
             black_box(rate_limiter.get_metrics());
@@ -159,12 +151,10 @@ fn bench_metrics_collection(c: &mut Criterion) {
 /// Benchmark cleanup operation
 fn bench_cleanup(c: &mut Criterion) {
     let rt = Runtime::new().unwrap();
-    
+
     let config = create_benchmark_config();
-    let rate_limiter = rt.block_on(async {
-        AdvancedRateLimiter::new(config)
-    });
-    
+    let rate_limiter = rt.block_on(async { AdvancedRateLimiter::new(config) });
+
     // Pre-populate with lots of data
     rt.block_on(async {
         for i in 0..10000 {
@@ -172,7 +162,7 @@ fn bench_cleanup(c: &mut Criterion) {
             rate_limiter.check_rate_limit(&client_id).await.unwrap();
         }
     });
-    
+
     c.bench_function("cleanup_operation", |b| {
         b.to_async(&rt).iter(|| async {
             black_box(rate_limiter.cleanup().await);
@@ -183,15 +173,13 @@ fn bench_cleanup(c: &mut Criterion) {
 /// Benchmark memory usage with different numbers of clients
 fn bench_memory_usage(c: &mut Criterion) {
     let rt = Runtime::new().unwrap();
-    
+
     let mut group = c.benchmark_group("memory_usage");
-    
+
     for client_count in [100, 1000, 10000, 50000] {
         let config = create_benchmark_config();
-        let rate_limiter = rt.block_on(async {
-            AdvancedRateLimiter::new(config)
-        });
-        
+        let rate_limiter = rt.block_on(async { AdvancedRateLimiter::new(config) });
+
         group.bench_with_input(
             BenchmarkId::new("client_tracking", client_count),
             &client_count,
@@ -206,59 +194,63 @@ fn bench_memory_usage(c: &mut Criterion) {
             },
         );
     }
-    
+
     group.finish();
 }
 
 /// Benchmark DDoS protection overhead
 fn bench_ddos_protection(c: &mut Criterion) {
     let rt = Runtime::new().unwrap();
-    
+
     let mut group = c.benchmark_group("ddos_protection");
-    
+
     // Test with DDoS protection disabled
     let mut config = create_benchmark_config();
     config.ddos_protection.enabled = false;
-    let rate_limiter_no_ddos = Arc::new(rt.block_on(async {
-        AdvancedRateLimiter::new(config)
-    }));
-    
+    let rate_limiter_no_ddos = Arc::new(rt.block_on(async { AdvancedRateLimiter::new(config) }));
+
     // Test with DDoS protection enabled
     config.ddos_protection.enabled = true;
     config.ddos_protection.global_rps_threshold = Some(1000);
     config.ddos_protection.ip_rps_threshold = Some(100);
-    let rate_limiter_with_ddos = Arc::new(rt.block_on(async {
-        AdvancedRateLimiter::new(config)
-    }));
-    
+    let rate_limiter_with_ddos = Arc::new(rt.block_on(async { AdvancedRateLimiter::new(config) }));
+
     group.bench_function("without_ddos_protection", |b| {
         b.to_async(&rt).iter(|| async {
             let client_id = "benchmark_client";
-            black_box(rate_limiter_no_ddos.check_rate_limit(client_id).await.unwrap());
+            black_box(
+                rate_limiter_no_ddos
+                    .check_rate_limit(client_id)
+                    .await
+                    .unwrap(),
+            );
         });
     });
-    
+
     group.bench_function("with_ddos_protection", |b| {
         b.to_async(&rt).iter(|| async {
             let client_id = "ip:192.168.1.100";
-            black_box(rate_limiter_with_ddos.check_rate_limit(client_id).await.unwrap());
+            black_box(
+                rate_limiter_with_ddos
+                    .check_rate_limit(client_id)
+                    .await
+                    .unwrap(),
+            );
         });
     });
-    
+
     group.finish();
 }
 
 /// Benchmark different request patterns
 fn bench_request_patterns(c: &mut Criterion) {
     let rt = Runtime::new().unwrap();
-    
+
     let mut group = c.benchmark_group("request_patterns");
-    
+
     let config = create_benchmark_config();
-    let rate_limiter = Arc::new(rt.block_on(async {
-        AdvancedRateLimiter::new(config)
-    }));
-    
+    let rate_limiter = Arc::new(rt.block_on(async { AdvancedRateLimiter::new(config) }));
+
     // Burst pattern
     group.bench_function("burst_pattern", |b| {
         b.to_async(&rt).iter(|| async {
@@ -269,7 +261,7 @@ fn bench_request_patterns(c: &mut Criterion) {
             }
         });
     });
-    
+
     // Steady pattern
     group.bench_function("steady_pattern", |b| {
         b.to_async(&rt).iter(|| async {
@@ -280,7 +272,7 @@ fn bench_request_patterns(c: &mut Criterion) {
             }
         });
     });
-    
+
     // Mixed pattern
     group.bench_function("mixed_pattern", |b| {
         b.to_async(&rt).iter(|| async {
@@ -295,7 +287,7 @@ fn bench_request_patterns(c: &mut Criterion) {
             }
         });
     });
-    
+
     group.finish();
 }
 

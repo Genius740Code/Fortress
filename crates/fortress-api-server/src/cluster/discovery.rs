@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{RwLock, Mutex};
+use tokio::sync::{Mutex, RwLock};
 use tokio::time::interval;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
@@ -82,7 +82,7 @@ pub enum DiscoveryMessage {
         /// Information about the announcing node
         node_info: NodeInfo,
     },
-    
+
     /// Node discovery request
     DiscoveryRequest {
         /// ID of the requesting node
@@ -90,7 +90,7 @@ pub enum DiscoveryMessage {
         /// When the request was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
-    
+
     /// Node discovery response
     DiscoveryResponse {
         /// ID of the requesting node
@@ -100,7 +100,7 @@ pub enum DiscoveryMessage {
         /// When the response was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
-    
+
     /// Node leave notification
     NodeLeave {
         /// ID of the leaving node
@@ -110,7 +110,7 @@ pub enum DiscoveryMessage {
         /// Reason for leaving
         reason: String,
     },
-    
+
     /// Heartbeat message
     Heartbeat {
         /// ID of the node sending heartbeat
@@ -128,27 +128,27 @@ pub enum DiscoveryError {
     /// Network discovery failed
     #[error("Network discovery failed: {0}")]
     NetworkDiscoveryFailed(String),
-    
+
     /// DNS discovery failed
     #[error("DNS discovery failed: {0}")]
     DnsDiscoveryFailed(String),
-    
+
     /// Invalid node address
     #[error("Invalid node address: {0}")]
     InvalidNodeAddress(String),
-    
+
     /// Node already exists
     #[error("Node already exists: {0}")]
     NodeAlreadyExists(Uuid),
-    
+
     /// Node not found in cluster
     #[error("Node not found: {0}")]
     NodeNotFound(Uuid),
-    
+
     /// Discovery operation timed out
     #[error("Discovery timeout")]
     DiscoveryTimeout,
-    
+
     /// Multicast communication error
     #[error("Multicast error: {0}")]
     MulticastError(String),
@@ -173,10 +173,10 @@ pub struct NodeDiscovery {
 pub trait NodeDiscoveryCallback {
     /// Called when a new node joins the cluster
     async fn on_node_joined(&self, node_info: &NodeInfo);
-    
+
     /// Called when a node leaves the cluster
     async fn on_node_left(&self, node_id: Uuid, reason: &str);
-    
+
     /// Called when a node's information is updated
     async fn on_node_updated(&self, node_info: &NodeInfo);
 }
@@ -185,11 +185,15 @@ pub trait NodeDiscoveryCallback {
 #[async_trait::async_trait]
 pub trait DiscoveryNetworkSender {
     /// Send a discovery message to a specific target
-    async fn send_discovery_message(&self, target: &str, message: DiscoveryMessage) -> ClusterResult<()>;
-    
+    async fn send_discovery_message(
+        &self,
+        target: &str,
+        message: DiscoveryMessage,
+    ) -> ClusterResult<()>;
+
     /// Broadcast a discovery message to all nodes
     async fn broadcast_discovery_message(&self, message: DiscoveryMessage) -> ClusterResult<()>;
-    
+
     /// Receive discovery messages from the network
     async fn receive_discovery_messages(&self) -> Vec<(String, DiscoveryMessage)>;
 }
@@ -212,8 +216,11 @@ impl NodeDiscovery {
 
     /// Start the discovery service
     pub async fn start(&self) -> ClusterResult<()> {
-        info!("Starting node discovery for {}", self.local_node_info.node_id);
-        
+        info!(
+            "Starting node discovery for {}",
+            self.local_node_info.node_id
+        );
+
         // Start discovery loop
         let discovery = self.clone();
         tokio::spawn(async move {
@@ -235,10 +242,10 @@ impl NodeDiscovery {
     /// Main discovery loop
     async fn discovery_loop(&self) {
         let mut interval = interval(Duration::from_secs(self.config.discovery_interval_secs));
-        
+
         loop {
             interval.tick().await;
-            
+
             if let Err(e) = self.perform_discovery().await {
                 error!("Discovery failed: {}", e);
             }
@@ -248,10 +255,10 @@ impl NodeDiscovery {
     /// Node cleanup loop
     async fn cleanup_loop(&self) {
         let mut interval = interval(Duration::from_secs(30));
-        
+
         loop {
             interval.tick().await;
-            
+
             if let Err(e) = self.cleanup_stale_nodes().await {
                 error!("Node cleanup failed: {}", e);
             }
@@ -261,7 +268,7 @@ impl NodeDiscovery {
     /// Perform initial discovery
     async fn perform_initial_discovery(&self) -> ClusterResult<()> {
         info!("Performing initial node discovery");
-        
+
         // Try static seed nodes first
         if self.config.enable_static_seeds {
             self.discover_static_seeds().await?;
@@ -297,7 +304,7 @@ impl NodeDiscovery {
     /// Discover static seed nodes
     async fn discover_static_seeds(&self) -> ClusterResult<()> {
         info!("Discovering static seed nodes");
-        
+
         for seed_address in &self.config.static_seed_nodes {
             let request = DiscoveryMessage::DiscoveryRequest {
                 requester_id: self.local_node_info.node_id,
@@ -317,7 +324,7 @@ impl NodeDiscovery {
     async fn discover_dns_nodes(&self) -> ClusterResult<()> {
         if let Some(domain) = &self.config.dns_domain {
             info!("Discovering nodes via DNS domain: {}", domain);
-            
+
             // DNS SRV record lookup would go here
             // For now, this is a placeholder
             debug!("DNS discovery not yet implemented");
@@ -329,15 +336,21 @@ impl NodeDiscovery {
     /// Discover nodes via multicast
     async fn discover_multicast_nodes(&self) -> ClusterResult<()> {
         info!("Discovering nodes via multicast");
-        
+
         let announcement = DiscoveryMessage::NodeAnnouncement {
             node_info: self.local_node_info.clone(),
         };
 
-        let multicast_address = format!("{}:{}", self.config.multicast_address, self.config.multicast_port);
+        let multicast_address = format!(
+            "{}:{}",
+            self.config.multicast_address, self.config.multicast_port
+        );
         let sender = self.network_sender.lock().await;
-        
-        if let Err(e) = sender.send_discovery_message(&multicast_address, announcement).await {
+
+        if let Err(e) = sender
+            .send_discovery_message(&multicast_address, announcement)
+            .await
+        {
             warn!("Failed to send multicast announcement: {}", e);
         }
 
@@ -348,7 +361,7 @@ impl NodeDiscovery {
     async fn cleanup_stale_nodes(&self) -> ClusterResult<()> {
         let now = chrono::Utc::now();
         let timeout_duration = chrono::Duration::seconds(self.config.node_timeout_secs as i64);
-        
+
         let mut nodes_to_remove = Vec::new();
         {
             let known_nodes = self.known_nodes.read().await;
@@ -367,21 +380,42 @@ impl NodeDiscovery {
     }
 
     /// Handle incoming discovery message
-    pub async fn handle_message(&self, source: &str, message: DiscoveryMessage) -> ClusterResult<()> {
+    pub async fn handle_message(
+        &self,
+        source: &str,
+        message: DiscoveryMessage,
+    ) -> ClusterResult<()> {
         match message {
             DiscoveryMessage::NodeAnnouncement { node_info } => {
                 self.handle_node_announcement(node_info).await?;
             }
-            DiscoveryMessage::DiscoveryRequest { requester_id, timestamp } => {
-                self.handle_discovery_request(source, requester_id, timestamp).await?;
+            DiscoveryMessage::DiscoveryRequest {
+                requester_id,
+                timestamp,
+            } => {
+                self.handle_discovery_request(source, requester_id, timestamp)
+                    .await?;
             }
-            DiscoveryMessage::DiscoveryResponse { requester_id, known_nodes, timestamp } => {
-                self.handle_discovery_response(requester_id, known_nodes, timestamp).await?;
+            DiscoveryMessage::DiscoveryResponse {
+                requester_id,
+                known_nodes,
+                timestamp,
+            } => {
+                self.handle_discovery_response(requester_id, known_nodes, timestamp)
+                    .await?;
             }
-            DiscoveryMessage::NodeLeave { node_id, timestamp: _, reason } => {
+            DiscoveryMessage::NodeLeave {
+                node_id,
+                timestamp: _,
+                reason,
+            } => {
                 self.handle_node_leave(node_id, &reason).await?;
             }
-            DiscoveryMessage::Heartbeat { node_id, timestamp, term: _ } => {
+            DiscoveryMessage::Heartbeat {
+                node_id,
+                timestamp,
+                term: _,
+            } => {
                 self.handle_heartbeat(node_id, timestamp).await?;
             }
         }
@@ -392,20 +426,20 @@ impl NodeDiscovery {
     /// Handle node announcement
     async fn handle_node_announcement(&self, node_info: NodeInfo) -> ClusterResult<()> {
         let node_id = node_info.node_id;
-        
+
         // Skip if it's our own announcement
         if node_id == self.local_node_info.node_id {
             return Ok(());
         }
 
         let mut known_nodes = self.known_nodes.write().await;
-        
+
         if let Some(existing_info) = known_nodes.get_mut(&node_id) {
             // Update existing node
             if existing_info.last_seen < node_info.last_seen {
                 *existing_info = node_info.clone();
                 drop(known_nodes);
-                
+
                 // Notify callbacks
                 let callbacks = self.callbacks.lock().await;
                 for callback in callbacks.iter() {
@@ -416,9 +450,9 @@ impl NodeDiscovery {
             // Add new node
             known_nodes.insert(node_id, node_info.clone());
             drop(known_nodes);
-            
+
             info!("Discovered new node: {}", node_id);
-            
+
             // Notify callbacks
             let callbacks = self.callbacks.lock().await;
             for callback in callbacks.iter() {
@@ -430,7 +464,12 @@ impl NodeDiscovery {
     }
 
     /// Handle discovery request
-    async fn handle_discovery_request(&self, source: &str, requester_id: Uuid, timestamp: chrono::DateTime<chrono::Utc>) -> ClusterResult<()> {
+    async fn handle_discovery_request(
+        &self,
+        source: &str,
+        requester_id: Uuid,
+        timestamp: chrono::DateTime<chrono::Utc>,
+    ) -> ClusterResult<()> {
         if requester_id == self.local_node_info.node_id {
             return Ok(());
         }
@@ -452,7 +491,12 @@ impl NodeDiscovery {
     }
 
     /// Handle discovery response
-    async fn handle_discovery_response(&self, requester_id: Uuid, known_nodes: Vec<NodeInfo>, _timestamp: chrono::DateTime<chrono::Utc>) -> ClusterResult<()> {
+    async fn handle_discovery_response(
+        &self,
+        requester_id: Uuid,
+        known_nodes: Vec<NodeInfo>,
+        _timestamp: chrono::DateTime<chrono::Utc>,
+    ) -> ClusterResult<()> {
         if requester_id != self.local_node_info.node_id {
             return Ok(());
         }
@@ -470,9 +514,13 @@ impl NodeDiscovery {
     }
 
     /// Handle heartbeat
-    async fn handle_heartbeat(&self, node_id: Uuid, timestamp: chrono::DateTime<chrono::Utc>) -> ClusterResult<()> {
+    async fn handle_heartbeat(
+        &self,
+        node_id: Uuid,
+        timestamp: chrono::DateTime<chrono::Utc>,
+    ) -> ClusterResult<()> {
         let mut known_nodes = self.known_nodes.write().await;
-        
+
         if let Some(node_info) = known_nodes.get_mut(&node_id) {
             node_info.last_seen = timestamp;
         }
@@ -483,11 +531,11 @@ impl NodeDiscovery {
     /// Remove a node from the known nodes
     async fn remove_node(&self, node_id: Uuid, reason: &str) -> ClusterResult<()> {
         let mut known_nodes = self.known_nodes.write().await;
-        
+
         if known_nodes.remove(&node_id).is_some() {
             info!("Node {} left: {}", node_id, reason);
             drop(known_nodes);
-            
+
             // Notify callbacks
             let callbacks = self.callbacks.lock().await;
             for callback in callbacks.iter() {

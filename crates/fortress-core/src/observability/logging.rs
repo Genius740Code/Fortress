@@ -239,7 +239,13 @@ impl Default for LogOutputConfig {
                 target_type: LogOutputType::Console,
                 config: HashMap::new(),
                 enabled: true,
-                levels: vec![LogLevel::Trace, LogLevel::Debug, LogLevel::Info, LogLevel::Warn, LogLevel::Error],
+                levels: vec![
+                    LogLevel::Trace,
+                    LogLevel::Debug,
+                    LogLevel::Info,
+                    LogLevel::Warn,
+                    LogLevel::Error,
+                ],
             }],
             buffer: LogBufferConfig::default(),
             rotation: LogRotationConfig::default(),
@@ -358,9 +364,7 @@ impl StructuredLogger {
         let layers = self.create_layers()?;
 
         // Initialize subscriber
-        let subscriber = tracing_subscriber::registry()
-            .with(env_filter)
-            .with(layers);
+        let subscriber = tracing_subscriber::registry().with(env_filter).with(layers);
 
         subscriber.init();
 
@@ -387,7 +391,8 @@ impl StructuredLogger {
 
         // Add module-specific filters
         for (module, level) in &self.config.filtering.module_filters {
-            filter = filter.add_directive(format!("{}={}", module, self.level_to_string(*level)).parse()?);
+            filter = filter
+                .add_directive(format!("{}={}", module, self.level_to_string(*level)).parse()?);
         }
 
         Ok(filter)
@@ -395,7 +400,9 @@ impl StructuredLogger {
 
     /// Create subscriber layers
     #[cfg(feature = "tracing-subscriber")]
-    fn create_layers(&self) -> Result<Vec<Box<dyn Layer< tracing_subscriber::Registry> + Send + Sync>>> {
+    fn create_layers(
+        &self,
+    ) -> Result<Vec<Box<dyn Layer<tracing_subscriber::Registry> + Send + Sync>>> {
         let mut layers = Vec::new();
 
         for target in &self.config.output.targets {
@@ -420,42 +427,35 @@ impl StructuredLogger {
 
     /// Create console layer
     #[cfg(feature = "tracing-subscriber")]
-    fn create_console_layer(&self, target: &LogOutputTarget) -> Result<Box<dyn Layer< tracing_subscriber::Registry> + Send + Sync>> {
+    fn create_console_layer(
+        &self,
+        target: &LogOutputTarget,
+    ) -> Result<Box<dyn Layer<tracing_subscriber::Registry> + Send + Sync>> {
         let layer = match self.config.format {
-            LogFormat::Plain => {
-                tracing_subscriber::fmt::layer()
-                    .with_writer(std::io::stdout)
-                    .with_ansi(true)
-                    .boxed()
-            }
-            LogFormat::Json => {
-                tracing_subscriber::fmt::layer()
-                    .json()
-                    .with_writer(std::io::stdout)
-                    .boxed()
-            }
-            LogFormat::CompactJson => {
-                tracing_subscriber::fmt::layer()
-                    .compact()
-                    .json()
-                    .with_writer(std::io::stdout)
-                    .boxed()
-            }
-            LogFormat::Pretty => {
-                tracing_subscriber::fmt::layer()
-                    .pretty()
-                    .with_writer(std::io::stdout)
-                    .boxed()
-            }
-            LogFormat::Structured => {
-                tracing_subscriber::fmt::layer()
-                    .json()
-                    .with_target(true)
-                    .with_thread_ids(true)
-                    .with_process_id(true)
-                    .with_writer(std::io::stdout)
-                    .boxed()
-            }
+            LogFormat::Plain => tracing_subscriber::fmt::layer()
+                .with_writer(std::io::stdout)
+                .with_ansi(true)
+                .boxed(),
+            LogFormat::Json => tracing_subscriber::fmt::layer()
+                .json()
+                .with_writer(std::io::stdout)
+                .boxed(),
+            LogFormat::CompactJson => tracing_subscriber::fmt::layer()
+                .compact()
+                .json()
+                .with_writer(std::io::stdout)
+                .boxed(),
+            LogFormat::Pretty => tracing_subscriber::fmt::layer()
+                .pretty()
+                .with_writer(std::io::stdout)
+                .boxed(),
+            LogFormat::Structured => tracing_subscriber::fmt::layer()
+                .json()
+                .with_target(true)
+                .with_thread_ids(true)
+                .with_process_id(true)
+                .with_writer(std::io::stdout)
+                .boxed(),
         };
 
         Ok(layer)
@@ -463,13 +463,19 @@ impl StructuredLogger {
 
     /// Create console layer (no-op when feature not enabled)
     #[cfg(not(feature = "tracing-subscriber"))]
-    fn create_console_layer(&self, _target: &LogOutputTarget) -> Result<Box<dyn std::any::Any + Send + Sync>> {
+    fn create_console_layer(
+        &self,
+        _target: &LogOutputTarget,
+    ) -> Result<Box<dyn std::any::Any + Send + Sync>> {
         Ok(Box::new(()))
     }
 
     /// Create file layer
     #[cfg(feature = "tracing-subscriber")]
-    fn create_file_layer(&self, target: &LogOutputTarget) -> Result<Box<dyn Layer< tracing_subscriber::Registry> + Send + Sync>> {
+    fn create_file_layer(
+        &self,
+        target: &LogOutputTarget,
+    ) -> Result<Box<dyn Layer<tracing_subscriber::Registry> + Send + Sync>> {
         let file_path = target.config.get("path").ok_or_else(|| {
             FortressError::validation("File path not specified for file output".to_string())
         })?;
@@ -480,24 +486,16 @@ impl StructuredLogger {
             .open(file_path)?;
 
         let layer = match self.config.format {
-            LogFormat::Json => {
-                tracing_subscriber::fmt::layer()
-                    .json()
-                    .with_writer(file)
-                    .boxed()
-            }
-            LogFormat::CompactJson => {
-                tracing_subscriber::fmt::layer()
-                    .compact()
-                    .json()
-                    .with_writer(file)
-                    .boxed()
-            }
-            _ => {
-                tracing_subscriber::fmt::layer()
-                    .with_writer(file)
-                    .boxed()
-            }
+            LogFormat::Json => tracing_subscriber::fmt::layer()
+                .json()
+                .with_writer(file)
+                .boxed(),
+            LogFormat::CompactJson => tracing_subscriber::fmt::layer()
+                .compact()
+                .json()
+                .with_writer(file)
+                .boxed(),
+            _ => tracing_subscriber::fmt::layer().with_writer(file).boxed(),
         };
 
         Ok(layer)
@@ -505,58 +503,88 @@ impl StructuredLogger {
 
     /// Create file layer (no-op when feature not enabled)
     #[cfg(not(feature = "tracing-subscriber"))]
-    fn create_file_layer(&self, _target: &LogOutputTarget) -> Result<Box<dyn std::any::Any + Send + Sync>> {
+    fn create_file_layer(
+        &self,
+        _target: &LogOutputTarget,
+    ) -> Result<Box<dyn std::any::Any + Send + Sync>> {
         Ok(Box::new(()))
     }
 
     /// Create network layer
     #[cfg(feature = "tracing-subscriber")]
-    fn create_network_layer(&self, target: &LogOutputTarget) -> Result<Box<dyn Layer< tracing_subscriber::Registry> + Send + Sync>> {
+    fn create_network_layer(
+        &self,
+        target: &LogOutputTarget,
+    ) -> Result<Box<dyn Layer<tracing_subscriber::Registry> + Send + Sync>> {
         // For now, return a no-op layer
         // In a full implementation, this would set up network logging
         tracing::warn!("Network logging not yet implemented");
-        Ok(Box::new(tracing_subscriber::fmt::layer().with_writer(std::io::sink)))
+        Ok(Box::new(
+            tracing_subscriber::fmt::layer().with_writer(std::io::sink),
+        ))
     }
 
     /// Create network layer (no-op when feature not enabled)
     #[cfg(not(feature = "tracing-subscriber"))]
-    fn create_network_layer(&self, _target: &LogOutputTarget) -> Result<Box<dyn std::any::Any + Send + Sync>> {
+    fn create_network_layer(
+        &self,
+        _target: &LogOutputTarget,
+    ) -> Result<Box<dyn std::any::Any + Send + Sync>> {
         Ok(Box::new(()))
     }
 
     /// Create Elasticsearch layer
     #[cfg(feature = "tracing-subscriber")]
-    fn create_elasticsearch_layer(&self, target: &LogOutputTarget) -> Result<Box<dyn Layer< tracing_subscriber::Registry> + Send + Sync>> {
+    fn create_elasticsearch_layer(
+        &self,
+        target: &LogOutputTarget,
+    ) -> Result<Box<dyn Layer<tracing_subscriber::Registry> + Send + Sync>> {
         // For now, return a no-op layer
         // In a full implementation, this would set up Elasticsearch logging
         tracing::warn!("Elasticsearch logging not yet implemented");
-        Ok(Box::new(tracing_subscriber::fmt::layer().with_writer(std::io::sink)))
+        Ok(Box::new(
+            tracing_subscriber::fmt::layer().with_writer(std::io::sink),
+        ))
     }
 
     /// Create Elasticsearch layer (no-op when feature not enabled)
     #[cfg(not(feature = "tracing-subscriber"))]
-    fn create_elasticsearch_layer(&self, _target: &LogOutputTarget) -> Result<Box<dyn std::any::Any + Send + Sync>> {
+    fn create_elasticsearch_layer(
+        &self,
+        _target: &LogOutputTarget,
+    ) -> Result<Box<dyn std::any::Any + Send + Sync>> {
         Ok(Box::new(()))
     }
 
     /// Create Loki layer
     #[cfg(feature = "tracing-subscriber")]
-    fn create_loki_layer(&self, target: &LogOutputTarget) -> Result<Box<dyn Layer< tracing_subscriber::Registry> + Send + Sync>> {
+    fn create_loki_layer(
+        &self,
+        target: &LogOutputTarget,
+    ) -> Result<Box<dyn Layer<tracing_subscriber::Registry> + Send + Sync>> {
         // For now, return a no-op layer
         // In a full implementation, this would set up Loki logging
         tracing::warn!("Loki logging not yet implemented");
-        Ok(Box::new(tracing_subscriber::fmt::layer().with_writer(std::io::sink)))
+        Ok(Box::new(
+            tracing_subscriber::fmt::layer().with_writer(std::io::sink),
+        ))
     }
 
     /// Create Loki layer (no-op when feature not enabled)
     #[cfg(not(feature = "tracing-subscriber"))]
-    fn create_loki_layer(&self, _target: &LogOutputTarget) -> Result<Box<dyn std::any::Any + Send + Sync>> {
+    fn create_loki_layer(
+        &self,
+        _target: &LogOutputTarget,
+    ) -> Result<Box<dyn std::any::Any + Send + Sync>> {
         Ok(Box::new(()))
     }
 
     /// Create syslog layer (no-op when feature not enabled)
     #[cfg(not(feature = "tracing-subscriber"))]
-    fn create_syslog_layer(&self, _target: &LogOutputTarget) -> Result<Box<dyn std::any::Any + Send + Sync>> {
+    fn create_syslog_layer(
+        &self,
+        _target: &LogOutputTarget,
+    ) -> Result<Box<dyn std::any::Any + Send + Sync>> {
         Ok(Box::new(()))
     }
 
@@ -597,7 +625,7 @@ impl StructuredLogger {
         if self.config.enabled {
             // Initialize global context
             self.initialize_global_context().await;
-            
+
             tracing::info!("Structured logger started");
         }
         Ok(())
@@ -614,7 +642,7 @@ impl StructuredLogger {
     /// Initialize global context
     async fn initialize_global_context(&self) {
         let mut context = self.global_context.write().await;
-        
+
         // Add automatic fields
         for auto_field in &self.config.context.auto_fields {
             match auto_field {
@@ -751,10 +779,13 @@ mod tests {
     async fn test_structured_logger_creation() {
         let config = LogConfig::default();
         let logger = StructuredLogger::new(config);
-        
+
         // Test adding global context
-        logger.add_global_context("test_key", "test_value").await.unwrap();
-        
+        logger
+            .add_global_context("test_key", "test_value")
+            .await
+            .unwrap();
+
         let context = logger.get_global_context().await;
         assert_eq!(context.get("test_key"), Some(&"test_value".to_string()));
     }
@@ -763,7 +794,7 @@ mod tests {
     async fn test_logging_stats() {
         let config = LogConfig::default();
         let logger = StructuredLogger::new(config);
-        
+
         let stats = logger.get_stats().await;
         assert_eq!(stats.total_logs, 0);
         assert_eq!(stats.dropped_logs, 0);
@@ -772,7 +803,7 @@ mod tests {
     #[test]
     fn test_level_conversion() {
         let logger = StructuredLogger::new(LogConfig::default());
-        
+
         assert_eq!(logger.level_to_string(LogLevel::Info), "info");
         assert_eq!(logger.string_to_level("error"), LogLevel::Error);
         assert_eq!(logger.string_to_level("invalid"), LogLevel::Info);

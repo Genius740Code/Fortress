@@ -3,12 +3,12 @@
 //! This module provides built-in functions that can be used in HCL policies
 //! for advanced access control and validation.
 
-use chrono::{Utc, Datelike, Timelike};
+use chrono::{Datelike, Timelike, Utc};
 use serde_json::Value;
 use std::net::IpAddr;
 
 use crate::error::{FortressError, Result};
-use crate::policy_hcl::types::{PolicyContext, PolicyFunction, ParameterType};
+use crate::policy_hcl::types::{ParameterType, PolicyContext, PolicyFunction};
 
 /// Time function - returns current timestamp
 pub struct TimeFunction;
@@ -42,7 +42,9 @@ pub struct IdentityFunction;
 impl PolicyFunction for IdentityFunction {
     fn evaluate(&self, args: &[Value], context: &PolicyContext) -> Result<Value> {
         if !args.is_empty() {
-            return Err(FortressError::policy("identity() function takes no arguments"));
+            return Err(FortressError::policy(
+                "identity() function takes no arguments",
+            ));
         }
 
         Ok(Value::String(context.token.token.id.clone()))
@@ -70,7 +72,9 @@ impl PolicyFunction for IpFunction {
             return Err(FortressError::policy("ip() function takes no arguments"));
         }
 
-        let ip = context.ip_address.clone()
+        let ip = context
+            .ip_address
+            .clone()
             .unwrap_or_else(|| "unknown".to_string());
         Ok(Value::String(ip))
     }
@@ -198,7 +202,9 @@ pub struct RoleFunction;
 impl PolicyFunction for RoleFunction {
     fn evaluate(&self, args: &[Value], context: &PolicyContext) -> Result<Value> {
         if args.len() != 1 {
-            return Err(FortressError::policy("role() function takes exactly one argument"));
+            return Err(FortressError::policy(
+                "role() function takes exactly one argument",
+            ));
         }
 
         let role_name = match &args[0] {
@@ -208,7 +214,10 @@ impl PolicyFunction for RoleFunction {
 
         // For now, check if the role is in the token's policies
         // In a real implementation, this would query the role store
-        let has_role = context.token.token.has_role(&crate::token::TokenRole::Custom(role_name.clone()));
+        let has_role = context
+            .token
+            .token
+            .has_role(&crate::token::TokenRole::Custom(role_name.clone()));
         Ok(Value::Bool(has_role))
     }
 
@@ -231,7 +240,9 @@ pub struct PolicyCheckFunction;
 impl PolicyFunction for PolicyCheckFunction {
     fn evaluate(&self, args: &[Value], context: &PolicyContext) -> Result<Value> {
         if args.len() != 1 {
-            return Err(FortressError::policy("policy() function takes exactly one argument"));
+            return Err(FortressError::policy(
+                "policy() function takes exactly one argument",
+            ));
         }
 
         let policy_name = match &args[0] {
@@ -287,7 +298,9 @@ pub struct OperationFunction;
 impl PolicyFunction for OperationFunction {
     fn evaluate(&self, args: &[Value], context: &PolicyContext) -> Result<Value> {
         if !args.is_empty() {
-            return Err(FortressError::policy("operation() function takes no arguments"));
+            return Err(FortressError::policy(
+                "operation() function takes no arguments",
+            ));
         }
 
         Ok(Value::String(context.operation.clone()))
@@ -312,10 +325,14 @@ pub struct MethodFunction;
 impl PolicyFunction for MethodFunction {
     fn evaluate(&self, args: &[Value], context: &PolicyContext) -> Result<Value> {
         if !args.is_empty() {
-            return Err(FortressError::policy("method() function takes no arguments"));
+            return Err(FortressError::policy(
+                "method() function takes no arguments",
+            ));
         }
 
-        let method = context.method.clone()
+        let method = context
+            .method
+            .clone()
             .unwrap_or_else(|| "unknown".to_string());
         Ok(Value::String(method))
     }
@@ -339,10 +356,14 @@ pub struct UserAgentFunction;
 impl PolicyFunction for UserAgentFunction {
     fn evaluate(&self, args: &[Value], context: &PolicyContext) -> Result<Value> {
         if !args.is_empty() {
-            return Err(FortressError::policy("useragent() function takes no arguments"));
+            return Err(FortressError::policy(
+                "useragent() function takes no arguments",
+            ));
         }
 
-        let user_agent = context.user_agent.clone()
+        let user_agent = context
+            .user_agent
+            .clone()
             .unwrap_or_else(|| "unknown".to_string());
         Ok(Value::String(user_agent))
     }
@@ -366,15 +387,22 @@ pub struct EnvironmentFunction;
 impl PolicyFunction for EnvironmentFunction {
     fn evaluate(&self, args: &[Value], context: &PolicyContext) -> Result<Value> {
         if args.len() != 1 {
-            return Err(FortressError::policy("environment() function takes exactly one argument"));
+            return Err(FortressError::policy(
+                "environment() function takes exactly one argument",
+            ));
         }
 
         let var_name = match &args[0] {
             Value::String(s) => s,
-            _ => return Err(FortressError::policy("environment() argument must be a string")),
+            _ => {
+                return Err(FortressError::policy(
+                    "environment() argument must be a string",
+                ))
+            }
         };
 
-        let value = context.get_environment(var_name)
+        let value = context
+            .get_environment(var_name)
             .cloned()
             .unwrap_or_else(|| "".to_string());
         Ok(Value::String(value))
@@ -399,7 +427,9 @@ pub struct HeaderFunction;
 impl PolicyFunction for HeaderFunction {
     fn evaluate(&self, args: &[Value], context: &PolicyContext) -> Result<Value> {
         if args.len() != 1 {
-            return Err(FortressError::policy("header() function takes exactly one argument"));
+            return Err(FortressError::policy(
+                "header() function takes exactly one argument",
+            ));
         }
 
         let header_name = match &args[0] {
@@ -407,7 +437,8 @@ impl PolicyFunction for HeaderFunction {
             _ => return Err(FortressError::policy("header() argument must be a string")),
         };
 
-        let value = context.get_header(header_name)
+        let value = context
+            .get_header(header_name)
             .cloned()
             .unwrap_or_else(|| "".to_string());
         Ok(Value::String(value))
@@ -432,12 +463,18 @@ pub struct IsPrivateIPFunction;
 impl PolicyFunction for IsPrivateIPFunction {
     fn evaluate(&self, args: &[Value], _context: &PolicyContext) -> Result<Value> {
         if args.len() != 1 {
-            return Err(FortressError::policy("is_private_ip() function takes exactly one argument"));
+            return Err(FortressError::policy(
+                "is_private_ip() function takes exactly one argument",
+            ));
         }
 
         let ip_str = match &args[0] {
             Value::String(s) => s,
-            _ => return Err(FortressError::policy("is_private_ip() argument must be a string")),
+            _ => {
+                return Err(FortressError::policy(
+                    "is_private_ip() argument must be a string",
+                ))
+            }
         };
 
         let is_private = match ip_str.parse::<IpAddr>() {
@@ -464,12 +501,10 @@ impl PolicyFunction for IsPrivateIPFunction {
 /// Helper function to check if an IP address is private
 fn is_private_ip(ip: IpAddr) -> bool {
     match ip {
-        IpAddr::V4(ipv4) => {
-            ipv4.is_private() || ipv4.is_loopback() || ipv4.is_link_local()
-        }
+        IpAddr::V4(ipv4) => ipv4.is_private() || ipv4.is_loopback() || ipv4.is_link_local(),
         IpAddr::V6(ipv6) => {
-            ipv6.is_loopback() || ipv6.is_unicast_link_local() || 
-            (ipv6.segments()[0] == 0xfc00) // Unique local address
+            ipv6.is_loopback() || ipv6.is_unicast_link_local() || (ipv6.segments()[0] == 0xfc00)
+            // Unique local address
         }
     }
 }
@@ -480,17 +515,27 @@ pub struct ContainsFunction;
 impl PolicyFunction for ContainsFunction {
     fn evaluate(&self, args: &[Value], _context: &PolicyContext) -> Result<Value> {
         if args.len() != 2 {
-            return Err(FortressError::policy("contains() function takes exactly two arguments"));
+            return Err(FortressError::policy(
+                "contains() function takes exactly two arguments",
+            ));
         }
 
         let haystack = match &args[0] {
             Value::String(s) => s,
-            _ => return Err(FortressError::policy("contains() first argument must be a string")),
+            _ => {
+                return Err(FortressError::policy(
+                    "contains() first argument must be a string",
+                ))
+            }
         };
 
         let needle = match &args[1] {
             Value::String(s) => s,
-            _ => return Err(FortressError::policy("contains() second argument must be a string")),
+            _ => {
+                return Err(FortressError::policy(
+                    "contains() second argument must be a string",
+                ))
+            }
         };
 
         let contains = haystack.contains(needle);
@@ -516,17 +561,27 @@ pub struct StartsWithFunction;
 impl PolicyFunction for StartsWithFunction {
     fn evaluate(&self, args: &[Value], _context: &PolicyContext) -> Result<Value> {
         if args.len() != 2 {
-            return Err(FortressError::policy("starts_with() function takes exactly two arguments"));
+            return Err(FortressError::policy(
+                "starts_with() function takes exactly two arguments",
+            ));
         }
 
         let haystack = match &args[0] {
             Value::String(s) => s,
-            _ => return Err(FortressError::policy("starts_with() first argument must be a string")),
+            _ => {
+                return Err(FortressError::policy(
+                    "starts_with() first argument must be a string",
+                ))
+            }
         };
 
         let needle = match &args[1] {
             Value::String(s) => s,
-            _ => return Err(FortressError::policy("starts_with() second argument must be a string")),
+            _ => {
+                return Err(FortressError::policy(
+                    "starts_with() second argument must be a string",
+                ))
+            }
         };
 
         let starts_with = haystack.starts_with(needle);
@@ -552,17 +607,27 @@ pub struct EndsWithFunction;
 impl PolicyFunction for EndsWithFunction {
     fn evaluate(&self, args: &[Value], _context: &PolicyContext) -> Result<Value> {
         if args.len() != 2 {
-            return Err(FortressError::policy("ends_with() function takes exactly two arguments"));
+            return Err(FortressError::policy(
+                "ends_with() function takes exactly two arguments",
+            ));
         }
 
         let haystack = match &args[0] {
             Value::String(s) => s,
-            _ => return Err(FortressError::policy("ends_with() first argument must be a string")),
+            _ => {
+                return Err(FortressError::policy(
+                    "ends_with() first argument must be a string",
+                ))
+            }
         };
 
         let needle = match &args[1] {
             Value::String(s) => s,
-            _ => return Err(FortressError::policy("ends_with() second argument must be a string")),
+            _ => {
+                return Err(FortressError::policy(
+                    "ends_with() second argument must be a string",
+                ))
+            }
         };
 
         let ends_with = haystack.ends_with(needle);
@@ -583,22 +648,26 @@ impl PolicyFunction for EndsWithFunction {
 }
 
 /// Register all built-in functions
-pub fn register_builtin_functions() -> std::collections::HashMap<String, Box<dyn crate::policy_hcl::types::PolicyFunction>> {
-    let mut registry: std::collections::HashMap<String, Box<dyn crate::policy_hcl::types::PolicyFunction>> = std::collections::HashMap::new();
-    
+pub fn register_builtin_functions(
+) -> std::collections::HashMap<String, Box<dyn crate::policy_hcl::types::PolicyFunction>> {
+    let mut registry: std::collections::HashMap<
+        String,
+        Box<dyn crate::policy_hcl::types::PolicyFunction>,
+    > = std::collections::HashMap::new();
+
     // Time and date functions
     registry.insert("time".to_string(), Box::new(TimeFunction));
     registry.insert("hour".to_string(), Box::new(HourFunction));
     registry.insert("day".to_string(), Box::new(DayFunction));
     registry.insert("month".to_string(), Box::new(MonthFunction));
     registry.insert("year".to_string(), Box::new(YearFunction));
-    
+
     // Identity and access functions
     registry.insert("identity".to_string(), Box::new(IdentityFunction));
     registry.insert("ip".to_string(), Box::new(IpFunction));
     registry.insert("role".to_string(), Box::new(RoleFunction));
     registry.insert("policy".to_string(), Box::new(PolicyCheckFunction));
-    
+
     // Request context functions
     registry.insert("path".to_string(), Box::new(PathFunction));
     registry.insert("operation".to_string(), Box::new(OperationFunction));
@@ -606,20 +675,20 @@ pub fn register_builtin_functions() -> std::collections::HashMap<String, Box<dyn
     registry.insert("useragent".to_string(), Box::new(UserAgentFunction));
     registry.insert("environment".to_string(), Box::new(EnvironmentFunction));
     registry.insert("header".to_string(), Box::new(HeaderFunction));
-    
+
     // Utility functions
     registry.insert("is_private_ip".to_string(), Box::new(IsPrivateIPFunction));
     registry.insert("contains".to_string(), Box::new(ContainsFunction));
     registry.insert("starts_with".to_string(), Box::new(StartsWithFunction));
     registry.insert("ends_with".to_string(), Box::new(EndsWithFunction));
-    
+
     registry
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::token::{TokenType, TokenRole};
+    use crate::token::{TokenRole, TokenType};
 
     fn create_test_context() -> PolicyContext {
         let token = crate::token::Token::new(
@@ -629,7 +698,7 @@ mod tests {
             chrono::Duration::hours(1),
             "user123".to_string(),
         );
-        
+
         let token_info = crate::token::TokenInfo {
             token: token.clone(),
             display_name: "Test Token".to_string(),
@@ -637,13 +706,14 @@ mod tests {
             usage_stats: Default::default(),
             creation_context: Default::default(),
         };
-        
-        let mut context = PolicyContext::new(token_info, "secret/data".to_string(), "read".to_string());
+
+        let mut context =
+            PolicyContext::new(token_info, "secret/data".to_string(), "read".to_string());
         context.ip_address = Some("192.168.1.1".to_string());
         context.user_agent = Some("Mozilla/5.0".to_string());
         context.add_environment("ENV".to_string(), "production".to_string());
         context.add_header("X-Request-ID".to_string(), "req-123".to_string());
-        
+
         context
     }
 
@@ -651,7 +721,7 @@ mod tests {
     fn test_time_function() {
         let func = TimeFunction;
         let context = create_test_context();
-        
+
         let result = func.evaluate(&[], &context).unwrap();
         if let Value::Number(timestamp) = result {
             assert!(timestamp.as_i64().unwrap() > 0);
@@ -664,7 +734,7 @@ mod tests {
     fn test_identity_function() {
         let func = IdentityFunction;
         let context = create_test_context();
-        
+
         let result = func.evaluate(&[], &context).unwrap();
         if let Value::String(entity_id) = result {
             assert_eq!(entity_id, "user123");
@@ -677,7 +747,7 @@ mod tests {
     fn test_ip_function() {
         let func = IpFunction;
         let context = create_test_context();
-        
+
         let result = func.evaluate(&[], &context).unwrap();
         if let Value::String(ip) = result {
             assert_eq!(ip, "192.168.1.1");
@@ -690,7 +760,7 @@ mod tests {
     fn test_hour_function() {
         let func = HourFunction;
         let context = create_test_context();
-        
+
         let result = func.evaluate(&[], &context).unwrap();
         if let Value::Number(hour) = result {
             let hour_val = hour.as_i64().unwrap();
@@ -704,13 +774,17 @@ mod tests {
     fn test_role_function() {
         let func = RoleFunction;
         let context = create_test_context();
-        
+
         // Test with existing role
-        let result = func.evaluate(&[Value::String("admin".to_string())], &context).unwrap();
+        let result = func
+            .evaluate(&[Value::String("admin".to_string())], &context)
+            .unwrap();
         assert_eq!(result, Value::Bool(true));
-        
+
         // Test with non-existing role
-        let result = func.evaluate(&[Value::String("auditor".to_string())], &context).unwrap();
+        let result = func
+            .evaluate(&[Value::String("auditor".to_string())], &context)
+            .unwrap();
         assert_eq!(result, Value::Bool(false));
     }
 
@@ -718,13 +792,17 @@ mod tests {
     fn test_policy_function() {
         let func = super::RoleFunction;
         let context = create_test_context();
-        
+
         // Test with existing policy
-        let result = func.evaluate(&[Value::String("admin".to_string())], &context).unwrap();
+        let result = func
+            .evaluate(&[Value::String("admin".to_string())], &context)
+            .unwrap();
         assert_eq!(result, Value::Bool(true));
-        
+
         // Test with non-existing policy
-        let result = func.evaluate(&[Value::String("restricted".to_string())], &context).unwrap();
+        let result = func
+            .evaluate(&[Value::String("restricted".to_string())], &context)
+            .unwrap();
         assert_eq!(result, Value::Bool(false));
     }
 
@@ -732,7 +810,7 @@ mod tests {
     fn test_path_function() {
         let func = PathFunction;
         let context = create_test_context();
-        
+
         let result = func.evaluate(&[], &context).unwrap();
         if let Value::String(path) = result {
             assert_eq!(path, "secret/data");
@@ -745,7 +823,7 @@ mod tests {
     fn test_operation_function() {
         let func = OperationFunction;
         let context = create_test_context();
-        
+
         let result = func.evaluate(&[], &context).unwrap();
         if let Value::String(operation) = result {
             assert_eq!(operation, "read");
@@ -758,17 +836,21 @@ mod tests {
     fn test_environment_function() {
         let func = EnvironmentFunction;
         let context = create_test_context();
-        
+
         // Test with existing environment variable
-        let result = func.evaluate(&[Value::String("ENV".to_string())], &context).unwrap();
+        let result = func
+            .evaluate(&[Value::String("ENV".to_string())], &context)
+            .unwrap();
         if let Value::String(value) = result {
             assert_eq!(value, "production");
         } else {
             panic!("Expected string result");
         }
-        
+
         // Test with non-existing environment variable
-        let result = func.evaluate(&[Value::String("NONEXISTENT".to_string())], &context).unwrap();
+        let result = func
+            .evaluate(&[Value::String("NONEXISTENT".to_string())], &context)
+            .unwrap();
         if let Value::String(value) = result {
             assert_eq!(value, "");
         } else {
@@ -780,17 +862,21 @@ mod tests {
     fn test_header_function() {
         let func = HeaderFunction;
         let context = create_test_context();
-        
+
         // Test with existing header
-        let result = func.evaluate(&[Value::String("X-Request-ID".to_string())], &context).unwrap();
+        let result = func
+            .evaluate(&[Value::String("X-Request-ID".to_string())], &context)
+            .unwrap();
         if let Value::String(value) = result {
             assert_eq!(value, "req-123");
         } else {
             panic!("Expected string result");
         }
-        
+
         // Test with non-existing header
-        let result = func.evaluate(&[Value::String("X-Nonexistent".to_string())], &context).unwrap();
+        let result = func
+            .evaluate(&[Value::String("X-Nonexistent".to_string())], &context)
+            .unwrap();
         if let Value::String(value) = result {
             assert_eq!(value, "");
         } else {
@@ -802,17 +888,23 @@ mod tests {
     fn test_is_private_ip_function() {
         let func = IsPrivateIPFunction;
         let context = create_test_context();
-        
+
         // Test with private IP
-        let result = func.evaluate(&[Value::String("192.168.1.1".to_string())], &context).unwrap();
+        let result = func
+            .evaluate(&[Value::String("192.168.1.1".to_string())], &context)
+            .unwrap();
         assert_eq!(result, Value::Bool(true));
-        
+
         // Test with public IP
-        let result = func.evaluate(&[Value::String("8.8.8.8".to_string())], &context).unwrap();
+        let result = func
+            .evaluate(&[Value::String("8.8.8.8".to_string())], &context)
+            .unwrap();
         assert_eq!(result, Value::Bool(false));
-        
+
         // Test with invalid IP
-        let result = func.evaluate(&[Value::String("invalid".to_string())], &context).unwrap();
+        let result = func
+            .evaluate(&[Value::String("invalid".to_string())], &context)
+            .unwrap();
         assert_eq!(result, Value::Bool(false));
     }
 
@@ -820,19 +912,29 @@ mod tests {
     fn test_contains_function() {
         let func = ContainsFunction;
         let context = create_test_context();
-        
+
         // Test with contained string
-        let result = func.evaluate(&[
-            Value::String("hello world".to_string()),
-            Value::String("world".to_string())
-        ], &context).unwrap();
+        let result = func
+            .evaluate(
+                &[
+                    Value::String("hello world".to_string()),
+                    Value::String("world".to_string()),
+                ],
+                &context,
+            )
+            .unwrap();
         assert_eq!(result, Value::Bool(true));
-        
+
         // Test with non-contained string
-        let result = func.evaluate(&[
-            Value::String("hello world".to_string()),
-            Value::String("universe".to_string())
-        ], &context).unwrap();
+        let result = func
+            .evaluate(
+                &[
+                    Value::String("hello world".to_string()),
+                    Value::String("universe".to_string()),
+                ],
+                &context,
+            )
+            .unwrap();
         assert_eq!(result, Value::Bool(false));
     }
 
@@ -840,19 +942,29 @@ mod tests {
     fn test_starts_with_function() {
         let func = StartsWithFunction;
         let context = create_test_context();
-        
+
         // Test with matching prefix
-        let result = func.evaluate(&[
-            Value::String("hello world".to_string()),
-            Value::String("hello".to_string())
-        ], &context).unwrap();
+        let result = func
+            .evaluate(
+                &[
+                    Value::String("hello world".to_string()),
+                    Value::String("hello".to_string()),
+                ],
+                &context,
+            )
+            .unwrap();
         assert_eq!(result, Value::Bool(true));
-        
+
         // Test with non-matching prefix
-        let result = func.evaluate(&[
-            Value::String("hello world".to_string()),
-            Value::String("world".to_string())
-        ], &context).unwrap();
+        let result = func
+            .evaluate(
+                &[
+                    Value::String("hello world".to_string()),
+                    Value::String("world".to_string()),
+                ],
+                &context,
+            )
+            .unwrap();
         assert_eq!(result, Value::Bool(false));
     }
 
@@ -860,19 +972,29 @@ mod tests {
     fn test_ends_with_function() {
         let func = EndsWithFunction;
         let context = create_test_context();
-        
+
         // Test with matching suffix
-        let result = func.evaluate(&[
-            Value::String("hello world".to_string()),
-            Value::String("world".to_string())
-        ], &context).unwrap();
+        let result = func
+            .evaluate(
+                &[
+                    Value::String("hello world".to_string()),
+                    Value::String("world".to_string()),
+                ],
+                &context,
+            )
+            .unwrap();
         assert_eq!(result, Value::Bool(true));
-        
+
         // Test with non-matching suffix
-        let result = func.evaluate(&[
-            Value::String("hello world".to_string()),
-            Value::String("hello".to_string())
-        ], &context).unwrap();
+        let result = func
+            .evaluate(
+                &[
+                    Value::String("hello world".to_string()),
+                    Value::String("hello".to_string()),
+                ],
+                &context,
+            )
+            .unwrap();
         assert_eq!(result, Value::Bool(false));
     }
 
@@ -880,11 +1002,11 @@ mod tests {
     fn test_function_parameter_validation() {
         let func = TimeFunction;
         let context = create_test_context();
-        
+
         // Test with too many arguments
         let result = func.evaluate(&[Value::String("test".to_string())], &context);
         assert!(result.is_err());
-        
+
         // Test with string argument for time function
         let func = RoleFunction;
         let result = func.evaluate(&[Value::Number(serde_json::Number::from(42))], &context);
@@ -894,20 +1016,38 @@ mod tests {
     #[test]
     fn test_register_builtin_functions() {
         let registry = register_builtin_functions();
-        
+
         // Check that all expected functions are registered
         let expected_functions = vec![
-            "time", "hour", "day", "month", "year",
-            "identity", "ip", "role", "policy",
-            "path", "operation", "method", "useragent",
-            "environment", "header", "is_private_ip",
-            "contains", "starts_with", "ends_with"
+            "time",
+            "hour",
+            "day",
+            "month",
+            "year",
+            "identity",
+            "ip",
+            "role",
+            "policy",
+            "path",
+            "operation",
+            "method",
+            "useragent",
+            "environment",
+            "header",
+            "is_private_ip",
+            "contains",
+            "starts_with",
+            "ends_with",
         ];
-        
+
         for func_name in expected_functions {
-            assert!(registry.contains_key(func_name), "Missing function: {}", func_name);
+            assert!(
+                registry.contains_key(func_name),
+                "Missing function: {}",
+                func_name
+            );
         }
-        
+
         // Check that registered functions have correct names
         for (name, func) in registry.iter() {
             assert_eq!(name, func.name());

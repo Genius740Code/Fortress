@@ -3,17 +3,21 @@
 //! Implements security test suites, penetration testing tools,
 //! vulnerability scanning, and compliance validation.
 
+use crate::graphql::{
+    auth::{AuthConfig, AuthManager, AuthenticatedUser},
+    encryption::{DataEncryptionManager, EncryptionConfig, UserContext},
+    performance::PerformanceMonitor,
+    query_executor::{
+        BatchQuery, Cache, CacheStats, ConnectionInfo, ConnectionPool, DatabaseConnection,
+        ExecutorConfig, OptimizedPlan, OptimizedQueryExecutor, PoolStats, PreparedStatement,
+        QueryExplanation, QueryPlanner, QueryResult,
+    },
+    security::{SecurityConfig, SecurityManager, SecurityRequest},
+};
+use serde::{Deserialize, Serialize};
+use serde_json;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use serde_json;
-use serde::{Serialize, Deserialize};
-use crate::graphql::{
-    security::{SecurityManager, SecurityRequest, SecurityConfig},
-    auth::{AuthManager, AuthenticatedUser, AuthConfig},
-    encryption::{DataEncryptionManager, UserContext, EncryptionConfig},
-    performance::PerformanceMonitor,
-    query_executor::{QueryPlanner, QueryResult, QueryExplanation, PreparedStatement, ExecutorConfig, OptimizedQueryExecutor, ConnectionInfo, Cache, CacheStats, OptimizedPlan, ConnectionPool, DatabaseConnection, PoolStats, BatchQuery},
-};
 
 /// Security test suite
 pub struct SecurityTestSuite {
@@ -98,8 +102,12 @@ impl SecurityTestSuite {
 
             let validation = self.security_manager.validate_request(&request).await;
             match validation {
-                Ok(crate::graphql::security::SecurityValidationResult::Allowed) => allowed_count += 1,
-                Ok(crate::graphql::security::SecurityValidationResult::Blocked { .. }) => blocked_count += 1,
+                Ok(crate::graphql::security::SecurityValidationResult::Allowed) => {
+                    allowed_count += 1
+                }
+                Ok(crate::graphql::security::SecurityValidationResult::Blocked { .. }) => {
+                    blocked_count += 1
+                }
                 Err(_) => blocked_count += 1,
             }
         }
@@ -124,15 +132,22 @@ impl SecurityTestSuite {
 
             let validation = self.security_manager.validate_request(&request).await;
             match validation {
-                Ok(crate::graphql::security::SecurityValidationResult::Allowed) => burst_allowed += 1,
-                Ok(crate::graphql::security::SecurityValidationResult::Blocked { .. }) => burst_blocked += 1,
+                Ok(crate::graphql::security::SecurityValidationResult::Allowed) => {
+                    burst_allowed += 1
+                }
+                Ok(crate::graphql::security::SecurityValidationResult::Blocked { .. }) => {
+                    burst_blocked += 1
+                }
                 Err(_) => burst_blocked += 1,
             }
         }
 
         results.burst_rate_limiting = TestResult {
             passed: burst_blocked > 0,
-            details: format!("Burst - Allowed: {}, Blocked: {}", burst_allowed, burst_blocked),
+            details: format!(
+                "Burst - Allowed: {}, Blocked: {}",
+                burst_allowed, burst_blocked
+            ),
         };
 
         // Test IP blocking
@@ -145,9 +160,15 @@ impl SecurityTestSuite {
             blocked_ip.to_string(),
         );
 
-        let validation = self.security_manager.validate_request(&blocked_request).await;
+        let validation = self
+            .security_manager
+            .validate_request(&blocked_request)
+            .await;
         results.ip_blocking = TestResult {
-            passed: matches!(validation, Ok(crate::graphql::security::SecurityValidationResult::Blocked { .. })),
+            passed: matches!(
+                validation,
+                Ok(crate::graphql::security::SecurityValidationResult::Blocked { .. })
+            ),
             details: "IP blocking functionality".to_string(),
         };
 
@@ -175,17 +196,25 @@ impl SecurityTestSuite {
                 "test_client".to_string(),
                 Some("test_user".to_string()),
                 "127.0.0.1".to_string(),
-            ).with_input("query".to_string(), injection.to_string());
+            )
+            .with_input("query".to_string(), injection.to_string());
 
             let validation = self.security_manager.validate_request(&request).await;
-            if matches!(validation, Ok(crate::graphql::security::SecurityValidationResult::Blocked { .. })) {
+            if matches!(
+                validation,
+                Ok(crate::graphql::security::SecurityValidationResult::Blocked { .. })
+            ) {
                 sql_blocked += 1;
             }
         }
 
         results.sql_injection_prevention = TestResult {
             passed: sql_blocked == sql_injection_attempts.len(),
-            details: format!("SQL injection attempts blocked: {}/{}", sql_blocked, sql_injection_attempts.len()),
+            details: format!(
+                "SQL injection attempts blocked: {}/{}",
+                sql_blocked,
+                sql_injection_attempts.len()
+            ),
         };
 
         // Test XSS prevention
@@ -202,17 +231,25 @@ impl SecurityTestSuite {
                 "test_client".to_string(),
                 Some("test_user".to_string()),
                 "127.0.0.1".to_string(),
-            ).with_input("content".to_string(), xss.to_string());
+            )
+            .with_input("content".to_string(), xss.to_string());
 
             let validation = self.security_manager.validate_request(&request).await;
-            if matches!(validation, Ok(crate::graphql::security::SecurityValidationResult::Blocked { .. })) {
+            if matches!(
+                validation,
+                Ok(crate::graphql::security::SecurityValidationResult::Blocked { .. })
+            ) {
                 xss_blocked += 1;
             }
         }
 
         results.xss_prevention = TestResult {
             passed: xss_blocked == xss_attempts.len(),
-            details: format!("XSS attempts blocked: {}/{}", xss_blocked, xss_attempts.len()),
+            details: format!(
+                "XSS attempts blocked: {}/{}",
+                xss_blocked,
+                xss_attempts.len()
+            ),
         };
 
         // Test path traversal prevention
@@ -229,17 +266,25 @@ impl SecurityTestSuite {
                 "test_client".to_string(),
                 Some("test_user".to_string()),
                 "127.0.0.1".to_string(),
-            ).with_input("file_path".to_string(), path.to_string());
+            )
+            .with_input("file_path".to_string(), path.to_string());
 
             let validation = self.security_manager.validate_request(&request).await;
-            if matches!(validation, Ok(crate::graphql::security::SecurityValidationResult::Blocked { .. })) {
+            if matches!(
+                validation,
+                Ok(crate::graphql::security::SecurityValidationResult::Blocked { .. })
+            ) {
                 path_blocked += 1;
             }
         }
 
         results.path_traversal_prevention = TestResult {
             passed: path_blocked == path_traversal_attempts.len(),
-            details: format!("Path traversal attempts blocked: {}/{}", path_blocked, path_traversal_attempts.len()),
+            details: format!(
+                "Path traversal attempts blocked: {}/{}",
+                path_blocked,
+                path_traversal_attempts.len()
+            ),
         };
 
         // Test input size limits
@@ -248,12 +293,16 @@ impl SecurityTestSuite {
             "test_client".to_string(),
             Some("test_user".to_string()),
             "127.0.0.1".to_string(),
-        ).with_input("large_field".to_string(), large_input)
+        )
+        .with_input("large_field".to_string(), large_input)
         .with_size(25000);
 
         let validation = self.security_manager.validate_request(&request).await;
         results.input_size_limits = TestResult {
-            passed: matches!(validation, Ok(crate::graphql::security::SecurityValidationResult::Blocked { .. })),
+            passed: matches!(
+                validation,
+                Ok(crate::graphql::security::SecurityValidationResult::Blocked { .. })
+            ),
             details: "Large input should be blocked".to_string(),
         };
 
@@ -270,11 +319,15 @@ impl SecurityTestSuite {
             "test_client".to_string(),
             Some("test_user".to_string()),
             "127.0.0.1".to_string(),
-        ).with_query(simple_query.to_string());
+        )
+        .with_query(simple_query.to_string());
 
         let validation = self.security_manager.validate_request(&request).await;
         results.simple_query = TestResult {
-            passed: matches!(validation, Ok(crate::graphql::security::SecurityValidationResult::Allowed)),
+            passed: matches!(
+                validation,
+                Ok(crate::graphql::security::SecurityValidationResult::Allowed)
+            ),
             details: "Simple query should be allowed".to_string(),
         };
 
@@ -284,11 +337,15 @@ impl SecurityTestSuite {
             "test_client".to_string(),
             Some("test_user".to_string()),
             "127.0.0.1".to_string(),
-        ).with_query(deep_query.to_string());
+        )
+        .with_query(deep_query.to_string());
 
         let validation = self.security_manager.validate_request(&request).await;
         results.deep_query = TestResult {
-            passed: matches!(validation, Ok(crate::graphql::security::SecurityValidationResult::Blocked { .. })),
+            passed: matches!(
+                validation,
+                Ok(crate::graphql::security::SecurityValidationResult::Blocked { .. })
+            ),
             details: "Deep query should be blocked".to_string(),
         };
 
@@ -298,11 +355,15 @@ impl SecurityTestSuite {
             "test_client".to_string(),
             Some("test_user".to_string()),
             "127.0.0.1".to_string(),
-        ).with_query(complex_query.to_string());
+        )
+        .with_query(complex_query.to_string());
 
         let validation = self.security_manager.validate_request(&request).await;
         results.complex_query = TestResult {
-            passed: matches!(validation, Ok(crate::graphql::security::SecurityValidationResult::Blocked { .. })),
+            passed: matches!(
+                validation,
+                Ok(crate::graphql::security::SecurityValidationResult::Blocked { .. })
+            ),
             details: "Complex query should be blocked".to_string(),
         };
 
@@ -314,31 +375,55 @@ impl SecurityTestSuite {
         let mut results = AuthenticationTestResults::new();
 
         // Test valid authentication
-        let auth_result = self.auth_manager.authenticate("admin", "password123", "127.0.0.1", "Mozilla/5.0").await;
+        let auth_result = self
+            .auth_manager
+            .authenticate("admin", "password123", "127.0.0.1", "Mozilla/5.0")
+            .await;
         results.valid_credentials = TestResult {
-            passed: matches!(auth_result, Ok(crate::graphql::auth::AuthResult::Success { .. })),
+            passed: matches!(
+                auth_result,
+                Ok(crate::graphql::auth::AuthResult::Success { .. })
+            ),
             details: "Valid credentials should authenticate".to_string(),
         };
 
         // Test invalid authentication
-        let auth_result = self.auth_manager.authenticate("admin", "wrongpassword", "127.0.0.1", "Mozilla/5.0").await;
+        let auth_result = self
+            .auth_manager
+            .authenticate("admin", "wrongpassword", "127.0.0.1", "Mozilla/5.0")
+            .await;
         results.invalid_credentials = TestResult {
-            passed: matches!(auth_result, Ok(crate::graphql::auth::AuthResult::Failed { .. })),
+            passed: matches!(
+                auth_result,
+                Ok(crate::graphql::auth::AuthResult::Failed { .. })
+            ),
             details: "Invalid credentials should be rejected".to_string(),
         };
 
         // Test token verification
         if let Ok(crate::graphql::auth::AuthResult::Success { token, .. }) = auth_result {
-            let verification = self.auth_manager.verify_token(&token, "127.0.0.1", "Mozilla/5.0").await;
+            let verification = self
+                .auth_manager
+                .verify_token(&token, "127.0.0.1", "Mozilla/5.0")
+                .await;
             results.token_verification = TestResult {
-                passed: matches!(verification, Ok(crate::graphql::auth::TokenVerificationResult::Valid { .. })),
+                passed: matches!(
+                    verification,
+                    Ok(crate::graphql::auth::TokenVerificationResult::Valid { .. })
+                ),
                 details: "Valid token should verify successfully".to_string(),
             };
 
             // Test token refresh
-            let refresh_result = self.auth_manager.refresh_token(&token, "127.0.0.1", "Mozilla/5.0").await;
+            let refresh_result = self
+                .auth_manager
+                .refresh_token(&token, "127.0.0.1", "Mozilla/5.0")
+                .await;
             results.token_refresh = TestResult {
-                passed: matches!(refresh_result, Ok(crate::graphql::auth::TokenRefreshResult::Success { .. })),
+                passed: matches!(
+                    refresh_result,
+                    Ok(crate::graphql::auth::TokenRefreshResult::Success { .. })
+                ),
                 details: "Valid token should refresh successfully".to_string(),
             };
 
@@ -363,7 +448,11 @@ impl SecurityTestSuite {
             username: "admin".to_string(),
             email: "admin@example.com".to_string(),
             roles: vec!["admin".to_string(), "user".to_string()],
-            permissions: vec!["read:all".to_string(), "write:all".to_string(), "delete:all".to_string()],
+            permissions: vec![
+                "read:all".to_string(),
+                "write:all".to_string(),
+                "delete:all".to_string(),
+            ],
             tenant_id: None,
             session_id: "admin_session".to_string(),
             last_login: None,
@@ -412,23 +501,34 @@ impl SecurityTestSuite {
         };
 
         results.unauthorized_permission_access = TestResult {
-            passed: !self.auth_manager.has_permission(&regular_user, "delete:all"),
+            passed: !self
+                .auth_manager
+                .has_permission(&regular_user, "delete:all"),
             details: "Regular user should not have delete:all permission".to_string(),
         };
 
         // Test resource access
         results.admin_resource_access = TestResult {
-            passed: self.auth_manager.can_access_resource(&admin_user, "users", "delete").await,
+            passed: self
+                .auth_manager
+                .can_access_resource(&admin_user, "users", "delete")
+                .await,
             details: "Admin should be able to delete users".to_string(),
         };
 
         results.user_resource_access = TestResult {
-            passed: self.auth_manager.can_access_resource(&regular_user, "users", "read").await,
+            passed: self
+                .auth_manager
+                .can_access_resource(&regular_user, "users", "read")
+                .await,
             details: "User should be able to read users".to_string(),
         };
 
         results.unauthorized_resource_access = TestResult {
-            passed: !self.auth_manager.can_access_resource(&regular_user, "users", "delete").await,
+            passed: !self
+                .auth_manager
+                .can_access_resource(&regular_user, "users", "delete")
+                .await,
             details: "User should not be able to delete users".to_string(),
         };
 
@@ -449,7 +549,10 @@ impl SecurityTestSuite {
         };
 
         // Test field encryption
-        let encrypted_field = self.encryption_manager.encrypt_field("email", "user", "test@example.com", &user_context).await;
+        let encrypted_field = self
+            .encryption_manager
+            .encrypt_field("email", "user", "test@example.com", &user_context)
+            .await;
         results.field_encryption = TestResult {
             passed: encrypted_field.is_ok(),
             details: "Field encryption should succeed".to_string(),
@@ -457,7 +560,10 @@ impl SecurityTestSuite {
 
         if let Ok(encrypted) = encrypted_field {
             // Test field decryption
-            let decrypted_field = self.encryption_manager.decrypt_field("email", "user", &encrypted.data, &user_context).await;
+            let decrypted_field = self
+                .encryption_manager
+                .decrypt_field("email", "user", &encrypted.data, &user_context)
+                .await;
             results.field_decryption = TestResult {
                 passed: decrypted_field.is_ok(),
                 details: "Field decryption should succeed".to_string(),
@@ -479,7 +585,10 @@ impl SecurityTestSuite {
             "phone": "1234567890"
         });
 
-        let encrypted_record = self.encryption_manager.encrypt_record("user", &record, &user_context).await;
+        let encrypted_record = self
+            .encryption_manager
+            .encrypt_record("user", &record, &user_context)
+            .await;
         results.record_encryption = TestResult {
             passed: encrypted_record.is_ok(),
             details: "Record encryption should succeed".to_string(),
@@ -487,7 +596,10 @@ impl SecurityTestSuite {
 
         if let Ok(encrypted) = encrypted_record {
             // Test record decryption
-            let decrypted_record = self.encryption_manager.decrypt_record("user", &encrypted, &user_context).await;
+            let decrypted_record = self
+                .encryption_manager
+                .decrypt_record("user", &encrypted, &user_context)
+                .await;
             results.record_decryption = TestResult {
                 passed: decrypted_record.is_ok(),
                 details: "Record decryption should succeed".to_string(),
@@ -516,20 +628,40 @@ impl SecurityTestSuite {
         let mut results = SessionManagementTestResults::new();
 
         // Authenticate to create a session
-        let auth_result = self.auth_manager.authenticate("admin", "password123", "127.0.0.1", "Mozilla/5.0").await;
-        
-        if let Ok(crate::graphql::auth::AuthResult::Success { token, session_id: _, .. }) = auth_result {
+        let auth_result = self
+            .auth_manager
+            .authenticate("admin", "password123", "127.0.0.1", "Mozilla/5.0")
+            .await;
+
+        if let Ok(crate::graphql::auth::AuthResult::Success {
+            token,
+            session_id: _,
+            ..
+        }) = auth_result
+        {
             // Test session validation
-            let verification = self.auth_manager.verify_token(&token, "127.0.0.1", "Mozilla/5.0").await;
+            let verification = self
+                .auth_manager
+                .verify_token(&token, "127.0.0.1", "Mozilla/5.0")
+                .await;
             results.session_validation = TestResult {
-                passed: matches!(verification, Ok(crate::graphql::auth::TokenVerificationResult::Valid { .. })),
+                passed: matches!(
+                    verification,
+                    Ok(crate::graphql::auth::TokenVerificationResult::Valid { .. })
+                ),
                 details: "Valid session should validate".to_string(),
             };
 
             // Test session expiration simulation
-            let expired_verification = self.auth_manager.verify_token(&token, "192.168.1.1", "Mozilla/5.0").await;
+            let expired_verification = self
+                .auth_manager
+                .verify_token(&token, "192.168.1.1", "Mozilla/5.0")
+                .await;
             results.session_expiration = TestResult {
-                passed: matches!(expired_verification, Ok(crate::graphql::auth::TokenVerificationResult::DeviceMismatch { .. })),
+                passed: matches!(
+                    expired_verification,
+                    Ok(crate::graphql::auth::TokenVerificationResult::DeviceMismatch { .. })
+                ),
                 details: "Session should fail with different device/IP".to_string(),
             };
 
@@ -541,9 +673,15 @@ impl SecurityTestSuite {
             };
 
             // Test post-logout validation
-            let post_logout_verification = self.auth_manager.verify_token(&token, "127.0.0.1", "Mozilla/5.0").await;
+            let post_logout_verification = self
+                .auth_manager
+                .verify_token(&token, "127.0.0.1", "Mozilla/5.0")
+                .await;
             results.post_logout_validation = TestResult {
-                passed: matches!(post_logout_verification, Ok(crate::graphql::auth::TokenVerificationResult::SessionExpired)),
+                passed: matches!(
+                    post_logout_verification,
+                    Ok(crate::graphql::auth::TokenVerificationResult::SessionExpired)
+                ),
                 details: "Logged out session should be invalid".to_string(),
             };
         }
@@ -559,7 +697,10 @@ impl SecurityTestSuite {
         let session_stats = self.auth_manager.get_session_stats().await;
         results.session_statistics = TestResult {
             passed: !session_stats.total_sessions == 0,
-            details: format!("Session stats: total={}, active={}", session_stats.total_sessions, session_stats.active_sessions),
+            details: format!(
+                "Session stats: total={}, active={}",
+                session_stats.total_sessions, session_stats.active_sessions
+            ),
         };
 
         results
@@ -609,7 +750,8 @@ impl SecurityTestSuite {
                     format!("client_{}", i),
                     Some("test_user".to_string()),
                     "127.0.0.1".to_string(),
-                ).with_query("{ user { id name } }".to_string());
+                )
+                .with_query("{ user { id name } }".to_string());
 
                 let validation_start = Instant::now();
                 let result = security_manager.validate_request(&request).await;
@@ -631,8 +773,12 @@ impl SecurityTestSuite {
                 Ok((validation_result, duration)) => {
                     total_duration += duration;
                     match validation_result {
-                        Ok(crate::graphql::security::SecurityValidationResult::Allowed) => successful_validations += 1,
-                        Ok(crate::graphql::security::SecurityValidationResult::Blocked { reason: _ }) => failed_validations += 1,
+                        Ok(crate::graphql::security::SecurityValidationResult::Allowed) => {
+                            successful_validations += 1
+                        }
+                        Ok(crate::graphql::security::SecurityValidationResult::Blocked {
+                            reason: _,
+                        }) => failed_validations += 1,
                         Err(_) => failed_validations += 1,
                     }
                 }
@@ -646,12 +792,18 @@ impl SecurityTestSuite {
 
         results.concurrent_validations = TestResult {
             passed: successful_validations > 0,
-            details: format!("Concurrent validations: {} successful, {} failed", successful_validations, failed_validations),
+            details: format!(
+                "Concurrent validations: {} successful, {} failed",
+                successful_validations, failed_validations
+            ),
         };
 
         results.performance_metrics = TestResult {
             passed: avg_validation_time < Duration::from_millis(100),
-            details: format!("Avg validation time: {:?}, Validations/sec: {:.2}", avg_validation_time, validations_per_second),
+            details: format!(
+                "Avg validation time: {:?}, Validations/sec: {:.2}",
+                avg_validation_time, validations_per_second
+            ),
         };
 
         results.memory_usage = TestResult {
@@ -765,7 +917,10 @@ impl SecurityTestSuite {
         passed_tests += results.performance_under_load.performance_metrics.passed as u8;
         passed_tests += results.performance_under_load.memory_usage.passed as u8;
 
-        passed_tests += results.vulnerability_scan.sql_injection_vulnerabilities.passed as u8;
+        passed_tests += results
+            .vulnerability_scan
+            .sql_injection_vulnerabilities
+            .passed as u8;
         passed_tests += results.vulnerability_scan.xss_vulnerabilities.passed as u8;
         passed_tests += results.vulnerability_scan.csrf_vulnerabilities.passed as u8;
         passed_tests += results.vulnerability_scan.authentication_bypass.passed as u8;
@@ -989,9 +1144,18 @@ impl RateLimitingTestResults {
     /// Create new rate limiting test results with default values
     pub fn new() -> Self {
         Self {
-            normal_rate_limiting: TestResult { passed: false, details: String::new() },
-            burst_rate_limiting: TestResult { passed: false, details: String::new() },
-            ip_blocking: TestResult { passed: false, details: String::new() },
+            normal_rate_limiting: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            burst_rate_limiting: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            ip_blocking: TestResult {
+                passed: false,
+                details: String::new(),
+            },
         }
     }
 }
@@ -1000,10 +1164,22 @@ impl InputValidationTestResults {
     /// Create new input validation test results with default values
     pub fn new() -> Self {
         Self {
-            sql_injection_prevention: TestResult { passed: false, details: String::new() },
-            xss_prevention: TestResult { passed: false, details: String::new() },
-            path_traversal_prevention: TestResult { passed: false, details: String::new() },
-            input_size_limits: TestResult { passed: false, details: String::new() },
+            sql_injection_prevention: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            xss_prevention: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            path_traversal_prevention: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            input_size_limits: TestResult {
+                passed: false,
+                details: String::new(),
+            },
         }
     }
 }
@@ -1012,9 +1188,18 @@ impl QueryComplexityTestResults {
     /// Create new query complexity test results with default values
     pub fn new() -> Self {
         Self {
-            simple_query: TestResult { passed: false, details: String::new() },
-            deep_query: TestResult { passed: false, details: String::new() },
-            complex_query: TestResult { passed: false, details: String::new() },
+            simple_query: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            deep_query: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            complex_query: TestResult {
+                passed: false,
+                details: String::new(),
+            },
         }
     }
 }
@@ -1023,11 +1208,26 @@ impl AuthenticationTestResults {
     /// Create new authentication test results with default values
     pub fn new() -> Self {
         Self {
-            valid_credentials: TestResult { passed: false, details: String::new() },
-            invalid_credentials: TestResult { passed: false, details: String::new() },
-            token_verification: TestResult { passed: false, details: String::new() },
-            token_refresh: TestResult { passed: false, details: String::new() },
-            logout: TestResult { passed: false, details: String::new() },
+            valid_credentials: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            invalid_credentials: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            token_verification: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            token_refresh: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            logout: TestResult {
+                passed: false,
+                details: String::new(),
+            },
         }
     }
 }
@@ -1036,15 +1236,42 @@ impl AuthorizationTestResults {
     /// Create new authorization test results with default values
     pub fn new() -> Self {
         Self {
-            admin_role_access: TestResult { passed: false, details: String::new() },
-            user_role_access: TestResult { passed: false, details: String::new() },
-            unauthorized_role_access: TestResult { passed: false, details: String::new() },
-            admin_permission_access: TestResult { passed: false, details: String::new() },
-            user_permission_access: TestResult { passed: false, details: String::new() },
-            unauthorized_permission_access: TestResult { passed: false, details: String::new() },
-            admin_resource_access: TestResult { passed: false, details: String::new() },
-            user_resource_access: TestResult { passed: false, details: String::new() },
-            unauthorized_resource_access: TestResult { passed: false, details: String::new() },
+            admin_role_access: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            user_role_access: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            unauthorized_role_access: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            admin_permission_access: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            user_permission_access: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            unauthorized_permission_access: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            admin_resource_access: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            user_resource_access: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            unauthorized_resource_access: TestResult {
+                passed: false,
+                details: String::new(),
+            },
         }
     }
 }
@@ -1053,13 +1280,34 @@ impl DataEncryptionTestResults {
     /// Create new data encryption test results with default values
     pub fn new() -> Self {
         Self {
-            field_encryption: TestResult { passed: false, details: String::new() },
-            field_decryption: TestResult { passed: false, details: String::new() },
-            encryption_round_trip: TestResult { passed: false, details: String::new() },
-            record_encryption: TestResult { passed: false, details: String::new() },
-            record_decryption: TestResult { passed: false, details: String::new() },
-            record_round_trip: TestResult { passed: false, details: String::new() },
-            key_rotation: TestResult { passed: false, details: String::new() },
+            field_encryption: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            field_decryption: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            encryption_round_trip: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            record_encryption: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            record_decryption: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            record_round_trip: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            key_rotation: TestResult {
+                passed: false,
+                details: String::new(),
+            },
         }
     }
 }
@@ -1068,12 +1316,30 @@ impl SessionManagementTestResults {
     /// Create new session management test results with default values
     pub fn new() -> Self {
         Self {
-            session_validation: TestResult { passed: false, details: String::new() },
-            session_expiration: TestResult { passed: false, details: String::new() },
-            session_logout: TestResult { passed: false, details: String::new() },
-            post_logout_validation: TestResult { passed: false, details: String::new() },
-            session_cleanup: TestResult { passed: false, details: String::new() },
-            session_statistics: TestResult { passed: false, details: String::new() },
+            session_validation: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            session_expiration: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            session_logout: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            post_logout_validation: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            session_cleanup: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            session_statistics: TestResult {
+                passed: false,
+                details: String::new(),
+            },
         }
     }
 }
@@ -1082,10 +1348,22 @@ impl SecurityPolicyTestResults {
     /// Create new security policy test results with default values
     pub fn new() -> Self {
         Self {
-            policy_evaluation: TestResult { passed: false, details: String::new() },
-            role_based_policies: TestResult { passed: false, details: String::new() },
-            time_based_policies: TestResult { passed: false, details: String::new() },
-            ip_based_policies: TestResult { passed: false, details: String::new() },
+            policy_evaluation: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            role_based_policies: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            time_based_policies: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            ip_based_policies: TestResult {
+                passed: false,
+                details: String::new(),
+            },
         }
     }
 }
@@ -1094,9 +1372,18 @@ impl PerformanceTestResults {
     /// Create new performance test results with default values
     pub fn new() -> Self {
         Self {
-            concurrent_validations: TestResult { passed: false, details: String::new() },
-            performance_metrics: TestResult { passed: false, details: String::new() },
-            memory_usage: TestResult { passed: false, details: String::new() },
+            concurrent_validations: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            performance_metrics: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            memory_usage: TestResult {
+                passed: false,
+                details: String::new(),
+            },
         }
     }
 }
@@ -1105,12 +1392,30 @@ impl VulnerabilityScanResults {
     /// Create new vulnerability scan test results with default values
     pub fn new() -> Self {
         Self {
-            sql_injection_vulnerabilities: TestResult { passed: false, details: String::new() },
-            xss_vulnerabilities: TestResult { passed: false, details: String::new() },
-            csrf_vulnerabilities: TestResult { passed: false, details: String::new() },
-            authentication_bypass: TestResult { passed: false, details: String::new() },
-            authorization_bypass: TestResult { passed: false, details: String::new() },
-            data_exposure: TestResult { passed: false, details: String::new() },
+            sql_injection_vulnerabilities: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            xss_vulnerabilities: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            csrf_vulnerabilities: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            authentication_bypass: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            authorization_bypass: TestResult {
+                passed: false,
+                details: String::new(),
+            },
+            data_exposure: TestResult {
+                passed: false,
+                details: String::new(),
+            },
         }
     }
 }
@@ -1130,7 +1435,8 @@ mod tests {
 
         let key_manager = Arc::new(InMemoryKeyManager::new());
         let encryption_config = EncryptionConfig::default();
-        let encryption_manager = Arc::new(DataEncryptionManager::new(key_manager, encryption_config));
+        let encryption_manager =
+            Arc::new(DataEncryptionManager::new(key_manager, encryption_config));
 
         let performance_monitor = Arc::new(PerformanceMonitor::new(1000, Duration::from_secs(300)));
 
@@ -1142,11 +1448,11 @@ mod tests {
         );
 
         let results = test_suite.run_all_tests().await;
-        
+
         // Verify all tests ran
         assert!(results.overall_score >= 0.0);
         assert!(results.overall_score <= 100.0);
-        
+
         // Verify test completion
         assert!(results.total_duration > Duration::from_secs(0));
     }
@@ -1163,19 +1469,27 @@ mod query_executor_security_tests {
     struct MockCache;
     struct MockQueryPlanner;
     struct MockConnectionPool;
-    
+
     #[async_trait::async_trait]
     impl Cache for MockCache {
-        async fn get(&self, _key: &str) -> Option<QueryResult> { None }
+        async fn get(&self, _key: &str) -> Option<QueryResult> {
+            None
+        }
         async fn set(&self, _key: &str, _value: &QueryResult, _ttl: Duration) {}
         async fn invalidate(&self, _key: &str) {}
         async fn clear(&self) {}
-        async fn stats(&self) -> CacheStats { CacheStats::default() }
+        async fn stats(&self) -> CacheStats {
+            CacheStats::default()
+        }
     }
-    
+
     #[async_trait::async_trait]
     impl QueryPlanner for MockQueryPlanner {
-        async fn optimize(&self, query: &str, _parameters: &Option<Vec<serde_json::Value>>) -> Result<OptimizedPlan> {
+        async fn optimize(
+            &self,
+            query: &str,
+            _parameters: &Option<Vec<serde_json::Value>>,
+        ) -> Result<OptimizedPlan> {
             Ok(OptimizedPlan {
                 optimized_query: query.to_string(),
                 execution_plan: "mock_plan".to_string(),
@@ -1185,7 +1499,7 @@ mod query_executor_security_tests {
                 parallel_execution: false,
             })
         }
-        
+
         async fn explain(&self, _query: &str) -> Result<QueryExplanation> {
             Ok(QueryExplanation {
                 plan: Vec::new(),
@@ -1194,29 +1508,35 @@ mod query_executor_security_tests {
             })
         }
     }
-    
+
     #[async_trait::async_trait]
     impl ConnectionPool for MockConnectionPool {
         async fn get_connection(&self) -> Result<Box<dyn DatabaseConnection>> {
             Ok(Box::new(MockDatabaseConnection))
         }
-        
+
         async fn return_connection(&self, _conn: Box<dyn DatabaseConnection>) {}
-        async fn stats(&self) -> PoolStats { PoolStats::default() }
+        async fn stats(&self) -> PoolStats {
+            PoolStats::default()
+        }
     }
-    
+
     struct MockDatabaseConnection;
-    
+
     #[async_trait::async_trait]
     impl DatabaseConnection for MockDatabaseConnection {
-        async fn execute(&mut self, _query: &str, _params: &[serde_json::Value]) -> Result<QueryResult> {
+        async fn execute(
+            &mut self,
+            _query: &str,
+            _params: &[serde_json::Value],
+        ) -> Result<QueryResult> {
             Ok(QueryResult::default())
         }
-        
+
         async fn execute_batch(&mut self, _queries: &[BatchQuery]) -> Result<Vec<QueryResult>> {
             Ok(Vec::new())
         }
-        
+
         async fn prepare(&mut self, _query: &str) -> Result<PreparedStatement> {
             Ok(PreparedStatement {
                 id: "mock".to_string(),
@@ -1225,7 +1545,7 @@ mod query_executor_security_tests {
                 prepared_at: Utc::now(),
             })
         }
-        
+
         fn connection_info(&self) -> ConnectionInfo {
             ConnectionInfo {
                 id: "mock".to_string(),
@@ -1250,15 +1570,22 @@ mod query_executor_security_tests {
     #[tokio::test]
     async fn test_sql_injection_prevention_quotes() {
         let executor = create_test_executor();
-        
+
         // Test single quote injection
         let result = executor.parse_query("SELECT * FROM users WHERE name = 'admin' OR '1'='1");
-        assert!(result.is_err(), "Should reject SQL injection with single quotes");
-        
+        assert!(
+            result.is_err(),
+            "Should reject SQL injection with single quotes"
+        );
+
         // Test double quote injection
-        let result = executor.parse_query("SELECT * FROM users WHERE name = \"admin\" OR \"1\"=\"1");
-        assert!(result.is_err(), "Should reject SQL injection with double quotes");
-        
+        let result =
+            executor.parse_query("SELECT * FROM users WHERE name = \"admin\" OR \"1\"=\"1");
+        assert!(
+            result.is_err(),
+            "Should reject SQL injection with double quotes"
+        );
+
         // Test mixed quotes
         let result = executor.parse_query("SELECT * FROM users WHERE name = 'admin' --");
         assert!(result.is_err(), "Should reject SQL injection with comment");
@@ -1267,11 +1594,14 @@ mod query_executor_security_tests {
     #[tokio::test]
     async fn test_sql_injection_prevention_semicolon() {
         let executor = create_test_executor();
-        
+
         // Test multiple statements
         let result = executor.parse_query("SELECT * FROM users; DROP TABLE users; --");
-        assert!(result.is_err(), "Should reject multiple statements with semicolon");
-        
+        assert!(
+            result.is_err(),
+            "Should reject multiple statements with semicolon"
+        );
+
         // Test semicolon injection
         let result = executor.parse_query("SELECT * FROM users WHERE id = 1; DELETE FROM users");
         assert!(result.is_err(), "Should reject semicolon injection");
@@ -1280,37 +1610,40 @@ mod query_executor_security_tests {
     #[tokio::test]
     async fn test_sql_injection_prevention_comments() {
         let executor = create_test_executor();
-        
+
         // Test line comment injection
         let result = executor.parse_query("SELECT * FROM users WHERE id = 1 -- DELETE FROM users");
         assert!(result.is_err(), "Should reject line comment injection");
-        
+
         // Test block comment injection
-        let result = executor.parse_query("SELECT * FROM users WHERE id = 1 /* DELETE FROM users */");
+        let result =
+            executor.parse_query("SELECT * FROM users WHERE id = 1 /* DELETE FROM users */");
         assert!(result.is_err(), "Should reject block comment injection");
     }
 
     #[tokio::test]
     async fn test_sql_injection_prevention_union_select() {
         let executor = create_test_executor();
-        
+
         // Test UNION injection
-        let result = executor.parse_query("SELECT name FROM users UNION SELECT password FROM admin");
+        let result =
+            executor.parse_query("SELECT name FROM users UNION SELECT password FROM admin");
         assert!(result.is_err(), "Should reject UNION SELECT injection");
-        
+
         // Test UNION ALL injection
-        let result = executor.parse_query("SELECT name FROM users UNION ALL SELECT password FROM admin");
+        let result =
+            executor.parse_query("SELECT name FROM users UNION ALL SELECT password FROM admin");
         assert!(result.is_err(), "Should reject UNION ALL injection");
     }
 
     #[tokio::test]
     async fn test_sql_injection_prevention_boolean_blind() {
         let executor = create_test_executor();
-        
+
         // Test OR 1=1 injection
         let result = executor.parse_query("SELECT * FROM users WHERE id = 1 OR 1=1");
         assert!(result.is_err(), "Should reject OR 1=1 injection");
-        
+
         // Test AND 1=1 injection
         let result = executor.parse_query("SELECT * FROM users WHERE id = 1 AND 1=1");
         assert!(result.is_err(), "Should reject AND 1=1 injection");
@@ -1319,11 +1652,11 @@ mod query_executor_security_tests {
     #[tokio::test]
     async fn test_sql_injection_prevention_stored_procedures() {
         let executor = create_test_executor();
-        
+
         // Test xp_cmdshell injection
         let result = executor.parse_query("EXEC xp_cmdshell 'dir'");
         assert!(result.is_err(), "Should reject xp_cmdshell injection");
-        
+
         // Test sp_executesql injection
         let result = executor.parse_query("EXEC sp_executesql N'DELETE FROM users'");
         assert!(result.is_err(), "Should reject sp_executesql injection");
@@ -1332,11 +1665,11 @@ mod query_executor_security_tests {
     #[tokio::test]
     async fn test_sql_injection_prevention_file_operations() {
         let executor = create_test_executor();
-        
+
         // Test LOAD_FILE injection
         let result = executor.parse_query("SELECT LOAD_FILE('/etc/passwd')");
         assert!(result.is_err(), "Should reject LOAD_FILE injection");
-        
+
         // Test INTO OUTFILE injection
         let result = executor.parse_query("SELECT * FROM users INTO OUTFILE '/tmp/users.txt'");
         assert!(result.is_err(), "Should reject INTO OUTFILE injection");
@@ -1345,15 +1678,15 @@ mod query_executor_security_tests {
     #[tokio::test]
     async fn test_sql_injection_prevention_system_tables() {
         let executor = create_test_executor();
-        
+
         // Test information_schema access
         let result = executor.parse_query("SELECT * FROM information_schema.tables");
         assert!(result.is_err(), "Should reject information_schema access");
-        
+
         // Test mysql.user access
         let result = executor.parse_query("SELECT * FROM mysql.user");
         assert!(result.is_err(), "Should reject mysql.user access");
-        
+
         // Test pg_catalog access
         let result = executor.parse_query("SELECT * FROM pg_catalog.pg_user");
         assert!(result.is_err(), "Should reject pg_catalog access");
@@ -1362,36 +1695,39 @@ mod query_executor_security_tests {
     #[tokio::test]
     async fn test_sql_injection_prevention_timing_attacks() {
         let executor = create_test_executor();
-        
+
         // Test WAITFOR DELAY injection
-        let result = executor.parse_query("SELECT * FROM users WHERE id = 1 WAITFOR DELAY '00:00:05'");
+        let result =
+            executor.parse_query("SELECT * FROM users WHERE id = 1 WAITFOR DELAY '00:00:05'");
         assert!(result.is_err(), "Should reject WAITFOR DELAY injection");
-        
+
         // Test SLEEP injection
         let result = executor.parse_query("SELECT * FROM users WHERE id = 1 AND SLEEP(5)");
         assert!(result.is_err(), "Should reject SLEEP injection");
-        
+
         // Test BENCHMARK injection
-        let result = executor.parse_query("SELECT * FROM users WHERE id = 1 AND BENCHMARK(5000000, MD5('test'))");
+        let result = executor
+            .parse_query("SELECT * FROM users WHERE id = 1 AND BENCHMARK(5000000, MD5('test'))");
         assert!(result.is_err(), "Should reject BENCHMARK injection");
     }
 
     #[tokio::test]
     async fn test_legitimate_queries_allowed() {
         let executor = create_test_executor();
-        
+
         // Test legitimate SELECT queries
         let result = executor.parse_query("SELECT id, name FROM users WHERE active = 1");
         assert!(result.is_ok(), "Should allow legitimate SELECT query");
-        
+
         // Test legitimate INSERT queries
-        let result = executor.parse_query("INSERT INTO users (name, email) VALUES ('John', 'john@example.com')");
+        let result = executor
+            .parse_query("INSERT INTO users (name, email) VALUES ('John', 'john@example.com')");
         assert!(result.is_ok(), "Should allow legitimate INSERT query");
-        
+
         // Test legitimate UPDATE queries
         let result = executor.parse_query("UPDATE users SET name = 'John' WHERE id = 1");
         assert!(result.is_ok(), "Should allow legitimate UPDATE query");
-        
+
         // Test legitimate DELETE queries
         let result = executor.parse_query("DELETE FROM users WHERE id = 1");
         assert!(result.is_ok(), "Should allow legitimate DELETE query");
@@ -1400,19 +1736,21 @@ mod query_executor_security_tests {
     #[tokio::test]
     async fn test_complex_legitimate_queries_allowed() {
         let executor = create_test_executor();
-        
+
         // Test complex JOIN queries
         let result = executor.parse_query("SELECT u.name, o.total FROM users u JOIN orders o ON u.id = o.user_id WHERE u.active = 1");
         assert!(result.is_ok(), "Should allow legitimate JOIN query");
-        
+
         // Test subquery
-        let result = executor.parse_query("SELECT name FROM users WHERE id IN (SELECT user_id FROM orders WHERE total > 100)");
+        let result = executor.parse_query(
+            "SELECT name FROM users WHERE id IN (SELECT user_id FROM orders WHERE total > 100)",
+        );
         assert!(result.is_ok(), "Should allow legitimate subquery");
-        
+
         // Test CTE (Common Table Expression)
         let result = executor.parse_query("WITH active_users AS (SELECT * FROM users WHERE active = 1) SELECT * FROM active_users");
         assert!(result.is_ok(), "Should allow legitimate CTE");
-        
+
         // Test aggregation
         let result = executor.parse_query("SELECT COUNT(*) as total, AVG(price) as avg_price FROM products WHERE category = 'electronics'");
         assert!(result.is_ok(), "Should allow legitimate aggregation query");
@@ -1421,7 +1759,7 @@ mod query_executor_security_tests {
     #[tokio::test]
     async fn test_admin_operation_detection() {
         let executor = create_test_executor();
-        
+
         // Test DDL operations detected as admin
         let admin_queries = [
             "CREATE TABLE users (id INT, name VARCHAR(100))",
@@ -1431,19 +1769,23 @@ mod query_executor_security_tests {
             "GRANT SELECT ON users TO webapp",
             "REVOKE SELECT ON users FROM webapp",
         ];
-        
+
         for query in admin_queries {
             let result = executor.parse_query(query);
             assert!(result.is_ok(), "Should parse admin query: {}", query);
             let parsed = result.unwrap();
-            assert!(parsed.is_admin_operation, "Should detect admin operation in: {}", query);
+            assert!(
+                parsed.is_admin_operation,
+                "Should detect admin operation in: {}",
+                query
+            );
         }
     }
 
     #[tokio::test]
     async fn test_comprehensive_injection_patterns() {
         let executor = create_test_executor();
-        
+
         // Advanced injection patterns that should be blocked
         let injection_patterns = [
             "SELECT * FROM users WHERE name = 'admin' OR 'x'='x",
@@ -1457,30 +1799,34 @@ mod query_executor_security_tests {
             "SELECT * FROM users WHERE id = 1 UNION SELECT LOAD_FILE('/etc/passwd')",
             "SELECT * FROM users WHERE id = 1 INTO OUTFILE '/tmp/dump.txt'",
         ];
-        
+
         for pattern in injection_patterns {
             let result = executor.parse_query(pattern);
-            assert!(result.is_err(), "Should reject injection pattern: {}", pattern);
+            assert!(
+                result.is_err(),
+                "Should reject injection pattern: {}",
+                pattern
+            );
         }
     }
 
     #[tokio::test]
     async fn test_legitimate_edge_cases() {
         let executor = create_test_executor();
-        
+
         // Edge cases that should be allowed
         let legitimate_queries = [
-            "SELECT * FROM users WHERE name = 'O'Reilly'",  // Single quote in name
-            "SELECT * FROM users WHERE description = 'This contains \"quotes\"'",  // Double quotes in string
-            "SELECT * FROM users WHERE notes LIKE '%important%'",  // LIKE with wildcards
-            "SELECT * FROM users WHERE id IN (1, 2, 3, 4, 5)",  // IN clause
-            "SELECT * FROM users WHERE name IS NOT NULL",  // IS NOT NULL
-            "SELECT * FROM users WHERE created_at > '2023-01-01'",  // Date comparison
-            "SELECT COUNT(*) as total FROM users",  // Aggregate with alias
-            "SELECT DISTINCT category FROM products",  // DISTINCT
-            "SELECT * FROM users ORDER BY name DESC LIMIT 10",  // ORDER BY and LIMIT
+            "SELECT * FROM users WHERE name = 'O'Reilly'", // Single quote in name
+            "SELECT * FROM users WHERE description = 'This contains \"quotes\"'", // Double quotes in string
+            "SELECT * FROM users WHERE notes LIKE '%important%'", // LIKE with wildcards
+            "SELECT * FROM users WHERE id IN (1, 2, 3, 4, 5)",    // IN clause
+            "SELECT * FROM users WHERE name IS NOT NULL",         // IS NOT NULL
+            "SELECT * FROM users WHERE created_at > '2023-01-01'", // Date comparison
+            "SELECT COUNT(*) as total FROM users",                // Aggregate with alias
+            "SELECT DISTINCT category FROM products",             // DISTINCT
+            "SELECT * FROM users ORDER BY name DESC LIMIT 10",    // ORDER BY and LIMIT
         ];
-        
+
         for query in legitimate_queries {
             let result = executor.parse_query(query);
             assert!(result.is_ok(), "Should allow legitimate query: {}", query);
@@ -1490,15 +1836,15 @@ mod query_executor_security_tests {
     #[tokio::test]
     async fn test_empty_and_invalid_queries() {
         let executor = create_test_executor();
-        
+
         // Test empty query
         let result = executor.parse_query("");
         assert!(result.is_err(), "Should reject empty query");
-        
+
         // Test whitespace-only query
         let result = executor.parse_query("   \t\n   ");
         assert!(result.is_err(), "Should reject whitespace-only query");
-        
+
         // Test comment-only query
         let result = executor.parse_query("-- This is just a comment");
         assert!(result.is_err(), "Should reject comment-only query");

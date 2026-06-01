@@ -1,15 +1,15 @@
-use crate::grpc::types::*;
 use crate::error::ServerError;
+use crate::grpc::types::*;
 use fortress_core::encryption::{Aegis256, EncryptionAlgorithm};
 use fortress_core::key::KeyManager;
+use hex;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{info, error, debug};
-use hex;
+use tracing::{debug, error, info};
 
 /// gRPC service implementation for Fortress
-/// 
+///
 /// This struct provides the main gRPC service interface for the Fortress
 /// secure storage system, handling database operations and encryption.
 #[derive(Clone)]
@@ -84,7 +84,7 @@ impl FortressGrpcService {
         _request: ListDatabasesRequest,
     ) -> Result<ListDatabasesResponse, String> {
         info!("Listing databases");
-        
+
         // Implementation would list from storage
         Ok(ListDatabasesResponse {
             databases: vec![],
@@ -93,10 +93,7 @@ impl FortressGrpcService {
     }
 
     /// Delete a database
-    pub async fn delete_database(
-        &self,
-        request: DeleteDatabaseRequest,
-    ) -> Result<(), String> {
+    pub async fn delete_database(&self, request: DeleteDatabaseRequest) -> Result<(), String> {
         info!("Deleting database: {}", request.database_id);
 
         // Implementation would delete from storage
@@ -104,10 +101,7 @@ impl FortressGrpcService {
     }
 
     /// Encrypt data for a database
-    pub async fn encrypt_data(
-        &self,
-        request: EncryptRequest,
-    ) -> Result<EncryptResponse, String> {
+    pub async fn encrypt_data(&self, request: EncryptRequest) -> Result<EncryptResponse, String> {
         debug!("Encrypting data for database: {}", request.database_id);
 
         // Validate request
@@ -135,9 +129,12 @@ impl FortressGrpcService {
             key.0.as_bytes(), // Use only the SecureKey part
         ) {
             Ok(encrypted_data) => {
-                info!("Successfully encrypted {} bytes for database {}", 
-                      request.plaintext.len(), request.database_id);
-                
+                info!(
+                    "Successfully encrypted {} bytes for database {}",
+                    request.plaintext.len(),
+                    request.database_id
+                );
+
                 Ok(EncryptResponse {
                     ciphertext: encrypted_data,
                     key_id: key_id,
@@ -153,10 +150,7 @@ impl FortressGrpcService {
     }
 
     /// Decrypt data for a database
-    pub async fn decrypt_data(
-        &self,
-        request: DecryptRequest,
-    ) -> Result<DecryptResponse, String> {
+    pub async fn decrypt_data(&self, request: DecryptRequest) -> Result<DecryptResponse, String> {
         debug!("Decrypting data for database: {}", request.database_id);
 
         // Validate request
@@ -183,9 +177,12 @@ impl FortressGrpcService {
             key.0.as_bytes(), // Use only the SecureKey part
         ) {
             Ok(decrypted_data) => {
-                info!("Successfully decrypted {} bytes for database {}", 
-                      decrypted_data.len(), request.database_id);
-                
+                info!(
+                    "Successfully decrypted {} bytes for database {}",
+                    decrypted_data.len(),
+                    request.database_id
+                );
+
                 Ok(DecryptResponse {
                     plaintext: decrypted_data,
                     decrypted_at: chrono::Utc::now(),
@@ -204,7 +201,11 @@ impl FortressGrpcService {
         &self,
         request: BatchEncryptRequest,
     ) -> Result<BatchEncryptResponse, String> {
-        debug!("Batch encrypting {} items for database: {}", request.items.len(), request.database_id);
+        debug!(
+            "Batch encrypting {} items for database: {}",
+            request.items.len(),
+            request.database_id
+        );
 
         if request.items.is_empty() {
             return Err("Items cannot be empty".to_string());
@@ -251,9 +252,11 @@ impl FortressGrpcService {
             }
         }
 
-        info!("Batch encryption completed: {} successful, {} failed", 
-              results.iter().filter(|r| r.success).count(),
-              errors.len());
+        info!(
+            "Batch encryption completed: {} successful, {} failed",
+            results.iter().filter(|r| r.success).count(),
+            errors.len()
+        );
 
         Ok(BatchEncryptResponse {
             results: results.clone(),
@@ -269,7 +272,11 @@ impl FortressGrpcService {
         &self,
         request: BatchDecryptRequest,
     ) -> Result<BatchDecryptResponse, String> {
-        debug!("Batch decrypting {} items for database: {}", request.items.len(), request.database_id);
+        debug!(
+            "Batch decrypting {} items for database: {}",
+            request.items.len(),
+            request.database_id
+        );
 
         if request.items.is_empty() {
             return Err("Items cannot be empty".to_string());
@@ -315,9 +322,11 @@ impl FortressGrpcService {
             }
         }
 
-        info!("Batch decryption completed: {} successful, {} failed", 
-              results.iter().filter(|r| r.success).count(),
-              errors.len());
+        info!(
+            "Batch decryption completed: {} successful, {} failed",
+            results.iter().filter(|r| r.success).count(),
+            errors.len()
+        );
 
         Ok(BatchDecryptResponse {
             results: results.clone(),
@@ -329,9 +338,7 @@ impl FortressGrpcService {
     }
 
     /// Perform health check
-    pub async fn health_check(
-        &self,
-    ) -> Result<HealthResponse, String> {
+    pub async fn health_check(&self) -> Result<HealthResponse, String> {
         debug!("Health check requested");
 
         let components = vec![
@@ -358,9 +365,7 @@ impl FortressGrpcService {
     }
 
     /// Get system metrics
-    pub async fn get_metrics(
-        &self,
-    ) -> Result<MetricsResponse, String> {
+    pub async fn get_metrics(&self) -> Result<MetricsResponse, String> {
         debug!("Metrics requested");
 
         // Implementation would collect actual metrics

@@ -3,35 +3,29 @@
 //! This is the main entry point for Fortress REST API server.
 //! It sets up the HTTP server with basic endpoints.
 
+use axum::http::{header, HeaderValue, Method};
 use axum::{
-    Router,
     middleware::from_fn_with_state,
-    routing::{get, post, put, delete},
-    Json,
+    routing::{delete, get, post, put},
+    Json, Router,
 };
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tower::ServiceBuilder;
-use tower_http::{
-    cors::CorsLayer,
-    trace::TraceLayer,
-    compression::CompressionLayer,
-};
-use axum::http::{header, Method, HeaderValue};
+use tower_http::{compression::CompressionLayer, cors::CorsLayer, trace::TraceLayer};
 use tracing::info;
 
 // Import from fortress_api_server instead of fortress_server
-use fortress_api_server::handlers::{
-    get_tenant_stats, admin_list_data, create_openapi, AppState,
-    detailed_health_check, security_health_check,
-    get_prometheus_metrics, get_security_events, get_blocked_requests,
-    store_data, retrieve_data, update_data, delete_data, list_data,
-    generate_key, create_tenant, list_tenants, authenticate, refresh_token,
-};
-use fortress_api_server::auth::{AuthManager, InMemoryUserStore, require_jwt_middleware};
-use fortress_api_server::metrics::MetricsCollector;
-use fortress_api_server::health::HealthChecker;
+use fortress_api_server::auth::{require_jwt_middleware, AuthManager, InMemoryUserStore};
 use fortress_api_server::graphql::{graphql_handler, graphql_playground};
+use fortress_api_server::handlers::{
+    admin_list_data, authenticate, create_openapi, create_tenant, delete_data,
+    detailed_health_check, generate_key, get_blocked_requests, get_prometheus_metrics,
+    get_security_events, get_tenant_stats, list_data, list_tenants, refresh_token, retrieve_data,
+    security_health_check, store_data, update_data, AppState,
+};
+use fortress_api_server::health::HealthChecker;
+use fortress_api_server::metrics::MetricsCollector;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -54,14 +48,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-
 async fn create_router_with_state(
     state: Arc<AppState>,
     _openapi: utoipa::openapi::OpenApi,
 ) -> Result<Router, Box<dyn std::error::Error>> {
     // Get allowed origins from environment or use secure defaults
-    let allowed_origins_str = std::env::var("FORTRESS_ALLOWED_ORIGINS")
-        .unwrap_or_else(|_| "https://fortress.example.com,http://localhost:3000,http://localhost:8080".to_string());
+    let allowed_origins_str = std::env::var("FORTRESS_ALLOWED_ORIGINS").unwrap_or_else(|_| {
+        "https://fortress.example.com,http://localhost:3000,http://localhost:8080".to_string()
+    });
     let _allowed_origins = allowed_origins_str
         .split(',')
         .map(|s| s.trim().to_string())
@@ -104,8 +98,11 @@ async fn create_router_with_state(
                 .layer(
                     CorsLayer::new()
                         .allow_origin({
-                            let fallback_origin = HeaderValue::from_static("https://fortress.example.com");
-                            allowed_origins_str.parse::<HeaderValue>().unwrap_or(fallback_origin)
+                            let fallback_origin =
+                                HeaderValue::from_static("https://fortress.example.com");
+                            allowed_origins_str
+                                .parse::<HeaderValue>()
+                                .unwrap_or(fallback_origin)
                         })
                         .allow_methods([
                             Method::GET,
@@ -113,7 +110,7 @@ async fn create_router_with_state(
                             Method::PUT,
                             Method::DELETE,
                             Method::PATCH,
-                            Method::OPTIONS
+                            Method::OPTIONS,
                         ])
                         .allow_headers([
                             header::AUTHORIZATION,
@@ -121,11 +118,11 @@ async fn create_router_with_state(
                             header::CONTENT_TYPE,
                             header::ORIGIN,
                             header::ACCESS_CONTROL_REQUEST_METHOD,
-                            header::ACCESS_CONTROL_REQUEST_HEADERS
+                            header::ACCESS_CONTROL_REQUEST_HEADERS,
                         ])
                         .allow_credentials(true)
-                        .max_age(std::time::Duration::from_secs(3600))
-                )
+                        .max_age(std::time::Duration::from_secs(3600)),
+                ),
         )
         .with_state(state);
 
@@ -134,23 +131,27 @@ async fn create_router_with_state(
 
 /// Create application state
 async fn create_app_state() -> Result<Arc<AppState>, Box<dyn std::error::Error>> {
-    use fortress_api_server::handlers::AppState;
-    use fortress_core::tenant::{InMemoryTenantManager, GlobalResourceLimits};
-    use fortress_api_server::config::FeatureFlags;
-    use fortress_core::field_encryption_manager::DefaultFieldEncryptionManager;
     use chrono::Duration;
-    
+    use fortress_api_server::config::FeatureFlags;
+    use fortress_api_server::handlers::AppState;
+    use fortress_core::field_encryption_manager::DefaultFieldEncryptionManager;
+    use fortress_core::tenant::{GlobalResourceLimits, InMemoryTenantManager};
+
     // Initialize components with secure JWT secret from environment
     let jwt_secret = std::env::var("FORTRESS_JWT_SECRET")
         .map_err(|_| "FORTRESS_JWT_SECRET environment variable not set")?;
-    
+
     if jwt_secret.len() < 32 {
         return Err("FORTRESS_JWT_SECRET must be at least 32 characters long".into());
     }
-    
+
     let user_store = Arc::new(InMemoryUserStore::new()); // Wrap in Arc here
-    
-    if std::env::var("FORTRESS_BOOTSTRAP_DEFAULT_ADMIN").ok().as_deref() == Some("1") {
+
+    if std::env::var("FORTRESS_BOOTSTRAP_DEFAULT_ADMIN")
+        .ok()
+        .as_deref()
+        == Some("1")
+    {
         let admin_password = std::env::var("FORTRESS_BOOTSTRAP_ADMIN_PASSWORD") // Password for default admin user
             .map_err(|_| "FORTRESS_BOOTSTRAP_ADMIN_PASSWORD environment variable not set for default admin bootstrap")?;
         let admin_user = fortress_api_server::auth::UserRecord {
@@ -173,7 +174,7 @@ async fn create_app_state() -> Result<Arc<AppState>, Box<dyn std::error::Error>>
     ));
     let metrics = Arc::new(MetricsCollector::new());
     let key_manager = Arc::new(fortress_core::key::InMemoryKeyManager::new());
-    
+
     // Initialize storage with optimized connection pool
     let storage_config = fortress_core::storage::StorageConfig {
         backend_type: fortress_core::storage::StorageBackendType::FileSystem {
@@ -187,17 +188,17 @@ async fn create_app_state() -> Result<Arc<AppState>, Box<dyn std::error::Error>>
         connection_timeout: std::time::Duration::from_secs(30).as_secs(),
         max_connections: 100,
     };
-    let storage = Arc::new(fortress_core::storage::FileSystemStorage::with_config("./data", storage_config)?);
-    
+    let storage = Arc::new(fortress_core::storage::FileSystemStorage::with_config(
+        "./data",
+        storage_config,
+    )?);
+
     // Initialize field encryption manager
-    let field_encryption_manager = Arc::new(
-        DefaultFieldEncryptionManager::new(key_manager.clone())
-    );
-    
+    let field_encryption_manager =
+        Arc::new(DefaultFieldEncryptionManager::new(key_manager.clone()));
+
     // Initialize health checker
-    let health_checker = Arc::new(HealthChecker::new(
-        FeatureFlags::default()
-    ));
+    let health_checker = Arc::new(HealthChecker::new(FeatureFlags::default()));
 
     // Initialize tenant manager with demo limits
     let global_limits = GlobalResourceLimits {

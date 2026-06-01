@@ -4,17 +4,21 @@
 //! showing how JWT, OAuth, and SAML plugins can be deployed, managed, and swapped
 //! independently without system restart.
 
+use crate::auth_plugin::{
+    AuthContext, AuthCredentials, AuthMethod, AuthPluginManagerConfig, AuthRequest,
+};
+use crate::auth_plugin_manager::{
+    DeploymentStrategy, HotSwappableAuthPluginManager, PluginDeployment, PluginReloadRequest,
+};
+use crate::auth_service::{AuthServiceConfig, PluginAuthService};
 use crate::error::{FortressError, Result};
-use crate::auth_plugin_manager::{HotSwappableAuthPluginManager, PluginReloadRequest, DeploymentStrategy, PluginDeployment};
-use crate::auth_service::{PluginAuthService, AuthServiceConfig};
-use crate::auth_plugin::{AuthMethod, AuthRequest, AuthCredentials, AuthContext, AuthPluginManagerConfig};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use std::path::PathBuf;
+use tracing::{error, info, warn};
 use uuid::Uuid;
-use tracing::{info, warn, error};
 
 /// Authentication plugin integration service
 #[derive(Clone)]
@@ -136,7 +140,10 @@ impl AuthPluginIntegrationService {
 
         let available_methods = self.plugin_manager.list_supported_methods().await;
         if !available_methods.contains(&default_method) {
-            warn!("Default authentication method {:?} is not available", default_method);
+            warn!(
+                "Default authentication method {:?} is not available",
+                default_method
+            );
         }
 
         info!("Authentication plugin integration service initialized successfully");
@@ -152,7 +159,10 @@ impl AuthPluginIntegrationService {
         wasm_file_path: &str,
         strategy: DeploymentStrategy,
     ) -> Result<String> {
-        info!("Deploying authentication plugin: {} with strategy: {:?}", plugin_name, strategy);
+        info!(
+            "Deploying authentication plugin: {} with strategy: {:?}",
+            plugin_name, strategy
+        );
 
         let deployment_id = Uuid::new_v4().to_string();
         let deployment = PluginDeployment {
@@ -178,12 +188,20 @@ impl AuthPluginIntegrationService {
 
         // Perform deployment based on strategy
         let result = match strategy {
-            DeploymentStrategy::Rolling => self.rolling_deployment(plugin_name, wasm_file_path).await,
-            DeploymentStrategy::BlueGreen => self.blue_green_deployment(plugin_name, wasm_file_path).await,
-            DeploymentStrategy::Canary { percentage } => {
-                self.canary_deployment(plugin_name, wasm_file_path, percentage as u32).await
+            DeploymentStrategy::Rolling => {
+                self.rolling_deployment(plugin_name, wasm_file_path).await
             }
-            DeploymentStrategy::Immediate => self.immediate_deployment(plugin_name, wasm_file_path).await,
+            DeploymentStrategy::BlueGreen => {
+                self.blue_green_deployment(plugin_name, wasm_file_path)
+                    .await
+            }
+            DeploymentStrategy::Canary { percentage } => {
+                self.canary_deployment(plugin_name, wasm_file_path, percentage as u32)
+                    .await
+            }
+            DeploymentStrategy::Immediate => {
+                self.immediate_deployment(plugin_name, wasm_file_path).await
+            }
         };
 
         // Update deployment status
@@ -194,10 +212,11 @@ impl AuthPluginIntegrationService {
                     Ok(_) => {
                         // Update deployment config with success status
                         dep.config["status"] = serde_json::json!("Completed");
-                        dep.config["completed_at"] = serde_json::json!(std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap()
-                            .as_secs());
+                        dep.config["completed_at"] =
+                            serde_json::json!(std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap()
+                                .as_secs());
                         info!("Successfully deployed plugin: {}", plugin_name);
                     }
                     Err(e) => {
@@ -220,7 +239,10 @@ impl AuthPluginIntegrationService {
         new_wasm_file_path: &str,
         strategy: DeploymentStrategy,
     ) -> Result<String> {
-        info!("Hot-swapping plugin: {} with strategy: {:?}", plugin_name, strategy);
+        info!(
+            "Hot-swapping plugin: {} with strategy: {:?}",
+            plugin_name, strategy
+        );
 
         let deployment_id = Uuid::new_v4().to_string();
         let previous_version = self.get_plugin_version(plugin_name).await;
@@ -267,10 +289,11 @@ impl AuthPluginIntegrationService {
                     Ok(_) => {
                         // Update deployment config with success status
                         dep.config["status"] = serde_json::json!("Completed");
-                        dep.config["completed_at"] = serde_json::json!(std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap()
-                            .as_secs());
+                        dep.config["completed_at"] =
+                            serde_json::json!(std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap()
+                                .as_secs());
                         info!("Successfully hot-swapped plugin: {}", plugin_name);
                     }
                     Err(e) => {
@@ -278,12 +301,15 @@ impl AuthPluginIntegrationService {
                         dep.config["status"] = serde_json::json!("Failed");
                         dep.config["error"] = serde_json::json!(e.to_string());
                         error!("Failed to hot-swap plugin {}: {}", plugin_name, e);
-                        
+
                         // Attempt rollback if auto-reload is enabled
                         if self.config.auto_reload_on_failure {
                             warn!("Attempting rollback for plugin: {}", plugin_name);
                             if let Err(rollback_err) = self.rollback_plugin(plugin_name).await {
-                                error!("Rollback failed for plugin {}: {}", plugin_name, rollback_err);
+                                error!(
+                                    "Rollback failed for plugin {}: {}",
+                                    plugin_name, rollback_err
+                                );
                             }
                         }
                     }
@@ -299,48 +325,65 @@ impl AuthPluginIntegrationService {
         info!("Performing canary deployment for plugin: {}", plugin_name);
 
         let _wasm_path = PathBuf::from(wasm_file_path);
-        
+
         // Load new plugin
         self.plugin_manager.load_plugin(plugin_name).await?;
-        
+
         info!("Rolling deployment completed for plugin: {}", plugin_name);
         Ok(())
     }
 
     /// Blue-green deployment strategy
     async fn blue_green_deployment(&self, plugin_name: &str, wasm_file_path: &str) -> Result<()> {
-        info!("Performing blue-green deployment for plugin: {}", plugin_name);
+        info!(
+            "Performing blue-green deployment for plugin: {}",
+            plugin_name
+        );
 
         let _wasm_path = PathBuf::from(wasm_file_path);
-        
+
         // Load new plugin (green)
         self.plugin_manager.load_plugin(plugin_name).await?;
-        
-        info!("Blue-green deployment completed for plugin: {}", plugin_name);
+
+        info!(
+            "Blue-green deployment completed for plugin: {}",
+            plugin_name
+        );
         Ok(())
     }
 
     /// Canary deployment strategy
-    async fn canary_deployment(&self, plugin_name: &str, wasm_file_path: &str, percentage: u32) -> Result<()> {
-        info!("Performing canary deployment for plugin: {} with {}% traffic", plugin_name, percentage);
+    async fn canary_deployment(
+        &self,
+        plugin_name: &str,
+        wasm_file_path: &str,
+        percentage: u32,
+    ) -> Result<()> {
+        info!(
+            "Performing canary deployment for plugin: {} with {}% traffic",
+            plugin_name, percentage
+        );
 
         let _wasm_path = PathBuf::from(wasm_file_path);
-        
+
         // For simplicity, implement as immediate deployment
         // In production, you'd route percentage of traffic to new plugin
         self.plugin_manager.load_plugin(plugin_name).await?;
-        
+
         info!("Canary deployment completed for plugin: {}", plugin_name);
         Ok(())
     }
 
     /// Immediate deployment strategy
     async fn immediate_deployment(&self, plugin_name: &str, wasm_file_path: &str) -> Result<()> {
-        info!("Performing immediate deployment for plugin: {}", plugin_name);
+        info!(
+            "Performing immediate deployment for plugin: {}",
+            plugin_name
+        );
 
         let _wasm_path = PathBuf::from(wasm_file_path);
         self.plugin_manager.load_plugin(plugin_name).await?;
-        
+
         info!("Immediate deployment completed for plugin: {}", plugin_name);
         Ok(())
     }
@@ -353,7 +396,10 @@ impl AuthPluginIntegrationService {
         let _prev_version = self.get_previous_version(plugin_name).await;
 
         if let Some(_version) = _prev_version {
-            info!("Rolling back plugin {} to version {}", plugin_name, _version);
+            info!(
+                "Rolling back plugin {} to version {}",
+                plugin_name, _version
+            );
             // In a real implementation, you would load the previous version
         } else {
             warn!("No previous version found for plugin: {}", plugin_name);
@@ -372,13 +418,26 @@ impl AuthPluginIntegrationService {
     /// Get previous version from deployment history
     async fn get_previous_version(&self, plugin_name: &str) -> Option<String> {
         let deployments = self.deployments.read().await;
-        
+
         // Find the most recent successful deployment for this plugin
         deployments
             .values()
-            .filter(|d| d.name == plugin_name && d.config.get("status") == Some(&serde_json::json!("Completed")))
-            .max_by_key(|d| d.config.get("started_at").and_then(|v| v.as_u64()).unwrap_or(0))
-            .and_then(|d| d.config.get("previous_version").and_then(|v| v.as_str()).map(|s| s.to_string()))
+            .filter(|d| {
+                d.name == plugin_name
+                    && d.config.get("status") == Some(&serde_json::json!("Completed"))
+            })
+            .max_by_key(|d| {
+                d.config
+                    .get("started_at")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0)
+            })
+            .and_then(|d| {
+                d.config
+                    .get("previous_version")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            })
     }
 
     /// Get authentication method metrics
@@ -387,8 +446,12 @@ impl AuthPluginIntegrationService {
         let mut metrics = Vec::new();
 
         for method in methods {
-            let _plugin_healthy = self.plugin_manager.get_plugin_for_method(&method).await.is_ok();
-            
+            let _plugin_healthy = self
+                .plugin_manager
+                .get_plugin_for_method(&method)
+                .await
+                .is_ok();
+
             let metric = AuthMethodMetrics {
                 method: format!("{:?}", method),
                 total_requests: 0, // Would be tracked in real implementation
@@ -398,7 +461,7 @@ impl AuthPluginIntegrationService {
                 last_request: None,
                 plugin_healthy: _plugin_healthy,
             };
-            
+
             metrics.push(metric);
         }
 
@@ -427,20 +490,49 @@ impl AuthPluginIntegrationService {
             "jwt" => AuthMethod::JWT,
             "oauth" => AuthMethod::OAuth,
             "saml" => AuthMethod::SAML,
-            _ => return Err(FortressError::authentication("Unsupported authentication method", None)),
+            _ => {
+                return Err(FortressError::authentication(
+                    "Unsupported authentication method",
+                    None,
+                ))
+            }
         };
 
         let request = AuthRequest {
             method: auth_method.clone(),
             credentials: AuthCredentials {
-                username: credentials.get("username").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                password: credentials.get("password").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                token: credentials.get("token").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                authorization_code: credentials.get("authorization_code").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                state: credentials.get("state").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                redirect_uri: credentials.get("redirect_uri").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                saml_assertion: credentials.get("saml_assertion").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                api_key: credentials.get("api_key").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                username: credentials
+                    .get("username")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string()),
+                password: credentials
+                    .get("password")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string()),
+                token: credentials
+                    .get("token")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string()),
+                authorization_code: credentials
+                    .get("authorization_code")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string()),
+                state: credentials
+                    .get("state")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string()),
+                redirect_uri: credentials
+                    .get("redirect_uri")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string()),
+                saml_assertion: credentials
+                    .get("saml_assertion")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string()),
+                api_key: credentials
+                    .get("api_key")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string()),
                 additional_data: HashMap::new(),
             },
             context: AuthContext {
@@ -455,7 +547,10 @@ impl AuthPluginIntegrationService {
             },
         };
 
-        let result = self.auth_service.authenticate(request, Default::default()).await?;
+        let result = self
+            .auth_service
+            .authenticate(request, Default::default())
+            .await?;
         Ok(serde_json::to_value(result)?)
     }
 
@@ -463,7 +558,7 @@ impl AuthPluginIntegrationService {
     pub async fn get_health_status(&self) -> serde_json::Value {
         let plugin_health = self.plugin_manager.health_check_all().await;
         let metrics = self.get_auth_method_metrics().await;
-        
+
         serde_json::json!({
             "status": "healthy",
             "timestamp": std::time::SystemTime::now()
@@ -531,7 +626,7 @@ mod tests {
     async fn test_service_creation() {
         let config = IntegrationConfig::default();
         let service = AuthPluginIntegrationService::new(config).await.unwrap();
-        
+
         // Test that service was created successfully
         let health = service.get_health_status().await;
         assert_eq!(health["status"], "healthy");
@@ -541,11 +636,11 @@ mod tests {
     async fn test_service_initialization() {
         let config = IntegrationConfig::default();
         let service = AuthPluginIntegrationService::new(config).await.unwrap();
-        
+
         // Test service initialization
         let result = service.initialize().await;
         assert!(result.is_ok());
-        
+
         // Check health status after initialization
         let health = service.get_health_status().await;
         assert_eq!(health["status"], "healthy");
@@ -557,16 +652,19 @@ mod tests {
     async fn test_plugin_deployment_immediate() {
         let config = IntegrationConfig::default();
         let service = AuthPluginIntegrationService::new(config).await.unwrap();
-        
+
         // Test immediate deployment strategy
-        let deployment_id = service.deploy_plugin(
-            "test_plugin",
-            "./test_plugin.wasm",
-            DeploymentStrategy::Immediate,
-        ).await.unwrap();
-        
+        let deployment_id = service
+            .deploy_plugin(
+                "test_plugin",
+                "./test_plugin.wasm",
+                DeploymentStrategy::Immediate,
+            )
+            .await
+            .unwrap();
+
         assert!(!deployment_id.is_empty());
-        
+
         // Check deployment status
         let deployment = service.get_deployment_status(&deployment_id).await;
         assert!(deployment.is_some());
@@ -579,16 +677,19 @@ mod tests {
     async fn test_plugin_deployment_rolling() {
         let config = IntegrationConfig::default();
         let service = AuthPluginIntegrationService::new(config).await.unwrap();
-        
+
         // Test rolling deployment strategy
-        let deployment_id = service.deploy_plugin(
-            "test_plugin",
-            "./test_plugin.wasm",
-            DeploymentStrategy::Rolling,
-        ).await.unwrap();
-        
+        let deployment_id = service
+            .deploy_plugin(
+                "test_plugin",
+                "./test_plugin.wasm",
+                DeploymentStrategy::Rolling,
+            )
+            .await
+            .unwrap();
+
         assert!(!deployment_id.is_empty());
-        
+
         // Check deployment status
         let deployment = service.get_deployment_status(&deployment_id).await;
         assert!(deployment.is_some());
@@ -600,16 +701,19 @@ mod tests {
     async fn test_plugin_deployment_blue_green() {
         let config = IntegrationConfig::default();
         let service = AuthPluginIntegrationService::new(config).await.unwrap();
-        
+
         // Test blue-green deployment strategy
-        let deployment_id = service.deploy_plugin(
-            "test_plugin",
-            "./test_plugin.wasm",
-            DeploymentStrategy::BlueGreen,
-        ).await.unwrap();
-        
+        let deployment_id = service
+            .deploy_plugin(
+                "test_plugin",
+                "./test_plugin.wasm",
+                DeploymentStrategy::BlueGreen,
+            )
+            .await
+            .unwrap();
+
         assert!(!deployment_id.is_empty());
-        
+
         // Check deployment status
         let deployment = service.get_deployment_status(&deployment_id).await;
         assert!(deployment.is_some());
@@ -621,21 +725,24 @@ mod tests {
     async fn test_plugin_deployment_canary() {
         let config = IntegrationConfig::default();
         let service = AuthPluginIntegrationService::new(config).await.unwrap();
-        
+
         // Test canary deployment strategy
-        let deployment_id = service.deploy_plugin(
-            "test_plugin",
-            "./test_plugin.wasm",
-            DeploymentStrategy::Canary { percentage: 10.0 },
-        ).await.unwrap();
-        
+        let deployment_id = service
+            .deploy_plugin(
+                "test_plugin",
+                "./test_plugin.wasm",
+                DeploymentStrategy::Canary { percentage: 10.0 },
+            )
+            .await
+            .unwrap();
+
         assert!(!deployment_id.is_empty());
-        
+
         // Check deployment status
         let deployment = service.get_deployment_status(&deployment_id).await;
         assert!(deployment.is_some());
         let deployment = deployment.unwrap();
-        
+
         if let DeploymentStrategy::Canary { percentage } = deployment.strategy {
             assert_eq!(percentage, 10.0);
         } else {
@@ -647,16 +754,19 @@ mod tests {
     async fn test_plugin_hot_swap() {
         let config = IntegrationConfig::default();
         let service = AuthPluginIntegrationService::new(config).await.unwrap();
-        
+
         // Test hot-swap deployment
-        let deployment_id = service.hot_swap_plugin(
-            "test_plugin",
-            "./test_plugin_v2.wasm",
-            DeploymentStrategy::Immediate,
-        ).await.unwrap();
-        
+        let deployment_id = service
+            .hot_swap_plugin(
+                "test_plugin",
+                "./test_plugin_v2.wasm",
+                DeploymentStrategy::Immediate,
+            )
+            .await
+            .unwrap();
+
         assert!(!deployment_id.is_empty());
-        
+
         // Check deployment status
         let deployment = service.get_deployment_status(&deployment_id).await;
         assert!(deployment.is_some());
@@ -670,7 +780,7 @@ mod tests {
     async fn test_plugin_rollback() {
         let config = IntegrationConfig::default();
         let service = AuthPluginIntegrationService::new(config).await.unwrap();
-        
+
         // Test plugin rollback
         let result = service.rollback_plugin("test_plugin").await;
         assert!(result.is_ok());
@@ -680,24 +790,22 @@ mod tests {
     async fn test_list_deployments() {
         let config = IntegrationConfig::default();
         let service = AuthPluginIntegrationService::new(config).await.unwrap();
-        
+
         // Deploy multiple plugins
-        let _deployment1 = service.deploy_plugin(
-            "plugin1",
-            "./plugin1.wasm",
-            DeploymentStrategy::Immediate,
-        ).await.unwrap();
-        
-        let _deployment2 = service.deploy_plugin(
-            "plugin2",
-            "./plugin2.wasm",
-            DeploymentStrategy::Rolling,
-        ).await.unwrap();
-        
+        let _deployment1 = service
+            .deploy_plugin("plugin1", "./plugin1.wasm", DeploymentStrategy::Immediate)
+            .await
+            .unwrap();
+
+        let _deployment2 = service
+            .deploy_plugin("plugin2", "./plugin2.wasm", DeploymentStrategy::Rolling)
+            .await
+            .unwrap();
+
         // List deployments
         let deployments = service.list_deployments().await;
         assert_eq!(deployments.len(), 2);
-        
+
         // Verify deployment names
         let deployment_names: Vec<String> = deployments.iter().map(|d| d.name.clone()).collect();
         assert!(deployment_names.contains(&"plugin1".to_string()));
@@ -708,30 +816,32 @@ mod tests {
     async fn test_authentication_methods() {
         let config = IntegrationConfig::default();
         let service = AuthPluginIntegrationService::new(config).await.unwrap();
-        
+
         // Test JWT authentication
         let jwt_credentials = serde_json::json!({
             "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test"
         });
-        
+
         let result = service.test_authentication("jwt", jwt_credentials).await;
         assert!(result.is_ok());
-        
+
         // Test OAuth authentication
         let oauth_credentials = serde_json::json!({
             "authorization_code": "auth_code_123",
             "state": "state_456",
             "redirect_uri": "https://example.com/callback"
         });
-        
-        let result = service.test_authentication("oauth", oauth_credentials).await;
+
+        let result = service
+            .test_authentication("oauth", oauth_credentials)
+            .await;
         assert!(result.is_ok());
-        
+
         // Test SAML authentication
         let saml_credentials = serde_json::json!({
             "saml_assertion": "saml_assertion_xml"
         });
-        
+
         let result = service.test_authentication("saml", saml_credentials).await;
         assert!(result.is_ok());
     }
@@ -740,14 +850,16 @@ mod tests {
     async fn test_authentication_invalid_method() {
         let config = IntegrationConfig::default();
         let service = AuthPluginIntegrationService::new(config).await.unwrap();
-        
+
         // Test invalid authentication method
         let credentials = serde_json::json!({
             "username": "testuser",
             "password": "testpass"
         });
-        
-        let result = service.test_authentication("invalid_method", credentials).await;
+
+        let result = service
+            .test_authentication("invalid_method", credentials)
+            .await;
         assert!(result.is_err());
     }
 
@@ -755,11 +867,11 @@ mod tests {
     async fn test_auth_method_metrics() {
         let config = IntegrationConfig::default();
         let service = AuthPluginIntegrationService::new(config).await.unwrap();
-        
+
         // Get authentication method metrics
         let metrics = service.get_auth_method_metrics().await;
         assert!(!metrics.is_empty());
-        
+
         // Verify metrics structure
         for metric in &metrics {
             assert!(!metric.method.is_empty());
@@ -775,42 +887,54 @@ mod tests {
     async fn test_health_status() {
         let config = IntegrationConfig::default();
         let service = AuthPluginIntegrationService::new(config).await.unwrap();
-        
+
         // Get health status
         let health = service.get_health_status().await;
-        
+
         // Verify health status structure
         assert_eq!(health["status"], "healthy");
         assert!(health.get("timestamp").is_some());
         assert!(health.get("plugin_health").is_some());
         assert!(health.get("metrics").is_some());
         assert!(health.get("config").is_some());
-        
+
         // Verify config in health status
         let config_health = &health["config"];
-        assert_eq!(config_health["hot_swapping_enabled"], serde_json::Value::Bool(true));
-        assert_eq!(config_health["health_monitoring_enabled"], serde_json::Value::Bool(true));
-        assert_eq!(config_health["default_auth_method"], serde_json::Value::String("jwt".to_string()));
+        assert_eq!(
+            config_health["hot_swapping_enabled"],
+            serde_json::Value::Bool(true)
+        );
+        assert_eq!(
+            config_health["health_monitoring_enabled"],
+            serde_json::Value::Bool(true)
+        );
+        assert_eq!(
+            config_health["default_auth_method"],
+            serde_json::Value::String("jwt".to_string())
+        );
     }
 
     #[tokio::test]
     async fn test_deployment_status_tracking() {
         let config = IntegrationConfig::default();
         let service = AuthPluginIntegrationService::new(config).await.unwrap();
-        
+
         // Deploy a plugin
-        let deployment_id = service.deploy_plugin(
-            "status_test_plugin",
-            "./status_test_plugin.wasm",
-            DeploymentStrategy::Immediate,
-        ).await.unwrap();
-        
+        let deployment_id = service
+            .deploy_plugin(
+                "status_test_plugin",
+                "./status_test_plugin.wasm",
+                DeploymentStrategy::Immediate,
+            )
+            .await
+            .unwrap();
+
         // Check initial deployment status
         let deployment = service.get_deployment_status(&deployment_id).await;
         assert!(deployment.is_some());
         let deployment = deployment.unwrap();
         assert_eq!(deployment.name, "status_test_plugin");
-        
+
         // Verify deployment config contains required fields
         assert!(deployment.config.get("deployment_type").is_some());
         assert!(deployment.config.get("started_at").is_some());
@@ -821,7 +945,7 @@ mod tests {
     async fn test_plugin_version_tracking() {
         let config = IntegrationConfig::default();
         let service = AuthPluginIntegrationService::new(config).await.unwrap();
-        
+
         // Test version tracking (simplified for tests)
         let version = service.get_plugin_version("test_plugin").await;
         assert!(version.is_some());
@@ -832,18 +956,21 @@ mod tests {
     async fn test_previous_version_tracking() {
         let config = IntegrationConfig::default();
         let service = AuthPluginIntegrationService::new(config).await.unwrap();
-        
+
         // Initially no previous version should exist
         let prev_version = service.get_previous_version("test_plugin").await;
         assert!(prev_version.is_none());
-        
+
         // Deploy a plugin to create history
-        let _deployment_id = service.deploy_plugin(
-            "test_plugin",
-            "./test_plugin.wasm",
-            DeploymentStrategy::Immediate,
-        ).await.unwrap();
-        
+        let _deployment_id = service
+            .deploy_plugin(
+                "test_plugin",
+                "./test_plugin.wasm",
+                DeploymentStrategy::Immediate,
+            )
+            .await
+            .unwrap();
+
         // Now there should be a previous version (in real implementation)
         // For this test, we're testing the logic structure
         let _prev_version = service.get_previous_version("test_plugin").await;
@@ -862,48 +989,54 @@ mod tests {
             auto_reload_on_failure: true,
             max_reload_attempts: 3,
         };
-        
+
         let service = AuthPluginIntegrationService::new(config).await.unwrap();
-        
+
         // Initialize service
         let result = service.initialize().await;
         assert!(result.is_ok());
-        
+
         // Deploy plugin with canary strategy
-        let deployment_id = service.deploy_plugin(
-            "complex_plugin",
-            "./complex_plugin.wasm",
-            DeploymentStrategy::Canary { percentage: 25.0 },
-        ).await.unwrap();
-        
+        let deployment_id = service
+            .deploy_plugin(
+                "complex_plugin",
+                "./complex_plugin.wasm",
+                DeploymentStrategy::Canary { percentage: 25.0 },
+            )
+            .await
+            .unwrap();
+
         // Verify deployment
         let deployment = service.get_deployment_status(&deployment_id).await;
         assert!(deployment.is_some());
         let deployment = deployment.unwrap();
         assert_eq!(deployment.name, "complex_plugin");
-        
+
         // Hot-swap to new version
-        let swap_deployment_id = service.hot_swap_plugin(
-            "complex_plugin",
-            "./complex_plugin_v2.wasm",
-            DeploymentStrategy::Rolling,
-        ).await.unwrap();
-        
+        let swap_deployment_id = service
+            .hot_swap_plugin(
+                "complex_plugin",
+                "./complex_plugin_v2.wasm",
+                DeploymentStrategy::Rolling,
+            )
+            .await
+            .unwrap();
+
         // Verify hot-swap deployment
         let swap_deployment = service.get_deployment_status(&swap_deployment_id).await;
         assert!(swap_deployment.is_some());
         let swap_deployment = swap_deployment.unwrap();
         assert_eq!(swap_deployment.version, "2.0.0");
-        
+
         // Test authentication with new plugin
         let credentials = serde_json::json!({
             "authorization_code": "new_auth_code",
             "state": "new_state"
         });
-        
+
         let result = service.test_authentication("oauth", credentials).await;
         assert!(result.is_ok());
-        
+
         // Check final health status
         let health = service.get_health_status().await;
         assert_eq!(health["status"], "healthy");
@@ -914,24 +1047,24 @@ mod tests {
     async fn test_error_handling_scenarios() {
         let config = IntegrationConfig::default();
         let service = AuthPluginIntegrationService::new(config).await.unwrap();
-        
+
         // Test deployment with invalid plugin name
-        let result = service.deploy_plugin(
-            "",
-            "./invalid.wasm",
-            DeploymentStrategy::Immediate,
-        ).await;
-        
+        let result = service
+            .deploy_plugin("", "./invalid.wasm", DeploymentStrategy::Immediate)
+            .await;
+
         // Should handle empty plugin name gracefully
         // In real implementation, this would return an error
         assert!(result.is_err());
-        
+
         // Test authentication with invalid credentials format
         let invalid_credentials = serde_json::json!({
             "invalid_field": "invalid_value"
         });
-        
-        let _result = service.test_authentication("jwt", invalid_credentials).await;
+
+        let _result = service
+            .test_authentication("jwt", invalid_credentials)
+            .await;
         // Should handle invalid credentials gracefully
         // The result depends on the plugin implementation
         // This test verifies the integration layer doesn't panic
@@ -941,31 +1074,33 @@ mod tests {
     async fn test_concurrent_deployments() {
         let config = IntegrationConfig::default();
         let service = AuthPluginIntegrationService::new(config).await.unwrap();
-        
+
         // Deploy multiple plugins concurrently
         let mut handles = Vec::new();
-        
+
         for i in 0..5 {
             let service_clone = service.clone();
             let handle = tokio::spawn(async move {
-                service_clone.deploy_plugin(
-                    &format!("concurrent_plugin_{}", i),
-                    &format!("./plugin_{}.wasm", i),
-                    DeploymentStrategy::Immediate,
-                ).await
+                service_clone
+                    .deploy_plugin(
+                        &format!("concurrent_plugin_{}", i),
+                        &format!("./plugin_{}.wasm", i),
+                        DeploymentStrategy::Immediate,
+                    )
+                    .await
             });
             handles.push(handle);
         }
-        
+
         // Wait for all deployments to complete
         let results = join_all(handles).await;
-        
+
         // All deployments should succeed
         for result in results {
             let deployment_id = result.expect("Deployment task panicked").unwrap();
             assert!(!deployment_id.is_empty());
         }
-        
+
         // Verify all deployments are tracked
         let deployments = service.list_deployments().await;
         assert_eq!(deployments.len(), 5);
@@ -978,26 +1113,26 @@ mod tests {
             health_check_interval: 5, // Short interval for testing
             ..IntegrationConfig::default()
         };
-        
+
         let service = AuthPluginIntegrationService::new(config).await.unwrap();
-        
+
         // Get initial metrics
         let initial_metrics = service.get_auth_method_metrics().await;
         assert!(!initial_metrics.is_empty());
-        
+
         // Simulate some authentication activity
         for _ in 0..3 {
             let credentials = serde_json::json!({
                 "token": "test_token"
             });
-            
+
             let _ = service.test_authentication("jwt", credentials).await;
         }
-        
+
         // Get updated metrics
         let updated_metrics = service.get_auth_method_metrics().await;
         assert_eq!(initial_metrics.len(), updated_metrics.len());
-        
+
         // In a real implementation, metrics would be updated
         // This test verifies the metrics collection structure
         for metric in &updated_metrics {

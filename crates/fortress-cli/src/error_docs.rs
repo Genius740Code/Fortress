@@ -1,5 +1,5 @@
-use serde::{Serialize, Deserialize};
 use crate::enhanced_error::FortressError;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -501,57 +501,54 @@ impl ErrorDocumentation {
             _ => None,
         }
     }
-    
+
     pub fn format_for_display(&self) -> String {
         let mut output = String::new();
-        
+
         output.push_str(&format!("✗ Error Code: {}\n", self.error_code));
         output.push_str(&format!("Title: {}\n", self.title));
         output.push_str(&format!("Description: {}\n", self.description));
         output.push_str(&format!("Severity: {}\n", self.severity));
         output.push_str(&format!("Category: {}\n\n", self.category));
-        
+
         output.push_str("Common Causes:\n");
         for (i, cause) in self.common_causes.iter().enumerate() {
             output.push_str(&format!("  {}. {}\n", i + 1, cause));
         }
-        
+
         output.push_str("\nSolutions:\n");
         for (i, solution) in self.solutions.iter().enumerate() {
             output.push_str(&format!("  {}. {}\n", i + 1, solution));
         }
-        
+
         if !self.examples.is_empty() {
             output.push_str("\nExample Commands:\n");
             for example in &self.examples {
                 output.push_str(&format!("  $ {}\n", example));
             }
         }
-        
+
         if !self.prevention_tips.is_empty() {
             output.push_str("\nPrevention Tips:\n");
             for (i, tip) in self.prevention_tips.iter().enumerate() {
                 output.push_str(&format!("  {}. {}\n", i + 1, tip));
             }
         }
-        
+
         if !self.related_docs.is_empty() {
             output.push_str("\nRelated Documentation:\n");
             for doc in &self.related_docs {
                 output.push_str(&format!("  • {}\n", doc));
             }
         }
-        
+
         output
     }
-    
+
     pub fn format_short(&self) -> String {
         format!(
             "🔴 {} ({}): {} - {}",
-            self.error_code,
-            self.severity,
-            self.title,
-            self.description
+            self.error_code, self.severity, self.title, self.description
         )
     }
 }
@@ -565,27 +562,37 @@ impl ErrorDocumentationRegistry {
         let mut registry = Self {
             docs: HashMap::new(),
         };
-        
+
         // Pre-load common error documentation
         let common_codes = vec![
-            "ENC001", "DB001", "CFG001", "AUTH001", "KEY001", "NET001",
-            "PLUGIN001", "COMP001", "CLUSTER001", "VALID001", "PERM001",
-            "TIMEOUT001", "RATE001"
+            "ENC001",
+            "DB001",
+            "CFG001",
+            "AUTH001",
+            "KEY001",
+            "NET001",
+            "PLUGIN001",
+            "COMP001",
+            "CLUSTER001",
+            "VALID001",
+            "PERM001",
+            "TIMEOUT001",
+            "RATE001",
         ];
-        
+
         for code in common_codes {
             if let Some(doc) = ErrorDocumentation::for_error_code(code) {
                 registry.docs.insert(code.to_string(), doc);
             }
         }
-        
+
         registry
     }
-    
+
     pub fn get(&self, error_code: &str) -> Option<&ErrorDocumentation> {
         self.docs.get(error_code)
     }
-    
+
     pub fn get_or_load(&mut self, error_code: &str) -> Option<&ErrorDocumentation> {
         if !self.docs.contains_key(error_code) {
             if let Some(doc) = ErrorDocumentation::for_error_code(error_code) {
@@ -594,23 +601,24 @@ impl ErrorDocumentationRegistry {
         }
         self.docs.get(error_code)
     }
-    
+
     pub fn list_by_category(&self, category: &str) -> Vec<&ErrorDocumentation> {
         self.docs
             .values()
             .filter(|doc| doc.category == category)
             .collect()
     }
-    
+
     pub fn list_by_severity(&self, severity: &str) -> Vec<&ErrorDocumentation> {
         self.docs
             .values()
             .filter(|doc| doc.severity == severity)
             .collect()
     }
-    
+
     pub fn all_categories(&self) -> Vec<String> {
-        let mut categories: Vec<String> = self.docs
+        let mut categories: Vec<String> = self
+            .docs
             .values()
             .map(|doc| doc.category.clone())
             .collect::<std::collections::HashSet<_>>()
@@ -619,16 +627,16 @@ impl ErrorDocumentationRegistry {
         categories.sort();
         categories
     }
-    
+
     pub fn search(&self, query: &str) -> Vec<&ErrorDocumentation> {
         let query_lower = query.to_lowercase();
         self.docs
             .values()
             .filter(|doc| {
-                doc.title.to_lowercase().contains(&query_lower) ||
-                doc.description.to_lowercase().contains(&query_lower) ||
-                doc.error_code.to_lowercase().contains(&query_lower) ||
-                doc.category.to_lowercase().contains(&query_lower)
+                doc.title.to_lowercase().contains(&query_lower)
+                    || doc.description.to_lowercase().contains(&query_lower)
+                    || doc.error_code.to_lowercase().contains(&query_lower)
+                    || doc.category.to_lowercase().contains(&query_lower)
             })
             .collect()
     }
@@ -643,12 +651,12 @@ impl Default for ErrorDocumentationRegistry {
 // Enhanced error display for CLI
 pub fn display_error_enhanced(error: &FortressError) {
     let error_code = error.error_code();
-    
+
     println!("✗ Fortress Error: {}", error);
     println!("Error Code: {}", error_code);
     println!("Severity: {}", error.severity());
     println!("Help: {}", error.help_text());
-    
+
     // Show troubleshooting steps
     let steps = error.troubleshooting_steps();
     if !steps.is_empty() {
@@ -657,18 +665,18 @@ pub fn display_error_enhanced(error: &FortressError) {
             println!("  {}. {}", i + 1, step);
         }
     }
-    
+
     // Show detailed documentation if available
     if let Some(doc) = ErrorDocumentation::for_error_code(error_code) {
         println!("\n{}", doc.format_for_display());
     }
-    
+
     // Suggest next steps
     println!("\nNext Steps:");
     println!("  • Run 'fortress --help' for available commands");
     println!("  • Check documentation at: https://docs.fortress.security");
     println!("  • Report issues at: https://github.com/Genius740Code/Fortress/issues");
-    
+
     // Show recoverability
     if error.is_recoverable() {
         println!("  ✓ This error is recoverable - try the suggested solutions above");
@@ -679,7 +687,7 @@ pub fn display_error_enhanced(error: &FortressError) {
 
 pub fn display_error_compact(error: &FortressError) {
     let error_code = error.error_code();
-    
+
     if let Some(doc) = ErrorDocumentation::for_error_code(error_code) {
         println!("{}", doc.format_short());
     } else {
@@ -698,7 +706,7 @@ pub fn display_error_json(error: &FortressError) -> Result<(), serde_json::Error
             "recoverable": error.is_recoverable()
         }
     });
-    
+
     println!("{}", serde_json::to_string_pretty(&error_json)?);
     Ok(())
 }

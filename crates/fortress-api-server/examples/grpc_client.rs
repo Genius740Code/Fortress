@@ -1,9 +1,9 @@
 use fortress_api_server::prelude::{
-    FortressServiceClient, CreateDatabaseRequest, DatabaseConfig, EncryptRequest, DecryptRequest,
+    CreateDatabaseRequest, DatabaseConfig, DecryptRequest, EncryptRequest, FortressServiceClient,
 };
 use tonic::transport::Channel;
 use tonic::Request;
-use tracing::{info, error};
+use tracing::{error, info};
 
 #[derive(Clone)]
 pub struct FortressGrpcClient {
@@ -103,20 +103,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut client = FortressGrpcClient::connect("http://127.0.0.1:50051").await?;
 
     // Create a database
-    client.create_database(
-        "test-db".to_string(),
-        "Test database for gRPC demo".to_string(),
-    ).await?;
+    client
+        .create_database(
+            "test-db".to_string(),
+            "Test database for gRPC demo".to_string(),
+        )
+        .await?;
 
     // Encrypt some data
     let plaintext = b"Hello, gRPC World!".to_vec();
-    let ciphertext = client.encrypt_data("test-db-id".to_string(), plaintext.clone()).await?;
+    let ciphertext = client
+        .encrypt_data("test-db-id".to_string(), plaintext.clone())
+        .await?;
 
     println!("Original: {:?}", String::from_utf8(plaintext)?);
     println!("Encrypted: {:?}", ciphertext);
 
     // Decrypt the data
-    let decrypted = client.decrypt_data("test-db-id".to_string(), ciphertext, "key-id".to_string()).await?;
+    let decrypted = client
+        .decrypt_data("test-db-id".to_string(), ciphertext, "key-id".to_string())
+        .await?;
     println!("Decrypted: {:?}", String::from_utf8(decrypted)?);
 
     Ok(())

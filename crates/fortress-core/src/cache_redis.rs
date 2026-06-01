@@ -6,7 +6,7 @@
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "redis")]
-use redis::{Client, Connection, AsyncCommands, RedisResult, RedisError};
+use redis::{AsyncCommands, Client, Connection, RedisError, RedisResult};
 
 /// Redis cache configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -73,14 +73,15 @@ impl RedisPool {
     /// Create a new Redis connection pool
     async fn new(config: RedisConfig) -> Result<Self> {
         let mut clients = Vec::new();
-        
+
         for url in &config.urls {
-            let client = Client::open(url.as_str())
-                .map_err(|e| FortressError::storage(
+            let client = Client::open(url.as_str()).map_err(|e| {
+                FortressError::storage(
                     format!("Failed to create Redis client: {}", e),
                     "redis_cache".to_string(),
                     crate::error::StorageErrorCode::ConnectionFailed,
-                ))?;
+                )
+            })?;
             clients.push(client);
         }
 
@@ -108,13 +109,17 @@ impl RedisPool {
         };
 
         let client = &self.clients[current_index];
-        
-        let conn = client.get_multiplexed_async_connection().await
-            .map_err(|e| FortressError::storage(
-                format!("Failed to get Redis connection: {}", e),
-                "redis_cache".to_string(),
-                crate::error::StorageErrorCode::ConnectionFailed,
-            ))?;
+
+        let conn = client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|e| {
+                FortressError::storage(
+                    format!("Failed to get Redis connection: {}", e),
+                    "redis_cache".to_string(),
+                    crate::error::StorageErrorCode::ConnectionFailed,
+                )
+            })?;
 
         // Authenticate if password is provided
         if let Some(ref password) = self.config.password {
@@ -123,11 +128,13 @@ impl RedisPool {
                 .arg(password)
                 .query_async(&mut conn)
                 .await
-                .map_err(|e| FortressError::storage(
-                    format!("Redis authentication failed: {}", e),
-                    "redis_cache".to_string(),
-                    crate::error::StorageErrorCode::AuthenticationFailed,
-                ))?;
+                .map_err(|e| {
+                    FortressError::storage(
+                        format!("Redis authentication failed: {}", e),
+                        "redis_cache".to_string(),
+                        crate::error::StorageErrorCode::AuthenticationFailed,
+                    )
+                })?;
         }
 
         // Select database
@@ -137,11 +144,13 @@ impl RedisPool {
                 .arg(self.config.db)
                 .query_async(&mut conn)
                 .await
-                .map_err(|e| FortressError::storage(
-                    format!("Failed to select Redis database: {}", e),
-                    "redis_cache".to_string(),
-                    crate::error::StorageErrorCode::InvalidConfiguration,
-                ))?;
+                .map_err(|e| {
+                    FortressError::storage(
+                        format!("Failed to select Redis database: {}", e),
+                        "redis_cache".to_string(),
+                        crate::error::StorageErrorCode::InvalidConfiguration,
+                    )
+                })?;
         }
 
         Ok(conn)
@@ -162,7 +171,7 @@ impl RedisCache {
     /// Create a new Redis cache
     pub async fn new(config: RedisConfig) -> Result<Self> {
         let pool = Arc::new(RedisPool::new(config.clone()).await?);
-        
+
         Ok(Self {
             pool,
             config,
@@ -189,21 +198,23 @@ impl RedisCache {
         T: Send + Sync + 'static,
     {
         if !self.config.enable_retry {
-            return operation().map_err(|e| FortressError::storage(
-                format!("Redis operation failed: {}", e),
-                "redis_cache".to_string(),
-                crate::error::StorageErrorCode::OperationFailed,
-            ));
+            return operation().map_err(|e| {
+                FortressError::storage(
+                    format!("Redis operation failed: {}", e),
+                    "redis_cache".to_string(),
+                    crate::error::StorageErrorCode::OperationFailed,
+                )
+            });
         }
 
         let mut last_error = None;
-        
+
         for attempt in 0..=self.config.max_retries {
             match operation() {
                 Ok(result) => return Ok(result),
                 Err(e) => {
                     last_error = Some(e.clone());
-                    
+
                     if attempt < self.config.max_retries {
                         tokio::time::sleep(Duration::from_millis(self.config.retry_delay_ms)).await;
                     }
@@ -212,7 +223,11 @@ impl RedisCache {
         }
 
         Err(FortressError::storage(
-            format!("Redis operation failed after {} attempts: {}", self.config.max_retries, last_error.unwrap()),
+            format!(
+                "Redis operation failed after {} attempts: {}",
+                self.config.max_retries,
+                last_error.unwrap()
+            ),
             "redis_cache".to_string(),
             crate::error::StorageErrorCode::OperationFailed,
         ))
@@ -222,12 +237,13 @@ impl RedisCache {
     fn compress_data(&self, data: &[u8]) -> Result<Vec<u8>> {
         if self.config.enable_compression {
             // Use LZ4 compression for speed
-            let compressed = lz4::block::compress(data, None, true)
-                .map_err(|e| FortressError::storage(
+            let compressed = lz4::block::compress(data, None, true).map_err(|e| {
+                FortressError::storage(
                     format!("Compression failed: {}", e),
                     "redis_cache".to_string(),
                     crate::error::StorageErrorCode::CorruptedData,
-                ))?;
+                )
+            })?;
             Ok(compressed)
         } else {
             Ok(data.to_vec())
@@ -237,12 +253,13 @@ impl RedisCache {
     /// Decompress data if needed
     fn decompress_data(&self, data: &[u8]) -> Result<Vec<u8>> {
         if self.config.enable_compression {
-            let decompressed = lz4::block::decompress(data, None)
-                .map_err(|e| FortressError::storage(
+            let decompressed = lz4::block::decompress(data, None).map_err(|e| {
+                FortressError::storage(
                     format!("Decompression failed: {}", e),
                     "redis_cache".to_string(),
                     crate::error::StorageErrorCode::CorruptedData,
-                ))?;
+                )
+            })?;
             Ok(decompressed)
         } else {
             Ok(data.to_vec())
@@ -257,7 +274,7 @@ impl RedisCache {
     /// Update statistics
     async fn update_stats(&self, operation: &str, success: bool, elapsed_us: f64) {
         let mut stats = self.statistics.write().await;
-        
+
         match operation {
             "get" => {
                 if success {
@@ -266,11 +283,15 @@ impl RedisCache {
                     stats.misses += 1;
                 }
                 stats.hit_ratio = stats.hits as f64 / (stats.hits + stats.misses) as f64;
-                stats.avg_get_time_us = (stats.avg_get_time_us * (stats.hits + stats.misses - 1) as f64 + elapsed_us) / (stats.hits + stats.misses) as f64;
+                stats.avg_get_time_us =
+                    (stats.avg_get_time_us * (stats.hits + stats.misses - 1) as f64 + elapsed_us)
+                        / (stats.hits + stats.misses) as f64;
             }
             "set" => {
                 stats.sets += 1;
-                stats.avg_set_time_us = (stats.avg_set_time_us * (stats.sets - 1) as f64 + elapsed_us) / stats.sets as f64;
+                stats.avg_set_time_us = (stats.avg_set_time_us * (stats.sets - 1) as f64
+                    + elapsed_us)
+                    / stats.sets as f64;
             }
             "delete" => {
                 stats.deletes += 1;
@@ -287,11 +308,13 @@ impl crate::distributed_cache::DistributedCache for RedisCache {
         let start = std::time::Instant::now();
         let full_key = self.get_full_key(key);
 
-        let result = self.execute_with_retry(|| async {
-            let mut conn = self.pool.get_connection().await?;
-            let value: Option<Vec<u8>> = conn.get(&full_key).await?;
-            Ok(value)
-        }).await;
+        let result = self
+            .execute_with_retry(|| async {
+                let mut conn = self.pool.get_connection().await?;
+                let value: Option<Vec<u8>> = conn.get(&full_key).await?;
+                Ok(value)
+            })
+            .await;
 
         let elapsed_us = start.elapsed().as_micros() as f64;
         let success = result.is_ok() && result.as_ref().unwrap().is_some();
@@ -312,17 +335,19 @@ impl crate::distributed_cache::DistributedCache for RedisCache {
         let full_key = self.get_full_key(key);
         let compressed_value = self.compress_data(&value)?;
 
-        let result = self.execute_with_retry(|| async {
-            let mut conn = self.pool.get_connection().await?;
-            
-            if let Some(ttl) = ttl_seconds {
-                let _: () = conn.set_ex(&full_key, &compressed_value, ttl).await?;
-            } else {
-                let _: () = conn.set(&full_key, &compressed_value).await?;
-            }
-            
-            Ok(())
-        }).await;
+        let result = self
+            .execute_with_retry(|| async {
+                let mut conn = self.pool.get_connection().await?;
+
+                if let Some(ttl) = ttl_seconds {
+                    let _: () = conn.set_ex(&full_key, &compressed_value, ttl).await?;
+                } else {
+                    let _: () = conn.set(&full_key, &compressed_value).await?;
+                }
+
+                Ok(())
+            })
+            .await;
 
         let elapsed_us = start.elapsed().as_micros() as f64;
         let success = result.is_ok();
@@ -334,11 +359,13 @@ impl crate::distributed_cache::DistributedCache for RedisCache {
     async fn delete(&self, key: &str) -> Result<bool> {
         let full_key = self.get_full_key(key);
 
-        let result = self.execute_with_retry(|| async {
-            let mut conn = self.pool.get_connection().await?;
-            let deleted: i32 = conn.del(&full_key).await?;
-            Ok(deleted > 0)
-        }).await;
+        let result = self
+            .execute_with_retry(|| async {
+                let mut conn = self.pool.get_connection().await?;
+                let deleted: i32 = conn.del(&full_key).await?;
+                Ok(deleted > 0)
+            })
+            .await;
 
         if result.is_ok() && result.as_ref().unwrap() {
             self.update_stats("delete", true, 0.0).await;
@@ -354,7 +381,8 @@ impl crate::distributed_cache::DistributedCache for RedisCache {
             let mut conn = self.pool.get_connection().await?;
             let exists: bool = conn.exists(&full_key).await?;
             Ok(exists)
-        }).await
+        })
+        .await
     }
 
     async fn clear(&self) -> Result<()> {
@@ -370,7 +398,8 @@ impl crate::distributed_cache::DistributedCache for RedisCache {
                 .query_async(&mut conn)
                 .await?;
             Ok(())
-        }).await?;
+        })
+        .await?;
 
         // Update statistics
         let mut stats = self.statistics.write().await;
@@ -382,12 +411,14 @@ impl crate::distributed_cache::DistributedCache for RedisCache {
 
     async fn mget(&self, keys: &[&str]) -> Result<Vec<Option<Vec<u8>>>> {
         let full_keys: Vec<String> = keys.iter().map(|k| self.get_full_key(k)).collect();
-        
-        let result = self.execute_with_retry(|| async {
-            let mut conn = self.pool.get_connection().await?;
-            let values: Vec<Option<Vec<u8>>> = conn.mget(&full_keys).await?;
-            Ok(values)
-        }).await?;
+
+        let result = self
+            .execute_with_retry(|| async {
+                let mut conn = self.pool.get_connection().await?;
+                let values: Vec<Option<Vec<u8>>> = conn.mget(&full_keys).await?;
+                Ok(values)
+            })
+            .await?;
 
         // Decompress all values
         let mut decompressed_results = Vec::new();
@@ -406,11 +437,11 @@ impl crate::distributed_cache::DistributedCache for RedisCache {
 
     async fn mset(&self, entries: &[(&str, Vec<u8>, Option<u64>)]) -> Result<()> {
         let mut pipe = redis::pipe();
-        
+
         for (key, value, ttl) in entries {
             let full_key = self.get_full_key(key);
             let compressed_value = self.compress_data(value)?;
-            
+
             if let Some(ttl) = ttl {
                 pipe.set_ex(&full_key, &compressed_value, *ttl);
             } else {
@@ -422,7 +453,8 @@ impl crate::distributed_cache::DistributedCache for RedisCache {
             let mut conn = self.pool.get_connection().await?;
             let _: () = pipe.query_async(&mut conn).await?;
             Ok(())
-        }).await
+        })
+        .await
     }
 
     async fn increment(&self, key: &str, delta: i64) -> Result<i64> {
@@ -432,24 +464,27 @@ impl crate::distributed_cache::DistributedCache for RedisCache {
             let mut conn = self.pool.get_connection().await?;
             let result: i64 = conn.incr(&full_key, delta).await?;
             Ok(result)
-        }).await
+        })
+        .await
     }
 
     async fn get_statistics(&self) -> Result<crate::distributed_cache::CacheStatistics> {
         let stats = self.statistics.read().await;
-        
+
         // Get actual Redis info
-        let info_result = self.execute_with_retry(|| async {
-            let mut conn = self.pool.get_connection().await?;
-            let info: String = redis::cmd("INFO").query_async(&mut conn).await?;
-            Ok(info)
-        }).await;
+        let info_result = self
+            .execute_with_retry(|| async {
+                let mut conn = self.pool.get_connection().await?;
+                let info: String = redis::cmd("INFO").query_async(&mut conn).await?;
+                Ok(info)
+            })
+            .await;
 
         if let Ok(info) = info_result {
             // Parse Redis info for additional statistics
             // This is a simple implementation - in production you'd want more robust parsing
             let mut cache_stats = stats.clone();
-            
+
             for line in info.lines() {
                 if line.starts_with("used_memory:") {
                     if let Some(memory_str) = line.split(':').nth(1) {
@@ -459,7 +494,7 @@ impl crate::distributed_cache::DistributedCache for RedisCache {
                     }
                 }
             }
-            
+
             Ok(cache_stats)
         } else {
             Ok(stats.clone())
@@ -483,12 +518,12 @@ impl crate::distributed_cache::DistributedCache for RedisCache {
     async fn health_check(&self) -> Result<bool> {
         let test_key = self.get_full_key("health_check");
         let test_value = b"test".to_vec();
-        
+
         // Try to set and get a test value
         if let Err(_) = self.set("health_check", test_value.clone(), Some(1)).await {
             return Ok(false);
         }
-        
+
         match self.get("health_check").await {
             Ok(Some(retrieved)) if retrieved == test_value => {
                 let _ = self.delete("health_check").await;
@@ -501,7 +536,9 @@ impl crate::distributed_cache::DistributedCache for RedisCache {
 
 /// Factory function to create Redis cache
 #[cfg(feature = "redis")]
-pub async fn create_redis_cache(config: RedisConfig) -> Result<Box<dyn crate::distributed_cache::DistributedCache>> {
+pub async fn create_redis_cache(
+    config: RedisConfig,
+) -> Result<Box<dyn crate::distributed_cache::DistributedCache>> {
     let cache = RedisCache::new(config).await?;
     Ok(Box::new(cache))
 }
@@ -509,7 +546,9 @@ pub async fn create_redis_cache(config: RedisConfig) -> Result<Box<dyn crate::di
 /// Factory function that returns error when Redis feature is not enabled
 #[cfg(not(feature = "redis"))]
 #[cfg(feature = "distributed-cache")]
-pub async fn create_redis_cache(_config: RedisConfig) -> Result<Box<dyn crate::distributed_cache::DistributedCache>> {
+pub async fn create_redis_cache(
+    _config: RedisConfig,
+) -> Result<Box<dyn crate::distributed_cache::DistributedCache>> {
     Err(FortressError::storage(
         "Redis support not enabled. Enable the 'redis' feature in Cargo.toml".to_string(),
         "redis_cache".to_string(),
@@ -532,15 +571,15 @@ mod tests {
         // Test set and get
         let key = "test_key";
         let value = b"test_value".to_vec();
-        
+
         cache.set(key, value.clone(), None).await.unwrap();
         let retrieved = cache.get(key).await.unwrap();
-        
+
         assert_eq!(retrieved, Some(value));
-        
+
         // Test exists
         assert!(cache.exists(key).await.unwrap());
-        
+
         // Test delete
         assert!(cache.delete(key).await.unwrap());
         assert!(!cache.exists(key).await.unwrap());
@@ -554,15 +593,15 @@ mod tests {
 
         let key = "ttl_test";
         let value = b"test_value".to_vec();
-        
+
         cache.set(key, value.clone(), Some(1)).await.unwrap();
-        
+
         // Should be available immediately
         assert!(cache.get(key).await.unwrap().is_some());
-        
+
         // Wait for expiration
         tokio::time::sleep(Duration::from_secs(2)).await;
-        
+
         // Should be expired
         assert!(cache.get(key).await.unwrap().is_none());
     }
@@ -578,12 +617,12 @@ mod tests {
             ("key2", b"value2".to_vec(), None),
             ("key3", b"value3".to_vec(), None),
         ];
-        
+
         cache.mset(&entries).await.unwrap();
-        
+
         let keys = vec!["key1", "key2", "key3"];
         let results = cache.mget(&keys).await.unwrap();
-        
+
         assert_eq!(results.len(), 3);
         assert_eq!(results[0], Some(b"value1".to_vec()));
         assert_eq!(results[1], Some(b"value2".to_vec()));
@@ -597,15 +636,15 @@ mod tests {
         let cache = RedisCache::new(config).await.unwrap();
 
         let key = "counter";
-        
+
         // Increment from non-existent (should start at 0)
         let result = cache.increment(key, 5).await.unwrap();
         assert_eq!(result, 5);
-        
+
         // Increment existing value
         let result = cache.increment(key, 3).await.unwrap();
         assert_eq!(result, 8);
-        
+
         // Verify stored value
         let stored = cache.get(key).await.unwrap();
         assert_eq!(stored, Some(b"8".to_vec()));

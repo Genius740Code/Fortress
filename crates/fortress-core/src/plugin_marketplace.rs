@@ -1,12 +1,12 @@
 //! Plugin Marketplace and Distribution System
-//! 
+//!
 //! This module provides functionality for downloading, installing, and managing
 //! plugins from remote repositories and marketplaces.
 
 use crate::error::{FortressError, Result};
 use crate::plugin::PluginCapability;
-use sha2::Digest;
 use serde::{Deserialize, Serialize};
+use sha2::Digest;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tokio::fs;
@@ -75,14 +75,15 @@ impl PluginRepository {
     /// Search for plugins in the repository
     pub async fn search(&self, query: &str, limit: Option<usize>) -> Result<Vec<PluginPackage>> {
         let url = format!("{}/api/plugins/search", self.base_url);
-        
+
         let mut params: HashMap<String, String> = HashMap::new();
         params.insert("q".to_string(), query.to_string());
         if let Some(limit) = limit {
             params.insert("limit".to_string(), limit.to_string());
         }
 
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .query(&params)
             .send()
@@ -123,8 +124,9 @@ impl PluginRepository {
         }
 
         let url = format!("{}/api/plugins/{}", self.base_url, package_id);
-        
-        let response = self.client
+
+        let response = self
+            .client
             .get(&url)
             .send()
             .await
@@ -152,12 +154,17 @@ impl PluginRepository {
     }
 
     /// Download plugin package
-    pub async fn download_package(&self, package: &PluginPackage, download_dir: &PathBuf) -> Result<PathBuf> {
+    pub async fn download_package(
+        &self,
+        package: &PluginPackage,
+        download_dir: &PathBuf,
+    ) -> Result<PathBuf> {
         let package_filename = format!("{}-{}.fplugin", package.id, package.version);
         let package_path = download_dir.join(&package_filename);
 
         // Download the package
-        let response = self.client
+        let response = self
+            .client
             .get(&package.download_url)
             .send()
             .await
@@ -178,7 +185,9 @@ impl PluginRepository {
         // Verify checksum
         let checksum = format!("{:x}", sha2::Sha256::digest(&bytes));
         if checksum != package.checksum {
-            return Err(FortressError::plugin("Checksum verification failed".to_string()));
+            return Err(FortressError::plugin(
+                "Checksum verification failed".to_string(),
+            ));
         }
 
         // Write to file
@@ -192,13 +201,14 @@ impl PluginRepository {
     /// List popular plugins
     pub async fn list_popular(&self, limit: Option<usize>) -> Result<Vec<PluginPackage>> {
         let url = format!("{}/api/plugins/popular", self.base_url);
-        
+
         let mut params: HashMap<String, String> = HashMap::new();
         if let Some(limit) = limit {
             params.insert("limit".to_string(), limit.to_string());
         }
 
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .query(&params)
             .send()
@@ -212,29 +222,35 @@ impl PluginRepository {
             )));
         }
 
-        let packages: Vec<PluginPackage> = response
-            .json()
-            .await
-            .map_err(|e| FortressError::plugin(format!("Failed to parse popular plugins: {}", e)))?;
+        let packages: Vec<PluginPackage> = response.json().await.map_err(|e| {
+            FortressError::plugin(format!("Failed to parse popular plugins: {}", e))
+        })?;
 
         Ok(packages)
     }
 
     /// List plugins by category
-    pub async fn list_by_category(&self, category: &str, limit: Option<usize>) -> Result<Vec<PluginPackage>> {
+    pub async fn list_by_category(
+        &self,
+        category: &str,
+        limit: Option<usize>,
+    ) -> Result<Vec<PluginPackage>> {
         let url = format!("{}/api/plugins/category/{}", self.base_url, category);
-        
+
         let mut params: HashMap<String, String> = HashMap::new();
         if let Some(limit) = limit {
             params.insert("limit".to_string(), limit.to_string());
         }
 
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .query(&params)
             .send()
             .await
-            .map_err(|e| FortressError::plugin(format!("Failed to list plugins by category: {}", e)))?;
+            .map_err(|e| {
+                FortressError::plugin(format!("Failed to list plugins by category: {}", e))
+            })?;
 
         if !response.status().is_success() {
             return Err(FortressError::plugin(format!(
@@ -243,10 +259,9 @@ impl PluginRepository {
             )));
         }
 
-        let packages: Vec<PluginPackage> = response
-            .json()
-            .await
-            .map_err(|e| FortressError::plugin(format!("Failed to parse category plugins: {}", e)))?;
+        let packages: Vec<PluginPackage> = response.json().await.map_err(|e| {
+            FortressError::plugin(format!("Failed to parse category plugins: {}", e))
+        })?;
 
         Ok(packages)
     }
@@ -267,7 +282,7 @@ impl PluginInstaller {
     /// Create a new plugin installer
     pub fn new(plugins_dir: PathBuf, repository: PluginRepository) -> Result<Self> {
         let download_dir = plugins_dir.join("downloads");
-        
+
         Ok(Self {
             plugins_dir,
             download_dir,
@@ -276,7 +291,11 @@ impl PluginInstaller {
     }
 
     /// Install a plugin from the repository
-    pub async fn install(&self, package_id: &str, config: Option<HashMap<String, serde_json::Value>>) -> Result<()> {
+    pub async fn install(
+        &self,
+        package_id: &str,
+        config: Option<HashMap<String, serde_json::Value>>,
+    ) -> Result<()> {
         // Get package information
         let package = self.repository.get_package(package_id).await?;
 
@@ -284,35 +303,50 @@ impl PluginInstaller {
         self.verify_compatibility(&package)?;
 
         // Create directories if they don't exist
-        fs::create_dir_all(&self.plugins_dir).await
-            .map_err(|e| FortressError::plugin(format!("Failed to create plugins directory: {}", e)))?;
-        fs::create_dir_all(&self.download_dir).await
-            .map_err(|e| FortressError::plugin(format!("Failed to create download directory: {}", e)))?;
+        fs::create_dir_all(&self.plugins_dir).await.map_err(|e| {
+            FortressError::plugin(format!("Failed to create plugins directory: {}", e))
+        })?;
+        fs::create_dir_all(&self.download_dir).await.map_err(|e| {
+            FortressError::plugin(format!("Failed to create download directory: {}", e))
+        })?;
 
         // Download the package
-        let package_path = self.repository.download_package(&package, &self.download_dir).await?;
+        let package_path = self
+            .repository
+            .download_package(&package, &self.download_dir)
+            .await?;
 
         // Extract and install the plugin
-        self.extract_and_install(&package_path, &package, config).await?;
+        self.extract_and_install(&package_path, &package, config)
+            .await?;
 
         // Clean up download
-        fs::remove_file(&package_path).await
+        fs::remove_file(&package_path)
+            .await
             .map_err(|e| FortressError::plugin(format!("Failed to cleanup download: {}", e)))?;
 
-        tracing::info!("Plugin '{}' v{} installed successfully!", package.name, package.version);
+        tracing::info!(
+            "Plugin '{}' v{} installed successfully!",
+            package.name,
+            package.version
+        );
         Ok(())
     }
 
     /// Uninstall a plugin
     pub async fn uninstall(&self, plugin_id: &str) -> Result<()> {
         let plugin_dir = self.plugins_dir.join(plugin_id);
-        
+
         if !plugin_dir.exists() {
-            return Err(FortressError::plugin(format!("Plugin '{}' is not installed", plugin_id)));
+            return Err(FortressError::plugin(format!(
+                "Plugin '{}' is not installed",
+                plugin_id
+            )));
         }
 
         // Remove plugin directory
-        fs::remove_dir_all(&plugin_dir).await
+        fs::remove_dir_all(&plugin_dir)
+            .await
             .map_err(|e| FortressError::plugin(format!("Failed to uninstall plugin: {}", e)))?;
 
         tracing::info!("Plugin '{}' uninstalled successfully!", plugin_id);
@@ -327,12 +361,15 @@ impl PluginInstaller {
             return Ok(installed_plugins);
         }
 
-        let mut entries = fs::read_dir(&self.plugins_dir).await
-            .map_err(|e| FortressError::plugin(format!("Failed to read plugins directory: {}", e)))?;
+        let mut entries = fs::read_dir(&self.plugins_dir).await.map_err(|e| {
+            FortressError::plugin(format!("Failed to read plugins directory: {}", e))
+        })?;
 
-        while let Some(entry) = entries.next_entry().await
-            .map_err(|e| FortressError::plugin(format!("Failed to read directory entry: {}", e)))? {
-            
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .map_err(|e| FortressError::plugin(format!("Failed to read directory entry: {}", e)))?
+        {
             let path = entry.path();
             if path.is_dir() {
                 if let Ok(plugin) = self.load_installed_plugin(&path).await {
@@ -348,7 +385,7 @@ impl PluginInstaller {
     pub async fn update(&self, plugin_id: &str) -> Result<()> {
         // Get current installation info
         let current = self.get_installed_plugin(plugin_id).await?;
-        
+
         // Get latest package info
         let latest = self.repository.get_package(plugin_id).await?;
 
@@ -358,7 +395,12 @@ impl PluginInstaller {
             return Ok(());
         }
 
-        tracing::info!("Updating plugin '{}' from v{} to v{}...", plugin_id, current.metadata.version, latest.version);
+        tracing::info!(
+            "Updating plugin '{}' from v{} to v{}...",
+            plugin_id,
+            current.metadata.version,
+            latest.version
+        );
 
         // Uninstall current version
         self.uninstall(plugin_id).await?;
@@ -374,17 +416,16 @@ impl PluginInstaller {
     fn verify_compatibility(&self, package: &PluginPackage) -> Result<()> {
         // Check Fortress version compatibility using semantic versioning
         let current_version = env!("CARGO_PKG_VERSION");
-        
+
         // Parse versions for proper comparison
         let current_parsed = self.parse_version(current_version)?;
         let required_parsed = self.parse_version(&package.min_fortress_version)?;
-        
+
         // Compare major.minor.patch versions
         if current_parsed < required_parsed {
             return Err(FortressError::plugin(format!(
                 "Plugin requires Fortress version {} or higher, current version is {}",
-                package.min_fortress_version,
-                current_version
+                package.min_fortress_version, current_version
             )));
         }
 
@@ -400,14 +441,17 @@ impl PluginInstaller {
                 version
             )));
         }
-        
-        let major = parts[0].parse()
+
+        let major = parts[0]
+            .parse()
             .map_err(|_| FortressError::plugin(format!("Invalid major version: {}", parts[0])))?;
-        let minor = parts[1].parse()
+        let minor = parts[1]
+            .parse()
             .map_err(|_| FortressError::plugin(format!("Invalid minor version: {}", parts[1])))?;
-        let patch = parts[2].parse()
+        let patch = parts[2]
+            .parse()
             .map_err(|_| FortressError::plugin(format!("Invalid patch version: {}", parts[2])))?;
-        
+
         Ok((major, minor, patch))
     }
 
@@ -422,34 +466,39 @@ impl PluginInstaller {
 
         // Remove existing installation
         if plugin_dir.exists() {
-            fs::remove_dir_all(&plugin_dir).await
-                .map_err(|e| FortressError::plugin(format!("Failed to remove existing plugin: {}", e)))?;
+            fs::remove_dir_all(&plugin_dir).await.map_err(|e| {
+                FortressError::plugin(format!("Failed to remove existing plugin: {}", e))
+            })?;
         }
 
         // Create plugin directory
-        fs::create_dir_all(&plugin_dir).await
-            .map_err(|e| FortressError::plugin(format!("Failed to create plugin directory: {}", e)))?;
+        fs::create_dir_all(&plugin_dir).await.map_err(|e| {
+            FortressError::plugin(format!("Failed to create plugin directory: {}", e))
+        })?;
 
         // Read and extract package using tar/gzip
-        let package_data = fs::read(package_path).await
+        let package_data = fs::read(package_path)
+            .await
             .map_err(|e| FortressError::plugin(format!("Failed to read package: {}", e)))?;
 
         // Extract tar.gz package
         use flate2::read::GzDecoder;
         use tar::Archive;
-        
+
         let cursor = std::io::Cursor::new(package_data);
         let decoder = GzDecoder::new(cursor);
         let mut archive = Archive::new(decoder);
-        
-        archive.unpack(&plugin_dir)
+
+        archive
+            .unpack(&plugin_dir)
             .map_err(|e| FortressError::plugin(format!("Failed to extract package: {}", e)))?;
 
         // Write package metadata
         let metadata_path = plugin_dir.join("metadata.json");
         let metadata_json = serde_json::to_string_pretty(package)
             .map_err(|e| FortressError::plugin(format!("Failed to serialize metadata: {}", e)))?;
-        fs::write(&metadata_path, metadata_json).await
+        fs::write(&metadata_path, metadata_json)
+            .await
             .map_err(|e| FortressError::plugin(format!("Failed to write metadata: {}", e)))?;
 
         // Write configuration if provided
@@ -457,7 +506,8 @@ impl PluginInstaller {
             let config_path = plugin_dir.join("config.json");
             let config_json = serde_json::to_string_pretty(&config)
                 .map_err(|e| FortressError::plugin(format!("Failed to serialize config: {}", e)))?;
-            fs::write(&config_path, config_json).await
+            fs::write(&config_path, config_json)
+                .await
                 .map_err(|e| FortressError::plugin(format!("Failed to write config: {}", e)))?;
         }
 
@@ -470,17 +520,21 @@ impl PluginInstaller {
         let config_path = plugin_dir.join("config.json");
 
         let metadata: PluginPackage = {
-            let metadata_data = fs::read_to_string(&metadata_path).await
+            let metadata_data = fs::read_to_string(&metadata_path)
+                .await
                 .map_err(|e| FortressError::plugin(format!("Failed to read metadata: {}", e)))?;
             serde_json::from_str(&metadata_data)
                 .map_err(|e| FortressError::plugin(format!("Failed to parse metadata: {}", e)))?
         };
 
         let config = if config_path.exists() {
-            let config_data = fs::read_to_string(&config_path).await
+            let config_data = fs::read_to_string(&config_path)
+                .await
                 .map_err(|e| FortressError::plugin(format!("Failed to read config: {}", e)))?;
-            Some(serde_json::from_str(&config_data)
-                .map_err(|e| FortressError::plugin(format!("Failed to parse config: {}", e)))?)
+            Some(
+                serde_json::from_str(&config_data)
+                    .map_err(|e| FortressError::plugin(format!("Failed to parse config: {}", e)))?,
+            )
         } else {
             None
         };
@@ -490,9 +544,13 @@ impl PluginInstaller {
             config,
             installed_at: fs::metadata(plugin_dir)
                 .await
-                .map_err(|e| FortressError::plugin(format!("Failed to get plugin metadata: {}", e)))?
+                .map_err(|e| {
+                    FortressError::plugin(format!("Failed to get plugin metadata: {}", e))
+                })?
                 .modified()
-                .map_err(|e| FortressError::plugin(format!("Failed to get modification time: {}", e)))?
+                .map_err(|e| {
+                    FortressError::plugin(format!("Failed to get modification time: {}", e))
+                })?
                 .into(),
         })
     }
@@ -527,7 +585,8 @@ pub struct PluginMarketplace {
 impl PluginMarketplace {
     /// Create a new marketplace manager
     pub fn new(plugins_dir: PathBuf, repository_url: Option<String>) -> Result<Self> {
-        let repository_url = repository_url.unwrap_or_else(|| "https://plugins.fortress-db.com".to_string());
+        let repository_url =
+            repository_url.unwrap_or_else(|| "https://plugins.fortress-db.com".to_string());
         let repository = PluginRepository::new(repository_url);
         let installer = PluginInstaller::new(plugins_dir, repository.clone())?;
 
@@ -543,7 +602,11 @@ impl PluginMarketplace {
     }
 
     /// Install a plugin
-    pub async fn install(&self, package_id: &str, config: Option<HashMap<String, serde_json::Value>>) -> Result<()> {
+    pub async fn install(
+        &self,
+        package_id: &str,
+        config: Option<HashMap<String, serde_json::Value>>,
+    ) -> Result<()> {
         self.installer.install(package_id, config).await
     }
 
@@ -568,7 +631,11 @@ impl PluginMarketplace {
     }
 
     /// List plugins by category
-    pub async fn list_by_category(&self, category: &str, limit: Option<usize>) -> Result<Vec<PluginPackage>> {
+    pub async fn list_by_category(
+        &self,
+        category: &str,
+        limit: Option<usize>,
+    ) -> Result<Vec<PluginPackage>> {
         self.repository.list_by_category(category, limit).await
     }
 

@@ -7,17 +7,17 @@
 //! - Token-based authentication and authorization
 //! - Role-based access control integration
 
-pub mod manager;
 pub mod lease;
+pub mod manager;
 pub mod revocation;
 pub mod types;
 
 // Re-export main types for convenience
+pub use lease::{LeaseInfo, LeaseManager, LeaseStatus};
 pub use manager::TokenManager;
-pub use lease::{LeaseManager, LeaseInfo, LeaseStatus};
-pub use revocation::{RevocationList, RevocationReason, RevocationEntry};
+pub use revocation::{RevocationEntry, RevocationList, RevocationReason};
 pub use types::{
-    Token, TokenInfo, TokenMetadata, TokenType, TokenRole,
-    CreateTokenRequest, RenewTokenRequest, RevokeTokenRequest,
-    TokenValidationResult, TokenLookupResult, TokenUsageStats, TokenCreationContext,
+    CreateTokenRequest, RenewTokenRequest, RevokeTokenRequest, Token, TokenCreationContext,
+    TokenInfo, TokenLookupResult, TokenMetadata, TokenRole, TokenType, TokenUsageStats,
+    TokenValidationResult,
 };

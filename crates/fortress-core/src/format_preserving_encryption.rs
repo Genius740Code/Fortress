@@ -4,13 +4,13 @@
 //! allowing encryption of sensitive data while maintaining the original format.
 //! This is crucial for legacy system compatibility where data formats cannot be changed.
 
-use crate::error::{FortressError, Result, EncryptionErrorCode};
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use regex::Regex;
-use chrono::{DateTime, Utc, NaiveDate};
-use sha2::{Sha256, Digest};
+use crate::error::{EncryptionErrorCode, FortressError, Result};
+use chrono::{DateTime, NaiveDate, Utc};
 use hmac::{Hmac, Mac};
+use regex::Regex;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 type HmacSha256 = Hmac<Sha256>;
 
 /// FPE Algorithm types
@@ -37,25 +37,25 @@ pub enum DataFormat {
     EmailAddress,
     /// Numeric string of fixed length
     /// Numeric string of fixed length
-    Numeric { 
+    Numeric {
         /// Length of the numeric string
-        length: usize 
+        length: usize,
     },
     /// Alphanumeric string of fixed length
     /// Alphanumeric string of fixed length
-    Alphanumeric { 
+    Alphanumeric {
         /// Length of alphanumeric string
-        length: usize 
+        length: usize,
     },
     /// Date format (YYYY-MM-DD)
     Date,
     /// Custom format with regex pattern
     /// Custom format with regex pattern
-    Custom { 
+    Custom {
         /// Regex pattern for format validation
         pattern: String,
         /// Character set for encryption
-        charset: String 
+        charset: String,
     },
 }
 
@@ -122,11 +122,11 @@ impl FormatPreservingEncryption {
             charsets: HashMap::new(),
             config,
         };
-        
+
         fpe.initialize_patterns()?;
         fpe.initialize_charsets();
         fpe.initialize_ciphers()?;
-        
+
         Ok(fpe)
     }
 
@@ -137,27 +137,28 @@ impl FormatPreservingEncryption {
                 let radix = self.get_radix_for_format()?;
                 let cipher = FF1Cipher::new(self.config.key.clone(), radix, 2, 100)?;
                 self.ff1_cipher = Some(cipher);
-            },
+            }
             FpeAlgorithm::FF3_1 => {
                 let radix = self.get_radix_for_format()?;
                 let cipher = FF31Cipher::new(self.config.key.clone(), radix, 2, 100)?;
                 self.ff31_cipher = Some(cipher);
-            },
+            }
             FpeAlgorithm::Custom(_) => {
                 // Custom algorithms use simple character substitution
-            },
+            }
         }
         Ok(())
     }
 
     /// Get radix (character set size) for current format
     fn get_radix_for_format(&self) -> Result<u32> {
-        let charset = self.charsets.get(&self.config.format)
-            .ok_or_else(|| FortressError::encryption(
+        let charset = self.charsets.get(&self.config.format).ok_or_else(|| {
+            FortressError::encryption(
                 "No charset defined for format",
                 &"FPE".to_string(),
                 EncryptionErrorCode::InvalidInput,
-            ))?;
+            )
+        })?;
         Ok(charset.len() as u32)
     }
 
@@ -166,56 +167,61 @@ impl FormatPreservingEncryption {
         // Credit card pattern (16 digits, supports spaces/hyphens)
         self.patterns.insert(
             DataFormat::CreditCard,
-            Regex::new(r"^(?:(\d{4}[-\s]?){3}\d{4})$")
-                .map_err(|_e| FortressError::encryption(
+            Regex::new(r"^(?:(\d{4}[-\s]?){3}\d{4})$").map_err(|_e| {
+                FortressError::encryption(
                     &format!("Invalid credit card regex: {}", _e),
                     &"FPE".to_string(),
                     EncryptionErrorCode::InvalidInput,
-                ))?
+                )
+            })?,
         );
 
         // SSN pattern (XXX-XX-XXXX)
         self.patterns.insert(
             DataFormat::SocialSecurityNumber,
-            Regex::new(r"^\d{3}-\d{2}-\d{4}$")
-                .map_err(|_e| FortressError::encryption(
+            Regex::new(r"^\d{3}-\d{2}-\d{4}$").map_err(|_e| {
+                FortressError::encryption(
                     &format!("Invalid SSN regex: {}", _e),
                     &"FPE".to_string(),
                     EncryptionErrorCode::InvalidInput,
-                ))?
+                )
+            })?,
         );
 
         // Phone number pattern (E.164: +XXXXXXXXXX)
         self.patterns.insert(
             DataFormat::PhoneNumber,
-            Regex::new(r"^\+\d{10,15}$")
-                .map_err(|_e| FortressError::encryption(
+            Regex::new(r"^\+\d{10,15}$").map_err(|_e| {
+                FortressError::encryption(
                     &format!("Invalid phone regex: {}", _e),
                     &"FPE".to_string(),
                     EncryptionErrorCode::InvalidInput,
-                ))?
+                )
+            })?,
         );
 
         // Email address pattern
         self.patterns.insert(
             DataFormat::EmailAddress,
-            Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
-                .map_err(|_e| FortressError::encryption(
+            Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$").map_err(|_e| {
+                FortressError::encryption(
                     &format!("Invalid email regex: {}", _e),
                     &"FPE".to_string(),
                     EncryptionErrorCode::InvalidInput,
-                ))?
+                )
+            })?,
         );
 
         // Date pattern (YYYY-MM-DD)
         self.patterns.insert(
             DataFormat::Date,
-            Regex::new(r"^\d{4}-\d{2}-\d{2}$")
-                .map_err(|_e| FortressError::encryption(
+            Regex::new(r"^\d{4}-\d{2}-\d{2}$").map_err(|_e| {
+                FortressError::encryption(
                     &format!("Invalid date regex: {}", _e),
                     &"FPE".to_string(),
                     EncryptionErrorCode::InvalidInput,
-                ))?
+                )
+            })?,
         );
 
         Ok(())
@@ -223,11 +229,18 @@ impl FormatPreservingEncryption {
 
     /// Initialize character sets for different formats
     fn initialize_charsets(&mut self) {
-        self.charsets.insert(DataFormat::CreditCard, "0123456789".to_string());
-        self.charsets.insert(DataFormat::SocialSecurityNumber, "0123456789-".to_string());
-        self.charsets.insert(DataFormat::PhoneNumber, "+0123456789".to_string());
-        self.charsets.insert(DataFormat::EmailAddress, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@.-_+".to_string());
-        self.charsets.insert(DataFormat::Date, "0123456789-".to_string());
+        self.charsets
+            .insert(DataFormat::CreditCard, "0123456789".to_string());
+        self.charsets
+            .insert(DataFormat::SocialSecurityNumber, "0123456789-".to_string());
+        self.charsets
+            .insert(DataFormat::PhoneNumber, "+0123456789".to_string());
+        self.charsets.insert(
+            DataFormat::EmailAddress,
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@.-_+".to_string(),
+        );
+        self.charsets
+            .insert(DataFormat::Date, "0123456789-".to_string());
     }
 
     /// Encrypt data while preserving format
@@ -243,7 +256,9 @@ impl FormatPreservingEncryption {
             DataFormat::Numeric { length } => self.encrypt_numeric(plaintext, *length),
             DataFormat::Alphanumeric { length } => self.encrypt_alphanumeric(plaintext, *length),
             DataFormat::Date => self.encrypt_date(plaintext),
-            DataFormat::Custom { pattern, charset } => self.encrypt_custom(plaintext, pattern, charset),
+            DataFormat::Custom { pattern, charset } => {
+                self.encrypt_custom(plaintext, pattern, charset)
+            }
         }
     }
 
@@ -257,13 +272,17 @@ impl FormatPreservingEncryption {
             DataFormat::Numeric { length } => self.decrypt_numeric(ciphertext, *length),
             DataFormat::Alphanumeric { length } => self.decrypt_alphanumeric(ciphertext, *length),
             DataFormat::Date => self.decrypt_date(ciphertext),
-            DataFormat::Custom { pattern, charset } => self.decrypt_custom(ciphertext, pattern, charset),
+            DataFormat::Custom { pattern, charset } => {
+                self.decrypt_custom(ciphertext, pattern, charset)
+            }
         }
     }
 
     /// Validate input format
     fn validate_format(&self, input: &str) -> Result<()> {
-        let pattern = self.patterns.get(&self.config.format)
+        let pattern = self
+            .patterns
+            .get(&self.config.format)
             .ok_or_else(|| FortressError::validation("Unsupported format", None, None))?;
 
         if !pattern.is_match(input) {
@@ -281,7 +300,7 @@ impl FormatPreservingEncryption {
     fn encrypt_credit_card(&self, card_number: &str) -> Result<FpeResult> {
         // Remove spaces and hyphens for processing
         let clean_number = card_number.replace(&[' ', '-'][..], "");
-        
+
         if clean_number.len() != 16 {
             return Err(FortressError::encryption(
                 "Credit card must be 16 digits",
@@ -326,7 +345,7 @@ impl FormatPreservingEncryption {
     fn decrypt_credit_card(&self, encrypted_card: &str) -> Result<String> {
         // Remove spaces and hyphens for processing
         let clean_number = encrypted_card.replace(&[' ', '-'][..], "");
-        
+
         if clean_number.len() != 16 {
             return Err(FortressError::encryption(
                 "Encrypted credit card must be 16 digits",
@@ -350,7 +369,7 @@ impl FormatPreservingEncryption {
     fn encrypt_ssn(&self, ssn: &str) -> Result<FpeResult> {
         // Remove hyphens for processing
         let clean_ssn = ssn.replace('-', "");
-        
+
         if clean_ssn.len() != 9 {
             return Err(FortressError::encryption(
                 "SSN must be 9 digits",
@@ -361,9 +380,10 @@ impl FormatPreservingEncryption {
 
         // Apply FPE to all 9 digits
         let encrypted_digits = self.apply_fpe_to_digits(&clean_ssn)?;
-        
+
         // Reformat with hyphens
-        let formatted = format!("{}-{}-{}", 
+        let formatted = format!(
+            "{}-{}-{}",
             &encrypted_digits[..3],
             &encrypted_digits[3..5],
             &encrypted_digits[5..9]
@@ -386,7 +406,7 @@ impl FormatPreservingEncryption {
     fn decrypt_ssn(&self, encrypted_ssn: &str) -> Result<String> {
         // Remove hyphens for processing
         let clean_ssn = encrypted_ssn.replace('-', "");
-        
+
         if clean_ssn.len() != 9 {
             return Err(FortressError::encryption(
                 "Encrypted SSN must be 9 digits",
@@ -399,7 +419,8 @@ impl FormatPreservingEncryption {
         let decrypted_digits = self.apply_reverse_fpe_to_digits(&clean_ssn)?;
 
         // Reformat with hyphens
-        Ok(format!("{}-{}-{}", 
+        Ok(format!(
+            "{}-{}-{}",
             &decrypted_digits[..3],
             &decrypted_digits[3..5],
             &decrypted_digits[5..9]
@@ -410,7 +431,7 @@ impl FormatPreservingEncryption {
     fn encrypt_phone(&self, phone: &str) -> Result<FpeResult> {
         // Remove + for processing
         let clean_phone = &phone[1..]; // Remove +
-        
+
         if clean_phone.len() < 10 || clean_phone.len() > 15 {
             return Err(FortressError::encryption(
                 "Phone number must be 10-15 digits",
@@ -442,7 +463,7 @@ impl FormatPreservingEncryption {
     fn decrypt_phone(&self, encrypted_phone: &str) -> Result<String> {
         // Remove + for processing
         let clean_phone = &encrypted_phone[1..];
-        
+
         if clean_phone.len() < 10 || clean_phone.len() > 15 {
             return Err(FortressError::encryption(
                 "Encrypted phone number must be 10-15 digits",
@@ -473,7 +494,8 @@ impl FormatPreservingEncryption {
         let domain = parts[1];
 
         // Encrypt username while preserving length
-        let encrypted_username = self.apply_fpe_to_string(username, &self.charsets[&DataFormat::EmailAddress])?;
+        let encrypted_username =
+            self.apply_fpe_to_string(username, &self.charsets[&DataFormat::EmailAddress])?;
 
         // Keep domain unchanged (could be encrypted separately if needed)
         let formatted = format!("{}@{}", encrypted_username, domain);
@@ -506,7 +528,10 @@ impl FormatPreservingEncryption {
         let domain = parts[1];
 
         // Decrypt username
-        let decrypted_username = self.apply_reverse_fpe_to_string(encrypted_username, &self.charsets[&DataFormat::EmailAddress])?;
+        let decrypted_username = self.apply_reverse_fpe_to_string(
+            encrypted_username,
+            &self.charsets[&DataFormat::EmailAddress],
+        )?;
 
         Ok(format!("{}@{}", decrypted_username, domain))
     }
@@ -600,15 +625,17 @@ impl FormatPreservingEncryption {
     /// Encrypt date
     fn encrypt_date(&self, date_str: &str) -> Result<FpeResult> {
         // Parse date
-        let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")
-            .map_err(|_e| FortressError::encryption(
+        let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d").map_err(|_e| {
+            FortressError::encryption(
                 &format!("Invalid date format: {}", _e),
                 &"FPE".to_string(),
                 EncryptionErrorCode::InvalidInput,
-            ))?;
+            )
+        })?;
 
         // Convert to days since epoch
-        let days_since_epoch = date.signed_duration_since(NaiveDate::from_ymd_opt(1970, 1, 1).unwrap())
+        let days_since_epoch = date
+            .signed_duration_since(NaiveDate::from_ymd_opt(1970, 1, 1).unwrap())
             .num_days() as u64;
 
         // Apply FPE to the day count
@@ -617,11 +644,13 @@ impl FormatPreservingEncryption {
         // Convert back to date
         let encrypted_date = NaiveDate::from_ymd_opt(1970, 1, 1)
             .and_then(|date| date.checked_add_signed(chrono::Duration::days(encrypted_days as i64)))
-            .ok_or_else(|| FortressError::encryption(
-                "Date overflow",
-                &"FPE".to_string(),
-                EncryptionErrorCode::InvalidInput,
-            ))?;
+            .ok_or_else(|| {
+                FortressError::encryption(
+                    "Date overflow",
+                    &"FPE".to_string(),
+                    EncryptionErrorCode::InvalidInput,
+                )
+            })?;
 
         let formatted = encrypted_date.format("%Y-%m-%d").to_string();
 
@@ -641,27 +670,33 @@ impl FormatPreservingEncryption {
     /// Decrypt date
     fn decrypt_date(&self, encrypted_date_str: &str) -> Result<String> {
         // Parse encrypted date
-        let encrypted_date = NaiveDate::parse_from_str(encrypted_date_str, "%Y-%m-%d")
-            .map_err(|_e| FortressError::encryption(
-                &format!("Invalid encrypted date format: {}", _e),
-                &"FPE".to_string(),
-                EncryptionErrorCode::InvalidInput,
-            ))?;
+        let encrypted_date =
+            NaiveDate::parse_from_str(encrypted_date_str, "%Y-%m-%d").map_err(|_e| {
+                FortressError::encryption(
+                    &format!("Invalid encrypted date format: {}", _e),
+                    &"FPE".to_string(),
+                    EncryptionErrorCode::InvalidInput,
+                )
+            })?;
 
         // Convert to days since epoch
-        let encrypted_days = encrypted_date.signed_duration_since(NaiveDate::from_ymd_opt(1970, 1, 1).unwrap())
+        let encrypted_days = encrypted_date
+            .signed_duration_since(NaiveDate::from_ymd_opt(1970, 1, 1).unwrap())
             .num_days() as u64;
 
         let original_days = self.apply_reverse_fpe_to_number(encrypted_days, u32::MAX as u64)?;
 
         // Convert back to original date
-        let original_date = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap()
+        let original_date = NaiveDate::from_ymd_opt(1970, 1, 1)
+            .unwrap()
             .checked_add_signed(chrono::Duration::days(original_days as i64))
-            .ok_or_else(|| FortressError::encryption(
-                "Date overflow",
-                &"FPE".to_string(),
-                EncryptionErrorCode::InvalidInput,
-            ))?;
+            .ok_or_else(|| {
+                FortressError::encryption(
+                    "Date overflow",
+                    &"FPE".to_string(),
+                    EncryptionErrorCode::InvalidInput,
+                )
+            })?;
 
         Ok(original_date.format("%Y-%m-%d").to_string())
     }
@@ -676,9 +711,9 @@ impl FormatPreservingEncryption {
             format_preserved: true,
             metadata: FpeMetadata {
                 algorithm: self.config.algorithm.clone(),
-                format: DataFormat::Custom { 
-                    pattern: pattern.to_string(), 
-                    charset: charset.to_string() 
+                format: DataFormat::Custom {
+                    pattern: pattern.to_string(),
+                    charset: charset.to_string(),
                 },
                 timestamp: Utc::now(),
                 version: "1.0".to_string(),
@@ -713,17 +748,15 @@ impl FormatPreservingEncryption {
                 } else {
                     self.apply_simple_fpe(input, charset)
                 }
-            },
+            }
             FpeAlgorithm::FF3_1 => {
                 if let Some(cipher) = &self.ff31_cipher {
                     cipher.encrypt_string(input, charset)
                 } else {
                     self.apply_simple_fpe(input, charset)
                 }
-            },
-            FpeAlgorithm::Custom(_) => {
-                self.apply_simple_fpe(input, charset)
-            },
+            }
+            FpeAlgorithm::Custom(_) => self.apply_simple_fpe(input, charset),
         }
     }
 
@@ -744,12 +777,13 @@ impl FormatPreservingEncryption {
             }
         }
 
-        String::from_utf8(result)
-            .map_err(|_e| FortressError::encryption(
+        String::from_utf8(result).map_err(|_e| {
+            FortressError::encryption(
                 "Invalid UTF-8 in FPE result",
                 &"FPE".to_string(),
                 EncryptionErrorCode::InvalidInput,
-            ))
+            )
+        })
     }
 
     /// Apply reverse FPE to string using character set
@@ -761,17 +795,15 @@ impl FormatPreservingEncryption {
                 } else {
                     self.apply_reverse_simple_fpe(encrypted, charset)
                 }
-            },
+            }
             FpeAlgorithm::FF3_1 => {
                 if let Some(cipher) = &self.ff31_cipher {
                     cipher.decrypt_string(encrypted, charset)
                 } else {
                     self.apply_reverse_simple_fpe(encrypted, charset)
                 }
-            },
-            FpeAlgorithm::Custom(_) => {
-                self.apply_reverse_simple_fpe(encrypted, charset)
-            },
+            }
+            FpeAlgorithm::Custom(_) => self.apply_reverse_simple_fpe(encrypted, charset),
         }
     }
 
@@ -784,7 +816,9 @@ impl FormatPreservingEncryption {
             if let Some(pos) = charset_bytes.iter().position(|&c| c == ch) {
                 // Apply reverse transformation
                 let key_byte = self.config.key[i % self.config.key.len()];
-                let original_pos = (pos + charset_bytes.len() - (key_byte as usize % charset_bytes.len())) % charset_bytes.len();
+                let original_pos = (pos + charset_bytes.len()
+                    - (key_byte as usize % charset_bytes.len()))
+                    % charset_bytes.len();
                 result.push(charset_bytes[original_pos]);
             } else {
                 // Keep characters not in charset unchanged
@@ -792,12 +826,13 @@ impl FormatPreservingEncryption {
             }
         }
 
-        String::from_utf8(result)
-            .map_err(|_e| FortressError::encryption(
+        String::from_utf8(result).map_err(|_e| {
+            FortressError::encryption(
                 "Invalid UTF-8 in FPE result",
                 &"FPE".to_string(),
                 EncryptionErrorCode::InvalidInput,
-            ))
+            )
+        })
     }
 
     /// Reformat credit card with original spacing
@@ -937,35 +972,35 @@ impl FormatPreservingEncryption {
     /// Batch encrypt multiple values
     pub fn encrypt_batch(&self, plaintexts: &[String]) -> Result<Vec<FpeResult>> {
         let mut results = Vec::with_capacity(plaintexts.len());
-        
+
         for plaintext in plaintexts {
             let result = self.encrypt(plaintext)?;
             results.push(result);
         }
-        
+
         Ok(results)
     }
 
     /// Batch decrypt multiple values
     pub fn decrypt_batch(&self, ciphertexts: &[String]) -> Result<Vec<String>> {
         let mut results = Vec::with_capacity(ciphertexts.len());
-        
+
         for ciphertext in ciphertexts {
             let result = self.decrypt(ciphertext)?;
             results.push(result);
         }
-        
+
         Ok(results)
     }
 
     /// Derive FPE key from master key using HKDF
     pub fn derive_fpe_key(master_key: &[u8], context: &[u8], length: usize) -> Vec<u8> {
-        let mut hkdf = HmacSha256::new_from_slice(master_key)
-            .expect("HMAC can take key of any size");
+        let mut hkdf =
+            HmacSha256::new_from_slice(master_key).expect("HMAC can take key of any size");
         hkdf.update(context);
         let result = hkdf.finalize();
         let bytes = result.into_bytes();
-        
+
         // Truncate or extend to desired length
         let mut key = Vec::with_capacity(length);
         for i in 0..length {
@@ -998,9 +1033,9 @@ impl FormatPreservingEncryption {
             DataFormat::Numeric { length: 8 },
             DataFormat::Alphanumeric { length: 10 },
             DataFormat::Date,
-            DataFormat::Custom { 
-                pattern: r"^[A-Z]{3}\d{3}$".to_string(), 
-                charset: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".to_string() 
+            DataFormat::Custom {
+                pattern: r"^[A-Z]{3}\d{3}$".to_string(),
+                charset: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".to_string(),
             },
         ]
     }
@@ -1131,14 +1166,16 @@ mod tests {
 
     #[test]
     fn test_luhn_validation() {
-        let fpe = FormatPreservingEncryption::new(FormatPreservingEncryption::credit_card_config(
-            vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
-        )).unwrap();
+        let fpe =
+            FormatPreservingEncryption::new(FormatPreservingEncryption::credit_card_config(vec![
+                1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+            ]))
+            .unwrap();
 
         // Valid credit card numbers
         assert!(fpe.validate_luhn("4532015112830366"));
         assert!(fpe.validate_luhn("6011111111111117"));
-        
+
         // Invalid credit card numbers
         assert!(!fpe.validate_luhn("4532015112830367"));
         assert!(!fpe.validate_luhn("6011111111111118"));
@@ -1147,7 +1184,7 @@ mod tests {
     #[test]
     fn test_invalid_formats() {
         let key = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
-        
+
         // Test invalid credit card
         let config = FormatPreservingEncryption::credit_card_config(key.clone());
         let fpe = FormatPreservingEncryption::new(config).unwrap();
@@ -1227,7 +1264,8 @@ mod tests {
         assert_eq!(encrypted_results.len(), cards.len());
 
         // Extract encrypted values
-        let encrypted_cards: Vec<String> = encrypted_results.iter()
+        let encrypted_cards: Vec<String> = encrypted_results
+            .iter()
             .map(|r| r.encrypted_value.clone())
             .collect();
 
@@ -1249,7 +1287,8 @@ mod tests {
 
         assert_eq!(derived_key.len(), 32);
         // Different context should produce different key
-        let different_key = FormatPreservingEncryption::derive_fpe_key(&master_key, b"Different-Context", 32);
+        let different_key =
+            FormatPreservingEncryption::derive_fpe_key(&master_key, b"Different-Context", 32);
         assert_ne!(derived_key, different_key);
     }
 
@@ -1260,7 +1299,9 @@ mod tests {
         let fpe = FormatPreservingEncryption::new(config).unwrap();
 
         // Valid format
-        assert!(fpe.validate_format_constraints("4532 1234 5678 9012").unwrap());
+        assert!(fpe
+            .validate_format_constraints("4532 1234 5678 9012")
+            .unwrap());
 
         // Invalid format
         assert!(fpe.validate_format_constraints("invalid").is_err());
@@ -1287,9 +1328,9 @@ mod tests {
         let key = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
         let config = FpeConfig {
             algorithm: FpeAlgorithm::FF1,
-            format: DataFormat::Custom { 
-                pattern: r"^[A-Z]{3}\d{3}$".to_string(), 
-                charset: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".to_string() 
+            format: DataFormat::Custom {
+                pattern: r"^[A-Z]{3}\d{3}$".to_string(),
+                charset: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".to_string(),
             },
             key,
             parameters: HashMap::new(),
@@ -1369,7 +1410,7 @@ impl FF1Cipher {
                 EncryptionErrorCode::InvalidInput,
             ));
         }
-        
+
         if min_len < 2 || max_len < min_len {
             return Err(FortressError::encryption(
                 "Invalid length constraints",
@@ -1391,7 +1432,10 @@ impl FF1Cipher {
         let length = plaintext.len();
         if length < self.min_len || length > self.max_len {
             return Err(FortressError::encryption(
-                &format!("Length {} is outside allowed range [{}, {}]", length, self.min_len, self.max_len),
+                &format!(
+                    "Length {} is outside allowed range [{}, {}]",
+                    length, self.min_len, self.max_len
+                ),
                 &"FF1".to_string(),
                 EncryptionErrorCode::InvalidInput,
             ));
@@ -1399,10 +1443,10 @@ impl FF1Cipher {
 
         // Convert string to numeric representation
         let x = self.string_to_numeric(plaintext, charset)?;
-        
+
         // Apply FF1 encryption
         let y = self.ff1_encrypt(&x, length)?;
-        
+
         // Convert back to string
         self.numeric_to_string(&y, length, charset)
     }
@@ -1412,7 +1456,10 @@ impl FF1Cipher {
         let length = ciphertext.len();
         if length < self.min_len || length > self.max_len {
             return Err(FortressError::encryption(
-                &format!("Length {} is outside allowed range [{}, {}]", length, self.min_len, self.max_len),
+                &format!(
+                    "Length {} is outside allowed range [{}, {}]",
+                    length, self.min_len, self.max_len
+                ),
                 &"FF1".to_string(),
                 EncryptionErrorCode::InvalidInput,
             ));
@@ -1420,10 +1467,10 @@ impl FF1Cipher {
 
         // Convert string to numeric representation
         let y = self.string_to_numeric(ciphertext, charset)?;
-        
+
         // Apply FF1 decryption
         let x = self.ff1_decrypt(&y, length)?;
-        
+
         // Convert back to string
         self.numeric_to_string(&x, length, charset)
     }
@@ -1432,7 +1479,7 @@ impl FF1Cipher {
     fn string_to_numeric(&self, text: &str, charset: &str) -> Result<Vec<u32>> {
         let charset_bytes = charset.as_bytes();
         let mut numeric = Vec::new();
-        
+
         for &ch in text.as_bytes() {
             if let Some(pos) = charset_bytes.iter().position(|&c| c == ch) {
                 numeric.push(pos as u32);
@@ -1444,7 +1491,7 @@ impl FF1Cipher {
                 ));
             }
         }
-        
+
         Ok(numeric)
     }
 
@@ -1452,7 +1499,7 @@ impl FF1Cipher {
     fn numeric_to_string(&self, numeric: &[u32], length: usize, charset: &str) -> Result<String> {
         let charset_bytes = charset.as_bytes();
         let mut result = Vec::new();
-        
+
         for &i in numeric.iter().take(length) {
             if i < charset_bytes.len() as u32 {
                 result.push(charset_bytes[i as usize]);
@@ -1464,13 +1511,14 @@ impl FF1Cipher {
                 ));
             }
         }
-        
-        String::from_utf8(result)
-            .map_err(|_e| FortressError::encryption(
+
+        String::from_utf8(result).map_err(|_e| {
+            FortressError::encryption(
                 "Invalid UTF-8 conversion",
                 &"FF1".to_string(),
                 EncryptionErrorCode::InvalidInput,
-            ))
+            )
+        })
     }
 
     /// FF1 encryption using Feistel network
@@ -1479,7 +1527,7 @@ impl FF1Cipher {
         let n = length;
         let u = n / 2;
         let _v = n - u;
-        
+
         // Feistel rounds (simplified for demonstration)
         for round in 0..10 {
             let temp = if n % 2 == 0 {
@@ -1495,7 +1543,7 @@ impl FF1Cipher {
             };
             a = temp;
         }
-        
+
         Ok(a)
     }
 
@@ -1503,7 +1551,7 @@ impl FF1Cipher {
     fn ff1_decrypt(&self, y: &[u32], length: usize) -> Result<Vec<u32>> {
         let mut a = y.to_vec();
         let n = length;
-        
+
         // Reverse Feistel rounds
         for round in (0..10).rev() {
             let temp = if n % 2 == 0 {
@@ -1517,21 +1565,21 @@ impl FF1Cipher {
             };
             a = temp;
         }
-        
+
         Ok(a)
     }
 
     /// Single Feistel round
     fn feistel_round(&self, a: &[u32], b: &[u32], round: u32) -> Result<Vec<u32>> {
         let mut result = Vec::new();
-        
+
         for (i, &ai) in a.iter().enumerate() {
             // PRF using AES and round number
             let round_key = self.derive_round_key(round, i as u32)?;
             let fi = (ai + round_key + b[i % b.len()]) % self.radix;
             result.push(fi);
         }
-        
+
         Ok(result)
     }
 
@@ -1541,12 +1589,12 @@ impl FF1Cipher {
         data.extend_from_slice(&self.key);
         data.extend_from_slice(&round.to_be_bytes());
         data.extend_from_slice(&position.to_be_bytes());
-        
+
         let hash = Sha256::digest(&data);
         let key_bytes = &hash[..4]; // Take first 4 bytes
         let mut key_array = [0u8; 4];
         key_array.copy_from_slice(key_bytes);
-        
+
         Ok(u32::from_be_bytes(key_array) % self.radix)
     }
 }
@@ -1569,7 +1617,7 @@ impl FF31Cipher {
                 EncryptionErrorCode::InvalidInput,
             ));
         }
-        
+
         if min_len < 2 || max_len < min_len {
             return Err(FortressError::encryption(
                 "Invalid length constraints",
@@ -1591,7 +1639,10 @@ impl FF31Cipher {
         let length = plaintext.len();
         if length < self.min_len || length > self.max_len {
             return Err(FortressError::encryption(
-                &format!("Length {} is outside allowed range [{}, {}]", length, self.min_len, self.max_len),
+                &format!(
+                    "Length {} is outside allowed range [{}, {}]",
+                    length, self.min_len, self.max_len
+                ),
                 &"FF3-1".to_string(),
                 EncryptionErrorCode::InvalidInput,
             ));
@@ -1599,10 +1650,10 @@ impl FF31Cipher {
 
         // Convert string to numeric representation
         let x = self.string_to_numeric(plaintext, charset)?;
-        
+
         // Apply FF3-1 encryption
         let y = self.ff31_encrypt(&x, length)?;
-        
+
         // Convert back to string
         self.numeric_to_string(&y, length, charset)
     }
@@ -1612,7 +1663,10 @@ impl FF31Cipher {
         let length = ciphertext.len();
         if length < self.min_len || length > self.max_len {
             return Err(FortressError::encryption(
-                &format!("Length {} is outside allowed range [{}, {}]", length, self.min_len, self.max_len),
+                &format!(
+                    "Length {} is outside allowed range [{}, {}]",
+                    length, self.min_len, self.max_len
+                ),
                 &"FF3-1".to_string(),
                 EncryptionErrorCode::InvalidInput,
             ));
@@ -1620,10 +1674,10 @@ impl FF31Cipher {
 
         // Convert string to numeric representation
         let y = self.string_to_numeric(ciphertext, charset)?;
-        
+
         // Apply FF3-1 decryption
         let x = self.ff31_decrypt(&y, length)?;
-        
+
         // Convert back to string
         self.numeric_to_string(&x, length, charset)
     }
@@ -1632,7 +1686,7 @@ impl FF31Cipher {
     fn string_to_numeric(&self, text: &str, charset: &str) -> Result<Vec<u32>> {
         let charset_bytes = charset.as_bytes();
         let mut numeric = Vec::new();
-        
+
         for &ch in text.as_bytes() {
             if let Some(pos) = charset_bytes.iter().position(|&c| c == ch) {
                 numeric.push(pos as u32);
@@ -1644,7 +1698,7 @@ impl FF31Cipher {
                 ));
             }
         }
-        
+
         Ok(numeric)
     }
 
@@ -1652,7 +1706,7 @@ impl FF31Cipher {
     fn numeric_to_string(&self, numeric: &[u32], length: usize, charset: &str) -> Result<String> {
         let charset_bytes = charset.as_bytes();
         let mut result = Vec::new();
-        
+
         for &i in numeric.iter().take(length) {
             if i < charset_bytes.len() as u32 {
                 result.push(charset_bytes[i as usize]);
@@ -1664,13 +1718,14 @@ impl FF31Cipher {
                 ));
             }
         }
-        
-        String::from_utf8(result)
-            .map_err(|_e| FortressError::encryption(
+
+        String::from_utf8(result).map_err(|_e| {
+            FortressError::encryption(
                 "Invalid UTF-8 conversion",
                 &"FF3-1".to_string(),
                 EncryptionErrorCode::InvalidInput,
-            ))
+            )
+        })
     }
 
     /// FF3-1 encryption using Feistel network with tweak
@@ -1679,10 +1734,10 @@ impl FF31Cipher {
         let n = length;
         let u = n / 2;
         let _v = n - u;
-        
+
         // Generate tweak
         let tweak = self.generate_tweak()?;
-        
+
         // Feistel rounds with tweak
         for round in 0..8 {
             let temp = if n % 2 == 0 {
@@ -1696,7 +1751,7 @@ impl FF31Cipher {
             };
             a = temp;
         }
-        
+
         Ok(a)
     }
 
@@ -1704,10 +1759,10 @@ impl FF31Cipher {
     fn ff31_decrypt(&self, y: &[u32], length: usize) -> Result<Vec<u32>> {
         let mut a = y.to_vec();
         let n = length;
-        
+
         // Generate same tweak
         let tweak = self.generate_tweak()?;
-        
+
         // Reverse Feistel rounds with tweak
         for round in (0..8).rev() {
             let temp = if n % 2 == 0 {
@@ -1721,7 +1776,7 @@ impl FF31Cipher {
             };
             a = temp;
         }
-        
+
         Ok(a)
     }
 
@@ -1735,16 +1790,22 @@ impl FF31Cipher {
     }
 
     /// Single Feistel round with tweak
-    fn feistel_round_with_tweak(&self, a: &[u32], b: &[u32], round: u32, tweak: &[u8]) -> Result<Vec<u32>> {
+    fn feistel_round_with_tweak(
+        &self,
+        a: &[u32],
+        b: &[u32],
+        round: u32,
+        tweak: &[u8],
+    ) -> Result<Vec<u32>> {
         let mut result = Vec::new();
-        
+
         for (i, &ai) in a.iter().enumerate() {
             // PRF using AES, round number, and tweak
             let round_key = self.derive_round_key_with_tweak(round, i as u32, tweak)?;
             let fi = (ai + round_key + b[i % b.len()]) % self.radix;
             result.push(fi);
         }
-        
+
         Ok(result)
     }
 
@@ -1755,12 +1816,12 @@ impl FF31Cipher {
         data.extend_from_slice(&round.to_be_bytes());
         data.extend_from_slice(&position.to_be_bytes());
         data.extend_from_slice(tweak);
-        
+
         let hash = Sha256::digest(&data);
         let key_bytes = &hash[..4]; // Take first 4 bytes
         let mut key_array = [0u8; 4];
         key_array.copy_from_slice(key_bytes);
-        
+
         Ok(u32::from_be_bytes(key_array) % self.radix)
     }
 }

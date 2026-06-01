@@ -3,12 +3,12 @@
 //! This module provides protocol negotiation capabilities for Fortress
 //! to automatically select the best serialization format for communication.
 
+use super::SerializationFormat;
+use crate::error::{FortressError, Result};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use serde::{Serialize, Deserialize};
-use crate::error::{FortressError, Result};
-use super::SerializationFormat;
 
 /// Protocol negotiator for automatic format selection
 pub struct ProtocolNegotiator {
@@ -115,7 +115,7 @@ impl ProtocolNegotiator {
 
         // Initialize supported formats
         negotiator.initialize_supported_formats();
-        
+
         Ok(negotiator)
     }
 
@@ -265,11 +265,16 @@ impl ProtocolNegotiator {
         );
 
         // Set format preferences (higher = more preferred)
-        self.format_preferences.insert(SerializationFormat::Binary, 100);
-        self.format_preferences.insert(SerializationFormat::Protobuf, 90);
-        self.format_preferences.insert(SerializationFormat::MessagePack, 85);
-        self.format_preferences.insert(SerializationFormat::Cbor, 80);
-        self.format_preferences.insert(SerializationFormat::Json, 70);
+        self.format_preferences
+            .insert(SerializationFormat::Binary, 100);
+        self.format_preferences
+            .insert(SerializationFormat::Protobuf, 90);
+        self.format_preferences
+            .insert(SerializationFormat::MessagePack, 85);
+        self.format_preferences
+            .insert(SerializationFormat::Cbor, 80);
+        self.format_preferences
+            .insert(SerializationFormat::Json, 70);
     }
 
     /// Negotiate protocol with peer capabilities
@@ -277,13 +282,16 @@ impl ProtocolNegotiator {
         let start = std::time::Instant::now();
 
         // Find common formats
-        let common_formats: Vec<&SerializationFormat> = peer_formats.iter()
+        let common_formats: Vec<&SerializationFormat> = peer_formats
+            .iter()
             .filter(|format| self.supported_formats.contains_key(format))
             .collect();
 
         if common_formats.is_empty() {
-            return Err(FortressError::serialization("No common format found", 
-                &format!("Peer formats: {:?}", peer_formats)));
+            return Err(FortressError::serialization(
+                "No common format found",
+                &format!("Peer formats: {:?}", peer_formats),
+            ));
         }
 
         // Select best format based on preferences and capabilities
@@ -294,10 +302,15 @@ impl ProtocolNegotiator {
             let mut metrics = self.metrics.try_write().unwrap();
             metrics.total_negotiations += 1;
             metrics.successful_negotiations += 1;
-            metrics.avg_negotiation_time_us = (metrics.avg_negotiation_time_us * (metrics.total_negotiations - 1) as f64 
-                + start.elapsed().as_micros() as f64) / metrics.total_negotiations as f64;
-            
-            *metrics.format_selections.entry(selected_format.clone()).or_insert(0) += 1;
+            metrics.avg_negotiation_time_us = (metrics.avg_negotiation_time_us
+                * (metrics.total_negotiations - 1) as f64
+                + start.elapsed().as_micros() as f64)
+                / metrics.total_negotiations as f64;
+
+            *metrics
+                .format_selections
+                .entry(selected_format.clone())
+                .or_insert(0) += 1;
             metrics.last_updated = chrono::Utc::now();
         }
 
@@ -315,7 +328,7 @@ impl ProtocolNegotiator {
             if let Some(&cached_format) = cache.get(&cache_key) {
                 let mut metrics = self.metrics.write().await;
                 metrics.cache_hits += 1;
-                
+
                 let cached_format_clone = cached_format.clone();
                 return Ok(NegotiationResponse {
                     selected_format: cached_format,
@@ -327,7 +340,7 @@ impl ProtocolNegotiator {
 
         // Perform negotiation
         let selected_format = self.negotiate(&request.client_formats)?;
-        
+
         let reason = self.generate_negotiation_reason(&request, &selected_format);
         let server_capabilities = self.supported_formats[&selected_format].clone();
 
@@ -343,8 +356,10 @@ impl ProtocolNegotiator {
             metrics.cache_misses += 1;
             metrics.total_negotiations += 1;
             metrics.successful_negotiations += 1;
-            metrics.avg_negotiation_time_us = (metrics.avg_negotiation_time_us * (metrics.total_negotiations - 1) as f64 
-                + start.elapsed().as_micros() as f64) / metrics.total_negotiations as f64;
+            metrics.avg_negotiation_time_us = (metrics.avg_negotiation_time_us
+                * (metrics.total_negotiations - 1) as f64
+                + start.elapsed().as_micros() as f64)
+                / metrics.total_negotiations as f64;
             metrics.last_updated = chrono::Utc::now();
         }
 
@@ -356,20 +371,24 @@ impl ProtocolNegotiator {
     }
 
     /// Select best format from common formats
-    fn select_best_format(&self, common_formats: &[&SerializationFormat]) -> Result<SerializationFormat> {
+    fn select_best_format(
+        &self,
+        common_formats: &[&SerializationFormat],
+    ) -> Result<SerializationFormat> {
         // Score each format based on multiple criteria
-        let mut scored_formats: Vec<(SerializationFormat, u32)> = common_formats.iter()
+        let mut scored_formats: Vec<(SerializationFormat, u32)> = common_formats
+            .iter()
             .map(|&&format| {
                 let capabilities = &self.supported_formats[&format];
                 let preference = self.format_preferences[&format] as u32;
-                
+
                 // Calculate composite score
                 let performance_score = capabilities.performance_score as u32 * 2;
                 let compatibility_score = capabilities.compatibility_score as u32;
                 let preference_score = preference * 3;
-                
+
                 let total_score = performance_score + compatibility_score + preference_score;
-                
+
                 (format, total_score)
             })
             .collect();
@@ -378,7 +397,8 @@ impl ProtocolNegotiator {
         scored_formats.sort_by(|a, b| b.1.cmp(&a.1));
 
         // Return the highest scoring format
-        scored_formats.into_iter()
+        scored_formats
+            .into_iter()
             .next()
             .map(|(format, _score)| format)
             .ok_or_else(|| FortressError::serialization("No format selected", "Scoring failed"))
@@ -388,37 +408,45 @@ impl ProtocolNegotiator {
     fn generate_cache_key(&self, request: &NegotiationRequest) -> String {
         let mut formats = request.client_formats.clone();
         formats.sort();
-        
+
         format!(
             "{}-{:?}-{:?}",
-            formats.iter().map(|f| format!("{:?}", f)).collect::<Vec<_>>().join(","),
+            formats
+                .iter()
+                .map(|f| format!("{:?}", f))
+                .collect::<Vec<_>>()
+                .join(","),
             request.preferences.prefer_performance,
             request.preferences.prefer_compatibility
         )
     }
 
     /// Generate negotiation reason
-    fn generate_negotiation_reason(&self, request: &NegotiationRequest, selected_format: &SerializationFormat) -> String {
+    fn generate_negotiation_reason(
+        &self,
+        request: &NegotiationRequest,
+        selected_format: &SerializationFormat,
+    ) -> String {
         let capabilities = &self.supported_formats[selected_format];
-        
+
         let mut reasons = Vec::new();
-        
+
         if request.preferences.prefer_performance && capabilities.performance_score >= 90 {
             reasons.push("High performance");
         }
-        
+
         if request.preferences.prefer_compatibility && capabilities.compatibility_score >= 90 {
             reasons.push("High compatibility");
         }
-        
+
         if request.preferences.prefer_binary && capabilities.binary {
             reasons.push("Binary format");
         }
-        
+
         if request.preferences.prefer_human_readable && capabilities.human_readable {
             reasons.push("Human readable");
         }
-        
+
         if reasons.is_empty() {
             format!("Selected based on overall score: {}", capabilities.name)
         } else {
@@ -432,7 +460,10 @@ impl ProtocolNegotiator {
     }
 
     /// Get format capabilities
-    pub fn get_format_capabilities(&self, format: &SerializationFormat) -> Option<&FormatCapabilities> {
+    pub fn get_format_capabilities(
+        &self,
+        format: &SerializationFormat,
+    ) -> Option<&FormatCapabilities> {
         self.supported_formats.get(format)
     }
 
@@ -454,108 +485,121 @@ impl ProtocolNegotiator {
     }
 
     /// Get format compatibility matrix
-    pub fn get_compatibility_matrix(&self) -> HashMap<SerializationFormat, HashMap<SerializationFormat, f64>> {
+    pub fn get_compatibility_matrix(
+        &self,
+    ) -> HashMap<SerializationFormat, HashMap<SerializationFormat, f64>> {
         let mut matrix = HashMap::new();
-        
+
         for format1 in self.supported_formats.keys() {
             let mut compat_row = HashMap::new();
-            
+
             for format2 in self.supported_formats.keys() {
                 let compatibility = self.calculate_compatibility(format1, format2);
                 compat_row.insert(format2.clone(), compatibility);
             }
-            
+
             matrix.insert(format1.clone(), compat_row);
         }
-        
+
         matrix
     }
 
     /// Calculate compatibility between two formats
-    fn calculate_compatibility(&self, format1: &SerializationFormat, format2: &SerializationFormat) -> f64 {
+    fn calculate_compatibility(
+        &self,
+        format1: &SerializationFormat,
+        format2: &SerializationFormat,
+    ) -> f64 {
         if format1 == format2 {
             return 1.0;
         }
-        
+
         let caps1 = &self.supported_formats[format1];
         let caps2 = &self.supported_formats[format2];
-        
+
         // Calculate type compatibility
         let mut common_types = 0;
         let total_types = caps1.supported_types.len();
-        
+
         for type1 in &caps1.supported_types {
             if caps2.supported_types.contains(type1) {
                 common_types += 1;
             }
         }
-        
+
         let type_compatibility = if total_types > 0 {
             common_types as f64 / total_types as f64
         } else {
             0.0
         };
-        
+
         // Calculate feature compatibility
         let mut feature_score = 0.0;
         let mut total_features = 0.0;
-        
+
         if caps1.compression_support == caps2.compression_support {
             feature_score += 1.0;
         }
         total_features += 1.0;
-        
+
         if caps1.schema_evolution == caps2.schema_evolution {
             feature_score += 1.0;
         }
         total_features += 1.0;
-        
+
         if caps1.human_readable == caps2.human_readable {
             feature_score += 1.0;
         }
         total_features += 1.0;
-        
+
         if caps1.binary == caps2.binary {
             feature_score += 1.0;
         }
         total_features += 1.0;
-        
+
         let feature_compatibility = if total_features > 0.0 {
             feature_score / total_features
         } else {
             0.0
         };
-        
+
         // Weighted average
         (type_compatibility * 0.7) + (feature_compatibility * 0.3)
     }
 
     /// Benchmark format performance
-    pub async fn benchmark_formats(&self, test_data: &[u8], iterations: usize) -> Result<HashMap<SerializationFormat, BenchmarkResult>> {
+    pub async fn benchmark_formats(
+        &self,
+        test_data: &[u8],
+        iterations: usize,
+    ) -> Result<HashMap<SerializationFormat, BenchmarkResult>> {
         let mut results = HashMap::new();
-        
+
         for format in self.get_supported_formats() {
             let start = std::time::Instant::now();
-            
+
             // Simulate serialization/deserialization
             for _ in 0..iterations {
                 // In a real implementation, this would actually serialize/deserialize
                 tokio::task::yield_now().await;
             }
-            
+
             let duration = start.elapsed();
             let throughput = iterations as f64 / duration.as_secs_f64();
-            
-            results.insert(format.clone(), BenchmarkResult {
-                format: format.clone(),
-                iterations,
-                total_time: duration,
-                avg_time_per_op: duration / iterations as u32,
-                throughput_ops_per_sec: throughput,
-                avg_size_bytes: test_data.len(),
-            });
+
+            results.insert(
+                format.clone(),
+                BenchmarkResult {
+                    format: format.clone(),
+                    iterations,
+                    total_time: duration,
+                    avg_time_per_op: duration / iterations as u32,
+                    throughput_ops_per_sec: throughput,
+                    avg_size_bytes: test_data.len(),
+                },
+            );
         }
-        
+
         Ok(results)
     }
 }
@@ -611,15 +655,12 @@ mod tests {
     #[tokio::test]
     async fn test_protocol_negotiation() {
         let negotiator = ProtocolNegotiator::new().unwrap();
-        
-        let peer_formats = vec![
-            SerializationFormat::Binary,
-            SerializationFormat::Json,
-        ];
-        
+
+        let peer_formats = vec![SerializationFormat::Binary, SerializationFormat::Json];
+
         let selected = negotiator.negotiate(&peer_formats).unwrap();
         assert!(peer_formats.contains(&selected));
-        
+
         // Binary should be preferred over JSON
         assert_eq!(selected, SerializationFormat::Binary);
     }
@@ -627,13 +668,13 @@ mod tests {
     #[tokio::test]
     async fn test_full_negotiation() {
         let negotiator = ProtocolNegotiator::new().unwrap();
-        
+
         let request = NegotiationRequest {
             client_formats: vec![SerializationFormat::Binary, SerializationFormat::Json],
             client_capabilities: HashMap::new(),
             preferences: NegotiationPreferences::default(),
         };
-        
+
         let response = negotiator.negotiate_full(request).await.unwrap();
         assert_eq!(response.selected_format, SerializationFormat::Binary);
         assert!(!response.reason.is_empty());
@@ -642,10 +683,10 @@ mod tests {
     #[test]
     fn test_compatibility_matrix() {
         let negotiator = ProtocolNegotiator::new().unwrap();
-        
+
         let matrix = negotiator.get_compatibility_matrix();
         assert!(!matrix.is_empty());
-        
+
         // Same format should have 1.0 compatibility
         let binary_compat = matrix[&SerializationFormat::Binary][&SerializationFormat::Binary];
         assert_eq!(binary_compat, 1.0);
@@ -654,11 +695,13 @@ mod tests {
     #[tokio::test]
     async fn test_metrics() {
         let negotiator = ProtocolNegotiator::new().unwrap();
-        
+
         // Perform some negotiations
-        negotiator.negotiate(&[SerializationFormat::Binary]).unwrap();
+        negotiator
+            .negotiate(&[SerializationFormat::Binary])
+            .unwrap();
         negotiator.negotiate(&[SerializationFormat::Json]).unwrap();
-        
+
         let metrics = negotiator.get_metrics().await.unwrap();
         assert_eq!(metrics.total_negotiations, 2);
         assert_eq!(metrics.successful_negotiations, 2);

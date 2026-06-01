@@ -1,15 +1,15 @@
 //! Comprehensive OIDC Provider Tests
-//! 
+//!
 //! This test suite provides comprehensive testing for the OIDC provider implementation,
 //! covering authorization flows, token management, user info endpoints, JWKS handling,
 //! Rego policy integration, PKCE support, client management, and security scenarios.
 
-use fortress_core::oidc_provider::*;
+use base64::Engine;
 use fortress_core::auth::AuthManager;
+use fortress_core::oidc_provider::*;
+use sha2::Digest;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
-use sha2::Digest;
-use base64::Engine;
 
 #[cfg(test)]
 mod tests {
@@ -18,73 +18,81 @@ mod tests {
     /// Helper function to create test OIDC configuration
     fn create_test_oidc_config() -> OidcConfig {
         let mut clients = HashMap::new();
-        
+
         // Test web client
-        clients.insert("web_client".to_string(), OidcClient {
-            client_id: "web_client".to_string(),
-            client_secret: Some("web_secret".to_string()),
-            name: "Web Application".to_string(),
-            redirect_uris: vec![
-                "http://localhost:3000/callback".to_string(),
-                "http://localhost:3000/auth/callback".to_string(),
-            ],
-            grant_types: vec![
-                "authorization_code".to_string(),
-                "refresh_token".to_string(),
-            ],
-            response_types: vec!["code".to_string()],
-            scopes: vec![
-                "openid".to_string(),
-                "profile".to_string(),
-                "email".to_string(),
-                "read".to_string(),
-                "write".to_string(),
-            ],
-            public: false,
-            metadata: HashMap::new(),
-        });
+        clients.insert(
+            "web_client".to_string(),
+            OidcClient {
+                client_id: "web_client".to_string(),
+                client_secret: Some("web_secret".to_string()),
+                name: "Web Application".to_string(),
+                redirect_uris: vec![
+                    "http://localhost:3000/callback".to_string(),
+                    "http://localhost:3000/auth/callback".to_string(),
+                ],
+                grant_types: vec![
+                    "authorization_code".to_string(),
+                    "refresh_token".to_string(),
+                ],
+                response_types: vec!["code".to_string()],
+                scopes: vec![
+                    "openid".to_string(),
+                    "profile".to_string(),
+                    "email".to_string(),
+                    "read".to_string(),
+                    "write".to_string(),
+                ],
+                public: false,
+                metadata: HashMap::new(),
+            },
+        );
 
         // Test public client (SPA)
-        clients.insert("spa_client".to_string(), OidcClient {
-            client_id: "spa_client".to_string(),
-            client_secret: None,
-            name: "Single Page Application".to_string(),
-            redirect_uris: vec![
-                "http://localhost:8080/callback".to_string(),
-            ],
-            grant_types: vec![
-                "authorization_code".to_string(),
-                "refresh_token".to_string(),
-            ],
-            response_types: vec!["code".to_string()],
-            scopes: vec![
-                "openid".to_string(),
-                "profile".to_string(),
-                "email".to_string(),
-            ],
-            public: true,
-            metadata: HashMap::new(),
-        });
+        clients.insert(
+            "spa_client".to_string(),
+            OidcClient {
+                client_id: "spa_client".to_string(),
+                client_secret: None,
+                name: "Single Page Application".to_string(),
+                redirect_uris: vec!["http://localhost:8080/callback".to_string()],
+                grant_types: vec![
+                    "authorization_code".to_string(),
+                    "refresh_token".to_string(),
+                ],
+                response_types: vec!["code".to_string()],
+                scopes: vec![
+                    "openid".to_string(),
+                    "profile".to_string(),
+                    "email".to_string(),
+                ],
+                public: true,
+                metadata: HashMap::new(),
+            },
+        );
 
         // Test machine-to-machine client
-        clients.insert("m2m_client".to_string(), OidcClient {
-            client_id: "m2m_client".to_string(),
-            client_secret: Some("m2m_secret".to_string()),
-            name: "Machine-to-Machine Client".to_string(),
-            redirect_uris: vec![],
-            grant_types: vec!["client_credentials".to_string()],
-            response_types: vec![],
-            scopes: vec![
-                "api.read".to_string(),
-                "api.write".to_string(),
-            ],
-            public: false,
-            metadata: HashMap::new(),
-        });
+        clients.insert(
+            "m2m_client".to_string(),
+            OidcClient {
+                client_id: "m2m_client".to_string(),
+                client_secret: Some("m2m_secret".to_string()),
+                name: "Machine-to-Machine Client".to_string(),
+                redirect_uris: vec![],
+                grant_types: vec!["client_credentials".to_string()],
+                response_types: vec![],
+                scopes: vec!["api.read".to_string(), "api.write".to_string()],
+                public: false,
+                metadata: HashMap::new(),
+            },
+        );
 
         OidcConfig {
             issuer: "https://auth.fortress.local".to_string(),
-            response_types: vec!["code".to_string(), "id_token".to_string(), "token".to_string()],
+            response_types: vec![
+                "code".to_string(),
+                "id_token".to_string(),
+                "token".to_string(),
+            ],
             grant_types: vec![
                 "authorization_code".to_string(),
                 "refresh_token".to_string(),
@@ -101,7 +109,7 @@ mod tests {
             ],
             response_modes: vec!["query".to_string(), "fragment".to_string()],
             token_expiration: TokenExpiration {
-                auth_code: 600,        // 10 minutes
+                auth_code: 600,         // 10 minutes
                 access_token: 3600,     // 1 hour
                 refresh_token: 2592000, // 30 days
                 id_token: 3600,         // 1 hour
@@ -145,19 +153,26 @@ mod tests {
 
         // Test successful initialization
         let provider = OidcProvider::new(config, auth_manager);
-        assert!(provider.is_ok(), "OIDC provider should initialize successfully");
+        assert!(
+            provider.is_ok(),
+            "OIDC provider should initialize successfully"
+        );
 
         let provider = provider.unwrap();
-        
+
         // Test JWKS availability
         let jwks = provider.jwks();
         assert!(!jwks.keys.is_empty(), "JWKS should contain keys");
-        
+
         // Test key structure
         let key = &jwks.keys[0];
         assert!(!key.kid.is_empty(), "Key should have ID");
         assert_eq!(key.kty, "RSA", "Key type should be RSA");
-        assert_eq!(key.use_, Some("sig".to_string()), "Key usage should be signature");
+        assert_eq!(
+            key.use_,
+            Some("sig".to_string()),
+            "Key usage should be signature"
+        );
     }
 
     /// Test 2: Authorization code flow (basic functionality)
@@ -182,14 +197,20 @@ mod tests {
         };
 
         // Process authorization request
-        let redirect_url = provider.authorize(auth_request).await
+        let redirect_url = provider
+            .authorize(auth_request)
+            .await
             .expect("Authorization should succeed");
 
         // Verify redirect URL structure
-        assert!(redirect_url.starts_with("http://localhost:3000/callback?code="), 
-                "Redirect URL should contain code");
-        assert!(redirect_url.contains("&state=state_123"), 
-                "Redirect URL should contain state");
+        assert!(
+            redirect_url.starts_with("http://localhost:3000/callback?code="),
+            "Redirect URL should contain code"
+        );
+        assert!(
+            redirect_url.contains("&state=state_123"),
+            "Redirect URL should contain state"
+        );
 
         // Extract authorization code
         let code_start = redirect_url.find("code=").unwrap() + 5;
@@ -212,10 +233,13 @@ mod tests {
         // that doesn't exist in the auth manager. This is a limitation of the
         // current OIDC provider implementation.
         let token_result = provider.token(token_request).await;
-        
+
         // We expect this to fail due to the hardcoded user limitation
-        assert!(token_result.is_err(), "Token exchange should fail due to hardcoded user limitation");
-        
+        assert!(
+            token_result.is_err(),
+            "Token exchange should fail due to hardcoded user limitation"
+        );
+
         println!("Authorization code flow test completed");
         println!("  Authorization request: SUCCESS");
         println!("  Code generation: SUCCESS");
@@ -251,7 +275,9 @@ mod tests {
             additional_params: HashMap::new(),
         };
 
-        let redirect_url = provider.authorize(auth_request).await
+        let redirect_url = provider
+            .authorize(auth_request)
+            .await
             .expect("Authorization with PKCE should succeed");
 
         // Extract code
@@ -271,10 +297,15 @@ mod tests {
             scope: None,
         };
 
-        let token_response = provider.token(token_request).await
+        let token_response = provider
+            .token(token_request)
+            .await
             .expect("Token exchange with PKCE should succeed");
 
-        assert!(!token_response.access_token.is_empty(), "PKCE token exchange should succeed");
+        assert!(
+            !token_response.access_token.is_empty(),
+            "PKCE token exchange should succeed"
+        );
 
         // Test invalid PKCE verifier
         let invalid_token_request = OidcTokenRequest {
@@ -347,14 +378,31 @@ mod tests {
             scope: None,
         };
 
-        let refresh_response = provider.token(refresh_request).await
+        let refresh_response = provider
+            .token(refresh_request)
+            .await
             .expect("Refresh token flow should succeed");
 
-        assert!(!refresh_response.access_token.is_empty(), "New access token should be issued");
-        assert_eq!(refresh_response.token_type, "Bearer", "Token type should be Bearer");
-        assert_eq!(refresh_response.expires_in, 3600, "Expiration should be reset");
-        assert!(refresh_response.refresh_token.is_some(), "Refresh token should be preserved");
-        assert!(refresh_response.id_token.is_none(), "ID token should not be issued on refresh");
+        assert!(
+            !refresh_response.access_token.is_empty(),
+            "New access token should be issued"
+        );
+        assert_eq!(
+            refresh_response.token_type, "Bearer",
+            "Token type should be Bearer"
+        );
+        assert_eq!(
+            refresh_response.expires_in, 3600,
+            "Expiration should be reset"
+        );
+        assert!(
+            refresh_response.refresh_token.is_some(),
+            "Refresh token should be preserved"
+        );
+        assert!(
+            refresh_response.id_token.is_none(),
+            "ID token should not be issued on refresh"
+        );
 
         println!("Refresh token flow completed successfully");
         println!("  New access token issued: YES");
@@ -379,16 +427,36 @@ mod tests {
             scope: Some("api.read api.write".to_string()),
         };
 
-        let token_response = provider.token(token_request).await
+        let token_response = provider
+            .token(token_request)
+            .await
             .expect("Client credentials flow should succeed");
 
-        assert!(!token_response.access_token.is_empty(), "Access token should be issued");
-        assert_eq!(token_response.token_type, "Bearer", "Token type should be Bearer");
-        assert_eq!(token_response.expires_in, 3600, "Expiration should be 1 hour");
-        assert!(token_response.refresh_token.is_none(), "Refresh token should not be issued");
-        assert!(token_response.id_token.is_none(), "ID token should not be issued");
-        assert_eq!(token_response.scope, Some("api.read api.write".to_string()), 
-                  "Scope should match request");
+        assert!(
+            !token_response.access_token.is_empty(),
+            "Access token should be issued"
+        );
+        assert_eq!(
+            token_response.token_type, "Bearer",
+            "Token type should be Bearer"
+        );
+        assert_eq!(
+            token_response.expires_in, 3600,
+            "Expiration should be 1 hour"
+        );
+        assert!(
+            token_response.refresh_token.is_none(),
+            "Refresh token should not be issued"
+        );
+        assert!(
+            token_response.id_token.is_none(),
+            "ID token should not be issued"
+        );
+        assert_eq!(
+            token_response.scope,
+            Some("api.read api.write".to_string()),
+            "Scope should match request"
+        );
 
         println!("Client credentials flow completed successfully");
         println!("  Synthetic user created: client_m2m_client");
@@ -434,24 +502,51 @@ mod tests {
         let token_response = provider.token(token_request).await.unwrap();
 
         // Test user info endpoint
-        let user_info = provider.user_info(&token_response.access_token).await
+        let user_info = provider
+            .user_info(&token_response.access_token)
+            .await
             .expect("User info should be accessible");
 
         assert_eq!(user_info.sub, "user_123", "Subject should match user ID");
-        assert_eq!(user_info.name, Some("Test User".to_string()), "Name should match");
-        assert_eq!(user_info.email, Some("test@example.com".to_string()), "Email should match");
-        assert_eq!(user_info.email_verified, Some(true), "Email should be verified");
-        assert_eq!(user_info.preferred_username, Some("testuser".to_string()), "Username should match");
+        assert_eq!(
+            user_info.name,
+            Some("Test User".to_string()),
+            "Name should match"
+        );
+        assert_eq!(
+            user_info.email,
+            Some("test@example.com".to_string()),
+            "Email should match"
+        );
+        assert_eq!(
+            user_info.email_verified,
+            Some(true),
+            "Email should be verified"
+        );
+        assert_eq!(
+            user_info.preferred_username,
+            Some("testuser".to_string()),
+            "Username should match"
+        );
         assert!(user_info.groups.is_some(), "Groups should be present");
-        
+
         // Check additional claims
-        assert!(user_info.additional_claims.contains_key("roles"), "Roles should be in claims");
-        assert!(user_info.additional_claims.contains_key("permissions"), "Permissions should be in claims");
+        assert!(
+            user_info.additional_claims.contains_key("roles"),
+            "Roles should be in claims"
+        );
+        assert!(
+            user_info.additional_claims.contains_key("permissions"),
+            "Permissions should be in claims"
+        );
 
         println!("User info endpoint test completed successfully");
         println!("  User ID: {}", user_info.sub);
         println!("  Email: {:?}", user_info.email);
-        println!("  Roles in claims: {:?}", user_info.additional_claims.get("roles"));
+        println!(
+            "  Roles in claims: {:?}",
+            user_info.additional_claims.get("roles")
+        );
     }
 
     /// Test 7: Error handling scenarios
@@ -632,7 +727,7 @@ mod tests {
 
         // Test with blocked user (simulate by modifying the hardcoded user in provider)
         // This would require modifying the provider implementation for proper testing
-        
+
         println!("Rego policy integration test completed");
         println!("  Policy evaluation: FUNCTIONAL");
         println!("  Cache mechanism: FUNCTIONAL");
@@ -679,7 +774,7 @@ mod tests {
 
         // Test cleanup functionality
         provider.cleanup_expired();
-        
+
         // Verify refresh token still exists (not expired)
         let refresh_request = OidcTokenRequest {
             grant_type: "refresh_token".to_string(),
@@ -693,7 +788,10 @@ mod tests {
         };
 
         let result = provider.token(refresh_request).await;
-        assert!(result.is_ok(), "Non-expired refresh token should work after cleanup");
+        assert!(
+            result.is_ok(),
+            "Non-expired refresh token should work after cleanup"
+        );
 
         println!("Token expiration and cleanup test completed");
         println!("  Cleanup mechanism: FUNCTIONAL");
@@ -716,7 +814,7 @@ mod tests {
             assert!(!key.kid.is_empty(), "Key ID should not be empty");
             assert!(!key.kty.is_empty(), "Key type should not be empty");
             assert!(key.alg.is_some(), "Algorithm should be specified");
-            
+
             if key.kty == "RSA" {
                 assert!(key.n.is_some(), "RSA key should have modulus");
                 assert!(key.e.is_some(), "RSA key should have exponent");
@@ -758,7 +856,7 @@ mod tests {
             let result = provider.authorize(auth_request).await;
             let duration = start_time.elapsed();
             total_duration += duration;
-            
+
             if result.is_ok() {
                 successful_requests += 1;
             }
@@ -768,14 +866,21 @@ mod tests {
         let success_rate = (successful_requests as f64 / num_requests as f64) * 100.0;
 
         // Performance assertions
-        assert!(successful_requests >= num_requests * 95 / 100, 
-               "At least 95% of requests should succeed");
-        assert!(avg_duration.as_millis() < 200, 
-               "Average response time should be under 200ms");
+        assert!(
+            successful_requests >= num_requests * 95 / 100,
+            "At least 95% of requests should succeed"
+        );
+        assert!(
+            avg_duration.as_millis() < 200,
+            "Average response time should be under 200ms"
+        );
 
         println!("Performance and load testing completed");
         println!("  Requests: {}", num_requests);
-        println!("  Successful: {} ({:.1}%)", successful_requests, success_rate);
+        println!(
+            "  Successful: {} ({:.1}%)",
+            successful_requests, success_rate
+        );
         println!("  Average response time: {:?}", avg_duration);
     }
 
@@ -792,7 +897,11 @@ mod tests {
             ("openid profile", true, "OIDC with profile"),
             ("openid profile email", true, "Full user info scopes"),
             ("openid read", true, "OIDC with read permission"),
-            ("openid write", false, "Write scope not allowed for web_client"),
+            (
+                "openid write",
+                false,
+                "Write scope not allowed for web_client",
+            ),
             ("admin superuser", false, "Admin scopes not allowed"),
             ("", false, "Empty scope"),
         ];
@@ -812,7 +921,7 @@ mod tests {
             };
 
             let result = provider.authorize(auth_request).await;
-            
+
             if should_succeed {
                 assert!(result.is_ok(), "{} should succeed", description);
             } else {
@@ -845,7 +954,10 @@ mod tests {
         };
 
         let result = provider.token(confidential_request).await;
-        assert!(result.is_ok(), "Confidential client with secret should succeed");
+        assert!(
+            result.is_ok(),
+            "Confidential client with secret should succeed"
+        );
 
         // Test confidential client without secret (should fail)
         let no_secret_request = OidcTokenRequest {
@@ -860,7 +972,10 @@ mod tests {
         };
 
         let result = provider.token(no_secret_request).await;
-        assert!(result.is_err(), "Confidential client without secret should fail");
+        assert!(
+            result.is_err(),
+            "Confidential client without secret should fail"
+        );
 
         // Test confidential client with wrong secret (should fail)
         let wrong_secret_request = OidcTokenRequest {
@@ -875,7 +990,10 @@ mod tests {
         };
 
         let result = provider.token(wrong_secret_request).await;
-        assert!(result.is_err(), "Confidential client with wrong secret should fail");
+        assert!(
+            result.is_err(),
+            "Confidential client with wrong secret should fail"
+        );
 
         println!("Client authentication methods test completed");
         println!("  Confidential client + secret: SUCCESS");
@@ -905,8 +1023,10 @@ mod tests {
         };
 
         let redirect_url = provider.authorize(auth_request_with_state).await.unwrap();
-        assert!(redirect_url.contains("&state=custom_state_12345"), 
-                "State parameter should be preserved");
+        assert!(
+            redirect_url.contains("&state=custom_state_12345"),
+            "State parameter should be preserved"
+        );
 
         // Test nonce parameter inclusion in ID token
         let auth_request_with_nonce = OidcAuthRequest {
@@ -938,7 +1058,10 @@ mod tests {
         };
 
         let token_response = provider.token(token_request).await.unwrap();
-        assert!(token_response.id_token.is_some(), "ID token should be issued with nonce");
+        assert!(
+            token_response.id_token.is_some(),
+            "ID token should be issued with nonce"
+        );
 
         println!("State and nonce parameter handling test completed");
         println!("  State preservation: SUCCESS");

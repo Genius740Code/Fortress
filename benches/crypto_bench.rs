@@ -43,13 +43,14 @@ fn bench_key_generation(c: &mut Criterion) {
     let algorithm = Aegis256::new();
 
     c.bench_function("key_generation_aegis256", |b| {
-        b.iter(|| {
-            rt.block_on(async {
-                key_manager.generate_key(black_box(&algorithm)).await
-            })
-        })
+        b.iter(|| rt.block_on(async { key_manager.generate_key(black_box(&algorithm)).await }))
     });
 }
 
-criterion_group!(benches, bench_aegis256, bench_aegis256_decrypt, bench_key_generation);
+criterion_group!(
+    benches,
+    bench_aegis256,
+    bench_aegis256_decrypt,
+    bench_key_generation
+);
 criterion_main!(benches);

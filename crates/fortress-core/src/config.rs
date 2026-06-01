@@ -3,8 +3,8 @@
 //! This module provides configuration loading, validation, and management
 //! capabilities for Fortress.
 
-use crate::error::{FortressError, Result, ConfigurationErrorCode};
 use crate::encryption::EncryptionProfile;
+use crate::error::{ConfigurationErrorCode, FortressError, Result};
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DurationSeconds};
 use std::collections::HashMap;
@@ -36,27 +36,30 @@ pub struct Config {
 impl Config {
     /// Load configuration from a file
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let content = std::fs::read_to_string(&path)
-            .map_err(|e| FortressError::configuration(
+        let content = std::fs::read_to_string(&path).map_err(|e| {
+            FortressError::configuration(
                 format!("Failed to read config file: {}", e),
                 None,
                 ConfigurationErrorCode::FileNotFound,
-            ))?;
+            )
+        })?;
 
         let config: Config = if path.as_ref().extension().and_then(|s| s.to_str()) == Some("toml") {
-            toml::from_str(&content)
-                .map_err(|e| FortressError::configuration(
+            toml::from_str(&content).map_err(|e| {
+                FortressError::configuration(
                     format!("Failed to parse TOML config: {}", e),
                     None,
                     ConfigurationErrorCode::InvalidFormat,
-                ))?
+                )
+            })?
         } else {
-            serde_json::from_str(&content)
-                .map_err(|e| FortressError::configuration(
+            serde_json::from_str(&content).map_err(|e| {
+                FortressError::configuration(
                     format!("Failed to parse JSON config: {}", e),
                     None,
                     ConfigurationErrorCode::InvalidFormat,
-                ))?
+                )
+            })?
         };
 
         // Validate configuration
@@ -85,12 +88,13 @@ impl Config {
         // API configuration
         if let Ok(port) = std::env::var("FORTRESS_API_PORT") {
             let mut api_config = config.api.unwrap_or_default();
-            api_config.rest_port = port.parse()
-                .map_err(|_| FortressError::configuration(
+            api_config.rest_port = port.parse().map_err(|_| {
+                FortressError::configuration(
                     "Invalid API port".to_string(),
                     Some("api.rest_port".to_string()),
                     ConfigurationErrorCode::InvalidValue,
-                ))?;
+                )
+            })?;
             config.api = Some(api_config);
         }
 
@@ -110,9 +114,21 @@ impl Config {
         }
 
         // Validate encryption configuration
-        if !["aegis256", "chacha20poly1305", "aes256gcm", "kyber512", "kyber768", "kyber1024"].contains(&self.encryption.default_algorithm.as_str()) {
+        if ![
+            "aegis256",
+            "chacha20poly1305",
+            "aes256gcm",
+            "kyber512",
+            "kyber768",
+            "kyber1024",
+        ]
+        .contains(&self.encryption.default_algorithm.as_str())
+        {
             return Err(FortressError::configuration(
-                format!("Invalid default algorithm: {}", self.encryption.default_algorithm),
+                format!(
+                    "Invalid default algorithm: {}",
+                    self.encryption.default_algorithm
+                ),
                 Some("encryption.default_algorithm".to_string()),
                 ConfigurationErrorCode::InvalidValue,
             ));
@@ -135,27 +151,30 @@ impl Config {
     /// Save configuration to a file
     pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         let content = if path.as_ref().extension().and_then(|s| s.to_str()) == Some("toml") {
-            toml::to_string_pretty(self)
-                .map_err(|e| FortressError::configuration(
+            toml::to_string_pretty(self).map_err(|e| {
+                FortressError::configuration(
                     format!("Failed to serialize TOML: {}", e),
                     None,
                     ConfigurationErrorCode::InvalidFormat,
-                ))?
+                )
+            })?
         } else {
-            serde_json::to_string_pretty(self)
-                .map_err(|e| FortressError::configuration(
+            serde_json::to_string_pretty(self).map_err(|e| {
+                FortressError::configuration(
                     format!("Failed to serialize JSON: {}", e),
                     None,
                     ConfigurationErrorCode::InvalidFormat,
-                ))?
+                )
+            })?
         };
 
-        std::fs::write(path, content)
-            .map_err(|e| FortressError::configuration(
+        std::fs::write(path, content).map_err(|e| {
+            FortressError::configuration(
                 format!("Failed to write config file: {}", e),
                 None,
                 ConfigurationErrorCode::AccessDenied,
-            ))?;
+            )
+        })?;
 
         Ok(())
     }
@@ -251,7 +270,7 @@ impl Default for DatabaseConfig {
         Self {
             path: "./fortress.db".to_string(),
             max_size: Some(1024 * 1024 * 1024), // 1GB
-            cache_size: Some(64 * 1024 * 1024),  // 64MB
+            cache_size: Some(64 * 1024 * 1024), // 64MB
             enable_wal: true,
             pool_size: 10,
         }
@@ -279,9 +298,18 @@ pub struct EncryptionConfig {
 impl Default for EncryptionConfig {
     fn default() -> Self {
         let mut profiles = HashMap::new();
-        profiles.insert("lightning".to_string(), EncryptionProfile::lightning("lightning".to_string()));
-        profiles.insert("balanced".to_string(), EncryptionProfile::balanced("balanced".to_string()));
-        profiles.insert("fortress".to_string(), EncryptionProfile::fortress("fortress".to_string()));
+        profiles.insert(
+            "lightning".to_string(),
+            EncryptionProfile::lightning("lightning".to_string()),
+        );
+        profiles.insert(
+            "balanced".to_string(),
+            EncryptionProfile::balanced("balanced".to_string()),
+        );
+        profiles.insert(
+            "fortress".to_string(),
+            EncryptionProfile::fortress("fortress".to_string()),
+        );
 
         Self {
             default_algorithm: "kyber1024".to_string(),
@@ -490,12 +518,13 @@ impl Default for MonitoringConfig {
 
 /// Parse duration string (e.g., "23h", "7d", "30m")
 fn parse_duration(s: &str) -> Result<std::time::Duration> {
-    humantime::parse_duration(s)
-        .map_err(|_| FortressError::configuration(
+    humantime::parse_duration(s).map_err(|_| {
+        FortressError::configuration(
             format!("Invalid duration format: {}", s),
             None,
             ConfigurationErrorCode::InvalidValue,
-        ))
+        )
+    })
 }
 
 /// Transaction configuration
@@ -557,9 +586,9 @@ pub struct StreamingConfig {
 impl Default for StreamingConfig {
     fn default() -> Self {
         Self {
-            default_buffer_size: 64 * 1024, // 64KB
+            default_buffer_size: 64 * 1024,    // 64KB
             max_buffer_size: 10 * 1024 * 1024, // 10MB
-            timeout_seconds: 300, // 5 minutes
+            timeout_seconds: 300,              // 5 minutes
             max_concurrent_streams: 1000,
             compression_enabled: true,
             default_compression: "gzip".to_string(),
@@ -704,8 +733,8 @@ impl Default for AuditConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::NamedTempFile;
     use crate::encryption::PerformanceProfile;
+    use tempfile::NamedTempFile;
 
     #[test]
     fn test_default_config() {
@@ -752,7 +781,7 @@ mod tests {
     #[test]
     fn test_config_validation() {
         let mut config = Config::default();
-        
+
         // Valid config should pass
         assert!(config.validate().is_ok());
 
@@ -769,7 +798,7 @@ mod tests {
     #[test]
     fn test_config_serialization() {
         let config = Config::default();
-        
+
         // Test JSON serialization
         let json = serde_json::to_string_pretty(&config).unwrap();
         let deserialized: Config = serde_json::from_str(&json).unwrap();
@@ -784,7 +813,7 @@ mod tests {
     #[test]
     fn test_config_file_operations() {
         let config = Config::default();
-        
+
         // Test JSON file
         let temp_file = NamedTempFile::new().unwrap();
         config.save_to_file(temp_file.path()).unwrap();
@@ -800,10 +829,19 @@ mod tests {
 
     #[test]
     fn test_parse_duration() {
-        assert_eq!(parse_duration("23h").unwrap(), std::time::Duration::from_secs(23 * 3600));
-        assert_eq!(parse_duration("7d").unwrap(), std::time::Duration::from_secs(7 * 24 * 3600));
-        assert_eq!(parse_duration("30m").unwrap(), std::time::Duration::from_secs(30 * 60));
-        
+        assert_eq!(
+            parse_duration("23h").unwrap(),
+            std::time::Duration::from_secs(23 * 3600)
+        );
+        assert_eq!(
+            parse_duration("7d").unwrap(),
+            std::time::Duration::from_secs(7 * 24 * 3600)
+        );
+        assert_eq!(
+            parse_duration("30m").unwrap(),
+            std::time::Duration::from_secs(30 * 60)
+        );
+
         assert!(parse_duration("invalid").is_err());
     }
 
@@ -811,15 +849,15 @@ mod tests {
     fn test_encryption_profiles() {
         let config = Config::default();
         assert_eq!(config.encryption.profiles.len(), 3);
-        
+
         let lightning = config.encryption.profiles.get("lightning").unwrap();
         assert_eq!(lightning.algorithm, "aegis256");
         assert_eq!(lightning.performance_profile, PerformanceProfile::Lightning);
-        
+
         let balanced = config.encryption.profiles.get("balanced").unwrap();
         assert_eq!(balanced.algorithm, "chacha20poly1305");
         assert_eq!(balanced.performance_profile, PerformanceProfile::Balanced);
-        
+
         let fortress = config.encryption.profiles.get("fortress").unwrap();
         assert_eq!(fortress.algorithm, "aes256gcm");
         assert_eq!(fortress.performance_profile, PerformanceProfile::Fortress);

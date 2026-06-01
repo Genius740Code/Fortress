@@ -1,5 +1,5 @@
 //! HSM Integration Tests for Fortress
-//! 
+//!
 //! This test suite validates HSM integration with Fortress across all supported providers:
 //! - AWS CloudHSM
 //! - PKCS#11 compliant HSMs
@@ -9,19 +9,19 @@
 #[cfg(test)]
 #[cfg(feature = "hsm")]
 mod hsm_integration_tests {
+    use chrono::{DateTime, Utc};
     use fortress_core::{
-        hsm::{
-            HsmProvider, HsmConfig, HsmProviderType, HsmConnection, HsmCredentials,
-            HsmKeySettings, Pkcs11UserType,
-        },
-        key::{KeyId, KeyMetadata, KeyVersion, HsmKeyManager},
         encryption::{EncryptionAlgorithm, PerformanceProfile},
-        error::{FortressError, Result, HsmErrorCode},
+        error::{FortressError, HsmErrorCode, Result},
+        hsm::{
+            HsmConfig, HsmConnection, HsmCredentials, HsmKeySettings, HsmProvider, HsmProviderType,
+            Pkcs11UserType,
+        },
+        key::{HsmKeyManager, KeyId, KeyMetadata, KeyVersion},
     };
     use std::collections::HashMap;
     use std::time::Duration;
     use tokio::time::timeout;
-    use chrono::{DateTime, Utc};
 
     /// Test configuration for HSM integration
     struct HsmTestConfig {
@@ -111,10 +111,10 @@ mod hsm_integration_tests {
     #[tokio::test]
     async fn test_aws_cloudhsm_provider_initialization() {
         let config = HsmTestConfig::aws_cloudhsm_test().to_hsm_config();
-        
+
         // Test provider initialization
         let result = HsmKeyManager::new(config).await;
-        
+
         // In test environment, we expect this to fail gracefully with proper error handling
         match result {
             Ok(_) => {
@@ -132,10 +132,10 @@ mod hsm_integration_tests {
     #[tokio::test]
     async fn test_pkcs11_provider_initialization() {
         let config = HsmTestConfig::pkcs11_test().to_hsm_config();
-        
+
         // Test provider initialization
         let result = HsmKeyManager::new(config).await;
-        
+
         // In test environment, we expect this to fail gracefully with proper error handling
         match result {
             Ok(_) => {
@@ -153,20 +153,25 @@ mod hsm_integration_tests {
     #[tokio::test]
     async fn test_azure_dedicated_hsm_provider_initialization() {
         let config = HsmTestConfig::azure_dedicated_hsm_test().to_hsm_config();
-        
+
         // Test provider initialization
         let result = HsmKeyManager::new(config).await;
-        
+
         // In test environment, we expect this to fail gracefully with proper error handling
         match result {
             Ok(_) => {
                 // If it succeeds, verify the provider is properly initialized
-                println!("Azure Dedicated HSM provider initialized successfully in test environment");
+                println!(
+                    "Azure Dedicated HSM provider initialized successfully in test environment"
+                );
             }
             Err(e) => {
                 // In test environment without real Azure credentials, this should fail gracefully
                 assert!(matches!(e, fortress_core::error::FortressError::Hsm { .. }));
-                println!("Azure Dedicated HSM provider failed gracefully as expected: {}", e);
+                println!(
+                    "Azure Dedicated HSM provider failed gracefully as expected: {}",
+                    e
+                );
             }
         }
     }
@@ -174,10 +179,10 @@ mod hsm_integration_tests {
     #[tokio::test]
     async fn test_google_cloud_hsm_provider_initialization() {
         let config = HsmTestConfig::google_cloud_hsm_test().to_hsm_config();
-        
+
         // Test provider initialization
         let result = HsmKeyManager::new(config).await;
-        
+
         // In test environment, we expect this to fail gracefully with proper error handling
         match result {
             Ok(_) => {
@@ -187,7 +192,10 @@ mod hsm_integration_tests {
             Err(e) => {
                 // In test environment without real GCP credentials, this should fail gracefully
                 assert!(matches!(e, fortress_core::error::FortressError::Hsm { .. }));
-                println!("Google Cloud HSM provider failed gracefully as expected: {}", e);
+                println!(
+                    "Google Cloud HSM provider failed gracefully as expected: {}",
+                    e
+                );
             }
         }
     }
@@ -234,12 +242,13 @@ mod hsm_integration_tests {
     #[tokio::test]
     async fn test_hsm_key_operations_timeout() {
         let config = HsmTestConfig::aws_cloudhsm_test().to_hsm_config();
-        
+
         // Test timeout handling
         let result = timeout(Duration::from_secs(5), async {
             // This should timeout quickly in test environment
             HsmKeyManager::new(config).await
-        }).await;
+        })
+        .await;
 
         match result {
             Ok(_) => {
@@ -255,15 +264,27 @@ mod hsm_integration_tests {
     async fn test_hsm_error_handling() {
         // Test various error scenarios
         let test_cases = vec![
-            ("Invalid credentials", HsmTestConfig::aws_cloudhsm_test().to_hsm_config()),
-            ("Invalid PKCS#11 library", HsmTestConfig::pkcs11_test().to_hsm_config()),
-            ("Invalid Azure credentials", HsmTestConfig::azure_dedicated_hsm_test().to_hsm_config()),
-            ("Invalid GCP credentials", HsmTestConfig::google_cloud_hsm_test().to_hsm_config()),
+            (
+                "Invalid credentials",
+                HsmTestConfig::aws_cloudhsm_test().to_hsm_config(),
+            ),
+            (
+                "Invalid PKCS#11 library",
+                HsmTestConfig::pkcs11_test().to_hsm_config(),
+            ),
+            (
+                "Invalid Azure credentials",
+                HsmTestConfig::azure_dedicated_hsm_test().to_hsm_config(),
+            ),
+            (
+                "Invalid GCP credentials",
+                HsmTestConfig::google_cloud_hsm_test().to_hsm_config(),
+            ),
         ];
 
         for (description, config) in test_cases {
             let result = HsmKeyManager::new(config).await;
-            
+
             match result {
                 Ok(_) => {
                     println!("{}: Unexpected success", description);
@@ -291,7 +312,7 @@ mod hsm_integration_tests {
             // Test cloning
             let cloned = provider.clone();
             assert_eq!(provider, cloned);
-            
+
             // Test serialization/deserialization
             let serialized = serde_json::to_string(&provider).unwrap();
             let deserialized: HsmProviderType = serde_json::from_str(&serialized).unwrap();
@@ -325,7 +346,7 @@ mod hsm_integration_tests {
             // Test cloning
             let cloned = connection.clone();
             assert_eq!(connection, cloned);
-            
+
             // Test serialization/deserialization
             let serialized = serde_json::to_string(&connection).unwrap();
             let deserialized: HsmConnection = serde_json::from_str(&serialized).unwrap();
@@ -360,7 +381,7 @@ mod hsm_integration_tests {
             // Test cloning
             let cloned = cred.clone();
             assert_eq!(cred, cloned);
-            
+
             // Test serialization/deserialization
             let serialized = serde_json::to_string(&cred).unwrap();
             let deserialized: HsmCredentials = serde_json::from_str(&serialized).unwrap();
@@ -372,11 +393,11 @@ mod hsm_integration_tests {
     async fn test_hsm_key_settings() {
         // Test key settings configuration
         let settings = HsmKeySettings::default();
-        
+
         // Test cloning
         let cloned = settings.clone();
         assert_eq!(settings, cloned);
-        
+
         // Test serialization/deserialization
         let serialized = serde_json::to_string(&settings).unwrap();
         let deserialized: HsmKeySettings = serde_json::from_str(&serialized).unwrap();
@@ -387,11 +408,11 @@ mod hsm_integration_tests {
     async fn test_hsm_config_serialization() {
         // Test full HSM configuration serialization
         let config = HsmTestConfig::aws_cloudhsm_test().to_hsm_config();
-        
+
         // Test cloning
         let cloned = config.clone();
         assert_eq!(config, cloned);
-        
+
         // Test serialization/deserialization
         let serialized = serde_json::to_string(&config).unwrap();
         let deserialized: HsmConfig = serde_json::from_str(&serialized).unwrap();
@@ -402,19 +423,19 @@ mod hsm_integration_tests {
     async fn test_hsm_performance_metrics() {
         // Test that HSM providers can report performance metrics
         let config = HsmTestConfig::aws_cloudhsm_test().to_hsm_config();
-        
+
         match HsmKeyManager::new(config).await {
             Ok(manager) => {
                 // Test metrics collection
                 let metrics = manager.get_performance_metrics().await;
                 assert!(metrics.is_ok());
-                
+
                 let metrics = metrics.unwrap();
                 // Verify metrics contain expected fields
                 assert!(metrics.contains_key("operations_per_second"));
                 assert!(metrics.contains_key("average_latency_ms"));
                 assert!(metrics.contains_key("error_rate"));
-                
+
                 println!("HSM performance metrics: {:?}", metrics);
             }
             Err(_) => {
@@ -428,13 +449,13 @@ mod hsm_integration_tests {
     async fn test_hsm_health_check() {
         // Test health check functionality
         let config = HsmTestConfig::aws_cloudhsm_test().to_hsm_config();
-        
+
         match HsmKeyManager::new(config).await {
             Ok(manager) => {
                 // Test health check
                 let health = manager.health_check().await;
                 assert!(health.is_ok());
-                
+
                 let is_healthy = health.unwrap();
                 println!("HSM health check result: {}", is_healthy);
             }
@@ -449,13 +470,13 @@ mod hsm_integration_tests {
     async fn test_hsm_graceful_shutdown() {
         // Test graceful shutdown functionality
         let config = HsmTestConfig::aws_cloudhsm_test().to_hsm_config();
-        
+
         match HsmKeyManager::new(config).await {
             Ok(manager) => {
                 // Test graceful shutdown
                 let shutdown_result = manager.shutdown().await;
                 assert!(shutdown_result.is_ok());
-                
+
                 println!("HSM graceful shutdown completed successfully");
             }
             Err(_) => {
@@ -469,23 +490,23 @@ mod hsm_integration_tests {
     async fn test_hsm_concurrent_operations() {
         // Test concurrent HSM operations
         let config = HsmTestConfig::aws_cloudhsm_test().to_hsm_config();
-        
+
         match HsmKeyManager::new(config).await {
             Ok(manager) => {
                 // Spawn multiple concurrent health checks
-                let handles: Vec<_> = (0..10).map(|_| {
-                    let manager = manager.clone();
-                    tokio::spawn(async move {
-                        manager.health_check().await
+                let handles: Vec<_> = (0..10)
+                    .map(|_| {
+                        let manager = manager.clone();
+                        tokio::spawn(async move { manager.health_check().await })
                     })
-                }).collect();
+                    .collect();
 
                 // Wait for all operations to complete
                 for handle in handles {
                     let result = handle.await.unwrap();
                     assert!(result.is_ok());
                 }
-                
+
                 println!("Concurrent HSM operations completed successfully");
             }
             Err(_) => {
@@ -499,14 +520,14 @@ mod hsm_integration_tests {
 /// Integration tests that can run with mock HSM providers
 #[cfg(test)]
 mod hsm_mock_tests {
-    use fortress_core::{
-        hsm::HsmProvider,
-        key::{KeyId, KeyMetadata},
-        encryption::{EncryptionAlgorithm, PerformanceProfile},
-        Result,
-    };
     use async_trait::async_trait;
     use fortress_core::prelude::Aes256GcmWrapper;
+    use fortress_core::{
+        encryption::{EncryptionAlgorithm, PerformanceProfile},
+        hsm::HsmProvider,
+        key::{KeyId, KeyMetadata},
+        Result,
+    };
     use std::time::Duration;
 
     /// Mock HSM provider for testing
@@ -528,16 +549,24 @@ mod hsm_mock_tests {
             if self.healthy {
                 Ok(())
             } else {
-                Err(fortress_core::error::FortressError::hsm("Mock HSM is unhealthy"))
+                Err(fortress_core::error::FortressError::hsm(
+                    "Mock HSM is unhealthy",
+                ))
             }
         }
 
-        async fn generate_key(&self, _key_id: &KeyId, _algorithm: &dyn EncryptionAlgorithm) -> Result<()> {
+        async fn generate_key(
+            &self,
+            _key_id: &KeyId,
+            _algorithm: &dyn EncryptionAlgorithm,
+        ) -> Result<()> {
             tokio::time::sleep(self.latency).await;
             if self.healthy {
                 Ok(())
             } else {
-                Err(fortress_core::error::FortressError::hsm("Mock HSM is unhealthy"))
+                Err(fortress_core::error::FortressError::hsm(
+                    "Mock HSM is unhealthy",
+                ))
             }
         }
 
@@ -554,7 +583,9 @@ mod hsm_mock_tests {
                     PerformanceProfile::default(),
                 ))
             } else {
-                Err(fortress_core::error::FortressError::hsm("Mock HSM is unhealthy"))
+                Err(fortress_core::error::FortressError::hsm(
+                    "Mock HSM is unhealthy",
+                ))
             }
         }
 
@@ -563,7 +594,9 @@ mod hsm_mock_tests {
             if self.healthy {
                 Ok(())
             } else {
-                Err(fortress_core::error::FortressError::hsm("Mock HSM is unhealthy"))
+                Err(fortress_core::error::FortressError::hsm(
+                    "Mock HSM is unhealthy",
+                ))
             }
         }
 
@@ -572,7 +605,9 @@ mod hsm_mock_tests {
             if self.healthy {
                 Ok(vec![])
             } else {
-                Err(fortress_core::error::FortressError::hsm("Mock HSM is unhealthy"))
+                Err(fortress_core::error::FortressError::hsm(
+                    "Mock HSM is unhealthy",
+                ))
             }
         }
 
@@ -581,7 +616,9 @@ mod hsm_mock_tests {
             if self.healthy {
                 Ok(data.to_vec()) // Mock signature
             } else {
-                Err(fortress_core::error::FortressError::hsm("Mock HSM is unhealthy"))
+                Err(fortress_core::error::FortressError::hsm(
+                    "Mock HSM is unhealthy",
+                ))
             }
         }
 
@@ -590,7 +627,9 @@ mod hsm_mock_tests {
             if self.healthy {
                 Ok(data == signature) // Mock verification
             } else {
-                Err(fortress_core::error::FortressError::hsm("Mock HSM is unhealthy"))
+                Err(fortress_core::error::FortressError::hsm(
+                    "Mock HSM is unhealthy",
+                ))
             }
         }
 
@@ -599,7 +638,9 @@ mod hsm_mock_tests {
             if self.healthy {
                 Ok(plaintext.to_vec()) // Mock encryption
             } else {
-                Err(fortress_core::error::FortressError::hsm("Mock HSM is unhealthy"))
+                Err(fortress_core::error::FortressError::hsm(
+                    "Mock HSM is unhealthy",
+                ))
             }
         }
 
@@ -608,7 +649,9 @@ mod hsm_mock_tests {
             if self.healthy {
                 Ok(ciphertext.to_vec()) // Mock decryption
             } else {
-                Err(fortress_core::error::FortressError::hsm("Mock HSM is unhealthy"))
+                Err(fortress_core::error::FortressError::hsm(
+                    "Mock HSM is unhealthy",
+                ))
             }
         }
 
@@ -635,7 +678,10 @@ mod hsm_mock_tests {
         assert!(provider.delete_key(&key_id).await.is_ok());
         assert!(provider.list_keys().await.is_ok());
         assert!(provider.sign(&key_id, b"test data").await.is_ok());
-        assert!(provider.verify(&key_id, b"test data", b"test data").await.is_ok());
+        assert!(provider
+            .verify(&key_id, b"test data", b"test data")
+            .await
+            .is_ok());
         assert!(provider.encrypt(&key_id, b"test data").await.is_ok());
         assert!(provider.decrypt(&key_id, b"test data").await.is_ok());
         assert!(provider.health_check().await.is_ok());
@@ -648,12 +694,18 @@ mod hsm_mock_tests {
         let key_id = "test-key".to_string();
 
         // Test all operations fail when unhealthy
-        assert!(provider.generate_key(&key_id, &Aes256GcmWrapper::new()).await.is_err());
+        assert!(provider
+            .generate_key(&key_id, &Aes256GcmWrapper::new())
+            .await
+            .is_err());
         assert!(provider.get_key_metadata(&key_id).await.is_err());
         assert!(provider.delete_key(&key_id).await.is_err());
         assert!(provider.list_keys().await.is_err());
         assert!(provider.sign(&key_id, b"test data").await.is_err());
-        assert!(provider.verify(&key_id, b"test data", b"test data").await.is_err());
+        assert!(provider
+            .verify(&key_id, b"test data", b"test data")
+            .await
+            .is_err());
         assert!(provider.encrypt(&key_id, b"test data").await.is_err());
         assert!(provider.decrypt(&key_id, b"test data").await.is_err());
         assert!(provider.health_check().await.is_ok()); // Health check should still work
@@ -666,7 +718,9 @@ mod hsm_mock_tests {
         let key_id = "test-key".to_string();
 
         let start = std::time::Instant::now();
-        let result = provider.generate_key(&key_id, &Aes256GcmWrapper::new()).await;
+        let result = provider
+            .generate_key(&key_id, &Aes256GcmWrapper::new())
+            .await;
         let elapsed = start.elapsed();
 
         assert!(result.is_ok());

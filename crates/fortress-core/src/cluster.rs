@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::time::Duration;
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::{mpsc, RwLock};
 use uuid::Uuid;
 
 /// Cluster node identifier
@@ -115,7 +115,11 @@ impl Default for NodeCapabilities {
             storage: true,
             encryption: true,
             leadership: true,
-            algorithms: vec!["aegis256".to_string(), "chacha20".to_string(), "aes256gcm".to_string()],
+            algorithms: vec![
+                "aegis256".to_string(),
+                "chacha20".to_string(),
+                "aes256gcm".to_string(),
+            ],
         }
     }
 }
@@ -154,14 +158,14 @@ pub struct LogEntry {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClusterCommand {
     /// Add a new node to the cluster
-    AddNode { 
+    AddNode {
         /// Node to add
-        node: ClusterNode 
+        node: ClusterNode,
     },
     /// Remove a node from the cluster
-    RemoveNode { 
+    RemoveNode {
         /// Node ID to remove
-        node_id: NodeId 
+        node_id: NodeId,
     },
     /// Replicate data to nodes
     ReplicateData {
@@ -173,16 +177,16 @@ pub enum ClusterCommand {
         nodes: Vec<NodeId>,
     },
     /// Update cluster configuration
-    UpdateConfig { 
+    UpdateConfig {
         /// New configuration
-        config: ClusterConfig 
+        config: ClusterConfig,
     },
     /// Heartbeat message
-    Heartbeat { 
+    Heartbeat {
         /// Sender node ID
-        from: NodeId, 
+        from: NodeId,
         /// Current term
-        term: u64 
+        term: u64,
     },
     /// Vote request
     RequestVote {
@@ -250,7 +254,10 @@ impl ClusterManager {
         let local_node = ClusterNode {
             id: config.node_id,
             address: config.bind_address,
-            state: NodeState::Follower { leader: None, term: 0 },
+            state: NodeState::Follower {
+                leader: None,
+                term: 0,
+            },
             last_heartbeat: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_else(|_| Duration::from_secs(0))
@@ -269,19 +276,15 @@ impl ClusterManager {
 
         let mut members = HashMap::new();
         members.insert(config.node_id, local_node.clone());
-        
+
         // Create cluster members map for Raft engine
         let mut raft_members = HashMap::new();
         for (id, node) in &members {
             raft_members.insert(*id, node.address.to_string());
         }
-        
+
         // Create Raft engine
-        let raft_engine = RaftEngine::new(
-            config.node_id,
-            config.election_timeout,
-            raft_members,
-        );
+        let raft_engine = RaftEngine::new(config.node_id, config.election_timeout, raft_members);
 
         Ok(Self {
             config,
@@ -297,7 +300,7 @@ impl ClusterManager {
     pub async fn start(&mut self) -> Result<()> {
         // Start Raft engine
         self.raft_engine.start().await?;
-        
+
         // Start node discovery
         self.discover_nodes().await?;
 
@@ -322,34 +325,32 @@ impl ClusterManager {
 
     /// Contact a seed node to join the cluster
     async fn contact_seed_node(&self, addr: SocketAddr) -> Result<()> {
-        use tokio::net::TcpStream;
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
         use serde_json;
-        
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpStream;
+
         tracing::info!("Contacting seed node at {}", addr);
-        
+
         // Attempt to connect to seed node
-        let mut stream = match tokio::time::timeout(
-            Duration::from_secs(5),
-            TcpStream::connect(addr)
-        ).await {
-            Ok(Ok(stream)) => stream,
-            Ok(Err(e)) => {
-                tracing::warn!("Failed to connect to seed node {}: {}", addr, e);
-                return Err(FortressError::cluster(
-                    format!("Failed to connect to seed node {}: {}", addr, e),
-                    None,
-                ));
-            }
-            Err(_) => {
-                tracing::warn!("Timeout connecting to seed node {}", addr);
-                return Err(FortressError::cluster(
-                    format!("Timeout connecting to seed node {}", addr),
-                    None,
-                ));
-            }
-        };
-        
+        let mut stream =
+            match tokio::time::timeout(Duration::from_secs(5), TcpStream::connect(addr)).await {
+                Ok(Ok(stream)) => stream,
+                Ok(Err(e)) => {
+                    tracing::warn!("Failed to connect to seed node {}: {}", addr, e);
+                    return Err(FortressError::cluster(
+                        format!("Failed to connect to seed node {}: {}", addr, e),
+                        None,
+                    ));
+                }
+                Err(_) => {
+                    tracing::warn!("Timeout connecting to seed node {}", addr);
+                    return Err(FortressError::cluster(
+                        format!("Timeout connecting to seed node {}", addr),
+                        None,
+                    ));
+                }
+            };
+
         // Send join request
         let join_request = serde_json::json!({
             "type": "join_request",
@@ -357,13 +358,11 @@ impl ClusterManager {
             "address": self.local_node.address.to_string(),
             "capabilities": self.local_node.capabilities,
         });
-        
-        let request_bytes = serde_json::to_vec(&join_request)
-            .map_err(|e| FortressError::cluster(
-                format!("Failed to serialize join request: {}", e),
-                None,
-            ))?;
-        
+
+        let request_bytes = serde_json::to_vec(&join_request).map_err(|e| {
+            FortressError::cluster(format!("Failed to serialize join request: {}", e), None)
+        })?;
+
         // Send length prefix followed by data
         let length = request_bytes.len() as u32;
         if let Err(e) = stream.write_all(&length.to_le_bytes()).await {
@@ -373,7 +372,7 @@ impl ClusterManager {
                 None,
             ));
         }
-        
+
         if let Err(e) = stream.write_all(&request_bytes).await {
             tracing::warn!("Failed to send join request to seed node {}: {}", addr, e);
             return Err(FortressError::cluster(
@@ -381,20 +380,27 @@ impl ClusterManager {
                 None,
             ));
         }
-        
+
         // Read response
         let mut length_bytes = [0u8; 4];
         if let Err(e) = stream.read_exact(&mut length_bytes).await {
-            tracing::warn!("Failed to read response length from seed node {}: {}", addr, e);
+            tracing::warn!(
+                "Failed to read response length from seed node {}: {}",
+                addr,
+                e
+            );
             return Err(FortressError::cluster(
-                format!("Failed to read response length from seed node {}: {}", addr, e),
+                format!(
+                    "Failed to read response length from seed node {}: {}",
+                    addr, e
+                ),
                 None,
             ));
         }
-        
+
         let response_length = u32::from_le_bytes(length_bytes) as usize;
         let mut response_bytes = vec![0u8; response_length];
-        
+
         if let Err(e) = stream.read_exact(&mut response_bytes).await {
             tracing::warn!("Failed to read response from seed node {}: {}", addr, e);
             return Err(FortressError::cluster(
@@ -402,28 +408,33 @@ impl ClusterManager {
                 None,
             ));
         }
-        
+
         // Parse response
-        let response: serde_json::Value = serde_json::from_slice(&response_bytes)
-            .map_err(|e| FortressError::cluster(
+        let response: serde_json::Value = serde_json::from_slice(&response_bytes).map_err(|e| {
+            FortressError::cluster(
                 format!("Failed to parse response from seed node {}: {}", addr, e),
                 None,
-            ))?;
-        
+            )
+        })?;
+
         if let Some(success) = response.get("success").and_then(|v| v.as_bool()) {
             if success {
                 tracing::info!("Successfully joined cluster via seed node {}", addr);
-                
+
                 // Add seed node to members list
-                let seed_node_id = response.get("node_id")
+                let seed_node_id = response
+                    .get("node_id")
                     .and_then(|v| v.as_str())
                     .and_then(|s| Uuid::parse_str(s).ok())
                     .unwrap_or_else(|| Uuid::new_v4());
-                
+
                 let seed_node = ClusterNode {
                     id: seed_node_id,
                     address: addr,
-                    state: NodeState::Follower { leader: None, term: 0 },
+                    state: NodeState::Follower {
+                        leader: None,
+                        term: 0,
+                    },
                     last_heartbeat: std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
                         .unwrap_or_else(|_| Duration::from_secs(0))
@@ -431,11 +442,12 @@ impl ClusterManager {
                     capabilities: NodeCapabilities::default(),
                     load_metrics: LoadMetrics::default(),
                 };
-                
+
                 self.members.write().await.insert(seed_node_id, seed_node);
                 Ok(())
             } else {
-                let error_msg = response.get("error")
+                let error_msg = response
+                    .get("error")
                     .and_then(|v| v.as_str())
                     .unwrap_or("Unknown error");
                 Err(FortressError::cluster(
@@ -459,20 +471,23 @@ impl ClusterManager {
 
         tokio::spawn(async move {
             let mut ticker = tokio::time::interval(interval);
-            
+
             loop {
                 ticker.tick().await;
-                
+
                 // Send heartbeat to all cluster members
                 let _heartbeat = ClusterCommand::Heartbeat {
                     from: local_node_id,
                     term: 0, // This would be updated based on current term
                 };
-                
+
                 // In a real implementation, we'd get the list of members and send to each
                 // For now, we'll just log that we sent a heartbeat
-                tracing::debug!("Sending heartbeat from {} to cluster members", local_node_id);
-                
+                tracing::debug!(
+                    "Sending heartbeat from {} to cluster members",
+                    local_node_id
+                );
+
                 // Note: In a full implementation, we would:
                 // 1. Get current term from Raft engine
                 // 2. Get list of cluster members
@@ -499,7 +514,7 @@ impl ClusterManager {
                 }
             }
         }
-        
+
         Ok(())
     }
 
@@ -509,11 +524,22 @@ impl ClusterManager {
             ClusterCommand::Heartbeat { from, term } => {
                 self.handle_heartbeat(from, term).await?;
             }
-            ClusterCommand::RequestVote { candidate_id, term, last_log_index, last_log_term } => {
-                self.handle_vote_request(candidate_id, term, last_log_index, last_log_term).await?;
+            ClusterCommand::RequestVote {
+                candidate_id,
+                term,
+                last_log_index,
+                last_log_term,
+            } => {
+                self.handle_vote_request(candidate_id, term, last_log_index, last_log_term)
+                    .await?;
             }
-            ClusterCommand::VoteResponse { voter_id, term, vote_granted } => {
-                self.handle_vote_response(voter_id, term, vote_granted).await?;
+            ClusterCommand::VoteResponse {
+                voter_id,
+                term,
+                vote_granted,
+            } => {
+                self.handle_vote_response(voter_id, term, vote_granted)
+                    .await?;
             }
             ClusterCommand::AddNode { node } => {
                 self.handle_add_node(node).await?;
@@ -534,71 +560,103 @@ impl ClusterManager {
     /// Handle heartbeat message
     async fn handle_heartbeat(&self, from: NodeId, term: u64) -> Result<()> {
         let mut members = self.members.write().await;
-        
+
         if let Some(node) = members.get_mut(&from) {
             node.last_heartbeat = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_else(|_| Duration::from_secs(0))
                 .as_millis() as u64;
-            
+
             // Update node state if it's a leader
             if matches!(node.state, NodeState::Leader { .. }) {
                 if let Some(local_node) = members.get_mut(&self.local_node.id) {
-                    if let NodeState::Follower { leader, term: current_term } = &mut local_node.state {
+                    if let NodeState::Follower {
+                        leader,
+                        term: current_term,
+                    } = &mut local_node.state
+                    {
                         *leader = Some(from);
                         *current_term = term.max(*current_term);
                     }
                 }
             }
         }
-        
+
         tracing::debug!("Received heartbeat from node {} in term {}", from, term);
         Ok(())
     }
 
     /// Handle vote request
-    async fn handle_vote_request(&self, candidate_id: NodeId, term: u64, last_log_index: u64, last_log_term: u64) -> Result<()> {
+    async fn handle_vote_request(
+        &self,
+        candidate_id: NodeId,
+        term: u64,
+        last_log_index: u64,
+        last_log_term: u64,
+    ) -> Result<()> {
         let request = RequestVoteRequest {
             term,
             candidate_id,
             last_log_index,
             last_log_term,
         };
-        
+
         let response = self.raft_engine.handle_request_vote(request).await?;
-        
+
         // Send vote response
         let cluster_response = ClusterCommand::VoteResponse {
             voter_id: self.local_node.id,
             term: response.term,
             vote_granted: response.vote_granted,
         };
-        
-        if let Err(_) = self.channels.incoming.send((candidate_id, cluster_response)) {
+
+        if let Err(_) = self
+            .channels
+            .incoming
+            .send((candidate_id, cluster_response))
+        {
             tracing::warn!("Failed to send vote response to candidate {}", candidate_id);
         }
-        
-        tracing::info!("{} vote to candidate {} in term {}", if response.vote_granted { "Granted" } else { "Denied" }, candidate_id, term);
+
+        tracing::info!(
+            "{} vote to candidate {} in term {}",
+            if response.vote_granted {
+                "Granted"
+            } else {
+                "Denied"
+            },
+            candidate_id,
+            term
+        );
         Ok(())
     }
 
     /// Handle vote response
-    async fn handle_vote_response(&self, voter_id: NodeId, term: u64, vote_granted: bool) -> Result<()> {
+    async fn handle_vote_response(
+        &self,
+        voter_id: NodeId,
+        term: u64,
+        vote_granted: bool,
+    ) -> Result<()> {
         // Update vote count in Raft engine
         let current_state = self.raft_engine.get_state().await;
         let current_term = self.raft_engine.get_term().await;
-        
+
         if matches!(current_state, crate::raft::RaftState::Candidate) && term == current_term {
             if vote_granted {
                 tracing::debug!("Received vote from {} in term {}", voter_id, term);
-                
+
                 // In a real implementation, we'd track votes and check for majority
                 // For now, we'll become leader if we receive any vote (simplified)
                 if let Err(e) = self.raft_engine.become_leader().await {
                     tracing::warn!("Failed to become leader: {}", e);
                 } else {
-                    tracing::info!("Node {} became leader in term {}", self.local_node.id, current_term);
-                    
+                    tracing::info!(
+                        "Node {} became leader in term {}",
+                        self.local_node.id,
+                        current_term
+                    );
+
                     // Update local node state
                     let mut members = self.members.write().await;
                     if let Some(node) = members.get_mut(&self.local_node.id) {
@@ -607,7 +665,7 @@ impl ClusterManager {
                 }
             }
         }
-        
+
         Ok(())
     }
 
@@ -615,12 +673,16 @@ impl ClusterManager {
     async fn handle_add_node(&self, node: ClusterNode) -> Result<()> {
         let mut members = self.members.write().await;
         members.insert(node.id, node.clone());
-        
+
         // Update quorum manager
         let mut quorum_manager = self.quorum_manager.write().await;
         quorum_manager.update_cluster_size(members.len());
-        
-        tracing::info!("Added node {} to cluster, new size: {}", node.id, members.len());
+
+        tracing::info!(
+            "Added node {} to cluster, new size: {}",
+            node.id,
+            members.len()
+        );
         Ok(())
     }
 
@@ -628,19 +690,32 @@ impl ClusterManager {
     async fn handle_remove_node(&self, node_id: NodeId) -> Result<()> {
         let mut members = self.members.write().await;
         members.remove(&node_id);
-        
+
         // Update quorum manager
         let mut quorum_manager = self.quorum_manager.write().await;
         quorum_manager.update_cluster_size(members.len());
-        
-        tracing::info!("Removed node {} from cluster, new size: {}", node_id, members.len());
+
+        tracing::info!(
+            "Removed node {} from cluster, new size: {}",
+            node_id,
+            members.len()
+        );
         Ok(())
     }
 
     /// Handle replication request
-    async fn handle_replication_request(&self, key: String, _data: Vec<u8>, nodes: Vec<NodeId>) -> Result<()> {
+    async fn handle_replication_request(
+        &self,
+        key: String,
+        _data: Vec<u8>,
+        nodes: Vec<NodeId>,
+    ) -> Result<()> {
         // Forward to replication manager
-        tracing::debug!("Handling replication request for key {} to nodes {:?}", key, nodes);
+        tracing::debug!(
+            "Handling replication request for key {} to nodes {:?}",
+            key,
+            nodes
+        );
         Ok(())
     }
 
@@ -682,11 +757,12 @@ impl ClusterManager {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_else(|_| Duration::from_secs(0))
             .as_millis() as u64;
-        
-        let active_nodes = members.values()
+
+        let active_nodes = members
+            .values()
             .filter(|node| now.saturating_sub(node.last_heartbeat) < 10000) // 10 seconds in milliseconds
             .count();
-        
+
         quorum_manager.has_quorum(active_nodes)
     }
 
@@ -694,13 +770,14 @@ impl ClusterManager {
     pub async fn replicate_data(&self, key: String, data: Vec<u8>) -> Result<()> {
         let members = self.members.read().await;
         let replication_factor = self.config.replication_factor.min(members.len());
-        
+
         // Select nodes for replication (excluding self)
-        let mut target_nodes: Vec<NodeId> = members.keys()
+        let mut target_nodes: Vec<NodeId> = members
+            .keys()
             .filter(|&&id| id != self.local_node.id)
             .cloned()
             .collect();
-        
+
         // Randomly select replication factor nodes using TRNG
         match crate::trng::random_bytes(target_nodes.len()) {
             Ok(random_bytes) => {
@@ -712,8 +789,8 @@ impl ClusterManager {
             }
             Err(_) => {
                 // Fallback to OsRng for cryptographic security
-                use rand::seq::SliceRandom;
                 use rand::rngs::OsRng;
+                use rand::seq::SliceRandom;
                 target_nodes.shuffle(&mut OsRng);
             }
         }
@@ -729,7 +806,11 @@ impl ClusterManager {
         // Send to target nodes
         for node_id in target_nodes {
             if let Err(e) = self.send_replication_command(node_id, &command).await {
-                tracing::warn!("Failed to send replication command to node {}: {}", node_id, e);
+                tracing::warn!(
+                    "Failed to send replication command to node {}: {}",
+                    node_id,
+                    e
+                );
             } else {
                 tracing::debug!("Successfully sent replication command to node {}", node_id);
             }
@@ -739,51 +820,60 @@ impl ClusterManager {
     }
 
     /// Send replication command to a specific node
-    async fn send_replication_command(&self, node_id: NodeId, command: &ClusterCommand) -> Result<()> {
-        use tokio::net::TcpStream;
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    async fn send_replication_command(
+        &self,
+        node_id: NodeId,
+        command: &ClusterCommand,
+    ) -> Result<()> {
         use serde_json;
-        
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpStream;
+
         // Get node address
         let node_address = {
             let members = self.members.read().await;
-            members.get(&node_id)
+            members
+                .get(&node_id)
                 .map(|node| node.address)
-                .ok_or_else(|| FortressError::cluster(
-                    format!("Node {} not found in cluster", node_id),
-                    None,
-                ))?
+                .ok_or_else(|| {
+                    FortressError::cluster(format!("Node {} not found in cluster", node_id), None)
+                })?
         };
-        
-        tracing::debug!("Sending replication command to node {} at {:?}", node_id, command);
-        
+
+        tracing::debug!(
+            "Sending replication command to node {} at {:?}",
+            node_id,
+            command
+        );
+
         // Connect to target node with timeout
-        let mut stream = match tokio::time::timeout(
-            Duration::from_secs(3),
-            TcpStream::connect(node_address)
-        ).await {
-            Ok(Ok(stream)) => stream,
-            Ok(Err(e)) => {
-                return Err(FortressError::cluster(
-                    format!("Failed to connect to node {}: {}", node_id, e),
-                    None,
-                ));
-            }
-            Err(_) => {
-                return Err(FortressError::cluster(
-                    format!("Timeout connecting to node {}", node_id),
-                    None,
-                ));
-            }
-        };
-        
+        let mut stream =
+            match tokio::time::timeout(Duration::from_secs(3), TcpStream::connect(node_address))
+                .await
+            {
+                Ok(Ok(stream)) => stream,
+                Ok(Err(e)) => {
+                    return Err(FortressError::cluster(
+                        format!("Failed to connect to node {}: {}", node_id, e),
+                        None,
+                    ));
+                }
+                Err(_) => {
+                    return Err(FortressError::cluster(
+                        format!("Timeout connecting to node {}", node_id),
+                        None,
+                    ));
+                }
+            };
+
         // Serialize command
-        let command_bytes = serde_json::to_vec(command)
-            .map_err(|e| FortressError::cluster(
+        let command_bytes = serde_json::to_vec(command).map_err(|e| {
+            FortressError::cluster(
                 format!("Failed to serialize replication command: {}", e),
                 None,
-            ))?;
-        
+            )
+        })?;
+
         // Send length prefix followed by data
         let length = command_bytes.len() as u32;
         if let Err(e) = stream.write_all(&length.to_le_bytes()).await {
@@ -792,31 +882,38 @@ impl ClusterManager {
                 None,
             ));
         }
-        
+
         if let Err(e) = stream.write_all(&command_bytes).await {
             return Err(FortressError::cluster(
                 format!("Failed to send command to node {}: {}", node_id, e),
                 None,
             ));
         }
-        
+
         // Read acknowledgment
         let mut length_bytes = [0u8; 4];
         if let Err(e) = stream.read_exact(&mut length_bytes).await {
             return Err(FortressError::cluster(
-                format!("Failed to read acknowledgment length from node {}: {}", node_id, e),
+                format!(
+                    "Failed to read acknowledgment length from node {}: {}",
+                    node_id, e
+                ),
                 None,
             ));
         }
-        
+
         let ack_length = u32::from_le_bytes(length_bytes) as usize;
-        if ack_length > 1024 { // Reasonable limit for acknowledgment
+        if ack_length > 1024 {
+            // Reasonable limit for acknowledgment
             return Err(FortressError::cluster(
-                format!("Acknowledgment too large from node {}: {} bytes", node_id, ack_length),
+                format!(
+                    "Acknowledgment too large from node {}: {} bytes",
+                    node_id, ack_length
+                ),
                 None,
             ));
         }
-        
+
         let mut ack_bytes = vec![0u8; ack_length];
         if let Err(e) = stream.read_exact(&mut ack_bytes).await {
             return Err(FortressError::cluster(
@@ -824,24 +921,32 @@ impl ClusterManager {
                 None,
             ));
         }
-        
+
         // Parse acknowledgment
-        let ack: serde_json::Value = serde_json::from_slice(&ack_bytes)
-            .map_err(|e| FortressError::cluster(
-                format!("Failed to parse acknowledgment from node {}: {}", node_id, e),
+        let ack: serde_json::Value = serde_json::from_slice(&ack_bytes).map_err(|e| {
+            FortressError::cluster(
+                format!(
+                    "Failed to parse acknowledgment from node {}: {}",
+                    node_id, e
+                ),
                 None,
-            ))?;
-        
+            )
+        })?;
+
         if let Some(success) = ack.get("success").and_then(|v| v.as_bool()) {
             if success {
                 tracing::debug!("Node {} acknowledged replication command", node_id);
                 Ok(())
             } else {
-                let error_msg = ack.get("error")
+                let error_msg = ack
+                    .get("error")
                     .and_then(|v| v.as_str())
                     .unwrap_or("Unknown error");
                 Err(FortressError::cluster(
-                    format!("Node {} rejected replication command: {}", node_id, error_msg),
+                    format!(
+                        "Node {} rejected replication command: {}",
+                        node_id, error_msg
+                    ),
                     None,
                 ))
             }
@@ -862,7 +967,8 @@ impl ClusterManager {
         let current_term = self.raft_engine.get_term().await;
         let commit_index = self.raft_engine.get_commit_index().await;
 
-        let active_nodes = members.values()
+        let active_nodes = members
+            .values()
             .filter(|node| {
                 let now = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
@@ -898,7 +1004,8 @@ impl ClusterManager {
     /// Select a target node for load balancing
     pub async fn select_target_node(&self) -> Option<NodeId> {
         let members = self.members.read().await;
-        let active_nodes: Vec<_> = members.values()
+        let active_nodes: Vec<_> = members
+            .values()
             .filter(|node| {
                 let now = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
@@ -907,7 +1014,7 @@ impl ClusterManager {
                 now.saturating_sub(node.last_heartbeat) < 10000 // 10 seconds
             })
             .collect();
-        
+
         if active_nodes.is_empty() {
             return None;
         }
@@ -916,8 +1023,9 @@ impl ClusterManager {
         let index = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_else(|_| Duration::from_secs(0))
-            .as_millis() as usize % active_nodes.len();
-        
+            .as_millis() as usize
+            % active_nodes.len();
+
         active_nodes.get(index).map(|node| node.id)
     }
 
@@ -948,7 +1056,7 @@ impl ClusterManager {
     /// Simulate leader failure for testing
     pub async fn simulate_leader_failure(&self) -> Result<()> {
         tracing::warn!("Simulating leader failure");
-        
+
         // In a real implementation, would trigger new election
         // For now, just log the event
         Ok(())
@@ -964,26 +1072,35 @@ impl ClusterManager {
     /// Get performance metrics for the cluster
     pub async fn get_performance_metrics(&self) -> ClusterPerformanceMetrics {
         let members = self.members.read().await;
-        let total_cpu: f64 = members.values()
+        let total_cpu: f64 = members
+            .values()
             .map(|node| node.load_metrics.cpu_usage as f64)
             .sum();
-        let avg_cpu = if members.is_empty() { 0.0 } else { total_cpu / members.len() as f64 };
+        let avg_cpu = if members.is_empty() {
+            0.0
+        } else {
+            total_cpu / members.len() as f64
+        };
 
         ClusterPerformanceMetrics {
             total_nodes: members.len(),
-            active_nodes: members.values().filter(|n| {
-                let now = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_else(|_| Duration::from_secs(0))
-                    .as_millis() as u64;
-                now.saturating_sub(n.last_heartbeat) < 10000
-            }).count(),
+            active_nodes: members
+                .values()
+                .filter(|n| {
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_else(|_| Duration::from_secs(0))
+                        .as_millis() as u64;
+                    now.saturating_sub(n.last_heartbeat) < 10000
+                })
+                .count(),
             average_cpu_usage: avg_cpu,
-            total_memory_usage: members.values()
+            total_memory_usage: members
+                .values()
                 .map(|n| (n.load_metrics.memory_usage * 1024.0 * 1024.0) as u64) // Convert percentage to bytes
                 .sum(),
-            network_latency: 0, // Would be calculated from actual pings
-            total_operations: 0, // Would be tracked in production
+            network_latency: 0,         // Would be calculated from actual pings
+            total_operations: 0,        // Would be tracked in production
             avg_operation_time_ms: 0.0, // Would be tracked in production
             node_count: members.len(),
             operations: vec!["read".to_string(), "write".to_string()], // Sample operations
@@ -1004,10 +1121,7 @@ impl ClusterManager {
             members: RwLock::new(members_map),
             raft_engine: self.raft_engine.clone(),
             quorum_manager: RwLock::new(QuorumManager::new(self.config.min_nodes)),
-            channels: ClusterChannels {
-                outgoing,
-                incoming,
-            },
+            channels: ClusterChannels { outgoing, incoming },
         })
     }
 
@@ -1067,27 +1181,27 @@ impl QuorumManager {
             quorum_size,
         }
     }
-    
+
     /// Check if we have quorum
     pub fn has_quorum(&self, responses: usize) -> bool {
         responses >= self.quorum_size
     }
-    
+
     /// Get quorum size
     pub fn quorum_size(&self) -> usize {
         self.quorum_size
     }
-    
+
     /// Get total nodes
     pub fn total_nodes(&self) -> usize {
         self.total_nodes
     }
-    
+
     /// Check if a specific node count is sufficient for quorum
     pub fn is_sufficient(&self, node_count: usize) -> bool {
         node_count >= self.quorum_size
     }
-    
+
     /// Update cluster size
     pub fn update_cluster_size(&mut self, total_nodes: usize) {
         self.total_nodes = total_nodes;
@@ -1153,7 +1267,7 @@ mod tests {
 
         let manager = ClusterManager::new(config).unwrap();
         let members = manager.get_members().await;
-        
+
         assert_eq!(members.len(), 1);
         assert!(members.contains_key(&manager.local_node.id));
     }
@@ -1171,7 +1285,7 @@ mod tests {
         };
 
         let manager = ClusterManager::new(config).unwrap();
-        
+
         // With only one node and min_nodes=2, should not have quorum
         assert!(!manager.has_quorum().await);
     }
@@ -1189,7 +1303,7 @@ mod tests {
         };
 
         let manager = ClusterManager::new(config).unwrap();
-        
+
         // Single node should have quorum
         assert!(manager.has_quorum().await);
     }
@@ -1197,13 +1311,13 @@ mod tests {
     #[tokio::test]
     async fn test_quorum_manager() {
         let mut quorum_manager = QuorumManager::new(3);
-        
+
         assert_eq!(quorum_manager.total_nodes(), 3);
         assert_eq!(quorum_manager.quorum_size(), 2);
         assert!(quorum_manager.has_quorum(2));
         assert!(!quorum_manager.has_quorum(1));
         assert!(quorum_manager.is_sufficient(2));
-        
+
         // Update cluster size
         quorum_manager.update_cluster_size(5);
         assert_eq!(quorum_manager.total_nodes(), 5);
@@ -1226,7 +1340,7 @@ mod tests {
 
         let manager = ClusterManager::new(config).unwrap();
         let health = manager.get_health_status().await;
-        
+
         assert_eq!(health.total_nodes, 1);
         assert_eq!(health.active_nodes, 1);
         assert!(health.has_quorum);
@@ -1248,11 +1362,14 @@ mod tests {
         };
 
         let mut manager = ClusterManager::new(config).unwrap();
-        
+
         let new_node = ClusterNode {
             id: Uuid::new_v4(),
             address: "127.0.0.1:8081".parse().unwrap(),
-            state: NodeState::Follower { leader: None, term: 0 },
+            state: NodeState::Follower {
+                leader: None,
+                term: 0,
+            },
             last_heartbeat: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_else(|_| Duration::from_secs(0))
@@ -1260,13 +1377,13 @@ mod tests {
             capabilities: NodeCapabilities::default(),
             load_metrics: LoadMetrics::default(),
         };
-        
+
         manager.handle_add_node(new_node.clone()).await.unwrap();
-        
+
         let members = manager.get_members().await;
         assert_eq!(members.len(), 2);
         assert!(members.contains_key(&new_node.id));
-        
+
         let health = manager.get_health_status().await;
         assert_eq!(health.total_nodes, 2);
     }
@@ -1284,11 +1401,14 @@ mod tests {
         };
 
         let mut manager = ClusterManager::new(config).unwrap();
-        
+
         let new_node = ClusterNode {
             id: Uuid::new_v4(),
             address: "127.0.0.1:8081".parse().unwrap(),
-            state: NodeState::Follower { leader: None, term: 0 },
+            state: NodeState::Follower {
+                leader: None,
+                term: 0,
+            },
             last_heartbeat: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_else(|_| Duration::from_secs(0))
@@ -1296,11 +1416,11 @@ mod tests {
             capabilities: NodeCapabilities::default(),
             load_metrics: LoadMetrics::default(),
         };
-        
+
         // Add node first
         manager.handle_add_node(new_node.clone()).await.unwrap();
         assert_eq!(manager.get_members().await.len(), 2);
-        
+
         // Remove node
         manager.handle_remove_node(new_node.id).await.unwrap();
         assert_eq!(manager.get_members().await.len(), 1);
@@ -1320,13 +1440,13 @@ mod tests {
         };
 
         let manager = ClusterManager::new(config).unwrap();
-        
+
         // Initially no leader
         assert!(manager.get_leader().await.is_none());
-        
+
         // Become leader
         manager.raft_engine.become_leader().await.unwrap();
-        
+
         // Should detect self as leader
         assert_eq!(manager.get_leader().await, Some(manager.local_node.id));
     }
@@ -1359,11 +1479,11 @@ mod tests {
         // Test node discovery
         let discover_result = manager1.discover_nodes().await;
         assert!(discover_result.is_ok());
-        
+
         // Test cluster joining
         let join_result = manager1.join_cluster("test-cluster").await;
         assert!(join_result.is_ok());
-        
+
         let members = manager1.get_members().await;
         assert!(members.len() >= 1);
     }
@@ -1381,15 +1501,15 @@ mod tests {
         };
 
         let manager = ClusterManager::new(config).unwrap();
-        
+
         // Start election
         let election_result = manager.start_election().await;
         assert!(election_result.is_ok());
-        
+
         // Verify leader election
         let leader = manager.get_leader().await;
         assert!(leader.is_some());
-        
+
         // Verify term increased
         let health = manager.get_health_status().await;
         assert!(health.current_term > 0);
@@ -1408,15 +1528,17 @@ mod tests {
         };
 
         let manager = ClusterManager::new(config).unwrap();
-        
+
         // Become leader first
         manager.raft_engine.become_leader().await.unwrap();
-        
+
         // Test data replication
         let test_data = b"test replication data";
-        let replication_result = manager.replicate_data("test-key".to_string(), test_data.to_vec()).await;
+        let replication_result = manager
+            .replicate_data("test-key".to_string(), test_data.to_vec())
+            .await;
         assert!(replication_result.is_ok());
-        
+
         // Verify replication status
         let replication_status = manager.get_replication_status().await;
         assert!(replication_status.is_ok());
@@ -1438,18 +1560,18 @@ mod tests {
         };
 
         let manager = ClusterManager::new(config).unwrap();
-        
+
         // Simulate network partition
         let partitioned_nodes = vec![manager.local_node.id];
         manager.simulate_partition(partitioned_nodes).await;
-        
+
         // Check cluster status during partition
         let health = manager.get_health_status().await;
         assert!(!health.is_healthy);
-        
+
         // Recover from partition
         manager.simulate_partition(vec![]).await;
-        
+
         // Check recovery
         let health = manager.get_health_status().await;
         assert!(health.is_healthy);
@@ -1468,12 +1590,15 @@ mod tests {
         };
 
         let mut manager = ClusterManager::new(config).unwrap();
-        
+
         // Test node joining
         let new_node = ClusterNode {
             id: Uuid::new_v4(),
             address: "127.0.0.1:8081".parse().unwrap(),
-            state: NodeState::Follower { leader: None, term: 0 },
+            state: NodeState::Follower {
+                leader: None,
+                term: 0,
+            },
             last_heartbeat: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_else(|_| Duration::from_secs(0))
@@ -1481,10 +1606,10 @@ mod tests {
             capabilities: NodeCapabilities::default(),
             load_metrics: LoadMetrics::default(),
         };
-        
+
         manager.handle_add_node(new_node.clone()).await.unwrap();
         assert_eq!(manager.get_members().await.len(), 2);
-        
+
         // Test node leaving gracefully
         let leave_result = manager.handle_node_leave(new_node.id).await;
         assert!(leave_result.is_ok());
@@ -1504,13 +1629,16 @@ mod tests {
         };
 
         let manager = ClusterManager::new(config).unwrap();
-        
+
         // Add multiple nodes
         for i in 1..5 {
             let node = ClusterNode {
                 id: Uuid::new_v4(),
                 address: format!("127.0.0.1:{}", 8080 + i).parse().unwrap(),
-                state: NodeState::Follower { leader: None, term: 0 },
+                state: NodeState::Follower {
+                    leader: None,
+                    term: 0,
+                },
                 last_heartbeat: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_else(|_| Duration::from_secs(0))
@@ -1520,11 +1648,11 @@ mod tests {
             };
             manager.handle_add_node(node).await.unwrap();
         }
-        
+
         // Test load balancing
         let target_node = manager.select_target_node().await;
         assert!(target_node.is_some());
-        
+
         // Test load-aware selection
         let balanced_node = manager.select_load_balanced_node().await;
         assert!(balanced_node.is_some());
@@ -1543,15 +1671,15 @@ mod tests {
         };
 
         let manager = ClusterManager::new(config).unwrap();
-        
+
         // Become leader
         manager.raft_engine.become_leader().await.unwrap();
         let original_leader = manager.get_leader().await;
         assert!(original_leader.is_some());
-        
+
         // Simulate leader failure
         manager.simulate_leader_failure().await;
-        
+
         // Check failover
         let new_leader = manager.get_leader().await;
         assert!(new_leader.is_some());
@@ -1571,12 +1699,12 @@ mod tests {
         };
 
         let manager = ClusterManager::new(config).unwrap();
-        
+
         // Test configuration retrieval
         let current_config = &manager.config;
         assert_eq!(current_config.min_nodes, 3);
         assert_eq!(current_config.replication_factor, 5);
-        
+
         // Test configuration update
         let new_config = ClusterConfig {
             node_id: current_config.node_id,
@@ -1587,10 +1715,10 @@ mod tests {
             election_timeout: Duration::from_millis(15000),
             replication_factor: 7,
         };
-        
+
         let update_result = manager.update_config(new_config).await;
         assert!(update_result.is_ok());
-        
+
         let updated_config = &manager.config;
         assert_eq!(updated_config.min_nodes, 5);
         assert_eq!(updated_config.replication_factor, 7);
@@ -1609,22 +1737,24 @@ mod tests {
         };
 
         let manager = ClusterManager::new(config).unwrap();
-        
+
         // Perform operations to generate metrics
         for _ in 0..10 {
             manager.get_health_status().await;
             manager.get_members().await;
         }
-        
+
         // Get performance metrics
         let metrics = manager.get_performance_metrics().await;
-        
+
         assert!(metrics.total_operations > 0);
         assert!(metrics.avg_operation_time_ms >= 0.0);
         assert!(metrics.node_count >= 1);
-        
+
         // Verify operation types
-        assert!(metrics.operations.contains(&"get_health_status".to_string()));
+        assert!(metrics
+            .operations
+            .contains(&"get_health_status".to_string()));
         assert!(metrics.operations.contains(&"get_members".to_string()));
     }
 
@@ -1641,12 +1771,15 @@ mod tests {
         };
 
         let manager = ClusterManager::new(config).unwrap();
-        
+
         // Test node authentication
         let trusted_node = ClusterNode {
             id: Uuid::new_v4(),
             address: "127.0.0.1:8081".parse().unwrap(),
-            state: NodeState::Follower { leader: None, term: 0 },
+            state: NodeState::Follower {
+                leader: None,
+                term: 0,
+            },
             last_heartbeat: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_else(|_| Duration::from_secs(0))
@@ -1654,16 +1787,21 @@ mod tests {
             capabilities: NodeCapabilities::default(),
             load_metrics: LoadMetrics::default(),
         };
-        
+
         // Test secure node addition
-        let auth_result = manager.authenticate_node(trusted_node.id, "trusted-token").await;
+        let auth_result = manager
+            .authenticate_node(trusted_node.id, "trusted-token")
+            .await;
         assert!(auth_result.is_ok());
-        
+
         // Test unauthorized node rejection
         let untrusted_node = ClusterNode {
             id: Uuid::new_v4(),
             address: "127.0.0.1:9999".parse().unwrap(),
-            state: NodeState::Follower { leader: None, term: 0 },
+            state: NodeState::Follower {
+                leader: None,
+                term: 0,
+            },
             last_heartbeat: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_else(|_| Duration::from_secs(0))
@@ -1671,8 +1809,10 @@ mod tests {
             capabilities: NodeCapabilities::default(),
             load_metrics: LoadMetrics::default(),
         };
-        
-        let unauth_result = manager.authenticate_node(untrusted_node.id, "invalid-token").await;
+
+        let unauth_result = manager
+            .authenticate_node(untrusted_node.id, "invalid-token")
+            .await;
         assert!(unauth_result.is_err());
     }
 
@@ -1689,10 +1829,10 @@ mod tests {
         };
 
         let manager = ClusterManager::new(config).unwrap();
-        
+
         // Test concurrent operations
         let mut handles = Vec::new();
-        
+
         for i in 0..5 {
             let manager_clone = manager.clone_without_channels().unwrap();
             let handle = tokio::spawn(async move {
@@ -1701,13 +1841,13 @@ mod tests {
             });
             handles.push(handle);
         }
-        
+
         // Wait for all operations
         for handle in handles {
             let result = handle.await.unwrap();
             assert!(result.total_nodes >= 1);
         }
-        
+
         // Test concurrent node additions
         let mut add_handles = Vec::new();
         for i in 0..3 {
@@ -1716,7 +1856,10 @@ mod tests {
                 let node = ClusterNode {
                     id: Uuid::new_v4(),
                     address: format!("127.0.0.1:{}", 8081 + i).parse().unwrap(),
-                    state: NodeState::Follower { leader: None, term: 0 },
+                    state: NodeState::Follower {
+                        leader: None,
+                        term: 0,
+                    },
                     last_heartbeat: std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
                         .unwrap_or_else(|_| Duration::from_secs(0))
@@ -1728,7 +1871,7 @@ mod tests {
             });
             add_handles.push(handle);
         }
-        
+
         // Wait for all additions
         for handle in add_handles {
             let result = handle.await.unwrap();

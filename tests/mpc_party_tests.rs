@@ -1,15 +1,15 @@
 #![cfg(any())]
 //! Comprehensive MPC Party Tests
-//! 
+//!
 //! This test suite provides comprehensive coverage for Multi-Party Computation (MPC) party functionality,
 //! ensuring secure, reliable, and efficient party operations and communication.
 
-use fortress_core::mpc_party::{MpcParty, PartyMetadata, PartyConfig, PartyMessage};
+use fortress_core::error::MpcErrorCode;
 use fortress_core::mpc::PartyRole;
 use fortress_core::mpc_manager::MpcSession;
-use fortress_core::error::MpcErrorCode;
-use std::time::Instant;
+use fortress_core::mpc_party::{MpcParty, PartyConfig, PartyMessage, PartyMetadata};
 use std::collections::HashMap;
+use std::time::Instant;
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -37,13 +37,26 @@ mod tests {
         };
 
         let party = MpcParty::new(config, metadata);
-        assert!(party.initialize().await.is_ok(), "MPC party should initialize successfully");
-        
+        assert!(
+            party.initialize().await.is_ok(),
+            "MPC party should initialize successfully"
+        );
+
         // Verify party metadata
         let party_metadata = party.get_metadata().await;
-        assert_eq!(party_metadata.party_id, "test_party_1", "Party ID should match");
-        assert_eq!(party_metadata.role, PartyRole::Initiator, "Role should match");
-        assert_eq!(party_metadata.endpoint, "http://localhost:8080", "Endpoint should match");
+        assert_eq!(
+            party_metadata.party_id, "test_party_1",
+            "Party ID should match"
+        );
+        assert_eq!(
+            party_metadata.role,
+            PartyRole::Initiator,
+            "Role should match"
+        );
+        assert_eq!(
+            party_metadata.endpoint, "http://localhost:8080",
+            "Endpoint should match"
+        );
     }
 
     /// Test MPC party with different roles
@@ -68,7 +81,10 @@ mod tests {
         };
 
         let initiator = MpcParty::new(config.clone(), initiator_metadata);
-        assert!(initiator.initialize().await.is_ok(), "Initiator party should initialize");
+        assert!(
+            initiator.initialize().await.is_ok(),
+            "Initiator party should initialize"
+        );
 
         // Test Participant role
         let participant_metadata = PartyMetadata {
@@ -80,7 +96,10 @@ mod tests {
         };
 
         let participant = MpcParty::new(config.clone(), participant_metadata);
-        assert!(participant.initialize().await.is_ok(), "Participant party should initialize");
+        assert!(
+            participant.initialize().await.is_ok(),
+            "Participant party should initialize"
+        );
 
         // Test Observer role
         let observer_metadata = PartyMetadata {
@@ -92,19 +111,37 @@ mod tests {
         };
 
         let observer = MpcParty::new(config, observer_metadata);
-        assert!(observer.initialize().await.is_ok(), "Observer party should initialize");
+        assert!(
+            observer.initialize().await.is_ok(),
+            "Observer party should initialize"
+        );
 
         // Verify role-specific capabilities
         let initiator_caps = initiator.get_capabilities().await;
-        assert!(initiator_caps.contains(&"initiation".to_string()), "Initiator should have initiation capability");
+        assert!(
+            initiator_caps.contains(&"initiation".to_string()),
+            "Initiator should have initiation capability"
+        );
 
         let participant_caps = participant.get_capabilities().await;
-        assert!(participant_caps.contains(&"computation".to_string()), "Participant should have computation capability");
-        assert!(!participant_caps.contains(&"initiation".to_string()), "Participant should not have initiation capability");
+        assert!(
+            participant_caps.contains(&"computation".to_string()),
+            "Participant should have computation capability"
+        );
+        assert!(
+            !participant_caps.contains(&"initiation".to_string()),
+            "Participant should not have initiation capability"
+        );
 
         let observer_caps = observer.get_capabilities().await;
-        assert!(observer_caps.contains(&"observation".to_string()), "Observer should have observation capability");
-        assert!(!observer_caps.contains(&"computation".to_string()), "Observer should not have computation capability");
+        assert!(
+            observer_caps.contains(&"observation".to_string()),
+            "Observer should have observation capability"
+        );
+        assert!(
+            !observer_caps.contains(&"computation".to_string()),
+            "Observer should not have computation capability"
+        );
     }
 
     /// Test MPC party session joining
@@ -144,11 +181,17 @@ mod tests {
 
         // Join the session
         let join_result = party.join_session(&session).await;
-        assert!(join_result.is_ok(), "Party should join session successfully");
-        
+        assert!(
+            join_result.is_ok(),
+            "Party should join session successfully"
+        );
+
         // Verify party is in session
         let active_sessions = party.get_active_sessions().await;
-        assert!(active_sessions.contains(&"test_session_123".to_string()), "Party should be in active sessions");
+        assert!(
+            active_sessions.contains(&"test_session_123".to_string()),
+            "Party should be in active sessions"
+        );
     }
 
     /// Test MPC party message handling
@@ -188,8 +231,11 @@ mod tests {
 
         // Process incoming message
         let process_result = party.process_message(&message).await;
-        assert!(process_result.is_ok(), "Party should process message successfully");
-        
+        assert!(
+            process_result.is_ok(),
+            "Party should process message successfully"
+        );
+
         // Send response message
         let response_message = PartyMessage {
             message_id: Uuid::new_v4().to_string(),
@@ -203,7 +249,10 @@ mod tests {
         };
 
         let send_result = party.send_message(&response_message).await;
-        assert!(send_result.is_ok(), "Party should send message successfully");
+        assert!(
+            send_result.is_ok(),
+            "Party should send message successfully"
+        );
     }
 
     /// Test MPC party computation participation
@@ -237,13 +286,26 @@ mod tests {
         ]);
 
         // Perform computation
-        let computation_result = party.perform_computation(&computation_request).await.unwrap();
-        assert!(computation_result.contains_key("result"), "Should have computation result");
-        assert!(computation_result.contains_key("proof"), "Should have computation proof");
-        
+        let computation_result = party
+            .perform_computation(&computation_request)
+            .await
+            .unwrap();
+        assert!(
+            computation_result.contains_key("result"),
+            "Should have computation result"
+        );
+        assert!(
+            computation_result.contains_key("proof"),
+            "Should have computation proof"
+        );
+
         // Verify computation result
         let result = computation_result.get("result").unwrap();
-        assert_eq!(result, &"100".to_string(), "Computation result should be correct");
+        assert_eq!(
+            result,
+            &"100".to_string(),
+            "Computation result should be correct"
+        );
     }
 
     /// Test MPC party security validation
@@ -269,7 +331,10 @@ mod tests {
 
         let insecure_party = MpcParty::new(config.clone(), insecure_metadata);
         let init_result = insecure_party.initialize().await;
-        assert!(init_result.is_err(), "Party with insufficient security should fail initialization");
+        assert!(
+            init_result.is_err(),
+            "Party with insufficient security should fail initialization"
+        );
 
         // Test party with proper security
         let secure_metadata = PartyMetadata {
@@ -282,7 +347,10 @@ mod tests {
 
         let secure_party = MpcParty::new(config, secure_metadata);
         let secure_init_result = secure_party.initialize().await;
-        assert!(secure_init_result.is_ok(), "Secure party should initialize successfully");
+        assert!(
+            secure_init_result.is_ok(),
+            "Secure party should initialize successfully"
+        );
     }
 
     /// Test MPC party message authentication
@@ -321,7 +389,10 @@ mod tests {
         };
 
         let auth_result = party.authenticate_message(&valid_message).await;
-        assert!(auth_result.is_ok(), "Valid message should authenticate successfully");
+        assert!(
+            auth_result.is_ok(),
+            "Valid message should authenticate successfully"
+        );
 
         // Create message with invalid signature
         let invalid_message = PartyMessage {
@@ -336,7 +407,10 @@ mod tests {
         };
 
         let invalid_auth_result = party.authenticate_message(&invalid_message).await;
-        assert!(invalid_auth_result.is_err(), "Invalid message should fail authentication");
+        assert!(
+            invalid_auth_result.is_err(),
+            "Invalid message should fail authentication"
+        );
     }
 
     /// Test MPC party concurrent operations
@@ -372,25 +446,37 @@ mod tests {
                     ("share1".to_string(), format!("{}", i * 10)),
                     ("share2".to_string(), format!("{}", (i + 1) * 10)),
                 ]);
-                
-                let result = party_clone.perform_computation(&computation_request).await.unwrap();
+
+                let result = party_clone
+                    .perform_computation(&computation_request)
+                    .await
+                    .unwrap();
                 (i, result)
             });
             handles.push(handle);
         }
 
         // Wait for all operations to complete
-        let results: Vec<_> = futures::future::join_all(handles).await
+        let results: Vec<_> = futures::future::join_all(handles)
+            .await
             .into_iter()
             .map(|result| result.unwrap())
             .collect();
 
         // Verify all operations completed successfully
         for (i, result) in results {
-            assert!(result.contains_key("result"), "Operation {} should have result", i);
+            assert!(
+                result.contains_key("result"),
+                "Operation {} should have result",
+                i
+            );
             let computed_result = result.get("result").unwrap();
             let expected = format!("{}", i * 20 + 10);
-            assert_eq!(computed_result, &expected, "Operation {} result should be correct", i);
+            assert_eq!(
+                computed_result, &expected,
+                "Operation {} result should be correct",
+                i
+            );
         }
     }
 
@@ -435,7 +521,7 @@ mod tests {
                 created_at: std::time::SystemTime::now(),
                 last_activity: std::time::SystemTime::now(),
             };
-            
+
             party.join_session(&mock_session).await.unwrap();
         }
 
@@ -443,18 +529,31 @@ mod tests {
         let active_sessions = party.get_active_sessions().await;
         assert_eq!(active_sessions.len(), 3, "Should have 3 active sessions");
         for session_id in &session_ids {
-            assert!(active_sessions.contains(session_id), "Session {} should be active", session_id);
+            assert!(
+                active_sessions.contains(session_id),
+                "Session {} should be active",
+                session_id
+            );
         }
 
         // Leave one session
         party.leave_session("session_2").await.unwrap();
-        
+
         // Verify session was removed
         let updated_sessions = party.get_active_sessions().await;
         assert_eq!(updated_sessions.len(), 2, "Should have 2 active sessions");
-        assert!(!updated_sessions.contains(&"session_2".to_string()), "Session 2 should not be active");
-        assert!(updated_sessions.contains(&"session_1".to_string()), "Session 1 should still be active");
-        assert!(updated_sessions.contains(&"session_3".to_string()), "Session 3 should still be active");
+        assert!(
+            !updated_sessions.contains(&"session_2".to_string()),
+            "Session 2 should not be active"
+        );
+        assert!(
+            updated_sessions.contains(&"session_1".to_string()),
+            "Session 1 should still be active"
+        );
+        assert!(
+            updated_sessions.contains(&"session_3".to_string()),
+            "Session 3 should still be active"
+        );
     }
 
     /// Test MPC party error handling
@@ -502,11 +601,17 @@ mod tests {
         };
 
         let process_result = party.process_message(&malformed_message).await;
-        assert!(process_result.is_err(), "Malformed message should fail processing");
+        assert!(
+            process_result.is_err(),
+            "Malformed message should fail processing"
+        );
 
         // Test leaving non-existent session
         let leave_result = party.leave_session("non_existent_session").await;
-        assert!(leave_result.is_err(), "Leaving non-existent session should fail");
+        assert!(
+            leave_result.is_err(),
+            "Leaving non-existent session should fail"
+        );
     }
 
     /// Test MPC party performance metrics
@@ -540,20 +645,38 @@ mod tests {
                 ("share1".to_string(), format!("{}", i)),
                 ("share2".to_string(), format!("{}", i + 1)),
             ]);
-            
-            party.perform_computation(&computation_request).await.unwrap();
+
+            party
+                .perform_computation(&computation_request)
+                .await
+                .unwrap();
         }
         let computation_time = start_time.elapsed();
 
         // Performance should be reasonable
-        assert!(computation_time.as_millis() < 5000, "10 computations should complete within 5 seconds");
-        
+        assert!(
+            computation_time.as_millis() < 5000,
+            "10 computations should complete within 5 seconds"
+        );
+
         // Get performance metrics
         let metrics = party.get_performance_metrics().await.unwrap();
-        assert!(metrics.total_computations >= 10, "Should have performed at least 10 computations");
-        assert!(metrics.average_computation_time_ms > 0.0, "Should have average computation time");
-        assert!(metrics.active_sessions >= 0, "Should have active sessions count");
-        assert!(metrics.messages_processed >= 0, "Should have messages processed count");
+        assert!(
+            metrics.total_computations >= 10,
+            "Should have performed at least 10 computations"
+        );
+        assert!(
+            metrics.average_computation_time_ms > 0.0,
+            "Should have average computation time"
+        );
+        assert!(
+            metrics.active_sessions >= 0,
+            "Should have active sessions count"
+        );
+        assert!(
+            metrics.messages_processed >= 0,
+            "Should have messages processed count"
+        );
     }
 
     /// Test MPC party compliance features
@@ -581,14 +704,23 @@ mod tests {
 
         // Test audit logging
         let audit_event = HashMap::from([
-            ("event_type".to_string(), "computation_completed".to_string()),
+            (
+                "event_type".to_string(),
+                "computation_completed".to_string(),
+            ),
             ("session_id".to_string(), "audit_session".to_string()),
             ("timestamp".to_string(), "1234567890".to_string()),
-            ("details".to_string(), "Computation completed successfully".to_string()),
+            (
+                "details".to_string(),
+                "Computation completed successfully".to_string(),
+            ),
         ]);
 
         let log_result = party.log_audit_event(&audit_event).await;
-        assert!(log_result.is_ok(), "Audit event should be logged successfully");
+        assert!(
+            log_result.is_ok(),
+            "Audit event should be logged successfully"
+        );
 
         // Test compliance checking
         let compliance_request = HashMap::from([
@@ -597,9 +729,15 @@ mod tests {
         ]);
 
         let compliance_result = party.check_compliance(&compliance_request).await.unwrap();
-        assert!(compliance_result.contains_key("compliant"), "Should have compliance status");
-        assert!(compliance_result.contains_key("score"), "Should have compliance score");
-        
+        assert!(
+            compliance_result.contains_key("compliant"),
+            "Should have compliance status"
+        );
+        assert!(
+            compliance_result.contains_key("score"),
+            "Should have compliance score"
+        );
+
         // Verify compliance result
         let compliant = compliance_result.get("compliant").unwrap();
         assert_eq!(compliant, &"true".to_string(), "Party should be compliant");
@@ -648,7 +786,10 @@ mod tests {
 
         // Verify party is no longer operational
         let active_sessions = party.get_active_sessions().await;
-        assert!(active_sessions.is_empty(), "Should have no active sessions after shutdown");
+        assert!(
+            active_sessions.is_empty(),
+            "Should have no active sessions after shutdown"
+        );
 
         // Operations after shutdown should fail
         let computation_request = HashMap::from([
@@ -658,6 +799,9 @@ mod tests {
         ]);
 
         let post_shutdown_result = party.perform_computation(&computation_request).await;
-        assert!(post_shutdown_result.is_err(), "Operations after shutdown should fail");
+        assert!(
+            post_shutdown_result.is_err(),
+            "Operations after shutdown should fail"
+        );
     }
 }

@@ -1,14 +1,14 @@
 #![cfg(any())]
 //! Comprehensive Plugin System Core Tests
-//! 
+//!
 //! This test suite provides comprehensive coverage for the Fortress plugin system core functionality,
 //! ensuring secure, reliable, and efficient plugin operations, lifecycle management, and security controls.
 
-use fortress_core::plugin::{Plugin, PluginMetadata, PluginCapability, PluginManager};
-use fortress_core::plugin_registry::PluginRegistry;
 use fortress_core::error::{FortressError, PluginErrorCode};
-use std::time::Instant;
+use fortress_core::plugin::{Plugin, PluginCapability, PluginManager, PluginMetadata};
+use fortress_core::plugin_registry::PluginRegistry;
 use std::collections::HashMap;
+use std::time::Instant;
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -35,20 +35,42 @@ mod tests {
         };
 
         let config = std::collections::HashMap::from([
-            ("max_execution_time_ms".to_string(), serde_json::Value::Number(5000.into())),
-            ("max_memory_mb".to_string(), serde_json::Value::Number(100.into())),
+            (
+                "max_execution_time_ms".to_string(),
+                serde_json::Value::Number(5000.into()),
+            ),
+            (
+                "max_memory_mb".to_string(),
+                serde_json::Value::Number(100.into()),
+            ),
             ("enable_logging".to_string(), serde_json::Value::Bool(true)),
-            ("security_policy".to_string(), serde_json::Value::String("strict".to_string())),
+            (
+                "security_policy".to_string(),
+                serde_json::Value::String("strict".to_string()),
+            ),
         ]);
 
         let plugin = TestPlugin::new(metadata, config);
-        assert!(plugin.initialize().await.is_ok(), "Plugin should initialize successfully");
-        
+        assert!(
+            plugin.initialize().await.is_ok(),
+            "Plugin should initialize successfully"
+        );
+
         // Verify plugin metadata
         let plugin_metadata = plugin.get_metadata().await;
-        assert_eq!(plugin_metadata.name, "test_plugin", "Plugin name should match");
-        assert_eq!(plugin_metadata.version, "1.0.0", "Plugin version should match");
-        assert_eq!(plugin_metadata.capabilities.len(), 3, "Should have 3 capabilities");
+        assert_eq!(
+            plugin_metadata.name, "test_plugin",
+            "Plugin name should match"
+        );
+        assert_eq!(
+            plugin_metadata.version, "1.0.0",
+            "Plugin version should match"
+        );
+        assert_eq!(
+            plugin_metadata.capabilities.len(),
+            3,
+            "Should have 3 capabilities"
+        );
     }
 
     /// Test plugin with multiple capabilities
@@ -79,10 +101,19 @@ mod tests {
         };
 
         let config = std::collections::HashMap::from([
-            ("max_execution_time_ms".to_string(), serde_json::Value::Number(10000.into())),
-            ("max_memory_mb".to_string(), serde_json::Value::Number(200.into())),
+            (
+                "max_execution_time_ms".to_string(),
+                serde_json::Value::Number(10000.into()),
+            ),
+            (
+                "max_memory_mb".to_string(),
+                serde_json::Value::Number(200.into()),
+            ),
             ("enable_logging".to_string(), serde_json::Value::Bool(true)),
-            ("security_policy".to_string(), serde_json::Value::String("high_security".to_string())),
+            (
+                "security_policy".to_string(),
+                serde_json::Value::String("high_security".to_string()),
+            ),
         ]);
 
         let plugin = TestPlugin::new(metadata, config);
@@ -134,24 +165,42 @@ mod tests {
         let plugin = TestPlugin::new(metadata, config);
 
         // Test initialization
-        assert!(plugin.initialize().await.is_ok(), "Plugin should initialize");
-        assert!(plugin.is_initialized(), "Plugin should be marked as initialized");
+        assert!(
+            plugin.initialize().await.is_ok(),
+            "Plugin should initialize"
+        );
+        assert!(
+            plugin.is_initialized(),
+            "Plugin should be marked as initialized"
+        );
 
         // Test execution
         let sign_result = plugin.sign(b"test data", "RSA-2048").await;
-        assert!(sign_result.is_ok(), "Plugin should execute operations when initialized");
+        assert!(
+            sign_result.is_ok(),
+            "Plugin should execute operations when initialized"
+        );
 
         // Test health check
         let health_result = plugin.health_check().await;
         assert!(health_result.is_ok(), "Plugin health check should pass");
 
         // Test cleanup
-        assert!(plugin.cleanup().await.is_ok(), "Plugin should cleanup successfully");
-        assert!(!plugin.is_initialized(), "Plugin should be marked as not initialized after cleanup");
+        assert!(
+            plugin.cleanup().await.is_ok(),
+            "Plugin should cleanup successfully"
+        );
+        assert!(
+            !plugin.is_initialized(),
+            "Plugin should be marked as not initialized after cleanup"
+        );
 
         // Operations after cleanup should fail
         let post_cleanup_result = plugin.sign(b"test data", "RSA-2048").await;
-        assert!(post_cleanup_result.is_err(), "Operations should fail after cleanup");
+        assert!(
+            post_cleanup_result.is_err(),
+            "Operations should fail after cleanup"
+        );
     }
 
     /// Test plugin error handling and recovery
@@ -181,7 +230,10 @@ mod tests {
 
         // Test operation with unsupported algorithm
         let unsupported_result = plugin.encrypt(b"data", "UNSUPPORTED_ALGORITHM").await;
-        assert!(unsupported_result.is_err(), "Unsupported algorithm should fail");
+        assert!(
+            unsupported_result.is_err(),
+            "Unsupported algorithm should fail"
+        );
 
         // Test operation with invalid input
         let invalid_result = plugin.encrypt(&[], "AES-256-GCM").await;
@@ -208,10 +260,16 @@ mod tests {
         };
 
         let config = std::collections::HashMap::from([
-            ("max_execution_time_ms".to_string(), serde_json::json!(10000)),
+            (
+                "max_execution_time_ms".to_string(),
+                serde_json::json!(10000),
+            ),
             ("max_memory_mb".to_string(), serde_json::json!(100)),
             ("enable_logging".to_string(), serde_json::json!(true)),
-            ("security_policy".to_string(), serde_json::json!("performance")),
+            (
+                "security_policy".to_string(),
+                serde_json::json!("performance"),
+            ),
         ]);
 
         let plugin = TestPlugin::new(metadata, config);
@@ -226,13 +284,25 @@ mod tests {
         let hashing_time = start_time.elapsed();
 
         // Performance should be reasonable
-        assert!(hashing_time.as_millis() < 5000, "100 hash operations should complete within 5 seconds");
+        assert!(
+            hashing_time.as_millis() < 5000,
+            "100 hash operations should complete within 5 seconds"
+        );
 
         // Get performance metrics
         let metrics = plugin.get_performance_metrics().await.unwrap();
-        assert!(metrics.total_operations >= 100, "Should have performed at least 100 operations");
-        assert!(metrics.average_execution_time_ms > 0.0, "Should have average execution time");
-        assert!(metrics.memory_usage_mb <= 100, "Memory usage should be within limits");
+        assert!(
+            metrics.total_operations >= 100,
+            "Should have performed at least 100 operations"
+        );
+        assert!(
+            metrics.average_execution_time_ms > 0.0,
+            "Should have average execution time"
+        );
+        assert!(
+            metrics.memory_usage_mb <= 100,
+            "Memory usage should be within limits"
+        );
         assert!(metrics.success_rate >= 0.95, "Success rate should be high");
     }
 
@@ -256,12 +326,18 @@ mod tests {
             ("max_execution_time_ms".to_string(), serde_json::json!(5000)),
             ("max_memory_mb".to_string(), serde_json::json!(100)),
             ("enable_logging".to_string(), serde_json::json!(true)),
-            ("security_policy".to_string(), serde_json::json!("enterprise")),
+            (
+                "security_policy".to_string(),
+                serde_json::json!("enterprise"),
+            ),
         ]);
 
         let insecure_plugin = TestPlugin::new(insecure_metadata, config);
         let validation_result = insecure_plugin.validate_security().await;
-        assert!(validation_result.is_err(), "Insecure plugin should fail validation");
+        assert!(
+            validation_result.is_err(),
+            "Insecure plugin should fail validation"
+        );
 
         // Test plugin with proper security
         let secure_metadata = PluginMetadata {
@@ -280,12 +356,18 @@ mod tests {
             ("max_execution_time_ms".to_string(), serde_json::json!(5000)),
             ("max_memory_mb".to_string(), serde_json::json!(100)),
             ("enable_logging".to_string(), serde_json::json!(true)),
-            ("security_policy".to_string(), serde_json::json!("enterprise")),
+            (
+                "security_policy".to_string(),
+                serde_json::json!("enterprise"),
+            ),
         ]);
 
         let secure_plugin = TestPlugin::new(secure_metadata, secure_config);
         let secure_validation_result = secure_plugin.validate_security().await;
-        assert!(secure_validation_result.is_ok(), "Secure plugin should pass validation");
+        assert!(
+            secure_validation_result.is_ok(),
+            "Secure plugin should pass validation"
+        );
     }
 
     /// Test plugin concurrent execution
@@ -307,7 +389,10 @@ mod tests {
             ("max_execution_time_ms".to_string(), serde_json::json!(5000)),
             ("max_memory_mb".to_string(), serde_json::json!(100)),
             ("enable_logging".to_string(), serde_json::json!(true)),
-            ("security_policy".to_string(), serde_json::json!("concurrent")),
+            (
+                "security_policy".to_string(),
+                serde_json::json!("concurrent"),
+            ),
         ]);
 
         let plugin = TestPlugin::new(metadata, config);
@@ -319,15 +404,22 @@ mod tests {
             let plugin_clone = plugin.clone();
             let handle = tokio::spawn(async move {
                 let plaintext = format!("concurrent test data {}", i);
-                let encrypt_result = plugin_clone.encrypt(plaintext.as_bytes(), "AES-256-GCM").await.unwrap();
-                let decrypt_result = plugin_clone.decrypt(&encrypt_result, "AES-256-GCM").await.unwrap();
+                let encrypt_result = plugin_clone
+                    .encrypt(plaintext.as_bytes(), "AES-256-GCM")
+                    .await
+                    .unwrap();
+                let decrypt_result = plugin_clone
+                    .decrypt(&encrypt_result, "AES-256-GCM")
+                    .await
+                    .unwrap();
                 (i, decrypt_result)
             });
             handles.push(handle);
         }
 
         // Wait for all operations to complete
-        let results: Vec<_> = futures::future::join_all(handles).await
+        let results: Vec<_> = futures::future::join_all(handles)
+            .await
             .into_iter()
             .map(|result| result.unwrap())
             .collect();
@@ -335,7 +427,12 @@ mod tests {
         // Verify all operations completed successfully
         for (i, decrypted) in results {
             let expected = format!("concurrent test data {}", i);
-            assert_eq!(String::from_utf8(decrypted).unwrap(), expected, "Concurrent operation {} should succeed", i);
+            assert_eq!(
+                String::from_utf8(decrypted).unwrap(),
+                expected,
+                "Concurrent operation {} should succeed",
+                i
+            );
         }
     }
 
@@ -369,7 +466,10 @@ mod tests {
                 ("security_policy".to_string(), serde_json::json!("standard")),
             ]),
             std::collections::HashMap::from([
-                ("max_execution_time_ms".to_string(), serde_json::json!(10000)),
+                (
+                    "max_execution_time_ms".to_string(),
+                    serde_json::json!(10000),
+                ),
                 ("max_memory_mb".to_string(), serde_json::json!(200)),
                 ("enable_logging".to_string(), serde_json::json!(true)),
                 ("security_policy".to_string(), serde_json::json!("strict")),
@@ -378,14 +478,29 @@ mod tests {
 
         for (i, config) in configs.iter().enumerate() {
             let plugin = TestPlugin::new(metadata.clone(), config.clone());
-            plugin.initialize().await.expect("Plugin {} should initialize", i);
+            plugin
+                .initialize()
+                .await
+                .expect("Plugin {} should initialize", i);
 
             // Test configuration-specific behavior
             let plugin_config = plugin.get_config().await;
-            assert_eq!(plugin_config.max_execution_time_ms, config.max_execution_time_ms, "Execution time should match config");
-            assert_eq!(plugin_config.max_memory_mb, config.max_memory_mb, "Memory limit should match config");
-            assert_eq!(plugin_config.enable_logging, config.enable_logging, "Logging should match config");
-            assert_eq!(plugin_config.security_policy, config.security_policy, "Security policy should match config");
+            assert_eq!(
+                plugin_config.max_execution_time_ms, config.max_execution_time_ms,
+                "Execution time should match config"
+            );
+            assert_eq!(
+                plugin_config.max_memory_mb, config.max_memory_mb,
+                "Memory limit should match config"
+            );
+            assert_eq!(
+                plugin_config.enable_logging, config.enable_logging,
+                "Logging should match config"
+            );
+            assert_eq!(
+                plugin_config.security_policy, config.security_policy,
+                "Security policy should match config"
+            );
         }
     }
 
@@ -400,10 +515,7 @@ mod tests {
             author: "Fortress Team".to_string(),
             license: "MIT".to_string(),
             capabilities: vec![PluginCapability::Signing],
-            dependencies: vec![
-                "crypto_lib_v2".to_string(),
-                "security_utils_v1".to_string(),
-            ],
+            dependencies: vec!["crypto_lib_v2".to_string(), "security_utils_v1".to_string()],
             security_level: 128,
             supported_algorithms: vec!["RSA-2048".to_string()],
         };
@@ -420,14 +532,23 @@ mod tests {
         // Test dependency resolution
         let dependencies = plugin.get_dependencies().await;
         assert_eq!(dependencies.len(), 2, "Should have 2 dependencies");
-        assert!(dependencies.contains(&"crypto_lib_v2".to_string()), "Should contain crypto_lib_v2");
-        assert!(dependencies.contains(&"security_utils_v1".to_string()), "Should contain security_utils_v1");
+        assert!(
+            dependencies.contains(&"crypto_lib_v2".to_string()),
+            "Should contain crypto_lib_v2"
+        );
+        assert!(
+            dependencies.contains(&"security_utils_v1".to_string()),
+            "Should contain security_utils_v1"
+        );
 
         // Test initialization with missing dependencies (should fail)
         let init_result = plugin.initialize().await;
         // Note: In a real implementation, this would check for actual dependency availability
         // For testing purposes, we'll assume dependencies are available
-        assert!(init_result.is_ok(), "Should initialize when dependencies are available");
+        assert!(
+            init_result.is_ok(),
+            "Should initialize when dependencies are available"
+        );
     }
 
     /// Test plugin registry integration
@@ -449,14 +570,26 @@ mod tests {
 
         // List all plugins
         let registered_plugins = registry.list_plugins().await;
-        assert_eq!(registered_plugins.len(), 3, "Should have 3 registered plugins");
+        assert_eq!(
+            registered_plugins.len(),
+            3,
+            "Should have 3 registered plugins"
+        );
 
         // Find plugins by capability
-        let signing_plugins = registry.find_plugins_by_capability(PluginCapability::Signing).await;
+        let signing_plugins = registry
+            .find_plugins_by_capability(PluginCapability::Signing)
+            .await;
         assert_eq!(signing_plugins.len(), 1, "Should have 1 signing plugin");
 
-        let encryption_plugins = registry.find_plugins_by_capability(PluginCapability::Encryption).await;
-        assert_eq!(encryption_plugins.len(), 1, "Should have 1 encryption plugin");
+        let encryption_plugins = registry
+            .find_plugins_by_capability(PluginCapability::Encryption)
+            .await;
+        assert_eq!(
+            encryption_plugins.len(),
+            1,
+            "Should have 1 encryption plugin"
+        );
 
         // Get plugin by ID
         let plugin_list = registry.list_plugins().await;
@@ -472,7 +605,10 @@ mod tests {
         let manager = PluginManager::new();
 
         // Initialize manager
-        assert!(manager.initialize().await.is_ok(), "Plugin manager should initialize");
+        assert!(
+            manager.initialize().await.is_ok(),
+            "Plugin manager should initialize"
+        );
 
         // Load plugins
         let plugin_paths = vec![
@@ -485,7 +621,10 @@ mod tests {
             // For testing, we'll simulate successful loading
             let load_result = manager.load_plugin(path).await;
             // Simulate success for test purposes
-            assert!(load_result.is_ok() || load_result.is_err(), "Load result should be handled");
+            assert!(
+                load_result.is_ok() || load_result.is_err(),
+                "Load result should be handled"
+            );
         }
 
         // Get manager statistics
@@ -503,7 +642,10 @@ mod tests {
 
         let execution_result = manager.execute_plugin(&execution_request).await;
         // Note: This would fail without actual plugins, but we test the interface
-        assert!(execution_result.is_ok() || execution_result.is_err(), "Execution should be handled");
+        assert!(
+            execution_result.is_ok() || execution_result.is_err(),
+            "Execution should be handled"
+        );
     }
 
     /// Test plugin access controls
@@ -515,10 +657,7 @@ mod tests {
             description: "Plugin with access controls".to_string(),
             author: "Fortress Team".to_string(),
             license: "MIT".to_string(),
-            capabilities: vec![
-                PluginCapability::Signing,
-                PluginCapability::Encryption,
-            ],
+            capabilities: vec![PluginCapability::Signing, PluginCapability::Encryption],
             dependencies: vec![],
             security_level: 256,
             supported_algorithms: vec!["RSA-4096".to_string(), "AES-256-GCM".to_string()],
@@ -528,7 +667,10 @@ mod tests {
             ("max_execution_time_ms".to_string(), serde_json::json!(5000)),
             ("max_memory_mb".to_string(), serde_json::json!(100)),
             ("enable_logging".to_string(), serde_json::json!(true)),
-            ("security_policy".to_string(), serde_json::json!("enterprise")),
+            (
+                "security_policy".to_string(),
+                serde_json::json!("enterprise"),
+            ),
         ]);
 
         let plugin = TestPlugin::new(metadata, config);
@@ -553,7 +695,10 @@ mod tests {
         ]);
 
         let restricted_result = plugin.check_access(&restricted_context).await;
-        assert!(restricted_result.is_err(), "Restricted access should be denied");
+        assert!(
+            restricted_result.is_err(),
+            "Restricted access should be denied"
+        );
     }
 
     /// Test plugin version compatibility
@@ -575,18 +720,31 @@ mod tests {
         }
 
         // Test version resolution
-        let latest_plugin = registry.get_latest_plugin_version("compat_plugin").await.unwrap();
+        let latest_plugin = registry
+            .get_latest_plugin_version("compat_plugin")
+            .await
+            .unwrap();
         let latest_metadata = latest_plugin.get_metadata().await;
-        assert_eq!(latest_metadata.version, "3.0.0", "Should get latest version");
+        assert_eq!(
+            latest_metadata.version, "3.0.0",
+            "Should get latest version"
+        );
 
         // Test specific version retrieval
-        let v2_plugin = registry.get_plugin_version("compat_plugin", "2.0.0").await.unwrap();
+        let v2_plugin = registry
+            .get_plugin_version("compat_plugin", "2.0.0")
+            .await
+            .unwrap();
         let v2_metadata = v2_plugin.get_metadata().await;
         assert_eq!(v2_metadata.version, "2.0.0", "Should get specific version");
     }
 
     // Helper function to create test plugins
-    fn create_test_plugin(name: &str, version: &str, capabilities: Vec<PluginCapability>) -> TestPlugin {
+    fn create_test_plugin(
+        name: &str,
+        version: &str,
+        capabilities: Vec<PluginCapability>,
+    ) -> TestPlugin {
         let metadata = PluginMetadata {
             name: name.to_string(),
             version: version.to_string(),
@@ -619,7 +777,10 @@ struct TestPlugin {
 }
 
 impl TestPlugin {
-    fn new(metadata: PluginMetadata, config: std::collections::HashMap<String, serde_json::Value>) -> Self {
+    fn new(
+        metadata: PluginMetadata,
+        config: std::collections::HashMap<String, serde_json::Value>,
+    ) -> Self {
         Self {
             metadata,
             config,
@@ -666,7 +827,8 @@ impl Plugin for TestPlugin {
             return Err(FortressError::plugin(PluginErrorCode::NotInitialized));
         }
 
-        self.execution_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.execution_count
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
         match operation {
             "sign" => {
@@ -681,7 +843,10 @@ impl Plugin for TestPlugin {
             }
             "decrypt" => {
                 // Simulate decryption operation
-                if let Some(plaintext) = std::str::from_utf8(input).ok().and_then(|s| s.strip_prefix("encrypted_")) {
+                if let Some(plaintext) = std::str::from_utf8(input)
+                    .ok()
+                    .and_then(|s| s.strip_prefix("encrypted_"))
+                {
                     Ok(hex::decode(plaintext).unwrap_or_default())
                 } else {
                     Ok(input.to_vec())
@@ -705,14 +870,26 @@ impl Plugin for TestPlugin {
     }
 
     async fn sign(&mut self, data: &[u8], algorithm: &str) -> Result<Vec<u8>, FortressError> {
-        if !self.metadata.supported_algorithms.contains(&algorithm.to_string()) {
+        if !self
+            .metadata
+            .supported_algorithms
+            .contains(&algorithm.to_string())
+        {
             return Err(FortressError::plugin(PluginErrorCode::UnsupportedAlgorithm));
         }
         self.execute("sign", data).await
     }
 
-    async fn encrypt(&mut self, plaintext: &[u8], algorithm: &str) -> Result<Vec<u8>, FortressError> {
-        if !self.metadata.supported_algorithms.contains(&algorithm.to_string()) {
+    async fn encrypt(
+        &mut self,
+        plaintext: &[u8],
+        algorithm: &str,
+    ) -> Result<Vec<u8>, FortressError> {
+        if !self
+            .metadata
+            .supported_algorithms
+            .contains(&algorithm.to_string())
+        {
             return Err(FortressError::plugin(PluginErrorCode::UnsupportedAlgorithm));
         }
         if plaintext.is_empty() {
@@ -721,29 +898,58 @@ impl Plugin for TestPlugin {
         self.execute("encrypt", plaintext).await
     }
 
-    async fn decrypt(&mut self, ciphertext: &[u8], algorithm: &str) -> Result<Vec<u8>, FortressError> {
-        if !self.metadata.supported_algorithms.contains(&algorithm.to_string()) {
+    async fn decrypt(
+        &mut self,
+        ciphertext: &[u8],
+        algorithm: &str,
+    ) -> Result<Vec<u8>, FortressError> {
+        if !self
+            .metadata
+            .supported_algorithms
+            .contains(&algorithm.to_string())
+        {
             return Err(FortressError::plugin(PluginErrorCode::UnsupportedAlgorithm));
         }
         self.execute("decrypt", ciphertext).await
     }
 
     async fn hash(&mut self, data: &[u8], algorithm: &str) -> Result<Vec<u8>, FortressError> {
-        if !self.metadata.supported_algorithms.contains(&algorithm.to_string()) {
+        if !self
+            .metadata
+            .supported_algorithms
+            .contains(&algorithm.to_string())
+        {
             return Err(FortressError::plugin(PluginErrorCode::UnsupportedAlgorithm));
         }
         self.execute("hash", data).await
     }
 
-    async fn generate_key(&mut self, algorithm: &str, key_size: usize) -> Result<Vec<u8>, FortressError> {
-        if !self.metadata.supported_algorithms.contains(&algorithm.to_string()) {
+    async fn generate_key(
+        &mut self,
+        algorithm: &str,
+        key_size: usize,
+    ) -> Result<Vec<u8>, FortressError> {
+        if !self
+            .metadata
+            .supported_algorithms
+            .contains(&algorithm.to_string())
+        {
             return Err(FortressError::plugin(PluginErrorCode::UnsupportedAlgorithm));
         }
         self.execute("generate_key", &key_size.to_le_bytes()).await
     }
 
-    async fn verify(&mut self, data: &[u8], signature: &[u8], algorithm: &str) -> Result<bool, FortressError> {
-        if !self.metadata.supported_algorithms.contains(&algorithm.to_string()) {
+    async fn verify(
+        &mut self,
+        data: &[u8],
+        signature: &[u8],
+        algorithm: &str,
+    ) -> Result<bool, FortressError> {
+        if !self
+            .metadata
+            .supported_algorithms
+            .contains(&algorithm.to_string())
+        {
             return Err(FortressError::plugin(PluginErrorCode::UnsupportedAlgorithm));
         }
         // Simulate verification (always true for test)
@@ -758,12 +964,19 @@ impl Plugin for TestPlugin {
         let mut health = HashMap::new();
         health.insert("status".to_string(), "healthy".to_string());
         health.insert("uptime".to_string(), "60s".to_string());
-        health.insert("operations".to_string(), self.execution_count.load(std::sync::atomic::Ordering::SeqCst).to_string());
+        health.insert(
+            "operations".to_string(),
+            self.execution_count
+                .load(std::sync::atomic::Ordering::SeqCst)
+                .to_string(),
+        );
         Ok(health)
     }
 
     async fn get_performance_metrics(&self) -> Result<PluginPerformanceMetrics, FortressError> {
-        let operations = self.execution_count.load(std::sync::atomic::Ordering::SeqCst);
+        let operations = self
+            .execution_count
+            .load(std::sync::atomic::Ordering::SeqCst);
         Ok(PluginPerformanceMetrics {
             total_operations: operations,
             average_execution_time_ms: 5.0,
@@ -820,7 +1033,8 @@ impl Clone for TestPlugin {
             config: self.config.clone(),
             initialized: self.initialized,
             execution_count: std::sync::atomic::AtomicU64::new(
-                self.execution_count.load(std::sync::atomic::Ordering::SeqCst)
+                self.execution_count
+                    .load(std::sync::atomic::Ordering::SeqCst),
             ),
         }
     }

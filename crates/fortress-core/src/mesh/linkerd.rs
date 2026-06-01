@@ -1,14 +1,17 @@
 //! Linkerd Service Mesh Integration
-//! 
+//!
 //! This module provides integration with Linkerd service mesh for traffic
 //! management, security, and observability features.
 
+use crate::error::{FortressError, Result};
+use crate::mesh::{
+    MeshConfig, MeshMetrics, MeshNode, MeshNodeHealthStatus, MeshProvider, MeshType,
+    SecurityPolicy, TrafficPolicy,
+};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
-use serde::{Serialize, Deserialize};
-use chrono::{DateTime, Utc};
-use crate::error::{FortressError, Result};
-use crate::mesh::{MeshProvider, MeshConfig, MeshNode, MeshNodeHealthStatus, TrafficPolicy, SecurityPolicy, MeshMetrics, MeshType};
 
 /// Linkerd mesh provider configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -26,7 +29,8 @@ pub struct LinkerdMeshConfig {
 impl Default for LinkerdMeshConfig {
     fn default() -> Self {
         Self {
-            controller_api_address: "http://linkerd-controller.linkerd.svc.cluster.local:8085".to_string(),
+            controller_api_address: "http://linkerd-controller.linkerd.svc.cluster.local:8085"
+                .to_string(),
             proxy_api_address: "http://localhost:4191".to_string(),
             namespace: "default".to_string(),
             service_discovery_enabled: true,
@@ -81,92 +85,117 @@ impl LinkerdMesh {
 
     /// Get Linkerd services from controller API
     async fn get_linkerd_services(&self) -> Result<Vec<LinkerdService>> {
-        let client = self.client.as_ref()
+        let client = self
+            .client
+            .as_ref()
             .ok_or_else(|| FortressError::mesh("Linkerd client not initialized"))?;
 
         let url = self.build_controller_url("api/v1/services");
-        
-        let response = client.get(&url)
-            .send()
-            .await
-            .map_err(|e| FortressError::mesh(format!("Linkerd services API request failed: {}", e)))?;
+
+        let response = client.get(&url).send().await.map_err(|e| {
+            FortressError::mesh(format!("Linkerd services API request failed: {}", e))
+        })?;
 
         if !response.status().is_success() {
-            return Err(FortressError::mesh(format!("Linkerd services API returned status: {}", response.status())));
+            return Err(FortressError::mesh(format!(
+                "Linkerd services API returned status: {}",
+                response.status()
+            )));
         }
 
-        let services: Vec<LinkerdService> = response.json()
-            .await
-            .map_err(|e| FortressError::mesh(format!("Failed to parse Linkerd services response: {}", e)))?;
+        let services: Vec<LinkerdService> = response.json().await.map_err(|e| {
+            FortressError::mesh(format!("Failed to parse Linkerd services response: {}", e))
+        })?;
 
         Ok(services)
     }
 
     /// Get Linkerd HTTP routes
     async fn get_linkerd_http_routes(&self) -> Result<Vec<LinkerdHttpRoute>> {
-        let client = self.client.as_ref()
+        let client = self
+            .client
+            .as_ref()
             .ok_or_else(|| FortressError::mesh("Linkerd client not initialized"))?;
 
         let url = self.build_controller_url("api/v1/http-routes");
-        
-        let response = client.get(&url)
-            .send()
-            .await
-            .map_err(|e| FortressError::mesh(format!("Linkerd HTTP routes API request failed: {}", e)))?;
+
+        let response = client.get(&url).send().await.map_err(|e| {
+            FortressError::mesh(format!("Linkerd HTTP routes API request failed: {}", e))
+        })?;
 
         if !response.status().is_success() {
-            return Err(FortressError::mesh(format!("Linkerd HTTP routes API returned status: {}", response.status())));
+            return Err(FortressError::mesh(format!(
+                "Linkerd HTTP routes API returned status: {}",
+                response.status()
+            )));
         }
 
-        let routes: Vec<LinkerdHttpRoute> = response.json()
-            .await
-            .map_err(|e| FortressError::mesh(format!("Failed to parse Linkerd HTTP routes response: {}", e)))?;
+        let routes: Vec<LinkerdHttpRoute> = response.json().await.map_err(|e| {
+            FortressError::mesh(format!(
+                "Failed to parse Linkerd HTTP routes response: {}",
+                e
+            ))
+        })?;
 
         Ok(routes)
     }
 
     /// Get Linkerd server policies
     async fn get_linkerd_server_policies(&self) -> Result<Vec<LinkerdServerPolicy>> {
-        let client = self.client.as_ref()
+        let client = self
+            .client
+            .as_ref()
             .ok_or_else(|| FortressError::mesh("Linkerd client not initialized"))?;
 
         let url = self.build_controller_url("api/v1/server-policies");
-        
-        let response = client.get(&url)
-            .send()
-            .await
-            .map_err(|e| FortressError::mesh(format!("Linkerd server policies API request failed: {}", e)))?;
+
+        let response = client.get(&url).send().await.map_err(|e| {
+            FortressError::mesh(format!("Linkerd server policies API request failed: {}", e))
+        })?;
 
         if !response.status().is_success() {
-            return Err(FortressError::mesh(format!("Linkerd server policies API returned status: {}", response.status())));
+            return Err(FortressError::mesh(format!(
+                "Linkerd server policies API returned status: {}",
+                response.status()
+            )));
         }
 
-        let policies: Vec<LinkerdServerPolicy> = response.json()
-            .await
-            .map_err(|e| FortressError::mesh(format!("Failed to parse Linkerd server policies response: {}", e)))?;
+        let policies: Vec<LinkerdServerPolicy> = response.json().await.map_err(|e| {
+            FortressError::mesh(format!(
+                "Failed to parse Linkerd server policies response: {}",
+                e
+            ))
+        })?;
 
         Ok(policies)
     }
 
     /// Get Linkerd authorization policies
     async fn get_linkerd_authz_policies(&self) -> Result<Vec<LinkerdAuthzPolicy>> {
-        let client = self.client.as_ref()
+        let client = self
+            .client
+            .as_ref()
             .ok_or_else(|| FortressError::mesh("Linkerd client not initialized"))?;
 
         let url = self.build_controller_url("api/v1/authorization-policies");
-        
-        let response = client.get(&url)
-            .send()
-            .await
-            .map_err(|e| FortressError::mesh(format!("Linkerd authz policies API request failed: {}", e)))?;
+
+        let response = client.get(&url).send().await.map_err(|e| {
+            FortressError::mesh(format!("Linkerd authz policies API request failed: {}", e))
+        })?;
 
         if !response.status().is_success() {
-            return Err(FortressError::mesh(format!("Linkerd authz policies API returned status: {}", response.status())));
+            return Err(FortressError::mesh(format!(
+                "Linkerd authz policies API returned status: {}",
+                response.status()
+            )));
         }
 
-        let policies: Vec<LinkerdAuthzPolicy> = response.json()
-            .await
-            .map_err(|e| FortressError::mesh(format!("Failed to parse Linkerd authz policies response: {}", e)))?;
+        let policies: Vec<LinkerdAuthzPolicy> = response.json().await.map_err(|e| {
+            FortressError::mesh(format!(
+                "Failed to parse Linkerd authz policies response: {}",
+                e
+            ))
+        })?;
 
         Ok(policies)
     }
@@ -174,14 +203,18 @@ impl LinkerdMesh {
     /// Convert Linkerd service to mesh node
     fn linkerd_service_to_mesh_node(&self, service: &LinkerdService) -> Result<MeshNode> {
         let node_id = format!("linkerd-service-{}", service.name);
-        
+
         // Extract IP address from service endpoints
-        let ip_address = service.endpoints.first()
+        let ip_address = service
+            .endpoints
+            .first()
             .and_then(|endpoint| endpoint.address.as_ref())
             .cloned()
             .unwrap_or_else(|| "127.0.0.1".to_string());
 
-        let port = service.endpoints.first()
+        let port = service
+            .endpoints
+            .first()
             .map(|endpoint| endpoint.port)
             .unwrap_or(8080);
 
@@ -190,7 +223,7 @@ impl LinkerdMesh {
         labels.insert("mesh_provider".to_string(), "linkerd".to_string());
         labels.insert("service_name".to_string(), service.name.clone());
         labels.insert("service_type".to_string(), service.service_type.clone());
-        
+
         for (key, value) in &service.labels {
             labels.insert(key.clone(), value.clone());
         }
@@ -200,7 +233,10 @@ impl LinkerdMesh {
         metadata.insert("service_name".to_string(), service.name.clone());
         metadata.insert("service_type".to_string(), service.service_type.clone());
         metadata.insert("namespace".to_string(), service.namespace.clone());
-        metadata.insert("total_endpoints".to_string(), service.endpoints.len().to_string());
+        metadata.insert(
+            "total_endpoints".to_string(),
+            service.endpoints.len().to_string(),
+        );
 
         // Determine health status
         let healthy_endpoints = service.endpoints.iter().filter(|e| e.healthy).count();
@@ -237,30 +273,44 @@ impl LinkerdMesh {
     }
 
     /// Convert Linkerd HTTP route to traffic policy
-    fn linkerd_http_route_to_traffic_policy(&self, route: &LinkerdHttpRoute) -> Result<TrafficPolicy> {
+    fn linkerd_http_route_to_traffic_policy(
+        &self,
+        route: &LinkerdHttpRoute,
+    ) -> Result<TrafficPolicy> {
         let mut rules = Vec::new();
 
         for rule in &route.spec.rules {
             let traffic_rule = TrafficRule {
                 name: rule.name.clone(),
                 priority: rule.priority.unwrap_or(100),
-                match_conditions: rule.matches.iter().map(|m| crate::mesh::MatchCondition {
-                    field: m.name.clone(),
-                    operator: match m.regex {
-                        true => crate::mesh::MatchOperator::Regex,
-                        false => crate::mesh::MatchOperator::Equals,
-                    },
-                    value: m.value.clone(),
-                }).collect(),
-                actions: rule.route.iter().map(|r| crate::mesh::TrafficAction {
-                    action_type: crate::mesh::ActionType::Route,
-                    parameters: serde_json::json!({
-                        "cluster": r.service_name.clone(),
-                        "weight": r.weight.unwrap_or(100)
-                    }),
-                }).collect(),
+                match_conditions: rule
+                    .matches
+                    .iter()
+                    .map(|m| crate::mesh::MatchCondition {
+                        field: m.name.clone(),
+                        operator: match m.regex {
+                            true => crate::mesh::MatchOperator::Regex,
+                            false => crate::mesh::MatchOperator::Equals,
+                        },
+                        value: m.value.clone(),
+                    })
+                    .collect(),
+                actions: rule
+                    .route
+                    .iter()
+                    .map(|r| crate::mesh::TrafficAction {
+                        action_type: crate::mesh::ActionType::Route,
+                        parameters: serde_json::json!({
+                            "cluster": r.service_name.clone(),
+                            "weight": r.weight.unwrap_or(100)
+                        }),
+                    })
+                    .collect(),
                 timeout_seconds: route.timeout.as_ref().map(|t| t.parse().unwrap_or(30)),
-                retries: route.retries.as_ref().map(|r| r.attempts.parse().unwrap_or(3)),
+                retries: route
+                    .retries
+                    .as_ref()
+                    .map(|r| r.attempts.parse().unwrap_or(3)),
             };
             rules.push(traffic_rule);
         }
@@ -270,13 +320,22 @@ impl LinkerdMesh {
             namespace: route.metadata.namespace.clone(),
             selector: HashMap::new(), // Would need to extract from route metadata
             rules,
-            created_at: route.metadata.creation_timestamp.unwrap_or_else(|| Utc::now()),
-            updated_at: route.metadata.creation_timestamp.unwrap_or_else(|| Utc::now()),
+            created_at: route
+                .metadata
+                .creation_timestamp
+                .unwrap_or_else(|| Utc::now()),
+            updated_at: route
+                .metadata
+                .creation_timestamp
+                .unwrap_or_else(|| Utc::now()),
         })
     }
 
     /// Convert Linkerd server policy to security policy
-    fn linkerd_server_policy_to_security_policy(&self, policy: &LinkerdServerPolicy) -> Result<SecurityPolicy> {
+    fn linkerd_server_policy_to_security_policy(
+        &self,
+        policy: &LinkerdServerPolicy,
+    ) -> Result<SecurityPolicy> {
         let mut auth_rules = Vec::new();
         let mut authz_rules = Vec::new();
 
@@ -301,11 +360,15 @@ impl LinkerdMesh {
             let authz_rule = crate::mesh::AuthzRule {
                 name: format!("{}-authz", policy.metadata.name),
                 action: crate::mesh::AuthzAction::Allow, // Default to allow
-                when: authz.allow_unauthenticated.iter().map(|_| crate::mesh::AuthzCondition {
-                    key: "authenticated".to_string(),
-                    values: vec!["true".to_string()],
-                    not_values: vec![],
-                }).collect(),
+                when: authz
+                    .allow_unauthenticated
+                    .iter()
+                    .map(|_| crate::mesh::AuthzCondition {
+                        key: "authenticated".to_string(),
+                        values: vec!["true".to_string()],
+                        not_values: vec![],
+                    })
+                    .collect(),
                 deny: false,
             };
             authz_rules.push(authz_rule);
@@ -314,12 +377,23 @@ impl LinkerdMesh {
         Ok(SecurityPolicy {
             name: policy.metadata.name.clone(),
             namespace: policy.metadata.namespace.clone(),
-            selector: policy.spec.selector.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+            selector: policy
+                .spec
+                .selector
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
             authentication_rules: auth_rules,
             authorization_rules: authz_rules,
             mtls_enabled: policy.spec.authentication.is_some(),
-            created_at: policy.metadata.creation_timestamp.unwrap_or_else(|| Utc::now()),
-            updated_at: policy.metadata.creation_timestamp.unwrap_or_else(|| Utc::now()),
+            created_at: policy
+                .metadata
+                .creation_timestamp
+                .unwrap_or_else(|| Utc::now()),
+            updated_at: policy
+                .metadata
+                .creation_timestamp
+                .unwrap_or_else(|| Utc::now()),
         })
     }
 
@@ -327,7 +401,7 @@ impl LinkerdMesh {
     async fn apply_linkerd_traffic_policy(&self, policy: &TrafficPolicy) -> Result<()> {
         // Convert traffic policy to Linkerd HTTP route
         let route = self.convert_traffic_policy_to_linkerd_http_route(policy)?;
-        
+
         // Apply via Linkerd controller API
         self.apply_linkerd_http_route(&route).await
     }
@@ -336,35 +410,49 @@ impl LinkerdMesh {
     async fn apply_linkerd_security_policy(&self, policy: &SecurityPolicy) -> Result<()> {
         // Convert security policy to Linkerd server policy
         let server_policy = self.convert_security_policy_to_linkerd_server_policy(policy)?;
-        
+
         // Apply via Linkerd controller API
         self.apply_linkerd_server_policy(&server_policy).await
     }
 
     /// Convert traffic policy to Linkerd HTTP route
-    fn convert_traffic_policy_to_linkerd_http_route(&self, policy: &TrafficPolicy) -> Result<LinkerdHttpRoute> {
+    fn convert_traffic_policy_to_linkerd_http_route(
+        &self,
+        policy: &TrafficPolicy,
+    ) -> Result<LinkerdHttpRoute> {
         let mut route_rules = Vec::new();
 
         for rule in &policy.rules {
             let linkerd_rule = LinkerdHttpRouteRule {
-                matches: rule.match_conditions.iter().map(|m| LinkerdHttpMatch {
-                    name: m.field.clone(),
-                    value: m.value.clone(),
-                    regex: matches!(m.operator, crate::mesh::MatchOperator::Regex),
-                }).collect(),
-                route: rule.actions.iter().map(|a| {
-                    if let crate::mesh::ActionType::Route = a.action_type {
-                        LinkerdHttpRouteDestination {
-                            service_name: a.parameters["cluster"].as_str().unwrap_or("fortress").to_string(),
-                            weight: a.parameters["weight"].as_u64().unwrap_or(100) as u32,
+                matches: rule
+                    .match_conditions
+                    .iter()
+                    .map(|m| LinkerdHttpMatch {
+                        name: m.field.clone(),
+                        value: m.value.clone(),
+                        regex: matches!(m.operator, crate::mesh::MatchOperator::Regex),
+                    })
+                    .collect(),
+                route: rule
+                    .actions
+                    .iter()
+                    .map(|a| {
+                        if let crate::mesh::ActionType::Route = a.action_type {
+                            LinkerdHttpRouteDestination {
+                                service_name: a.parameters["cluster"]
+                                    .as_str()
+                                    .unwrap_or("fortress")
+                                    .to_string(),
+                                weight: a.parameters["weight"].as_u64().unwrap_or(100) as u32,
+                            }
+                        } else {
+                            LinkerdHttpRouteDestination {
+                                service_name: "fortress".to_string(),
+                                weight: 100,
+                            }
                         }
-                    } else {
-                        LinkerdHttpRouteDestination {
-                            service_name: "fortress".to_string(),
-                            weight: 100,
-                        }
-                    }
-                }).collect(),
+                    })
+                    .collect(),
                 timeout: rule.timeout_seconds.map(|t| format!("{}s", t)),
                 retries: rule.retries.map(|r| LinkerdRetry {
                     attempts: r,
@@ -380,14 +468,15 @@ impl LinkerdMesh {
                 namespace: policy.namespace.clone(),
                 creation_timestamp: Some(policy.created_at),
             },
-            spec: LinkerdHttpRouteSpec {
-                rules: route_rules,
-            },
+            spec: LinkerdHttpRouteSpec { rules: route_rules },
         })
     }
 
     /// Convert security policy to Linkerd server policy
-    fn convert_security_policy_to_linkerd_server_policy(&self, policy: &SecurityPolicy) -> Result<LinkerdServerPolicy> {
+    fn convert_security_policy_to_linkerd_server_policy(
+        &self,
+        policy: &SecurityPolicy,
+    ) -> Result<LinkerdServerPolicy> {
         let mut server_authn = None;
         let mut server_authz = None;
 
@@ -399,7 +488,10 @@ impl LinkerdMesh {
 
         if !policy.authorization_rules.is_empty() {
             server_authz = Some(LinkerdServerAuthz {
-                allow_unauthenticated: policy.authorization_rules.iter().any(|r| matches!(r.action, crate::mesh::AuthzAction::Allow)),
+                allow_unauthenticated: policy
+                    .authorization_rules
+                    .iter()
+                    .any(|r| matches!(r.action, crate::mesh::AuthzAction::Allow)),
             });
         }
 
@@ -419,22 +511,30 @@ impl LinkerdMesh {
 
     /// Apply Linkerd HTTP route via controller API
     async fn apply_linkerd_http_route(&self, route: &LinkerdHttpRoute) -> Result<()> {
-        let client = self.client.as_ref()
+        let client = self
+            .client
+            .as_ref()
             .ok_or_else(|| FortressError::mesh("Linkerd client not initialized"))?;
 
         let url = self.build_controller_url("api/v1/http-routes");
-        
+
         let route_json = serde_json::to_value(route)
             .map_err(|e| FortressError::mesh(format!("Failed to serialize HTTP route: {}", e)))?;
 
-        let response = client.put(&url)
+        let response = client
+            .put(&url)
             .json(&route_json)
             .send()
             .await
-            .map_err(|e| FortressError::mesh(format!("Linkerd HTTP route API request failed: {}", e)))?;
+            .map_err(|e| {
+                FortressError::mesh(format!("Linkerd HTTP route API request failed: {}", e))
+            })?;
 
         if !response.status().is_success() {
-            return Err(FortressError::mesh(format!("Linkerd HTTP route API returned status: {}", response.status())));
+            return Err(FortressError::mesh(format!(
+                "Linkerd HTTP route API returned status: {}",
+                response.status()
+            )));
         }
 
         tracing::info!("Applied Linkerd HTTP route: {}", route.metadata.name);
@@ -443,22 +543,31 @@ impl LinkerdMesh {
 
     /// Apply Linkerd server policy via controller API
     async fn apply_linkerd_server_policy(&self, policy: &LinkerdServerPolicy) -> Result<()> {
-        let client = self.client.as_ref()
+        let client = self
+            .client
+            .as_ref()
             .ok_or_else(|| FortressError::mesh("Linkerd client not initialized"))?;
 
         let url = self.build_controller_url("api/v1/server-policies");
-        
-        let policy_json = serde_json::to_value(policy)
-            .map_err(|e| FortressError::mesh(format!("Failed to serialize server policy: {}", e)))?;
 
-        let response = client.put(&url)
+        let policy_json = serde_json::to_value(policy).map_err(|e| {
+            FortressError::mesh(format!("Failed to serialize server policy: {}", e))
+        })?;
+
+        let response = client
+            .put(&url)
             .json(&policy_json)
             .send()
             .await
-            .map_err(|e| FortressError::mesh(format!("Linkerd server policy API request failed: {}", e)))?;
+            .map_err(|e| {
+                FortressError::mesh(format!("Linkerd server policy API request failed: {}", e))
+            })?;
 
         if !response.status().is_success() {
-            return Err(FortressError::mesh(format!("Linkerd server policy API returned status: {}", response.status())));
+            return Err(FortressError::mesh(format!(
+                "Linkerd server policy API returned status: {}",
+                response.status()
+            )));
         }
 
         tracing::info!("Applied Linkerd server policy: {}", policy.metadata.name);
@@ -468,23 +577,27 @@ impl LinkerdMesh {
     /// Get Linkerd metrics
     async fn get_linkerd_metrics(&self) -> Result<LinkerdMetrics> {
         // Get metrics from Linkerd proxy
-        let client = self.client.as_ref()
+        let client = self
+            .client
+            .as_ref()
             .ok_or_else(|| FortressError::mesh("Linkerd client not initialized"))?;
 
         let url = self.build_proxy_url("metrics");
-        
-        let response = client.get(url)
-            .send()
-            .await
-            .map_err(|e| FortressError::mesh(format!("Linkerd metrics API request failed: {}", e)))?;
+
+        let response = client.get(url).send().await.map_err(|e| {
+            FortressError::mesh(format!("Linkerd metrics API request failed: {}", e))
+        })?;
 
         if !response.status().is_success() {
-            return Err(FortressError::mesh(format!("Linkerd metrics API returned status: {}", response.status())));
+            return Err(FortressError::mesh(format!(
+                "Linkerd metrics API returned status: {}",
+                response.status()
+            )));
         }
 
-        let metrics_text = response.text()
-            .await
-            .map_err(|e| FortressError::mesh(format!("Failed to read Linkerd metrics response: {}", e)))?;
+        let metrics_text = response.text().await.map_err(|e| {
+            FortressError::mesh(format!("Failed to read Linkerd metrics response: {}", e))
+        })?;
 
         self.parse_linkerd_metrics(&metrics_text)
     }
@@ -536,9 +649,9 @@ impl MeshProvider for LinkerdMesh {
 
     async fn initialize(&mut self, config: &MeshConfig) -> Result<()> {
         // Extract Linkerd-specific config
-        let linkerd_config: LinkerdMeshConfig = serde_json::from_value(
-            serde_json::to_value(&config.settings).unwrap_or_default()
-        ).unwrap_or_default();
+        let linkerd_config: LinkerdMeshConfig =
+            serde_json::from_value(serde_json::to_value(&config.settings).unwrap_or_default())
+                .unwrap_or_default();
 
         self.config = linkerd_config;
 
@@ -592,7 +705,10 @@ impl MeshProvider for LinkerdMesh {
                     match self.linkerd_http_route_to_traffic_policy(&route) {
                         Ok(policy) => policies.push(policy),
                         Err(e) => {
-                            tracing::warn!("Failed to convert Linkerd HTTP route to traffic policy: {}", e);
+                            tracing::warn!(
+                                "Failed to convert Linkerd HTTP route to traffic policy: {}",
+                                e
+                            );
                         }
                     }
                 }
@@ -619,7 +735,10 @@ impl MeshProvider for LinkerdMesh {
                     match self.linkerd_server_policy_to_security_policy(&policy) {
                         Ok(security_policy) => policies.push(security_policy),
                         Err(e) => {
-                            tracing::warn!("Failed to convert Linkerd server policy to security policy: {}", e);
+                            tracing::warn!(
+                                "Failed to convert Linkerd server policy to security policy: {}",
+                                e
+                            );
                         }
                     }
                 }
@@ -668,13 +787,14 @@ impl MeshProvider for LinkerdMesh {
         }
 
         let linkerd_metrics = self.get_linkerd_metrics().await?;
-        
+
         Ok(MeshMetrics {
             request_count: linkerd_metrics.request_total,
             request_duration_ms: 0, // Would need to calculate from histogram stats
             request_error_count: linkerd_metrics.request_failure_total,
             request_success_rate: if linkerd_metrics.request_total > 0 {
-                (linkerd_metrics.request_total - linkerd_metrics.request_failure_total) as f64 / linkerd_metrics.request_total as f64
+                (linkerd_metrics.request_total - linkerd_metrics.request_failure_total) as f64
+                    / linkerd_metrics.request_total as f64
             } else {
                 0.0
             },
@@ -690,11 +810,13 @@ impl MeshProvider for LinkerdMesh {
         }
 
         // Check if Linkerd controller API is accessible
-        let client = self.client.as_ref()
+        let client = self
+            .client
+            .as_ref()
             .ok_or_else(|| FortressError::mesh("Linkerd client not initialized"));
 
         let url = self.build_controller_url("api/v1/services");
-        
+
         match client.get(&url).send().await {
             Ok(response) => {
                 if response.status().is_success() {
@@ -710,7 +832,7 @@ impl MeshProvider for LinkerdMesh {
     async fn shutdown(&mut self) -> Result<()> {
         self.client = None;
         self.initialized = false;
-        
+
         // Clear caches
         {
             let mut node_cache = self.node_cache.write().await;
@@ -720,24 +842,32 @@ impl MeshProvider for LinkerdMesh {
             let mut service_cache = self.service_cache.write().await;
             service_cache.clear();
         }
-        
+
         tracing::info!("Linkerd mesh provider shutdown");
         Ok(())
     }
 
     /// Convert Linkerd authorization policy to security policy
-    fn linkerd_authz_policy_to_security_policy(&self, authz: &LinkerdAuthzPolicy) -> Result<SecurityPolicy> {
+    fn linkerd_authz_policy_to_security_policy(
+        &self,
+        authz: &LinkerdAuthzPolicy,
+    ) -> Result<SecurityPolicy> {
         let mut authz_rules = Vec::new();
 
         // Convert Linkerd authz policy to our format
         let authz_rule = crate::mesh::AuthzRule {
             name: authz.metadata.name.clone(),
             action: crate::mesh::AuthzAction::Allow, // Default to allow
-            when: authz.spec.allow_unauthenticated.iter().map(|_| crate::mesh::AuthzCondition {
-                key: "authenticated".to_string(),
-                values: vec!["true".to_string()],
-                not_values: vec![],
-            }).collect(),
+            when: authz
+                .spec
+                .allow_unauthenticated
+                .iter()
+                .map(|_| crate::mesh::AuthzCondition {
+                    key: "authenticated".to_string(),
+                    values: vec!["true".to_string()],
+                    not_values: vec![],
+                })
+                .collect(),
             deny: !authz.spec.allow_unauthenticated,
         };
         authz_rules.push(authz_rule);
@@ -745,12 +875,23 @@ impl MeshProvider for LinkerdMesh {
         Ok(SecurityPolicy {
             name: authz.metadata.name.clone(),
             namespace: authz.metadata.namespace.clone(),
-            selector: authz.spec.selector.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+            selector: authz
+                .spec
+                .selector
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
             authentication_rules: Vec::new(), // Auth handled in server policy
             authorization_rules: authz_rules,
             mtls_enabled: true, // Linkerd uses mTLS by default
-            created_at: authz.metadata.creation_timestamp.unwrap_or_else(|| Utc::now()),
-            updated_at: authz.metadata.creation_timestamp.unwrap_or_else(|| Utc::now()),
+            created_at: authz
+                .metadata
+                .creation_timestamp
+                .unwrap_or_else(|| Utc::now()),
+            updated_at: authz
+                .metadata
+                .creation_timestamp
+                .unwrap_or_else(|| Utc::now()),
         })
     }
 }
@@ -872,7 +1013,10 @@ mod tests {
     #[test]
     fn test_linkerd_config_default() {
         let config = LinkerdMeshConfig::default();
-        assert_eq!(config.controller_api_address, "http://linkerd-controller.linkerd.svc.cluster.local:8085");
+        assert_eq!(
+            config.controller_api_address,
+            "http://linkerd-controller.linkerd.svc.cluster.local:8085"
+        );
         assert_eq!(config.proxy_api_address, "http://localhost:4191");
         assert_eq!(config.namespace, "default");
         assert!(config.service_discovery_enabled);
@@ -884,7 +1028,7 @@ mod tests {
     fn test_linkerd_mesh_creation() {
         let config = LinkerdMeshConfig::default();
         let mesh = LinkerdMesh::new(config);
-        
+
         assert_eq!(mesh.name(), "linkerd");
         assert_eq!(mesh.mesh_type(), MeshType::Linkerd);
         assert!(!mesh.initialized);

@@ -8,16 +8,13 @@
 
 //! and easy to use.
 
-
-
-use crate::error::{FortressError, Result, EncryptionErrorCode};
+use crate::error::{EncryptionErrorCode, FortressError, Result};
 
 use async_trait::async_trait;
 
-use base64::{Engine as _, engine::general_purpose};
+use base64::{engine::general_purpose, Engine as _};
 
 use bytes::Bytes;
-
 
 use std::fmt;
 use subtle::ConstantTimeEq;
@@ -25,13 +22,12 @@ use subtle::ConstantTimeEq;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DurationSeconds};
 
-
-use chacha20poly1305::{KeyInit as ChaChaKeyInit, aead::Aead};
+use argon2::PasswordHasher;
 use blake3::Hasher as Blake3Hasher;
-use sha2::{Sha256, Sha512, Digest};
+use chacha20poly1305::{aead::Aead, KeyInit as ChaChaKeyInit};
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac};
-use argon2::PasswordHasher;
+use sha2::{Digest, Sha256, Sha512};
 // use aegis::aegis256::Aegis256;
 type HmacSha256 = Hmac<Sha256>;
 type HmacSha512 = Hmac<Sha512>;
@@ -39,8 +35,6 @@ type HmacSha512 = Hmac<Sha512>;
 // use ring::aead::{LessSafeKey, UnboundKey, AES_256_GCM};
 // use ring::aead::Nonce as RingNonce;
 // use generic_array::GenericArray;
-
-
 
 /// Trait for encryption algorithms
 
@@ -53,7 +47,6 @@ type HmacSha512 = Hmac<Sha512>;
 #[async_trait]
 
 pub trait EncryptionAlgorithm: Send + Sync + fmt::Debug {
-
     /// Encrypt data using the provided key
 
     ///
@@ -77,8 +70,6 @@ pub trait EncryptionAlgorithm: Send + Sync + fmt::Debug {
     /// Returns an error if encryption fails due to invalid key length, algorithm issues, etc.
 
     fn encrypt(&self, plaintext: &[u8], key: &[u8]) -> Result<Vec<u8>>;
-
-
 
     /// Decrypt data using the provided key
 
@@ -104,123 +95,82 @@ pub trait EncryptionAlgorithm: Send + Sync + fmt::Debug {
 
     fn decrypt(&self, ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>>;
 
-
-
     /// Asynchronous version of encrypt
 
     async fn encrypt_async(&self, plaintext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
-
         // Direct encryption call - CPU-intensive but necessary for trait compatibility
 
         self.encrypt(plaintext, key)
-
     }
-
-
 
     /// Asynchronous version of decrypt
 
     async fn decrypt_async(&self, ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
-
         // Direct decryption call - CPU-intensive but necessary for trait compatibility
 
         self.decrypt(ciphertext, key)
-
     }
-
-
 
     /// Get the required key size in bytes
 
     fn key_size(&self) -> usize;
 
-
-
     /// Get the nonce/IV size in bytes (if applicable)
 
     fn nonce_size(&self) -> usize;
-
-
 
     /// Get the authentication tag size in bytes (for AEAD algorithms)
 
     fn tag_size(&self) -> usize;
 
-
-
     /// Get the name of the algorithm
 
     fn name(&self) -> &'static str;
 
-
-
     /// Check if the algorithm is an AEAD (Authenticated Encryption with Associated Data) construction
 
     fn is_aead(&self) -> bool {
-
         true // Most modern algorithms are AEAD
-
     }
-
-
 
     /// Get the security level in bits (e.g., 128, 192, 256)
 
     fn security_level(&self) -> usize {
-
         128 // Default to 128-bit security
-
     }
-
-
 
     /// Get performance characteristics of the algorithm
 
     fn performance_profile(&self) -> PerformanceProfile {
-
         PerformanceProfile::Balanced
-
     }
-
-    
 }
-
-
 
 /// Performance profile for encryption algorithms
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 
 pub enum PerformanceProfile {
-
     /// Ultra-fast encryption for high-throughput scenarios
-
     Lightning,
 
     /// Balanced performance and security
-
     Balanced,
 
     /// Maximum security with acceptable performance
-
     Fortress,
 
     /// Streaming encryption for large data
-
     Streaming,
 
     /// Hardware-accelerated performance
-
     Hardware,
 
     /// High-performance mode optimized for speed
-
     HighPerformance,
 
     /// Quantum-resistant encryption
-
     Quantum,
-
 }
 
 impl Default for PerformanceProfile {
@@ -229,15 +179,11 @@ impl Default for PerformanceProfile {
     }
 }
 
-
 impl PerformanceProfile {
-
     /// Get the recommended key rotation interval for this profile
 
     pub fn recommended_rotation_interval(&self) -> std::time::Duration {
-
         match self {
-
             Self::Lightning => std::time::Duration::from_secs(23 * 3600), // 23 hours
 
             Self::Balanced => std::time::Duration::from_secs(7 * 24 * 3600), // 7 days
@@ -251,14 +197,9 @@ impl PerformanceProfile {
             Self::HighPerformance => std::time::Duration::from_secs(1 * 24 * 3600), // 1 day
 
             Self::Quantum => std::time::Duration::from_secs(90 * 24 * 3600), // 90 days
-
         }
-
     }
-
 }
-
-
 
 /// Encryption profile configuration
 
@@ -278,14 +219,10 @@ pub struct EncryptionProfile {
     pub parameters: std::collections::HashMap<String, serde_json::Value>,
 }
 
-
-
 impl EncryptionProfile {
-
     /// Create a new encryption profile
 
     pub fn new(
-
         name: String,
 
         algorithm: String,
@@ -293,11 +230,8 @@ impl EncryptionProfile {
         key_rotation_interval: std::time::Duration,
 
         performance_profile: PerformanceProfile,
-
     ) -> Self {
-
         Self {
-
             name,
 
             algorithm,
@@ -307,127 +241,75 @@ impl EncryptionProfile {
             performance_profile,
 
             parameters: std::collections::HashMap::new(),
-
         }
-
     }
-
-
 
     /// Create a lightning profile (fastest encryption)
 
     pub fn lightning(name: String) -> Self {
-
         Self::new(
-
             name,
-
             "aegis256".to_string(),
-
             PerformanceProfile::Lightning.recommended_rotation_interval(),
-
             PerformanceProfile::Lightning,
-
         )
-
     }
-
-
 
     /// Create a balanced profile (good performance + security)
 
     pub fn balanced(name: String) -> Self {
-
         Self::new(
-
             name,
-
             "chacha20poly1305".to_string(),
-
             PerformanceProfile::Balanced.recommended_rotation_interval(),
-
             PerformanceProfile::Balanced,
-
         )
-
     }
-
-
 
     /// Create a fortress profile (maximum security)
 
     pub fn fortress(name: String) -> Self {
-
         Self::new(
-
             name,
-
             "aes256gcm".to_string(),
-
             PerformanceProfile::Fortress.recommended_rotation_interval(),
-
             PerformanceProfile::Fortress,
-
         )
-
     }
-
 }
-
-
 
 /// Encrypted data container with metadata
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 
 pub struct EncryptedData {
-
     /// The encrypted data
-
     pub ciphertext: Bytes,
 
     /// Nonce/IV used for encryption (if applicable)
-
     pub nonce: Option<Bytes>,
 
     /// Authentication tag (for AEAD algorithms)
-
     pub tag: Option<Bytes>,
 
     /// Algorithm used for encryption
-
     pub algorithm: String,
 
     /// Key version used
-
     pub key_version: Option<u32>,
 
     /// Timestamp when data was encrypted
-
     pub encrypted_at: chrono::DateTime<chrono::Utc>,
 
     /// Additional metadata
-
     pub metadata: std::collections::HashMap<String, String>,
-
 }
 
-
-
 impl EncryptedData {
-
     /// Create new encrypted data
 
-    pub fn new(
-
-        ciphertext: Bytes,
-
-        algorithm: String,
-
-    ) -> Self {
-
+    pub fn new(ciphertext: Bytes, algorithm: String) -> Self {
         Self {
-
             ciphertext,
 
             nonce: None,
@@ -441,192 +323,125 @@ impl EncryptedData {
             encrypted_at: chrono::Utc::now(),
 
             metadata: std::collections::HashMap::new(),
-
         }
-
     }
-
-
 
     /// Set the nonce
 
     pub fn with_nonce(mut self, nonce: Bytes) -> Self {
-
         self.nonce = Some(nonce);
 
         self
-
     }
-
-
 
     /// Set the authentication tag
 
     pub fn with_tag(mut self, tag: Bytes) -> Self {
-
         self.tag = Some(tag);
 
         self
-
     }
-
-
 
     /// Set the key version
 
     pub fn with_key_version(mut self, version: u32) -> Self {
-
         self.key_version = Some(version);
 
         self
-
     }
-
-
 
     /// Add metadata
 
     pub fn with_metadata(mut self, key: String, value: String) -> Self {
-
         self.metadata.insert(key, value);
 
         self
-
     }
-
-
 
     /// Serialize to base64 string for storage
 
     pub fn to_base64(&self) -> Result<String> {
-
-        let json = serde_json::to_string(self)
-
-            .map_err(|_e| FortressError::encryption(
-
+        let json = serde_json::to_string(self).map_err(|_e| {
+            FortressError::encryption(
                 "Failed to serialize encrypted data",
-
                 &self.algorithm,
-
                 EncryptionErrorCode::EncryptionFailed,
-
-            ))?;
+            )
+        })?;
 
         Ok(general_purpose::STANDARD.encode(json.as_bytes()))
-
     }
-
-
 
     /// Deserialize from base64 string
 
     pub fn from_base64(data: &str) -> Result<Self> {
-
-        let bytes = general_purpose::STANDARD
-
-            .decode(data)
-
-            .map_err(|_e| FortressError::encryption(
-
+        let bytes = general_purpose::STANDARD.decode(data).map_err(|_e| {
+            FortressError::encryption(
                 "Failed to decode base64 data",
-
                 "unknown",
-
                 EncryptionErrorCode::DecryptionFailed,
+            )
+        })?;
 
-            ))?;
-
-        
-
-        serde_json::from_slice(&bytes)
-
-            .map_err(|_e| FortressError::encryption(
-
+        serde_json::from_slice(&bytes).map_err(|_e| {
+            FortressError::encryption(
                 "Failed to deserialize encrypted data",
-
                 "unknown",
-
                 EncryptionErrorCode::DecryptionFailed,
-
-            ))
-
+            )
+        })
     }
-
 }
-
-
 
 /// Secure key container that zeroizes on drop
 
 #[derive(Clone)]
 
 pub struct SecureKey {
-
     /// The key bytes
-
     key: Bytes,
-
 }
 
-
-
 impl SecureKey {
-
     /// Create a new secure key
 
     pub fn new(key: Vec<u8>) -> Self {
-
-        Self { key: Bytes::from(key) }
-
+        Self {
+            key: Bytes::from(key),
+        }
     }
 
     /// Create a secure key from bytes
 
     pub fn from_bytes(bytes: &[u8]) -> Self {
-
-        Self { key: Bytes::copy_from_slice(bytes) }
-
+        Self {
+            key: Bytes::copy_from_slice(bytes),
+        }
     }
-
-
 
     /// Get the key bytes
 
     pub fn as_bytes(&self) -> &[u8] {
-
         &self.key
-
     }
 
     /// Get the key bytes as a Vec<u8>
 
     pub fn to_vec(&self) -> Vec<u8> {
-
         self.key.to_vec()
-
     }
-
-
 
     /// Get the key length
 
     pub fn len(&self) -> usize {
-
         self.key.len()
-
     }
-
-
 
     /// Check if the key is empty
 
     pub fn is_empty(&self) -> bool {
-
         self.key.is_empty()
-
     }
-
-
 
     /// Generate a random key of the specified length
 
@@ -658,27 +473,19 @@ impl Drop for SecureKey {
         // Issue 9: SecureKey::drop() zeroizes a copy, not the original.
         // This requires a more fundamental change in how SecureKey stores its data
         // to guarantee zeroization. Replacing with unimplemented!() to flag.
-        unimplemented!("SecureKey::drop() needs to correctly zeroize the original key data, not a copy.");
+        unimplemented!(
+            "SecureKey::drop() needs to correctly zeroize the original key data, not a copy."
+        );
     }
 }
-
-
 
 impl fmt::Debug for SecureKey {
-
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-
         f.debug_struct("SecureKey")
-
             .field("length", &self.key.len())
-
             .finish()
-
     }
-
 }
-
-
 
 /// AES-256-GCM encryption algorithm (fallback for AEGIS)
 ///
@@ -714,29 +521,30 @@ impl EncryptionAlgorithm for Aegis256Wrapper {
                 EncryptionErrorCode::InvalidKeyLength,
             ));
         }
-        
+
         // Generate random nonce (AEGIS-256 uses 16-byte nonce)
         let mut nonce = vec![0u8; 16];
         match crate::trng::fill_random(&mut nonce) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(_) => {
-                getrandom::getrandom(&mut nonce)
-                    .map_err(|_e| FortressError::encryption(
+                getrandom::getrandom(&mut nonce).map_err(|_e| {
+                    FortressError::encryption(
                         "Failed to generate nonce",
                         "aegis256",
                         EncryptionErrorCode::EncryptionFailed,
-                    ))?;
+                    )
+                })?;
             }
         }
-        
+
         // Use AEGIS-256 for encryption
         let cipher: aegis::aegis256::Aegis256<16> = aegis::aegis256::Aegis256::new(
-            key.try_into().expect("Key must be 32 bytes"), 
-            nonce.as_slice().try_into().expect("Nonce must be 16 bytes")
+            key.try_into().expect("Key must be 32 bytes"),
+            nonce.as_slice().try_into().expect("Nonce must be 16 bytes"),
         );
-        
+
         let (ciphertext, tag) = cipher.encrypt(plaintext, &[]);
-        
+
         // Prepend nonce and tag to ciphertext for decrypt compatibility
         let mut result = nonce;
         result.extend_from_slice(tag.as_ref());
@@ -752,33 +560,40 @@ impl EncryptionAlgorithm for Aegis256Wrapper {
                 EncryptionErrorCode::InvalidKeyLength,
             ));
         }
-        
-        if ciphertext.len() < 16 + 16 { // Nonce + Tag
+
+        if ciphertext.len() < 16 + 16 {
+            // Nonce + Tag
             return Err(FortressError::encryption(
                 "AEGIS-256 ciphertext too short",
                 "aegis256",
                 EncryptionErrorCode::DecryptionFailed,
             ));
         }
-        
+
         let nonce = &ciphertext[..16];
         let tag = &ciphertext[16..32];
         let actual_ciphertext = &ciphertext[32..];
 
         // Use AEGIS-256 for decryption
         let cipher: aegis::aegis256::Aegis256<16> = aegis::aegis256::Aegis256::new(
-            key.try_into().expect("Key must be 32 bytes"), 
-            nonce.try_into().expect("Nonce must be 16 bytes")
+            key.try_into().expect("Key must be 32 bytes"),
+            nonce.try_into().expect("Nonce must be 16 bytes"),
         );
-        
+
         let plaintext = cipher
-            .decrypt(actual_ciphertext, tag.try_into().expect("Tag must be 16 bytes"), &[])
-            .map_err(|_| FortressError::encryption(
-                "AEGIS-256 decryption failed (invalid tag)",
-                "aegis256",
-                EncryptionErrorCode::DecryptionFailed,
-            ))?;
-        
+            .decrypt(
+                actual_ciphertext,
+                tag.try_into().expect("Tag must be 16 bytes"),
+                &[],
+            )
+            .map_err(|_| {
+                FortressError::encryption(
+                    "AEGIS-256 decryption failed (invalid tag)",
+                    "aegis256",
+                    EncryptionErrorCode::DecryptionFailed,
+                )
+            })?;
+
         Ok(plaintext)
     }
 
@@ -819,55 +634,36 @@ impl EncryptionAlgorithm for Aegis256Wrapper {
 
 pub struct ChaCha20Poly1305;
 
-
-
 impl ChaCha20Poly1305 {
-
     /// Create a new ChaCha20-Poly1305 instance
 
     pub fn new() -> Self {
-
         Self
-
     }
-
 }
-
-
 
 impl Default for ChaCha20Poly1305 {
-
     fn default() -> Self {
-
         Self::new()
-
     }
-
 }
-
-
 
 #[async_trait]
 
 impl EncryptionAlgorithm for ChaCha20Poly1305 {
-
     fn encrypt(&self, plaintext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
-
         if key.len() != self.key_size() {
-
             return Err(FortressError::encryption(
-
-                format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()).to_string(),
-
+                format!(
+                    "Invalid key length: expected {}, got {}",
+                    self.key_size(),
+                    key.len()
+                )
+                .to_string(),
                 self.name().to_string(),
-
                 EncryptionErrorCode::InvalidKeyLength,
-
             ));
-
         }
-
-
 
         // Generate random 24-byte nonce for XChaCha20Poly1305
 
@@ -876,60 +672,38 @@ impl EncryptionAlgorithm for ChaCha20Poly1305 {
         // Try to use TRNG first, fallback to getrandom
 
         match crate::trng::fill_random(&mut xnonce) {
-
-            Ok(_) => {},
+            Ok(_) => {}
 
             Err(_) => {
-
-                getrandom::getrandom(&mut xnonce)
-
-                    .map_err(|_e| FortressError::encryption(
-
+                getrandom::getrandom(&mut xnonce).map_err(|_e| {
+                    FortressError::encryption(
                         "Failed to generate nonce: random error".to_string(),
-
                         self.name().to_string(),
-
                         EncryptionErrorCode::EncryptionFailed,
-
-                    ))?;
-
+                    )
+                })?;
             }
-
         }
-
-
 
         // Use the chacha20poly1305 crate for actual encryption
 
-        let cipher = chacha20poly1305::XChaCha20Poly1305::new_from_slice(key)
-
-            .map_err(|_e| FortressError::encryption(
-
+        let cipher = chacha20poly1305::XChaCha20Poly1305::new_from_slice(key).map_err(|_e| {
+            FortressError::encryption(
                 "Failed to create cipher: cipher error".to_string(),
-
                 self.name().to_string(),
-
                 EncryptionErrorCode::EncryptionFailed,
-
-            ))?;
-
-
+            )
+        })?;
 
         let ciphertext = cipher
-
             .encrypt(&chacha20poly1305::XNonce::from_slice(&xnonce), plaintext)
-
-            .map_err(|_e| FortressError::encryption(
-
-                "Encryption failed: encryption error".to_string(),
-
-                self.name().to_string(),
-
-                EncryptionErrorCode::EncryptionFailed,
-
-            ))?;
-
-
+            .map_err(|_e| {
+                FortressError::encryption(
+                    "Encryption failed: encryption error".to_string(),
+                    self.name().to_string(),
+                    EncryptionErrorCode::EncryptionFailed,
+                )
+            })?;
 
         // Prepend nonce to ciphertext
 
@@ -937,47 +711,30 @@ impl EncryptionAlgorithm for ChaCha20Poly1305 {
 
         result.extend_from_slice(&ciphertext);
 
-        
-
         Ok(result)
-
     }
 
-
-
     fn decrypt(&self, ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
-
         if key.len() != self.key_size() {
-
             return Err(FortressError::encryption(
-
-                format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()).to_string(),
-
+                format!(
+                    "Invalid key length: expected {}, got {}",
+                    self.key_size(),
+                    key.len()
+                )
+                .to_string(),
                 self.name().to_string(),
-
                 EncryptionErrorCode::InvalidKeyLength,
-
             ));
-
         }
-
-
 
         if ciphertext.len() < self.nonce_size() {
-
             return Err(FortressError::encryption(
-
                 "Ciphertext too short to contain nonce".to_string(),
-
                 self.name().to_string(),
-
                 EncryptionErrorCode::DecryptionFailed,
-
             ));
-
         }
-
-
 
         // Extract nonce from the beginning of ciphertext
 
@@ -985,23 +742,15 @@ impl EncryptionAlgorithm for ChaCha20Poly1305 {
 
         let actual_ciphertext = &ciphertext[self.nonce_size()..];
 
-
-
         // Use the chacha20poly1305 crate for actual decryption
 
-        let cipher = chacha20poly1305::XChaCha20Poly1305::new_from_slice(key)
-
-            .map_err(|_e| FortressError::encryption(
-
+        let cipher = chacha20poly1305::XChaCha20Poly1305::new_from_slice(key).map_err(|_e| {
+            FortressError::encryption(
                 "Failed to create cipher: cipher error".to_string(),
-
                 self.name().to_string(),
-
                 EncryptionErrorCode::DecryptionFailed,
-
-            ))?;
-
-
+            )
+        })?;
 
         // Convert nonce to the correct format
 
@@ -1009,80 +758,46 @@ impl EncryptionAlgorithm for ChaCha20Poly1305 {
 
         xnonce.copy_from_slice(nonce);
 
-
-
         let plaintext = cipher
-
-            .decrypt(&chacha20poly1305::XNonce::from_slice(&xnonce), actual_ciphertext)
-
-            .map_err(|_e| FortressError::encryption(
-
-                "Decryption failed: decryption error".to_string(),
-
-                self.name().to_string(),
-
-                EncryptionErrorCode::DecryptionFailed,
-
-            ))?;
-
-
+            .decrypt(
+                &chacha20poly1305::XNonce::from_slice(&xnonce),
+                actual_ciphertext,
+            )
+            .map_err(|_e| {
+                FortressError::encryption(
+                    "Decryption failed: decryption error".to_string(),
+                    self.name().to_string(),
+                    EncryptionErrorCode::DecryptionFailed,
+                )
+            })?;
 
         Ok(plaintext)
-
     }
-
-
 
     fn key_size(&self) -> usize {
-
         32 // 256 bits
-
     }
-
-
 
     fn nonce_size(&self) -> usize {
-
         24 // 192 bits nonce for XChaCha20Poly1305
-
     }
-
-
 
     fn tag_size(&self) -> usize {
-
         16 // 128 bits authentication tag
-
     }
-
-
 
     fn name(&self) -> &'static str {
-
         "chacha20poly1305"
-
     }
-
-
 
     fn security_level(&self) -> usize {
-
         256 // 256-bit security
-
     }
-
-
 
     fn performance_profile(&self) -> PerformanceProfile {
-
         PerformanceProfile::Balanced
-
     }
-
-    
 }
-
-
 
 /// AES-256-GCM encryption algorithm
 ///
@@ -1115,7 +830,11 @@ impl EncryptionAlgorithm for XChaCha20Poly1305 {
     fn encrypt(&self, plaintext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
         if key.len() != self.key_size() {
             return Err(FortressError::encryption(
-                format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()),
+                format!(
+                    "Invalid key length: expected {}, got {}",
+                    self.key_size(),
+                    key.len()
+                ),
                 self.name().to_string(),
                 EncryptionErrorCode::InvalidKeyLength,
             ));
@@ -1123,47 +842,55 @@ impl EncryptionAlgorithm for XChaCha20Poly1305 {
 
         // Generate random 24-byte nonce for XChaCha20
         let mut nonce = vec![0u8; self.nonce_size()];
-        
+
         // Try to use TRNG first, fallback to getrandom
         match crate::trng::fill_random(&mut nonce) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(_) => {
-                getrandom::getrandom(&mut nonce)
-                    .map_err(|_e| FortressError::encryption(
+                getrandom::getrandom(&mut nonce).map_err(|_e| {
+                    FortressError::encryption(
                         "Failed to generate nonce: random error".to_string(),
                         self.name().to_string(),
                         EncryptionErrorCode::EncryptionFailed,
-                    ))?;
+                    )
+                })?;
             }
         }
 
         // Use the chacha20poly1305 crate for actual encryption
-        let cipher = chacha20poly1305::XChaCha20Poly1305::new_from_slice(key)
-            .map_err(|_e| FortressError::encryption(
+        let cipher = chacha20poly1305::XChaCha20Poly1305::new_from_slice(key).map_err(|_e| {
+            FortressError::encryption(
                 "Failed to create cipher: cipher error".to_string(),
                 self.name().to_string(),
                 EncryptionErrorCode::EncryptionFailed,
-            ))?;
+            )
+        })?;
 
         let ciphertext = cipher
             .encrypt(&chacha20poly1305::XNonce::from_slice(&nonce), plaintext)
-            .map_err(|_e| FortressError::encryption(
-                "Encryption failed: encryption error".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::EncryptionFailed,
-            ))?;
+            .map_err(|_e| {
+                FortressError::encryption(
+                    "Encryption failed: encryption error".to_string(),
+                    self.name().to_string(),
+                    EncryptionErrorCode::EncryptionFailed,
+                )
+            })?;
 
         // Prepend nonce to ciphertext
         let mut result = nonce;
         result.extend_from_slice(&ciphertext);
-        
+
         Ok(result)
     }
 
     fn decrypt(&self, ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
         if key.len() != self.key_size() {
             return Err(FortressError::encryption(
-                format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()),
+                format!(
+                    "Invalid key length: expected {}, got {}",
+                    self.key_size(),
+                    key.len()
+                ),
                 self.name().to_string(),
                 EncryptionErrorCode::InvalidKeyLength,
             ));
@@ -1182,20 +909,26 @@ impl EncryptionAlgorithm for XChaCha20Poly1305 {
         let actual_ciphertext = &ciphertext[self.nonce_size()..];
 
         // Use the chacha20poly1305 crate for actual decryption
-        let cipher = chacha20poly1305::XChaCha20Poly1305::new_from_slice(key)
-            .map_err(|_e| FortressError::encryption(
+        let cipher = chacha20poly1305::XChaCha20Poly1305::new_from_slice(key).map_err(|_e| {
+            FortressError::encryption(
                 "Failed to create cipher: cipher error".to_string(),
                 self.name().to_string(),
                 EncryptionErrorCode::DecryptionFailed,
-            ))?;
+            )
+        })?;
 
         let plaintext = cipher
-            .decrypt(&chacha20poly1305::XNonce::from_slice(nonce), actual_ciphertext)
-            .map_err(|_e| FortressError::encryption(
-                "Decryption failed: decryption error".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::DecryptionFailed,
-            ))?;
+            .decrypt(
+                &chacha20poly1305::XNonce::from_slice(nonce),
+                actual_ciphertext,
+            )
+            .map_err(|_e| {
+                FortressError::encryption(
+                    "Decryption failed: decryption error".to_string(),
+                    self.name().to_string(),
+                    EncryptionErrorCode::DecryptionFailed,
+                )
+            })?;
 
         Ok(plaintext)
     }
@@ -1248,13 +981,17 @@ impl Default for Blake3Encrypt {
 #[async_trait]
 impl EncryptionAlgorithm for Blake3Encrypt {
     fn is_aead(&self) -> bool {
-        true 
+        true
     }
 
     fn encrypt(&self, plaintext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
         if key.len() != self.key_size() {
             return Err(FortressError::encryption(
-                format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()),
+                format!(
+                    "Invalid key length: expected {}, got {}",
+                    self.key_size(),
+                    key.len()
+                ),
                 self.name().to_string(),
                 EncryptionErrorCode::InvalidKeyLength,
             ));
@@ -1262,31 +999,34 @@ impl EncryptionAlgorithm for Blake3Encrypt {
 
         // Generate random nonce
         let mut nonce = vec![0u8; self.nonce_size()];
-        
+
         // Try to use TRNG first, fallback to getrandom
         match crate::trng::fill_random(&mut nonce) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(_) => {
-                getrandom::getrandom(&mut nonce)
-                    .map_err(|_e| FortressError::encryption(
+                getrandom::getrandom(&mut nonce).map_err(|_e| {
+                    FortressError::encryption(
                         "Failed to generate nonce: random error".to_string(),
                         self.name().to_string(),
                         EncryptionErrorCode::EncryptionFailed,
-                    ))?;
+                    )
+                })?;
             }
         }
 
         // Use Blake3 in keyed mode as a stream cipher
-        let key_array: [u8; 32] = key.try_into().map_err(|_| FortressError::encryption(
-            "Invalid key length for Blake3: expected 32 bytes".to_string(),
-            self.name().to_string(),
-            EncryptionErrorCode::InvalidKeyLength,
-        ))?;
-        
+        let key_array: [u8; 32] = key.try_into().map_err(|_| {
+            FortressError::encryption(
+                "Invalid key length for Blake3: expected 32 bytes".to_string(),
+                self.name().to_string(),
+                EncryptionErrorCode::InvalidKeyLength,
+            )
+        })?;
+
         // Generate keystream using Blake3
         let mut hasher = Blake3Hasher::new_keyed(&key_array);
         hasher.update(&nonce);
-        
+
         // Generate enough keystream for the plaintext
         let mut keystream = Vec::new();
         let mut chunk_hasher = hasher.clone();
@@ -1296,13 +1036,13 @@ impl EncryptionAlgorithm for Blake3Encrypt {
             keystream.extend_from_slice(chunk_hasher.finalize().as_bytes());
             chunk_hasher = hasher.clone();
         }
-        
+
         // XOR plaintext with keystream
         let mut ciphertext = plaintext.to_vec();
         for (i, byte) in ciphertext.iter_mut().enumerate() {
             *byte ^= keystream[i];
         }
-        
+
         // Calculate authentication tag
         let mut tag_hasher = Blake3Hasher::new_keyed(&key_array);
         tag_hasher.update(&nonce);
@@ -1313,14 +1053,18 @@ impl EncryptionAlgorithm for Blake3Encrypt {
         let mut result = nonce;
         result.extend_from_slice(tag.as_bytes());
         result.extend_from_slice(&ciphertext);
-        
+
         Ok(result)
     }
 
     fn decrypt(&self, ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
         if key.len() != self.key_size() {
             return Err(FortressError::encryption(
-                format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()),
+                format!(
+                    "Invalid key length: expected {}, got {}",
+                    self.key_size(),
+                    key.len()
+                ),
                 self.name().to_string(),
                 EncryptionErrorCode::InvalidKeyLength,
             ));
@@ -1340,11 +1084,13 @@ impl EncryptionAlgorithm for Blake3Encrypt {
         let actual_ciphertext = &ciphertext[self.nonce_size() + self.tag_size()..];
 
         // Verify authentication tag
-        let key_array: [u8; 32] = key.try_into().map_err(|_| FortressError::encryption(
-            "Invalid key length for Blake3: expected 32 bytes".to_string(),
-            self.name().to_string(),
-            EncryptionErrorCode::InvalidKeyLength,
-        ))?;
+        let key_array: [u8; 32] = key.try_into().map_err(|_| {
+            FortressError::encryption(
+                "Invalid key length for Blake3: expected 32 bytes".to_string(),
+                self.name().to_string(),
+                EncryptionErrorCode::InvalidKeyLength,
+            )
+        })?;
 
         let mut tag_hasher = Blake3Hasher::new_keyed(&key_array);
         tag_hasher.update(nonce);
@@ -1362,7 +1108,7 @@ impl EncryptionAlgorithm for Blake3Encrypt {
         // Generate the same keystream
         let mut hasher = Blake3Hasher::new_keyed(&key_array);
         hasher.update(nonce);
-        
+
         // Generate enough keystream for decryption
         let mut keystream = Vec::new();
         let mut chunk_hasher = hasher.clone();
@@ -1372,13 +1118,13 @@ impl EncryptionAlgorithm for Blake3Encrypt {
             keystream.extend_from_slice(chunk_hasher.finalize().as_bytes());
             chunk_hasher = hasher.clone();
         }
-        
+
         // XOR ciphertext with keystream to recover plaintext
         let mut plaintext = actual_ciphertext.to_vec();
         for (i, byte) in plaintext.iter_mut().enumerate() {
             *byte ^= keystream[i];
         }
-        
+
         Ok(plaintext)
     }
 
@@ -1487,7 +1233,11 @@ impl EncryptionAlgorithm for Aes256Ctr {
     fn encrypt(&self, plaintext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
         if key.len() != self.key_size() {
             return Err(FortressError::encryption(
-                format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()),
+                format!(
+                    "Invalid key length: expected {}, got {}",
+                    self.key_size(),
+                    key.len()
+                ),
                 self.name().to_string(),
                 EncryptionErrorCode::InvalidKeyLength,
             ));
@@ -1499,45 +1249,51 @@ impl EncryptionAlgorithm for Aes256Ctr {
             Err(_) => {
                 // Fallback to getrandom
                 let mut iv = vec![0u8; self.nonce_size()];
-                getrandom::getrandom(&mut iv)
-                    .map_err(|_e| FortressError::encryption(
+                getrandom::getrandom(&mut iv).map_err(|_e| {
+                    FortressError::encryption(
                         "Failed to generate IV: random error".to_string(),
                         self.name().to_string(),
                         EncryptionErrorCode::EncryptionFailed,
-                    ))?;
+                    )
+                })?;
                 iv
             }
         };
 
         // Use AES-GCM in a way that simulates CTR (simplified implementation)
         // In production, use a proper AES-CTR implementation
-        let cipher = aes_gcm::Aes256Gcm::new_from_slice(key)
-            .map_err(|_e| FortressError::encryption(
+        let cipher = aes_gcm::Aes256Gcm::new_from_slice(key).map_err(|_e| {
+            FortressError::encryption(
                 "Failed to create cipher: cipher error".to_string(),
                 self.name().to_string(),
                 EncryptionErrorCode::EncryptionFailed,
-            ))?;
+            )
+        })?;
 
         let nonce = aes_gcm::Nonce::from_slice(&iv[..12]); // Use first 12 bytes as nonce
-        let ciphertext = cipher
-            .encrypt(nonce, plaintext)
-            .map_err(|_e| FortressError::encryption(
+        let ciphertext = cipher.encrypt(nonce, plaintext).map_err(|_e| {
+            FortressError::encryption(
                 "Encryption failed: encryption error".to_string(),
                 self.name().to_string(),
                 EncryptionErrorCode::EncryptionFailed,
-            ))?;
+            )
+        })?;
 
         // Prepend IV to ciphertext
         let mut result = iv;
         result.extend_from_slice(&ciphertext);
-        
+
         Ok(result)
     }
 
     fn decrypt(&self, ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
         if key.len() != self.key_size() {
             return Err(FortressError::encryption(
-                format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()),
+                format!(
+                    "Invalid key length: expected {}, got {}",
+                    self.key_size(),
+                    key.len()
+                ),
                 self.name().to_string(),
                 EncryptionErrorCode::InvalidKeyLength,
             ));
@@ -1556,20 +1312,23 @@ impl EncryptionAlgorithm for Aes256Ctr {
         let actual_ciphertext = &ciphertext[self.nonce_size()..];
 
         // Use AES-GCM for decryption (simplified implementation)
-        let cipher = aes_gcm::Aes256Gcm::new_from_slice(key)
-            .map_err(|_e| FortressError::encryption(
+        let cipher = aes_gcm::Aes256Gcm::new_from_slice(key).map_err(|_e| {
+            FortressError::encryption(
                 "Failed to create cipher: cipher error".to_string(),
                 self.name().to_string(),
                 EncryptionErrorCode::DecryptionFailed,
-            ))?;
+            )
+        })?;
 
         let nonce = aes_gcm::Nonce::from_slice(&iv[..12]); // Use first 12 bytes as nonce
-        let plaintext = aes_gcm::aead::Aead::decrypt(&cipher, nonce, actual_ciphertext)
-            .map_err(|_e| FortressError::encryption(
-                "Decryption failed: decryption error".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::DecryptionFailed,
-            ))?;
+        let plaintext =
+            aes_gcm::aead::Aead::decrypt(&cipher, nonce, actual_ciphertext).map_err(|_e| {
+                FortressError::encryption(
+                    "Decryption failed: decryption error".to_string(),
+                    self.name().to_string(),
+                    EncryptionErrorCode::DecryptionFailed,
+                )
+            })?;
 
         Ok(plaintext)
     }
@@ -1624,7 +1383,11 @@ impl EncryptionAlgorithm for Argon2idEncrypt {
     fn encrypt(&self, plaintext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
         if key.len() != self.key_size() {
             return Err(FortressError::encryption(
-                format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()),
+                format!(
+                    "Invalid key length: expected {}, got {}",
+                    self.key_size(),
+                    key.len()
+                ),
                 self.name().to_string(),
                 EncryptionErrorCode::InvalidKeyLength,
             ));
@@ -1632,45 +1395,50 @@ impl EncryptionAlgorithm for Argon2idEncrypt {
 
         // Generate random salt
         let mut salt = vec![0u8; self.nonce_size()];
-        
+
         // Try to use TRNG first, fallback to getrandom
         match crate::trng::fill_random(&mut salt) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(_) => {
-                getrandom::getrandom(&mut salt)
-                    .map_err(|_e| FortressError::encryption(
+                getrandom::getrandom(&mut salt).map_err(|_e| {
+                    FortressError::encryption(
                         "Failed to generate salt: random error".to_string(),
                         self.name().to_string(),
                         EncryptionErrorCode::EncryptionFailed,
-                    ))?;
+                    )
+                })?;
             }
         }
 
         // Derive encryption key using Argon2id
         let argon2 = argon2::Argon2::default();
-        let salt_string = argon2::password_hash::SaltString::encode_b64(&salt)
-            .map_err(|_e| FortressError::encryption(
+        let salt_string = argon2::password_hash::SaltString::encode_b64(&salt).map_err(|_e| {
+            FortressError::encryption(
                 "Failed to encode salt".to_string(),
                 self.name().to_string(),
                 EncryptionErrorCode::EncryptionFailed,
-            ))?;
-        let password_hash = argon2.hash_password(key, &salt_string)
-            .map_err(|_e| FortressError::encryption(
+            )
+        })?;
+        let password_hash = argon2.hash_password(key, &salt_string).map_err(|_e| {
+            FortressError::encryption(
                 "Argon2id hashing failed".to_string(),
                 self.name().to_string(),
                 EncryptionErrorCode::EncryptionFailed,
-            ))?;
+            )
+        })?;
 
         // SECURE: Extract hash string directly for encryption key
-        let hash_str = password_hash.hash.ok_or_else(|| FortressError::encryption(
-            "Password hash failed to generate".to_string(),
-            self.name().to_string(),
-            EncryptionErrorCode::EncryptionFailed,
-        ))?;
-        
+        let hash_str = password_hash.hash.ok_or_else(|| {
+            FortressError::encryption(
+                "Password hash failed to generate".to_string(),
+                self.name().to_string(),
+                EncryptionErrorCode::EncryptionFailed,
+            )
+        })?;
+
         // SECURE: Use hash string directly for key derivation
         let derived_key = hash_str.as_bytes();
-        
+
         // Use first 32 bytes of derived hash as encryption key
         let mut encryption_key = [0u8; 32];
         let key_len = std::cmp::min(derived_key.len(), 32);
@@ -1682,47 +1450,56 @@ impl EncryptionAlgorithm for Argon2idEncrypt {
             Err(_) => {
                 // Fallback to getrandom
                 let mut nonce = vec![0u8; 12];
-                getrandom::getrandom(&mut nonce)
-                    .map_err(|_e| FortressError::encryption(
+                getrandom::getrandom(&mut nonce).map_err(|_e| {
+                    FortressError::encryption(
                         "Failed to generate nonce: random error".to_string(),
                         self.name().to_string(),
                         EncryptionErrorCode::EncryptionFailed,
-                    ))?;
+                    )
+                })?;
                 nonce
             }
         };
 
         // Use ChaCha20-Poly1305 for encryption
-        let cipher = chacha20poly1305::XChaCha20Poly1305::new_from_slice(&encryption_key)
-            .map_err(|_e| FortressError::encryption(
-                "Failed to create cipher: cipher error".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::EncryptionFailed,
-            ))?;
+        let cipher =
+            chacha20poly1305::XChaCha20Poly1305::new_from_slice(&encryption_key).map_err(|_e| {
+                FortressError::encryption(
+                    "Failed to create cipher: cipher error".to_string(),
+                    self.name().to_string(),
+                    EncryptionErrorCode::EncryptionFailed,
+                )
+            })?;
 
         let mut xnonce = [0u8; 24];
         xnonce[..12].copy_from_slice(&nonce);
 
         let ciphertext = cipher
             .encrypt(&chacha20poly1305::XNonce::from_slice(&xnonce), plaintext)
-            .map_err(|_e| FortressError::encryption(
-                "Encryption failed: encryption error".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::EncryptionFailed,
-            ))?;
+            .map_err(|_e| {
+                FortressError::encryption(
+                    "Encryption failed: encryption error".to_string(),
+                    self.name().to_string(),
+                    EncryptionErrorCode::EncryptionFailed,
+                )
+            })?;
 
         // Prepend salt, nonce, and ciphertext
         let mut result = salt;
         result.extend_from_slice(&nonce);
         result.extend_from_slice(&ciphertext);
-        
+
         Ok(result)
     }
 
     fn decrypt(&self, ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
         if key.len() != self.key_size() {
             return Err(FortressError::encryption(
-                format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()),
+                format!(
+                    "Invalid key length: expected {}, got {}",
+                    self.key_size(),
+                    key.len()
+                ),
                 self.name().to_string(),
                 EncryptionErrorCode::InvalidKeyLength,
             ));
@@ -1743,52 +1520,63 @@ impl EncryptionAlgorithm for Argon2idEncrypt {
 
         // Derive encryption key using Argon2id
         let argon2 = argon2::Argon2::default();
-        let salt_string = argon2::password_hash::SaltString::encode_b64(salt)
-            .map_err(|_e| FortressError::encryption(
+        let salt_string = argon2::password_hash::SaltString::encode_b64(salt).map_err(|_e| {
+            FortressError::encryption(
                 "Failed to encode salt".to_string(),
                 self.name().to_string(),
                 EncryptionErrorCode::DecryptionFailed,
-            ))?;
-        let password_hash = argon2.hash_password(key, &salt_string)
-            .map_err(|_e| FortressError::encryption(
+            )
+        })?;
+        let password_hash = argon2.hash_password(key, &salt_string).map_err(|_e| {
+            FortressError::encryption(
                 "Argon2id hashing failed".to_string(),
                 self.name().to_string(),
                 EncryptionErrorCode::DecryptionFailed,
-            ))?;
+            )
+        })?;
 
         // SECURE: Extract hash string directly for encryption key
-        let hash_str = password_hash.hash.ok_or_else(|| FortressError::encryption(
-            "Password hash failed to generate".to_string(),
-            self.name().to_string(),
-            EncryptionErrorCode::EncryptionFailed,
-        ))?;
-        
+        let hash_str = password_hash.hash.ok_or_else(|| {
+            FortressError::encryption(
+                "Password hash failed to generate".to_string(),
+                self.name().to_string(),
+                EncryptionErrorCode::EncryptionFailed,
+            )
+        })?;
+
         // SECURE: Use hash string directly for key derivation
         let derived_key = hash_str.as_bytes();
-        
+
         // Use first 32 bytes of derived hash as encryption key
         let mut encryption_key = [0u8; 32];
         let key_len = std::cmp::min(derived_key.len(), 32);
         encryption_key[..key_len].copy_from_slice(&derived_key[..key_len]);
 
         // Use ChaCha20-Poly1305 for decryption
-        let cipher = chacha20poly1305::XChaCha20Poly1305::new_from_slice(&encryption_key)
-            .map_err(|_e| FortressError::encryption(
-                "Failed to create cipher: cipher error".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::DecryptionFailed,
-            ))?;
+        let cipher =
+            chacha20poly1305::XChaCha20Poly1305::new_from_slice(&encryption_key).map_err(|_e| {
+                FortressError::encryption(
+                    "Failed to create cipher: cipher error".to_string(),
+                    self.name().to_string(),
+                    EncryptionErrorCode::DecryptionFailed,
+                )
+            })?;
 
         let mut xnonce = [0u8; 24];
         xnonce[..12].copy_from_slice(nonce);
 
         let plaintext = cipher
-            .decrypt(&chacha20poly1305::XNonce::from_slice(&xnonce), actual_ciphertext)
-            .map_err(|_e| FortressError::encryption(
-                "Decryption failed: decryption error".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::DecryptionFailed,
-            ))?;
+            .decrypt(
+                &chacha20poly1305::XNonce::from_slice(&xnonce),
+                actual_ciphertext,
+            )
+            .map_err(|_e| {
+                FortressError::encryption(
+                    "Decryption failed: decryption error".to_string(),
+                    self.name().to_string(),
+                    EncryptionErrorCode::DecryptionFailed,
+                )
+            })?;
 
         Ok(plaintext)
     }
@@ -1843,7 +1631,11 @@ impl EncryptionAlgorithm for CompositeEncrypt {
     fn encrypt(&self, plaintext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
         if key.len() != self.key_size() {
             return Err(FortressError::encryption(
-                format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()),
+                format!(
+                    "Invalid key length: expected {}, got {}",
+                    self.key_size(),
+                    key.len()
+                ),
                 self.name().to_string(),
                 EncryptionErrorCode::InvalidKeyLength,
             ));
@@ -1852,38 +1644,42 @@ impl EncryptionAlgorithm for CompositeEncrypt {
         // Generate random salt and nonce
         let mut salt = vec![0u8; 16];
         let mut nonce = vec![0u8; 24];
-        
+
         // Try to use TRNG first, fallback to getrandom
         match crate::trng::fill_random(&mut salt) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(_) => {
-                getrandom::getrandom(&mut salt)
-                    .map_err(|_e| FortressError::encryption(
+                getrandom::getrandom(&mut salt).map_err(|_e| {
+                    FortressError::encryption(
                         "Failed to generate salt: random error".to_string(),
                         self.name().to_string(),
                         EncryptionErrorCode::EncryptionFailed,
-                    ))?;
+                    )
+                })?;
             }
         }
-        
+
         match crate::trng::fill_random(&mut nonce) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(_) => {
-                getrandom::getrandom(&mut nonce)
-                    .map_err(|_e| FortressError::encryption(
+                getrandom::getrandom(&mut nonce).map_err(|_e| {
+                    FortressError::encryption(
                         "Failed to generate nonce: random error".to_string(),
                         self.name().to_string(),
                         EncryptionErrorCode::EncryptionFailed,
-                    ))?;
+                    )
+                })?;
             }
         }
 
         // Derive encryption key using Blake3
-        let key_array: [u8; 32] = key.try_into().map_err(|_| FortressError::encryption(
-            "Invalid key length for Blake3: expected 32 bytes".to_string(),
-            self.name().to_string(),
-            EncryptionErrorCode::InvalidKeyLength,
-        ))?;
+        let key_array: [u8; 32] = key.try_into().map_err(|_| {
+            FortressError::encryption(
+                "Invalid key length for Blake3: expected 32 bytes".to_string(),
+                self.name().to_string(),
+                EncryptionErrorCode::InvalidKeyLength,
+            )
+        })?;
         let mut hasher = blake3::Hasher::new_keyed(&key_array);
         hasher.update(&salt);
         hasher.update(b"composite-encryption");
@@ -1891,27 +1687,32 @@ impl EncryptionAlgorithm for CompositeEncrypt {
 
         // Encrypt with XChaCha20-Poly1305
         let cipher = chacha20poly1305::XChaCha20Poly1305::new_from_slice(derived_key.as_bytes())
-            .map_err(|_e| FortressError::encryption(
-                "Failed to create cipher: cipher error".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::EncryptionFailed,
-            ))?;
+            .map_err(|_e| {
+                FortressError::encryption(
+                    "Failed to create cipher: cipher error".to_string(),
+                    self.name().to_string(),
+                    EncryptionErrorCode::EncryptionFailed,
+                )
+            })?;
 
         let ciphertext = cipher
             .encrypt(&chacha20poly1305::XNonce::from_slice(&nonce), plaintext)
-            .map_err(|_e| FortressError::encryption(
-                "Encryption failed: encryption error".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::EncryptionFailed,
-            ))?;
+            .map_err(|_e| {
+                FortressError::encryption(
+                    "Encryption failed: encryption error".to_string(),
+                    self.name().to_string(),
+                    EncryptionErrorCode::EncryptionFailed,
+                )
+            })?;
 
         // Calculate HMAC-SHA256 for authentication
-        let mut mac = <HmacSha256 as Mac>::new_from_slice(key)
-            .map_err(|_e| FortressError::encryption(
+        let mut mac = <HmacSha256 as Mac>::new_from_slice(key).map_err(|_e| {
+            FortressError::encryption(
                 "Failed to create HMAC".to_string(),
                 self.name().to_string(),
                 EncryptionErrorCode::EncryptionFailed,
-            ))?;
+            )
+        })?;
         mac.update(&ciphertext);
         mac.update(&salt);
         mac.update(&nonce);
@@ -1922,14 +1723,18 @@ impl EncryptionAlgorithm for CompositeEncrypt {
         result.extend_from_slice(&nonce);
         result.extend_from_slice(&tag);
         result.extend_from_slice(&ciphertext);
-        
+
         Ok(result)
     }
 
     fn decrypt(&self, ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
         if key.len() != self.key_size() {
             return Err(FortressError::encryption(
-                format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()),
+                format!(
+                    "Invalid key length: expected {}, got {}",
+                    self.key_size(),
+                    key.len()
+                ),
                 self.name().to_string(),
                 EncryptionErrorCode::InvalidKeyLength,
             ));
@@ -1950,12 +1755,13 @@ impl EncryptionAlgorithm for CompositeEncrypt {
         let actual_ciphertext = &ciphertext[72..];
 
         // Verify HMAC-SHA256
-        let mut mac = <HmacSha256 as Mac>::new_from_slice(key)
-            .map_err(|_e| FortressError::encryption(
+        let mut mac = <HmacSha256 as Mac>::new_from_slice(key).map_err(|_e| {
+            FortressError::encryption(
                 "Failed to create HMAC".to_string(),
                 self.name().to_string(),
                 EncryptionErrorCode::DecryptionFailed,
-            ))?;
+            )
+        })?;
         mac.update(actual_ciphertext);
         mac.update(salt);
         mac.update(nonce);
@@ -1972,11 +1778,13 @@ impl EncryptionAlgorithm for CompositeEncrypt {
         }
 
         // Derive encryption key using Blake3
-        let key_array: [u8; 32] = key.try_into().map_err(|_| FortressError::encryption(
-            "Invalid key length for Blake3: expected 32 bytes".to_string(),
-            self.name().to_string(),
-            EncryptionErrorCode::InvalidKeyLength,
-        ))?;
+        let key_array: [u8; 32] = key.try_into().map_err(|_| {
+            FortressError::encryption(
+                "Invalid key length for Blake3: expected 32 bytes".to_string(),
+                self.name().to_string(),
+                EncryptionErrorCode::InvalidKeyLength,
+            )
+        })?;
         let mut hasher = blake3::Hasher::new_keyed(&key_array);
         hasher.update(salt);
         hasher.update(b"composite-encryption");
@@ -1984,19 +1792,26 @@ impl EncryptionAlgorithm for CompositeEncrypt {
 
         // Decrypt with XChaCha20-Poly1305
         let cipher = chacha20poly1305::XChaCha20Poly1305::new_from_slice(derived_key.as_bytes())
-            .map_err(|_e| FortressError::encryption(
-                "Failed to create cipher: cipher error".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::DecryptionFailed,
-            ))?;
+            .map_err(|_e| {
+                FortressError::encryption(
+                    "Failed to create cipher: cipher error".to_string(),
+                    self.name().to_string(),
+                    EncryptionErrorCode::DecryptionFailed,
+                )
+            })?;
 
         let plaintext = cipher
-            .decrypt(&chacha20poly1305::XNonce::from_slice(nonce), actual_ciphertext)
-            .map_err(|_e| FortressError::encryption(
-                "Decryption failed: decryption error".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::DecryptionFailed,
-            ))?;
+            .decrypt(
+                &chacha20poly1305::XNonce::from_slice(nonce),
+                actual_ciphertext,
+            )
+            .map_err(|_e| {
+                FortressError::encryption(
+                    "Decryption failed: decryption error".to_string(),
+                    self.name().to_string(),
+                    EncryptionErrorCode::DecryptionFailed,
+                )
+            })?;
 
         Ok(plaintext)
     }
@@ -2052,7 +1867,11 @@ impl EncryptionAlgorithm for Salsa20 {
     fn encrypt(&self, plaintext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
         if key.len() != self.key_size() {
             return Err(FortressError::encryption(
-                format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()),
+                format!(
+                    "Invalid key length: expected {}, got {}",
+                    self.key_size(),
+                    key.len()
+                ),
                 self.name().to_string(),
                 EncryptionErrorCode::InvalidKeyLength,
             ));
@@ -2060,28 +1879,30 @@ impl EncryptionAlgorithm for Salsa20 {
 
         // Generate random nonce
         let mut nonce = vec![0u8; self.nonce_size()];
-        
+
         // Try to use TRNG first, fallback to getrandom
         match crate::trng::fill_random(&mut nonce) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(_) => {
-                getrandom::getrandom(&mut nonce)
-                    .map_err(|_e| FortressError::encryption(
+                getrandom::getrandom(&mut nonce).map_err(|_e| {
+                    FortressError::encryption(
                         "Failed to generate nonce: random error".to_string(),
                         self.name().to_string(),
                         EncryptionErrorCode::EncryptionFailed,
-                    ))?;
+                    )
+                })?;
             }
         }
 
         // Use ChaCha20 as a practical implementation (Salsa20 core is similar)
         // In production, this would use a proper Salsa20 implementation
-        let cipher = chacha20poly1305::XChaCha20Poly1305::new_from_slice(key)
-            .map_err(|_e| FortressError::encryption(
+        let cipher = chacha20poly1305::XChaCha20Poly1305::new_from_slice(key).map_err(|_e| {
+            FortressError::encryption(
                 "Failed to create cipher: cipher error".to_string(),
                 self.name().to_string(),
                 EncryptionErrorCode::EncryptionFailed,
-            ))?;
+            )
+        })?;
 
         let mut xnonce = [0u8; 24];
         xnonce[..8].copy_from_slice(&nonce);
@@ -2089,23 +1910,29 @@ impl EncryptionAlgorithm for Salsa20 {
 
         let ciphertext = cipher
             .encrypt(&chacha20poly1305::XNonce::from_slice(&xnonce), plaintext)
-            .map_err(|_e| FortressError::encryption(
-                "Encryption failed: encryption error".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::EncryptionFailed,
-            ))?;
+            .map_err(|_e| {
+                FortressError::encryption(
+                    "Encryption failed: encryption error".to_string(),
+                    self.name().to_string(),
+                    EncryptionErrorCode::EncryptionFailed,
+                )
+            })?;
 
         // Prepend nonce to ciphertext
         let mut result = nonce;
         result.extend_from_slice(&ciphertext);
-        
+
         Ok(result)
     }
 
     fn decrypt(&self, ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
         if key.len() != self.key_size() {
             return Err(FortressError::encryption(
-                format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()),
+                format!(
+                    "Invalid key length: expected {}, got {}",
+                    self.key_size(),
+                    key.len()
+                ),
                 self.name().to_string(),
                 EncryptionErrorCode::InvalidKeyLength,
             ));
@@ -2124,24 +1951,30 @@ impl EncryptionAlgorithm for Salsa20 {
         let actual_ciphertext = &ciphertext[self.nonce_size()..];
 
         // Use ChaCha20 for decryption (practical implementation)
-        let cipher = chacha20poly1305::XChaCha20Poly1305::new_from_slice(key)
-            .map_err(|_e| FortressError::encryption(
+        let cipher = chacha20poly1305::XChaCha20Poly1305::new_from_slice(key).map_err(|_e| {
+            FortressError::encryption(
                 "Failed to create cipher: cipher error".to_string(),
                 self.name().to_string(),
                 EncryptionErrorCode::DecryptionFailed,
-            ))?;
+            )
+        })?;
 
         let mut xnonce = [0u8; 24];
         xnonce[..8].copy_from_slice(nonce);
         xnonce[8..].copy_from_slice(&[0u8; 16]);
 
         let plaintext = cipher
-            .decrypt(&chacha20poly1305::XNonce::from_slice(&xnonce), actual_ciphertext)
-            .map_err(|_e| FortressError::encryption(
-                "Decryption failed: decryption error".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::DecryptionFailed,
-            ))?;
+            .decrypt(
+                &chacha20poly1305::XNonce::from_slice(&xnonce),
+                actual_ciphertext,
+            )
+            .map_err(|_e| {
+                FortressError::encryption(
+                    "Decryption failed: decryption error".to_string(),
+                    self.name().to_string(),
+                    EncryptionErrorCode::DecryptionFailed,
+                )
+            })?;
 
         Ok(plaintext)
     }
@@ -2197,7 +2030,11 @@ impl EncryptionAlgorithm for Ascon {
     fn encrypt(&self, plaintext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
         if key.len() != self.key_size() {
             return Err(FortressError::encryption(
-                format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()),
+                format!(
+                    "Invalid key length: expected {}, got {}",
+                    self.key_size(),
+                    key.len()
+                ),
                 self.name().to_string(),
                 EncryptionErrorCode::InvalidKeyLength,
             ));
@@ -2205,17 +2042,18 @@ impl EncryptionAlgorithm for Ascon {
 
         // Generate random nonce
         let mut nonce = vec![0u8; self.nonce_size()];
-        
+
         // Try to use TRNG first, fallback to getrandom
         match crate::trng::fill_random(&mut nonce) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(_) => {
-                getrandom::getrandom(&mut nonce)
-                    .map_err(|_e| FortressError::encryption(
+                getrandom::getrandom(&mut nonce).map_err(|_e| {
+                    FortressError::encryption(
                         "Failed to generate nonce: random error".to_string(),
                         self.name().to_string(),
                         EncryptionErrorCode::EncryptionFailed,
-                    ))?;
+                    )
+                })?;
             }
         }
 
@@ -2227,16 +2065,18 @@ impl EncryptionAlgorithm for Ascon {
         // Use HKDF to expand the key to 32 bytes
         let hkdf = Hkdf::<Sha256>::new(None, key);
         hkdf.expand(b"ASCON-key-expansion", &mut expanded_key)
-            .map_err(|_e| FortressError::encryption(
-                "Key expansion failed".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::EncryptionFailed,
-            ))?;
+            .map_err(|_e| {
+                FortressError::encryption(
+                    "Key expansion failed".to_string(),
+                    self.name().to_string(),
+                    EncryptionErrorCode::EncryptionFailed,
+                )
+            })?;
 
         // Generate keystream using Blake3
         let mut hasher = Blake3Hasher::new_keyed(&expanded_key);
         hasher.update(&nonce);
-        
+
         // Generate enough keystream for the plaintext
         let mut keystream = Vec::new();
         let mut chunk_hasher = hasher.clone();
@@ -2246,7 +2086,7 @@ impl EncryptionAlgorithm for Ascon {
             keystream.extend_from_slice(chunk_hasher.finalize().as_bytes());
             chunk_hasher = hasher.clone();
         }
-        
+
         // XOR plaintext with keystream
         let mut ciphertext = plaintext.to_vec();
         for (i, byte) in ciphertext.iter_mut().enumerate() {
@@ -2263,14 +2103,18 @@ impl EncryptionAlgorithm for Ascon {
         let mut result = nonce;
         result.extend_from_slice(&tag.as_bytes()[..16]); // Use first 16 bytes as tag
         result.extend_from_slice(&ciphertext);
-        
+
         Ok(result)
     }
 
     fn decrypt(&self, ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
         if key.len() != self.key_size() {
             return Err(FortressError::encryption(
-                format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()),
+                format!(
+                    "Invalid key length: expected {}, got {}",
+                    self.key_size(),
+                    key.len()
+                ),
                 self.name().to_string(),
                 EncryptionErrorCode::InvalidKeyLength,
             ));
@@ -2296,11 +2140,13 @@ impl EncryptionAlgorithm for Ascon {
         // Use HKDF to expand the key to 32 bytes
         let hkdf = Hkdf::<Sha256>::new(None, key);
         hkdf.expand(b"ASCON-key-expansion", &mut expanded_key)
-            .map_err(|_e| FortressError::encryption(
-                "Key expansion failed".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::DecryptionFailed,
-            ))?;
+            .map_err(|_e| {
+                FortressError::encryption(
+                    "Key expansion failed".to_string(),
+                    self.name().to_string(),
+                    EncryptionErrorCode::DecryptionFailed,
+                )
+            })?;
 
         let mut tag_hasher = Blake3Hasher::new_keyed(&expanded_key);
         tag_hasher.update(actual_ciphertext);
@@ -2318,7 +2164,7 @@ impl EncryptionAlgorithm for Ascon {
         // Generate the same keystream
         let mut hasher = Blake3Hasher::new_keyed(&expanded_key);
         hasher.update(nonce);
-        
+
         let mut keystream = Vec::new();
         let mut chunk_hasher = hasher.clone();
         while keystream.len() < actual_ciphertext.len() {
@@ -2327,13 +2173,13 @@ impl EncryptionAlgorithm for Ascon {
             keystream.extend_from_slice(chunk_hasher.finalize().as_bytes());
             chunk_hasher = hasher.clone();
         }
-        
+
         // XOR ciphertext with keystream to recover plaintext
         let mut plaintext = actual_ciphertext.to_vec();
         for (i, byte) in plaintext.iter_mut().enumerate() {
             *byte ^= keystream[i];
         }
-        
+
         Ok(plaintext)
     }
 
@@ -2360,8 +2206,7 @@ impl EncryptionAlgorithm for Ascon {
     fn performance_profile(&self) -> PerformanceProfile {
         PerformanceProfile::Lightning
     }
-
-    }
+}
 
 /// KMAC256 keyed hash-based encryption
 ///
@@ -2388,7 +2233,11 @@ impl EncryptionAlgorithm for Kmac256 {
     fn encrypt(&self, plaintext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
         if key.len() != self.key_size() {
             return Err(FortressError::encryption(
-                format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()),
+                format!(
+                    "Invalid key length: expected {}, got {}",
+                    self.key_size(),
+                    key.len()
+                ),
                 self.name().to_string(),
                 EncryptionErrorCode::InvalidKeyLength,
             ));
@@ -2396,32 +2245,35 @@ impl EncryptionAlgorithm for Kmac256 {
 
         // Generate random salt
         let mut salt = vec![0u8; self.nonce_size()];
-        
+
         // Try to use TRNG first, fallback to getrandom
         match crate::trng::fill_random(&mut salt) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(_) => {
-                getrandom::getrandom(&mut salt)
-                    .map_err(|_e| FortressError::encryption(
+                getrandom::getrandom(&mut salt).map_err(|_e| {
+                    FortressError::encryption(
                         "Failed to generate salt: random error".to_string(),
                         self.name().to_string(),
                         EncryptionErrorCode::EncryptionFailed,
-                    ))?;
+                    )
+                })?;
             }
         }
 
         // Use SHA-2 based KMAC256-like implementation
         // In production, this would use a proper KMAC256 implementation
-        
+
         // Derive encryption key using HKDF with SHA-256
         let hkdf = Hkdf::<Sha256>::new(Some(&salt), key);
         let mut encryption_key = [0u8; 64];
         hkdf.expand(b"KMAC256-encryption", &mut encryption_key)
-            .map_err(|_e| FortressError::encryption(
-                "HKDF expansion failed".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::EncryptionFailed,
-            ))?;
+            .map_err(|_e| {
+                FortressError::encryption(
+                    "HKDF expansion failed".to_string(),
+                    self.name().to_string(),
+                    EncryptionErrorCode::EncryptionFailed,
+                )
+            })?;
 
         // XOR encryption with derived key
         let mut ciphertext = plaintext.to_vec();
@@ -2440,14 +2292,18 @@ impl EncryptionAlgorithm for Kmac256 {
         let mut result = salt;
         result.extend_from_slice(&tag[..32]); // Use first 32 bytes as tag
         result.extend_from_slice(&ciphertext);
-        
+
         Ok(result)
     }
 
     fn decrypt(&self, ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
         if key.len() != self.key_size() {
             return Err(FortressError::encryption(
-                format!("Invalid key length: expected {}, got {}", self.key_size(), key.len()),
+                format!(
+                    "Invalid key length: expected {}, got {}",
+                    self.key_size(),
+                    key.len()
+                ),
                 self.name().to_string(),
                 EncryptionErrorCode::InvalidKeyLength,
             ));
@@ -2485,11 +2341,13 @@ impl EncryptionAlgorithm for Kmac256 {
         let hkdf = Hkdf::<Sha256>::new(Some(salt), key);
         let mut encryption_key = [0u8; 64];
         hkdf.expand(b"KMAC256-encryption", &mut encryption_key)
-            .map_err(|_e| FortressError::encryption(
-                "HKDF expansion failed".to_string(),
-                self.name().to_string(),
-                EncryptionErrorCode::DecryptionFailed,
-            ))?;
+            .map_err(|_e| {
+                FortressError::encryption(
+                    "HKDF expansion failed".to_string(),
+                    self.name().to_string(),
+                    EncryptionErrorCode::DecryptionFailed,
+                )
+            })?;
 
         // Reverse XOR encryption
         let mut plaintext = actual_ciphertext.to_vec();
@@ -2528,15 +2386,10 @@ impl EncryptionAlgorithm for Kmac256 {
 /// Factory function to create encryption algorithms by name
 
 pub fn create_algorithm(name: &str) -> Result<Box<dyn EncryptionAlgorithm>> {
-
     match name.to_lowercase().as_str() {
         "aegis256" | "aegis-256" => Ok(Box::new(Aegis256Wrapper::new())),
-        "chacha20poly1305" | "chacha20-poly1305" => {
-            Ok(Box::new(ChaCha20Poly1305::new()))
-        }
-        "xchacha20poly1305" | "xchacha20-poly1305" => {
-            Ok(Box::new(XChaCha20Poly1305::new()))
-        }
+        "chacha20poly1305" | "chacha20-poly1305" => Ok(Box::new(ChaCha20Poly1305::new())),
+        "xchacha20poly1305" | "xchacha20-poly1305" => Ok(Box::new(XChaCha20Poly1305::new())),
         "aes256gcm" | "aes-256-gcm" => Ok(Box::new(Aes256Gcm::new())),
         "aes256ctr" | "aes-256-ctr" => Ok(Box::new(Aes256Ctr::new())),
         "blake3encrypt" | "blake3-encrypt" => Ok(Box::new(Blake3Encrypt::new())),
@@ -2552,12 +2405,8 @@ pub fn create_algorithm(name: &str) -> Result<Box<dyn EncryptionAlgorithm>> {
             name.to_string(),
             EncryptionErrorCode::AlgorithmNotSupported,
         )),
-
     }
-
 }
-
-
 
 #[cfg(test)]
 
@@ -2578,7 +2427,6 @@ mod tests {
     }
     */
 
-
     /*
     #[test]
     fn test_invalid_key_length() {
@@ -2598,7 +2446,6 @@ mod tests {
     }
     */
 
-
     /*
     #[tokio::test]
     async fn test_aegis256_performance() {
@@ -2613,23 +2460,22 @@ mod tests {
     }
     */
 
-
     #[tokio::test]
     async fn test_chacha20poly1305_encrypt_decrypt() {
         let algorithm = ChaCha20Poly1305::new();
-        let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
+        let key =
+            SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
         let plaintext = b"Hello, Fortress!";
         let ciphertext = algorithm.encrypt(plaintext, key.as_bytes()).unwrap();
         let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
         assert_eq!(plaintext.to_vec(), decrypted);
     }
 
-
-
     #[tokio::test]
     async fn test_aes256gcm_encrypt_decrypt() {
         let algorithm = Aes256Gcm::new();
-        let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
+        let key =
+            SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
         let plaintext = b"Hello, Fortress!";
         let ciphertext = algorithm.encrypt(plaintext, key.as_bytes()).unwrap();
         let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
@@ -2639,7 +2485,8 @@ mod tests {
     #[tokio::test]
     async fn test_xchacha20poly1305_encrypt_decrypt() {
         let algorithm = XChaCha20Poly1305::new();
-        let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
+        let key =
+            SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
         let plaintext = b"Hello, XChaCha20!";
         let ciphertext = algorithm.encrypt(plaintext, key.as_bytes()).unwrap();
         let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
@@ -2649,7 +2496,8 @@ mod tests {
     #[tokio::test]
     async fn test_aes256ctr_encrypt_decrypt() {
         let algorithm = Aes256Ctr::new();
-        let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
+        let key =
+            SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
         let plaintext = b"Hello, AES-CTR!";
         let ciphertext = algorithm.encrypt(plaintext, key.as_bytes()).unwrap();
         let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
@@ -2659,7 +2507,8 @@ mod tests {
     #[tokio::test]
     async fn test_argon2idencrypt_encrypt_decrypt() {
         let algorithm = Argon2idEncrypt::new();
-        let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
+        let key =
+            SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
         let plaintext = b"Hello, Argon2id!";
         let ciphertext = algorithm.encrypt(plaintext, key.as_bytes()).unwrap();
         let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
@@ -2669,7 +2518,8 @@ mod tests {
     #[tokio::test]
     async fn test_compositeencrypt_encrypt_decrypt() {
         let algorithm = CompositeEncrypt::new();
-        let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
+        let key =
+            SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
         let plaintext = b"Hello, Composite!";
         let ciphertext = algorithm.encrypt(plaintext, key.as_bytes()).unwrap();
         let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
@@ -2679,7 +2529,8 @@ mod tests {
     #[tokio::test]
     async fn test_blake3encrypt_encrypt_decrypt() {
         let algorithm = Blake3Encrypt::new();
-        let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
+        let key =
+            SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
         let plaintext = b"Hello, Blake3!";
         let ciphertext = algorithm.encrypt(plaintext, key.as_bytes()).unwrap();
         let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
@@ -2689,7 +2540,8 @@ mod tests {
     #[tokio::test]
     async fn test_hmacsha512encrypt_encrypt_decrypt() {
         let algorithm = HmacSha512Encrypt::new();
-        let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
+        let key =
+            SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
         let plaintext = b"Hello, HMAC-SHA512!";
         let ciphertext = algorithm.encrypt(plaintext, key.as_bytes()).unwrap();
         let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
@@ -2701,29 +2553,29 @@ mod tests {
         // Test existing algorithms
         let alg1 = create_algorithm("chacha20poly1305").unwrap();
         assert_eq!(alg1.name(), "chacha20poly1305");
-        
+
         let alg2 = create_algorithm("AES-256-GCM").unwrap();
         assert_eq!(alg2.name(), "aes256gcm");
-        
+
         // Test new algorithms
         let alg3 = create_algorithm("xchacha20poly1305").unwrap();
         assert_eq!(alg3.name(), "xchacha20poly1305");
-        
+
         let alg4 = create_algorithm("blake3-encrypt").unwrap();
         assert_eq!(alg4.name(), "blake3encrypt");
-        
+
         let alg5 = create_algorithm("HMAC-SHA512-ENCRYPT").unwrap();
         assert_eq!(alg5.name(), "hmacsha512encrypt");
-        
+
         let alg6 = create_algorithm("aes256ctr").unwrap();
         assert_eq!(alg6.name(), "aes256ctr");
-        
+
         let alg7 = create_algorithm("argon2id-encrypt").unwrap();
         assert_eq!(alg7.name(), "argon2idencrypt");
-        
+
         let alg8 = create_algorithm("composite-encrypt").unwrap();
         assert_eq!(alg8.name(), "compositeencrypt");
-        
+
         // Test unknown algorithm
         let result = create_algorithm("unknown");
         assert!(result.is_err());
@@ -2733,19 +2585,19 @@ mod tests {
     fn test_performance_profiles() {
         let xchacha = XChaCha20Poly1305::new();
         assert_eq!(xchacha.performance_profile(), PerformanceProfile::Balanced);
-        
+
         let blake3 = Blake3Encrypt::new();
         assert_eq!(blake3.performance_profile(), PerformanceProfile::Hardware);
-        
+
         let hmac512 = HmacSha512Encrypt::new();
         assert_eq!(hmac512.performance_profile(), PerformanceProfile::Fortress);
-        
+
         let aesctr = Aes256Ctr::new();
         assert_eq!(aesctr.performance_profile(), PerformanceProfile::Streaming);
-        
+
         let argon2id = Argon2idEncrypt::new();
         assert_eq!(argon2id.performance_profile(), PerformanceProfile::Fortress);
-        
+
         let composite = CompositeEncrypt::new();
         assert_eq!(composite.performance_profile(), PerformanceProfile::Quantum);
     }
@@ -2754,19 +2606,19 @@ mod tests {
     fn test_security_levels() {
         let xchacha = XChaCha20Poly1305::new();
         assert_eq!(xchacha.security_level(), 256);
-        
+
         let blake3 = Blake3Encrypt::new();
         assert_eq!(blake3.security_level(), 256);
-        
+
         let hmac512 = HmacSha512Encrypt::new();
         assert_eq!(hmac512.security_level(), 512);
-        
+
         let aesctr = Aes256Ctr::new();
         assert_eq!(aesctr.security_level(), 256);
-        
+
         let argon2id = Argon2idEncrypt::new();
         assert_eq!(argon2id.security_level(), 256);
-        
+
         let composite = CompositeEncrypt::new();
         assert_eq!(composite.security_level(), 512);
     }
@@ -2777,27 +2629,27 @@ mod tests {
         assert_eq!(xchacha.key_size(), 32);
         assert_eq!(xchacha.nonce_size(), 24);
         assert_eq!(xchacha.tag_size(), 16);
-        
+
         let blake3 = Blake3Encrypt::new();
         assert_eq!(blake3.key_size(), 32);
         assert_eq!(blake3.nonce_size(), 16);
         assert_eq!(blake3.tag_size(), 32);
-        
+
         let hmac512 = HmacSha512Encrypt::new();
         assert_eq!(hmac512.key_size(), 64);
         assert_eq!(hmac512.nonce_size(), 32);
         assert_eq!(hmac512.tag_size(), 64);
-        
+
         let aesctr = Aes256Ctr::new();
         assert_eq!(aesctr.key_size(), 32);
         assert_eq!(aesctr.nonce_size(), 16);
         assert_eq!(aesctr.tag_size(), 16);
-        
+
         let argon2id = Argon2idEncrypt::new();
         assert_eq!(argon2id.key_size(), 32);
         assert_eq!(argon2id.nonce_size(), 16);
         assert_eq!(argon2id.tag_size(), 16);
-        
+
         let composite = CompositeEncrypt::new();
         assert_eq!(composite.key_size(), 32);
         assert_eq!(composite.nonce_size(), 56);
@@ -2806,42 +2658,33 @@ mod tests {
 
     #[test]
     fn test_invalid_key_length() {
-
         let algorithm = Aegis256::new();
 
         let invalid_key = b"short";
 
         let plaintext = b"Hello, Fortress!";
 
-
-
         let result = algorithm.encrypt(plaintext, invalid_key);
 
         assert!(result.is_err());
 
         assert!(matches!(
-
             result.unwrap_err(),
-
-            FortressError::Encryption { code: EncryptionErrorCode::InvalidKeyLength, .. }
-
+            FortressError::Encryption {
+                code: EncryptionErrorCode::InvalidKeyLength,
+                ..
+            }
         ));
-
     }
-
-
 
     #[test]
 
     fn test_encryption_profiles() {
-
         let lightning = EncryptionProfile::lightning("test".to_string());
 
         assert_eq!(lightning.performance_profile, PerformanceProfile::Lightning);
 
         assert_eq!(lightning.algorithm, "aegis256");
-
-
 
         let balanced = EncryptionProfile::balanced("test".to_string());
 
@@ -2849,67 +2692,41 @@ mod tests {
 
         assert_eq!(balanced.algorithm, "chacha20poly1305");
 
-
-
         let fortress = EncryptionProfile::fortress("test".to_string());
 
         assert_eq!(fortress.performance_profile, PerformanceProfile::Fortress);
 
         assert_eq!(fortress.algorithm, "aes256gcm");
-
     }
-
-
 
     #[test]
 
     fn test_secure_key() {
-
         let key = SecureKey::generate(32).expect("Failed to generate key for test");
 
         assert_eq!(key.len(), 32);
 
         assert!(!key.is_empty());
 
-
-
         let debug_str = format!("{:?}", key);
 
         assert!(debug_str.contains("SecureKey"));
 
         assert!(debug_str.contains("length: 32"));
-
     }
-
-
 
     #[test]
 
     fn test_encrypted_data_serialization() {
-
-        let data = EncryptedData::new(
-
-            Bytes::from("encrypted_data"),
-
-            "aes256gcm".to_string(),
-
-        )
-
-        .with_nonce(Bytes::from("nonce"))
-
-        .with_tag(Bytes::from("tag"))
-
-        .with_key_version(1)
-
-        .with_metadata("purpose".to_string(), "test".to_string());
-
-
+        let data = EncryptedData::new(Bytes::from("encrypted_data"), "aes256gcm".to_string())
+            .with_nonce(Bytes::from("nonce"))
+            .with_tag(Bytes::from("tag"))
+            .with_key_version(1)
+            .with_metadata("purpose".to_string(), "test".to_string());
 
         let base64 = data.to_base64().unwrap();
 
         let deserialized = EncryptedData::from_base64(&base64).unwrap();
-
-
 
         assert_eq!(deserialized.ciphertext, data.ciphertext);
 
@@ -2922,28 +2739,21 @@ mod tests {
         assert_eq!(deserialized.key_version, data.key_version);
 
         assert_eq!(deserialized.metadata, data.metadata);
-
     }
-
-
 
     #[test]
 
     fn test_create_algorithm() {
         let aegis = create_algorithm("aegis256").unwrap();
         assert_eq!(aegis.name(), "aegis256");
-        
+
         let chacha = create_algorithm("chacha20poly1305").unwrap();
 
         assert_eq!(chacha.name(), "chacha20poly1305");
 
-
-
         let aes = create_algorithm("aes256gcm").unwrap();
 
         assert_eq!(aes.name(), "aes256gcm");
-
-
 
         let unknown = create_algorithm("unknown");
 
@@ -2964,13 +2774,14 @@ mod tests {
     fn test_aegis256_implementation() {
         // This test verifies that our AEGIS-256 implementation works correctly
         let algorithm = Aegis256Wrapper::new();
-        let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
+        let key =
+            SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
         let plaintext = b"Hello, Fortress! Testing AEGIS-256 implementation.";
-        
+
         // Test encryption and decryption
         let ciphertext = algorithm.encrypt(plaintext, key.as_bytes()).unwrap();
         let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
-        
+
         assert_eq!(&plaintext[..], &decrypted[..]);
         println!("AEGIS-256 implementation test passed");
     }
@@ -2978,13 +2789,20 @@ mod tests {
     #[tokio::test]
     async fn test_aegis256_encrypt_decrypt() {
         let algorithm = Aegis256Wrapper::new();
-        let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
+        let key =
+            SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
         let plaintext = b"Hello, Fortress! Testing async AEGIS-256.";
-        
+
         // Test async encryption and decryption
-        let ciphertext = algorithm.encrypt_async(plaintext, key.as_bytes()).await.unwrap();
-        let decrypted = algorithm.decrypt_async(&ciphertext, key.as_bytes()).await.unwrap();
-        
+        let ciphertext = algorithm
+            .encrypt_async(plaintext, key.as_bytes())
+            .await
+            .unwrap();
+        let decrypted = algorithm
+            .decrypt_async(&ciphertext, key.as_bytes())
+            .await
+            .unwrap();
+
         assert_eq!(&plaintext[..], &decrypted[..]);
         println!("Async AEGIS-256 test passed");
     }
@@ -2992,13 +2810,14 @@ mod tests {
     #[test]
     fn test_salsa20_encrypt_decrypt() {
         let algorithm = Salsa20::new();
-        let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
+        let key =
+            SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
         let plaintext = b"Hello, Fortress! Testing Salsa20.";
-        
+
         // Test encryption and decryption
         let ciphertext = algorithm.encrypt(plaintext, key.as_bytes()).unwrap();
         let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
-        
+
         assert_eq!(&plaintext[..], &decrypted[..]);
         println!("Salsa20 implementation test passed");
     }
@@ -3006,13 +2825,14 @@ mod tests {
     #[test]
     fn test_ascon_encrypt_decrypt() {
         let algorithm = Ascon::new();
-        let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
+        let key =
+            SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
         let plaintext = b"Hello, Fortress! Testing ASCON.";
-        
+
         // Test encryption and decryption
         let ciphertext = algorithm.encrypt(plaintext, key.as_bytes()).unwrap();
         let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
-        
+
         assert_eq!(&plaintext[..], &decrypted[..]);
         println!("ASCON implementation test passed");
     }
@@ -3020,13 +2840,14 @@ mod tests {
     #[test]
     fn test_kmac256_encrypt_decrypt() {
         let algorithm = Kmac256::new();
-        let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
+        let key =
+            SecureKey::generate(algorithm.key_size()).expect("Failed to generate key for test");
         let plaintext = b"Hello, Fortress! Testing KMAC256.";
-        
+
         // Test encryption and decryption
         let ciphertext = algorithm.encrypt(plaintext, key.as_bytes()).unwrap();
         let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes()).unwrap();
-        
+
         assert_eq!(&plaintext[..], &decrypted[..]);
         println!("KMAC256 implementation test passed");
     }

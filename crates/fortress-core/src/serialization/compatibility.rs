@@ -3,12 +3,12 @@
 //! This module provides backward compatibility management for Fortress
 //! serialization protocols with version negotiation and migration support.
 
+use super::SerializationFormat;
+use crate::error::{FortressError, Result};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use serde::{Serialize, Deserialize};
-use crate::error::{FortressError, Result};
-use super::SerializationFormat;
 
 /// Compatibility manager for version handling
 pub struct CompatibilityManager {
@@ -211,94 +211,95 @@ impl CompatibilityManager {
 
         // Initialize version registry
         manager.initialize_version_registry();
-        
+
         Ok(manager)
     }
 
     /// Initialize version registry with known versions
     fn initialize_version_registry(&mut self) {
         let mut registry = self.version_registry.try_write().unwrap();
-        
+
         // Current version
-        registry.insert("1.0.0".to_string(), VersionInfo {
-            version: "1.0.0".to_string(),
-            major: 1,
-            minor: 0,
-            patch: 0,
-            pre_release: None,
-            build_metadata: None,
-            supported_formats: vec![
-                SerializationFormat::Binary,
-                SerializationFormat::Json,
-                SerializationFormat::Protobuf,
-                SerializationFormat::MessagePack,
-                SerializationFormat::Cbor,
-            ],
-            breaking_changes: vec![],
-            deprecated_features: vec![],
-            new_features: vec![
-                "Binary protocol".to_string(),
-                "Protocol negotiation".to_string(),
-                "Compression".to_string(),
-            ],
-            release_date: chrono::Utc::now(),
-            end_of_life_date: None,
-        });
+        registry.insert(
+            "1.0.0".to_string(),
+            VersionInfo {
+                version: "1.0.0".to_string(),
+                major: 1,
+                minor: 0,
+                patch: 0,
+                pre_release: None,
+                build_metadata: None,
+                supported_formats: vec![
+                    SerializationFormat::Binary,
+                    SerializationFormat::Json,
+                    SerializationFormat::Protobuf,
+                    SerializationFormat::MessagePack,
+                    SerializationFormat::Cbor,
+                ],
+                breaking_changes: vec![],
+                deprecated_features: vec![],
+                new_features: vec![
+                    "Binary protocol".to_string(),
+                    "Protocol negotiation".to_string(),
+                    "Compression".to_string(),
+                ],
+                release_date: chrono::Utc::now(),
+                end_of_life_date: None,
+            },
+        );
 
         // Previous version
-        registry.insert("0.9.0".to_string(), VersionInfo {
-            version: "0.9.0".to_string(),
-            major: 0,
-            minor: 9,
-            patch: 0,
-            pre_release: None,
-            build_metadata: None,
-            supported_formats: vec![
-                SerializationFormat::Json,
-                SerializationFormat::MessagePack,
-            ],
-            breaking_changes: vec![
-                "Removed legacy XML format".to_string(),
-            ],
-            deprecated_features: vec![
-                "Legacy field names".to_string(),
-            ],
-            new_features: vec![
-                "MessagePack support".to_string(),
-            ],
-            release_date: chrono::Utc::now() - chrono::Duration::days(30),
-            end_of_life_date: Some(chrono::Utc::now() + chrono::Duration::days(365)),
-        });
+        registry.insert(
+            "0.9.0".to_string(),
+            VersionInfo {
+                version: "0.9.0".to_string(),
+                major: 0,
+                minor: 9,
+                patch: 0,
+                pre_release: None,
+                build_metadata: None,
+                supported_formats: vec![
+                    SerializationFormat::Json,
+                    SerializationFormat::MessagePack,
+                ],
+                breaking_changes: vec!["Removed legacy XML format".to_string()],
+                deprecated_features: vec!["Legacy field names".to_string()],
+                new_features: vec!["MessagePack support".to_string()],
+                release_date: chrono::Utc::now() - chrono::Duration::days(30),
+                end_of_life_date: Some(chrono::Utc::now() + chrono::Duration::days(365)),
+            },
+        );
 
         // Development version
-        registry.insert("2.0.0-alpha".to_string(), VersionInfo {
-            version: "2.0.0-alpha".to_string(),
-            major: 2,
-            minor: 0,
-            patch: 0,
-            pre_release: Some("alpha".to_string()),
-            build_metadata: None,
-            supported_formats: vec![
-                SerializationFormat::Binary,
-                SerializationFormat::Json,
-                SerializationFormat::Protobuf,
-                SerializationFormat::MessagePack,
-                SerializationFormat::Cbor,
-            ],
-            breaking_changes: vec![
-                "New binary protocol format".to_string(),
-                "Changed field ordering".to_string(),
-            ],
-            deprecated_features: vec![
-                "Legacy compression".to_string(),
-            ],
-            new_features: vec![
-                "Quantum-resistant encryption".to_string(),
-                "ML-based optimization".to_string(),
-            ],
-            release_date: chrono::Utc::now() + chrono::Duration::days(30),
-            end_of_life_date: None,
-        });
+        registry.insert(
+            "2.0.0-alpha".to_string(),
+            VersionInfo {
+                version: "2.0.0-alpha".to_string(),
+                major: 2,
+                minor: 0,
+                patch: 0,
+                pre_release: Some("alpha".to_string()),
+                build_metadata: None,
+                supported_formats: vec![
+                    SerializationFormat::Binary,
+                    SerializationFormat::Json,
+                    SerializationFormat::Protobuf,
+                    SerializationFormat::MessagePack,
+                    SerializationFormat::Cbor,
+                ],
+                breaking_changes: vec![
+                    "New binary protocol format".to_string(),
+                    "Changed field ordering".to_string(),
+                ],
+                deprecated_features: vec!["Legacy compression".to_string()],
+                new_features: vec![
+                    "Quantum-resistant encryption".to_string(),
+                    "ML-based optimization".to_string(),
+                ],
+                release_date: chrono::Utc::now() + chrono::Duration::days(30),
+                end_of_life_date: None,
+            },
+        );
     }
 
     /// Check compatibility with a version
@@ -310,10 +311,13 @@ impl CompatibilityManager {
     /// Check detailed compatibility
     pub async fn check_compatibility(&self, version: &str) -> Result<CompatibilityResult> {
         let _start = std::time::Instant::now();
-        
+
         let registry = self.version_registry.read().await;
         let version_info = registry.get(version).ok_or_else(|| {
-            FortressError::serialization("Unknown version", &format!("Version {} not found", version))
+            FortressError::serialization(
+                "Unknown version",
+                &format!("Version {} not found", version),
+            )
         })?;
 
         let current_info = registry.get(&self.current_version).unwrap();
@@ -333,7 +337,10 @@ impl CompatibilityManager {
                     issues.push(CompatibilityIssue {
                         severity: IssueSeverity::Error,
                         issue_type: IssueType::VersionMismatch,
-                        description: format!("Version {} does not match current version {}", version, self.current_version),
+                        description: format!(
+                            "Version {} does not match current version {}",
+                            version, self.current_version
+                        ),
                         component: None,
                         suggested_fix: Some(format!("Upgrade to version {}", self.current_version)),
                     });
@@ -348,7 +355,10 @@ impl CompatibilityManager {
                     issues.push(CompatibilityIssue {
                         severity: IssueSeverity::Error,
                         issue_type: IssueType::BreakingChange,
-                        description: format!("Major version mismatch: {} vs {}", version_info.major, current_info.major),
+                        description: format!(
+                            "Major version mismatch: {} vs {}",
+                            version_info.major, current_info.major
+                        ),
                         component: None,
                         suggested_fix: Some(format!("Upgrade to version {}.x", current_info.major)),
                     });
@@ -359,9 +369,14 @@ impl CompatibilityManager {
                     issues.push(CompatibilityIssue {
                         severity: IssueSeverity::Warning,
                         issue_type: IssueType::VersionMismatch,
-                        description: format!("Minor version mismatch: {} vs {}", version_info.minor, current_info.minor),
+                        description: format!(
+                            "Minor version mismatch: {} vs {}",
+                            version_info.minor, current_info.minor
+                        ),
                         component: None,
-                        suggested_fix: Some("Consider upgrading to latest minor version".to_string()),
+                        suggested_fix: Some(
+                            "Consider upgrading to latest minor version".to_string(),
+                        ),
                     });
                     recommendations.push("Consider upgrading to latest minor version".to_string());
                 }
@@ -373,7 +388,10 @@ impl CompatibilityManager {
                     issues.push(CompatibilityIssue {
                         severity: IssueSeverity::Error,
                         issue_type: IssueType::BreakingChange,
-                        description: format!("Version {} is newer than current version {}", version, self.current_version),
+                        description: format!(
+                            "Version {} is newer than current version {}",
+                            version, self.current_version
+                        ),
                         component: None,
                         suggested_fix: Some("Upgrade Fortress to newer version".to_string()),
                     });
@@ -383,7 +401,10 @@ impl CompatibilityManager {
                     issues.push(CompatibilityIssue {
                         severity: IssueSeverity::Warning,
                         issue_type: IssueType::VersionMismatch,
-                        description: format!("Version {} is older than current version {}", version, self.current_version),
+                        description: format!(
+                            "Version {} is older than current version {}",
+                            version, self.current_version
+                        ),
                         component: None,
                         suggested_fix: Some("Consider upgrading for new features".to_string()),
                     });
@@ -441,7 +462,8 @@ impl CompatibilityManager {
 
         // Determine migration path
         let migration_path = if migration_required {
-            self.find_migration_path(version, &self.current_version).await
+            self.find_migration_path(version, &self.current_version)
+                .await
         } else {
             None
         };
@@ -455,7 +477,10 @@ impl CompatibilityManager {
             } else {
                 metrics.failed_checks += 1;
             }
-            *metrics.version_distribution.entry(version.to_string()).or_insert(0) += 1;
+            *metrics
+                .version_distribution
+                .entry(version.to_string())
+                .or_insert(0) += 1;
             metrics.last_updated = chrono::Utc::now();
         }
 
@@ -471,16 +496,20 @@ impl CompatibilityManager {
     }
 
     /// Find migration path between versions
-    async fn find_migration_path(&self, from_version: &str, to_version: &str) -> Option<Vec<String>> {
+    async fn find_migration_path(
+        &self,
+        from_version: &str,
+        to_version: &str,
+    ) -> Option<Vec<String>> {
         let migration_rules = self.migration_rules.read().await;
-        
+
         // Simple pathfinding - in a real implementation, this would be more sophisticated
         let mut path = Vec::new();
         let mut current = from_version.to_string();
-        
+
         while current != to_version {
             let mut found_next = false;
-            
+
             // Look for direct migration rule
             for ((from, to), _rule) in migration_rules.iter() {
                 if from == &current && self.can_migrate_to(to, to_version) {
@@ -490,19 +519,21 @@ impl CompatibilityManager {
                     break;
                 }
             }
-            
+
             if !found_next {
                 return None; // No path found
             }
         }
-        
+
         Some(path)
     }
 
     /// Check if we can migrate to a target version
     fn can_migrate_to(&self, current: &str, target: &str) -> bool {
         // Simple version comparison
-        if let (Ok(current_ver), Ok(target_ver)) = (self.parse_version(current), self.parse_version(target)) {
+        if let (Ok(current_ver), Ok(target_ver)) =
+            (self.parse_version(current), self.parse_version(target))
+        {
             current_ver <= target_ver
         } else {
             false
@@ -513,15 +544,26 @@ impl CompatibilityManager {
     fn parse_version(&self, version: &str) -> Result<(u32, u32, u32)> {
         let parts: Vec<&str> = version.split('.').collect();
         if parts.len() >= 3 {
-            let major = parts[0].parse::<u32>()
-                .map_err(|_| FortressError::serialization("Invalid version", "Cannot parse major version"))?;
-            let minor = parts[1].parse::<u32>()
-                .map_err(|_| FortressError::serialization("Invalid version", "Cannot parse minor version"))?;
-            let patch = parts[2].split('-').next().unwrap_or(&parts[2]).parse::<u32>()
-                .map_err(|_| FortressError::serialization("Invalid version", "Cannot parse patch version"))?;
+            let major = parts[0].parse::<u32>().map_err(|_| {
+                FortressError::serialization("Invalid version", "Cannot parse major version")
+            })?;
+            let minor = parts[1].parse::<u32>().map_err(|_| {
+                FortressError::serialization("Invalid version", "Cannot parse minor version")
+            })?;
+            let patch = parts[2]
+                .split('-')
+                .next()
+                .unwrap_or(&parts[2])
+                .parse::<u32>()
+                .map_err(|_| {
+                    FortressError::serialization("Invalid version", "Cannot parse patch version")
+                })?;
             Ok((major, minor, patch))
         } else {
-            Err(FortressError::serialization("Invalid version format", "Expected x.y.z format"))
+            Err(FortressError::serialization(
+                "Invalid version format",
+                "Expected x.y.z format",
+            ))
         }
     }
 
@@ -571,11 +613,11 @@ impl CompatibilityManager {
     pub async fn generate_compatibility_report(&self) -> Result<CompatibilityReport> {
         let registry = self.version_registry.read().await;
         let metrics = self.metrics.read().await;
-        
+
         let mut version_summaries = Vec::new();
         for (version, info) in registry.iter() {
             let compatibility_result = self.check_compatibility(version).await?;
-            
+
             version_summaries.push(VersionSummary {
                 version: version.clone(),
                 compatible: compatibility_result.compatible,
@@ -602,10 +644,13 @@ impl CompatibilityManager {
     pub async fn cleanup_old_versions(&self, max_age_days: u64) -> Result<usize> {
         let mut registry = self.version_registry.write().await;
         let cutoff_date = chrono::Utc::now() - chrono::Duration::days(max_age_days as i64);
-        
+
         let mut removed = 0;
         registry.retain(|version, info| {
-            let keep = info.end_of_life_date.map(|eol| eol > cutoff_date).unwrap_or(true) 
+            let keep = info
+                .end_of_life_date
+                .map(|eol| eol > cutoff_date)
+                .unwrap_or(true)
                 || version == &self.current_version;
             if !keep {
                 removed += 1;
@@ -678,14 +723,14 @@ mod tests {
     #[tokio::test]
     async fn test_compatibility_manager() {
         let manager = CompatibilityManager::new(CompatibilityLevel::Minor).unwrap();
-        
+
         // Test compatibility check
         let compatible = manager.is_compatible("1.0.0").await.unwrap();
         assert!(compatible);
-        
+
         let compatible = manager.is_compatible("0.9.0").await.unwrap();
         assert!(compatible);
-        
+
         let compatible = manager.is_compatible("2.0.0-alpha").await.unwrap();
         assert!(!compatible); // Major version mismatch
     }
@@ -693,7 +738,7 @@ mod tests {
     #[tokio::test]
     async fn test_detailed_compatibility() {
         let manager = CompatibilityManager::new(CompatibilityLevel::Minor).unwrap();
-        
+
         let result = manager.check_compatibility("0.9.0").await.unwrap();
         assert!(result.compatible);
         assert!(result.score > 0.5);
@@ -703,7 +748,7 @@ mod tests {
     #[tokio::test]
     async fn test_version_registration() {
         let manager = CompatibilityManager::new(CompatibilityLevel::None).unwrap();
-        
+
         let new_version = VersionInfo {
             version: "1.1.0".to_string(),
             major: 1,
@@ -718,9 +763,9 @@ mod tests {
             release_date: chrono::Utc::now(),
             end_of_life_date: None,
         };
-        
+
         manager.register_version(new_version).await.unwrap();
-        
+
         let compatible = manager.is_compatible("1.1.0").await.unwrap();
         assert!(compatible);
     }
@@ -728,7 +773,7 @@ mod tests {
     #[tokio::test]
     async fn test_compatibility_report() {
         let manager = CompatibilityManager::new(CompatibilityLevel::Minor).unwrap();
-        
+
         let report = manager.generate_compatibility_report().await.unwrap();
         assert!(!report.version_summaries.is_empty());
         assert_eq!(report.current_version, "1.0.0");

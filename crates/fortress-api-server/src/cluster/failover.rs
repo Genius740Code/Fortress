@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{RwLock, Mutex};
+use tokio::sync::{Mutex, RwLock};
 use tokio::time::{interval, timeout};
 use tracing::{error, info, warn};
 use uuid::Uuid;
@@ -135,7 +135,7 @@ pub enum FailoverMessage {
         /// When the request was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
-    
+
     /// Health check response
     HealthCheckResponse {
         /// ID of the responding node
@@ -147,13 +147,13 @@ pub enum FailoverMessage {
         /// Node metrics
         metrics: HashMap<String, String>,
     },
-    
+
     /// Failover notification
     FailoverNotification {
         /// The failover event
         event: FailoverEvent,
     },
-    
+
     /// Leader election request
     LeaderElectionRequest {
         /// ID of the candidate node
@@ -163,7 +163,7 @@ pub enum FailoverMessage {
         /// When the request was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
-    
+
     /// Leader election response
     LeaderElectionResponse {
         /// ID of the voting node
@@ -177,7 +177,7 @@ pub enum FailoverMessage {
         /// When the response was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
-    
+
     /// Recovery request
     RecoveryRequest {
         /// ID of the failed node
@@ -187,7 +187,7 @@ pub enum FailoverMessage {
         /// When the request was sent
         timestamp: chrono::DateTime<chrono::Utc>,
     },
-    
+
     /// Recovery response
     RecoveryResponse {
         /// Unique identifier for the request
@@ -220,31 +220,31 @@ pub enum FailoverError {
     /// Node failure detected
     #[error("Node failure detected: {0}")]
     NodeFailure(Uuid),
-    
+
     /// Leader election process failed
     #[error("Leader election failed: {0}")]
     LeaderElectionFailed(String),
-    
+
     /// Recovery operation failed
     #[error("Recovery failed: {0}")]
     RecoveryFailed(String),
-    
+
     /// Network partition detected
     #[error("Network partition detected")]
     NetworkPartition,
-    
+
     /// Not enough healthy nodes for operation
     #[error("Insufficient healthy nodes: {0}/{1}")]
     InsufficientHealthyNodes(usize, usize),
-    
+
     /// Backup node promotion failed
     #[error("Backup promotion failed: {0}")]
     BackupPromotionFailed(String),
-    
+
     /// Failover operation timed out
     #[error("Failover timeout")]
     FailoverTimeout,
-    
+
     /// Invalid failover configuration
     #[error("Invalid failover configuration: {0}")]
     InvalidConfiguration(String),
@@ -277,16 +277,16 @@ pub struct FailoverManager {
 pub trait FailoverCallback {
     /// Called when a node failure is detected
     async fn on_node_failure(&self, node_id: Uuid, event: &FailoverEvent);
-    
+
     /// Called when a new leader is elected
     async fn on_leader_election(&self, new_leader: Uuid, event: &FailoverEvent);
-    
+
     /// Called when recovery is initiated for a node
     async fn on_recovery_initiated(&self, node_id: Uuid, event: &FailoverEvent);
-    
+
     /// Called when recovery is completed for a node
     async fn on_recovery_completed(&self, node_id: Uuid, event: &FailoverEvent);
-    
+
     /// Called when a backup node is promoted
     async fn on_backup_promotion(&self, backup_node: Uuid, event: &FailoverEvent);
 }
@@ -295,8 +295,12 @@ pub trait FailoverCallback {
 #[async_trait::async_trait]
 pub trait FailoverNetworkSender {
     /// Send a failover message to a specific node
-    async fn send_failover_message(&self, target: Uuid, message: FailoverMessage) -> ClusterResult<()>;
-    
+    async fn send_failover_message(
+        &self,
+        target: Uuid,
+        message: FailoverMessage,
+    ) -> ClusterResult<()>;
+
     /// Broadcast a failover message to all nodes
     async fn broadcast_failover_message(&self, message: FailoverMessage) -> ClusterResult<()>;
 }
@@ -305,11 +309,15 @@ pub trait FailoverNetworkSender {
 #[async_trait::async_trait]
 pub trait RecoveryManager {
     /// Initiate recovery for a failed node
-    async fn initiate_recovery(&self, node_id: Uuid, recovery_type: RecoveryType) -> ClusterResult<()>;
-    
+    async fn initiate_recovery(
+        &self,
+        node_id: Uuid,
+        recovery_type: RecoveryType,
+    ) -> ClusterResult<()>;
+
     /// Check the recovery status of a node
     async fn check_recovery_status(&self, node_id: Uuid) -> ClusterResult<Option<RecoveryStatus>>;
-    
+
     /// Promote a backup node to primary
     async fn promote_backup(&self, backup_node: Uuid) -> ClusterResult<()>;
 }
@@ -355,7 +363,7 @@ impl FailoverManager {
     /// Start the failover manager
     pub async fn start(&self) -> ClusterResult<()> {
         info!("Starting failover manager for node {}", self.node_id);
-        
+
         // Start health check loop
         let failover = self.clone();
         tokio::spawn(async move {
@@ -374,10 +382,10 @@ impl FailoverManager {
     /// Health check loop
     async fn health_check_loop(&self) {
         let mut interval = interval(Duration::from_secs(self.config.health_check_interval_secs));
-        
+
         loop {
             interval.tick().await;
-            
+
             if let Err(e) = self.perform_health_checks().await {
                 error!("Health check failed: {}", e);
             }
@@ -387,10 +395,10 @@ impl FailoverManager {
     /// Event processing loop
     async fn event_processing_loop(&self) {
         let mut interval = interval(Duration::from_secs(5));
-        
+
         loop {
             interval.tick().await;
-            
+
             if let Err(e) = self.process_failover_events().await {
                 error!("Event processing failed: {}", e);
             }
@@ -404,7 +412,7 @@ impl FailoverManager {
         drop(cluster_nodes);
 
         let mut failed_nodes = Vec::new();
-        
+
         for node_id in nodes_to_check {
             if let Err(e) = self.check_node_health(node_id).await {
                 warn!("Health check failed for node {}: {}", node_id, e);
@@ -428,10 +436,15 @@ impl FailoverManager {
         };
 
         let sender = self.network_sender.lock().await;
-        
+
         // Send health check with timeout
         let timeout_duration = Duration::from_secs(self.config.node_timeout_secs);
-        match timeout(timeout_duration, sender.send_failover_message(node_id, health_request)).await {
+        match timeout(
+            timeout_duration,
+            sender.send_failover_message(node_id, health_request),
+        )
+        .await
+        {
             Ok(Ok(())) => {
                 // Update node health to healthy
                 let mut health = self.node_health.write().await;
@@ -456,7 +469,7 @@ impl FailoverManager {
     /// Handle node failure
     async fn handle_node_failure(&self, node_id: Uuid) -> ClusterResult<()> {
         warn!("Handling node failure for {}", node_id);
-        
+
         // Create failover event
         let event = FailoverEvent {
             event_id: Uuid::new_v4(),
@@ -486,7 +499,8 @@ impl FailoverManager {
 
         // Initiate recovery if enabled
         if self.config.enable_auto_recovery {
-            self.initiate_recovery(node_id, RecoveryType::FullRecovery, &event).await?;
+            self.initiate_recovery(node_id, RecoveryType::FullRecovery, &event)
+                .await?;
         }
 
         // Notify callbacks
@@ -499,9 +513,16 @@ impl FailoverManager {
     }
 
     /// Handle leader failure
-    async fn handle_leader_failure(&self, failed_leader: Uuid, event: &FailoverEvent) -> ClusterResult<()> {
-        error!("Leader {} has failed, initiating leader election", failed_leader);
-        
+    async fn handle_leader_failure(
+        &self,
+        failed_leader: Uuid,
+        event: &FailoverEvent,
+    ) -> ClusterResult<()> {
+        error!(
+            "Leader {} has failed, initiating leader election",
+            failed_leader
+        );
+
         // Clear current leader
         {
             let mut leader = self.current_leader.write().await;
@@ -519,7 +540,7 @@ impl FailoverManager {
     /// Initiate leader election
     async fn initiate_leader_election(&self, _failure_event: &FailoverEvent) -> ClusterResult<()> {
         info!("Initiating leader election");
-        
+
         let election_event = FailoverEvent {
             event_id: Uuid::new_v4(),
             event_type: FailoverEventType::LeaderElectionInitiated,
@@ -557,9 +578,14 @@ impl FailoverManager {
     }
 
     /// Initiate recovery for a failed node
-    async fn initiate_recovery(&self, node_id: Uuid, recovery_type: RecoveryType, _failure_event: &FailoverEvent) -> ClusterResult<()> {
+    async fn initiate_recovery(
+        &self,
+        node_id: Uuid,
+        recovery_type: RecoveryType,
+        _failure_event: &FailoverEvent,
+    ) -> ClusterResult<()> {
         info!("Initiating recovery for node {}", node_id);
-        
+
         let recovery_event = FailoverEvent {
             event_id: Uuid::new_v4(),
             event_type: FailoverEventType::RecoveryInitiated,
@@ -584,12 +610,16 @@ impl FailoverManager {
 
         // Start recovery process
         let recovery_manager = self.recovery_manager.lock().await;
-        recovery_manager.initiate_recovery(node_id, recovery_type).await?;
+        recovery_manager
+            .initiate_recovery(node_id, recovery_type)
+            .await?;
 
         // Notify callbacks
         let callbacks = self.callbacks.lock().await;
         for callback in callbacks.iter() {
-            callback.on_recovery_initiated(node_id, &recovery_event).await;
+            callback
+                .on_recovery_initiated(node_id, &recovery_event)
+                .await;
         }
 
         Ok(())
@@ -629,29 +659,41 @@ impl FailoverManager {
     async fn check_cluster_health(&self) -> ClusterResult<()> {
         let health = self.node_health.read().await;
         let cluster_nodes = self.cluster_nodes.read().await;
-        
-        let healthy_nodes = health.values()
+
+        let healthy_nodes = health
+            .values()
             .filter(|&status| *status == NodeHealthStatus::Healthy)
             .count();
-        
+
         let total_nodes = cluster_nodes.len();
         drop(health);
         drop(cluster_nodes);
 
         if healthy_nodes < total_nodes - self.config.max_failed_nodes {
-            error!("Cluster health critical: {}/{} nodes healthy", healthy_nodes, total_nodes);
-            
+            error!(
+                "Cluster health critical: {}/{} nodes healthy",
+                healthy_nodes, total_nodes
+            );
+
             // Trigger emergency measures
-            self.trigger_emergency_measures(healthy_nodes, total_nodes).await?;
+            self.trigger_emergency_measures(healthy_nodes, total_nodes)
+                .await?;
         }
 
         Ok(())
     }
 
     /// Trigger emergency measures
-    async fn trigger_emergency_measures(&self, healthy_nodes: usize, total_nodes: usize) -> ClusterResult<()> {
-        warn!("Triggering emergency measures: {}/{} nodes healthy", healthy_nodes, total_nodes);
-        
+    async fn trigger_emergency_measures(
+        &self,
+        healthy_nodes: usize,
+        total_nodes: usize,
+    ) -> ClusterResult<()> {
+        warn!(
+            "Triggering emergency measures: {}/{} nodes healthy",
+            healthy_nodes, total_nodes
+        );
+
         // Enable backup promotion if not already enabled
         if self.config.enable_backup_promotion {
             self.promote_backup_nodes().await?;
@@ -663,7 +705,10 @@ impl FailoverManager {
             event_type: FailoverEventType::NetworkPartition,
             node_id: self.node_id,
             timestamp: chrono::Utc::now(),
-            description: format!("Emergency measures triggered: {}/{} nodes healthy", healthy_nodes, total_nodes),
+            description: format!(
+                "Emergency measures triggered: {}/{} nodes healthy",
+                healthy_nodes, total_nodes
+            ),
             severity: FailoverSeverity::Critical,
             metadata: HashMap::new(),
         };
@@ -679,13 +724,13 @@ impl FailoverManager {
     /// Promote backup nodes
     async fn promote_backup_nodes(&self) -> ClusterResult<()> {
         info!("Promoting backup nodes");
-        
+
         // In a real implementation, this would identify backup nodes
         // and promote them to active status
-        
+
         let health = self.node_health.read().await;
         let cluster_nodes = self.cluster_nodes.read().await;
-        
+
         for node_id in cluster_nodes.iter() {
             if let Some(status) = health.get(node_id) {
                 if *status == NodeHealthStatus::Healthy {
@@ -709,7 +754,9 @@ impl FailoverManager {
                     // Notify callbacks
                     let callbacks = self.callbacks.lock().await;
                     for callback in callbacks.iter() {
-                        callback.on_backup_promotion(*node_id, &promotion_event).await;
+                        callback
+                            .on_backup_promotion(*node_id, &promotion_event)
+                            .await;
                     }
                 }
             }
@@ -721,7 +768,7 @@ impl FailoverManager {
     /// Monitor recovery progress
     async fn monitor_recovery_progress(&self, node_id: Uuid) -> ClusterResult<()> {
         let recovery_manager = self.recovery_manager.lock().await;
-        
+
         match recovery_manager.check_recovery_status(node_id).await {
             Ok(Some(status)) => {
                 if status.status == NodeHealthStatus::Healthy {
@@ -751,7 +798,9 @@ impl FailoverManager {
                     // Notify callbacks
                     let callbacks = self.callbacks.lock().await;
                     for callback in callbacks.iter() {
-                        callback.on_recovery_completed(node_id, &completion_event).await;
+                        callback
+                            .on_recovery_completed(node_id, &completion_event)
+                            .await;
                     }
                 }
             }
@@ -759,7 +808,10 @@ impl FailoverManager {
                 // Recovery still in progress
             }
             Err(e) => {
-                error!("Failed to check recovery status for node {}: {}", node_id, e);
+                error!(
+                    "Failed to check recovery status for node {}: {}",
+                    node_id, e
+                );
             }
         }
 
@@ -767,38 +819,85 @@ impl FailoverManager {
     }
 
     /// Handle incoming failover message
-    pub async fn handle_message(&self, _source: Uuid, message: FailoverMessage) -> ClusterResult<Option<FailoverMessage>> {
+    pub async fn handle_message(
+        &self,
+        _source: Uuid,
+        message: FailoverMessage,
+    ) -> ClusterResult<Option<FailoverMessage>> {
         match message {
-            FailoverMessage::HealthCheckRequest { requester_id, timestamp } => {
-                self.handle_health_check_request(requester_id, timestamp).await
+            FailoverMessage::HealthCheckRequest {
+                requester_id,
+                timestamp,
+            } => {
+                self.handle_health_check_request(requester_id, timestamp)
+                    .await
             }
-            FailoverMessage::HealthCheckResponse { responder_id, status, timestamp, metrics } => {
-                self.handle_health_check_response(responder_id, status, timestamp, metrics).await?;
+            FailoverMessage::HealthCheckResponse {
+                responder_id,
+                status,
+                timestamp,
+                metrics,
+            } => {
+                self.handle_health_check_response(responder_id, status, timestamp, metrics)
+                    .await?;
                 Ok(None)
             }
             FailoverMessage::FailoverNotification { event } => {
                 self.handle_failover_notification(event).await?;
                 Ok(None)
             }
-            FailoverMessage::LeaderElectionRequest { candidate_id, term, timestamp } => {
-                self.handle_leader_election_request(candidate_id, term, timestamp).await
+            FailoverMessage::LeaderElectionRequest {
+                candidate_id,
+                term,
+                timestamp,
+            } => {
+                self.handle_leader_election_request(candidate_id, term, timestamp)
+                    .await
             }
-            FailoverMessage::LeaderElectionResponse { voter_id, candidate_id, vote_granted, term, timestamp } => {
-                self.handle_leader_election_response(voter_id, candidate_id, vote_granted, term, timestamp).await?;
+            FailoverMessage::LeaderElectionResponse {
+                voter_id,
+                candidate_id,
+                vote_granted,
+                term,
+                timestamp,
+            } => {
+                self.handle_leader_election_response(
+                    voter_id,
+                    candidate_id,
+                    vote_granted,
+                    term,
+                    timestamp,
+                )
+                .await?;
                 Ok(None)
             }
-            FailoverMessage::RecoveryRequest { failed_node_id, recovery_type, timestamp } => {
-                self.handle_recovery_request(failed_node_id, recovery_type, timestamp).await
+            FailoverMessage::RecoveryRequest {
+                failed_node_id,
+                recovery_type,
+                timestamp,
+            } => {
+                self.handle_recovery_request(failed_node_id, recovery_type, timestamp)
+                    .await
             }
-            FailoverMessage::RecoveryResponse { request_id, success, message, timestamp } => {
-                self.handle_recovery_response(request_id, success, message, timestamp).await?;
+            FailoverMessage::RecoveryResponse {
+                request_id,
+                success,
+                message,
+                timestamp,
+            } => {
+                self.handle_recovery_response(request_id, success, message, timestamp)
+                    .await?;
                 Ok(None)
             }
         }
     }
 
     /// Handle health check request
-    async fn handle_health_check_request(&self, _requester_id: Uuid, _timestamp: chrono::DateTime<chrono::Utc>) -> ClusterResult<Option<FailoverMessage>> {
+    async fn handle_health_check_request(
+        &self,
+        _requester_id: Uuid,
+        _timestamp: chrono::DateTime<chrono::Utc>,
+    ) -> ClusterResult<Option<FailoverMessage>> {
         let response = FailoverMessage::HealthCheckResponse {
             responder_id: self.node_id,
             status: NodeHealthStatus::Healthy,
@@ -810,11 +909,17 @@ impl FailoverManager {
     }
 
     /// Handle health check response
-    async fn handle_health_check_response(&self, responder_id: Uuid, status: NodeHealthStatus, _timestamp: chrono::DateTime<chrono::Utc>, _metrics: HashMap<String, String>) -> ClusterResult<()> {
+    async fn handle_health_check_response(
+        &self,
+        responder_id: Uuid,
+        status: NodeHealthStatus,
+        _timestamp: chrono::DateTime<chrono::Utc>,
+        _metrics: HashMap<String, String>,
+    ) -> ClusterResult<()> {
         // Update node health status
         let mut health = self.node_health.write().await;
         health.insert(responder_id, status);
-        
+
         Ok(())
     }
 
@@ -833,7 +938,7 @@ impl FailoverManager {
                     if let Ok(uuid) = Uuid::parse_str(leader_id) {
                         let mut leader = self.current_leader.write().await;
                         *leader = Some(uuid);
-                        
+
                         // Notify callbacks
                         let callbacks = self.callbacks.lock().await;
                         for callback in callbacks.iter() {
@@ -851,10 +956,15 @@ impl FailoverManager {
     }
 
     /// Handle leader election request
-    async fn handle_leader_election_request(&self, candidate_id: Uuid, term: u64, _timestamp: chrono::DateTime<chrono::Utc>) -> ClusterResult<Option<FailoverMessage>> {
+    async fn handle_leader_election_request(
+        &self,
+        candidate_id: Uuid,
+        term: u64,
+        _timestamp: chrono::DateTime<chrono::Utc>,
+    ) -> ClusterResult<Option<FailoverMessage>> {
         // Simple voting logic - in a real implementation, this would be more sophisticated
         let vote_granted = true; // For now, always grant vote
-        
+
         let response = FailoverMessage::LeaderElectionResponse {
             voter_id: self.node_id,
             candidate_id,
@@ -867,7 +977,14 @@ impl FailoverManager {
     }
 
     /// Handle leader election response
-    async fn handle_leader_election_response(&self, voter_id: Uuid, candidate_id: Uuid, vote_granted: bool, term: u64, _timestamp: chrono::DateTime<chrono::Utc>) -> ClusterResult<()> {
+    async fn handle_leader_election_response(
+        &self,
+        voter_id: Uuid,
+        candidate_id: Uuid,
+        vote_granted: bool,
+        term: u64,
+        _timestamp: chrono::DateTime<chrono::Utc>,
+    ) -> ClusterResult<()> {
         // In a real implementation, this would count votes and determine election outcome
         if vote_granted && candidate_id == self.node_id {
             info!("Received vote from {} for term {}", voter_id, term);
@@ -877,10 +994,18 @@ impl FailoverManager {
     }
 
     /// Handle recovery request
-    async fn handle_recovery_request(&self, failed_node_id: Uuid, recovery_type: RecoveryType, _timestamp: chrono::DateTime<chrono::Utc>) -> ClusterResult<Option<FailoverMessage>> {
+    async fn handle_recovery_request(
+        &self,
+        failed_node_id: Uuid,
+        recovery_type: RecoveryType,
+        _timestamp: chrono::DateTime<chrono::Utc>,
+    ) -> ClusterResult<Option<FailoverMessage>> {
         let recovery_manager = self.recovery_manager.lock().await;
-        
-        match recovery_manager.initiate_recovery(failed_node_id, recovery_type).await {
+
+        match recovery_manager
+            .initiate_recovery(failed_node_id, recovery_type)
+            .await
+        {
             Ok(()) => {
                 let response = FailoverMessage::RecoveryResponse {
                     request_id: Uuid::new_v4(),
@@ -903,9 +1028,18 @@ impl FailoverManager {
     }
 
     /// Handle recovery response
-    async fn handle_recovery_response(&self, request_id: Uuid, success: bool, message: String, _timestamp: chrono::DateTime<chrono::Utc>) -> ClusterResult<()> {
+    async fn handle_recovery_response(
+        &self,
+        request_id: Uuid,
+        success: bool,
+        message: String,
+        _timestamp: chrono::DateTime<chrono::Utc>,
+    ) -> ClusterResult<()> {
         if success {
-            info!("Recovery successful for request {}: {}", request_id, message);
+            info!(
+                "Recovery successful for request {}: {}",
+                request_id, message
+            );
         } else {
             error!("Recovery failed for request {}: {}", request_id, message);
         }
@@ -917,7 +1051,7 @@ impl FailoverManager {
     pub async fn add_node(&self, node_id: Uuid) {
         let mut nodes = self.cluster_nodes.write().await;
         nodes.insert(node_id);
-        
+
         // Initialize health status
         let mut health = self.node_health.write().await;
         health.insert(node_id, NodeHealthStatus::Healthy);
@@ -927,7 +1061,7 @@ impl FailoverManager {
     pub async fn remove_node(&self, node_id: Uuid) {
         let mut nodes = self.cluster_nodes.write().await;
         nodes.remove(&node_id);
-        
+
         // Clean up health status
         let mut health = self.node_health.write().await;
         health.remove(&node_id);

@@ -67,7 +67,9 @@ impl Polynomial {
 
     /// Create a random polynomial of given degree with constant term as secret
     pub fn random(_: usize, _: u32) -> Result<Self> {
-        unimplemented!("Polynomial::random is based on incorrect field arithmetic and needs reimplementation.");
+        unimplemented!(
+            "Polynomial::random is based on incorrect field arithmetic and needs reimplementation."
+        );
     }
 
     /// Evaluate the polynomial at a given point
@@ -118,12 +120,8 @@ impl Share {
             ));
         }
 
-        let x = u32::from_le_bytes([
-            bytes[0], bytes[1], bytes[2], bytes[3]
-        ]);
-        let y = u32::from_le_bytes([
-            bytes[4], bytes[5], bytes[6], bytes[7]
-        ]);
+        let x = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+        let y = u32::from_le_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]);
 
         Ok(Self::new(x, y))
     }
@@ -180,7 +178,9 @@ impl ShamirSecretSharing {
         }
 
         // Check if we can reconstruct a consistent secret
-        self.reconstruct(shares).map(|_| true).or_else(|_| Ok(false))
+        self.reconstruct(shares)
+            .map(|_| true)
+            .or_else(|_| Ok(false))
     }
 
     /// Get the threshold
@@ -200,7 +200,11 @@ pub mod multi_byte {
     use crate::error::{FortressError, SealErrorCode};
 
     /// Split a multi-byte secret into shares
-    pub fn split_multi_byte(secret: &[u8], threshold: usize, num_shares: usize) -> Result<Vec<Vec<u8>>> {
+    pub fn split_multi_byte(
+        secret: &[u8],
+        threshold: usize,
+        num_shares: usize,
+    ) -> Result<Vec<Vec<u8>>> {
         if secret.is_empty() {
             return Err(FortressError::seal_with_code(
                 "Secret cannot be empty",
@@ -214,7 +218,7 @@ pub mod multi_byte {
         // Process each byte separately
         for &byte in secret {
             let byte_shares = shamir.split(&[byte])?;
-            
+
             for (i, share) in byte_shares.iter().enumerate() {
                 if i < num_shares {
                     result_shares[i].push(share.y as u8);
@@ -229,8 +233,11 @@ pub mod multi_byte {
     pub fn reconstruct_multi_byte(shares: &[Vec<u8>], threshold: usize) -> Result<Vec<u8>> {
         if shares.len() < threshold {
             return Err(FortressError::seal_with_code(
-                format!("Insufficient shares: need {}, got {}", 
-                    threshold, shares.len()),
+                format!(
+                    "Insufficient shares: need {}, got {}",
+                    threshold,
+                    shares.len()
+                ),
                 SealErrorCode::InsufficientShares,
             ));
         }
@@ -240,11 +247,11 @@ pub mod multi_byte {
 
         // Determine the length of shares (they should all be the same)
         let share_length = shares[0].len();
-        
+
         // Reconstruct each byte
         for byte_index in 0..share_length {
             let mut byte_shares = Vec::new();
-            
+
             for (share_id, share_data) in shares.iter().enumerate() {
                 if byte_index < share_data.len() {
                     let share = Share::new((share_id + 1) as u32, share_data[byte_index] as u32);
@@ -271,14 +278,14 @@ pub mod multi_byte {
 //         // Test addition
 //         assert_eq!(field::add(10, 15), 25);
 //         assert_eq!(field::add(field::PRIME - 1, 1), 0);
-        
+
 //         // Test subtraction
 //         assert_eq!(field::sub(20, 5), 15);
 //         assert_eq!(field::sub(5, 20), field::PRIME - 15);
-        
+
 //         // Test multiplication
 //         assert_eq!(field::mul(6, 7), 42);
-        
+
 //         // Test exponentiation
 //         assert_eq!(field::pow(2, 3), 8);
 //         assert_eq!(field::pow(5, 0), 1);
@@ -287,13 +294,13 @@ pub mod multi_byte {
 //     #[test]
 //     fn test_polynomial() {
 //         let poly = Polynomial::new(vec![5, 3, 2]); // 2x^2 + 3x + 5
-        
+
 //         assert_eq!(poly.degree(), 2);
 //         assert_eq!(poly.constant_term(), 5);
-        
+
 //         // P(1) = 2*1^2 + 3*1 + 5 = 10
 //         assert_eq!(poly.evaluate(1), 10);
-        
+
 //         // P(2) = 2*4 + 3*2 + 5 = 19
 //         assert_eq!(poly.evaluate(2), 19);
 //     }
@@ -303,7 +310,7 @@ pub mod multi_byte {
 //         let share = Share::new(42, 12345);
 //         let bytes = share.to_bytes();
 //         let deserialized = Share::from_bytes(&bytes).unwrap();
-        
+
 //         assert_eq!(share.x, deserialized.x);
 //         assert_eq!(share.y, deserialized.y);
 //     }
@@ -312,18 +319,18 @@ pub mod multi_byte {
 //     fn test_shamir_split_reconstruct() {
 //         let shamir = ShamirSecretSharing::new(3, 5).unwrap();
 //         let secret = vec![42];
-        
+
 //         let shares = shamir.split(&secret).unwrap();
 //         assert_eq!(shares.len(), 5);
-        
+
 //         // Reconstruct with exactly threshold shares
 //         let reconstructed = shamir.reconstruct(&shares[..3]).unwrap();
 //         assert_eq!(reconstructed, secret);
-        
+
 //         // Reconstruct with more than threshold shares
 //         let reconstructed = shamir.reconstruct(&shares).unwrap();
 //         assert_eq!(reconstructed, secret);
-        
+
 //         // Should fail with insufficient shares
 //         assert!(shamir.reconstruct(&shares[..2]).is_err());
 //     }
@@ -333,15 +340,15 @@ pub mod multi_byte {
 //         let secret = b"Hello, World!";
 //         let threshold = 3;
 //         let num_shares = 5;
-        
+
 //         let shares = multi_byte::split_multi_byte(secret, threshold, num_shares).unwrap();
 //         assert_eq!(shares.len(), num_shares);
 //         assert_eq!(shares[0].len(), secret.len());
-        
+
 //         // Reconstruct with threshold shares
 //         let reconstructed = multi_byte::reconstruct_multi_byte(&shares[..threshold], threshold).unwrap();
 //         assert_eq!(reconstructed, secret);
-        
+
 //         // Reconstruct with all shares
 //         let reconstructed = multi_byte::reconstruct_multi_byte(&shares, threshold).unwrap();
 //         assert_eq!(reconstructed, secret);
@@ -350,13 +357,13 @@ pub mod multi_byte {
 //     #[test]
 //     fn test_different_thresholds() {
 //         let secret = vec![123];
-        
+
 //         // Test with threshold 2, shares 3
 //         let shamir = ShamirSecretSharing::new(2, 3).unwrap();
 //         let shares = shamir.split(&secret).unwrap();
 //         let reconstructed = shamir.reconstruct(&shares[..2]).unwrap();
 //         assert_eq!(reconstructed, secret);
-        
+
 //         // Test with threshold 5, shares 7
 //         let shamir = ShamirSecretSharing::new(5, 7).unwrap();
 //         let shares = shamir.split(&secret).unwrap();
@@ -370,7 +377,7 @@ pub mod multi_byte {
 //         assert!(ShamirSecretSharing::new(5, 3).is_err());
 //         assert!(ShamirSecretSharing::new(0, 3).is_err());
 //         assert!(ShamirSecretSharing::new(3, 0).is_err());
-        
+
 //         // Empty secret
 //         let shamir = ShamirSecretSharing::new(3, 5).unwrap();
 //         assert!(shamir.split(&[]).is_err());
@@ -380,13 +387,13 @@ pub mod multi_byte {
 //     fn test_share_verification() {
 //         let shamir = ShamirSecretSharing::new(3, 5).unwrap();
 //         let secret = vec![99];
-        
+
 //         let shares = shamir.split(&secret).unwrap();
-        
+
 //         // Valid shares should verify
 //         assert!(shamir.verify_shares(&shares[..3]).unwrap());
 //         assert!(shamir.verify_shares(&shares).unwrap());
-        
+
 //         // Invalid shares (wrong number)
 //         assert!(!shamir.verify_shares(&shares[..2]).unwrap());
 //     }

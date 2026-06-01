@@ -248,11 +248,13 @@ impl AdvancedConnectionPool {
 
             let handle = tokio::spawn(async move {
                 let mut interval_timer = tokio::time::interval(interval);
-                
+
                 loop {
                     interval_timer.tick().await;
-                    
-                    if let Err(e) = Self::perform_health_checks(&endpoints, &connections, &stats).await {
+
+                    if let Err(e) =
+                        Self::perform_health_checks(&endpoints, &connections, &stats).await
+                    {
                         eprintln!("Health check failed: {}", e);
                     }
                 }
@@ -291,7 +293,7 @@ impl AdvancedConnectionPool {
 
                 // Update connection list
                 *conn_list = healthy_connections;
-                
+
                 // Update statistics
                 stats_guard.health_check_failures += failed_connections.len() as u64;
 
@@ -316,7 +318,7 @@ impl AdvancedConnectionPool {
         // 1. Too old (exceeded max lifetime)
         // 2. Idle for too long
         // 3. Marked as failed
-        
+
         if age.as_secs() > 3600 || idle_time.as_secs() > 300 || !connection.healthy {
             return Ok(false);
         }
@@ -327,10 +329,8 @@ impl AdvancedConnectionPool {
     /// Select the best endpoint based on load balancing algorithm
     async fn select_endpoint(&self) -> Result<ServerEndpoint> {
         let endpoints = self.endpoints.read().await;
-        let available_endpoints: Vec<&ServerEndpoint> = endpoints
-            .iter()
-            .filter(|e| e.available)
-            .collect();
+        let available_endpoints: Vec<&ServerEndpoint> =
+            endpoints.iter().filter(|e| e.available).collect();
 
         if available_endpoints.is_empty() {
             return Err(FortressError::storage(
@@ -352,14 +352,8 @@ impl AdvancedConnectionPool {
                 let best_endpoint = available_endpoints
                     .iter()
                     .min_by(|a, b| {
-                        let conn_a = connections
-                            .get(&a.id)
-                            .map(|conns| conns.len())
-                            .unwrap_or(0);
-                        let conn_b = connections
-                            .get(&b.id)
-                            .map(|conns| conns.len())
-                            .unwrap_or(0);
+                        let conn_a = connections.get(&a.id).map(|conns| conns.len()).unwrap_or(0);
+                        let conn_b = connections.get(&b.id).map(|conns| conns.len()).unwrap_or(0);
                         conn_a.cmp(&conn_b)
                     })
                     .unwrap_or(&available_endpoints[0]);
@@ -373,14 +367,14 @@ impl AdvancedConnectionPool {
                 // Simplified weighted selection
                 let total_weight: u32 = available_endpoints.iter().map(|e| e.weight).sum();
                 let mut random_weight = rand::random::<u32>() % total_weight;
-                
+
                 for endpoint in available_endpoints.iter() {
                     if random_weight < endpoint.weight {
                         return Ok((*endpoint).clone());
                     }
                     random_weight -= endpoint.weight;
                 }
-                
+
                 available_endpoints[0].clone()
             }
             LoadBalanceAlgorithm::WeightedLeastConnections => {
@@ -388,14 +382,10 @@ impl AdvancedConnectionPool {
                 let best_endpoint = available_endpoints
                     .iter()
                     .min_by(|a, b| {
-                        let conn_count_a = connections
-                            .get(&a.id)
-                            .map(|conns| conns.len())
-                            .unwrap_or(0);
-                        let conn_count_b = connections
-                            .get(&b.id)
-                            .map(|conns| conns.len())
-                            .unwrap_or(0);
+                        let conn_count_a =
+                            connections.get(&a.id).map(|conns| conns.len()).unwrap_or(0);
+                        let conn_count_b =
+                            connections.get(&b.id).map(|conns| conns.len()).unwrap_or(0);
                         let ratio_a = (conn_count_a as f64) / (a.weight as f64);
                         let ratio_b = (conn_count_b as f64) / (b.weight as f64);
                         ratio_a.total_cmp(&ratio_b)
@@ -444,28 +434,30 @@ impl AdvancedConnectionPool {
     /// Get an existing idle connection for an endpoint
     async fn get_idle_connection(&self, endpoint_id: &str) -> Option<Arc<PooledConnection>> {
         let mut connections = self.connections.write().await;
-        
+
         if let Some(conn_list) = connections.get_mut(endpoint_id) {
             // Find an idle connection
-            if let Some(pos) = conn_list.iter().position(|conn| conn.state == ConnectionState::Idle) {
+            if let Some(pos) = conn_list
+                .iter()
+                .position(|conn| conn.state == ConnectionState::Idle)
+            {
                 let connection = conn_list.swap_remove(pos);
-                
+
                 // Update connection state
-                let mut conn_mut = Arc::try_unwrap(connection)
-                    .unwrap_or_else(|arc| (*arc).clone());
+                let mut conn_mut = Arc::try_unwrap(connection).unwrap_or_else(|arc| (*arc).clone());
                 conn_mut.state = ConnectionState::Active;
                 conn_mut.last_used = Instant::now();
                 conn_mut.use_count += 1;
                 let connection = Arc::new(conn_mut);
-                
+
                 // Add back to list
                 conn_list.push(connection.clone());
-                
+
                 // Update statistics
                 let mut stats = self.stats.write().await;
                 stats.active_connections += 1;
                 stats.idle_connections = stats.idle_connections.saturating_sub(1);
-                
+
                 return Some(connection);
             }
         }
@@ -478,12 +470,13 @@ impl AdvancedConnectionPool {
 impl ConnectionManager for AdvancedConnectionPool {
     async fn get_connection(&self) -> Result<Arc<PooledConnection>> {
         // Acquire semaphore to limit total connections
-        let _permit = self.connection_semaphore.acquire().await
-            .map_err(|_| FortressError::storage(
+        let _permit = self.connection_semaphore.acquire().await.map_err(|_| {
+            FortressError::storage(
                 "Connection pool exhausted".to_string(),
                 "connection_pool".to_string(),
                 crate::error::StorageErrorCode::ConnectionFailed,
-            ))?;
+            )
+        })?;
 
         // Select best endpoint
         let endpoint = self.select_endpoint().await?;
@@ -510,8 +503,7 @@ impl ConnectionManager for AdvancedConnectionPool {
 
     async fn return_connection(&self, connection: Arc<PooledConnection>) -> Result<()> {
         // Update connection state
-        let mut conn_mut = Arc::try_unwrap(connection)
-            .unwrap_or_else(|arc| (*arc).clone());
+        let mut conn_mut = Arc::try_unwrap(connection).unwrap_or_else(|arc| (*arc).clone());
         conn_mut.state = ConnectionState::Idle;
         conn_mut.last_used = Instant::now();
         let _connection = Arc::new(conn_mut);
@@ -557,11 +549,7 @@ impl ConnectionManager for AdvancedConnectionPool {
     }
 
     async fn health_check(&self) -> Result<bool> {
-        Self::perform_health_checks(
-            &self.endpoints,
-            &self.connections,
-            &self.stats,
-        ).await?;
+        Self::perform_health_checks(&self.endpoints, &self.connections, &self.stats).await?;
         Ok(true)
     }
 
@@ -587,7 +575,7 @@ impl ConnectionManager for AdvancedConnectionPool {
         let mut endpoints = self.endpoints.write().await;
         let initial_len = endpoints.len();
         endpoints.retain(|e| e.id != endpoint_id);
-        
+
         // Also remove connections for this endpoint
         let mut connections = self.connections.write().await;
         connections.remove(endpoint_id);
@@ -616,17 +604,15 @@ mod tests {
     #[tokio::test]
     async fn test_connection_pool_basic_operations() {
         let config = ConnectionPoolConfig::default();
-        let endpoints = vec![
-            ServerEndpoint {
-                id: "server1".to_string(),
-                address: "localhost:5432".to_string(),
-                weight: 1,
-                max_connections: 10,
-                available: true,
-                region: None,
-                tags: vec!["primary".to_string()],
-            }
-        ];
+        let endpoints = vec![ServerEndpoint {
+            id: "server1".to_string(),
+            address: "localhost:5432".to_string(),
+            weight: 1,
+            max_connections: 10,
+            available: true,
+            region: None,
+            tags: vec!["primary".to_string()],
+        }];
 
         let pool = AdvancedConnectionPool::new(config, endpoints).await;
 
@@ -716,24 +702,22 @@ mod tests {
     #[tokio::test]
     async fn test_connection_statistics() {
         let config = ConnectionPoolConfig::default();
-        let endpoints = vec![
-            ServerEndpoint {
-                id: "server1".to_string(),
-                address: "localhost:5432".to_string(),
-                weight: 1,
-                max_connections: 10,
-                available: true,
-                region: None,
-                tags: vec![],
-            }
-        ];
+        let endpoints = vec![ServerEndpoint {
+            id: "server1".to_string(),
+            address: "localhost:5432".to_string(),
+            weight: 1,
+            max_connections: 10,
+            available: true,
+            region: None,
+            tags: vec![],
+        }];
 
         let pool = AdvancedConnectionPool::new(config, endpoints).await;
 
         // Perform some operations
         let conn1 = pool.get_connection().await.unwrap();
         let conn2 = pool.get_connection().await.unwrap();
-        
+
         pool.return_connection(conn1).await.unwrap();
         pool.return_connection(conn2).await.unwrap();
 

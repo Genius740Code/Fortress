@@ -30,33 +30,19 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
+use crate::encryption::{Aegis256Wrapper as Aegis256, EncryptionAlgorithm};
 use crate::error::{FortressError, Result};
-use crate::secrets::{SecretsEngine, EngineStatus, EngineStats, EngineType, LeaseInfo, Secret, SecretMetadata};
-use crate::encryption::{EncryptionAlgorithm, Aegis256Wrapper as Aegis256};
+use crate::secrets::{
+    EngineStats, EngineStatus, EngineType, LeaseInfo, Secret, SecretMetadata, SecretsEngine,
+};
+use base64::Engine as _;
+use chrono::{DateTime, Duration, Utc};
+use rand::rngs::OsRng;
+use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use chrono::{DateTime, Utc, Duration};
-use base64::Engine as _;
-use rand::rngs::OsRng;
-use rand::RngCore;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Kubernetes-specific imports for actual API calls
 #[cfg(feature = "k8s")]
@@ -214,20 +200,21 @@ impl KubernetesAuth {
     /// Perform TokenReview with Kubernetes API
     async fn token_review(&self, token: &str) -> Result<TokenReviewResponse> {
         let config = self.config.read().await;
-        let config = config.as_ref()
+        let config = config
+            .as_ref()
             .ok_or_else(|| FortressError::secrets("Kubernetes auth not configured".to_string()))?;
 
         #[cfg(feature = "k8s")]
         {
             // Use actual Kubernetes client
-            let kube_config = Config::infer()
-                .await
-                .map_err(|e| FortressError::secrets(format!("Failed to load Kubernetes config: {}", e)))?;
-            
-            let client = Client::try_from(kube_config)
-                .await
-                .map_err(|e| FortressError::secrets(format!("Failed to create Kubernetes client: {}", e)))?;
-            
+            let kube_config = Config::infer().await.map_err(|e| {
+                FortressError::secrets(format!("Failed to load Kubernetes config: {}", e))
+            })?;
+
+            let client = Client::try_from(kube_config).await.map_err(|e| {
+                FortressError::secrets(format!("Failed to create Kubernetes client: {}", e))
+            })?;
+
             let token_review = TokenReview {
                 api_version: Some("authentication.k8s.io/v1".to_string()),
                 kind: Some("TokenReview".to_string()),
@@ -237,12 +224,13 @@ impl KubernetesAuth {
                 }),
                 status: None,
             };
-            
+
             match client.create(&token_review).await {
                 Ok(token_review_response) => {
-                    let status = token_review_response.status
-                        .ok_or_else(|| FortressError::secrets("No status in TokenReview response".to_string()))?;
-                    
+                    let status = token_review_response.status.ok_or_else(|| {
+                        FortressError::secrets("No status in TokenReview response".to_string())
+                    })?;
+
                     Ok(TokenReviewResponse {
                         api_version: "authentication.k8s.io/v1".to_string(),
                         kind: "TokenReview".to_string(),
@@ -258,19 +246,19 @@ impl KubernetesAuth {
                             audiences: status.audiences,
                         },
                     })
-                },
+                }
                 Err(e) => {
                     log::error!("Failed to perform TokenReview: {}", e);
                     Err(FortressError::secrets(format!("TokenReview failed: {}", e)))
                 }
             }
         }
-        
+
         #[cfg(not(feature = "k8s"))]
         {
             // Fallback to simulation when k8s feature is not enabled
             log::warn!("Kubernetes feature not enabled, simulating TokenReview");
-            
+
             // Simulate TokenReview for testing
             let token_review_request = TokenReviewRequest {
                 api_version: "authentication.k8s.io/v1".to_string(),
@@ -282,15 +270,27 @@ impl KubernetesAuth {
             };
 
             // Simulate API call
-            let url = format!("{}:{}/apis/authentication.k8s.io/v1/tokenreviews",
+            let url = format!(
+                "{}:{}/apis/authentication.k8s.io/v1/tokenreviews",
                 config.kubernetes_host.trim_end_matches('/'),
-                config.kubernetes_port);
+                config.kubernetes_port
+            );
 
-            let request = self.http_client
+            let request = self
+                .http_client
                 .post(&url)
                 .header("Content-Type", "application/json")
-                .header("Authorization", format!("Bearer {}", config.service_account_token.as_ref()
-                    .ok_or_else(|| FortressError::secrets("Service account token not configured".to_string()))?));
+                .header(
+                    "Authorization",
+                    format!(
+                        "Bearer {}",
+                        config.service_account_token.as_ref().ok_or_else(|| {
+                            FortressError::secrets(
+                                "Service account token not configured".to_string(),
+                            )
+                        })?
+                    ),
+                );
 
             // Add CA certificate if provided
             if let Some(_ca_cert) = &config.kubernetes_ca_cert {
@@ -301,22 +301,26 @@ impl KubernetesAuth {
                 .json(&token_review_request)
                 .send()
                 .await
-                .map_err(|e| FortressError::secrets(format!("Failed to send TokenReview request: {}", e)))?;
+                .map_err(|e| {
+                    FortressError::secrets(format!("Failed to send TokenReview request: {}", e))
+                })?;
 
             if response.status().is_success() {
-                let token_response: TokenReviewResponse = response
-                    .json()
-                    .await
-                    .map_err(|e| FortressError::secrets(format!("Failed to parse TokenReview response: {}", e)))?;
-                
+                let token_response: TokenReviewResponse = response.json().await.map_err(|e| {
+                    FortressError::secrets(format!("Failed to parse TokenReview response: {}", e))
+                })?;
+
                 Ok(token_response)
             } else {
                 let error_text = response
                     .text()
                     .await
                     .unwrap_or_else(|_| "Unknown error".to_string());
-                
-                Err(FortressError::secrets(format!("TokenReview failed: {}", error_text)))
+
+                Err(FortressError::secrets(format!(
+                    "TokenReview failed: {}",
+                    error_text
+                )))
             }
         }
     }
@@ -329,9 +333,10 @@ impl KubernetesAuth {
             if parts.len() >= 4 {
                 let namespace = parts[2].to_string();
                 let service_account = parts[3].to_string();
-                
+
                 // Extract pod name from extra information if available
-                let pod_name = user_info.extra
+                let pod_name = user_info
+                    .extra
                     .as_ref()
                     .and_then(|extra| extra.get("authentication.kubernetes.io/pod-name"))
                     .and_then(|pod_names| pod_names.first())
@@ -342,13 +347,20 @@ impl KubernetesAuth {
             }
         }
 
-        Err(FortressError::secrets("Invalid service account token format".to_string()))
+        Err(FortressError::secrets(
+            "Invalid service account token format".to_string(),
+        ))
     }
 
     /// Map Kubernetes roles to Fortress permissions
-    async fn map_permissions(&self, namespace: &str, service_account: &str, groups: &[String]) -> Vec<String> {
+    async fn map_permissions(
+        &self,
+        namespace: &str,
+        service_account: &str,
+        groups: &[String],
+    ) -> Vec<String> {
         let config = self.config.read().await;
-        
+
         if let Some(config) = config.as_ref() {
             // Check for specific role mappings
             let role_key = format!("{}:{}", namespace, service_account);
@@ -365,7 +377,9 @@ impl KubernetesAuth {
             }
 
             // Default permissions based on namespace
-            if config.allowed_namespaces.is_empty() || config.allowed_namespaces.contains(&namespace.to_string()) {
+            if config.allowed_namespaces.is_empty()
+                || config.allowed_namespaces.contains(&namespace.to_string())
+            {
                 vec!["read".to_string(), "list".to_string()]
             } else {
                 vec![]
@@ -378,16 +392,19 @@ impl KubernetesAuth {
     /// Generate session token
     fn generate_session_token(&self, namespace: &str, pod_name: &str) -> Result<String> {
         let session_data = format!("{}:{}:{}", namespace, pod_name, Utc::now().timestamp());
-        
+
         // Generate random encryption key for session using OsRng
         let mut key = vec![0u8; 32];
         OsRng.fill_bytes(&mut key);
-        
+
         // Encrypt session data
-        let encrypted_data = self.encryption
+        let encrypted_data = self
+            .encryption
             .encrypt(session_data.as_bytes(), &key)
-            .map_err(|e| FortressError::secrets(format!("Failed to encrypt session token: {}", e)))?;
-        
+            .map_err(|e| {
+                FortressError::secrets(format!("Failed to encrypt session token: {}", e))
+            })?;
+
         // Encode as base64
         Ok(base64::engine::general_purpose::STANDARD.encode(encrypted_data))
     }
@@ -400,7 +417,7 @@ impl KubernetesAuth {
         service_account_token: &str,
     ) -> Result<PodAuthResult> {
         log::info!("Authenticating pod {} in namespace {}", pod_name, namespace);
-        
+
         // Perform TokenReview
         let token_response = self.token_review(service_account_token).await?;
 
@@ -418,18 +435,24 @@ impl KubernetesAuth {
             });
         }
 
-        let user_info = token_response.status.user
-            .ok_or_else(|| FortressError::secrets("No user info in TokenReview response".to_string()))?;
+        let user_info = token_response.status.user.ok_or_else(|| {
+            FortressError::secrets("No user info in TokenReview response".to_string())
+        })?;
 
         // Extract pod information
-        let (token_namespace, token_pod_name, service_account) = 
+        let (token_namespace, token_pod_name, service_account) =
             self.extract_pod_info(&user_info)?;
 
         // Verify namespace and pod match
         if token_namespace != namespace || token_pod_name != pod_name {
-            log::warn!("Namespace or pod name mismatch: expected {}/{}, got {}/{}",
-                namespace, pod_name, token_namespace, token_pod_name);
-            
+            log::warn!(
+                "Namespace or pod name mismatch: expected {}/{}, got {}/{}",
+                namespace,
+                pod_name,
+                token_namespace,
+                token_pod_name
+            );
+
             return Ok(PodAuthResult {
                 authenticated: false,
                 namespace: namespace.to_string(),
@@ -446,10 +469,10 @@ impl KubernetesAuth {
         // Check namespace isolation
         let config = self.config.read().await;
         if let Some(config) = config.as_ref() {
-            if config.namespace_isolation && 
-               !config.allowed_namespaces.is_empty() && 
-               !config.allowed_namespaces.contains(&namespace.to_string()) {
-                
+            if config.namespace_isolation
+                && !config.allowed_namespaces.is_empty()
+                && !config.allowed_namespaces.contains(&namespace.to_string())
+            {
                 log::warn!("Namespace {} not allowed for pod authentication", namespace);
                 return Ok(PodAuthResult {
                     authenticated: false,
@@ -466,15 +489,14 @@ impl KubernetesAuth {
         }
 
         // Map permissions
-        let permissions = self.map_permissions(namespace, &service_account, &user_info.groups).await;
+        let permissions = self
+            .map_permissions(namespace, &service_account, &user_info.groups)
+            .await;
 
         // Generate session token
         let session_token = self.generate_session_token(namespace, pod_name)?;
-        let expires_at = Utc::now() + Duration::seconds(
-            config.as_ref()
-                .map(|c| c.default_ttl)
-                .unwrap_or(3600) as i64
-        );
+        let expires_at = Utc::now()
+            + Duration::seconds(config.as_ref().map(|c| c.default_ttl).unwrap_or(3600) as i64);
 
         let auth_result = PodAuthResult {
             authenticated: true,
@@ -499,12 +521,19 @@ impl KubernetesAuth {
             let mut stats = self.stats.write().await;
             stats.total_secrets = self.sessions.read().await.len() as u64;
             stats.active_leases = stats.total_secrets;
-            *stats.operations.entry("authenticate".to_string()).or_insert(0) += 1;
+            *stats
+                .operations
+                .entry("authenticate".to_string())
+                .or_insert(0) += 1;
             stats.last_operation = Some(Utc::now());
         }
 
-        log::info!("Successfully authenticated pod {}/{} with permissions: {:?}",
-            namespace, pod_name, permissions);
+        log::info!(
+            "Successfully authenticated pod {}/{} with permissions: {:?}",
+            namespace,
+            pod_name,
+            permissions
+        );
 
         Ok(auth_result)
     }
@@ -512,7 +541,7 @@ impl KubernetesAuth {
     /// Validate session token with enhanced checks
     pub async fn validate_session(&self, session_token: &str) -> Result<Option<PodAuthResult>> {
         let sessions = self.sessions.read().await;
-        
+
         if let Some(auth_result) = sessions.get(session_token) {
             // Check if session is expired
             if let Some(expires_at) = auth_result.expires_at {
@@ -520,12 +549,15 @@ impl KubernetesAuth {
                     log::info!("Session token {} has expired", session_token);
                     return Ok(None);
                 }
-                
+
                 // Log session validation
-                log::debug!("Session token {} is valid, expires at {}", 
-                    session_token, expires_at.to_rfc3339());
+                log::debug!(
+                    "Session token {} is valid, expires at {}",
+                    session_token,
+                    expires_at.to_rfc3339()
+                );
             }
-            
+
             Ok(Some(auth_result.clone()))
         } else {
             log::warn!("Session token {} not found", session_token);
@@ -536,12 +568,16 @@ impl KubernetesAuth {
     /// Revoke session with logging
     pub async fn revoke_session(&self, session_token: &str) -> Result<()> {
         log::info!("Revoking session token {}", session_token);
-        
+
         let mut sessions = self.sessions.write().await;
-        
+
         if let Some(auth_result) = sessions.remove(session_token) {
-            log::info!("Successfully revoked session for pod {}/{} in namespace {}",
-                auth_result.namespace, auth_result.pod_name, auth_result.namespace);
+            log::info!(
+                "Successfully revoked session for pod {}/{} in namespace {}",
+                auth_result.namespace,
+                auth_result.pod_name,
+                auth_result.namespace
+            );
         } else {
             log::warn!("Session token {} not found for revocation", session_token);
         }
@@ -608,24 +644,31 @@ impl SecretsEngine for KubernetesAuth {
 
     async fn write(&self, path: &str, data: &serde_json::Value) -> Result<Secret> {
         // Extract authentication data
-        let namespace = data.get("namespace")
+        let namespace = data
+            .get("namespace")
             .and_then(|v| v.as_str())
             .ok_or_else(|| FortressError::secrets("Missing namespace".to_string()))?;
 
-        let pod_name = data.get("pod_name")
+        let pod_name = data
+            .get("pod_name")
             .and_then(|v| v.as_str())
             .ok_or_else(|| FortressError::secrets("Missing pod_name".to_string()))?;
 
-        let service_account_token = data.get("service_account_token")
+        let service_account_token = data
+            .get("service_account_token")
             .and_then(|v| v.as_str())
             .ok_or_else(|| FortressError::secrets("Missing service_account_token".to_string()))?;
 
         // Authenticate pod
-        let auth_result = self.authenticate_pod(namespace, pod_name, service_account_token).await?;
+        let auth_result = self
+            .authenticate_pod(namespace, pod_name, service_account_token)
+            .await?;
 
         if !auth_result.authenticated {
             return Err(FortressError::secrets(
-                auth_result.error.unwrap_or_else(|| "Authentication failed".to_string())
+                auth_result
+                    .error
+                    .unwrap_or_else(|| "Authentication failed".to_string()),
             ));
         }
 
@@ -649,12 +692,17 @@ impl SecretsEngine for KubernetesAuth {
         let lease = Some(LeaseInfo {
             lease_id: format!("k8s:{}:{}", namespace, pod_name),
             ttl,
-            max_ttl: self.config.read().await
+            max_ttl: self
+                .config
+                .read()
+                .await
                 .as_ref()
                 .map(|c| Some(c.max_ttl))
                 .unwrap_or(None),
             created_at: Utc::now(),
-            expires_at: auth_result.expires_at.unwrap_or_else(|| Utc::now() + chrono::Duration::seconds(3600)),
+            expires_at: auth_result
+                .expires_at
+                .unwrap_or_else(|| Utc::now() + chrono::Duration::seconds(3600)),
             renewable: true,
             max_renewals: Some(5),
             renewal_count: 0,
@@ -677,7 +725,7 @@ impl SecretsEngine for KubernetesAuth {
 
     async fn read(&self, path: &str) -> Result<Option<Secret>> {
         let sessions = self.sessions.read().await;
-        
+
         // Find session by path (format: "namespace/pod")
         if let Some((namespace, pod_name)) = path.split_once('/') {
             for auth_result in sessions.values() {
@@ -691,12 +739,17 @@ impl SecretsEngine for KubernetesAuth {
                     let lease = Some(LeaseInfo {
                         lease_id: format!("k8s:{}:{}", namespace, pod_name),
                         ttl,
-                        max_ttl: self.config.read().await
+                        max_ttl: self
+                            .config
+                            .read()
+                            .await
                             .as_ref()
                             .map(|c| Some(c.max_ttl))
                             .unwrap_or(None),
                         created_at: Utc::now(),
-                        expires_at: auth_result.expires_at.unwrap_or_else(|| Utc::now() + chrono::Duration::seconds(3600)),
+                        expires_at: auth_result
+                            .expires_at
+                            .unwrap_or_else(|| Utc::now() + chrono::Duration::seconds(3600)),
                         renewable: true,
                         max_renewals: Some(5),
                         renewal_count: 0,
@@ -734,10 +787,11 @@ impl SecretsEngine for KubernetesAuth {
 
     async fn delete(&self, path: &str) -> Result<()> {
         let mut sessions = self.sessions.write().await;
-        
+
         // Find and remove session by path
         if let Some((namespace, pod_name)) = path.split_once('/') {
-            let to_remove: Vec<String> = sessions.iter()
+            let to_remove: Vec<String> = sessions
+                .iter()
                 .filter(|(_, auth_result)| {
                     auth_result.namespace == namespace && auth_result.pod_name == pod_name
                 })
@@ -764,7 +818,7 @@ impl SecretsEngine for KubernetesAuth {
     /// List sessions
     async fn list(&self, path: &str) -> Result<Vec<String>> {
         let sessions = self.sessions.read().await;
-        
+
         let mut paths = std::collections::HashSet::new();
         for auth_result in sessions.values() {
             let session_path = format!("{}/{}", auth_result.namespace, auth_result.pod_name);
@@ -780,16 +834,18 @@ impl SecretsEngine for KubernetesAuth {
 
     async fn renew(&self, lease_id: &str, increment: Option<u64>) -> Result<LeaseInfo> {
         let config = self.config.read().await;
-        let config = config.as_ref()
+        let config = config
+            .as_ref()
             .ok_or_else(|| FortressError::secrets("Kubernetes auth not configured".to_string()))?;
 
         let mut sessions = self.sessions.write().await;
-        
+
         // Find session by lease_id
-        let auth_result = sessions.iter_mut()
+        let auth_result = sessions
+            .iter_mut()
             .find(|(_, result)| {
-                result.namespace == lease_id.split(':').nth(1).unwrap_or("") &&
-                result.pod_name == lease_id.split(':').nth(2).unwrap_or("")
+                result.namespace == lease_id.split(':').nth(1).unwrap_or("")
+                    && result.pod_name == lease_id.split(':').nth(2).unwrap_or("")
             })
             .map(|(_, result)| result);
 
@@ -802,7 +858,9 @@ impl SecretsEngine for KubernetesAuth {
             };
 
             if new_ttl > config.max_ttl {
-                return Err(FortressError::secrets("Lease TTL exceeds maximum".to_string()));
+                return Err(FortressError::secrets(
+                    "Lease TTL exceeds maximum".to_string(),
+                ));
             }
 
             auth_result.expires_at = Some(Utc::now() + Duration::seconds(new_ttl as i64));
@@ -812,7 +870,9 @@ impl SecretsEngine for KubernetesAuth {
                 ttl: new_ttl,
                 max_ttl: Some(config.max_ttl),
                 created_at: Utc::now(),
-                expires_at: auth_result.expires_at.unwrap_or_else(|| Utc::now() + Duration::seconds(new_ttl as i64)),
+                expires_at: auth_result
+                    .expires_at
+                    .unwrap_or_else(|| Utc::now() + Duration::seconds(new_ttl as i64)),
                 renewable: true,
                 max_renewals: Some(5),
                 renewal_count: 0,
@@ -833,12 +893,13 @@ impl SecretsEngine for KubernetesAuth {
 
     async fn revoke(&self, lease_id: &str) -> Result<()> {
         let mut sessions = self.sessions.write().await;
-        
+
         // Find and remove session by lease_id
-        let to_remove: Vec<String> = sessions.iter()
+        let to_remove: Vec<String> = sessions
+            .iter()
             .filter(|(_, result)| {
-                result.namespace == lease_id.split(':').nth(1).unwrap_or("") &&
-                result.pod_name == lease_id.split(':').nth(2).unwrap_or("")
+                result.namespace == lease_id.split(':').nth(1).unwrap_or("")
+                    && result.pod_name == lease_id.split(':').nth(2).unwrap_or("")
             })
             .map(|(token, _)| token.clone())
             .collect();
@@ -860,12 +921,13 @@ impl SecretsEngine for KubernetesAuth {
     }
 
     async fn configure(&self, config: serde_json::Value) -> Result<()> {
-        let k8s_config: KubernetesAuthConfig = serde_json::from_value(config)
-            .map_err(|e| FortressError::secrets(format!("Invalid Kubernetes auth configuration: {}", e)))?;
-        
+        let k8s_config: KubernetesAuthConfig = serde_json::from_value(config).map_err(|e| {
+            FortressError::secrets(format!("Invalid Kubernetes auth configuration: {}", e))
+        })?;
+
         let mut self_config = self.config.write().await;
         *self_config = Some(k8s_config);
-        
+
         Ok(())
     }
 
@@ -873,12 +935,12 @@ impl SecretsEngine for KubernetesAuth {
         let config = self.config.read().await;
         let _sessions = self.sessions.read().await;
         let stats = self.stats.read().await;
-        
+
         let config_value = match config.as_ref() {
             Some(c) => serde_json::to_value(c).unwrap_or_default(),
             None => serde_json::Value::Null,
         };
-        
+
         Ok(EngineStatus {
             name: self.name().to_string(),
             engine_type: self.engine_type(),
@@ -912,7 +974,7 @@ mod tests {
     #[tokio::test]
     async fn test_kubernetes_configuration() {
         let mut auth = KubernetesAuth::new();
-        
+
         let config = json!({
             "kubernetes_host": "https://kubernetes.default.svc",
             "kubernetes_port": 443,
@@ -925,10 +987,10 @@ mod tests {
                 "group:system:masters": ["admin"]
             }
         });
-        
+
         let result = auth.configure(config).await;
         assert!(result.is_ok());
-        
+
         let status = auth.status().await.unwrap();
         assert!(status.initialized);
     }
@@ -936,14 +998,17 @@ mod tests {
     #[tokio::test]
     async fn test_pod_info_extraction() {
         let mut auth = KubernetesAuth::new();
-        
+
         let user_info = TokenUserInfo {
             username: "system:serviceaccount:default:my-service".to_string(),
             uid: "uid-123".to_string(),
-            groups: vec!["system:serviceaccounts".to_string(), "system:serviceaccounts:default".to_string()],
+            groups: vec![
+                "system:serviceaccounts".to_string(),
+                "system:serviceaccounts:default".to_string(),
+            ],
             extra: Some(HashMap::from([(
                 "authentication.kubernetes.io/pod-name".to_string(),
-                vec!["my-pod".to_string()]
+                vec!["my-pod".to_string()],
             )])),
         };
 
@@ -956,7 +1021,7 @@ mod tests {
     #[tokio::test]
     async fn test_permission_mapping() {
         let mut auth = KubernetesAuth::new();
-        
+
         let config = json!({
             "kubernetes_host": "https://kubernetes.default.svc",
             "role_mappings": {
@@ -964,23 +1029,35 @@ mod tests {
                 "group:system:masters": ["admin"]
             }
         });
-        
+
         auth.configure(config).await.unwrap();
-        
-        let permissions = auth.map_permissions("default", "my-service", &["system:serviceaccounts".to_string()]).await;
+
+        let permissions = auth
+            .map_permissions(
+                "default",
+                "my-service",
+                &["system:serviceaccounts".to_string()],
+            )
+            .await;
         assert_eq!(permissions, vec!["read", "write"]);
-        
-        let admin_permissions = auth.map_permissions("production", "admin-service", &["system:masters".to_string()]).await;
+
+        let admin_permissions = auth
+            .map_permissions(
+                "production",
+                "admin-service",
+                &["system:masters".to_string()],
+            )
+            .await;
         assert_eq!(admin_permissions, vec!["admin"]);
     }
 
     #[tokio::test]
     async fn test_session_token_generation() {
         let mut auth = KubernetesAuth::new();
-        
+
         let token1 = auth.generate_session_token("default", "my-pod").unwrap();
         let token2 = auth.generate_session_token("default", "my-pod").unwrap();
-        
+
         assert_ne!(token1, token2);
         assert!(!token1.is_empty());
         assert!(!token2.is_empty());
@@ -989,17 +1066,17 @@ mod tests {
     #[tokio::test]
     async fn test_session_validation() {
         let mut auth = KubernetesAuth::new();
-        
+
         // Configure auth
         let config = json!({
             "kubernetes_host": "https://kubernetes.default.svc",
             "default_ttl": 3600
         });
         auth.configure(config).await.unwrap();
-        
+
         // Create a mock session (in real scenario, this would come from authentication)
         let session_token = auth.generate_session_token("default", "my-pod").unwrap();
-        
+
         // Validate session (should fail since we don't have the session stored)
         let result = auth.validate_session(&session_token).await.unwrap();
         assert!(result.is_none());

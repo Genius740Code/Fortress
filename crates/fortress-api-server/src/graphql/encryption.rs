@@ -3,14 +3,14 @@
 //! Implements end-to-end encryption, field-level access control,
 //  secure key management, and data protection policies.
 
+use async_graphql::{Error, ErrorExtensions, Result};
+use fortress_core::encryption::EncryptionAlgorithm;
+use fortress_core::key::KeyManager;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
-use serde::{Serialize, Deserialize};
-use async_graphql::{Result, Error, ErrorExtensions};
-use fortress_core::encryption::EncryptionAlgorithm;
-use fortress_core::key::KeyManager;
 
 /// Field-level encryption configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -43,11 +43,11 @@ pub enum MaskingType {
     /// No masking applied
     None,
     /// Partial masking with specified visible characters and mask character
-    Partial { 
+    Partial {
         /// Number of characters to remain visible at the start
-        visible_chars: usize, 
+        visible_chars: usize,
         /// Character to use for masking the rest
-        mask_char: char 
+        mask_char: char,
     },
     /// Complete masking of the entire field
     Full,
@@ -58,9 +58,9 @@ pub enum MaskingType {
     /// Credit card masking (show only last 4 digits)
     CreditCard,
     /// Custom masking using a regex pattern
-    Custom { 
+    Custom {
         /// Regex pattern for custom masking
-        pattern: String 
+        pattern: String,
     },
 }
 
@@ -115,21 +115,21 @@ pub struct KeyAccessPolicy {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AccessCondition {
     /// Time-based access restrictions
-    TimeRestriction { 
+    TimeRestriction {
         /// Start hour (24-hour format)
-        start_hour: u32, 
+        start_hour: u32,
         /// End hour (24-hour format)
-        end_hour: u32 
+        end_hour: u32,
     },
     /// IP address whitelist for access
-    IpWhitelist { 
+    IpWhitelist {
         /// List of allowed IP addresses
-        ips: Vec<String> 
+        ips: Vec<String>,
     },
     /// Device whitelist for access
-    DeviceWhitelist { 
+    DeviceWhitelist {
         /// List of allowed device identifiers
-        devices: Vec<String> 
+        devices: Vec<String>,
     },
 }
 
@@ -177,7 +177,7 @@ impl Default for EncryptionConfig {
 
 impl DataEncryptionManager {
     /// Create a new data encryption manager
-    /// 
+    ///
     /// # Arguments
     /// * `key_manager` - Arc to key manager for cryptographic operations
     /// * `config` - Configuration for encryption settings
@@ -192,13 +192,19 @@ impl DataEncryptionManager {
     }
 
     /// Encrypt field data
-    pub async fn encrypt_field(&self, field_name: &str, resource_type: &str, data: &str, user_context: &UserContext) -> Result<EncryptedField> {
+    pub async fn encrypt_field(
+        &self,
+        field_name: &str,
+        resource_type: &str,
+        data: &str,
+        user_context: &UserContext,
+    ) -> Result<EncryptedField> {
         let config_key = format!("{}:{}", resource_type, field_name);
-        
+
         // Check if field encryption is enabled
         let field_configs = self.field_configs.read().await;
         let config = field_configs.get(&config_key);
-        
+
         if let Some(field_config) = config {
             if !field_config.encryption_enabled {
                 return Ok(EncryptedField {
@@ -218,32 +224,38 @@ impl DataEncryptionManager {
 
             // Get or create encryption key
             let key_id = self.get_or_create_key(field_config).await?;
-            
+
             // Encrypt the data
             let algorithm = self.get_algorithm(&field_config.encryption_algorithm)?;
-            let (key, _) = self.key_manager.retrieve_key(&key_id).await
-                .map_err(|e| {
-                    let error = Error::new(format!("Failed to get encryption key: {}", e))
-                        .extend_with(|_, ext| ext.set("code", "KEY_RETRIEVAL_FAILED"));
-                    error
-                })?;
+            let (key, _) = self.key_manager.retrieve_key(&key_id).await.map_err(|e| {
+                let error = Error::new(format!("Failed to get encryption key: {}", e))
+                    .extend_with(|_, ext| ext.set("code", "KEY_RETRIEVAL_FAILED"));
+                error
+            })?;
 
-            let encrypted_data = algorithm.encrypt(data.as_bytes(), key.as_bytes())
-                .map_err(|e| Error::new(format!("Encryption failed: {}", e))
-                    .extend_with(|_, e| e.set("code", "ENCRYPTION_FAILED")))?;
+            let encrypted_data =
+                algorithm
+                    .encrypt(data.as_bytes(), key.as_bytes())
+                    .map_err(|e| {
+                        Error::new(format!("Encryption failed: {}", e))
+                            .extend_with(|_, e| e.set("code", "ENCRYPTION_FAILED"))
+                    })?;
 
             // Cache the encrypted data
             let cache_key = format!("{}:{}:{}", resource_type, field_name, self.hash_data(data));
             let mut cache = self.encryption_cache.write().await;
-            cache.insert(cache_key, EncryptedData {
-                encrypted_data: encrypted_data.clone(),
-                key_id: key_id.clone(),
-                algorithm: field_config.encryption_algorithm.clone(),
-                created_at: SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs(),
-            });
+            cache.insert(
+                cache_key,
+                EncryptedData {
+                    encrypted_data: encrypted_data.clone(),
+                    key_id: key_id.clone(),
+                    algorithm: field_config.encryption_algorithm.clone(),
+                    created_at: SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs(),
+                },
+            );
 
             Ok(EncryptedField {
                 field_name: field_name.to_string(),
@@ -267,13 +279,19 @@ impl DataEncryptionManager {
     }
 
     /// Decrypt field data
-    pub async fn decrypt_field(&self, field_name: &str, resource_type: &str, encrypted_data: &str, user_context: &UserContext) -> Result<DecryptedField> {
+    pub async fn decrypt_field(
+        &self,
+        field_name: &str,
+        resource_type: &str,
+        encrypted_data: &str,
+        user_context: &UserContext,
+    ) -> Result<DecryptedField> {
         let config_key = format!("{}:{}", resource_type, field_name);
-        
+
         // Check field configuration
         let field_configs = self.field_configs.read().await;
         let config = field_configs.get(&config_key);
-        
+
         if let Some(field_config) = config {
             if !field_config.encryption_enabled {
                 return Ok(DecryptedField {
@@ -290,27 +308,34 @@ impl DataEncryptionManager {
             }
 
             // Decode encrypted data
-            let encrypted_bytes = hex::decode(encrypted_data)
-                .map_err(|e| Error::new(format!("Invalid encrypted data format: {}", e))
-                    .extend_with(|_, e| e.set("code", "INVALID_ENCRYPTED_DATA")))?;
+            let encrypted_bytes = hex::decode(encrypted_data).map_err(|e| {
+                Error::new(format!("Invalid encrypted data format: {}", e))
+                    .extend_with(|_, e| e.set("code", "INVALID_ENCRYPTED_DATA"))
+            })?;
 
             // Get encryption key
-            let key_id = self.get_active_key(field_config).await
-                .ok_or_else(|| Error::new("No active key available")
-                    .extend_with(|_, e| e.set("code", "NO_ACTIVE_KEY")))?;
-            let (key, _) = self.key_manager.retrieve_key(&key_id).await
-                .map_err(|e| Error::new(format!("Failed to get decryption key: {}", e))
-                    .extend_with(|_, e| e.set("code", "KEY_RETRIEVAL_FAILED")))?;
+            let key_id = self.get_active_key(field_config).await.ok_or_else(|| {
+                Error::new("No active key available")
+                    .extend_with(|_, e| e.set("code", "NO_ACTIVE_KEY"))
+            })?;
+            let (key, _) = self.key_manager.retrieve_key(&key_id).await.map_err(|e| {
+                Error::new(format!("Failed to get decryption key: {}", e))
+                    .extend_with(|_, e| e.set("code", "KEY_RETRIEVAL_FAILED"))
+            })?;
 
             // Decrypt the data
             let algorithm = self.get_algorithm(&field_config.encryption_algorithm)?;
-            let decrypted_data = algorithm.decrypt(&encrypted_bytes, key.as_bytes())
-                .map_err(|e| Error::new(format!("Decryption failed: {}", e))
-                    .extend_with(|_, e| e.set("code", "DECRYPTION_FAILED")))?;
+            let decrypted_data = algorithm
+                .decrypt(&encrypted_bytes, key.as_bytes())
+                .map_err(|e| {
+                    Error::new(format!("Decryption failed: {}", e))
+                        .extend_with(|_, e| e.set("code", "DECRYPTION_FAILED"))
+                })?;
 
-            let decrypted_string = String::from_utf8(decrypted_data)
-                .map_err(|e| Error::new(format!("Invalid UTF-8 in decrypted data: {}", e))
-                    .extend_with(|_, e| e.set("code", "INVALID_DECRYPTED_DATA")))?;
+            let decrypted_string = String::from_utf8(decrypted_data).map_err(|e| {
+                Error::new(format!("Invalid UTF-8 in decrypted data: {}", e))
+                    .extend_with(|_, e| e.set("code", "INVALID_DECRYPTED_DATA"))
+            })?;
 
             Ok(DecryptedField {
                 field_name: field_name.to_string(),
@@ -330,16 +355,23 @@ impl DataEncryptionManager {
     }
 
     /// Encrypt entire record
-    pub async fn encrypt_record(&self, resource_type: &str, record: &serde_json::Value, user_context: &UserContext) -> Result<EncryptedRecord> {
+    pub async fn encrypt_record(
+        &self,
+        resource_type: &str,
+        record: &serde_json::Value,
+        user_context: &UserContext,
+    ) -> Result<EncryptedRecord> {
         let mut encrypted_fields = Vec::new();
         let mut field_access = Vec::new();
 
         if let Some(obj) = record.as_object() {
             for (field_name, field_value) in obj {
                 if let Some(string_value) = field_value.as_str() {
-                    let encrypted_field = self.encrypt_field(field_name, resource_type, string_value, user_context).await?;
+                    let encrypted_field = self
+                        .encrypt_field(field_name, resource_type, string_value, user_context)
+                        .await?;
                     encrypted_fields.push(encrypted_field.clone());
-                    
+
                     // Track access level
                     field_access.push(FieldAccess {
                         field_name: field_name.to_string(),
@@ -361,7 +393,7 @@ impl DataEncryptionManager {
                         key_id: None,
                         algorithm: None,
                     });
-                    
+
                     field_access.push(FieldAccess {
                         field_name: field_name.to_string(),
                         access_level: AccessLevel::Plain,
@@ -379,15 +411,28 @@ impl DataEncryptionManager {
     }
 
     /// Decrypt entire record
-    pub async fn decrypt_record(&self, resource_type: &str, encrypted_record: &EncryptedRecord, user_context: &UserContext) -> Result<serde_json::Value> {
+    pub async fn decrypt_record(
+        &self,
+        resource_type: &str,
+        encrypted_record: &EncryptedRecord,
+        user_context: &UserContext,
+    ) -> Result<serde_json::Value> {
         let mut decrypted_obj = serde_json::Map::new();
 
         for field in &encrypted_record.fields {
             if field.is_encrypted {
-                let decrypted = self.decrypt_field(&field.field_name, resource_type, &field.data, user_context).await?;
-                decrypted_obj.insert(field.field_name.clone(), serde_json::Value::String(decrypted.data));
+                let decrypted = self
+                    .decrypt_field(&field.field_name, resource_type, &field.data, user_context)
+                    .await?;
+                decrypted_obj.insert(
+                    field.field_name.clone(),
+                    serde_json::Value::String(decrypted.data),
+                );
             } else {
-                decrypted_obj.insert(field.field_name.clone(), serde_json::Value::String(field.data.clone()));
+                decrypted_obj.insert(
+                    field.field_name.clone(),
+                    serde_json::Value::String(field.data.clone()),
+                );
             }
         }
 
@@ -397,21 +442,22 @@ impl DataEncryptionManager {
     /// Add field encryption configuration
     pub async fn add_field_config(&self, config: FieldEncryptionConfig) -> Result<()> {
         let config_key = format!("{}:{}", config.resource_type, config.field_name);
-        
+
         let mut configs = self.field_configs.write().await;
         configs.insert(config_key, config);
-        
+
         Ok(())
     }
 
     /// Rotate encryption key
     pub async fn rotate_key(&self, field_name: &str, resource_type: &str) -> Result<String> {
         let config_key = format!("{}:{}", resource_type, field_name);
-        
+
         let field_configs = self.field_configs.read().await;
-        let config = field_configs.get(&config_key)
-            .ok_or_else(|| Error::new("Field configuration not found")
-                .extend_with(|_, e| e.set("code", "FIELD_CONFIG_NOT_FOUND")))?;
+        let config = field_configs.get(&config_key).ok_or_else(|| {
+            Error::new("Field configuration not found")
+                .extend_with(|_, e| e.set("code", "FIELD_CONFIG_NOT_FOUND"))
+        })?;
 
         if !config.key_rotation_enabled {
             return Err(Error::new("Key rotation not enabled for this field")
@@ -420,9 +466,14 @@ impl DataEncryptionManager {
 
         // Generate new key
         let algorithm = self.get_algorithm(&config.encryption_algorithm)?;
-        let new_key = self.key_manager.generate_key(algorithm.as_ref()).await
-            .map_err(|e| Error::new(format!("Failed to generate new key: {}", e))
-                .extend_with(|_, e| e.set("code", "KEY_GENERATION_FAILED")))?;
+        let new_key = self
+            .key_manager
+            .generate_key(algorithm.as_ref())
+            .await
+            .map_err(|e| {
+                Error::new(format!("Failed to generate new key: {}", e))
+                    .extend_with(|_, e| e.set("code", "KEY_GENERATION_FAILED"))
+            })?;
 
         // Update key metadata
         let key_id = hex::encode(new_key.as_bytes());
@@ -459,12 +510,14 @@ impl DataEncryptionManager {
         let cache = self.encryption_cache.read().await;
 
         let total_fields = field_configs.len();
-        let encrypted_fields = field_configs.values()
+        let encrypted_fields = field_configs
+            .values()
             .filter(|config| config.encryption_enabled)
             .count();
-        
+
         let total_keys = key_metadata.len();
-        let active_keys = key_metadata.values()
+        let active_keys = key_metadata
+            .values()
             .filter(|metadata| matches!(metadata.status, KeyStatus::Active))
             .count();
 
@@ -479,7 +532,11 @@ impl DataEncryptionManager {
     }
 
     /// Check user access to field
-    fn check_field_access(&self, config: &FieldEncryptionConfig, user_context: &UserContext) -> bool {
+    fn check_field_access(
+        &self,
+        config: &FieldEncryptionConfig,
+        user_context: &UserContext,
+    ) -> bool {
         // Check role-based access
         for role in &config.access_roles {
             if user_context.roles.contains(role) {
@@ -523,7 +580,11 @@ impl DataEncryptionManager {
     }
 
     /// Apply masking to decrypted data
-    fn apply_masking_to_decrypted(&self, config: &FieldEncryptionConfig, data: &str) -> Result<DecryptedField> {
+    fn apply_masking_to_decrypted(
+        &self,
+        config: &FieldEncryptionConfig,
+        data: &str,
+    ) -> Result<DecryptedField> {
         if !config.masking_enabled {
             return Ok(DecryptedField {
                 field_name: config.field_name.clone(),
@@ -547,7 +608,10 @@ impl DataEncryptionManager {
     fn mask_data(&self, data: &str, masking_type: &MaskingType) -> String {
         match masking_type {
             MaskingType::None => data.to_string(),
-            MaskingType::Partial { visible_chars, mask_char: _ } => {
+            MaskingType::Partial {
+                visible_chars,
+                mask_char: _,
+            } => {
                 if data.len() <= *visible_chars {
                     data.to_string()
                 } else {
@@ -573,7 +637,7 @@ impl DataEncryptionManager {
             }
             MaskingType::Phone => {
                 if data.len() >= 4 {
-                    let last_four = &data[data.len()-4..];
+                    let last_four = &data[data.len() - 4..];
                     format!("***-***-***-{}", last_four)
                 } else {
                     "***".repeat(data.len())
@@ -581,7 +645,7 @@ impl DataEncryptionManager {
             }
             MaskingType::CreditCard => {
                 if data.len() >= 4 {
-                    let last_four = &data[data.len()-4..];
+                    let last_four = &data[data.len() - 4..];
                     format!("****-****-****-{}", last_four)
                 } else {
                     "*".repeat(data.len())
@@ -603,12 +667,17 @@ impl DataEncryptionManager {
 
         // Create new key
         let algorithm = self.get_algorithm(&config.encryption_algorithm)?;
-        let key = self.key_manager.generate_key(algorithm.as_ref()).await
-            .map_err(|e| Error::new(format!("Failed to generate encryption key: {}", e))
-                .extend_with(|_, e| e.set("code", "KEY_GENERATION_FAILED")))?;
+        let key = self
+            .key_manager
+            .generate_key(algorithm.as_ref())
+            .await
+            .map_err(|e| {
+                Error::new(format!("Failed to generate encryption key: {}", e))
+                    .extend_with(|_, e| e.set("code", "KEY_GENERATION_FAILED"))
+            })?;
 
         let key_id = hex::encode(key.as_bytes());
-        
+
         // Store key metadata
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -635,9 +704,10 @@ impl DataEncryptionManager {
     /// Get active key for field
     async fn get_active_key(&self, config: &FieldEncryptionConfig) -> Option<String> {
         let key_metadata = self.key_metadata.read().await;
-        
+
         // Find the most recent active key for this algorithm
-        key_metadata.values()
+        key_metadata
+            .values()
             .filter(|metadata| {
                 metadata.algorithm == config.encryption_algorithm
                     && matches!(metadata.status, KeyStatus::Active)
@@ -652,8 +722,11 @@ impl DataEncryptionManager {
             "AEGIS256" => Ok(Box::new(fortress_core::encryption::Aegis256::new())),
             "AES256GCM" => Ok(Box::new(fortress_core::encryption::Aes256Ctr::new())),
             "CHACHA20POLY1305" => Ok(Box::new(fortress_core::encryption::ChaCha20Poly1305::new())),
-            _ => Err(Error::new(format!("Unsupported encryption algorithm: {}", algorithm_name))
-                .extend_with(|_, e| e.set("code", "UNSUPPORTED_ALGORITHM"))),
+            _ => Err(Error::new(format!(
+                "Unsupported encryption algorithm: {}",
+                algorithm_name
+            ))
+            .extend_with(|_, e| e.set("code", "UNSUPPORTED_ALGORITHM"))),
         }
     }
 
@@ -883,7 +956,7 @@ pub struct AuditRequirement {
 
 impl DataProtectionPolicyManager {
     /// Create a new data protection policy manager
-    /// 
+    ///
     /// # Arguments
     /// * `encryption_manager` - Arc to the encryption manager for policy enforcement
     pub fn new(encryption_manager: Arc<DataEncryptionManager>) -> Self {
@@ -901,12 +974,19 @@ impl DataProtectionPolicyManager {
     }
 
     /// Evaluate data protection policies
-    pub async fn evaluate_policies(&self, resource_type: &str, user_context: &UserContext) -> PolicyEvaluationResult {
+    pub async fn evaluate_policies(
+        &self,
+        resource_type: &str,
+        user_context: &UserContext,
+    ) -> PolicyEvaluationResult {
         let policies = self.policies.read().await;
-        
+
         let mut applicable_policies = Vec::new();
-        
-        for policy in policies.iter().filter(|p| p.enabled && p.resource_type == resource_type) {
+
+        for policy in policies
+            .iter()
+            .filter(|p| p.enabled && p.resource_type == resource_type)
+        {
             if self.check_policy_access(policy, user_context) {
                 applicable_policies.push(policy.clone());
             }
@@ -916,20 +996,27 @@ impl DataProtectionPolicyManager {
             applicable_policies: applicable_policies.clone(),
             encryption_required: applicable_policies.iter().any(|p| p.encryption_required),
             masking_required: applicable_policies.iter().any(|p| p.masking_required),
-            max_retention_days: applicable_policies.iter()
+            max_retention_days: applicable_policies
+                .iter()
                 .map(|p| p.retention_period_days)
                 .max()
                 .unwrap_or(0),
         }
     }
 
-    fn check_policy_access(&self, policy: &DataProtectionPolicy, user_context: &UserContext) -> bool {
+    fn check_policy_access(
+        &self,
+        policy: &DataProtectionPolicy,
+        user_context: &UserContext,
+    ) -> bool {
         for access_control in &policy.access_controls {
             if user_context.roles.contains(&access_control.role) {
                 // Check if user has required permissions
-                let has_permissions = access_control.permissions.iter()
+                let has_permissions = access_control
+                    .permissions
+                    .iter()
                     .all(|perm| user_context.permissions.contains(perm));
-                
+
                 if has_permissions {
                     // Check conditions (simplified)
                     return true;
@@ -978,7 +1065,10 @@ mod tests {
             masking_type: MaskingType::None,
         };
 
-        encryption_manager.add_field_config(field_config).await.unwrap();
+        encryption_manager
+            .add_field_config(field_config)
+            .await
+            .unwrap();
 
         let user_context = UserContext {
             user_id: "test_user".to_string(),
@@ -990,12 +1080,18 @@ mod tests {
         };
 
         // Test encryption
-        let encrypted = encryption_manager.encrypt_field("email", "user", "test@example.com", &user_context).await.unwrap();
+        let encrypted = encryption_manager
+            .encrypt_field("email", "user", "test@example.com", &user_context)
+            .await
+            .unwrap();
         assert!(encrypted.is_encrypted);
         assert!(encrypted.key_id.is_some());
 
         // Test decryption
-        let decrypted = encryption_manager.decrypt_field("email", "user", &encrypted.data, &user_context).await.unwrap();
+        let decrypted = encryption_manager
+            .decrypt_field("email", "user", &encrypted.data, &user_context)
+            .await
+            .unwrap();
         assert_eq!(decrypted.data, "test@example.com");
         assert!(decrypted.is_encrypted);
     }
@@ -1008,10 +1104,25 @@ mod tests {
 
         // Test different masking types
         let test_cases = vec![
-            ("john.doe@example.com", MaskingType::Email, "jo***@example.com"),
+            (
+                "john.doe@example.com",
+                MaskingType::Email,
+                "jo***@example.com",
+            ),
             ("1234567890", MaskingType::Phone, "***-***-***-7890"),
-            ("4111111111111111", MaskingType::CreditCard, "****-****-****-1111"),
-            ("sensitive_data", MaskingType::Partial { visible_chars: 4, mask_char: '*' }, "sens************"),
+            (
+                "4111111111111111",
+                MaskingType::CreditCard,
+                "****-****-****-1111",
+            ),
+            (
+                "sensitive_data",
+                MaskingType::Partial {
+                    visible_chars: 4,
+                    mask_char: '*',
+                },
+                "sens************",
+            ),
             ("visible", MaskingType::Full, "*******"),
         ];
 
@@ -1041,7 +1152,10 @@ mod tests {
             masking_type: MaskingType::None,
         };
 
-        encryption_manager.add_field_config(email_config).await.unwrap();
+        encryption_manager
+            .add_field_config(email_config)
+            .await
+            .unwrap();
 
         let user_context = UserContext {
             user_id: "test_user".to_string(),
@@ -1060,15 +1174,25 @@ mod tests {
         });
 
         // Test record encryption
-        let encrypted_record = encryption_manager.encrypt_record("user", &record, &user_context).await.unwrap();
+        let encrypted_record = encryption_manager
+            .encrypt_record("user", &record, &user_context)
+            .await
+            .unwrap();
         assert_eq!(encrypted_record.fields.len(), 4);
-        
+
         // Check that email field is encrypted
-        let email_field = encrypted_record.fields.iter().find(|f| f.field_name == "email").unwrap();
+        let email_field = encrypted_record
+            .fields
+            .iter()
+            .find(|f| f.field_name == "email")
+            .unwrap();
         assert!(email_field.is_encrypted);
 
         // Test record decryption
-        let decrypted_record = encryption_manager.decrypt_record("user", &encrypted_record, &user_context).await.unwrap();
+        let decrypted_record = encryption_manager
+            .decrypt_record("user", &encrypted_record, &user_context)
+            .await
+            .unwrap();
         assert_eq!(decrypted_record, record);
     }
 }

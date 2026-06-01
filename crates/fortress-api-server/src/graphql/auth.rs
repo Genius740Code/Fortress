@@ -3,18 +3,18 @@
 //! Implements JWT-based authentication, role-based access control,
 //! session management, and comprehensive security policies.
 
+use argon2::{
+    password_hash::{rand_core::OsRng, SaltString},
+    Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
+};
+use async_graphql::{Error, ErrorExtensions, Result};
+use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
-use serde::{Serialize, Deserialize};
-use async_graphql::{Result, Error, ErrorExtensions};
-use jsonwebtoken::{encode, decode, Validation, Algorithm, Header, DecodingKey, EncodingKey};
 use uuid::Uuid;
-use argon2::{
-    Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
-    password_hash::{rand_core::OsRng, SaltString}
-};
 
 /// JWT token claims structure
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -188,7 +188,11 @@ impl Default for AuthConfig {
                 require_lowercase: true,
                 require_numbers: true,
                 require_symbols: true,
-                forbidden_patterns: vec!["password".to_string(), "123456".to_string(), "qwerty".to_string()],
+                forbidden_patterns: vec![
+                    "password".to_string(),
+                    "123456".to_string(),
+                    "qwerty".to_string(),
+                ],
                 max_age_days: 90,
             },
             enable_multi_factor_auth: false,
@@ -233,7 +237,13 @@ impl AuthManager {
     }
 
     /// Authenticate user with credentials
-    pub async fn authenticate(&self, username: &str, password: &str, ip_address: &str, user_agent: &str) -> Result<AuthResult> {
+    pub async fn authenticate(
+        &self,
+        username: &str,
+        password: &str,
+        ip_address: &str,
+        user_agent: &str,
+    ) -> Result<AuthResult> {
         // Check IP whitelist if enabled
         if self.config.enable_ip_whitelist {
             let whitelist = self.ip_whitelist.read().await;
@@ -253,7 +263,7 @@ impl AuthManager {
                 // Create session
                 let session_id = Uuid::new_v4().to_string();
                 let device_fingerprint = self.generate_device_fingerprint(user_agent, ip_address);
-                
+
                 let session = Session {
                     id: session_id.clone(),
                     user_id: user.id.clone(),
@@ -264,7 +274,8 @@ impl AuthManager {
                     expires_at: SystemTime::now()
                         .duration_since(UNIX_EPOCH)
                         .unwrap_or_default()
-                        .as_secs() as usize + self.config.session_timeout.as_secs() as usize,
+                        .as_secs() as usize
+                        + self.config.session_timeout.as_secs() as usize,
                     last_activity: SystemTime::now()
                         .duration_since(UNIX_EPOCH)
                         .unwrap_or_default()
@@ -292,10 +303,12 @@ impl AuthManager {
                 // Update user last login
                 let mut users = self.users.write().await;
                 if let Some(user) = users.get_mut(username) {
-                    user.last_login = Some(SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs() as usize);
+                    user.last_login = Some(
+                        SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs() as usize,
+                    );
                 }
 
                 // Generate JWT token
@@ -316,15 +329,26 @@ impl AuthManager {
     }
 
     /// Verify JWT token and return user information
-    pub async fn verify_token(&self, token: &str, ip_address: &str, user_agent: &str) -> Result<TokenVerificationResult> {
+    pub async fn verify_token(
+        &self,
+        token: &str,
+        ip_address: &str,
+        user_agent: &str,
+    ) -> Result<TokenVerificationResult> {
         // Decode and validate JWT
         let _now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
 
-        let token_data = decode::<Claims>(token, &self.decoding_key, &Validation::new(Algorithm::HS256))
-            .map_err(|_| Error::new("Invalid token").extend_with(|_, e| e.set("code", "INVALID_TOKEN")))?;
+        let token_data = decode::<Claims>(
+            token,
+            &self.decoding_key,
+            &Validation::new(Algorithm::HS256),
+        )
+        .map_err(|_| {
+            Error::new("Invalid token").extend_with(|_, e| e.set("code", "INVALID_TOKEN"))
+        })?;
 
         // Check expiration
         let current_time = SystemTime::now()
@@ -347,9 +371,10 @@ impl AuthManager {
             if self.config.enable_device_tracking {
                 let fingerprints = self.device_fingerprints.read().await;
                 let expected_fingerprint = fingerprints.get(&token_data.claims.sub);
-                
+
                 if let Some(expected) = expected_fingerprint {
-                    let current_fingerprint = self.generate_device_fingerprint(user_agent, ip_address);
+                    let current_fingerprint =
+                        self.generate_device_fingerprint(user_agent, ip_address);
                     if current_fingerprint != *expected {
                         return Ok(TokenVerificationResult::DeviceMismatch);
                     }
@@ -373,23 +398,34 @@ impl AuthManager {
     }
 
     /// Refresh JWT token
-    pub async fn refresh_token(&self, token: &str, ip_address: &str, user_agent: &str) -> Result<TokenRefreshResult> {
+    pub async fn refresh_token(
+        &self,
+        token: &str,
+        ip_address: &str,
+        user_agent: &str,
+    ) -> Result<TokenRefreshResult> {
         let verification = self.verify_token(token, ip_address, user_agent).await?;
 
         match verification {
-            TokenVerificationResult::Valid { user, claims: _, session } => {
+            TokenVerificationResult::Valid {
+                user,
+                claims: _,
+                session,
+            } => {
                 // Check if session is still valid for refresh
                 let now = SystemTime::now()
                     .duration_since(UNIX_EPOCH)
                     .unwrap_or_default()
                     .as_secs();
 
-                if session.expires_at.saturating_sub(now as usize) < 300 { // Only allow refresh if session has more than 5 minutes left
+                if session.expires_at.saturating_sub(now as usize) < 300 {
+                    // Only allow refresh if session has more than 5 minutes left
                     return Ok(TokenRefreshResult::SessionTooOld);
                 }
 
                 // Generate new token
-                let new_token = self.generate_jwt_token(&user, &session.id, ip_address, user_agent)?;
+                let new_token =
+                    self.generate_jwt_token(&user, &session.id, ip_address, user_agent)?;
 
                 // Update session activity
                 let mut sessions = self.sessions.write().await;
@@ -410,8 +446,14 @@ impl AuthManager {
 
     /// Logout user (invalidate session)
     pub async fn logout(&self, token: &str) -> Result<()> {
-        let token_data = decode::<Claims>(token, &self.decoding_key, &Validation::new(Algorithm::HS256))
-            .map_err(|_| Error::new("Invalid token").extend_with(|_, e| e.set("code", "INVALID_TOKEN")))?;
+        let token_data = decode::<Claims>(
+            token,
+            &self.decoding_key,
+            &Validation::new(Algorithm::HS256),
+        )
+        .map_err(|_| {
+            Error::new("Invalid token").extend_with(|_, e| e.set("code", "INVALID_TOKEN"))
+        })?;
 
         let mut sessions = self.sessions.write().await;
         if let Some(session) = sessions.get_mut(&token_data.claims.session_id) {
@@ -449,7 +491,9 @@ impl AuthManager {
 
     /// Check if user has any of the required roles
     pub fn has_any_role(&self, user: &AuthenticatedUser, required_roles: &[&str]) -> bool {
-        required_roles.iter().any(|role| user.roles.contains(&role.to_string()))
+        required_roles
+            .iter()
+            .any(|role| user.roles.contains(&role.to_string()))
     }
 
     /// Check if user has required permission
@@ -458,7 +502,12 @@ impl AuthManager {
     }
 
     /// Check if user can access resource
-    pub async fn can_access_resource(&self, user: &AuthenticatedUser, resource: &str, action: &str) -> bool {
+    pub async fn can_access_resource(
+        &self,
+        user: &AuthenticatedUser,
+        resource: &str,
+        action: &str,
+    ) -> bool {
         // Check specific permission
         let permission = format!("{}:{}", resource, action);
         if self.has_permission(user, &permission) {
@@ -481,7 +530,13 @@ impl AuthManager {
     }
 
     /// Generate JWT token
-    fn generate_jwt_token(&self, user: &AuthenticatedUser, session_id: &str, ip_address: &str, user_agent: &str) -> Result<String> {
+    fn generate_jwt_token(
+        &self,
+        user: &AuthenticatedUser,
+        session_id: &str,
+        ip_address: &str,
+        user_agent: &str,
+    ) -> Result<String> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -504,19 +559,24 @@ impl AuthManager {
         };
 
         let header = Header::new(Algorithm::HS256);
-        encode(&header, &claims, &self.encoding_key)
-            .map_err(|e| Error::new(format!("Failed to generate token: {}", e))
-                .extend_with(|_, e| e.set("code", "TOKEN_GENERATION_FAILED")))
+        encode(&header, &claims, &self.encoding_key).map_err(|e| {
+            Error::new(format!("Failed to generate token: {}", e))
+                .extend_with(|_, e| e.set("code", "TOKEN_GENERATION_FAILED"))
+        })
     }
 
     /// Verify password using Argon2id
     fn verify_password(&self, password: &str, user: &AuthenticatedUser) -> Result<bool> {
         // Get stored password hash from user metadata
-        let stored_hash = user.metadata.get("password_hash")
+        let stored_hash = user
+            .metadata
+            .get("password_hash")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| Error::new("Password hash not found")
-                .extend_with(|_, e| e.set("code", "PASSWORD_HASH_MISSING")))?;
-        
+            .ok_or_else(|| {
+                Error::new("Password hash not found")
+                    .extend_with(|_, e| e.set("code", "PASSWORD_HASH_MISSING"))
+            })?;
+
         // Verify using Argon2id
         match verify_password_secure(password, stored_hash) {
             Ok(is_valid) => Ok(is_valid),
@@ -529,12 +589,19 @@ impl AuthManager {
     }
 
     /// Create a new user with secure password hashing
-    pub async fn create_user(&self, username: &str, password: &str, email: &str, roles: Vec<String>) -> Result<AuthenticatedUser> {
+    pub async fn create_user(
+        &self,
+        username: &str,
+        password: &str,
+        email: &str,
+        roles: Vec<String>,
+    ) -> Result<AuthenticatedUser> {
         let user_id = Uuid::new_v4().to_string();
-        let password_hash = hash_password_secure(password)
-            .map_err(|e| Error::new(format!("Failed to hash password: {}", e))
-                .extend_with(|_, e| e.set("code", "PASSWORD_HASHING_FAILED")))?;
-        
+        let password_hash = hash_password_secure(password).map_err(|e| {
+            Error::new(format!("Failed to hash password: {}", e))
+                .extend_with(|_, e| e.set("code", "PASSWORD_HASHING_FAILED"))
+        })?;
+
         let user = AuthenticatedUser {
             id: user_id.clone(),
             username: username.to_string(),
@@ -549,7 +616,7 @@ impl AuthManager {
                 "password_hash": password_hash
             }),
         };
-        
+
         self.upsert_user(user.clone()).await?;
         Ok(user)
     }
@@ -613,7 +680,7 @@ impl AuthManager {
 
         let mut sessions = self.sessions.write().await;
         let initial_count = sessions.len();
-        
+
         sessions.retain(|_, session| session.expires_at > now as usize && session.is_active);
 
         Ok(initial_count - sessions.len())
@@ -627,11 +694,13 @@ impl AuthManager {
             .unwrap_or_default()
             .as_secs();
 
-        let active_sessions = sessions.values()
+        let active_sessions = sessions
+            .values()
             .filter(|s| s.is_active && s.expires_at > now as usize)
             .count();
 
-        let expired_sessions = sessions.values()
+        let expired_sessions = sessions
+            .values()
             .filter(|s| !s.is_active || s.expires_at <= now as usize)
             .count();
 
@@ -725,17 +794,22 @@ pub struct SessionStats {
 fn hash_password_secure(password: &str) -> Result<String, argon2::password_hash::Error> {
     let salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();
-    
+
     let password_hash = argon2.hash_password(password.as_bytes(), &salt)?;
     Ok(password_hash.to_string())
 }
 
 /// Secure password verification using Argon2id
-fn verify_password_secure(password: &str, hash: &str) -> Result<bool, argon2::password_hash::Error> {
+fn verify_password_secure(
+    password: &str,
+    hash: &str,
+) -> Result<bool, argon2::password_hash::Error> {
     let parsed_hash = PasswordHash::new(hash)?;
     let argon2 = Argon2::default();
-    
-    Ok(argon2.verify_password(password.as_bytes(), &parsed_hash).is_ok())
+
+    Ok(argon2
+        .verify_password(password.as_bytes(), &parsed_hash)
+        .is_ok())
 }
 
 /// Security policy enforcement
@@ -854,24 +928,33 @@ impl SecurityPolicy {
     }
 
     /// Evaluate security policies for a request
-    pub async fn evaluate_request(&self, user: &AuthenticatedUser, resource: &str, action: &str, context: &SecurityContext) -> PolicyEvaluationResult {
+    pub async fn evaluate_request(
+        &self,
+        user: &AuthenticatedUser,
+        resource: &str,
+        action: &str,
+        context: &SecurityContext,
+    ) -> PolicyEvaluationResult {
         let policies = self.policies.read().await;
-        
+
         let mut results = Vec::new();
-        
+
         for policy in policies.iter().filter(|p| p.enabled) {
-            if let Some(result) = self.evaluate_policy_rule(policy, user, resource, action, context) {
+            if let Some(result) = self.evaluate_policy_rule(policy, user, resource, action, context)
+            {
                 results.push(result);
             }
         }
 
         // Sort by evaluation result type (Deny results first)
-        results.sort_by(|a, b| {
-            match (a, b) {
-                (PolicyEvaluationResult::Deny { .. }, PolicyEvaluationResult::Allow) => std::cmp::Ordering::Less,
-                (PolicyEvaluationResult::Allow, PolicyEvaluationResult::Deny { .. }) => std::cmp::Ordering::Greater,
-                _ => std::cmp::Ordering::Equal,
+        results.sort_by(|a, b| match (a, b) {
+            (PolicyEvaluationResult::Deny { .. }, PolicyEvaluationResult::Allow) => {
+                std::cmp::Ordering::Less
             }
+            (PolicyEvaluationResult::Allow, PolicyEvaluationResult::Deny { .. }) => {
+                std::cmp::Ordering::Greater
+            }
+            _ => std::cmp::Ordering::Equal,
         });
 
         // Return the highest priority non-allow result
@@ -884,7 +967,14 @@ impl SecurityPolicy {
         PolicyEvaluationResult::Allow
     }
 
-    fn evaluate_policy_rule(&self, policy: &SecurityPolicyRule, user: &AuthenticatedUser, resource: &str, _action: &str, context: &SecurityContext) -> Option<PolicyEvaluationResult> {
+    fn evaluate_policy_rule(
+        &self,
+        policy: &SecurityPolicyRule,
+        user: &AuthenticatedUser,
+        resource: &str,
+        _action: &str,
+        context: &SecurityContext,
+    ) -> Option<PolicyEvaluationResult> {
         let mut conditions_met = Vec::new();
         let mut _action = "";
 
@@ -893,20 +983,24 @@ impl SecurityPolicy {
                 PolicyCondition::UserRole { role, operator } => {
                     self.evaluate_condition(&user.roles, role, operator)
                 }
-                PolicyCondition::Resource { resource: resource_pattern, operator } => {
-                    self.evaluate_condition(&[resource.to_string()], resource_pattern, operator)
-                }
-                PolicyCondition::TimeRestriction { start_hour, end_hour, days_of_week } => {
-                    self.evaluate_time_restriction(*start_hour, *end_hour, days_of_week, context.timestamp)
-                }
-                PolicyCondition::IpWhitelist { ips } => {
-                    ips.contains(&context.ip_address)
-                }
-                PolicyCondition::IpBlacklist { ips } => {
-                    ips.contains(&context.ip_address)
-                }
+                PolicyCondition::Resource {
+                    resource: resource_pattern,
+                    operator,
+                } => self.evaluate_condition(&[resource.to_string()], resource_pattern, operator),
+                PolicyCondition::TimeRestriction {
+                    start_hour,
+                    end_hour,
+                    days_of_week,
+                } => self.evaluate_time_restriction(
+                    *start_hour,
+                    *end_hour,
+                    days_of_week,
+                    context.timestamp,
+                ),
+                PolicyCondition::IpWhitelist { ips } => ips.contains(&context.ip_address),
+                PolicyCondition::IpBlacklist { ips } => ips.contains(&context.ip_address),
             };
-            
+
             conditions_met.push(met);
         }
 
@@ -923,7 +1017,10 @@ impl SecurityPolicy {
                         policy_id: policy.id.clone(),
                     },
                     PolicyAction::RequireMFA => PolicyEvaluationResult::RequireMFA {
-                        reason: format!("Multi-factor authentication required by policy: {}", policy.name),
+                        reason: format!(
+                            "Multi-factor authentication required by policy: {}",
+                            policy.name
+                        ),
                         policy_id: policy.id.clone(),
                     },
                     PolicyAction::LogAlert => PolicyEvaluationResult::LogAlert {
@@ -942,7 +1039,12 @@ impl SecurityPolicy {
         None
     }
 
-    fn evaluate_condition(&self, values: &[String], target: &str, operator: &ComparisonOperator) -> bool {
+    fn evaluate_condition(
+        &self,
+        values: &[String],
+        target: &str,
+        operator: &ComparisonOperator,
+    ) -> bool {
         match operator {
             ComparisonOperator::Equals => values.contains(&target.to_string()),
             ComparisonOperator::NotEquals => !values.contains(&target.to_string()),
@@ -955,19 +1057,26 @@ impl SecurityPolicy {
         }
     }
 
-    fn evaluate_time_restriction(&self, start_hour: u32, end_hour: u32, days_of_week: &[u8], timestamp: u64) -> bool {
+    fn evaluate_time_restriction(
+        &self,
+        start_hour: u32,
+        end_hour: u32,
+        days_of_week: &[u8],
+        timestamp: u64,
+    ) -> bool {
         use chrono::{Datelike, Timelike};
-        
+
         let datetime = chrono::DateTime::from_timestamp(timestamp as i64, 0);
-        let weekday = datetime.map(|dt| dt.weekday().num_days_from_monday() as u8).unwrap_or(0);
+        let weekday = datetime
+            .map(|dt| dt.weekday().num_days_from_monday() as u8)
+            .unwrap_or(0);
         let hour = datetime.map(|dt| dt.hour() as u32).unwrap_or(0);
-        
+
         // Check if current day is allowed
         if !days_of_week.contains(&weekday) {
             return false;
         }
 
-        
         // Check if current hour is within allowed range
         if start_hour <= end_hour {
             hour >= start_hour && hour <= end_hour
@@ -1057,7 +1166,9 @@ mod tests {
         auth_manager.upsert_user(user).await.unwrap();
 
         // Test authentication
-        let result = auth_manager.authenticate("testuser", "password123", "127.0.0.1", "Mozilla/5.0").await;
+        let result = auth_manager
+            .authenticate("testuser", "password123", "127.0.0.1", "Mozilla/5.0")
+            .await;
         assert!(matches!(result, Ok(AuthResult::Success { .. })));
     }
 
@@ -1084,13 +1195,25 @@ mod tests {
         };
 
         auth_manager.upsert_user(user).await.unwrap();
-        
-        let auth_result = auth_manager.authenticate("testuser", "password123", "127.0.0.1", "Mozilla/5.0").await.unwrap();
-        let token = if let AuthResult::Success { token, .. } = auth_result { token } else { panic!("Authentication failed") };
+
+        let auth_result = auth_manager
+            .authenticate("testuser", "password123", "127.0.0.1", "Mozilla/5.0")
+            .await
+            .unwrap();
+        let token = if let AuthResult::Success { token, .. } = auth_result {
+            token
+        } else {
+            panic!("Authentication failed")
+        };
 
         // Test token verification
-        let verification = auth_manager.verify_token(&token, "127.0.0.1", "Mozilla/5.0").await;
-        assert!(matches!(verification, Ok(TokenVerificationResult::Valid { .. })));
+        let verification = auth_manager
+            .verify_token(&token, "127.0.0.1", "Mozilla/5.0")
+            .await;
+        assert!(matches!(
+            verification,
+            Ok(TokenVerificationResult::Valid { .. })
+        ));
     }
 
     #[tokio::test]
@@ -1147,12 +1270,10 @@ mod tests {
             id: "admin_only".to_string(),
             name: "Admin Only Operations".to_string(),
             description: "Only admins can perform sensitive operations".to_string(),
-            conditions: vec![
-                PolicyCondition::UserRole {
-                    role: "admin".to_string(),
-                    operator: ComparisonOperator::Equals,
-                },
-            ],
+            conditions: vec![PolicyCondition::UserRole {
+                role: "admin".to_string(),
+                operator: ComparisonOperator::Equals,
+            }],
             actions: vec![PolicyAction::Deny],
             priority: 100,
             enabled: true,
@@ -1198,11 +1319,15 @@ mod tests {
         };
 
         // Admin should be allowed for admin operations
-        let result = security_policy.evaluate_request(&admin_user, "/admin/users", "DELETE", &context).await;
+        let result = security_policy
+            .evaluate_request(&admin_user, "/admin/users", "DELETE", &context)
+            .await;
         assert!(matches!(result, PolicyEvaluationResult::Allow));
 
         // Regular user should be denied for admin operations
-        let result = security_policy.evaluate_request(&regular_user, "/admin/users", "DELETE", &context).await;
+        let result = security_policy
+            .evaluate_request(&regular_user, "/admin/users", "DELETE", &context)
+            .await;
         assert!(matches!(result, PolicyEvaluationResult::Deny { .. }));
     }
 }

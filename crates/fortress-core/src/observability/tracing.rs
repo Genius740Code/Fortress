@@ -316,7 +316,7 @@ impl ObservabilityTracer {
         // Initialize OpenTelemetry tracer based on configuration
         #[cfg(feature = "opentelemetry")]
         let tracer = Self::create_otel_tracer(&config)?;
-        
+
         #[cfg(not(feature = "opentelemetry"))]
         let tracer = TracerImpl::Console(ConsoleTracer::new(TracerConfig::default()));
 
@@ -352,7 +352,9 @@ impl Default for TracerConfig {
 
 /// Create OpenTelemetry tracer based on configuration
 #[cfg(feature = "opentelemetry")]
-fn create_otel_tracer(config: &TraceConfig) -> Result<Box<dyn opentelemetry::trace::Tracer + Send + Sync>> {
+fn create_otel_tracer(
+    config: &TraceConfig,
+) -> Result<Box<dyn opentelemetry::trace::Tracer + Send + Sync>> {
     match config.export.exporter_type {
         ExporterType::Console => {
             // For now, return a no-op tracer that logs to console
@@ -374,9 +376,7 @@ fn create_otel_tracer(config: &TraceConfig) -> Result<Box<dyn opentelemetry::tra
             tracing::warn!("OTLP exporter not yet implemented, using console tracer");
             Ok(Box::new(ConsoleTracer))
         }
-        ExporterType::None => {
-            Ok(Box::new(NoOpTracer))
-        }
+        ExporterType::None => Ok(Box::new(NoOpTracer)),
     }
 }
 
@@ -421,7 +421,7 @@ impl ObservabilityTracer {
         // Create OpenTelemetry span (simplified for now)
         #[cfg(feature = "opentelemetry")]
         let _span = self.tracer.start_with_context(operation_name);
-        
+
         #[cfg(not(feature = "opentelemetry"))]
         let _span = self.tracer.start_with_context(operation_name);
 
@@ -497,7 +497,10 @@ impl ObservabilityTracer {
     }
 
     /// Extract span context from headers
-    pub fn extract_context(&self, headers: &HashMap<String, String>) -> Result<Option<SpanContext>> {
+    pub fn extract_context(
+        &self,
+        headers: &HashMap<String, String>,
+    ) -> Result<Option<SpanContext>> {
         if !self.config.enabled {
             return Ok(None);
         }
@@ -508,10 +511,9 @@ impl ObservabilityTracer {
         }
 
         // Look for legacy headers
-        if let (Some(trace_id), Some(span_id)) = (
-            headers.get("x-trace-id"),
-            headers.get("x-span-id"),
-        ) {
+        if let (Some(trace_id), Some(span_id)) =
+            (headers.get("x-trace-id"), headers.get("x-span-id"))
+        {
             return Ok(Some(SpanContext {
                 trace_id: trace_id.clone(),
                 span_id: span_id.clone(),
@@ -527,18 +529,22 @@ impl ObservabilityTracer {
 
     /// Inject span context into headers
     #[cfg(feature = "tracing-opentelemetry")]
-    pub fn inject_context(&self, context: &SpanContext, headers: &mut HashMap<String, String>) -> Result<()> {
+    pub fn inject_context(
+        &self,
+        context: &SpanContext,
+        headers: &mut HashMap<String, String>,
+    ) -> Result<()> {
         if !self.config.enabled || context.is_empty() {
             return Ok(());
         }
 
         // Inject W3C traceparent header
         headers.insert("traceparent".to_string(), context.to_traceparent()?);
-        
+
         // Also inject legacy headers for compatibility
         headers.insert("x-trace-id".to_string(), context.trace_id.clone());
         headers.insert("x-span-id".to_string(), context.span_id.clone());
-        
+
         if let Some(parent_span_id) = &context.parent_span_id {
             headers.insert("x-parent-span-id".to_string(), parent_span_id.clone());
         }
@@ -549,11 +555,15 @@ impl ObservabilityTracer {
     /// Inject span context into headers (no-op when feature not enabled)
     #[cfg(not(feature = "tracing-opentelemetry"))]
     /// Inject span context into HTTP headers for distributed tracing
-    /// 
+    ///
     /// # Arguments
     /// * `context` - Span context to inject
     /// * `headers` - HTTP headers to inject into
-    pub fn inject_context(&self, context: &SpanContext, headers: &mut HashMap<String, String>) -> Result<()> {
+    pub fn inject_context(
+        &self,
+        context: &SpanContext,
+        headers: &mut HashMap<String, String>,
+    ) -> Result<()> {
         if !self.config.enabled || context.is_empty() {
             return Ok(());
         }
@@ -561,7 +571,7 @@ impl ObservabilityTracer {
         // Inject legacy headers only
         headers.insert("x-trace-id".to_string(), context.trace_id.clone());
         headers.insert("x-span-id".to_string(), context.span_id.clone());
-        
+
         if let Some(parent_span_id) = &context.parent_span_id {
             headers.insert("x-parent-span-id".to_string(), parent_span_id.clone());
         }
@@ -570,7 +580,7 @@ impl ObservabilityTracer {
     }
 
     /// Get active spans from the tracer
-    /// 
+    ///
     /// # Returns
     /// * `Vec<ActiveSpanInfo>` - List of active span information
     pub async fn get_active_spans(&self) -> Result<Vec<ActiveSpanInfo>> {
@@ -589,7 +599,7 @@ impl ObservabilityTracer {
     }
 
     /// Start the distributed tracer
-    /// 
+    ///
     /// # Returns
     /// * `Result<()>` - Success status
     pub async fn start(&self) -> Result<()> {
@@ -600,7 +610,7 @@ impl ObservabilityTracer {
     }
 
     /// Shutdown the distributed tracer
-    /// 
+    ///
     /// # Returns
     /// * `Result<()>` - Success status
     pub async fn shutdown(&self) -> Result<()> {
@@ -609,7 +619,7 @@ impl ObservabilityTracer {
             let mut active_spans = self.active_spans.write().await;
             let span_count = active_spans.len();
             active_spans.clear();
-            
+
             if span_count > 0 {
                 tracing::warn!("Shutdown with {} active spans", span_count);
             }
@@ -665,8 +675,9 @@ impl SpanContext {
 
         let trace_id = parts[1].to_string();
         let span_id = parts[2].to_string();
-        let trace_flags = u8::from_str_radix(parts[3], 16)
-            .map_err(|_| FortressError::validation("Invalid trace flags".to_string(), None, None))?;
+        let trace_flags = u8::from_str_radix(parts[3], 16).map_err(|_| {
+            FortressError::validation("Invalid trace flags".to_string(), None, None)
+        })?;
 
         Ok(Self {
             trace_id,
@@ -686,7 +697,10 @@ impl SpanContext {
 
         let version = "00";
         let flags = format!("{:02x}", self.trace_flags);
-        Ok(format!("{}-{}-{}-{}", version, self.trace_id, self.span_id, flags))
+        Ok(format!(
+            "{}-{}-{}-{}",
+            version, self.trace_id, self.span_id, flags
+        ))
     }
 }
 
@@ -851,7 +865,7 @@ mod tests {
 
         let traceparent = context.to_traceparent().unwrap();
         assert!(traceparent.starts_with("00-"));
-        
+
         let parsed = SpanContext::from_traceparent(&traceparent).unwrap();
         assert_eq!(parsed.trace_id, context.trace_id);
         assert_eq!(parsed.span_id, context.span_id);
@@ -877,6 +891,9 @@ mod tests {
 
         assert!(!context.is_empty());
 
-        tracer.finish_span(&context, Some("success"), None).await.unwrap();
+        tracer
+            .finish_span(&context, Some("success"), None)
+            .await
+            .unwrap();
     }
 }

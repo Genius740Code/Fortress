@@ -3,9 +3,9 @@
 //! This module defines the request and response models used by the REST API,
 //! including data transfer objects (DTOs) and validation structures.
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use chrono::{DateTime, Utc};
 
 /// API response wrapper
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -179,7 +179,9 @@ impl From<CoreFieldEncryptionMetadata> for FieldEncryptionMetadata {
             field: match core.field {
                 fortress_core::field_encryption::FieldIdentifier::Name(name) => name,
                 fortress_core::field_encryption::FieldIdentifier::Path(path) => path.join("."),
-                fortress_core::field_encryption::FieldIdentifier::Indexed { index, .. } => format!("[{}]", index),
+                fortress_core::field_encryption::FieldIdentifier::Indexed { index, .. } => {
+                    format!("[{}]", index)
+                }
             },
             algorithm: core.algorithm,
             key_id: core.key_id.to_string(),
@@ -806,22 +808,16 @@ impl Default for SortParams {
 
 pub struct StoreDataResponse {
     /// Unique identifier for stored data
-    
     pub id: String,
     /// Key ID used for encryption
-    
     pub key_id: String,
     /// Timestamp when data was stored
-    
     pub stored_at: DateTime<Utc>,
     /// Size of stored data in bytes
-    
     pub size_bytes: u64,
     /// Encryption algorithm used
-    
     pub algorithm: String,
     /// Field-level encryption metadata
-    
     pub field_metadata: Option<HashMap<String, serde_json::Value>>,
 }
 
@@ -830,28 +826,20 @@ pub struct StoreDataResponse {
 
 pub struct RetrieveDataResponse {
     /// Unique identifier for the data
-    
     pub id: String,
     /// Decrypted data
-    
     pub data: serde_json::Value,
     /// Metadata associated with the data
-    
     pub metadata: Option<HashMap<String, serde_json::Value>>,
     /// Timestamp when data was created
-    
     pub created_at: DateTime<Utc>,
     /// Last access timestamp
-    
     pub last_accessed: Option<DateTime<Utc>>,
     /// Encryption algorithm used
-    
     pub algorithm: String,
     /// Key ID used for encryption
-    
     pub key_id: String,
     /// Field-level encryption metadata
-    
     pub field_metadata: Option<HashMap<String, serde_json::Value>>,
 }
 
@@ -860,19 +848,14 @@ pub struct RetrieveDataResponse {
 
 pub struct ListDataResponse {
     /// List of storage records
-    
     pub records: Vec<serde_json::Value>,
     /// Total count of records
-    
     pub total_count: u64,
     /// Current page number
-    
     pub page: u32,
     /// Page size
-    
     pub page_size: u32,
     /// Total pages
-    
     pub total_pages: u32,
 }
 
@@ -881,13 +864,10 @@ pub struct ListDataResponse {
 
 pub struct ComponentStatus {
     /// Component health status
-    
     pub status: String,
     /// Response time in milliseconds
-    
     pub response_time_ms: u64,
     /// Optional error message
-    
     pub error: Option<String>,
 }
 
@@ -896,18 +876,13 @@ pub struct ComponentStatus {
 
 pub struct ErrorResponse {
     /// Error code
-    
     pub code: String,
     /// Error message
-    
     pub message: String,
     /// Error details
-    
     pub details: Option<HashMap<String, serde_json::Value>>,
     /// Timestamp
-    
     pub timestamp: DateTime<Utc>,
     /// Request ID for tracing
-    
     pub request_id: String,
 }

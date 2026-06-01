@@ -3,15 +3,15 @@
 //! This module provides a complete Raft implementation for distributed consensus
 //! in Fortress clusters, including leader election, log replication, and safety.
 
-use crate::cluster::{NodeId, ClusterCommand, LogEntry};
+use crate::cluster::{ClusterCommand, LogEntry, NodeId};
 use crate::error::{FortressError, Result};
+use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
-use tracing::{debug, info, error};
-use futures::future::join_all;
+use tracing::{debug, error, info};
 
 /// Raft node state
 #[derive(Debug, Clone, PartialEq)]
@@ -164,10 +164,10 @@ impl RaftEngine {
     pub async fn start(&self) -> Result<()> {
         // Start election timeout checker
         self.start_election_timeout_checker().await?;
-        
+
         // Start log replication checker (if leader)
         self.start_log_replication_checker().await?;
-        
+
         info!("Raft engine started for node {}", self.node_id);
         Ok(())
     }
@@ -192,7 +192,9 @@ impl RaftEngine {
         *self.last_heartbeat.write().await = Instant::now();
 
         // Check if log is consistent using safety validation
-        let log_consistent = self.validate_log_consistency(request.prev_log_index, request.prev_log_term).await;
+        let log_consistent = self
+            .validate_log_consistency(request.prev_log_index, request.prev_log_term)
+            .await;
 
         if !log_consistent {
             return Ok(AppendEntriesResponse {
@@ -219,7 +221,7 @@ impl RaftEngine {
             while persistent_state.log.len() > start_index as usize {
                 persistent_state.log.pop();
             }
-            
+
             // Append new entries
             persistent_state.log.append(&mut new_entries);
         }
@@ -264,14 +266,18 @@ impl RaftEngine {
             let last_log_index = persistent_state.log.len() as u64;
 
             (request.last_log_term > last_log_term)
-                || (request.last_log_term == last_log_term && request.last_log_index >= last_log_index)
+                || (request.last_log_term == last_log_term
+                    && request.last_log_index >= last_log_index)
         } else {
             false
         };
 
         if vote_granted {
             persistent_state.voted_for = Some(request.candidate_id);
-            info!("Granted vote to candidate {} in term {}", request.candidate_id, request.term);
+            info!(
+                "Granted vote to candidate {} in term {}",
+                request.candidate_id, request.term
+            );
         }
 
         Ok(RequestVoteResponse {
@@ -283,7 +289,7 @@ impl RaftEngine {
     /// Propose a new command to the cluster
     pub async fn propose(&self, command: ClusterCommand) -> Result<()> {
         let state = self.state.read().await;
-        
+
         match *state {
             RaftState::Leader => {
                 // As leader, we can directly append to log
@@ -330,15 +336,18 @@ impl RaftEngine {
         let persistent_state = self.persistent_state.read().await;
         let volatile_state = self.volatile_state.read().await;
         let leader_state = self.leader_state.read().await;
-        
+
         if let Some(leader_state) = leader_state.as_ref() {
             let cluster_members = self.cluster_members.read().await;
-            
+
             for (node_id, address) in cluster_members.iter() {
                 if *node_id != self.node_id {
-                    let next_index = leader_state.next_index.get(node_id).copied()
+                    let next_index = leader_state
+                        .next_index
+                        .get(node_id)
+                        .copied()
                         .unwrap_or(persistent_state.log.len() as u64 + 1);
-                    
+
                     let prev_log_index = next_index - 1;
                     let prev_log_term = if prev_log_index > 0 {
                         persistent_state
@@ -369,7 +378,7 @@ impl RaftEngine {
                     // Send actual RPC to follower
                     if let Err(e) = self.send_append_entries(*node_id, address, request).await {
                         debug!("Failed to send AppendEntries to node {}: {}", node_id, e);
-                        
+
                         // Update next_index to retry with a lower index
                         let mut leader_state_mut = self.leader_state.write().await;
                         if let Some(ref mut leader_state_mut) = leader_state_mut.as_mut() {
@@ -396,21 +405,25 @@ impl RaftEngine {
     ) -> Result<()> {
         // In a real implementation, this would use actual network communication
         // For now, we'll simulate the RPC call and handle the response
-        
-        debug!("Sending AppendEntries RPC to node {} at {}: {:?}", node_id, address, request);
-        
+
+        debug!(
+            "Sending AppendEntries RPC to node {} at {}: {:?}",
+            node_id, address, request
+        );
+
         // Simulate network latency and processing
         tokio::time::sleep(Duration::from_millis(10)).await;
-        
+
         // Simulate a successful response (in reality, this would be a network call)
         let response = AppendEntriesResponse {
             term: request.term,
             success: true,
         };
-        
+
         // Handle the response
-        self.handle_append_entries_response(node_id, request, response).await?;
-        
+        self.handle_append_entries_response(node_id, request, response)
+            .await?;
+
         Ok(())
     }
 
@@ -424,7 +437,7 @@ impl RaftEngine {
         let mut leader_state = self.leader_state.write().await;
         let persistent_state = self.persistent_state.read().await;
         let mut volatile_state = self.volatile_state.write().await;
-        
+
         if let Some(ref mut leader_state) = leader_state.as_mut() {
             if response.term > persistent_state.current_term {
                 // Step down as leader
@@ -434,23 +447,28 @@ impl RaftEngine {
                 self.step_down().await?;
                 return Ok(());
             }
-            
+
             if response.success {
                 // Update next_index and match_index for successful replication
                 let new_next_index = request.prev_log_index + request.entries.len() as u64 + 1;
                 leader_state.next_index.insert(node_id, new_next_index);
                 let new_match_index = request.prev_log_index + request.entries.len() as u64;
                 leader_state.match_index.insert(node_id, new_match_index);
-                
-                debug!("Successful replication to node {}, updated indices", node_id);
-                
+
+                debug!(
+                    "Successful replication to node {}, updated indices",
+                    node_id
+                );
+
                 // Check if we can commit new entries
-                let mut match_indices: Vec<u64> = leader_state.match_index.values().copied().collect();
+                let mut match_indices: Vec<u64> =
+                    leader_state.match_index.values().copied().collect();
                 match_indices.push(persistent_state.log.len() as u64); // Include leader
                 match_indices.sort_unstable_by(|a, b| b.cmp(a)); // Sort descending
-                
+
                 if match_indices.len() >= (self.cluster_members.read().await.len() / 2) {
-                    let new_commit_index = match_indices[(self.cluster_members.read().await.len() / 2) - 1];
+                    let new_commit_index =
+                        match_indices[(self.cluster_members.read().await.len() / 2) - 1];
                     if new_commit_index > volatile_state.commit_index {
                         volatile_state.commit_index = new_commit_index;
                         debug!("Updated commit index to {}", new_commit_index);
@@ -458,21 +476,29 @@ impl RaftEngine {
                 }
             } else {
                 // Decrement next_index and retry
-                let current_next_index = leader_state.next_index.get(&node_id).copied()
+                let current_next_index = leader_state
+                    .next_index
+                    .get(&node_id)
+                    .copied()
                     .unwrap_or(persistent_state.log.len() as u64 + 1);
-                leader_state.next_index.insert(node_id, current_next_index.saturating_sub(1));
-                
-                debug!("Failed replication to node {}, decrementing next_index", node_id);
-                
+                leader_state
+                    .next_index
+                    .insert(node_id, current_next_index.saturating_sub(1));
+
+                debug!(
+                    "Failed replication to node {}, decrementing next_index",
+                    node_id
+                );
+
                 // Note: In a real implementation, we would retry replication
                 // but we remove the recursive call to avoid infinite recursion
             }
         }
-        
+
         Ok(())
     }
 
-        /// Start election timeout checker
+    /// Start election timeout checker
     async fn start_election_timeout_checker(&self) -> Result<()> {
         let node_id = self.node_id;
         let election_timeout = self.election_timeout;
@@ -483,40 +509,42 @@ impl RaftEngine {
 
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(election_timeout / 2);
-            
+
             loop {
                 interval.tick().await;
-                
+
                 let current_state = state.read().await;
                 let heartbeat_time = *last_heartbeat.read().await;
                 let current_term = persistent_state.read().await.current_term;
                 let members = cluster_members.read().await;
-                
+
                 // Only check election timeout if we're a follower
                 if matches!(*current_state, RaftState::Follower) {
                     let time_since_heartbeat = Instant::now().duration_since(heartbeat_time);
-                    
+
                     // Randomize election timeout to avoid split votes
-                    let randomized_timeout = election_timeout + 
-                        Duration::from_millis(
-                            rand::random::<u64>() % election_timeout.as_millis() as u64
+                    let randomized_timeout = election_timeout
+                        + Duration::from_millis(
+                            rand::random::<u64>() % election_timeout.as_millis() as u64,
                         );
-                    
+
                     if time_since_heartbeat > randomized_timeout {
                         info!("Election timeout for node {}, starting election", node_id);
-                        
+
                         // Start election
                         drop(current_state);
                         let _ = heartbeat_time;
                         drop(members);
-                        
+
                         if let Err(e) = Self::start_election(
                             node_id,
                             &state,
                             &persistent_state,
                             &cluster_members,
                             current_term,
-                        ).await {
+                        )
+                        .await
+                        {
                             error!("Failed to start election: {}", e);
                         }
                     }
@@ -540,7 +568,7 @@ impl RaftEngine {
             let mut state_guard = state.write().await;
             *state_guard = RaftState::Candidate;
         }
-        
+
         // Increment term and vote for self
         let new_term = current_term + 1;
         {
@@ -548,9 +576,9 @@ impl RaftEngine {
             persistent_guard.current_term = new_term;
             persistent_guard.voted_for = Some(node_id);
         }
-        
+
         info!("Node {} starting election for term {}", node_id, new_term);
-        
+
         // Get last log index and term
         let (last_log_index, last_log_term) = {
             let persistent_guard = persistent_state.read().await;
@@ -562,11 +590,11 @@ impl RaftEngine {
                 .unwrap_or(0);
             (log_len as u64, last_log_term)
         };
-        
+
         // Send RequestVote RPCs to all other nodes
         let members = cluster_members.read().await;
         let mut vote_requests = Vec::new();
-        
+
         for (&member_id, address) in members.iter() {
             if member_id != node_id {
                 let request = RequestVoteRequest {
@@ -575,18 +603,18 @@ impl RaftEngine {
                     last_log_index,
                     last_log_term,
                 };
-                
+
                 vote_requests.push(Self::send_request_vote(member_id, address, request));
             }
         }
-        
+
         // Wait for responses (in a real implementation, we'd handle this more carefully)
         let results = join_all(vote_requests).await;
-        
+
         // Count votes
         let mut votes_received = 1; // Vote for self
         let total_nodes = members.len();
-        
+
         for result in results {
             if let Ok(response) = result {
                 if response.vote_granted && response.term == new_term {
@@ -594,31 +622,35 @@ impl RaftEngine {
                 }
             }
         }
-        
+
         // Check if we won the election
         let votes_needed = (total_nodes / 2) + 1;
         if votes_received >= votes_needed {
-            info!("Node {} won election for term {} with {} votes", 
-                  node_id, new_term, votes_received);
-            
+            info!(
+                "Node {} won election for term {} with {} votes",
+                node_id, new_term, votes_received
+            );
+
             // Become leader
             // Note: This is simplified - in a real implementation, we'd need
             // to handle the case where another node becomes leader during the election
             drop(members);
             let _ = persistent_state;
-            
+
             // This would need to be called on the actual RaftEngine instance
             // For now, we'll just log the result
             info!("Node {} should become leader in term {}", node_id, new_term);
         } else {
-            info!("Node {} lost election for term {} with {} votes (needed {})", 
-                  node_id, new_term, votes_received, votes_needed);
-            
+            info!(
+                "Node {} lost election for term {} with {} votes (needed {})",
+                node_id, new_term, votes_received, votes_needed
+            );
+
             // Return to follower state
             let mut state_guard = state.write().await;
             *state_guard = RaftState::Follower;
         }
-        
+
         Ok(())
     }
 
@@ -630,20 +662,26 @@ impl RaftEngine {
     ) -> Result<RequestVoteResponse> {
         // In a real implementation, this would use actual network communication
         // For now, we'll simulate the RPC call
-        
-        debug!("Sending RequestVote RPC to node {} at {}: {:?}", node_id, address, request);
-        
+
+        debug!(
+            "Sending RequestVote RPC to node {} at {}: {:?}",
+            node_id, address, request
+        );
+
         // Simulate network latency and processing
         tokio::time::sleep(Duration::from_millis(5)).await;
-        
+
         // Simulate a positive response (in reality, this would be a network call)
         let response = RequestVoteResponse {
             term: request.term,
             vote_granted: true,
         };
-        
-        debug!("Received RequestVote response from node {}: {:?}", node_id, response);
-        
+
+        debug!(
+            "Received RequestVote response from node {}: {:?}",
+            node_id, response
+        );
+
         Ok(response)
     }
 
@@ -656,17 +694,17 @@ impl RaftEngine {
 
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_millis(50));
-            
+
             loop {
                 interval.tick().await;
-                
+
                 let current_state = state.read().await;
-                
+
                 // Only send heartbeats if we're the leader
                 if matches!(*current_state, RaftState::Leader) {
                     let current_term = persistent_state.read().await.current_term;
                     let members = cluster_members.read().await;
-                    
+
                     // Send heartbeat (empty AppendEntries) to all followers
                     for (&member_id, address) in members.iter() {
                         if member_id != node_id {
@@ -678,11 +716,16 @@ impl RaftEngine {
                                 entries: Vec::new(), // Empty entries for heartbeat
                                 leader_commit: 0,
                             };
-                            
-                            debug!("Sending heartbeat to node {} at {}: {:?}", member_id, address, heartbeat_request);
-                            
+
+                            debug!(
+                                "Sending heartbeat to node {} at {}: {:?}",
+                                member_id, address, heartbeat_request
+                            );
+
                             // Simulate sending heartbeat
-                            if let Err(e) = Self::send_heartbeat(member_id, address, heartbeat_request).await {
+                            if let Err(e) =
+                                Self::send_heartbeat(member_id, address, heartbeat_request).await
+                            {
                                 debug!("Failed to send heartbeat to node {}: {}", member_id, e);
                             } else {
                                 debug!("Successfully sent heartbeat to node {}", member_id);
@@ -704,20 +747,26 @@ impl RaftEngine {
     ) -> Result<()> {
         // In a real implementation, this would use actual network communication
         // For now, we'll simulate the RPC call
-        
-        debug!("Sending heartbeat to node {} at {}: {:?}", node_id, address, request);
-        
+
+        debug!(
+            "Sending heartbeat to node {} at {}: {:?}",
+            node_id, address, request
+        );
+
         // Simulate network latency
         tokio::time::sleep(Duration::from_millis(2)).await;
-        
+
         // Simulate a successful response
         let response = AppendEntriesResponse {
             term: request.term,
             success: true,
         };
-        
-        debug!("Received heartbeat response from node {}: {:?}", node_id, response);
-        
+
+        debug!(
+            "Received heartbeat response from node {}: {:?}",
+            node_id, response
+        );
+
         Ok(())
     }
 
@@ -726,28 +775,31 @@ impl RaftEngine {
         let mut state = self.state.write().await;
         let persistent_state = self.persistent_state.read().await;
         let cluster_members = self.cluster_members.read().await;
-        
+
         *state = RaftState::Leader;
-        
+
         // Initialize leader state
         let mut leader_state = LeaderState {
             next_index: HashMap::new(),
             match_index: HashMap::new(),
         };
-        
+
         let next_index_value = persistent_state.log.len() as u64 + 1;
-        
+
         for (node_id, _address) in cluster_members.iter() {
             if *node_id != self.node_id {
                 leader_state.next_index.insert(*node_id, next_index_value);
                 leader_state.match_index.insert(*node_id, 0);
             }
         }
-        
+
         *self.leader_state.write().await = Some(leader_state);
-        
-        info!("Node {} became leader in term {}", self.node_id, persistent_state.current_term);
-        
+
+        info!(
+            "Node {} became leader in term {}",
+            self.node_id, persistent_state.current_term
+        );
+
         Ok(())
     }
 
@@ -756,9 +808,9 @@ impl RaftEngine {
         let mut state = self.state.write().await;
         *state = RaftState::Follower;
         *self.leader_state.write().await = None;
-        
+
         info!("Node {} stepped down as leader", self.node_id);
-        
+
         Ok(())
     }
 
@@ -766,37 +818,41 @@ impl RaftEngine {
     async fn can_become_leader(&self) -> bool {
         let state = self.state.read().await;
         let persistent_state = self.persistent_state.read().await;
-        
+
         // Can only become leader if we're candidate
         if !matches!(*state, RaftState::Candidate) {
             return false;
         }
-        
+
         // Check if we have the most up-to-date log
         let _members = self.cluster_members.read().await;
         let _log_len = persistent_state.log.len() as u64;
-        let _last_term = persistent_state.log.last().map(|entry| entry.term).unwrap_or(0);
-        
+        let _last_term = persistent_state
+            .log
+            .last()
+            .map(|entry| entry.term)
+            .unwrap_or(0);
+
         // In a real implementation, we'd check other nodes' logs
         // For now, we assume our log is sufficiently up-to-date
         true
     }
-    
+
     /// Validate log consistency
     async fn validate_log_consistency(&self, prev_log_index: u64, prev_log_term: u64) -> bool {
         let persistent_state = self.persistent_state.read().await;
-        
+
         if prev_log_index == 0 {
             return true; // First entry is always consistent
         }
-        
+
         if let Some(entry) = persistent_state.log.get((prev_log_index - 1) as usize) {
             entry.term == prev_log_term
         } else {
             false
         }
     }
-    
+
     /// Check if command is safe to apply
     async fn is_command_safe(&self, command: &ClusterCommand) -> bool {
         match command {
@@ -811,7 +867,7 @@ impl RaftEngine {
             _ => true,
         }
     }
-    
+
     /// Check if cluster has quorum
     async fn has_quorum(&self) -> bool {
         let members = self.cluster_members.read().await;
@@ -839,15 +895,15 @@ impl RaftEngine {
 mod tests {
     use super::*;
     use std::collections::HashMap;
-    use uuid::Uuid;
     use tokio::time::{sleep, Duration};
+    use uuid::Uuid;
 
     #[tokio::test]
     async fn test_raft_engine_creation() {
         let node_id = Uuid::new_v4();
         let members = HashMap::new();
         let engine = RaftEngine::new(node_id, Duration::from_millis(5000), members);
-        
+
         assert_eq!(engine.get_state().await, RaftState::Follower);
         assert_eq!(engine.get_term().await, 0);
         assert_eq!(engine.get_commit_index().await, 0);
@@ -858,7 +914,7 @@ mod tests {
         let node_id = Uuid::new_v4();
         let members = HashMap::new();
         let engine = RaftEngine::new(node_id, Duration::from_millis(5000), members);
-        
+
         let request = AppendEntriesRequest {
             term: 1,
             leader_id: Uuid::new_v4(),
@@ -867,7 +923,7 @@ mod tests {
             entries: vec![],
             leader_commit: 0,
         };
-        
+
         let response = engine.handle_append_entries(request).await.unwrap();
         assert_eq!(response.term, 1);
         assert!(response.success);
@@ -878,14 +934,14 @@ mod tests {
         let node_id = Uuid::new_v4();
         let members = HashMap::new();
         let engine = RaftEngine::new(node_id, Duration::from_millis(5000), members);
-        
+
         let request = RequestVoteRequest {
             term: 1,
             candidate_id: Uuid::new_v4(),
             last_log_index: 0,
             last_log_term: 0,
         };
-        
+
         let response = engine.handle_request_vote(request).await.unwrap();
         assert_eq!(response.term, 1);
         assert!(response.vote_granted);
@@ -898,15 +954,15 @@ mod tests {
         members.insert(node_id, "127.0.0.1:8080".to_string());
         members.insert(Uuid::new_v4(), "127.0.0.1:8081".to_string());
         members.insert(Uuid::new_v4(), "127.0.0.1:8082".to_string());
-        
+
         let engine = RaftEngine::new(node_id, Duration::from_millis(100), members);
-        
+
         // Start the engine
         engine.start().await.unwrap();
-        
+
         // Wait a bit for election timeout
         sleep(Duration::from_millis(200)).await;
-        
+
         // Should be in candidate or leader state
         let state = engine.get_state().await;
         assert!(matches!(state, RaftState::Candidate | RaftState::Leader));
@@ -917,20 +973,20 @@ mod tests {
         let node_id = Uuid::new_v4();
         let members = HashMap::new();
         let engine = RaftEngine::new(node_id, Duration::from_millis(5000), members);
-        
+
         // Become leader first
         engine.become_leader().await.unwrap();
-        
+
         // Propose a command
         let command = ClusterCommand::ReplicateData {
             key: "test_key".to_string(),
             data: b"test_data".to_vec(),
             nodes: vec![],
         };
-        
+
         let result = engine.propose(command).await;
         assert!(result.is_ok());
-        
+
         // Check that log has entries
         let persistent_state = engine.persistent_state.read().await;
         assert!(!persistent_state.log.is_empty());
@@ -941,10 +997,10 @@ mod tests {
         let node_id = Uuid::new_v4();
         let members = HashMap::new();
         let engine = RaftEngine::new(node_id, Duration::from_millis(5000), members);
-        
+
         // Test log consistency validation
         assert!(engine.validate_log_consistency(0, 0).await);
-        
+
         // Test command safety
         let safe_command = ClusterCommand::ReplicateData {
             key: "test".to_string(),
@@ -952,7 +1008,7 @@ mod tests {
             nodes: vec![],
         };
         assert!(engine.is_command_safe(&safe_command).await);
-        
+
         // Test leader safety
         assert!(!engine.can_become_leader().await); // Not candidate
     }
@@ -962,14 +1018,14 @@ mod tests {
         let node_id = Uuid::new_v4();
         let members = HashMap::new();
         let engine = RaftEngine::new(node_id, Duration::from_millis(5000), members);
-        
+
         // Start as follower
         assert_eq!(engine.get_state().await, RaftState::Follower);
-        
+
         // Become leader
         engine.become_leader().await.unwrap();
         assert_eq!(engine.get_state().await, RaftState::Leader);
-        
+
         // Step down
         engine.step_down().await.unwrap();
         assert_eq!(engine.get_state().await, RaftState::Follower);
@@ -982,9 +1038,9 @@ mod tests {
         members.insert(node_id, "127.0.0.1:8080".to_string());
         members.insert(Uuid::new_v4(), "127.0.0.1:8081".to_string());
         members.insert(Uuid::new_v4(), "127.0.0.1:8082".to_string());
-        
+
         let engine = RaftEngine::new(node_id, Duration::from_millis(5000), members);
-        
+
         // Test quorum calculation
         assert!(engine.has_quorum().await);
     }
@@ -994,7 +1050,7 @@ mod tests {
         let node_id = Uuid::new_v4();
         let members = HashMap::new();
         let engine = RaftEngine::new(node_id, Duration::from_millis(5000), members);
-        
+
         let entry = LogEntry {
             index: 1,
             term: 1,
@@ -1004,7 +1060,7 @@ mod tests {
             },
             timestamp: 1234567890,
         };
-        
+
         let request = AppendEntriesRequest {
             term: 1,
             leader_id: Uuid::new_v4(),
@@ -1013,11 +1069,11 @@ mod tests {
             entries: vec![entry],
             leader_commit: 0,
         };
-        
+
         let response = engine.handle_append_entries(request).await.unwrap();
         assert_eq!(response.term, 1);
         assert!(response.success);
-        
+
         // Check that entry was appended
         let persistent_state = engine.persistent_state.read().await;
         assert_eq!(persistent_state.log.len(), 1);
@@ -1030,7 +1086,7 @@ mod tests {
         let node_id = Uuid::new_v4();
         let members = HashMap::new();
         let engine = RaftEngine::new(node_id, Duration::from_millis(5000), members);
-        
+
         // Request with inconsistent log
         let request = AppendEntriesRequest {
             term: 1,
@@ -1040,7 +1096,7 @@ mod tests {
             entries: vec![],
             leader_commit: 0,
         };
-        
+
         let response = engine.handle_append_entries(request).await.unwrap();
         assert_eq!(response.term, 1);
         assert!(!response.success);
@@ -1051,7 +1107,7 @@ mod tests {
         let node_id = Uuid::new_v4();
         let members = HashMap::new();
         let engine = RaftEngine::new(node_id, Duration::from_millis(5000), members);
-        
+
         // Request with higher term
         let request = RequestVoteRequest {
             term: 5,
@@ -1059,11 +1115,11 @@ mod tests {
             last_log_index: 0,
             last_log_term: 0,
         };
-        
+
         let response = engine.handle_request_vote(request).await.unwrap();
         assert_eq!(response.term, 5); // Term should be updated
         assert!(response.vote_granted);
-        
+
         // Check that term was updated
         assert_eq!(engine.get_term().await, 5);
     }

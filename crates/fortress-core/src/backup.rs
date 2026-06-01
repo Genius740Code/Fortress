@@ -6,11 +6,11 @@
 
 use crate::error::{FortressError, Result, StorageErrorCode};
 use crate::storage::StorageBackend;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fmt;
-use chrono::{DateTime, Utc};
-use sha2::{Sha256, Digest};
 use uuid::Uuid;
 
 /// Backup strategy types
@@ -420,7 +420,9 @@ pub trait BackupManager: Send + Sync + fmt::Debug {
     fn get_backup_metadata<'a>(
         &'a self,
         backup_id: &'a str,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Option<BackupMetadata>>> + Send + 'a>>;
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<Option<BackupMetadata>>> + Send + 'a>,
+    >;
 
     /// Delete a backup
     fn delete_backup<'a>(
@@ -459,12 +461,16 @@ pub trait DisasterRecoveryManager: Send + Sync + fmt::Debug {
     fn get_recovery_plan<'a>(
         &'a self,
         plan_id: &'a str,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Option<DisasterRecoveryPlan>>> + Send + 'a>>;
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<Option<DisasterRecoveryPlan>>> + Send + 'a>,
+    >;
 
     /// List all recovery plans
     fn list_recovery_plans<'a>(
         &'a self,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<DisasterRecoveryPlan>>> + Send + 'a>>;
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<Vec<DisasterRecoveryPlan>>> + Send + 'a>,
+    >;
 
     /// Execute recovery plan
     fn execute_recovery_plan<'a>(
@@ -628,19 +634,21 @@ pub mod utils {
         use std::io::Write;
 
         let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-        encoder.write_all(data)
-            .map_err(|e| FortressError::storage(
+        encoder.write_all(data).map_err(|e| {
+            FortressError::storage(
                 format!("Failed to compress data: {}", e),
                 "compression".to_string(),
                 StorageErrorCode::InvalidOperation,
-            ))?;
-        
-        encoder.finish()
-            .map_err(|e| FortressError::storage(
+            )
+        })?;
+
+        encoder.finish().map_err(|e| {
+            FortressError::storage(
                 format!("Failed to finish compression: {}", e),
                 "compression".to_string(),
                 StorageErrorCode::InvalidOperation,
-            ))
+            )
+        })
     }
 
     /// Decompress data using gzip
@@ -650,13 +658,14 @@ pub mod utils {
 
         let mut decoder = GzDecoder::new(compressed_data);
         let mut decompressed = Vec::new();
-        
-        decoder.read_to_end(&mut decompressed)
-            .map_err(|e| FortressError::storage(
+
+        decoder.read_to_end(&mut decompressed).map_err(|e| {
+            FortressError::storage(
                 format!("Failed to decompress data: {}", e),
                 "compression".to_string(),
                 StorageErrorCode::InvalidOperation,
-            ))?;
+            )
+        })?;
 
         Ok(decompressed)
     }
@@ -667,8 +676,8 @@ pub mod utils {
         strategy: &BackupStrategy,
     ) -> Result<Option<BackupMetadata>> {
         match strategy {
-            BackupStrategy::Incremental { base_backup_id } | 
-            BackupStrategy::Differential { base_backup_id } => {
+            BackupStrategy::Incremental { base_backup_id }
+            | BackupStrategy::Differential { base_backup_id } => {
                 backup_manager.get_backup_metadata(base_backup_id).await
             }
             BackupStrategy::Full => Ok(None),
@@ -681,7 +690,7 @@ pub mod utils {
         base_backup: Option<&BackupMetadata>,
     ) -> Result<Vec<String>> {
         let all_keys = source_storage.list_prefix("").await?;
-        
+
         if let Some(_base) = base_backup {
             // For incremental/differential, we need to compare with base backup
             // This is a simplified implementation - in practice, you'd need
@@ -727,14 +736,14 @@ pub mod utils {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::utils::*;
+    use super::*;
 
     #[test]
     fn test_generate_backup_id() {
         let id1 = generate_backup_id();
         let id2 = generate_backup_id();
-        
+
         assert_ne!(id1, id2);
         assert!(id1.starts_with("backup_"));
         assert!(id2.starts_with("backup_"));
@@ -744,7 +753,7 @@ mod tests {
     fn test_generate_restore_id() {
         let id1 = generate_restore_id();
         let id2 = generate_restore_id();
-        
+
         assert_ne!(id1, id2);
         assert!(id1.starts_with("restore_"));
         assert!(id2.starts_with("restore_"));
@@ -755,7 +764,7 @@ mod tests {
         let data = b"test data";
         let checksum1 = calculate_checksum(data);
         let checksum2 = calculate_checksum(data);
-        
+
         assert_eq!(checksum1, checksum2);
         assert_eq!(checksum1.len(), 64); // SHA256 hex length
     }
@@ -764,7 +773,7 @@ mod tests {
     fn test_verify_checksum() {
         let data = b"test data";
         let checksum = calculate_checksum(data);
-        
+
         assert!(verify_checksum(data, &checksum));
         assert!(!verify_checksum(b"different data", &checksum));
     }
@@ -772,17 +781,17 @@ mod tests {
     #[test]
     fn test_compress_decompress() {
         let data = b"test data for compression";
-        
+
         let compressed = compress_data(data).unwrap();
         let decompressed = decompress_data(&compressed).unwrap();
-        
+
         assert_eq!(data.to_vec(), decompressed);
     }
 
     #[test]
     fn test_backup_config_default() {
         let config = BackupConfig::default();
-        
+
         assert!(matches!(config.default_strategy, BackupStrategy::Full));
         assert!(config.encryption_algorithm.is_some());
         assert!(config.compression_algorithm.is_some());
@@ -793,19 +802,19 @@ mod tests {
     #[test]
     fn test_validate_backup_config() {
         let mut config = BackupConfig::default();
-        
+
         // Valid config should pass
         assert!(validate_backup_config(&config).is_ok());
-        
+
         // Invalid max size
         config.max_backup_size = Some(0);
         assert!(validate_backup_config(&config).is_err());
-        
+
         // Reset and test invalid workers
         config = BackupConfig::default();
         config.parallel_settings.max_workers = 0;
         assert!(validate_backup_config(&config).is_err());
-        
+
         // Reset and test invalid chunk size
         config = BackupConfig::default();
         config.parallel_settings.chunk_size = 0;

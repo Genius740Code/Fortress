@@ -13,9 +13,9 @@
 //! - **Isogeny-based cryptography**: Supersingular isogeny Diffie-Hellman
 //! - **Hybrid schemes**: Combining classical and quantum-resistant algorithms
 
-use crate::error::{FortressError, Result, EncryptionErrorCode};
 use crate::encryption::create_algorithm;
-use crate::key::{SecureKey, KeyId};
+use crate::error::{EncryptionErrorCode, FortressError, Result};
+use crate::key::{KeyId, SecureKey};
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -114,11 +114,7 @@ pub struct QuantumResistantCiphertext {
 
 impl QuantumResistantCiphertext {
     /// Create a new quantum-resistant ciphertext
-    pub fn new(
-        scheme: QuantumResistantScheme,
-        data: Vec<u8>,
-        key_id: KeyId,
-    ) -> Self {
+    pub fn new(scheme: QuantumResistantScheme, data: Vec<u8>, key_id: KeyId) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
             scheme,
@@ -169,10 +165,18 @@ pub trait QuantumResistantEncryption: Send + Sync {
     async fn generate_key(&self) -> Result<(SecureKey, KeyId)>;
 
     /// Encrypt a plaintext value
-    async fn encrypt(&self, plaintext: &[u8], key: &SecureKey) -> Result<QuantumResistantCiphertext>;
+    async fn encrypt(
+        &self,
+        plaintext: &[u8],
+        key: &SecureKey,
+    ) -> Result<QuantumResistantCiphertext>;
 
     /// Decrypt a ciphertext
-    async fn decrypt(&self, ciphertext: &QuantumResistantCiphertext, key: &SecureKey) -> Result<Vec<u8>>;
+    async fn decrypt(
+        &self,
+        ciphertext: &QuantumResistantCiphertext,
+        key: &SecureKey,
+    ) -> Result<Vec<u8>>;
 
     /// Get security level in bits (quantum security)
     fn quantum_security_level(&self) -> usize;
@@ -266,44 +270,53 @@ impl LweEncryption {
     fn generate_keypair(&self) -> Result<(Vec<u8>, Vec<u8>)> {
         // This is a simplified implementation
         // In practice, you'd use a proper post-quantum cryptographic library
-        
+
         // Generate secret vector
         let secret_size = self.dimension * (self.modulus_size / 8);
         let mut secret = vec![0u8; secret_size];
-        
+
         // Use TRNG if available, fallback to getrandom
         match crate::trng::random_bytes(secret_size) {
             Ok(bytes) => secret = bytes,
             Err(_) => {
-                getrandom::getrandom(&mut secret).map_err(|e| FortressError::encryption(
-                    format!("Failed to generate LWE secret: {}", e),
-                    "lwe".to_string(),
-                    EncryptionErrorCode::EncryptionFailed,
-                ))?;
+                getrandom::getrandom(&mut secret).map_err(|e| {
+                    FortressError::encryption(
+                        format!("Failed to generate LWE secret: {}", e),
+                        "lwe".to_string(),
+                        EncryptionErrorCode::EncryptionFailed,
+                    )
+                })?;
             }
         }
-        
+
         // Generate public parameters (simplified)
         let mut public_params = vec![0u8; 64];
         match crate::trng::random_bytes(64) {
             Ok(bytes) => public_params = bytes,
             Err(_) => {
-                getrandom::getrandom(&mut public_params).map_err(|e| FortressError::encryption(
-                    format!("Failed to generate LWE public params: {}", e),
-                    "lwe".to_string(),
-                    EncryptionErrorCode::EncryptionFailed,
-                ))?;
+                getrandom::getrandom(&mut public_params).map_err(|e| {
+                    FortressError::encryption(
+                        format!("Failed to generate LWE public params: {}", e),
+                        "lwe".to_string(),
+                        EncryptionErrorCode::EncryptionFailed,
+                    )
+                })?;
             }
         }
-        
+
         Ok((secret, public_params))
     }
 
     /// LWE encryption (simplified)
-    fn encrypt_lwe(&self, plaintext: &[u8], _secret: &[u8], public_params: &[u8]) -> Result<Vec<u8>> {
+    fn encrypt_lwe(
+        &self,
+        plaintext: &[u8],
+        _secret: &[u8],
+        public_params: &[u8],
+    ) -> Result<Vec<u8>> {
         // This is a simplified implementation
         // Real LWE encryption involves lattice operations and error sampling
-        
+
         if plaintext.len() > 32 {
             return Err(FortressError::encryption(
                 "Plaintext too large for LWE encryption",
@@ -311,29 +324,31 @@ impl LweEncryption {
                 EncryptionErrorCode::EncryptionFailed,
             ));
         }
-        
+
         // Generate random error vector
         let error_size = self.dimension * (self.modulus_size / 8);
         let mut error = vec![0u8; error_size];
-        
+
         match crate::trng::random_bytes(error_size) {
             Ok(bytes) => error = bytes,
             Err(_) => {
-                getrandom::getrandom(&mut error).map_err(|e| FortressError::encryption(
-                    format!("Failed to generate LWE error: {}", e),
-                    "lwe".to_string(),
-                    EncryptionErrorCode::EncryptionFailed,
-                ))?;
+                getrandom::getrandom(&mut error).map_err(|e| {
+                    FortressError::encryption(
+                        format!("Failed to generate LWE error: {}", e),
+                        "lwe".to_string(),
+                        EncryptionErrorCode::EncryptionFailed,
+                    )
+                })?;
             }
         }
-        
+
         // Simplified LWE encryption: c = A*r + e + encode(m)
         // This is not cryptographically secure - for demonstration only
         let mut ciphertext = Vec::new();
         ciphertext.extend_from_slice(public_params);
         ciphertext.extend_from_slice(&error);
         ciphertext.extend_from_slice(plaintext);
-        
+
         Ok(ciphertext)
     }
 
@@ -341,7 +356,7 @@ impl LweEncryption {
     fn decrypt_lwe(&self, ciphertext: &[u8], _secret: &[u8]) -> Result<Vec<u8>> {
         // This is a simplified implementation
         // Real LWE decryption involves lattice operations
-        
+
         if ciphertext.len() < 64 {
             return Err(FortressError::encryption(
                 "Ciphertext too short for LWE decryption",
@@ -349,22 +364,26 @@ impl LweEncryption {
                 EncryptionErrorCode::DecryptionFailed,
             ));
         }
-        
+
         // Extract plaintext (simplified - just take the last part)
         let plaintext_start = ciphertext.len().saturating_sub(32);
         let plaintext = &ciphertext[plaintext_start..];
-        
+
         Ok(plaintext.to_vec())
     }
-    
-    async fn encrypt(&self, plaintext: &[u8], key: &SecureKey) -> Result<QuantumResistantCiphertext> {
+
+    async fn encrypt(
+        &self,
+        plaintext: &[u8],
+        key: &SecureKey,
+    ) -> Result<QuantumResistantCiphertext> {
         // Extract secret and public parameters
         let secret_size = self.dimension * (self.modulus_size / 8);
         let secret = &key.as_bytes()[..secret_size];
         let public_params = &key.as_bytes()[secret_size..];
-        
+
         let ciphertext_data = self.encrypt_lwe(plaintext, secret, public_params)?;
-        
+
         Ok(QuantumResistantCiphertext::new(
             QuantumResistantScheme::Lwe {
                 security_parameter: self.security_parameter,
@@ -395,25 +414,29 @@ impl QuantumResistantEncryption for LweEncryption {
 
     async fn generate_key(&self) -> Result<(SecureKey, KeyId)> {
         let (secret, public_params) = self.generate_keypair()?;
-        
+
         // Combine secret and public parameters
         let mut key_data = secret;
         key_data.extend_from_slice(&public_params);
-        
+
         let key = SecureKey::new(key_data);
         let key_id = Uuid::new_v4().to_string();
-        
+
         Ok((key, key_id))
     }
 
-    async fn encrypt(&self, plaintext: &[u8], key: &SecureKey) -> Result<QuantumResistantCiphertext> {
+    async fn encrypt(
+        &self,
+        plaintext: &[u8],
+        key: &SecureKey,
+    ) -> Result<QuantumResistantCiphertext> {
         // Extract secret and public parameters
         let secret_size = self.dimension * (self.modulus_size / 8);
         let secret = &key.as_bytes()[..secret_size];
         let public_params = &key.as_bytes()[secret_size..];
-        
+
         let ciphertext_data = self.encrypt_lwe(plaintext, secret, public_params)?;
-        
+
         Ok(QuantumResistantCiphertext::new(
             QuantumResistantScheme::Lwe {
                 security_parameter: self.security_parameter,
@@ -425,11 +448,15 @@ impl QuantumResistantEncryption for LweEncryption {
         ))
     }
 
-    async fn decrypt(&self, ciphertext: &QuantumResistantCiphertext, key: &SecureKey) -> Result<Vec<u8>> {
+    async fn decrypt(
+        &self,
+        ciphertext: &QuantumResistantCiphertext,
+        key: &SecureKey,
+    ) -> Result<Vec<u8>> {
         // Extract secret
         let secret_size = self.dimension * (self.modulus_size / 8);
         let secret = &key.as_bytes()[..secret_size];
-        
+
         self.decrypt_lwe(&ciphertext.data, secret)
     }
 
@@ -494,45 +521,56 @@ impl HybridEncryption {
         let classical_algorithm = create_algorithm(&self.classical_algorithm)?;
         let classical_key = SecureKey::generate(classical_algorithm.key_size())
             .expect("Failed to generate classical key");
-        
+
         // Generate quantum-resistant key
         let lwe = LweEncryption::new(self.security_parameter, 1024, 32);
         let (quantum_key, _) = lwe.generate_keypair()?;
-        
+
         // Combine keys
         let mut private_key = classical_key.to_vec();
         private_key.extend_from_slice(&quantum_key);
-        
+
         let mut public_key = classical_key.to_vec();
         public_key.extend_from_slice(&[0u8; 32]); // Placeholder for quantum public params
-        
+
         Ok((private_key, public_key))
     }
 
     /// Hybrid encryption
-    async fn encrypt_hybrid(&self, plaintext: &[u8], classical_key: &[u8], quantum_key: &[u8]) -> Result<Vec<u8>> {
+    async fn encrypt_hybrid(
+        &self,
+        plaintext: &[u8],
+        classical_key: &[u8],
+        quantum_key: &[u8],
+    ) -> Result<Vec<u8>> {
         // Encrypt with classical algorithm
         let classical_algorithm = create_algorithm(&self.classical_algorithm)?;
         let classical_ciphertext = classical_algorithm.encrypt(plaintext, classical_key)?;
-        
+
         // Encrypt with quantum-resistant algorithm
         let lwe = LweEncryption::new(self.security_parameter, 1024, 32);
         let quantum_ciphertext = lwe.encrypt_lwe(plaintext, quantum_key, &[])?;
-        
+
         // Combine ciphertexts
         let mut combined = Vec::new();
         combined.extend_from_slice(&classical_ciphertext);
         combined.extend_from_slice(&quantum_ciphertext);
-        
+
         Ok(combined)
     }
 
     /// Hybrid decryption
-    async fn decrypt_hybrid(&self, ciphertext: &[u8], classical_key: &[u8], quantum_key: &[u8]) -> Result<Vec<u8>> {
+    async fn decrypt_hybrid(
+        &self,
+        ciphertext: &[u8],
+        classical_key: &[u8],
+        quantum_key: &[u8],
+    ) -> Result<Vec<u8>> {
         // Extract classical ciphertext
         let classical_algorithm = create_algorithm(&self.classical_algorithm)?;
-        let classical_ciphertext_size = classical_algorithm.nonce_size() + 32 + classical_algorithm.tag_size();
-        
+        let classical_ciphertext_size =
+            classical_algorithm.nonce_size() + 32 + classical_algorithm.tag_size();
+
         if ciphertext.len() < classical_ciphertext_size {
             return Err(FortressError::encryption(
                 "Ciphertext too short for hybrid decryption",
@@ -540,13 +578,14 @@ impl HybridEncryption {
                 EncryptionErrorCode::DecryptionFailed,
             ));
         }
-        
+
         let classical_ciphertext = &ciphertext[..classical_ciphertext_size];
         let quantum_ciphertext = &ciphertext[classical_ciphertext_size..];
-        
+
         // Decrypt with classical algorithm
-        let classical_plaintext = classical_algorithm.decrypt(classical_ciphertext, classical_key)?;
-        
+        let classical_plaintext =
+            classical_algorithm.decrypt(classical_ciphertext, classical_key)?;
+
         // Decrypt with quantum-resistant algorithm
         let lwe = LweEncryption::new(self.security_parameter, 1024, 32);
         let quantum_ciphertext_obj = QuantumResistantCiphertext::new(
@@ -559,7 +598,7 @@ impl HybridEncryption {
             Uuid::new_v4().to_string(),
         );
         let quantum_plaintext = lwe.decrypt_lwe(&quantum_ciphertext_obj.data, quantum_key)?;
-        
+
         // Verify both decryptions match (simplified)
         if classical_plaintext != quantum_plaintext {
             return Err(FortressError::encryption(
@@ -568,7 +607,7 @@ impl HybridEncryption {
                 EncryptionErrorCode::DecryptionFailed,
             ));
         }
-        
+
         Ok(classical_plaintext)
     }
 }
@@ -585,22 +624,28 @@ impl QuantumResistantEncryption for HybridEncryption {
 
     async fn generate_key(&self) -> Result<(SecureKey, KeyId)> {
         let (private_key, _public_key) = self.generate_keypair().await?;
-        
+
         let key = SecureKey::new(private_key);
         let key_id = Uuid::new_v4().to_string();
-        
+
         Ok((key, key_id))
     }
 
-    async fn encrypt(&self, plaintext: &[u8], key: &SecureKey) -> Result<QuantumResistantCiphertext> {
+    async fn encrypt(
+        &self,
+        plaintext: &[u8],
+        key: &SecureKey,
+    ) -> Result<QuantumResistantCiphertext> {
         // Extract keys
         let classical_algorithm = create_algorithm(&self.classical_algorithm)?;
         let classical_key_size = classical_algorithm.key_size();
         let classical_key = &key.as_bytes()[..classical_key_size];
         let quantum_key = &key.as_bytes()[classical_key_size..];
-        
-        let ciphertext_data = self.encrypt_hybrid(plaintext, classical_key, quantum_key).await?;
-        
+
+        let ciphertext_data = self
+            .encrypt_hybrid(plaintext, classical_key, quantum_key)
+            .await?;
+
         Ok(QuantumResistantCiphertext::new(
             QuantumResistantScheme::Hybrid {
                 classical: self.classical_algorithm.clone(),
@@ -612,14 +657,19 @@ impl QuantumResistantEncryption for HybridEncryption {
         ))
     }
 
-    async fn decrypt(&self, ciphertext: &QuantumResistantCiphertext, key: &SecureKey) -> Result<Vec<u8>> {
+    async fn decrypt(
+        &self,
+        ciphertext: &QuantumResistantCiphertext,
+        key: &SecureKey,
+    ) -> Result<Vec<u8>> {
         // Extract keys
         let classical_algorithm = create_algorithm(&self.classical_algorithm)?;
         let classical_key_size = classical_algorithm.key_size();
         let classical_key = &key.as_bytes()[..classical_key_size];
         let quantum_key = &key.as_bytes()[classical_key_size..];
-        
-        self.decrypt_hybrid(&ciphertext.data, classical_key, quantum_key).await
+
+        self.decrypt_hybrid(&ciphertext.data, classical_key, quantum_key)
+            .await
     }
 
     fn quantum_security_level(&self) -> usize {
@@ -649,17 +699,38 @@ impl QuantumResistantManager {
     /// Create a new quantum-resistant manager
     pub fn new() -> Self {
         let mut schemes: HashMap<String, Box<dyn QuantumResistantEncryption>> = HashMap::new();
-        
+
         // Add built-in schemes
-        schemes.insert("lwe_128".to_string(), Box::new(LweEncryption::new(128, 512, 32)));
-        schemes.insert("lwe_192".to_string(), Box::new(LweEncryption::new(192, 1024, 32)));
-        schemes.insert("lwe_256".to_string(), Box::new(LweEncryption::new(256, 2048, 32)));
-        
-        schemes.insert("hybrid_chacha_paillier".to_string(), 
-            Box::new(HybridEncryption::new("chacha20poly1305".to_string(), "lwe".to_string(), 128)));
-        schemes.insert("hybrid_aes_lwe".to_string(), 
-            Box::new(HybridEncryption::new("aes256gcm".to_string(), "lwe".to_string(), 256)));
-        
+        schemes.insert(
+            "lwe_128".to_string(),
+            Box::new(LweEncryption::new(128, 512, 32)),
+        );
+        schemes.insert(
+            "lwe_192".to_string(),
+            Box::new(LweEncryption::new(192, 1024, 32)),
+        );
+        schemes.insert(
+            "lwe_256".to_string(),
+            Box::new(LweEncryption::new(256, 2048, 32)),
+        );
+
+        schemes.insert(
+            "hybrid_chacha_paillier".to_string(),
+            Box::new(HybridEncryption::new(
+                "chacha20poly1305".to_string(),
+                "lwe".to_string(),
+                128,
+            )),
+        );
+        schemes.insert(
+            "hybrid_aes_lwe".to_string(),
+            Box::new(HybridEncryption::new(
+                "aes256gcm".to_string(),
+                "lwe".to_string(),
+                256,
+            )),
+        );
+
         Self {
             schemes,
             default_scheme: "lwe_128".to_string(),
@@ -673,19 +744,26 @@ impl QuantumResistantManager {
     }
 
     /// Add a custom scheme
-    pub fn add_scheme(&mut self, name: impl Into<String>, scheme: Box<dyn QuantumResistantEncryption>) {
+    pub fn add_scheme(
+        &mut self,
+        name: impl Into<String>,
+        scheme: Box<dyn QuantumResistantEncryption>,
+    ) {
         self.schemes.insert(name.into(), scheme);
     }
 
     /// Get a scheme by name
     pub fn get_scheme(&self, name: &str) -> Result<&dyn QuantumResistantEncryption> {
-        self.schemes.get(name).ok_or_else(|| {
-            FortressError::encryption(
-                format!("Scheme '{}' not found", name),
-                "quantum_manager".to_string(),
-                EncryptionErrorCode::AlgorithmNotSupported,
-            )
-        }).map(|s| s.as_ref())
+        self.schemes
+            .get(name)
+            .ok_or_else(|| {
+                FortressError::encryption(
+                    format!("Scheme '{}' not found", name),
+                    "quantum_manager".to_string(),
+                    EncryptionErrorCode::AlgorithmNotSupported,
+                )
+            })
+            .map(|s| s.as_ref())
     }
 
     /// Get the default scheme
@@ -745,7 +823,11 @@ impl QuantumResistantManagerBuilder {
     }
 
     /// Add a scheme
-    pub fn with_scheme(mut self, name: impl Into<String>, scheme: Box<dyn QuantumResistantEncryption>) -> Self {
+    pub fn with_scheme(
+        mut self,
+        name: impl Into<String>,
+        scheme: Box<dyn QuantumResistantEncryption>,
+    ) -> Self {
         self.schemes.insert(name.into(), scheme);
         self
     }
@@ -759,7 +841,7 @@ impl QuantumResistantManagerBuilder {
     /// Build the manager
     pub fn build(self) -> Result<QuantumResistantManager> {
         let default_scheme = self.default_scheme.unwrap_or_else(|| "lwe_128".to_string());
-        
+
         if !self.schemes.contains_key(&default_scheme) {
             return Err(FortressError::encryption(
                 format!("Default scheme '{}' not found", default_scheme),
@@ -788,22 +870,22 @@ mod tests {
     #[tokio::test]
     async fn test_lwe_encryption() {
         let lwe = LweEncryption::new(128, 512, 32);
-        
+
         // Generate key
         let (key, key_id) = lwe.generate_key().await.unwrap();
         assert!(!key.is_empty());
         assert!(!key_id.is_empty());
-        
+
         // Encrypt plaintext
         let plaintext = b"Hello, quantum world!";
         let ciphertext = lwe.encrypt(plaintext, &key).await.unwrap();
         assert_eq!(ciphertext.scheme_name(), "lwe".to_string());
         assert!(!ciphertext.data.is_empty());
-        
+
         // Decrypt ciphertext
         let decrypted = lwe.decrypt(&ciphertext, &key).await.unwrap();
         assert_eq!(decrypted, plaintext);
-        
+
         // Check security levels
         assert_eq!(lwe.quantum_security_level(), 128);
         assert_eq!(lwe.classical_security_level(), 256);
@@ -813,22 +895,22 @@ mod tests {
     #[tokio::test]
     async fn test_hybrid_encryption() {
         let hybrid = HybridEncryption::new("chacha20poly1305".to_string(), "lwe", 128);
-        
+
         // Generate key
         let (key, key_id) = hybrid.generate_key().await.unwrap();
         assert!(!key.is_empty());
         assert!(!key_id.is_empty());
-        
+
         // Encrypt plaintext
         let plaintext = b"Hybrid encryption test";
         let ciphertext = hybrid.encrypt(plaintext, &key).await.unwrap();
         assert_eq!(ciphertext.scheme_name(), "hybrid".to_string());
         assert!(!ciphertext.data.is_empty());
-        
+
         // Decrypt ciphertext
         let decrypted = hybrid.decrypt(&ciphertext, &key).await.unwrap();
         assert_eq!(decrypted, plaintext);
-        
+
         // Check security levels
         assert_eq!(hybrid.quantum_security_level(), 128);
         assert_eq!(hybrid.classical_security_level(), 256);
@@ -838,11 +920,11 @@ mod tests {
     #[test]
     fn test_quantum_resistant_manager() {
         let manager = QuantumResistantManager::new();
-        
+
         // Check default scheme
         let default_scheme = manager.get_default_scheme().unwrap();
         assert_eq!(default_scheme.scheme_id(), "lwe".to_string());
-        
+
         // List schemes
         let schemes = manager.list_schemes();
         assert!(schemes.contains(&"lwe_128".to_string()));
@@ -850,14 +932,14 @@ mod tests {
         assert!(schemes.contains(&"lwe_256".to_string()));
         assert!(schemes.contains(&"hybrid_chacha_paillier".to_string()));
         assert!(schemes.contains(&"hybrid_aes_lwe".to_string()));
-        
+
         // Get performance characteristics
         let perf = manager.get_performance("lwe_128").unwrap();
         assert!(perf.keygen_time_ms > 0.0);
         assert!(perf.encryption_time_ms > 0.0);
         assert!(perf.decryption_time_ms > 0.0);
         assert_eq!(perf.quantum_resistance_level, 3);
-        
+
         // Get schemes by security level
         let high_security = manager.get_schemes_by_security_level(200);
         assert!(high_security.contains(&"lwe_256".to_string()));
@@ -877,7 +959,7 @@ mod tests {
         )
         .with_parameter("error_rate", serde_json::Value::Number(0.01.into()))
         .with_metadata("quantum_safe", "true");
-        
+
         assert_eq!(ciphertext.scheme_name(), "lwe".to_string());
         assert_eq!(ciphertext.data, b"quantum_encrypted_data");
         assert_eq!(ciphertext.key_id, "quantum_key123");
@@ -892,9 +974,9 @@ mod tests {
             .with_default_scheme("custom_lwe")
             .build()
             .unwrap();
-        
+
         assert_eq!(manager.default_scheme, "custom_lwe");
-        
+
         let scheme = manager.get_scheme("custom_lwe").unwrap();
         assert_eq!(scheme.scheme_id(), "lwe".to_string());
         assert_eq!(scheme.quantum_security_level(), 256);
@@ -902,7 +984,7 @@ mod tests {
 }
 
 /// Kyber Key Encapsulation Mechanism (KEM) implementation
-/// 
+///
 /// Kyber is a lattice-based key encapsulation mechanism selected for standardization
 /// by NIST as a post-quantum cryptographic algorithm. It's based on the Module-LWE
 /// problem and provides IND-CCA2 security.
@@ -944,39 +1026,41 @@ impl KyberKem {
         // Simplified Kyber key generation
         let matrix_size = self.module_rank * self.module_rank * self.polynomial_degree * 4;
         let vector_size = self.module_rank * self.polynomial_degree * 4;
-        
+
         // Generate random matrix A (public)
         let mut matrix_a = vec![0u8; matrix_size];
         for i in 0..matrix_size {
             matrix_a[i] = rand::random::<u8>();
         }
-        
+
         // Generate secret vector s (private)
         let mut secret_s = vec![0u8; vector_size];
         for i in 0..vector_size {
             secret_s[i] = rand::random::<u8>();
         }
-        
+
         // Generate error vector e (public)
         let mut error_e = vec![0u8; vector_size];
         for i in 0..vector_size {
             let sample = self.sample_discrete_gaussian();
             error_e[i] = (sample.abs() as i64 % 256) as u8;
         }
-        
+
         // Compute t = A*s + e (simplified matrix multiplication)
         let mut t = vec![0u8; vector_size];
         for i in 0..vector_size {
-            t[i] = matrix_a[i % matrix_size].wrapping_add(secret_s[i]).wrapping_add(error_e[i]);
+            t[i] = matrix_a[i % matrix_size]
+                .wrapping_add(secret_s[i])
+                .wrapping_add(error_e[i]);
         }
-        
+
         // Public key: matrix_a || t
         let mut public_key = matrix_a;
         public_key.extend_from_slice(&t);
-        
+
         // Private key: secret_s
         let private_key = secret_s;
-        
+
         Ok((public_key, private_key))
     }
 
@@ -1007,24 +1091,28 @@ impl QuantumResistantEncryption for KyberKem {
 
     async fn generate_key(&self) -> Result<(SecureKey, KeyId)> {
         let (public_key, private_key) = self.generate_keypair()?;
-        
+
         // Combine public and private keys
         let mut key_data = public_key;
         key_data.extend_from_slice(&private_key);
-        
+
         let key = SecureKey::new(key_data);
         let key_id = Uuid::new_v4().to_string();
-        
+
         Ok((key, key_id))
     }
 
-    async fn encrypt(&self, plaintext: &[u8], _key: &SecureKey) -> Result<QuantumResistantCiphertext> {
+    async fn encrypt(
+        &self,
+        plaintext: &[u8],
+        _key: &SecureKey,
+    ) -> Result<QuantumResistantCiphertext> {
         // Simple XOR encryption for demonstration
         let mut encrypted_data = Vec::with_capacity(plaintext.len());
         for &byte in plaintext.iter() {
             encrypted_data.push(byte ^ 0xAB); // Simple XOR with fixed key
         }
-        
+
         Ok(QuantumResistantCiphertext::new(
             self.scheme_type().clone(),
             encrypted_data,
@@ -1032,13 +1120,17 @@ impl QuantumResistantEncryption for KyberKem {
         ))
     }
 
-    async fn decrypt(&self, ciphertext: &QuantumResistantCiphertext, _key: &SecureKey) -> Result<Vec<u8>> {
+    async fn decrypt(
+        &self,
+        ciphertext: &QuantumResistantCiphertext,
+        _key: &SecureKey,
+    ) -> Result<Vec<u8>> {
         // Simple XOR decryption for demonstration
         let mut decrypted_data = Vec::with_capacity(ciphertext.data.len());
         for &byte in ciphertext.data.iter() {
             decrypted_data.push(byte ^ 0xAB); // Reverse the XOR
         }
-        
+
         Ok(decrypted_data)
     }
 
@@ -1087,11 +1179,11 @@ mod kyber_tests {
         assert_eq!(kyber_512.module_rank, 2);
         assert_eq!(kyber_512.polynomial_degree, 256);
         assert_eq!(kyber_512.modulus, 3329);
-        
+
         let kyber_768 = KyberKem::new(192);
         assert_eq!(kyber_768.security_parameter, 192);
         assert_eq!(kyber_768.module_rank, 3);
-        
+
         let kyber_1024 = KyberKem::new(256);
         assert_eq!(kyber_1024.security_parameter, 256);
         assert_eq!(kyber_1024.module_rank, 4);
@@ -1101,14 +1193,14 @@ mod kyber_tests {
     fn test_kyber_keypair_generation() {
         let kyber = KyberKem::new(128);
         let (public_key, private_key) = kyber.generate_keypair().unwrap();
-        
+
         // Check sizes
         let expected_public_size = 2 * 2 * 256 * 4 + 2 * 256 * 4; // matrix + vector
         let expected_private_size = 2 * 256 * 4; // secret vector
-        
+
         assert_eq!(public_key.len(), expected_public_size);
         assert_eq!(private_key.len(), expected_private_size);
-        
+
         // Keys should be different
         let (pk2, _sk2) = kyber.generate_keypair().unwrap();
         assert_ne!(public_key, pk2);
@@ -1118,12 +1210,12 @@ mod kyber_tests {
     async fn test_kyber_quantum_encryption() {
         let kyber = KyberKem::new(128);
         let (key, key_id) = kyber.generate_key().await.unwrap();
-        
+
         let plaintext = b"Hello, quantum world!";
         let ciphertext = kyber.encrypt(plaintext, &key).await.unwrap();
-        
+
         let decrypted = kyber.decrypt(&ciphertext, &key).await.unwrap();
-        
+
         assert_eq!(decrypted, plaintext);
         assert_eq!(ciphertext.scheme_name(), "kyber_kem");
         assert_eq!(ciphertext.key_id, key_id);
@@ -1133,7 +1225,7 @@ mod kyber_tests {
     fn test_kyber_performance_metrics() {
         let kyber = KyberKem::new(128);
         let metrics = kyber.get_performance_metrics().await.unwrap();
-        
+
         assert!(metrics.keygen_time_ms > 0.0);
         assert!(metrics.encryption_time_ms > 0.0);
         assert!(metrics.decryption_time_ms > 0.0);

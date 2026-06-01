@@ -4,15 +4,15 @@
 //! event tracking, and analysis capabilities. All security-relevant operations
 //! are logged with cryptographic integrity verification.
 
+use crate::error::{AuditErrorCode, FortressError, Result};
+use ring::hmac;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
-use serde::{Deserialize, Serialize};
-use sha2::{Sha256, Digest};
-use ring::hmac;
-use zeroize::Zeroize;
 use tracing::debug;
-use crate::error::{FortressError, Result, AuditErrorCode};
+use zeroize::Zeroize;
 
 /// Audit log entry with tamper-evident protection
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -159,16 +159,16 @@ impl Default for AuditConfig {
 pub trait AuditLogger: Send + Sync {
     /// Log an audit event
     fn log(&mut self, entry: AuditEntry) -> Result<()>;
-    
+
     /// Query audit logs
     fn query(&self, query: AuditQuery) -> Result<Vec<AuditEntry>>;
-    
+
     /// Verify log integrity
     fn verify_integrity(&self) -> Result<IntegrityReport>;
-    
+
     /// Get audit statistics
     fn get_statistics(&self) -> Result<AuditStatistics>;
-    
+
     /// Rotate logs if needed
     fn rotate_logs(&self) -> Result<()>;
 }
@@ -263,13 +263,14 @@ impl DefaultAuditLogger {
     /// Create a new audit logger with the given configuration
     pub fn new(config: AuditConfig) -> Result<Self> {
         let hmac_key = if let Some(key_str) = &config.hmac_key {
-            use base64::{Engine as _, engine::general_purpose};
-            general_purpose::STANDARD.decode(key_str)
-                .map_err(|e| FortressError::configuration(
+            use base64::{engine::general_purpose, Engine as _};
+            general_purpose::STANDARD.decode(key_str).map_err(|e| {
+                FortressError::configuration(
                     format!("Invalid HMAC key: {}", e),
                     Some("hmac_key".to_string()),
                     crate::error::ConfigurationErrorCode::InvalidValue,
-                ))?
+                )
+            })?
         } else {
             // Generate a random key if none provided
             match crate::trng::random_bytes(32) {
@@ -277,11 +278,12 @@ impl DefaultAuditLogger {
                 Err(_) => {
                     // Fallback to getrandom
                     let mut key = vec![0u8; 32];
-                    getrandom::getrandom(&mut key)
-                        .map_err(|e| FortressError::internal(
+                    getrandom::getrandom(&mut key).map_err(|e| {
+                        FortressError::internal(
                             format!("Failed to generate HMAC key: {}", e),
                             "RANDOM_KEY_GENERATION".to_string(),
-                        ))?;
+                        )
+                    })?;
                     key
                 }
             }
@@ -296,22 +298,23 @@ impl DefaultAuditLogger {
 
     /// Generate HMAC signature for an entry
     fn generate_signature(&self, entry: &AuditEntry) -> Result<String> {
-        let serialized = serde_json::to_string(entry)
-            .map_err(|e| FortressError::internal(
+        let serialized = serde_json::to_string(entry).map_err(|e| {
+            FortressError::internal(
                 format!("Failed to serialize audit entry: {}", e),
                 "SERIALIZATION_ERROR".to_string(),
-            ))?;
+            )
+        })?;
 
         let key = hmac::Key::new(hmac::HMAC_SHA256, &self.hmac_key);
         let tag = hmac::sign(&key, serialized.as_bytes());
-        use base64::{Engine as _, engine::general_purpose};
+        use base64::{engine::general_purpose, Engine as _};
         Ok(general_purpose::STANDARD.encode(tag.as_ref()))
     }
 
     /// Generate hash for an entry
     fn generate_hash(&self, entry: &AuditEntry) -> Result<String> {
         let mut hasher = Sha256::new();
-        
+
         // Include all fields except the current hash and signature
         let mut hash_data = format!(
             "{}{}{:?}{:?}{:?}{:?}{:?}{:?}{:?}",
@@ -352,10 +355,12 @@ impl DefaultAuditLogger {
     ) -> Result<AuditEntry> {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map_err(|e| FortressError::internal(
-                format!("System time error: {}", e),
-                "SYSTEM_TIME_ERROR".to_string(),
-            ))?
+            .map_err(|e| {
+                FortressError::internal(
+                    format!("System time error: {}", e),
+                    "SYSTEM_TIME_ERROR".to_string(),
+                )
+            })?
             .as_millis() as u64;
 
         let id = format!("{}-{}", timestamp, uuid::Uuid::new_v4());
@@ -375,7 +380,7 @@ impl DefaultAuditLogger {
                     FortressError::audit(
                         "Audit system lock poisoned - possible concurrent access issue",
                         Some("audit_lock".to_string()),
-                        crate::error::AuditErrorCode::SystemError
+                        crate::error::AuditErrorCode::SystemError,
                     )
                 })?;
                 last_hash_guard.clone()
@@ -394,7 +399,7 @@ impl DefaultAuditLogger {
                 FortressError::audit(
                     "Audit system lock poisoned - possible concurrent access issue",
                     Some("audit_lock".to_string()),
-                    crate::error::AuditErrorCode::SystemError
+                    crate::error::AuditErrorCode::SystemError,
                 )
             })?;
             *last_hash_guard = Some(entry.current_hash.clone());
@@ -406,17 +411,18 @@ impl DefaultAuditLogger {
     /// Read audit entries from a log file
     fn read_log_file(&self, file_path: &str) -> Result<Vec<AuditEntry>> {
         let mut entries = Vec::new();
-        
+
         let content = if file_path.ends_with(".gz") {
             // Read compressed file
             self.read_compressed_log_file(file_path)?
         } else {
             // Read regular file
-            std::fs::read_to_string(file_path)
-                .map_err(|e| FortressError::io(
+            std::fs::read_to_string(file_path).map_err(|e| {
+                FortressError::io(
                     format!("Failed to read audit log file: {}", e),
                     Some(file_path.to_string()),
-                ))?
+                )
+            })?
         };
 
         // Parse each line as a JSON audit entry
@@ -424,7 +430,7 @@ impl DefaultAuditLogger {
             if line.trim().is_empty() {
                 continue;
             }
-            
+
             match serde_json::from_str::<AuditEntry>(line) {
                 Ok(entry) => entries.push(entry),
                 Err(e) => {
@@ -442,20 +448,22 @@ impl DefaultAuditLogger {
         use flate2::read::GzDecoder;
         use std::io::Read;
 
-        let file = std::fs::File::open(file_path)
-            .map_err(|e| FortressError::io(
+        let file = std::fs::File::open(file_path).map_err(|e| {
+            FortressError::io(
                 format!("Failed to open compressed log file: {}", e),
                 Some(file_path.to_string()),
-            ))?;
+            )
+        })?;
 
         let mut decoder = GzDecoder::new(file);
         let mut content = String::new();
-        
-        decoder.read_to_string(&mut content)
-            .map_err(|e| FortressError::io(
+
+        decoder.read_to_string(&mut content).map_err(|e| {
+            FortressError::io(
                 format!("Failed to decompress log file: {}", e),
                 Some(file_path.to_string()),
-            ))?;
+            )
+        })?;
 
         Ok(content)
     }
@@ -490,14 +498,22 @@ impl DefaultAuditLogger {
 
         // Principal filter
         if let Some(principal) = &query.principal {
-            if entry.principal.as_ref().map_or(true, |p| !p.contains(principal)) {
+            if entry
+                .principal
+                .as_ref()
+                .map_or(true, |p| !p.contains(principal))
+            {
                 return false;
             }
         }
 
         // Resource filter
         if let Some(resource) = &query.resource {
-            if entry.resource.as_ref().map_or(true, |r| !r.contains(resource)) {
+            if entry
+                .resource
+                .as_ref()
+                .map_or(true, |r| !r.contains(resource))
+            {
                 return false;
             }
         }
@@ -538,11 +554,12 @@ impl DefaultAuditLogger {
     /// Write entry to log file
     fn write_to_log(&self, entry: &AuditEntry) -> Result<()> {
         if let Some(log_path) = &self.config.log_path {
-            let serialized = serde_json::to_string(entry)
-                .map_err(|e| FortressError::internal(
+            let serialized = serde_json::to_string(entry).map_err(|e| {
+                FortressError::internal(
                     format!("Failed to serialize audit entry: {}", e),
                     "SERIALIZATION_ERROR".to_string(),
-                ))?;
+                )
+            })?;
 
             // Append to file (create if doesn't exist)
             use std::fs::OpenOptions;
@@ -552,16 +569,19 @@ impl DefaultAuditLogger {
                 .create(true)
                 .append(true)
                 .open(log_path)
-                .map_err(|e| FortressError::io(
-                    format!("Failed to open audit log file: {}", e),
-                    Some(log_path.clone()),
-                ))?;
+                .map_err(|e| {
+                    FortressError::io(
+                        format!("Failed to open audit log file: {}", e),
+                        Some(log_path.clone()),
+                    )
+                })?;
 
-            writeln!(file, "{}", serialized)
-                .map_err(|e| FortressError::io(
+            writeln!(file, "{}", serialized).map_err(|e| {
+                FortressError::io(
                     format!("Failed to write audit log: {}", e),
                     Some(log_path.clone()),
-                ))?;
+                )
+            })?;
         }
         Ok(())
     }
@@ -600,7 +620,7 @@ impl AuditLogger for DefaultAuditLogger {
 
         // Read all log files (current and rotated)
         let mut all_entries = Vec::new();
-        
+
         // Read current log file
         if std::path::Path::new(log_path).exists() {
             let entries = self.read_log_file(log_path)?;
@@ -613,8 +633,9 @@ impl AuditLogger for DefaultAuditLogger {
                 for entry in dir_entries.flatten() {
                     let path = entry.path();
                     if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                        if file_name.starts_with("audit_") && 
-                           (file_name.ends_with(".log") || file_name.ends_with(".log.gz")) {
+                        if file_name.starts_with("audit_")
+                            && (file_name.ends_with(".log") || file_name.ends_with(".log.gz"))
+                        {
                             // Skip the current log file as we already read it
                             if path.to_string_lossy() != *log_path {
                                 let entries = self.read_log_file(&path.to_string_lossy())?;
@@ -652,17 +673,19 @@ impl AuditLogger for DefaultAuditLogger {
     fn verify_integrity(&self) -> Result<IntegrityReport> {
         let log_path = match &self.config.log_path {
             Some(path) => path,
-            None => return Ok(IntegrityReport {
-                total_entries: 0,
-                valid_entries: 0,
-                violations: 0,
-                violation_details: vec![],
-            }),
+            None => {
+                return Ok(IntegrityReport {
+                    total_entries: 0,
+                    valid_entries: 0,
+                    violations: 0,
+                    violation_details: vec![],
+                })
+            }
         };
 
         // Read all audit entries from all log files
         let mut all_entries = Vec::new();
-        
+
         // Read current log file
         if std::path::Path::new(log_path).exists() {
             let entries = self.read_log_file(log_path)?;
@@ -675,12 +698,13 @@ impl AuditLogger for DefaultAuditLogger {
                 let mut rotated_files: Vec<_> = dir_entries.flatten().collect();
                 // Sort by filename to ensure chronological order
                 rotated_files.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
-                
+
                 for entry in rotated_files {
                     let path = entry.path();
                     if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                        if file_name.starts_with("audit_") && 
-                           (file_name.ends_with(".log") || file_name.ends_with(".log.gz")) {
+                        if file_name.starts_with("audit_")
+                            && (file_name.ends_with(".log") || file_name.ends_with(".log.gz"))
+                        {
                             // Skip current log file as we already read it
                             if path.to_string_lossy() != *log_path {
                                 let entries = self.read_log_file(&path.to_string_lossy())?;
@@ -710,9 +734,7 @@ impl AuditLogger for DefaultAuditLogger {
                     violation_type: IntegrityViolationType::HashChainBroken,
                     description: format!(
                         "Hash chain broken at entry {}. Expected previous hash: {:?}, found: {:?}",
-                        index,
-                        previous_hash,
-                        entry.previous_hash
+                        index, previous_hash, entry.previous_hash
                     ),
                 });
                 entry_valid = false;
@@ -726,9 +748,7 @@ impl AuditLogger for DefaultAuditLogger {
                     violation_type: IntegrityViolationType::InvalidSignature,
                     description: format!(
                         "Invalid hash for entry {}. Expected: {}, found: {}",
-                        index,
-                        expected_hash,
-                        entry.current_hash
+                        index, expected_hash, entry.current_hash
                     ),
                 });
                 entry_valid = false;
@@ -742,9 +762,7 @@ impl AuditLogger for DefaultAuditLogger {
                     violation_type: IntegrityViolationType::InvalidSignature,
                     description: format!(
                         "Invalid HMAC signature for entry {}. Expected: {}, found: {}",
-                        index,
-                        expected_signature,
-                        entry.signature
+                        index, expected_signature, entry.signature
                     ),
                 });
                 entry_valid = false;
@@ -759,9 +777,7 @@ impl AuditLogger for DefaultAuditLogger {
                         violation_type: IntegrityViolationType::TimestampInconsistency,
                         description: format!(
                             "Timestamp inconsistency at entry {}. Current: {}, Previous: {}",
-                            index,
-                            entry.timestamp,
-                            prev_entry.timestamp
+                            index, entry.timestamp, prev_entry.timestamp
                         ),
                     });
                     entry_valid = false;
@@ -786,19 +802,21 @@ impl AuditLogger for DefaultAuditLogger {
     fn get_statistics(&self) -> Result<AuditStatistics> {
         let log_path = match &self.config.log_path {
             Some(path) => path,
-            None => return Ok(AuditStatistics {
-                total_entries: 0,
-                entries_by_event_type: HashMap::new(),
-                entries_by_security_level: HashMap::new(),
-                entries_by_outcome: HashMap::new(),
-                date_range: (None, None),
-                log_size: 0,
-            }),
+            None => {
+                return Ok(AuditStatistics {
+                    total_entries: 0,
+                    entries_by_event_type: HashMap::new(),
+                    entries_by_security_level: HashMap::new(),
+                    entries_by_outcome: HashMap::new(),
+                    date_range: (None, None),
+                    log_size: 0,
+                })
+            }
         };
 
         // Read all audit entries from all log files
         let mut all_entries = Vec::new();
-        
+
         // Read current log file
         if std::path::Path::new(log_path).exists() {
             let entries = self.read_log_file(log_path)?;
@@ -811,8 +829,9 @@ impl AuditLogger for DefaultAuditLogger {
                 for entry in dir_entries.flatten() {
                     let path = entry.path();
                     if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                        if file_name.starts_with("audit_") && 
-                           (file_name.ends_with(".log") || file_name.ends_with(".log.gz")) {
+                        if file_name.starts_with("audit_")
+                            && (file_name.ends_with(".log") || file_name.ends_with(".log.gz"))
+                        {
                             // Skip current log file as we already read it
                             if path.to_string_lossy() != *log_path {
                                 let entries = self.read_log_file(&path.to_string_lossy())?;
@@ -845,8 +864,9 @@ impl AuditLogger for DefaultAuditLogger {
                 for entry in dir_entries.flatten() {
                     let path = entry.path();
                     if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                        if file_name.starts_with("audit_") && 
-                           (file_name.ends_with(".log") || file_name.ends_with(".log.gz")) {
+                        if file_name.starts_with("audit_")
+                            && (file_name.ends_with(".log") || file_name.ends_with(".log.gz"))
+                        {
                             if let Ok(metadata) = std::fs::metadata(&path) {
                                 total_log_size += metadata.len();
                             }
@@ -859,17 +879,23 @@ impl AuditLogger for DefaultAuditLogger {
         // Process entries
         for entry in &all_entries {
             // Count by event type
-            *entries_by_event_type.entry(entry.event_type.clone()).or_insert(0) += 1;
+            *entries_by_event_type
+                .entry(entry.event_type.clone())
+                .or_insert(0) += 1;
 
             // Count by security level
-            *entries_by_security_level.entry(entry.security_level.clone()).or_insert(0) += 1;
+            *entries_by_security_level
+                .entry(entry.security_level.clone())
+                .or_insert(0) += 1;
 
             // Count by outcome
             *entries_by_outcome.entry(entry.outcome.clone()).or_insert(0) += 1;
 
             // Track timestamp range
-            min_timestamp = min_timestamp.map_or(Some(entry.timestamp), |min| Some(min.min(entry.timestamp)));
-            max_timestamp = max_timestamp.map_or(Some(entry.timestamp), |max| Some(max.max(entry.timestamp)));
+            min_timestamp =
+                min_timestamp.map_or(Some(entry.timestamp), |min| Some(min.min(entry.timestamp)));
+            max_timestamp =
+                max_timestamp.map_or(Some(entry.timestamp), |max| Some(max.max(entry.timestamp)));
         }
 
         Ok(AuditStatistics {
@@ -884,7 +910,7 @@ impl AuditLogger for DefaultAuditLogger {
 
     fn rotate_logs(&self) -> Result<()> {
         use crate::audit_rotation::{LogRotationManager, RetentionPolicy, RotationStrategy};
-        
+
         if !self.config.enable_rotation {
             return Ok(());
         }
@@ -898,11 +924,8 @@ impl AuditLogger for DefaultAuditLogger {
 
         let rotation_strategy = RotationStrategy::SizeBased; // Use size-based rotation
 
-        let mut rotation_manager = LogRotationManager::new(
-            self.config.clone(),
-            retention_policy,
-            rotation_strategy,
-        )?;
+        let mut rotation_manager =
+            LogRotationManager::new(self.config.clone(), retention_policy, rotation_strategy)?;
 
         rotation_manager.force_rotation()
     }
@@ -916,13 +939,21 @@ impl Drop for DefaultAuditLogger {
 }
 
 /// Global audit logger instance using safe initialization
-static AUDIT_LOGGER: std::sync::OnceLock<Arc<std::sync::Mutex<DefaultAuditLogger>>> = std::sync::OnceLock::new();
+static AUDIT_LOGGER: std::sync::OnceLock<Arc<std::sync::Mutex<DefaultAuditLogger>>> =
+    std::sync::OnceLock::new();
 
 /// Initialize the global audit logger
 pub fn init_audit_logger(config: AuditConfig) -> Result<()> {
     let logger = DefaultAuditLogger::new(config)?;
-    AUDIT_LOGGER.set(Arc::new(std::sync::Mutex::new(logger)))
-        .map_err(|_| FortressError::audit("Audit logger already initialized", None, AuditErrorCode::ConfigurationError))?;
+    AUDIT_LOGGER
+        .set(Arc::new(std::sync::Mutex::new(logger)))
+        .map_err(|_| {
+            FortressError::audit(
+                "Audit logger already initialized",
+                None,
+                AuditErrorCode::ConfigurationError,
+            )
+        })?;
     Ok(())
 }
 
@@ -941,8 +972,22 @@ pub fn log_event(
     outcome: EventOutcome,
 ) -> Result<()> {
     if let Some(logger_arc) = get_audit_logger() {
-        let mut logger = logger_arc.lock().map_err(|_| FortressError::audit("Failed to lock audit logger", None, AuditErrorCode::LogRetrievalFailed))?;
-        let entry = logger.create_entry(event_type, security_level, principal, resource, action, outcome, HashMap::new())?;
+        let mut logger = logger_arc.lock().map_err(|_| {
+            FortressError::audit(
+                "Failed to lock audit logger",
+                None,
+                AuditErrorCode::LogRetrievalFailed,
+            )
+        })?;
+        let entry = logger.create_entry(
+            event_type,
+            security_level,
+            principal,
+            resource,
+            action,
+            outcome,
+            HashMap::new(),
+        )?;
         logger.log(entry)
     } else {
         debug!("No audit logger available");
@@ -961,8 +1006,22 @@ pub fn log_event_with_metadata(
     metadata: HashMap<String, String>,
 ) -> Result<()> {
     if let Some(logger_arc) = get_audit_logger() {
-        let mut logger = logger_arc.lock().map_err(|_| FortressError::audit("Failed to lock audit logger", None, AuditErrorCode::LogRetrievalFailed))?;
-        let entry = logger.create_entry(event_type, security_level, principal, resource, action, outcome, metadata)?;
+        let mut logger = logger_arc.lock().map_err(|_| {
+            FortressError::audit(
+                "Failed to lock audit logger",
+                None,
+                AuditErrorCode::LogRetrievalFailed,
+            )
+        })?;
+        let entry = logger.create_entry(
+            event_type,
+            security_level,
+            principal,
+            resource,
+            action,
+            outcome,
+            metadata,
+        )?;
         logger.log(entry)
     } else {
         debug!("No audit logger available");
@@ -978,19 +1037,23 @@ mod tests {
     #[test]
     fn test_audit_entry_creation() {
         let mut config = AuditConfig::default();
-        config.hmac_key = Some(base64::engine::general_purpose::STANDARD.encode("test_key_32_bytes_long_12345678"));
-        
+        config.hmac_key = Some(
+            base64::engine::general_purpose::STANDARD.encode("test_key_32_bytes_long_12345678"),
+        );
+
         let mut logger = DefaultAuditLogger::new(config).unwrap();
-        
-        let entry = logger.create_entry(
-            AuditEventType::Authentication,
-            SecurityLevel::High,
-            Some("user123".to_string()),
-            Some("/login".to_string()),
-            "user_login".to_string(),
-            EventOutcome::Success,
-            HashMap::new(),
-        ).unwrap();
+
+        let entry = logger
+            .create_entry(
+                AuditEventType::Authentication,
+                SecurityLevel::High,
+                Some("user123".to_string()),
+                Some("/login".to_string()),
+                "user_login".to_string(),
+                EventOutcome::Success,
+                HashMap::new(),
+            )
+            .unwrap();
 
         assert!(!entry.id.is_empty());
         assert!(!entry.current_hash.is_empty());

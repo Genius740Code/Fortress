@@ -1,10 +1,10 @@
 //! SIMD-optimized encryption implementations
-//! 
+//!
 //! This module provides high-performance encryption using SIMD instructions
 //! including AVX2 and AVX-512 for parallel processing of cryptographic operations.
 
-use crate::error::FortressError;
 use crate::encryption::EncryptionAlgorithm;
+use crate::error::FortressError;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
@@ -43,8 +43,6 @@ impl SimdEncryptor {
         // The simulated AVX-512 encryption (XOR) is insecure and has been removed.
         self.algorithm.encrypt(plaintext, &self.keys)
     }
-
-
 
     /// Encrypt data using the best available SIMD instruction set
     pub fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>, FortressError> {
@@ -129,8 +127,14 @@ mod tests {
     fn test_simd_feature_detection() {
         // Test feature detection
         println!("AVX2 supported: {}", SimdEncryptor::is_avx2_supported());
-        println!("AVX-512 supported: {}", SimdEncryptor::is_avx512_supported());
-        println!("Supported features: {:?}", AdaptiveEncryptor::supported_features());
+        println!(
+            "AVX-512 supported: {}",
+            SimdEncryptor::is_avx512_supported()
+        );
+        println!(
+            "Supported features: {:?}",
+            AdaptiveEncryptor::supported_features()
+        );
     }
 
     #[test]
@@ -148,7 +152,7 @@ mod tests {
     #[test]
     fn test_simd_operation_counting() {
         let initial_count = SimdEncryptor::simd_operation_count();
-        
+
         let algorithm = Arc::new(Aegis256::new());
         let key = vec![0u8; 32];
         let encryptor = SimdEncryptor::new(algorithm, &key);
@@ -156,7 +160,7 @@ mod tests {
         if SimdEncryptor::is_avx2_supported() || SimdEncryptor::is_avx512_supported() {
             let data = vec![1u8; 2048];
             let _ = encryptor.encrypt(&data);
-            
+
             let final_count = SimdEncryptor::simd_operation_count();
             assert!(final_count > initial_count);
         }

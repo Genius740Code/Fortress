@@ -1,5 +1,5 @@
 //! gRPC service implementation for Fortress
-//! 
+//!
 //! This module provides the gRPC server and service implementations
 //! for the Fortress secure storage system.
 

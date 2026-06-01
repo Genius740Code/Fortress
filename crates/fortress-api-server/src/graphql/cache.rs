@@ -3,12 +3,12 @@
 //! Implements multi-level caching with LRU eviction, TTL management,
 //! and intelligent cache warming strategies for optimal performance.
 
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
+use std::hash::Hash;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use std::hash::Hash;
 use tokio::sync::RwLock;
-use serde::{Serialize, Deserialize};
 
 /// Cache entry with TTL support
 #[derive(Clone, Debug)]
@@ -74,21 +74,21 @@ impl<T: Clone + Send + Sync + 'static> GraphQLCache<T> {
                 self.schedule_cleanup(key_owned);
                 return None;
             }
-            
+
             // Cache hit - get value and schedule async metadata update
             let value = entry.value.clone();
             let access_count = entry.access_count;
             drop(entries);
-            
+
             // Schedule async update to avoid blocking
             self.schedule_access_update(key, access_count);
-            
+
             return Some(value);
         }
-        
+
         None
     }
-    
+
     /// Schedule cleanup task for expired entries (non-blocking)
     fn schedule_cleanup(&self, key: String) {
         let cache = self.clone();
@@ -99,7 +99,7 @@ impl<T: Clone + Send + Sync + 'static> GraphQLCache<T> {
             lru_order.retain(|k| k != &key);
         });
     }
-    
+
     /// Schedule access metadata update (non-blocking)
     fn schedule_access_update(&self, key: &str, access_count: u64) {
         let cache = self.clone();
@@ -111,7 +111,7 @@ impl<T: Clone + Send + Sync + 'static> GraphQLCache<T> {
                 lru_order.retain(|k| k != &key_owned);
                 lru_order.push_front(key_owned.clone());
             }
-            
+
             // Then update entry metadata
             {
                 let mut entries = cache.entries.write().await;
@@ -127,7 +127,7 @@ impl<T: Clone + Send + Sync + 'static> GraphQLCache<T> {
     pub async fn put_with_ttl(&self, key: String, value: T, ttl: Duration) {
         let mut entries = self.entries.write().await;
         let mut lru_order = self.lru_order.write().await;
-        
+
         // Check if key already exists and update it
         if entries.contains_key(&key) {
             // Remove from current LRU position
@@ -143,7 +143,7 @@ impl<T: Clone + Send + Sync + 'static> GraphQLCache<T> {
                 }
             }
         }
-        
+
         entries.insert(key.clone(), CacheEntry::new(value, ttl));
         lru_order.push_front(key);
     }
@@ -158,21 +158,22 @@ impl<T: Clone + Send + Sync + 'static> GraphQLCache<T> {
         // Collect expired keys with read lock only
         let expired_keys = {
             let entries = self.entries.read().await;
-            entries.iter()
+            entries
+                .iter()
                 .filter(|(_, entry)| entry.is_expired())
                 .map(|(key, _)| key.clone())
                 .collect::<Vec<_>>()
         };
-        
+
         // Batch remove with write lock
         if !expired_keys.is_empty() {
             let mut entries = self.entries.write().await;
             let mut lru_order = self.lru_order.write().await;
-            
+
             for key in &expired_keys {
                 entries.remove(key);
             }
-            
+
             lru_order.retain(|k| !expired_keys.contains(k));
         }
     }
@@ -189,10 +190,8 @@ impl<T: Clone + Send + Sync + 'static> GraphQLCache<T> {
     pub async fn stats(&self) -> CacheStats {
         let entries = self.entries.read().await;
         let total_entries = entries.len();
-        let expired_count = entries.values()
-            .filter(|entry| entry.is_expired())
-            .count();
-        
+        let expired_count = entries.values().filter(|entry| entry.is_expired()).count();
+
         CacheStats {
             total_entries,
             expired_count,
@@ -201,7 +200,11 @@ impl<T: Clone + Send + Sync + 'static> GraphQLCache<T> {
     }
 
     /// Evict least recently used entries - optimized for direct access
-    fn evict_lru(&self, entries: &mut HashMap<String, CacheEntry<T>>, lru_order: &mut VecDeque<String>) {
+    fn evict_lru(
+        &self,
+        entries: &mut HashMap<String, CacheEntry<T>>,
+        lru_order: &mut VecDeque<String>,
+    ) {
         // Direct O(1) eviction using pop_back()
         if let Some(lru_key) = lru_order.pop_back() {
             entries.remove(&lru_key);
@@ -298,7 +301,7 @@ impl GraphQLCacheManager {
             let mut interval = tokio::time::interval(self.config.cleanup_interval);
             loop {
                 interval.tick().await;
-                
+
                 // Clean up expired entries
                 tokio::join!(
                     self.database_cache.cleanup_expired(),
@@ -371,7 +374,10 @@ pub struct QueryHasher;
 
 impl QueryHasher {
     /// Efficiently hash JSON value without string allocation
-    fn hash_json_value(value: &serde_json::Value, hasher: &mut std::collections::hash_map::DefaultHasher) {
+    fn hash_json_value(
+        value: &serde_json::Value,
+        hasher: &mut std::collections::hash_map::DefaultHasher,
+    ) {
         match value {
             serde_json::Value::Null => 0.hash(hasher),
             serde_json::Value::Bool(b) => b.hash(hasher),
@@ -415,14 +421,14 @@ impl QueryHasher {
         use std::hash::{Hash, Hasher};
 
         let mut hasher = DefaultHasher::new();
-        
+
         // Hash query components directly - zero allocations
         database.hash(&mut hasher);
         table.hash(&mut hasher);
-        
+
         // Hash JSON value efficiently without string allocation
         Self::hash_json_value(filters, &mut hasher);
-        
+
         // Hash pagination directly without string conversion
         if let Some(pagination) = pagination {
             pagination.page.hash(&mut hasher);

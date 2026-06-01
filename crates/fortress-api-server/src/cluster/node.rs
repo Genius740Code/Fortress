@@ -136,11 +136,11 @@ impl ClusterNode {
 
     /// Check if node is healthy
     pub fn is_healthy(&self) -> bool {
-        self.status == NodeStatus::Online && 
-        self.health_metrics.cpu_usage < 90.0 &&
-        self.health_metrics.memory_usage < 90.0 &&
-        self.health_metrics.disk_usage < 95.0 &&
-        self.health_metrics.error_rate < 5.0
+        self.status == NodeStatus::Online
+            && self.health_metrics.cpu_usage < 90.0
+            && self.health_metrics.memory_usage < 90.0
+            && self.health_metrics.disk_usage < 95.0
+            && self.health_metrics.error_rate < 5.0
     }
 
     /// Update node status

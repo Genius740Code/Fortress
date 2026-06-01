@@ -4,16 +4,16 @@
 //! enabling internal services to authenticate using industry-standard OIDC protocols.
 //! Includes support for Rego policies for authorization decisions.
 
-use crate::error::FortressError;
+use crate::auth::{AuthManager, TokenClaims, User};
 use crate::error::EncryptionErrorCode;
-use crate::auth::{AuthManager, User, TokenClaims};
+use crate::error::FortressError;
+use base64::{engine::general_purpose, Engine as _};
+use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
+use sha2::Digest;
 use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
-use jsonwebtoken::{encode, decode, Header, Algorithm, Validation, EncodingKey, DecodingKey};
-use base64::{Engine as _, engine::general_purpose};
-use sha2::Digest;
 
 /// OIDC Provider configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -328,23 +328,34 @@ impl OidcProvider {
     /// Handle authorization request
     pub async fn authorize(&mut self, request: OidcAuthRequest) -> Result<String, FortressError> {
         // Validate client
-        let client = self.config.clients.get(&request.client_id)
+        let client = self
+            .config
+            .clients
+            .get(&request.client_id)
             .ok_or_else(|| FortressError::validation("Invalid client_id", None, None))?;
 
         // Validate redirect URI
         if !client.redirect_uris.contains(&request.redirect_uri) {
-            return Err(FortressError::validation("Invalid redirect_uri", None, None));
+            return Err(FortressError::validation(
+                "Invalid redirect_uri",
+                None,
+                None,
+            ));
         }
 
         // Validate response type
         if !client.response_types.contains(&request.response_type) {
-            return Err(FortressError::validation("Unsupported response_type", None, None));
+            return Err(FortressError::validation(
+                "Unsupported response_type",
+                None,
+                None,
+            ));
         }
 
         // Validate scope
         let requested_scopes: HashSet<&str> = request.scope.split_whitespace().collect();
         let allowed_scopes: HashSet<&str> = client.scopes.iter().map(|s| s.as_str()).collect();
-        
+
         if !requested_scopes.is_subset(&allowed_scopes) {
             return Err(FortressError::validation("Invalid scope", None, None));
         }
@@ -356,7 +367,10 @@ impl OidcProvider {
         // Check authorization policies if Rego is enabled
         if let Some(rego_engine) = &mut self.rego_engine {
             if !rego_engine.evaluate_authorization(&user_id, &request.client_id, &request.scope)? {
-                return Err(FortressError::authentication("Access denied by policy", Some(user_id)));
+                return Err(FortressError::authentication(
+                    "Access denied by policy",
+                    Some(user_id),
+                ));
             }
         }
 
@@ -390,45 +404,77 @@ impl OidcProvider {
     }
 
     /// Handle token request
-    pub async fn token(&mut self, request: OidcTokenRequest) -> Result<OidcTokenResponse, FortressError> {
+    pub async fn token(
+        &mut self,
+        request: OidcTokenRequest,
+    ) -> Result<OidcTokenResponse, FortressError> {
         match request.grant_type.as_str() {
             "authorization_code" => self.handle_authorization_code_grant(request).await,
             "refresh_token" => self.handle_refresh_token_grant(request).await,
             "client_credentials" => self.handle_client_credentials_grant(request).await,
-            _ => Err(FortressError::validation("Unsupported grant_type", None, None)),
+            _ => Err(FortressError::validation(
+                "Unsupported grant_type",
+                None,
+                None,
+            )),
         }
     }
 
     /// Handle authorization code grant
-    async fn handle_authorization_code_grant(&mut self, request: OidcTokenRequest) -> Result<OidcTokenResponse, FortressError> {
-        let code = request.code.ok_or_else(|| FortressError::validation("Missing code", None, None))?;
-        let redirect_uri = request.redirect_uri.ok_or_else(|| FortressError::validation("Missing redirect_uri", None, None))?;
+    async fn handle_authorization_code_grant(
+        &mut self,
+        request: OidcTokenRequest,
+    ) -> Result<OidcTokenResponse, FortressError> {
+        let code = request
+            .code
+            .ok_or_else(|| FortressError::validation("Missing code", None, None))?;
+        let redirect_uri = request
+            .redirect_uri
+            .ok_or_else(|| FortressError::validation("Missing redirect_uri", None, None))?;
 
         // Validate client
-        let client = self.config.clients.get(&request.client_id)
+        let client = self
+            .config
+            .clients
+            .get(&request.client_id)
             .ok_or_else(|| FortressError::validation("Invalid client_id", None, None))?;
 
         // Validate client secret for confidential clients
         if !client.public {
-            let client_secret = request.client_secret.as_ref()
+            let client_secret = request
+                .client_secret
+                .as_ref()
                 .ok_or_else(|| FortressError::validation("Missing client_secret", None, None))?;
             if client.client_secret.as_ref() != Some(client_secret) {
-                return Err(FortressError::authentication("Invalid client credentials", None));
+                return Err(FortressError::authentication(
+                    "Invalid client credentials",
+                    None,
+                ));
             }
         }
 
         // Validate authorization code
-        let auth_code_info = self.auth_codes.remove(&code)
+        let auth_code_info = self
+            .auth_codes
+            .remove(&code)
             .ok_or_else(|| FortressError::validation("Invalid or expired code", None, None))?;
 
         // Check if code is expired
         if current_timestamp() > auth_code_info.expires_at {
-            return Err(FortressError::validation("Authorization code expired", None, None));
+            return Err(FortressError::validation(
+                "Authorization code expired",
+                None,
+                None,
+            ));
         }
 
         // Validate redirect URI
         if auth_code_info.redirect_uri != redirect_uri {
-            return Err(FortressError::validation("Redirect URI mismatch", None, None));
+            return Err(FortressError::validation(
+                "Redirect URI mismatch",
+                None,
+                None,
+            ));
         }
 
         // Validate client ID
@@ -437,15 +483,22 @@ impl OidcProvider {
         }
 
         // Validate PKCE if present
-        if let (Some(code_challenge), Some(code_verifier)) = (&auth_code_info.code_challenge, &request.code_verifier) {
-            let method = auth_code_info.code_challenge_method.as_deref().unwrap_or("plain");
+        if let (Some(code_challenge), Some(code_verifier)) =
+            (&auth_code_info.code_challenge, &request.code_verifier)
+        {
+            let method = auth_code_info
+                .code_challenge_method
+                .as_deref()
+                .unwrap_or("plain");
             if !self.validate_pkce(code_challenge, code_verifier, method)? {
                 return Err(FortressError::authentication("Invalid PKCE verifier", None));
             }
         }
 
         // Get user information
-        let user = self.auth_manager.get_user(&auth_code_info.user_id)
+        let user = self
+            .auth_manager
+            .get_user(&auth_code_info.user_id)
             .ok_or_else(|| FortressError::authentication("User not found", None))?;
 
         // Clone user data to avoid borrow issues
@@ -454,9 +507,11 @@ impl OidcProvider {
 
         // Generate tokens (refresh token needs mutable borrow)
         let refresh_token = self.generate_refresh_token(&auth_code_info)?;
-        
+
         // Get user again for token generation (or use cloned data)
-        let user = self.auth_manager.get_user(&user_id)
+        let user = self
+            .auth_manager
+            .get_user(&user_id)
             .ok_or_else(|| FortressError::authentication("User not found", None))?;
         let access_token = self.generate_access_token(&user, &auth_code_info)?;
         let id_token = self.generate_id_token(&user, &auth_code_info)?;
@@ -472,20 +527,33 @@ impl OidcProvider {
     }
 
     /// Handle refresh token grant
-    async fn handle_refresh_token_grant(&mut self, request: OidcTokenRequest) -> Result<OidcTokenResponse, FortressError> {
-        let refresh_token = request.refresh_token.ok_or_else(|| FortressError::validation("Missing refresh_token", None, None))?;
+    async fn handle_refresh_token_grant(
+        &mut self,
+        request: OidcTokenRequest,
+    ) -> Result<OidcTokenResponse, FortressError> {
+        let refresh_token = request
+            .refresh_token
+            .ok_or_else(|| FortressError::validation("Missing refresh_token", None, None))?;
 
         // Validate refresh token
-        let token_info = self.refresh_tokens.get(&refresh_token)
+        let token_info = self
+            .refresh_tokens
+            .get(&refresh_token)
             .ok_or_else(|| FortressError::validation("Invalid refresh_token", None, None))?;
 
         // Check if refresh token is expired
         if current_timestamp() > token_info.expires_at {
-            return Err(FortressError::validation("Refresh token expired", None, None));
+            return Err(FortressError::validation(
+                "Refresh token expired",
+                None,
+                None,
+            ));
         }
 
         // Get user information
-        let user = self.auth_manager.get_user(&token_info.user_id)
+        let user = self
+            .auth_manager
+            .get_user(&token_info.user_id)
             .ok_or_else(|| FortressError::authentication("User not found", None))?;
 
         // Generate new access token
@@ -502,16 +570,27 @@ impl OidcProvider {
     }
 
     /// Handle client credentials grant
-    async fn handle_client_credentials_grant(&mut self, request: OidcTokenRequest) -> Result<OidcTokenResponse, FortressError> {
+    async fn handle_client_credentials_grant(
+        &mut self,
+        request: OidcTokenRequest,
+    ) -> Result<OidcTokenResponse, FortressError> {
         // Validate client
-        let client = self.config.clients.get(&request.client_id)
+        let client = self
+            .config
+            .clients
+            .get(&request.client_id)
             .ok_or_else(|| FortressError::validation("Invalid client_id", None, None))?;
 
-        let client_secret = request.client_secret.as_ref()
+        let client_secret = request
+            .client_secret
+            .as_ref()
             .ok_or_else(|| FortressError::validation("Missing client_secret", None, None))?;
 
         if client.client_secret.as_ref() != Some(client_secret) {
-            return Err(FortressError::authentication("Invalid client credentials", None));
+            return Err(FortressError::authentication(
+                "Invalid client credentials",
+                None,
+            ));
         }
 
         // For client credentials, we create a synthetic user representing the client
@@ -528,7 +607,9 @@ impl OidcProvider {
         };
 
         // Generate access token
-        let scope = request.scope.unwrap_or_else(|| "client_credentials".to_string());
+        let scope = request
+            .scope
+            .unwrap_or_else(|| "client_credentials".to_string());
         let auth_code_info = AuthCodeInfo {
             code: String::new(),
             client_id: request.client_id.clone(),
@@ -558,31 +639,50 @@ impl OidcProvider {
     pub async fn user_info(&self, access_token: &str) -> Result<OidcUserInfo, FortressError> {
         // Decode and validate access token
         let claims = self.decode_access_token(access_token)?;
-        
+
         // Get user information
-        let user = self.auth_manager.get_user(&claims.sub)
+        let user = self
+            .auth_manager
+            .get_user(&claims.sub)
             .ok_or_else(|| FortressError::authentication("User not found", None))?;
 
         // Get user permissions and roles
         let user_id = user.id.clone(); // Clone to avoid move issues
         let permissions = self.auth_manager.get_user_permissions(&user.id);
-        let roles: Vec<String> = user.roles.iter()
+        let roles: Vec<String> = user
+            .roles
+            .iter()
             .filter_map(|role_id| self.auth_manager.get_role(role_id))
             .map(|role| role.name.clone())
             .collect();
 
         let mut additional_claims = HashMap::new();
-        additional_claims.insert("roles".to_string(), serde_json::Value::Array(
-            roles.clone().into_iter().map(serde_json::Value::String).collect()
-        ));
-        additional_claims.insert("permissions".to_string(), serde_json::Value::Array(
-            permissions.into_iter().map(|p| serde_json::json!({
-                "id": p.id,
-                "name": p.name,
-                "resource": p.resource,
-                "action": p.action
-            })).collect()
-        ));
+        additional_claims.insert(
+            "roles".to_string(),
+            serde_json::Value::Array(
+                roles
+                    .clone()
+                    .into_iter()
+                    .map(serde_json::Value::String)
+                    .collect(),
+            ),
+        );
+        additional_claims.insert(
+            "permissions".to_string(),
+            serde_json::Value::Array(
+                permissions
+                    .into_iter()
+                    .map(|p| {
+                        serde_json::json!({
+                            "id": p.id,
+                            "name": p.name,
+                            "resource": p.resource,
+                            "action": p.action
+                        })
+                    })
+                    .collect(),
+            ),
+        );
 
         Ok(OidcUserInfo {
             sub: user_id,
@@ -601,7 +701,11 @@ impl OidcProvider {
     }
 
     /// Generate access token
-    fn generate_access_token(&self, user: &User, auth_code_info: &AuthCodeInfo) -> Result<String, FortressError> {
+    fn generate_access_token(
+        &self,
+        user: &User,
+        auth_code_info: &AuthCodeInfo,
+    ) -> Result<String, FortressError> {
         let now = current_timestamp();
         let exp = now + self.config.token_expiration.access_token;
 
@@ -612,7 +716,9 @@ impl OidcProvider {
             exp,
             iat: now,
             roles: user.roles.clone(),
-            permissions: self.auth_manager.get_user_permissions(&user.id)
+            permissions: self
+                .auth_manager
+                .get_user_permissions(&user.id)
                 .into_iter()
                 .map(|p| p.id.clone())
                 .collect(),
@@ -623,12 +729,20 @@ impl OidcProvider {
         let key = EncodingKey::from_rsa_pem(b"-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...\n-----END PUBLIC KEY-----")
             .map_err(|_e| FortressError::encryption("Failed to create encoding key", "RS256", EncryptionErrorCode::AlgorithmNotSupported))?;
 
-        encode(&header, &claims, &key)
-            .map_err(|_e| FortressError::encryption("Failed to encode token", "RS256", EncryptionErrorCode::AlgorithmNotSupported))
+        encode(&header, &claims, &key).map_err(|_e| {
+            FortressError::encryption(
+                "Failed to encode token",
+                "RS256",
+                EncryptionErrorCode::AlgorithmNotSupported,
+            )
+        })
     }
 
     /// Generate refresh token
-    fn generate_refresh_token(&mut self, auth_code_info: &AuthCodeInfo) -> Result<String, FortressError> {
+    fn generate_refresh_token(
+        &mut self,
+        auth_code_info: &AuthCodeInfo,
+    ) -> Result<String, FortressError> {
         let token = Uuid::new_v4().to_string();
         let now = current_timestamp();
         let expires_at = now + self.config.token_expiration.refresh_token;
@@ -647,7 +761,11 @@ impl OidcProvider {
     }
 
     /// Generate ID token
-    fn generate_id_token(&self, user: &User, auth_code_info: &AuthCodeInfo) -> Result<String, FortressError> {
+    fn generate_id_token(
+        &self,
+        user: &User,
+        auth_code_info: &AuthCodeInfo,
+    ) -> Result<String, FortressError> {
         let now = current_timestamp();
         let exp = now + self.config.token_expiration.id_token;
 
@@ -671,12 +789,21 @@ impl OidcProvider {
         let key = EncodingKey::from_rsa_pem(b"-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...\n-----END PUBLIC KEY-----")
             .map_err(|_e| FortressError::encryption("Failed to create encoding key", "RS256", EncryptionErrorCode::AlgorithmNotSupported))?;
 
-        encode(&header, &claims, &key)
-            .map_err(|_e| FortressError::encryption("Failed to encode ID token", "RS256", EncryptionErrorCode::AlgorithmNotSupported))
+        encode(&header, &claims, &key).map_err(|_e| {
+            FortressError::encryption(
+                "Failed to encode ID token",
+                "RS256",
+                EncryptionErrorCode::AlgorithmNotSupported,
+            )
+        })
     }
 
     /// Generate access token from refresh token
-    fn generate_access_token_from_refresh(&self, user: &User, refresh_info: &RefreshTokenInfo) -> Result<String, FortressError> {
+    fn generate_access_token_from_refresh(
+        &self,
+        user: &User,
+        refresh_info: &RefreshTokenInfo,
+    ) -> Result<String, FortressError> {
         let now = current_timestamp();
         let exp = now + self.config.token_expiration.access_token;
 
@@ -687,7 +814,9 @@ impl OidcProvider {
             exp,
             iat: now,
             roles: user.roles.clone(),
-            permissions: self.auth_manager.get_user_permissions(&user.id)
+            permissions: self
+                .auth_manager
+                .get_user_permissions(&user.id)
                 .into_iter()
                 .map(|p| p.id.clone())
                 .collect(),
@@ -698,8 +827,13 @@ impl OidcProvider {
         let key = EncodingKey::from_rsa_pem(b"-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...\n-----END PUBLIC KEY-----")
             .map_err(|_e| FortressError::encryption("Failed to create encoding key", "RS256", EncryptionErrorCode::AlgorithmNotSupported))?;
 
-        encode(&header, &claims, &key)
-            .map_err(|_e| FortressError::encryption("Failed to encode access token", "RS256", EncryptionErrorCode::AlgorithmNotSupported))
+        encode(&header, &claims, &key).map_err(|_e| {
+            FortressError::encryption(
+                "Failed to encode access token",
+                "RS256",
+                EncryptionErrorCode::AlgorithmNotSupported,
+            )
+        })
     }
 
     /// Decode access token
@@ -717,7 +851,12 @@ impl OidcProvider {
     }
 
     /// Validate PKCE
-    fn validate_pkce(&self, code_challenge: &str, code_verifier: &str, method: &str) -> Result<bool, FortressError> {
+    fn validate_pkce(
+        &self,
+        code_challenge: &str,
+        code_verifier: &str,
+        method: &str,
+    ) -> Result<bool, FortressError> {
         match method {
             "plain" => Ok(code_challenge == code_verifier),
             "S256" => {
@@ -726,8 +865,12 @@ impl OidcProvider {
                 let hash = hasher.finalize();
                 let encoded = general_purpose::URL_SAFE_NO_PAD.encode(hash);
                 Ok(code_challenge == encoded)
-            },
-            _ => Err(FortressError::validation("Unsupported PKCE method", None, None)),
+            }
+            _ => Err(FortressError::validation(
+                "Unsupported PKCE method",
+                None,
+                None,
+            )),
         }
     }
 
@@ -748,18 +891,16 @@ impl OidcProvider {
             y: None,
         };
 
-        Ok(JsonWebKeySet {
-            keys: vec![key],
-        })
+        Ok(JsonWebKeySet { keys: vec![key] })
     }
 
     /// Clean up expired codes and tokens
     pub fn cleanup_expired(&mut self) {
         let now = current_timestamp();
-        
+
         // Clean up expired authorization codes
         self.auth_codes.retain(|_, info| info.expires_at > now);
-        
+
         // Clean up expired refresh tokens
         self.refresh_tokens.retain(|_, info| info.expires_at > now);
     }
@@ -786,23 +927,27 @@ impl RegoPolicyEngine {
 
     /// Load policies from directory
     pub fn load_policies_from_dir(&mut self, dir: &str) -> Result<(), FortressError> {
-        let paths = std::fs::read_dir(dir)
-            .map_err(|e| FortressError::io("Failed to read policy directory", Some(e.to_string())))?;
+        let paths = std::fs::read_dir(dir).map_err(|e| {
+            FortressError::io("Failed to read policy directory", Some(e.to_string()))
+        })?;
 
         for path in paths {
-            let path = path
-                .map_err(|e| FortressError::io("Failed to read directory entry", Some(e.to_string())))?;
-            
+            let path = path.map_err(|e| {
+                FortressError::io("Failed to read directory entry", Some(e.to_string()))
+            })?;
+
             if path.path().extension().and_then(|s| s.to_str()) == Some("rego") {
-                let policy_content = std::fs::read_to_string(path.path())
-                    .map_err(|e| FortressError::io("Failed to read policy file", Some(e.to_string())))?;
-            
-                let policy_name = path.file_name()
+                let policy_content = std::fs::read_to_string(path.path()).map_err(|e| {
+                    FortressError::io("Failed to read policy file", Some(e.to_string()))
+                })?;
+
+                let policy_name = path
+                    .file_name()
                     .to_str()
                     .map(|s| s.strip_suffix(".rego").unwrap_or(s))
                     .unwrap_or("unknown")
                     .to_string();
-            
+
                 self.load_policy(&policy_name, &policy_content)?;
             }
         }
@@ -810,10 +955,15 @@ impl RegoPolicyEngine {
     }
 
     /// Evaluate authorization policy
-    pub fn evaluate_authorization(&mut self, user_id: &str, client_id: &str, scope: &str) -> Result<bool, FortressError> {
+    pub fn evaluate_authorization(
+        &mut self,
+        user_id: &str,
+        client_id: &str,
+        scope: &str,
+    ) -> Result<bool, FortressError> {
         let current_time = current_timestamp();
         let cache_key = format!("{}:{}:{}", user_id, client_id, scope);
-        
+
         // Check cache first
         if let Some(&timestamp) = self.cache_timestamps.get(&cache_key) {
             if current_time - timestamp < self.cache_ttl {
@@ -835,7 +985,12 @@ impl RegoPolicyEngine {
     }
 
     /// Simple policy evaluation (placeholder for real Rego implementation)
-    fn evaluate_simple_policy(&self, user_id: &str, client_id: &str, scope: &str) -> Result<bool, FortressError> {
+    fn evaluate_simple_policy(
+        &self,
+        user_id: &str,
+        client_id: &str,
+        scope: &str,
+    ) -> Result<bool, FortressError> {
         // Example policy: Allow access if user is not blocked and client is trusted
         let blocked_users = vec!["blocked_user_1", "blocked_user_2"];
         let untrusted_clients = vec!["untrusted_client_1"];
@@ -851,9 +1006,12 @@ impl RegoPolicyEngine {
         // Allow access to basic scopes
         let allowed_scopes = vec!["openid", "profile", "email"];
         let requested_scopes: Vec<&str> = scope.split_whitespace().collect();
-        
+
         for requested_scope in requested_scopes {
-            if !allowed_scopes.contains(&requested_scope) && requested_scope != "read" && requested_scope != "write" {
+            if !allowed_scopes.contains(&requested_scope)
+                && requested_scope != "read"
+                && requested_scope != "write"
+            {
                 return Ok(false);
             }
         }
@@ -894,15 +1052,29 @@ impl Default for OidcConfig {
     fn default() -> Self {
         Self {
             issuer: "https://fortress.local".to_string(),
-            response_types: vec!["code".to_string(), "id_token".to_string(), "id_token token".to_string()],
-            grant_types: vec!["authorization_code".to_string(), "refresh_token".to_string(), "client_credentials".to_string()],
-            scopes: vec!["openid".to_string(), "profile".to_string(), "email".to_string(), "read".to_string(), "write".to_string()],
+            response_types: vec![
+                "code".to_string(),
+                "id_token".to_string(),
+                "id_token token".to_string(),
+            ],
+            grant_types: vec![
+                "authorization_code".to_string(),
+                "refresh_token".to_string(),
+                "client_credentials".to_string(),
+            ],
+            scopes: vec![
+                "openid".to_string(),
+                "profile".to_string(),
+                "email".to_string(),
+                "read".to_string(),
+                "write".to_string(),
+            ],
             response_modes: vec!["query".to_string(), "fragment".to_string()],
             token_expiration: TokenExpiration {
-                auth_code: 600,        // 10 minutes
+                auth_code: 600,         // 10 minutes
                 access_token: 3600,     // 1 hour
                 refresh_token: 2592000, // 30 days
-                id_token: 3600,        // 1 hour
+                id_token: 3600,         // 1 hour
             },
             jwks: JwksConfig {
                 rotation_interval: 86400, // 24 hours
@@ -923,7 +1095,7 @@ mod tests {
     async fn test_oidc_provider_creation() {
         let config = OidcConfig::default();
         let auth_manager = AuthManager::new();
-        
+
         let provider = OidcProvider::new(config, auth_manager);
         assert!(provider.is_ok());
     }
@@ -931,7 +1103,7 @@ mod tests {
     #[tokio::test]
     async fn test_authorization_request() {
         let mut config = OidcConfig::default();
-        
+
         // Add a test client
         let client = OidcClient {
             client_id: "test_client".to_string(),
@@ -944,12 +1116,12 @@ mod tests {
             public: false,
             metadata: HashMap::new(),
         };
-        
+
         config.clients.insert("test_client".to_string(), client);
-        
+
         let auth_manager = AuthManager::new();
         let mut provider = OidcProvider::new(config, auth_manager).unwrap();
-        
+
         let request = OidcAuthRequest {
             response_type: "code".to_string(),
             client_id: "test_client".to_string(),
@@ -962,10 +1134,10 @@ mod tests {
             code_challenge_method: None,
             additional_params: HashMap::new(),
         };
-        
+
         let result = provider.authorize(request).await;
         assert!(result.is_ok());
-        
+
         let redirect_url = result.unwrap();
         assert!(redirect_url.contains("code="));
         assert!(redirect_url.contains("state=test_state"));
@@ -976,18 +1148,18 @@ mod tests {
         let config = OidcConfig::default();
         let auth_manager = AuthManager::new();
         let provider = OidcProvider::new(config, auth_manager).unwrap();
-        
+
         // Test plain method
         let result = provider.validate_pkce("challenge", "challenge", "plain");
         assert!(result.unwrap());
-        
+
         // Test S256 method
         let code_verifier = "test_verifier_123";
         let mut hasher = sha2::Sha256::new();
         hasher.update(code_verifier.as_bytes());
         let hash = hasher.finalize();
         let code_challenge = general_purpose::URL_SAFE_NO_PAD.encode(hash);
-        
+
         let result = provider.validate_pkce(&code_challenge, code_verifier, "S256");
         assert!(result.unwrap());
     }
@@ -1000,17 +1172,17 @@ mod tests {
             enable_cache: true,
             cache_ttl: 300,
         };
-        
+
         let mut engine = RegoPolicyEngine::new(&config).unwrap();
-        
+
         // Test policy evaluation
         let result = engine.evaluate_authorization("user1", "client1", "openid profile");
         assert!(result.unwrap());
-        
+
         // Test blocked user
         let result = engine.evaluate_authorization("blocked_user_1", "client1", "openid");
         assert!(!result.unwrap());
-        
+
         // Test untrusted client
         let result = engine.evaluate_authorization("user1", "untrusted_client_1", "openid");
         assert!(!result.unwrap());

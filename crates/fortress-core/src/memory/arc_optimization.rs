@@ -3,12 +3,12 @@
 //! This module provides smart pointer optimization to reduce allocations
 //! and improve performance through efficient Arc usage patterns.
 
-use std::sync::Arc;
-use std::collections::HashMap;
-use tokio::sync::RwLock;
-use std::sync::atomic::{AtomicU64, Ordering};
-use serde::{Serialize, Deserialize};
 use crate::error::Result;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 /// Arc optimization manager for efficient shared data handling
 pub struct ArcOptimizer {
@@ -65,7 +65,7 @@ impl ArcOptimizer {
     /// Create or get an Arc for byte data
     pub async fn get_arc_bytes(&self, key: String, data: Vec<u8>) -> Result<Arc<Vec<u8>>> {
         let _start = std::time::Instant::now();
-        
+
         // Check cache first
         {
             let cache = self.arc_cache.read().await;
@@ -74,8 +74,10 @@ impl ArcOptimizer {
                 metrics.cache_hits += 1;
                 metrics.total_optimizations += 1;
                 metrics.memory_saved_bytes += data.len() as u64;
-                metrics.avg_reference_count = (metrics.avg_reference_count * (metrics.total_optimizations - 1) as f64 
-                    + Arc::strong_count(arc_data) as f64) / metrics.total_optimizations as f64;
+                metrics.avg_reference_count = (metrics.avg_reference_count
+                    * (metrics.total_optimizations - 1) as f64
+                    + Arc::strong_count(arc_data) as f64)
+                    / metrics.total_optimizations as f64;
                 return Ok(arc_data.clone());
             }
         }
@@ -88,7 +90,7 @@ impl ArcOptimizer {
                     // Resurrect from weak cache
                     let mut cache = self.arc_cache.write().await;
                     cache.insert(key.clone(), arc_data.clone());
-                    
+
                     let mut metrics = self.metrics.write().await;
                     metrics.cache_hits += 1;
                     metrics.total_optimizations += 1;
@@ -110,7 +112,7 @@ impl ArcOptimizer {
         {
             let mut cache = self.arc_cache.write().await;
             cache.insert(key.clone(), arc_data.clone());
-            
+
             // Add to weak cache for potential resurrection
             let mut weak_cache = self.weak_cache.write().await;
             weak_cache.insert(key, Arc::downgrade(&arc_data));
@@ -120,9 +122,11 @@ impl ArcOptimizer {
         metrics.cache_misses += 1;
         metrics.total_optimizations += 1;
         metrics.current_cache_size = self.arc_cache.read().await.len();
-        metrics.avg_reference_count = (metrics.avg_reference_count * (metrics.total_optimizations - 1) as f64 
-            + 1.0) / metrics.total_optimizations as f64;
-        metrics.cache_hit_rate = metrics.cache_hits as f64 / (metrics.cache_hits + metrics.cache_misses) as f64;
+        metrics.avg_reference_count =
+            (metrics.avg_reference_count * (metrics.total_optimizations - 1) as f64 + 1.0)
+                / metrics.total_optimizations as f64;
+        metrics.cache_hit_rate =
+            metrics.cache_hits as f64 / (metrics.cache_hits + metrics.cache_misses) as f64;
         metrics.last_updated = chrono::Utc::now();
 
         Ok(arc_data)
@@ -131,7 +135,7 @@ impl ArcOptimizer {
     /// Create or get an Arc for string data
     pub async fn get_arc_string(&self, key: String, data: String) -> Result<Arc<String>> {
         let _start = std::time::Instant::now();
-        
+
         // Check cache first
         {
             let cache = self.string_cache.read().await;
@@ -140,8 +144,10 @@ impl ArcOptimizer {
                 metrics.cache_hits += 1;
                 metrics.total_optimizations += 1;
                 metrics.memory_saved_bytes += data.len() as u64;
-                metrics.avg_reference_count = (metrics.avg_reference_count * (metrics.total_optimizations - 1) as f64 
-                    + Arc::strong_count(arc_data) as f64) / metrics.total_optimizations as f64;
+                metrics.avg_reference_count = (metrics.avg_reference_count
+                    * (metrics.total_optimizations - 1) as f64
+                    + Arc::strong_count(arc_data) as f64)
+                    / metrics.total_optimizations as f64;
                 return Ok(arc_data.clone());
             }
         }
@@ -159,9 +165,11 @@ impl ArcOptimizer {
         metrics.cache_misses += 1;
         metrics.total_optimizations += 1;
         metrics.current_cache_size = self.arc_cache.read().await.len();
-        metrics.avg_reference_count = (metrics.avg_reference_count * (metrics.total_optimizations - 1) as f64 
-            + 1.0) / metrics.total_optimizations as f64;
-        metrics.cache_hit_rate = metrics.cache_hits as f64 / (metrics.cache_hits + metrics.cache_misses) as f64;
+        metrics.avg_reference_count =
+            (metrics.avg_reference_count * (metrics.total_optimizations - 1) as f64 + 1.0)
+                / metrics.total_optimizations as f64;
+        metrics.cache_hit_rate =
+            metrics.cache_hits as f64 / (metrics.cache_hits + metrics.cache_misses) as f64;
         metrics.last_updated = chrono::Utc::now();
 
         Ok(arc_data)
@@ -173,7 +181,7 @@ impl ArcOptimizer {
         T: Send + Sync + 'static,
     {
         let arc_data = Arc::new(data);
-        
+
         let mut metrics = self.metrics.write().await;
         metrics.total_optimizations += 1;
         metrics.last_updated = chrono::Utc::now();
@@ -184,15 +192,16 @@ impl ArcOptimizer {
     /// Optimize Arc usage by consolidating duplicate data
     pub async fn consolidate_arcs(&self) -> Result<u64> {
         let mut consolidations = 0u64;
-        
+
         // Consolidate byte Arcs
         {
             let mut cache = self.arc_cache.write().await;
             let mut to_consolidate = Vec::new();
-            
+
             // Find duplicates by comparing data
-            let entries: Vec<(String, Arc<Vec<u8>>)> = cache.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
-            
+            let entries: Vec<(String, Arc<Vec<u8>>)> =
+                cache.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+
             for (i, (key1, data1)) in entries.iter().enumerate() {
                 for (key2, data2) in entries.iter().skip(i + 1) {
                     if **data1 == **data2 && key1 != key2 {
@@ -201,7 +210,7 @@ impl ArcOptimizer {
                     }
                 }
             }
-            
+
             // Apply consolidations
             for (key, shared_arc) in to_consolidate {
                 cache.insert(key, shared_arc);
@@ -220,17 +229,17 @@ impl ArcOptimizer {
     /// Clean up dead weak references
     pub async fn cleanup_weak_references(&self) -> Result<usize> {
         let mut cleaned = 0;
-        
+
         {
             let mut weak_cache = self.weak_cache.write().await;
             let mut dead_keys = Vec::new();
-            
+
             for (key, weak_ref) in weak_cache.iter() {
                 if weak_ref.strong_count() == 0 {
                     dead_keys.push(key.clone());
                 }
             }
-            
+
             for key in dead_keys {
                 weak_cache.remove(&key);
                 cleaned += 1;
@@ -249,14 +258,14 @@ impl ArcOptimizer {
     /// Optimize cache size by removing least used entries
     pub async fn optimize_cache_size(&self) -> Result<usize> {
         let mut removed = 0;
-        
+
         // Optimize byte cache
         {
             let mut cache = self.arc_cache.write().await;
             if cache.len() > self.max_cache_size {
                 let to_remove = cache.len() - self.max_cache_size;
                 let keys_to_remove: Vec<String> = cache.keys().take(to_remove).cloned().collect();
-                
+
                 for key in keys_to_remove {
                     cache.remove(&key);
                     removed += 1;
@@ -270,7 +279,7 @@ impl ArcOptimizer {
             if cache.len() > self.max_cache_size {
                 let to_remove = cache.len() - self.max_cache_size;
                 let keys_to_remove: Vec<String> = cache.keys().take(to_remove).cloned().collect();
-                
+
                 for key in keys_to_remove {
                     cache.remove(&key);
                     removed += 1;
@@ -326,10 +335,10 @@ impl ArcOptimizer {
     pub async fn optimize(&self) -> Result<()> {
         // Clean up dead weak references
         self.cleanup_weak_references().await?;
-        
+
         // Optimize cache size
         self.optimize_cache_size().await?;
-        
+
         // Consolidate duplicate Arcs
         self.consolidate_arcs().await?;
 
@@ -411,7 +420,8 @@ impl<T> SmartArc<T> {
 
     /// Get last access time
     pub fn last_access(&self) -> chrono::DateTime<chrono::Utc> {
-        self.last_access.lock()
+        self.last_access
+            .lock()
             .map(|time| *time)
             .unwrap_or_else(|_| chrono::Utc::now())
     }
@@ -435,15 +445,21 @@ mod tests {
     #[tokio::test]
     async fn test_arc_optimizer() {
         let optimizer = ArcOptimizer::new().unwrap();
-        
+
         // Test Arc creation and caching
         let data = vec![1, 2, 3, 4, 5];
-        let arc1 = optimizer.get_arc_bytes("test_key".to_string(), data.clone()).await.unwrap();
-        let arc2 = optimizer.get_arc_bytes("test_key".to_string(), data).await.unwrap();
-        
+        let arc1 = optimizer
+            .get_arc_bytes("test_key".to_string(), data.clone())
+            .await
+            .unwrap();
+        let arc2 = optimizer
+            .get_arc_bytes("test_key".to_string(), data)
+            .await
+            .unwrap();
+
         // Should be the same Arc (cache hit)
         assert!(Arc::ptr_eq(&arc1, &arc2));
-        
+
         let metrics = optimizer.get_metrics().await.unwrap();
         assert_eq!(metrics.cache_hits, 1);
         assert_eq!(metrics.cache_misses, 1);
@@ -452,10 +468,10 @@ mod tests {
     #[tokio::test]
     async fn test_smart_arc() {
         let smart_arc = SmartArc::new(vec![1, 2, 3, 4, 5]);
-        
+
         assert_eq!(smart_arc.access_count(), 0);
         assert_eq!(smart_arc.strong_count(), 1);
-        
+
         // Access the data
         let _data = smart_arc.get();
         assert_eq!(smart_arc.access_count(), 1);
@@ -464,15 +480,21 @@ mod tests {
     #[tokio::test]
     async fn test_optimization_cycle() {
         let optimizer = ArcOptimizer::new().unwrap();
-        
+
         // Add some data
         let data = vec![1, 2, 3, 4, 5];
-        optimizer.get_arc_bytes("key1".to_string(), data.clone()).await.unwrap();
-        optimizer.get_arc_bytes("key2".to_string(), data.clone()).await.unwrap();
-        
+        optimizer
+            .get_arc_bytes("key1".to_string(), data.clone())
+            .await
+            .unwrap();
+        optimizer
+            .get_arc_bytes("key2".to_string(), data.clone())
+            .await
+            .unwrap();
+
         // Run optimization
         optimizer.optimize().await.unwrap();
-        
+
         let metrics = optimizer.get_metrics().await.unwrap();
         assert!(metrics.total_optimizations > 0);
     }

@@ -1,15 +1,15 @@
 //! Performance metrics collection and monitoring
-//! 
+//!
 //! This module provides comprehensive performance metrics for all optimizations
 //! including SIMD operations, async operations, and memory management.
 
 use crate::error::FortressError;
+use once_cell::sync::Lazy;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use serde::{Serialize, Deserialize};
-use std::collections::HashMap;
-use once_cell::sync::Lazy;
 
 /// Global performance metrics
 pub struct PerformanceMetrics {
@@ -58,7 +58,7 @@ impl PerformanceMetrics {
     pub fn record_memory_allocation(&self, size: u64) {
         self.memory_allocations.fetch_add(1, Ordering::Relaxed);
         self.current_memory_usage.fetch_add(size, Ordering::Relaxed);
-        
+
         // Update peak if necessary
         let current = self.current_memory_usage.load(Ordering::Relaxed);
         let peak = self.peak_memory_usage.load(Ordering::Relaxed);
@@ -85,7 +85,8 @@ impl PerformanceMetrics {
     /// Record encryption operation
     pub fn record_encryption(&self, duration: Duration) {
         let micros = duration.as_micros() as u64;
-        self.total_encryption_time.fetch_add(micros, Ordering::Relaxed);
+        self.total_encryption_time
+            .fetch_add(micros, Ordering::Relaxed);
         self.total_encryptions.fetch_add(1, Ordering::Relaxed);
     }
 
@@ -148,7 +149,7 @@ impl PerformanceMetrics {
     fn calculate_throughput(&self) -> f64 {
         let total_ops = self.total_encryptions.load(Ordering::Relaxed);
         let total_time_micros = self.total_encryption_time.load(Ordering::Relaxed);
-        
+
         if total_time_micros == 0 {
             0.0
         } else {
@@ -273,14 +274,18 @@ impl PerformanceProfiler {
     /// End profiling an operation
     pub fn end_operation(&self, operation: &str) -> Result<Duration, FortressError> {
         let mut start_times = self.start_times.lock().unwrap();
-        let start_time = start_times.remove(operation)
-            .ok_or_else(|| FortressError::processor_error(format!("Operation '{}' not started", operation)))?;
-        
+        let start_time = start_times.remove(operation).ok_or_else(|| {
+            FortressError::processor_error(format!("Operation '{}' not started", operation))
+        })?;
+
         let duration = start_time.elapsed();
-        
+
         let mut operations = self.operations.lock().unwrap();
-        operations.entry(operation.to_string()).or_insert_with(Vec::new).push(duration);
-        
+        operations
+            .entry(operation.to_string())
+            .or_insert_with(Vec::new)
+            .push(duration);
+
         Ok(duration)
     }
 
@@ -288,7 +293,7 @@ impl PerformanceProfiler {
     pub fn get_operation_stats(&self, operation: &str) -> Option<OperationStats> {
         let operations = self.operations.lock().unwrap();
         let durations = operations.get(operation)?;
-        
+
         if durations.is_empty() {
             return None;
         }
@@ -326,7 +331,7 @@ impl PerformanceProfiler {
     pub fn clear(&self) {
         let mut operations = self.operations.lock().unwrap();
         operations.clear();
-        
+
         let mut start_times = self.start_times.lock().unwrap();
         start_times.clear();
     }
@@ -364,10 +369,12 @@ impl OperationStats {
 }
 
 /// Global performance metrics instance
-static GLOBAL_METRICS: Lazy<Arc<PerformanceMetrics>> = Lazy::new(|| Arc::new(PerformanceMetrics::new()));
+static GLOBAL_METRICS: Lazy<Arc<PerformanceMetrics>> =
+    Lazy::new(|| Arc::new(PerformanceMetrics::new()));
 
 /// Global performance profiler instance
-static GLOBAL_PROFILER: Lazy<Arc<PerformanceProfiler>> = Lazy::new(|| Arc::new(PerformanceProfiler::new()));
+static GLOBAL_PROFILER: Lazy<Arc<PerformanceProfiler>> =
+    Lazy::new(|| Arc::new(PerformanceProfiler::new()));
 
 /// Get global performance metrics
 pub fn global_metrics() -> &'static Arc<PerformanceMetrics> {
@@ -408,7 +415,7 @@ mod tests {
     #[test]
     fn test_performance_metrics() {
         let metrics = PerformanceMetrics::new();
-        
+
         metrics.record_simd_operation();
         metrics.record_async_operation();
         metrics.record_memory_allocation(1024);
@@ -417,7 +424,7 @@ mod tests {
         metrics.record_encryption(Duration::from_micros(100));
         metrics.record_cache_hit();
         metrics.record_cache_miss();
-        
+
         let snapshot = metrics.get_metrics();
         assert_eq!(snapshot.simd_operations, 1);
         assert_eq!(snapshot.async_operations, 1);
@@ -430,12 +437,12 @@ mod tests {
     fn test_performance_timer() {
         let metrics = Arc::new(PerformanceMetrics::new());
         let timer = PerformanceTimer::new(metrics.clone());
-        
+
         thread::sleep(Duration::from_millis(10));
         let duration = timer.finish();
-        
+
         assert!(duration >= Duration::from_millis(10));
-        
+
         let snapshot = metrics.get_metrics();
         assert_eq!(snapshot.total_encryptions, 1);
     }
@@ -443,13 +450,13 @@ mod tests {
     #[test]
     fn test_performance_profiler() {
         let profiler = PerformanceProfiler::new();
-        
+
         profiler.start_operation("test_operation");
         thread::sleep(Duration::from_millis(10));
         let duration = profiler.end_operation("test_operation").unwrap();
-        
+
         assert!(duration >= Duration::from_millis(10));
-        
+
         let stats = profiler.get_operation_stats("test_operation").unwrap();
         assert_eq!(stats.name, "test_operation");
         assert_eq!(stats.count, 1);
@@ -460,7 +467,7 @@ mod tests {
     fn test_global_metrics() {
         let metrics = global_metrics();
         metrics.record_simd_operation();
-        
+
         let snapshot = metrics.get_metrics();
         assert!(snapshot.simd_operations > 0);
     }
@@ -468,11 +475,11 @@ mod tests {
     #[test]
     fn test_global_profiler() {
         let profiler = global_profiler();
-        
+
         profiler.start_operation("global_test");
         thread::sleep(Duration::from_millis(5));
         let _ = profiler.end_operation("global_test");
-        
+
         let stats = profiler.get_operation_stats("global_test");
         assert!(stats.is_some());
     }
@@ -483,10 +490,10 @@ mod tests {
         metrics.record_simd_operation();
         metrics.record_async_operation();
         metrics.record_encryption(Duration::from_micros(100));
-        
+
         let snapshot = metrics.get_metrics();
         let formatted = snapshot.format();
-        
+
         assert!(formatted.contains("SIMD Operations: 1"));
         assert!(formatted.contains("Async Operations: 1"));
         assert!(formatted.contains("Avg Encryption Time:"));
@@ -502,7 +509,7 @@ mod tests {
             min_duration: Duration::from_millis(5),
             max_duration: Duration::from_millis(15),
         };
-        
+
         let formatted = stats.format();
         assert!(formatted.contains("Operation: test"));
         assert!(formatted.contains("Count: 5"));

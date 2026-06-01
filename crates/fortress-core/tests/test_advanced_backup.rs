@@ -4,15 +4,15 @@
 //! including incremental/differential backups, point-in-time recovery,
 //! cross-region replication, and automated scheduling.
 
-use fortress_core::prelude::*;
-use fortress_core::backup_manager::DefaultBackupManager;
+use chrono::Utc;
 use fortress_core::backup::{BackupManager, RetentionPolicy};
-use fortress_core::disaster_recovery::DefaultDisasterRecoveryManager;
+use fortress_core::backup_manager::DefaultBackupManager;
 use fortress_core::backup_scheduler::BackupScheduler;
 use fortress_core::cross_region_replication::CrossRegionReplicationManager;
+use fortress_core::disaster_recovery::DefaultDisasterRecoveryManager;
+use fortress_core::prelude::*;
 use fortress_core::storage::{InMemoryStorage, StorageBackend};
 use std::sync::Arc;
-use chrono::Utc;
 use tokio::time::{sleep, Duration};
 
 #[tokio::test]
@@ -35,7 +35,9 @@ async fn test_incremental_backup_workflow() -> Result<()> {
         default_strategy: BackupStrategy::Full,
         ..BackupConfig::default()
     };
-    let full_backup = backup_manager.create_backup(&*source_storage, &full_config).await?;
+    let full_backup = backup_manager
+        .create_backup(&*source_storage, &full_config)
+        .await?;
     assert_eq!(full_backup.item_count, 2);
     assert!(matches!(full_backup.strategy, BackupStrategy::Full));
 
@@ -53,39 +55,54 @@ async fn test_incremental_backup_workflow() -> Result<()> {
         },
         ..BackupConfig::default()
     };
-    let incremental_backup = backup_manager.create_backup(&*source_storage, &incremental_config).await?;
-    assert!(matches!(incremental_backup.strategy, BackupStrategy::Incremental { .. }));
-    
+    let incremental_backup = backup_manager
+        .create_backup(&*source_storage, &incremental_config)
+        .await?;
+    assert!(matches!(
+        incremental_backup.strategy,
+        BackupStrategy::Incremental { .. }
+    ));
+
     // Incremental backup should only contain changed keys
     assert!(incremental_backup.item_count <= 2); // key1 (modified) + key3 (new)
 
     // Test restore to new storage
     let target_storage = Arc::new(InMemoryStorage::new());
-    
+
     // First restore full backup
-    let restore_status = backup_manager.restore_backup(
-        &full_backup.backup_id,
-        &*target_storage,
-        &BackupConfig::default(),
-    ).await?;
-    assert!(matches!(restore_status.status, RestoreOperationStatus::Completed));
+    let restore_status = backup_manager
+        .restore_backup(
+            &full_backup.backup_id,
+            &*target_storage,
+            &BackupConfig::default(),
+        )
+        .await?;
+    assert!(matches!(
+        restore_status.status,
+        RestoreOperationStatus::Completed
+    ));
     assert_eq!(restore_status.items_restored, 2);
 
     // Then restore incremental backup
-    let inc_restore_status = backup_manager.restore_backup(
-        &incremental_backup.backup_id,
-        &*target_storage,
-        &BackupConfig::default(),
-    ).await?;
-    assert!(matches!(inc_restore_status.status, RestoreOperationStatus::Completed));
+    let inc_restore_status = backup_manager
+        .restore_backup(
+            &incremental_backup.backup_id,
+            &*target_storage,
+            &BackupConfig::default(),
+        )
+        .await?;
+    assert!(matches!(
+        inc_restore_status.status,
+        RestoreOperationStatus::Completed
+    ));
 
     // Verify final state
     let data1 = target_storage.get("key1").await?;
     assert_eq!(data1, Some(b"modified_data1".to_vec()));
-    
+
     let data2 = target_storage.get("key2").await?;
     assert_eq!(data2, Some(b"data2".to_vec()));
-    
+
     let data3 = target_storage.get("key3").await?;
     assert_eq!(data3, Some(b"data3".to_vec()));
 
@@ -112,7 +129,9 @@ async fn test_differential_backup_workflow() -> Result<()> {
         default_strategy: BackupStrategy::Full,
         ..BackupConfig::default()
     };
-    let full_backup = backup_manager.create_backup(&*source_storage, &full_config).await?;
+    let full_backup = backup_manager
+        .create_backup(&*source_storage, &full_config)
+        .await?;
 
     // Wait for different timestamp
     sleep(Duration::from_millis(10)).await;
@@ -128,8 +147,13 @@ async fn test_differential_backup_workflow() -> Result<()> {
         },
         ..BackupConfig::default()
     };
-    let differential_backup = backup_manager.create_backup(&*source_storage, &differential_config).await?;
-    assert!(matches!(differential_backup.strategy, BackupStrategy::Differential { .. }));
+    let differential_backup = backup_manager
+        .create_backup(&*source_storage, &differential_config)
+        .await?;
+    assert!(matches!(
+        differential_backup.strategy,
+        BackupStrategy::Differential { .. }
+    ));
 
     // Verify differential backup contains all changes since full backup
     assert_eq!(differential_backup.item_count, 2); // key3 + key4
@@ -150,64 +174,80 @@ async fn test_point_in_time_recovery() -> Result<()> {
 
     // Create timeline of data changes
     let time1 = Utc::now();
-    
+
     source_storage.put("key1", b"version1").await?;
-    
-    let full_backup = backup_manager.create_backup(&*source_storage, &BackupConfig::default()).await?;
-    
+
+    let full_backup = backup_manager
+        .create_backup(&*source_storage, &BackupConfig::default())
+        .await?;
+
     sleep(Duration::from_millis(10)).await;
     let time2 = Utc::now();
-    
+
     source_storage.put("key1", b"version2").await?;
     source_storage.put("key2", b"version1").await?;
-    
-    let incremental1 = backup_manager.create_backup(&*source_storage, &BackupConfig {
-        default_strategy: BackupStrategy::Incremental {
-            base_backup_id: full_backup.backup_id.clone(),
-        },
-        ..BackupConfig::default()
-    }).await?;
-    
+
+    let incremental1 = backup_manager
+        .create_backup(
+            &*source_storage,
+            &BackupConfig {
+                default_strategy: BackupStrategy::Incremental {
+                    base_backup_id: full_backup.backup_id.clone(),
+                },
+                ..BackupConfig::default()
+            },
+        )
+        .await?;
+
     sleep(Duration::from_millis(10)).await;
     let time3 = Utc::now();
-    
+
     source_storage.put("key1", b"version3").await?;
     source_storage.put("key3", b"version1").await?;
-    
-    let incremental2 = backup_manager.create_backup(&*source_storage, &BackupConfig {
-        default_strategy: BackupStrategy::Incremental {
-            base_backup_id: full_backup.backup_id.clone(),
-        },
-        ..BackupConfig::default()
-    }).await?;
+
+    let incremental2 = backup_manager
+        .create_backup(
+            &*source_storage,
+            &BackupConfig {
+                default_strategy: BackupStrategy::Incremental {
+                    base_backup_id: full_backup.backup_id.clone(),
+                },
+                ..BackupConfig::default()
+            },
+        )
+        .await?;
 
     // Test point-in-time recovery to time2 (after first incremental)
     let target_storage = Arc::new(InMemoryStorage::new());
-    
+
     // This would be implemented in the backup manager
     // For now, we'll simulate by restoring full + incremental1
-    let restore1 = backup_manager.restore_backup(
-        &full_backup.backup_id,
-        &*target_storage,
-        &BackupConfig::default(),
-    ).await?;
-    
-    let restore2 = backup_manager.restore_backup(
-        &incremental1.backup_id,
-        &*target_storage,
-        &BackupConfig::default(),
-    ).await?;
-    
+    let restore1 = backup_manager
+        .restore_backup(
+            &full_backup.backup_id,
+            &*target_storage,
+            &BackupConfig::default(),
+        )
+        .await?;
+
+    let restore2 = backup_manager
+        .restore_backup(
+            &incremental1.backup_id,
+            &*target_storage,
+            &BackupConfig::default(),
+        )
+        .await?;
+
     assert!(matches!(restore1.status, RestoreOperationStatus::Completed));
     assert!(matches!(restore2.status, RestoreOperationStatus::Completed));
-    
+
     // Verify state at time2
     let data1 = target_storage.get("key1").await?;
     assert_eq!(data1, Some(b"version2".to_vec()));
-    
+
     let data2 = target_storage.get("key2").await?;
     assert_eq!(data2, Some(b"version1".to_vec()));
-    
+
     // key3 should not exist at time2
     let data3 = target_storage.get("key3").await?;
     assert_eq!(data3, None);
@@ -231,16 +271,24 @@ async fn test_comprehensive_backup_verification() -> Result<()> {
     source_storage.put("key2", b"test_data2").await?;
 
     // Create backup
-    let backup = backup_manager.create_backup(&*source_storage, &BackupConfig::default()).await?;
+    let backup = backup_manager
+        .create_backup(&*source_storage, &BackupConfig::default())
+        .await?;
 
     // Test different verification levels
-    let basic_valid = backup_manager.verify_backup(&backup.backup_id, VerificationLevel::Basic).await?;
+    let basic_valid = backup_manager
+        .verify_backup(&backup.backup_id, VerificationLevel::Basic)
+        .await?;
     assert!(basic_valid);
 
-    let full_valid = backup_manager.verify_backup(&backup.backup_id, VerificationLevel::Full).await?;
+    let full_valid = backup_manager
+        .verify_backup(&backup.backup_id, VerificationLevel::Full)
+        .await?;
     assert!(full_valid);
 
-    let comprehensive_valid = backup_manager.verify_backup(&backup.backup_id, VerificationLevel::Comprehensive).await?;
+    let comprehensive_valid = backup_manager
+        .verify_backup(&backup.backup_id, VerificationLevel::Comprehensive)
+        .await?;
     assert!(comprehensive_valid);
 
     Ok(())
@@ -265,7 +313,7 @@ async fn test_backup_scheduler() -> Result<()> {
         name: "Test Schedule".to_string(),
         strategy: BackupStrategy::Full,
         cron_expression: "0 2 * * *".to_string(), // 2 AM daily
-        enabled: false, // Don't start task for test
+        enabled: false,                           // Don't start task for test
         timezone: "UTC".to_string(),
         max_retries: 2,
         retry_delay_seconds: 60,
@@ -288,7 +336,7 @@ async fn test_backup_scheduler() -> Result<()> {
 
     // Remove schedule
     scheduler.remove_schedule("test_schedule").await?;
-    
+
     let schedules_after = scheduler.list_schedules().await?;
     assert_eq!(schedules_after.len(), 0);
 
@@ -302,7 +350,7 @@ async fn test_cross_region_replication() -> Result<()> {
     let backup_storage = Arc::new(InMemoryStorage::new());
     let target_storage1 = Arc::new(InMemoryStorage::new());
     let target_storage2 = Arc::new(InMemoryStorage::new());
-    
+
     let backup_manager = Arc::new(DefaultBackupManager::new(
         backup_storage.clone(),
         None,
@@ -315,8 +363,12 @@ async fn test_cross_region_replication() -> Result<()> {
     );
 
     // Add target regions
-    replication_manager.add_target_region("us-east-1".to_string(), target_storage1.clone()).await?;
-    replication_manager.add_target_region("us-west-2".to_string(), target_storage2.clone()).await?;
+    replication_manager
+        .add_target_region("us-east-1".to_string(), target_storage1.clone())
+        .await?;
+    replication_manager
+        .add_target_region("us-west-2".to_string(), target_storage2.clone())
+        .await?;
 
     // Create replication config (disabled for testing)
     let config = CrossRegionConfig {
@@ -344,8 +396,10 @@ async fn test_cross_region_replication() -> Result<()> {
     assert_eq!(stats.active_replications, 0); // Disabled
 
     // Remove config
-    replication_manager.remove_replication_config("test_replication").await?;
-    
+    replication_manager
+        .remove_replication_config("test_replication")
+        .await?;
+
     let configs_after = replication_manager.list_replication_configs().await?;
     assert_eq!(configs_after.len(), 0);
 
@@ -363,10 +417,7 @@ async fn test_disaster_recovery_planning() -> Result<()> {
         BackupConfig::default(),
     )?);
 
-    let dr_manager = DefaultDisasterRecoveryManager::new(
-        plan_storage.clone(),
-        backup_manager,
-    );
+    let dr_manager = DefaultDisasterRecoveryManager::new(plan_storage.clone(), backup_manager);
 
     // Create default plans
     dr_manager.create_default_plans().await?;
@@ -381,7 +432,9 @@ async fn test_disaster_recovery_planning() -> Result<()> {
     assert_eq!(complete_plan.priority, RecoveryPriority::Critical);
 
     // Test recovery plan
-    let test_result = dr_manager.test_recovery_plan(&complete_plan.plan_id).await?;
+    let test_result = dr_manager
+        .test_recovery_plan(&complete_plan.plan_id)
+        .await?;
     assert!(test_result.passed);
 
     // Get plan after test (should have last_tested updated)
@@ -405,10 +458,14 @@ async fn test_backup_retention_policy() -> Result<()> {
     // Create multiple backups
     let mut backup_ids = Vec::new();
     for i in 0..5 {
-        source_storage.put(&format!("key{}", i), format!("data{}", i).as_bytes()).await?;
-        let backup = backup_manager.create_backup(&*source_storage, &BackupConfig::default()).await?;
+        source_storage
+            .put(&format!("key{}", i), format!("data{}", i).as_bytes())
+            .await?;
+        let backup = backup_manager
+            .create_backup(&*source_storage, &BackupConfig::default())
+            .await?;
         backup_ids.push(backup.backup_id);
-        
+
         // Wait to ensure different timestamps
         sleep(Duration::from_millis(10)).await;
     }
@@ -425,7 +482,9 @@ async fn test_backup_retention_policy() -> Result<()> {
         auto_cleanup: true,
     };
 
-    let deleted_count = backup_manager.cleanup_old_backups(&retention_policy).await?;
+    let deleted_count = backup_manager
+        .cleanup_old_backups(&retention_policy)
+        .await?;
     assert!(deleted_count >= 3); // Should delete at least 3 old backups
 
     // Verify cleanup
@@ -448,19 +507,26 @@ async fn test_backup_storage_statistics() -> Result<()> {
 
     // Create different types of backups
     source_storage.put("key1", b"data1").await?;
-    let full_backup = backup_manager.create_backup(&*source_storage, &BackupConfig::default()).await?;
+    let full_backup = backup_manager
+        .create_backup(&*source_storage, &BackupConfig::default())
+        .await?;
 
     source_storage.put("key2", b"data2").await?;
-    let incremental_backup = backup_manager.create_backup(&*source_storage, &BackupConfig {
-        default_strategy: BackupStrategy::Incremental {
-            base_backup_id: full_backup.backup_id.clone(),
-        },
-        ..BackupConfig::default()
-    }).await?;
+    let incremental_backup = backup_manager
+        .create_backup(
+            &*source_storage,
+            &BackupConfig {
+                default_strategy: BackupStrategy::Incremental {
+                    base_backup_id: full_backup.backup_id.clone(),
+                },
+                ..BackupConfig::default()
+            },
+        )
+        .await?;
 
     // Get statistics
     let stats = backup_manager.get_storage_stats().await?;
-    
+
     assert_eq!(stats.total_backups, 2);
     assert!(stats.total_storage_used > 0);
     assert!(stats.full_backup_storage > 0);
@@ -478,7 +544,7 @@ async fn test_encrypted_backup_verification() -> Result<()> {
     let source_storage = Arc::new(InMemoryStorage::new());
     let backup_storage = Arc::new(InMemoryStorage::new());
     let encryption = Arc::new(Aes256Gcm::new());
-    
+
     let backup_manager = Arc::new(DefaultBackupManager::new(
         backup_storage.clone(),
         Some(encryption),
@@ -486,27 +552,38 @@ async fn test_encrypted_backup_verification() -> Result<()> {
     )?);
 
     // Add test data
-    source_storage.put("secret_key", b"confidential_data").await?;
+    source_storage
+        .put("secret_key", b"confidential_data")
+        .await?;
 
     // Create encrypted backup
-    let backup = backup_manager.create_backup(&*source_storage, &BackupConfig::default()).await?;
+    let backup = backup_manager
+        .create_backup(&*source_storage, &BackupConfig::default())
+        .await?;
 
     // Verify backup can be restored
     let target_storage = Arc::new(InMemoryStorage::new());
-    let restore_status = backup_manager.restore_backup(
-        &backup.backup_id,
-        &*target_storage,
-        &BackupConfig::default(),
-    ).await?;
+    let restore_status = backup_manager
+        .restore_backup(
+            &backup.backup_id,
+            &*target_storage,
+            &BackupConfig::default(),
+        )
+        .await?;
 
-    assert!(matches!(restore_status.status, RestoreOperationStatus::Completed));
-    
+    assert!(matches!(
+        restore_status.status,
+        RestoreOperationStatus::Completed
+    ));
+
     // Verify decrypted data
     let restored_data = target_storage.get("secret_key").await?;
     assert_eq!(restored_data, Some(b"confidential_data".to_vec()));
 
     // Test comprehensive verification
-    let is_valid = backup_manager.verify_backup(&backup.backup_id, VerificationLevel::Comprehensive).await?;
+    let is_valid = backup_manager
+        .verify_backup(&backup.backup_id, VerificationLevel::Comprehensive)
+        .await?;
     assert!(is_valid);
 
     Ok(())
@@ -518,7 +595,7 @@ async fn test_backup_conflict_resolution() -> Result<()> {
     let source_storage = Arc::new(InMemoryStorage::new());
     let backup_storage = Arc::new(InMemoryStorage::new());
     let target_storage = Arc::new(InMemoryStorage::new());
-    
+
     let backup_manager = Arc::new(DefaultBackupManager::new(
         backup_storage.clone(),
         None,
@@ -527,25 +604,28 @@ async fn test_backup_conflict_resolution() -> Result<()> {
 
     // Add data to source
     source_storage.put("key1", b"source_data").await?;
-    let backup = backup_manager.create_backup(&*source_storage, &BackupConfig::default()).await?;
+    let backup = backup_manager
+        .create_backup(&*source_storage, &BackupConfig::default())
+        .await?;
 
     // Add conflicting data to target
     target_storage.put("key1", b"target_data").await?;
 
     // Test different conflict resolution strategies
-    
+
     // 1. Overwrite strategy
     let overwrite_config = BackupConfig {
         conflict_resolution: ConflictResolution::Overwrite,
         ..BackupConfig::default()
     };
-    let restore_status = backup_manager.restore_backup(
-        &backup.backup_id,
-        &*target_storage,
-        &overwrite_config,
-    ).await?;
-    assert!(matches!(restore_status.status, RestoreOperationStatus::Completed));
-    
+    let restore_status = backup_manager
+        .restore_backup(&backup.backup_id, &*target_storage, &overwrite_config)
+        .await?;
+    assert!(matches!(
+        restore_status.status,
+        RestoreOperationStatus::Completed
+    ));
+
     let data = target_storage.get("key1").await?;
     assert_eq!(data, Some(b"source_data".to_vec()));
 
@@ -557,13 +637,14 @@ async fn test_backup_conflict_resolution() -> Result<()> {
         conflict_resolution: ConflictResolution::Skip,
         ..BackupConfig::default()
     };
-    let restore_status = backup_manager.restore_backup(
-        &backup.backup_id,
-        &*target_storage,
-        &skip_config,
-    ).await?;
-    assert!(matches!(restore_status.status, RestoreOperationStatus::Completed));
-    
+    let restore_status = backup_manager
+        .restore_backup(&backup.backup_id, &*target_storage, &skip_config)
+        .await?;
+    assert!(matches!(
+        restore_status.status,
+        RestoreOperationStatus::Completed
+    ));
+
     let data = target_storage.get("key1").await?;
     assert_eq!(data, Some(b"target_data".to_vec())); // Should remain unchanged
 

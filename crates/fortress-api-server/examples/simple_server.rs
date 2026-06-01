@@ -19,7 +19,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create server configuration
     let mut config = ServerConfig::default();
-    
+
     // Customize configuration if needed
     config.network.port = 8080;
     config.network.host = "127.0.0.1".to_string();
@@ -28,15 +28,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     config.features.health_enabled = true;
 
     println!("Fortress server starting");
-    println!("Server will bind to {}{}", config.network.host, config.network.port);
-    println!("Authentication: {}", if config.features.auth_enabled { "enabled" } else { "disabled" });
-    println!("Metrics: {}", if config.features.metrics_enabled { "enabled" } else { "disabled" });
-    println!("Health checks: {}", if config.features.health_enabled { "enabled" } else { "disabled" });
+    println!(
+        "Server will bind to {}{}",
+        config.network.host, config.network.port
+    );
+    println!(
+        "Authentication: {}",
+        if config.features.auth_enabled {
+            "enabled"
+        } else {
+            "disabled"
+        }
+    );
+    println!(
+        "Metrics: {}",
+        if config.features.metrics_enabled {
+            "enabled"
+        } else {
+            "disabled"
+        }
+    );
+    println!(
+        "Health checks: {}",
+        if config.features.health_enabled {
+            "enabled"
+        } else {
+            "disabled"
+        }
+    );
 
     // Create and start the server
     let server = FortressServer::new(config).await?;
-    
-    let bind_addr = format!("{}:{}", server.config.network.host, server.config.network.port);
+
+    let bind_addr = format!(
+        "{}:{}",
+        server.config.network.host, server.config.network.port
+    );
     server.listen(&bind_addr).await?;
 
     Ok(())

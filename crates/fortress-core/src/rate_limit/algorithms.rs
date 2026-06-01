@@ -1,15 +1,17 @@
 //! Rate Limiting Algorithms
-//! 
+//!
 //! This module implements various rate limiting algorithms including
 //! token bucket, sliding window, fixed window, and leaky bucket.
 
+use crate::error::{FortressError, Result};
+use crate::rate_limit::{
+    RateLimitAction, RateLimitAlgorithm, RateLimitContext, RateLimitResult, RateLimitRule,
+};
+use async_trait::async_trait;
+use chrono::{DateTime, Duration, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use chrono::{DateTime, Utc, Duration};
-use crate::error::{FortressError, Result};
-use crate::rate_limit::{RateLimitAlgorithm, RateLimitRule, RateLimitResult, RateLimitContext, RateLimitAction};
-use async_trait::async_trait;
 
 /// Token bucket algorithm implementation
 pub struct TokenBucketAlgorithm {
@@ -37,29 +39,34 @@ impl TokenBucketAlgorithm {
     /// Get or create a token bucket for a key
     async fn get_or_create_bucket(&self, key: &str, rule: &RateLimitRule) -> TokenBucket {
         let mut buckets = self.buckets.write().await;
-        
-        buckets.entry(key.to_string()).or_insert_with(|| TokenBucket {
-            tokens: rule.burst.unwrap_or(rule.limit),
-            max_tokens: rule.limit,
-            refill_rate: rule.limit / rule.window_seconds,
-            last_refill: Utc::now(),
-            burst_tokens: rule.burst.unwrap_or(rule.limit),
-        }).clone()
+
+        buckets
+            .entry(key.to_string())
+            .or_insert_with(|| TokenBucket {
+                tokens: rule.burst.unwrap_or(rule.limit),
+                max_tokens: rule.limit,
+                refill_rate: rule.limit / rule.window_seconds,
+                last_refill: Utc::now(),
+                burst_tokens: rule.burst.unwrap_or(rule.limit),
+            })
+            .clone()
     }
 
     /// Refill tokens in a bucket
     async fn refill_bucket(&self, bucket: &mut TokenBucket, rule: &RateLimitRule) {
         let now = Utc::now();
         let elapsed = now - bucket.last_refill;
-        
+
         if elapsed.num_seconds() > 0 {
-            let tokens_to_add = (elapsed.num_seconds() as u64 * bucket.refill_rate).min(bucket.max_tokens - bucket.tokens);
+            let tokens_to_add = (elapsed.num_seconds() as u64 * bucket.refill_rate)
+                .min(bucket.max_tokens - bucket.tokens);
             bucket.tokens += tokens_to_add;
             bucket.last_refill = now;
-            
+
             // Also refill burst tokens if they were consumed
             if bucket.burst_tokens < rule.burst.unwrap_or(rule.limit) {
-                bucket.burst_tokens = (bucket.burst_tokens + tokens_to_add).min(rule.burst.unwrap_or(rule.limit));
+                bucket.burst_tokens =
+                    (bucket.burst_tokens + tokens_to_add).min(rule.burst.unwrap_or(rule.limit));
             }
         }
     }
@@ -81,15 +88,22 @@ impl RateLimitAlgorithm for TokenBucketAlgorithm {
         "token_bucket"
     }
 
-    async fn check_rate_limit(&self, key: &str, rule: &RateLimitRule, _context: &RateLimitContext) -> Result<RateLimitResult> {
+    async fn check_rate_limit(
+        &self,
+        key: &str,
+        rule: &RateLimitRule,
+        _context: &RateLimitContext,
+    ) -> Result<RateLimitResult> {
         let mut buckets = self.buckets.write().await;
-        let bucket = buckets.entry(key.to_string()).or_insert_with(|| TokenBucket {
-            tokens: rule.burst.unwrap_or(rule.limit),
-            max_tokens: rule.limit,
-            refill_rate: rule.limit / rule.window_seconds,
-            last_refill: Utc::now(),
-            burst_tokens: rule.burst.unwrap_or(rule.limit),
-        });
+        let bucket = buckets
+            .entry(key.to_string())
+            .or_insert_with(|| TokenBucket {
+                tokens: rule.burst.unwrap_or(rule.limit),
+                max_tokens: rule.limit,
+                refill_rate: rule.limit / rule.window_seconds,
+                last_refill: Utc::now(),
+                burst_tokens: rule.burst.unwrap_or(rule.limit),
+            });
 
         // Refill tokens based on elapsed time
         self.refill_bucket(bucket, rule).await;
@@ -119,8 +133,16 @@ impl RateLimitAlgorithm for TokenBucketAlgorithm {
             limit: rule.limit,
             remaining,
             reset_time,
-            retry_after: if !allowed { Some(Duration::seconds(1)) } else { None },
-            action: if allowed { RateLimitAction::Allow } else { RateLimitAction::Reject },
+            retry_after: if !allowed {
+                Some(Duration::seconds(1))
+            } else {
+                None
+            },
+            action: if allowed {
+                RateLimitAction::Allow
+            } else {
+                RateLimitAction::Reject
+            },
             rule_name: rule.name.clone(),
             message: if allowed {
                 "Request allowed".to_string()
@@ -132,13 +154,16 @@ impl RateLimitAlgorithm for TokenBucketAlgorithm {
 
     async fn reset_rate_limit(&self, key: &str, rule: &RateLimitRule) -> Result<()> {
         let mut buckets = self.buckets.write().await;
-        buckets.insert(key.to_string(), TokenBucket {
-            tokens: rule.burst.unwrap_or(rule.limit),
-            max_tokens: rule.limit,
-            refill_rate: rule.limit / rule.window_seconds,
-            last_refill: Utc::now(),
-            burst_tokens: rule.burst.unwrap_or(rule.limit),
-        });
+        buckets.insert(
+            key.to_string(),
+            TokenBucket {
+                tokens: rule.burst.unwrap_or(rule.limit),
+                max_tokens: rule.limit,
+                refill_rate: rule.limit / rule.window_seconds,
+                last_refill: Utc::now(),
+                burst_tokens: rule.burst.unwrap_or(rule.limit),
+            },
+        );
         Ok(())
     }
 
@@ -154,12 +179,11 @@ impl RateLimitAlgorithm for TokenBucketAlgorithm {
     async fn cleanup(&self) -> Result<()> {
         let mut buckets = self.buckets.write().await;
         let now = Utc::now();
-        
+
         // Remove expired buckets (older than 10 minutes)
-        buckets.retain(|_, bucket| {
-            now.signed_duration_since(bucket.last_refill).num_seconds() < 600
-        });
-        
+        buckets
+            .retain(|_, bucket| now.signed_duration_since(bucket.last_refill).num_seconds() < 600);
+
         Ok(())
     }
 }
@@ -188,12 +212,15 @@ impl SlidingWindowAlgorithm {
     /// Get or create a sliding window for a key
     async fn get_or_create_window(&self, key: &str, rule: &RateLimitRule) -> SlidingWindow {
         let mut windows = self.windows.write().await;
-        
-        windows.entry(key.to_string()).or_insert_with(|| SlidingWindow {
-            requests: Vec::new(),
-            window_size: Duration::seconds(rule.window_seconds as u64),
-            max_requests: rule.limit,
-        }).clone()
+
+        windows
+            .entry(key.to_string())
+            .or_insert_with(|| SlidingWindow {
+                requests: Vec::new(),
+                window_size: Duration::seconds(rule.window_seconds as u64),
+                max_requests: rule.limit,
+            })
+            .clone()
     }
 
     /// Clean up old requests outside the window
@@ -219,16 +246,23 @@ impl RateLimitAlgorithm for SlidingWindowAlgorithm {
         "sliding_window"
     }
 
-    async fn check_rate_limit(&self, key: &str, rule: &RateLimitRule, context: &RateLimitContext) -> Result<RateLimitResult> {
+    async fn check_rate_limit(
+        &self,
+        key: &str,
+        rule: &RateLimitRule,
+        context: &RateLimitContext,
+    ) -> Result<RateLimitResult> {
         let mut windows = self.windows.write().await;
-        let window = windows.entry(key.to_string()).or_insert_with(|| SlidingWindow {
-            requests: Vec::new(),
-            window_size: Duration::seconds(rule.window_seconds as u64),
-            max_requests: rule.limit,
-        });
+        let window = windows
+            .entry(key.to_string())
+            .or_insert_with(|| SlidingWindow {
+                requests: Vec::new(),
+                window_size: Duration::seconds(rule.window_seconds as u64),
+                max_requests: rule.limit,
+            });
 
         let now = context.timestamp;
-        
+
         // Clean up old requests
         Self::cleanup_old_requests(window, now);
 
@@ -248,8 +282,16 @@ impl RateLimitAlgorithm for SlidingWindowAlgorithm {
             limit: rule.max_requests,
             remaining,
             reset_time,
-            retry_after: if !allowed { Some(window.window_size) } else { None },
-            action: if allowed { RateLimitAction::Allow } else { RateLimitAction::Reject },
+            retry_after: if !allowed {
+                Some(window.window_size)
+            } else {
+                None
+            },
+            action: if allowed {
+                RateLimitAction::Allow
+            } else {
+                RateLimitAction::Reject
+            },
             rule_name: rule.name.clone(),
             message: if allowed {
                 "Request allowed".to_string()
@@ -261,11 +303,14 @@ impl RateLimitAlgorithm for SlidingWindowAlgorithm {
 
     async fn reset_rate_limit(&self, key: &str, rule: &RateLimitRule) -> Result<()> {
         let mut windows = self.windows.write().await;
-        windows.insert(key.to_string(), SlidingWindow {
-            requests: Vec::new(),
-            window_size: Duration::seconds(rule.window_seconds as u64),
-            max_requests: rule.limit,
-        });
+        windows.insert(
+            key.to_string(),
+            SlidingWindow {
+                requests: Vec::new(),
+                window_size: Duration::seconds(rule.window_seconds as u64),
+                max_requests: rule.limit,
+            },
+        );
         Ok(())
     }
 
@@ -281,13 +326,19 @@ impl RateLimitAlgorithm for SlidingWindowAlgorithm {
     async fn cleanup(&self) -> Result<()> {
         let mut windows = self.windows.write().await;
         let now = Utc::now();
-        
+
         // Remove expired windows (older than 10 minutes)
         windows.retain(|_, window| {
-            now.signed_duration_since(window.requests.last().unwrap_or_else(|| window.requests.first().unwrap_or_else(|| Utc::now())))
-                .num_seconds() < 600
+            now.signed_duration_since(
+                window
+                    .requests
+                    .last()
+                    .unwrap_or_else(|| window.requests.first().unwrap_or_else(|| Utc::now())),
+            )
+            .num_seconds()
+                < 600
         });
-        
+
         Ok(())
     }
 }
@@ -318,14 +369,17 @@ impl FixedWindowAlgorithm {
     /// Get or create a fixed window for a key
     async fn get_or_create_window(&self, key: &str, rule: &RateLimitRule) -> FixedWindow {
         let mut windows = self.windows.write().await;
-        
-        windows.entry(key.to_string()).or_insert_with(|| FixedWindow {
-            count: 0,
-            max_requests: rule.limit,
-            window_start: Utc::now(),
-            window_size: Duration::seconds(rule.window_seconds as u64),
-            last_reset: Utc::now(),
-        }).clone()
+
+        windows
+            .entry(key.to_string())
+            .or_insert_with(|| FixedWindow {
+                count: 0,
+                max_requests: rule.limit,
+                window_start: Utc::now(),
+                window_size: Duration::seconds(rule.window_seconds as u64),
+                last_reset: Utc::now(),
+            })
+            .clone()
     }
 
     /// Reset window if needed
@@ -349,18 +403,25 @@ impl RateLimitAlgorithm for FixedWindowAlgorithm {
         "fixed_window"
     }
 
-    async fn check_rate_limit(&self, key: &str, rule: &RateLimitRule, context: &RateLimitContext) -> Result<RateLimitResult> {
+    async fn check_rate_limit(
+        &self,
+        key: &str,
+        rule: &RateLimitRule,
+        context: &RateLimitContext,
+    ) -> Result<RateLimitResult> {
         let mut windows = self.windows.write().await;
-        let window = windows.entry(key.to_string()).or_insert_with(|| FixedWindow {
-            count: 0,
-            max_requests: rule.limit,
-            window_start: Utc::now(),
-            window_size: Duration::seconds(rule.window_seconds as u64),
-            last_reset: Utc::now(),
-        });
+        let window = windows
+            .entry(key.to_string())
+            .or_insert_with(|| FixedWindow {
+                count: 0,
+                max_requests: rule.limit,
+                window_start: Utc::now(),
+                window_size: Duration::seconds(rule.window_seconds as u64),
+                last_reset: Utc::now(),
+            });
 
         let now = context.timestamp;
-        
+
         // Reset window if needed
         Self::reset_window_if_needed(window, now, rule);
 
@@ -379,8 +440,16 @@ impl RateLimitAlgorithm for FixedWindowAlgorithm {
             limit: rule.max_requests,
             remaining,
             reset_time,
-            retry_after: if !allowed { Some(window.window_size) } else { None },
-            action: if allowed { RateLimitAction::Allow } else { RateLimitAction::Reject },
+            retry_after: if !allowed {
+                Some(window.window_size)
+            } else {
+                None
+            },
+            action: if allowed {
+                RateLimitAction::Allow
+            } else {
+                RateLimitAction::Reject
+            },
             rule_name: rule.name.clone(),
             message: if allowed {
                 "Request allowed".to_string()
@@ -392,13 +461,16 @@ impl RateLimitAlgorithm for FixedWindowAlgorithm {
 
     async fn reset_rate_limit(&self, key: &str, rule: &RateLimitRule) -> Result<()> {
         let mut windows = self.windows.write().await;
-        windows.insert(key.to_string(), FixedWindow {
-            count: 0,
-            max_requests: rule.limit,
-            window_start: Utc::now(),
-            window_size: Duration::seconds(rule.window_seconds as u64),
-            last_reset: Utc::now(),
-        });
+        windows.insert(
+            key.to_string(),
+            FixedWindow {
+                count: 0,
+                max_requests: rule.limit,
+                window_start: Utc::now(),
+                window_size: Duration::seconds(rule.window_seconds as u64),
+                last_reset: Utc::now(),
+            },
+        );
         Ok(())
     }
 
@@ -414,20 +486,18 @@ impl RateLimitAlgorithm for FixedWindowAlgorithm {
     async fn cleanup(&self) -> Result<()> {
         let mut windows = self.windows.write().await;
         let now = Utc::now();
-        
+
         // Remove expired windows (older than 10 minutes)
-        windows.retain(|_, window| {
-            now.signed_duration_since(window.last_reset)
-                .num_seconds() < 600
-        });
-        
+        windows
+            .retain(|_, window| now.signed_duration_since(window.last_reset).num_seconds() < 600);
+
         Ok(())
     }
 }
 
 /// Leaky bucket algorithm implementation
 pub struct LeakyBucketAlgorithm {
-    buckets: Arc<RwLock<HashMap<String, LeakyBucket>>,
+    buckets: Arc<RwLock<HashMap<String, LeakyBucket>>>,
 }
 
 /// Leaky bucket state
@@ -450,19 +520,22 @@ impl LeakyBucketAlgorithm {
     /// Get or create a leaky bucket for a key
     async fn get_or_create_bucket(&self, key: &str, rule: &RateLimitRule) -> LeakyBucket {
         let mut buckets = self.buckets.write().await;
-        
-        buckets.entry(key.to_string()).or_insert_with(|| LeakyBucket {
-            capacity: rule.limit,
-            water: rule.limit,
-            leak_rate: rule.limit / rule.window_seconds,
-            last_leak: Utc::now(),
-        }).clone()
+
+        buckets
+            .entry(key.to_string())
+            .or_insert_with(|| LeakyBucket {
+                capacity: rule.limit,
+                water: rule.limit,
+                leak_rate: rule.limit / rule.window_seconds,
+                last_leak: Utc::now(),
+            })
+            .clone()
     }
 
     /// Leak water from bucket
     fn leak_water(bucket: &mut LeakyBucket, now: DateTime<Utc>) {
         let elapsed = now - bucket.last_leak;
-        
+
         if elapsed.num_seconds() > 0 {
             let water_to_leak = (elapsed.num_seconds() as u64 * bucket.leak_rate).min(bucket.water);
             bucket.water -= water_to_leak;
@@ -483,17 +556,24 @@ impl RateLimitAlgorithm for LeakyAlgorithm {
         "leaky_bucket"
     }
 
-    async fn check_rate_limit(&self, key: &str, rule: &RateLimitRule, context: &RateLimitContext) -> Result<RateLimitResult> {
+    async fn check_rate_limit(
+        &self,
+        key: &str,
+        rule: &RateLimitRule,
+        context: &RateLimitContext,
+    ) -> Result<RateLimitResult> {
         let mut buckets = self.buckets.write().await;
-        let bucket = buckets.entry(key.to_string()).or_insert_with(|| LeakyBucket {
-            capacity: rule.limit,
-            water: rule.limit,
-            leak_rate: rule.limit / rule.window_seconds,
-            last_leak: Utc::now(),
-        });
+        let bucket = buckets
+            .entry(key.to_string())
+            .or_insert_with(|| LeakyBucket {
+                capacity: rule.limit,
+                water: rule.limit,
+                leak_rate: rule.limit / rule.window_seconds,
+                last_leak: Utc::now(),
+            });
 
         let now = context.timestamp;
-        
+
         // Leak water based on elapsed time
         Self::leak_water(bucket, now);
 
@@ -512,8 +592,16 @@ impl RateLimitAlgorithm for LeakyAlgorithm {
             limit: rule.limit,
             remaining,
             reset_time,
-            retry_after: if !allowed { Some(Duration::seconds(1)) } else { None },
-            action: if allowed { RateLimitAction::Allow } else { RateLimitAction::Reject },
+            retry_after: if !allowed {
+                Some(Duration::seconds(1))
+            } else {
+                None
+            },
+            action: if allowed {
+                RateLimitAction::Allow
+            } else {
+                RateLimitAction::Reject
+            },
             rule_name: rule.name.clone(),
             message: if allowed {
                 "Request allowed".to_string()
@@ -525,12 +613,15 @@ impl RateLimitAlgorithm for LeakyAlgorithm {
 
     async fn reset_rate_limit(&self, key: &str, rule: &RateLimitRule) -> Result<()> {
         let mut buckets = self.buckets.write().await;
-        buckets.insert(key.to_string(), LeakyBucket {
-            capacity: rule.limit,
-            water: rule.limit,
-            leak_rate: rule.limit / rule.window_seconds,
-            last_leak: Utc::now(),
-        });
+        buckets.insert(
+            key.to_string(),
+            LeakyBucket {
+                capacity: rule.limit,
+                water: rule.limit,
+                leak_rate: rule.limit / rule.window_seconds,
+                last_leak: Utc::now(),
+            },
+        );
         Ok(())
     }
 
@@ -546,13 +637,10 @@ impl RateLimitAlgorithm for LeakyAlgorithm {
     async fn cleanup(&self) -> Result<()> {
         let mut buckets = self.buckets.write().await;
         let now = Utc::now();
-        
+
         // Remove expired buckets (older than 10 minutes)
-        buckets.retain(|_, bucket| {
-            now.signed_duration_since(bucket.last_leak)
-                .num_seconds() < 600
-        });
-        
+        buckets.retain(|_, bucket| now.signed_duration_since(bucket.last_leak).num_seconds() < 600);
+
         Ok(())
     }
 }
@@ -564,7 +652,7 @@ mod tests {
     #[tokio::test]
     async fn test_token_bucket_algorithm() {
         let algorithm = TokenBucketAlgorithm::new();
-        
+
         let rule = RateLimitRule {
             name: "test-rule".to_string(),
             limit: 10,
@@ -591,22 +679,34 @@ mod tests {
         };
 
         // First request should be allowed
-        let result = algorithm.check_rate_limit("192.168.1.1", &rule, &context).await.unwrap();
+        let result = algorithm
+            .check_rate_limit("192.168.1.1", &rule, &context)
+            .await
+            .unwrap();
         assert!(result.allowed);
         assert_eq!(result.remaining, 14); // 10 + 5 burst
 
         // Second request should be allowed
-        let result = algorithm.check_rate_limit("192.168.1.1", &rule, &context).await.unwrap();
+        let result = algorithm
+            .check_rate_limit("192.168.1.1", &rule, &context)
+            .await
+            .unwrap();
         assert!(result.allowed);
         assert_eq!(result.remaining, 13);
 
         // Exhaust all tokens
         for _ in 0..14 {
-            algorithm.check_rate_limit("192.168.1.1", &rule, &context).await.unwrap();
+            algorithm
+                .check_rate_limit("192.168.1.1", &rule, &context)
+                .await
+                .unwrap();
         }
 
         // Next request should be rejected
-        let result = algorithm.check_rate_limit("192.168.1.1", &rule, &context).await.unwrap();
+        let result = algorithm
+            .check_rate_limit("192.168.1.1", &rule, &context)
+            .await
+            .unwrap();
         assert!(!result.allowed);
         assert_eq!(result.remaining, 0);
     }
@@ -614,7 +714,7 @@ mod tests {
     #[tokio::test]
     async fn test_sliding_window_algorithm() {
         let algorithm = SlidingWindowAlgorithm::new();
-        
+
         let rule = RateLimitRule {
             name: "test-rule".to_string(),
             limit: 5,
@@ -642,19 +742,25 @@ mod tests {
 
         // First 5 requests should be allowed
         for i in 0..5 {
-            let result = algorithm.check_rate_limit("192.168.1.1", &rule, &context).await.unwrap();
+            let result = algorithm
+                .check_rate_limit("192.168.1.1", &rule, &context)
+                .await
+                .unwrap();
             assert!(result.allowed, "Request {} should be allowed", i + 1);
         }
 
         // 6th request should be rejected
-        let result = algorithm.check_rate_limit("192.168.1.1", &rule, &context).await.unwrap();
+        let result = algorithm
+            .check_rate_limit("192.168.1.1", &rule, &context)
+            .await
+            .unwrap();
         assert!(!result.allowed, "Request 6 should be rejected");
     }
 
     #[tokio::test]
     async fn test_fixed_window_algorithm() {
         let algorithm = FixedWindowAlgorithm::new();
-        
+
         let rule = RateLimitRule {
             name: "test-rule".to_string(),
             limit: 3,
@@ -682,19 +788,25 @@ mod tests {
 
         // First 3 requests should be allowed
         for i in 0..3 {
-            let result = algorithm.check_rate_limit("192.168.1.1", &rule, &context).await.unwrap();
+            let result = algorithm
+                .check_rate_limit("192.168.1.1", &rule, &context)
+                .await
+                .unwrap();
             assert!(result.allowed, "Request {} should be allowed", i + 1);
         }
 
         // 4th request should be rejected
-        let result = algorithm.check_rate_limit("192.168.1.1", &rule, &context).await.unwrap();
+        let result = algorithm
+            .check_rate_limit("192.168.1.1", &rule, &context)
+            .await
+            .unwrap();
         assert!(!result.allowed, "Request 4 should be rejected");
     }
 
     #[tokio::test]
     async fn test_leaky_bucket_algorithm() {
         let algorithm = LeakyBucketAlgorithm::new();
-        
+
         let rule = RateLimitRule {
             name: "test-rule".to_string(),
             limit: 10,
@@ -721,12 +833,18 @@ mod tests {
         };
 
         // First request should be allowed
-        let result = algorithm.check_rate_limit("192.168.1.1", &rule, &context).await.unwrap();
+        let result = algorithm
+            .check_rate_limit("192.168.1.1", &rule, &context)
+            .await
+            .unwrap();
         assert!(result.allowed);
         assert_eq!(result.remaining, 9);
 
         // Second request should be allowed
-        let result = algorithm.check_rate_limit("192.168.1.1", &rule, &context).await.unwrap();
+        let result = algorithm
+            .check_rate_limit("192.168.1.1", &rule, &context)
+            .await
+            .unwrap();
         assert!(result.allowed);
         assert!(result.remaining, 8);
 
@@ -734,7 +852,10 @@ mod tests {
         tokio::time::sleep(Duration::from_secs(2)).await;
 
         // Check if water leaked
-        let result = algorithm.check_rate_limit("192.168.1.1", &rule, &context).await.unwrap();
+        let result = algorithm
+            .check_rate_limit("192.168.1.1", &rule, &context)
+            .await
+            .unwrap();
         assert!(result.allowed);
         assert!(result.remaining < 10); // Should have leaked some water
     }

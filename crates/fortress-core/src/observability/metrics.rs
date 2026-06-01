@@ -272,7 +272,7 @@ impl AdvancedMetricsCollector {
         }
 
         let mut registry = self.registry.write().await;
-        
+
         // Check if metric already exists
         if registry.definitions.contains_key(&definition.name) {
             return Err(FortressError::validation(
@@ -287,7 +287,10 @@ impl AdvancedMetricsCollector {
             MetricType::Counter => MetricStorage::Counter(AtomicU64::new(0)),
             MetricType::Gauge => MetricStorage::Gauge(tokio::sync::RwLock::new(0.0)),
             MetricType::Histogram => {
-                let buckets = self.config.aggregation.histogram_buckets
+                let buckets = self
+                    .config
+                    .aggregation
+                    .histogram_buckets
                     .iter()
                     .enumerate()
                     .map(|(_i, &bound)| (format!("le_{}", bound), 0))
@@ -297,31 +300,41 @@ impl AdvancedMetricsCollector {
                     ..Default::default()
                 }))
             }
-            MetricType::Summary => MetricStorage::Summary(tokio::sync::RwLock::new(SummaryStorage {
-                quantiles: self.config.aggregation.percentiles.clone(),
-                ..Default::default()
-            })),
+            MetricType::Summary => {
+                MetricStorage::Summary(tokio::sync::RwLock::new(SummaryStorage {
+                    quantiles: self.config.aggregation.percentiles.clone(),
+                    ..Default::default()
+                }))
+            }
         };
 
-        registry.definitions.insert(definition.name.clone(), definition.clone());
+        registry
+            .definitions
+            .insert(definition.name.clone(), definition.clone());
         registry.values.insert(definition.name, Arc::new(storage));
 
         Ok(())
     }
 
     /// Record a counter metric
-    pub async fn record_counter(&self, name: &str, value: u64, labels: HashMap<String, String>) -> Result<()> {
+    pub async fn record_counter(
+        &self,
+        name: &str,
+        value: u64,
+        labels: HashMap<String, String>,
+    ) -> Result<()> {
         if !self.config.enabled {
             return Ok(());
         }
 
         let full_name = self.format_metric_name(name, &labels);
         let registry = self.registry.read().await;
-        
+
         if let Some(storage) = registry.values.get(&full_name) {
             if let MetricStorage::Counter(counter) = storage.as_ref() {
                 counter.fetch_add(value, Ordering::Relaxed);
-                self.record_time_series(&full_name, MetricValue::Counter(value)).await;
+                self.record_time_series(&full_name, MetricValue::Counter(value))
+                    .await;
             }
         }
 
@@ -329,19 +342,25 @@ impl AdvancedMetricsCollector {
     }
 
     /// Set a gauge metric
-    pub async fn set_gauge(&self, name: &str, value: f64, labels: HashMap<String, String>) -> Result<()> {
+    pub async fn set_gauge(
+        &self,
+        name: &str,
+        value: f64,
+        labels: HashMap<String, String>,
+    ) -> Result<()> {
         if !self.config.enabled {
             return Ok(());
         }
 
         let full_name = self.format_metric_name(name, &labels);
         let registry = self.registry.read().await;
-        
+
         if let Some(storage) = registry.values.get(&full_name) {
             if let MetricStorage::Gauge(gauge) = storage.as_ref() {
                 let mut gauge_val = gauge.write().await;
                 *gauge_val = value;
-                self.record_time_series(&full_name, MetricValue::Gauge(value)).await;
+                self.record_time_series(&full_name, MetricValue::Gauge(value))
+                    .await;
             }
         }
 
@@ -349,14 +368,19 @@ impl AdvancedMetricsCollector {
     }
 
     /// Record a histogram observation
-    pub async fn record_histogram(&self, name: &str, value: f64, labels: HashMap<String, String>) -> Result<()> {
+    pub async fn record_histogram(
+        &self,
+        name: &str,
+        value: f64,
+        labels: HashMap<String, String>,
+    ) -> Result<()> {
         if !self.config.enabled {
             return Ok(());
         }
 
         let full_name = self.format_metric_name(name, &labels);
         let registry = self.registry.read().await;
-        
+
         if let Some(storage) = registry.values.get(&full_name) {
             if let MetricStorage::Histogram(hist) = storage.as_ref() {
                 let mut histogram = hist.write().await;
@@ -390,14 +414,19 @@ impl AdvancedMetricsCollector {
     }
 
     /// Record a summary observation
-    pub async fn record_summary(&self, name: &str, value: f64, labels: HashMap<String, String>) -> Result<()> {
+    pub async fn record_summary(
+        &self,
+        name: &str,
+        value: f64,
+        labels: HashMap<String, String>,
+    ) -> Result<()> {
         if !self.config.enabled {
             return Ok(());
         }
 
         let full_name = self.format_metric_name(name, &labels);
         let registry = self.registry.read().await;
-        
+
         if let Some(storage) = registry.values.get(&full_name) {
             if let MetricStorage::Summary(summary) = storage.as_ref() {
                 let mut sum = summary.write().await;
@@ -415,9 +444,10 @@ impl AdvancedMetricsCollector {
                 if !sum.observations.is_empty() {
                     let mut sorted = sum.observations.clone();
                     sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
-                    
+
                     for &quantile in &sum.quantiles {
-                        let index = ((quantile * (sorted.len() - 1) as f64) as usize).min(sorted.len() - 1);
+                        let index =
+                            ((quantile * (sorted.len() - 1) as f64) as usize).min(sorted.len() - 1);
                         quantiles.insert(format!("{:.2}", quantile), sorted[index]);
                     }
                 }
@@ -435,17 +465,23 @@ impl AdvancedMetricsCollector {
     }
 
     /// Get metric value
-    pub async fn get_metric(&self, name: &str, labels: HashMap<String, String>) -> Result<Option<MetricValue>> {
+    pub async fn get_metric(
+        &self,
+        name: &str,
+        labels: HashMap<String, String>,
+    ) -> Result<Option<MetricValue>> {
         if !self.config.enabled {
             return Ok(None);
         }
 
         let full_name = self.format_metric_name(name, &labels);
         let registry = self.registry.read().await;
-        
+
         if let Some(storage) = registry.values.get(&full_name) {
             let value = match storage.as_ref() {
-                MetricStorage::Counter(counter) => MetricValue::Counter(counter.load(Ordering::Relaxed)),
+                MetricStorage::Counter(counter) => {
+                    MetricValue::Counter(counter.load(Ordering::Relaxed))
+                }
                 MetricStorage::Gauge(gauge) => MetricValue::Gauge(*gauge.read().await),
                 MetricStorage::Histogram(hist) => {
                     let histogram = hist.read().await;
@@ -461,9 +497,10 @@ impl AdvancedMetricsCollector {
                     if !sum.observations.is_empty() {
                         let mut sorted = sum.observations.clone();
                         sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
-                        
+
                         for &quantile in &sum.quantiles {
-                            let index = ((quantile * (sorted.len() - 1) as f64) as usize).min(sorted.len() - 1);
+                            let index = ((quantile * (sorted.len() - 1) as f64) as usize)
+                                .min(sorted.len() - 1);
                             quantiles.insert(format!("{:.2}", quantile), sorted[index]);
                         }
                     }
@@ -481,7 +518,9 @@ impl AdvancedMetricsCollector {
     }
 
     /// Get all metrics
-    pub async fn get_all_metrics(&self) -> Result<HashMap<String, (MetricDefinition, MetricValue)>> {
+    pub async fn get_all_metrics(
+        &self,
+    ) -> Result<HashMap<String, (MetricDefinition, MetricValue)>> {
         if !self.config.enabled {
             return Ok(HashMap::new());
         }
@@ -492,7 +531,9 @@ impl AdvancedMetricsCollector {
         for (name, definition) in &registry.definitions {
             if let Some(storage) = registry.values.get(name) {
                 let value = match storage.as_ref() {
-                    MetricStorage::Counter(counter) => MetricValue::Counter(counter.load(Ordering::Relaxed)),
+                    MetricStorage::Counter(counter) => {
+                        MetricValue::Counter(counter.load(Ordering::Relaxed))
+                    }
                     MetricStorage::Gauge(gauge) => MetricValue::Gauge(*gauge.read().await),
                     MetricStorage::Histogram(hist) => {
                         let histogram = hist.read().await;
@@ -508,9 +549,10 @@ impl AdvancedMetricsCollector {
                         if !sum.observations.is_empty() {
                             let mut sorted = sum.observations.clone();
                             sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
-                            
+
                             for &quantile in &sum.quantiles {
-                                let index = ((quantile * (sorted.len() - 1) as f64) as usize).min(sorted.len() - 1);
+                                let index = ((quantile * (sorted.len() - 1) as f64) as usize)
+                                    .min(sorted.len() - 1);
                                 quantiles.insert(format!("{:.2}", quantile), sorted[index]);
                             }
                         }
@@ -535,7 +577,7 @@ impl AdvancedMetricsCollector {
 
         let total_metrics = registry.definitions.len();
         let mut metrics_by_type = HashMap::new();
-        
+
         for definition in registry.definitions.values() {
             *metrics_by_type.entry(definition.metric_type).or_insert(0) += 1;
         }
@@ -556,7 +598,9 @@ impl AdvancedMetricsCollector {
             metrics_by_type,
             collection_rate,
             memory_usage_bytes: self.estimate_memory_usage().await,
-            last_collection_time: stats.last_collection_time.unwrap_or_else(|| chrono::Utc::now()),
+            last_collection_time: stats
+                .last_collection_time
+                .unwrap_or_else(|| chrono::Utc::now()),
         }
     }
 
@@ -572,7 +616,11 @@ impl AdvancedMetricsCollector {
         for (name, (definition, value)) in metrics {
             // Add HELP and TYPE comments
             output.push(format!("# HELP {} {}", name, definition.description));
-            output.push(format!("# TYPE {} {}", name, self.metric_type_to_prometheus(definition.metric_type)));
+            output.push(format!(
+                "# TYPE {} {}",
+                name,
+                self.metric_type_to_prometheus(definition.metric_type)
+            ));
 
             match value {
                 MetricValue::Counter(val) => {
@@ -585,7 +633,12 @@ impl AdvancedMetricsCollector {
                     output.push(format!("{}_count {}", name, hist.count));
                     output.push(format!("{}_sum {}", name, hist.sum));
                     for (bucket, count) in hist.buckets {
-                        output.push(format!("{}_bucket{{le=\"{}\"}} {}", name, bucket.trim_start_matches("le_"), count));
+                        output.push(format!(
+                            "{}_bucket{{le=\"{}\"}} {}",
+                            name,
+                            bucket.trim_start_matches("le_"),
+                            count
+                        ));
                     }
                 }
                 MetricValue::Summary(summary) => {
@@ -639,18 +692,24 @@ impl AdvancedMetricsCollector {
     async fn record_time_series(&self, name: &str, value: MetricValue) {
         let mut registry = self.registry.write().await;
         let data_point = MetricDataPoint {
-            definition: registry.definitions.get(name).cloned().unwrap_or_else(|| MetricDefinition {
-                name: name.to_string(),
-                metric_type: MetricType::Counter,
-                description: "Auto-generated metric".to_string(),
-                labels: HashMap::new(),
-                unit: None,
+            definition: registry.definitions.get(name).cloned().unwrap_or_else(|| {
+                MetricDefinition {
+                    name: name.to_string(),
+                    metric_type: MetricType::Counter,
+                    description: "Auto-generated metric".to_string(),
+                    labels: HashMap::new(),
+                    unit: None,
+                }
             }),
             value,
             timestamp: chrono::Utc::now(),
         };
 
-        registry.time_series.entry(name.to_string()).or_insert_with(Vec::new).push(data_point);
+        registry
+            .time_series
+            .entry(name.to_string())
+            .or_insert_with(Vec::new)
+            .push(data_point);
 
         // Limit time series data
         let time_series = registry.time_series.get_mut(name).unwrap();
@@ -667,15 +726,15 @@ impl AdvancedMetricsCollector {
 
         tokio::spawn(async move {
             let mut timer = tokio::time::interval(interval);
-            
+
             loop {
                 timer.tick().await;
-                
+
                 // Update collection statistics
                 let mut stats_guard = stats.write().await;
                 stats_guard.total_collections += 1;
                 stats_guard.last_collection_time = Some(chrono::Utc::now());
-                
+
                 // Count total metrics
                 let registry_guard = registry.read().await;
                 stats_guard.total_metrics_collected += registry_guard.definitions.len() as u64;
@@ -739,9 +798,15 @@ mod tests {
         };
 
         collector.register_metric(definition).await.unwrap();
-        collector.record_counter("test_counter", 5, HashMap::new()).await.unwrap();
+        collector
+            .record_counter("test_counter", 5, HashMap::new())
+            .await
+            .unwrap();
 
-        let value = collector.get_metric("test_counter", HashMap::new()).await.unwrap();
+        let value = collector
+            .get_metric("test_counter", HashMap::new())
+            .await
+            .unwrap();
         assert!(matches!(value, Some(MetricValue::Counter(5))));
     }
 
@@ -759,9 +824,15 @@ mod tests {
         };
 
         collector.register_metric(definition).await.unwrap();
-        collector.set_gauge("test_gauge", 42.5, HashMap::new()).await.unwrap();
+        collector
+            .set_gauge("test_gauge", 42.5, HashMap::new())
+            .await
+            .unwrap();
 
-        let value = collector.get_metric("test_gauge", HashMap::new()).await.unwrap();
+        let value = collector
+            .get_metric("test_gauge", HashMap::new())
+            .await
+            .unwrap();
         assert!(matches!(value, Some(MetricValue::Gauge(42.5))));
     }
 
@@ -779,7 +850,10 @@ mod tests {
         };
 
         collector.register_metric(definition).await.unwrap();
-        collector.record_counter("test_counter", 10, HashMap::new()).await.unwrap();
+        collector
+            .record_counter("test_counter", 10, HashMap::new())
+            .await
+            .unwrap();
 
         let prometheus_output = collector.export_prometheus().await.unwrap();
         assert!(prometheus_output.contains("test_counter"));

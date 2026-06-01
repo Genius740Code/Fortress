@@ -3,8 +3,8 @@
 //! This module provides the default implementation of the MpcParty trait
 //! with in-memory storage for shares and message processing.
 
-use crate::error::{FortressError, Result, EncryptionErrorCode};
-use crate::mpc::{MpcParty, PartyId, PartyRole, SessionId, ShareId, SecretShare, MpcMessage};
+use crate::error::{EncryptionErrorCode, FortressError, Result};
+use crate::mpc::{MpcMessage, MpcParty, PartyId, PartyRole, SecretShare, SessionId, ShareId};
 
 use async_trait::async_trait;
 use std::collections::HashMap;
@@ -99,7 +99,10 @@ impl InMemoryMpcParty {
     fn validate_share_ownership(&self, share: &SecretShare) -> Result<()> {
         if share.party_id != self.party_id {
             return Err(FortressError::encryption(
-                format!("Share belongs to party {}, not {}", share.party_id, self.party_id),
+                format!(
+                    "Share belongs to party {}, not {}",
+                    share.party_id, self.party_id
+                ),
                 "mpc_party".to_string(),
                 EncryptionErrorCode::AlgorithmNotSupported,
             ));
@@ -142,20 +145,20 @@ impl MpcParty for InMemoryMpcParty {
                     "share_response".to_string(),
                     b"share_data_placeholder".to_vec(),
                 );
-                
+
                 // Add to outbox
                 let mut outbox = self.outbox.write().await;
                 outbox.push(response.clone());
-                
+
                 Ok(Some(response))
             }
-            
+
             "share_delivery" => {
                 // Handle share delivery
                 // In a real implementation, you'd parse the payload and store the share
                 Ok(None)
             }
-            
+
             "computation_request" => {
                 // Handle computation request
                 let response = MpcMessage::new(
@@ -165,13 +168,13 @@ impl MpcParty for InMemoryMpcParty {
                     "computation_response".to_string(),
                     b"computation_result_placeholder".to_vec(),
                 );
-                
+
                 let mut outbox = self.outbox.write().await;
                 outbox.push(response.clone());
-                
+
                 Ok(Some(response))
             }
-            
+
             "verification_request" => {
                 // Handle verification request
                 let response = MpcMessage::new(
@@ -181,13 +184,13 @@ impl MpcParty for InMemoryMpcParty {
                     "verification_response".to_string(),
                     b"verified".to_vec(),
                 );
-                
+
                 let mut outbox = self.outbox.write().await;
                 outbox.push(response.clone());
-                
+
                 Ok(Some(response))
             }
-            
+
             _ => {
                 // Unknown message type
                 Ok(None)
@@ -208,22 +211,24 @@ impl MpcParty for InMemoryMpcParty {
         self.validate_share_ownership(&share)?;
 
         let mut shares = self.shares.write().await;
-        let session_shares = shares.entry(share.session_id.clone()).or_insert_with(HashMap::new);
+        let session_shares = shares
+            .entry(share.session_id.clone())
+            .or_insert_with(HashMap::new);
         session_shares.insert(share.id.clone(), share);
-        
+
         Ok(())
     }
 
     async fn remove_share(&self, share_id: &ShareId) -> Result<()> {
         let mut shares = self.shares.write().await;
-        
+
         // Find and remove the share
         for session_shares in shares.values_mut() {
             if session_shares.remove(share_id).is_some() {
                 return Ok(());
             }
         }
-        
+
         Err(FortressError::encryption(
             format!("Share '{}' not found", share_id),
             "mpc_party".to_string(),
@@ -333,7 +338,7 @@ mod tests {
     #[tokio::test]
     async fn test_mpc_party_creation() {
         let party = InMemoryMpcParty::new("party1".to_string(), PartyRole::Initiator);
-        
+
         assert_eq!(party.party_id(), "party1");
         assert_eq!(party.role(), PartyRole::Initiator);
         assert_eq!(party.inbox_count().await, 0);
@@ -344,28 +349,28 @@ mod tests {
     async fn test_share_management() {
         let party = InMemoryMpcParty::new("party1".to_string(), PartyRole::Participant);
         let session_id = "session1".to_string();
-        
+
         // Initially no shares
         let shares = party.get_shares(&session_id).await.unwrap();
         assert!(shares.is_empty());
-        
+
         // Add a share
         let share = SecretShare::new(
             "party1".to_string(),
             session_id.clone(),
             b"share_data".to_vec(),
         );
-        
+
         party.add_share(share.clone()).await.unwrap();
-        
+
         // Check share exists
         let shares = party.get_shares(&session_id).await.unwrap();
         assert_eq!(shares.len(), 1);
         assert_eq!(shares[0].id, share.id);
-        
+
         // Remove share
         party.remove_share(&share.id).await.unwrap();
-        
+
         // Check share removed
         let shares = party.get_shares(&session_id).await.unwrap();
         assert!(shares.is_empty());
@@ -374,7 +379,7 @@ mod tests {
     #[tokio::test]
     async fn test_message_processing() {
         let party = InMemoryMpcParty::new("party1".to_string(), PartyRole::Participant);
-        
+
         // Create a message for this party
         let message = MpcMessage::new(
             "session1".to_string(),
@@ -383,14 +388,14 @@ mod tests {
             "share_request".to_string(),
             b"request_data".to_vec(),
         );
-        
+
         // Process message
         let response = party.process_message(message).await.unwrap();
         assert!(response.is_some());
-        
+
         // Check outbox
         assert_eq!(party.outbox_count().await, 1);
-        
+
         // Clear outbox
         let outbox_messages = party.clear_outbox().await;
         assert_eq!(outbox_messages.len(), 1);
@@ -400,11 +405,11 @@ mod tests {
     #[tokio::test]
     async fn test_metadata_management() {
         let party = InMemoryMpcParty::new("party1".to_string(), PartyRole::Initiator);
-        
+
         // Add metadata
         party.add_metadata("location", "us-east-1").await;
         party.add_metadata("version", "1.0").await;
-        
+
         // Get metadata
         let metadata = party.get_metadata().await;
         assert_eq!(metadata.get("location"), Some(&"us-east-1".to_string()));
@@ -420,7 +425,7 @@ mod tests {
             .build()
             .await
             .unwrap();
-        
+
         assert_eq!(party.party_id(), "party1");
         assert_eq!(party.role(), PartyRole::Initiator);
     }
@@ -429,16 +434,19 @@ mod tests {
     fn test_party_clone() {
         let party1 = InMemoryMpcParty::new("party1".to_string(), PartyRole::Participant);
         let party2 = party1.clone();
-        
+
         assert_eq!(party1.party_id(), party2.party_id());
         assert_eq!(party1.role(), party2.role());
     }
 
     #[tokio::test]
     async fn test_message_handler() {
-        let party = Arc::new(InMemoryMpcParty::new("party1".to_string(), PartyRole::Participant));
+        let party = Arc::new(InMemoryMpcParty::new(
+            "party1".to_string(),
+            PartyRole::Participant,
+        ));
         let handler = MessageHandler::new(party.clone());
-        
+
         let message = MpcMessage::new(
             "session1".to_string(),
             "party2".to_string(),
@@ -446,7 +454,7 @@ mod tests {
             "share_request".to_string(),
             b"test".to_vec(),
         );
-        
+
         let response = handler.handle_message(message).await.unwrap();
         assert!(response.is_some());
         assert_eq!(handler.party().party_id(), "party1");

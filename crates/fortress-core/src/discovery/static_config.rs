@@ -1,13 +1,13 @@
 //! Static Configuration Discovery Provider
-//! 
+//!
 //! This module provides static node configuration for Fortress clusters
 //! where nodes are manually configured rather than dynamically discovered.
 
-use std::collections::HashMap;
-use serde::{Serialize, Deserialize};
-use chrono::{DateTime, Utc};
+use crate::discovery::{DiscoveredNode, DiscoveryConfig, DiscoveryProvider, NodeHealthStatus};
 use crate::error::{FortressError, Result};
-use crate::discovery::{DiscoveryProvider, DiscoveredNode, NodeHealthStatus, DiscoveryConfig};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// Static discovery provider configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -83,7 +83,10 @@ impl StaticDiscovery {
     }
 
     /// Convert static node config to discovered node
-    fn static_node_to_discovered_node(&self, static_node: &StaticNodeConfig) -> Result<DiscoveredNode> {
+    fn static_node_to_discovered_node(
+        &self,
+        static_node: &StaticNodeConfig,
+    ) -> Result<DiscoveredNode> {
         if !static_node.enabled {
             return Err(FortressError::discovery("Static node is disabled"));
         }
@@ -129,7 +132,10 @@ impl StaticDiscovery {
                 if elapsed.num_seconds() < self.config.health_check_interval_seconds as i64 {
                     // Return cached health status
                     let health_cache = self.health_status_cache.read().await;
-                    return Ok(health_cache.get(node_id).cloned().unwrap_or(NodeHealthStatus::Unknown));
+                    return Ok(health_cache
+                        .get(node_id)
+                        .cloned()
+                        .unwrap_or(NodeHealthStatus::Unknown));
                 }
             }
         }
@@ -141,7 +147,11 @@ impl StaticDiscovery {
         }
 
         // Perform HTTP health check
-        let health_check_path = self.config.health_check_path.as_deref().unwrap_or("/health");
+        let health_check_path = self
+            .config
+            .health_check_path
+            .as_deref()
+            .unwrap_or("/health");
         let url = format!("http://{}:{}{}", node.address, node.port, health_check_path);
 
         let client = reqwest::Client::new();
@@ -174,7 +184,9 @@ impl StaticDiscovery {
 
     /// Get enabled nodes only
     fn get_enabled_nodes(&self) -> Vec<&StaticNodeConfig> {
-        self.config.nodes.iter()
+        self.config
+            .nodes
+            .iter()
             .filter(|node| node.enabled)
             .collect()
     }
@@ -186,11 +198,15 @@ impl StaticDiscovery {
         }
 
         if node.address.is_empty() {
-            return Err(FortressError::discovery("Static node address cannot be empty"));
+            return Err(FortressError::discovery(
+                "Static node address cannot be empty",
+            ));
         }
 
         if node.port == 0 {
-            return Err(FortressError::discovery("Static node port must be greater than 0"));
+            return Err(FortressError::discovery(
+                "Static node port must be greater than 0",
+            ));
         }
 
         // Validate IP address format
@@ -199,7 +215,9 @@ impl StaticDiscovery {
             if node.address.contains('.') || node.address.contains('-') {
                 // Accept as hostname
             } else {
-                return Err(FortressError::discovery("Invalid static node address format"));
+                return Err(FortressError::discovery(
+                    "Invalid static node address format",
+                ));
             }
         }
 
@@ -208,12 +226,13 @@ impl StaticDiscovery {
 
     /// Load configuration from file
     async fn load_from_file(&mut self, file_path: &str) -> Result<()> {
-        let content = tokio::fs::read_to_string(file_path)
-            .await
-            .map_err(|e| FortressError::discovery(format!("Failed to read static config file: {}", e)))?;
+        let content = tokio::fs::read_to_string(file_path).await.map_err(|e| {
+            FortressError::discovery(format!("Failed to read static config file: {}", e))
+        })?;
 
-        let config: StaticDiscoveryConfig = serde_json::from_str(&content)
-            .map_err(|e| FortressError::discovery(format!("Failed to parse static config file: {}", e)))?;
+        let config: StaticDiscoveryConfig = serde_json::from_str(&content).map_err(|e| {
+            FortressError::discovery(format!("Failed to parse static config file: {}", e))
+        })?;
 
         self.config = config;
         Ok(())
@@ -221,12 +240,13 @@ impl StaticDiscovery {
 
     /// Save configuration to file
     async fn save_to_file(&self, file_path: &str) -> Result<()> {
-        let content = serde_json::to_string_pretty(&self.config)
-            .map_err(|e| FortressError::discovery(format!("Failed to serialize static config: {}", e)))?;
+        let content = serde_json::to_string_pretty(&self.config).map_err(|e| {
+            FortressError::discovery(format!("Failed to serialize static config: {}", e))
+        })?;
 
-        tokio::fs::write(file_path, content)
-            .await
-            .map_err(|e| FortressError::discovery(format!("Failed to write static config file: {}", e)))?;
+        tokio::fs::write(file_path, content).await.map_err(|e| {
+            FortressError::discovery(format!("Failed to write static config file: {}", e))
+        })?;
 
         Ok(())
     }
@@ -237,7 +257,10 @@ impl StaticDiscovery {
 
         // Check for duplicate ID
         if self.config.nodes.iter().any(|n| n.id == node.id) {
-            return Err(FortressError::discovery(format!("Node with ID '{}' already exists", node.id)));
+            return Err(FortressError::discovery(format!(
+                "Node with ID '{}' already exists",
+                node.id
+            )));
         }
 
         self.config.nodes.push(node);
@@ -252,16 +275,27 @@ impl StaticDiscovery {
     }
 
     /// Update a node in the configuration
-    pub async fn update_node(&mut self, node_id: &str, updated_node: StaticNodeConfig) -> Result<()> {
+    pub async fn update_node(
+        &mut self,
+        node_id: &str,
+        updated_node: StaticNodeConfig,
+    ) -> Result<()> {
         self.validate_node_config(&updated_node)?;
 
         if updated_node.id != node_id {
-            return Err(FortressError::discovery("Node ID cannot be changed during update"));
+            return Err(FortressError::discovery(
+                "Node ID cannot be changed during update",
+            ));
         }
 
-        let index = self.config.nodes.iter()
+        let index = self
+            .config
+            .nodes
+            .iter()
             .position(|node| node.id == node_id)
-            .ok_or_else(|| FortressError::discovery(format!("Node with ID '{}' not found", node_id)))?;
+            .ok_or_else(|| {
+                FortressError::discovery(format!("Node with ID '{}' not found", node_id))
+            })?;
 
         self.config.nodes[index] = updated_node;
         Ok(())
@@ -296,9 +330,9 @@ impl DiscoveryProvider for StaticDiscovery {
 
     async fn initialize(&mut self, config: &DiscoveryConfig) -> Result<()> {
         // Extract static-specific config
-        let static_config: StaticDiscoveryConfig = serde_json::from_value(
-            serde_json::to_value(&config.settings).unwrap_or_default()
-        ).unwrap_or_default();
+        let static_config: StaticDiscoveryConfig =
+            serde_json::from_value(serde_json::to_value(&config.settings).unwrap_or_default())
+                .unwrap_or_default();
 
         self.config = static_config;
 
@@ -309,14 +343,19 @@ impl DiscoveryProvider for StaticDiscovery {
 
         self.initialized = true;
 
-        tracing::info!("Static discovery provider initialized with {} nodes ({} enabled)", 
-                      self.config.nodes.len(), self.get_enabled_nodes().len());
+        tracing::info!(
+            "Static discovery provider initialized with {} nodes ({} enabled)",
+            self.config.nodes.len(),
+            self.get_enabled_nodes().len()
+        );
         Ok(())
     }
 
     async fn discover_nodes(&self) -> Result<Vec<DiscoveredNode>> {
         if !self.initialized {
-            return Err(FortressError::discovery("Static discovery provider not initialized"));
+            return Err(FortressError::discovery(
+                "Static discovery provider not initialized",
+            ));
         }
 
         let mut nodes = Vec::new();
@@ -337,7 +376,9 @@ impl DiscoveryProvider for StaticDiscovery {
 
     async fn check_node_health(&self, node: &DiscoveredNode) -> Result<NodeHealthStatus> {
         if !self.initialized {
-            return Err(FortressError::discovery("Static discovery provider not initialized"));
+            return Err(FortressError::discovery(
+                "Static discovery provider not initialized",
+            ));
         }
 
         // Perform health check if enabled
@@ -346,7 +387,7 @@ impl DiscoveryProvider for StaticDiscovery {
 
     async fn shutdown(&mut self) -> Result<()> {
         self.initialized = false;
-        
+
         // Clear caches
         {
             let mut last_checks = self.last_health_check.write().await;
@@ -356,7 +397,7 @@ impl DiscoveryProvider for StaticDiscovery {
             let mut health_cache = self.health_status_cache.write().await;
             health_cache.clear();
         }
-        
+
         tracing::info!("Static discovery provider shutdown");
         Ok(())
     }
@@ -392,7 +433,7 @@ mod tests {
     fn test_static_discovery_creation() {
         let config = StaticDiscoveryConfig::default();
         let discovery = StaticDiscovery::new(config);
-        
+
         assert_eq!(discovery.name(), "static");
         assert!(!discovery.initialized);
     }
@@ -455,8 +496,10 @@ mod tests {
             ..Default::default()
         };
 
-        let discovered_node = discovery.static_node_to_discovered_node(&static_node).unwrap();
-        
+        let discovered_node = discovery
+            .static_node_to_discovered_node(&static_node)
+            .unwrap();
+
         assert_eq!(discovered_node.id, "test-node");
         assert_eq!(discovered_node.address, "192.168.1.100");
         assert_eq!(discovered_node.port, 8080);
@@ -464,7 +507,10 @@ mod tests {
         assert_eq!(discovered_node.zone, Some("us-west-2a".to_string()));
         assert_eq!(discovered_node.capabilities, vec!["test", "static"]);
         assert_eq!(discovered_node.tags.get("weight"), Some(&"10".to_string()));
-        assert_eq!(discovered_node.tags.get("discovery_type"), Some(&"static".to_string()));
+        assert_eq!(
+            discovered_node.tags.get("discovery_type"),
+            Some(&"static".to_string())
+        );
     }
 
     #[tokio::test]
@@ -493,7 +539,7 @@ mod tests {
         let mut discovery = StaticDiscovery::new(config);
 
         let initial_count = discovery.config.nodes.len();
-        
+
         // Remove existing node
         let removed = discovery.remove_node("node-1").await.unwrap();
         assert!(removed);
@@ -517,7 +563,7 @@ mod tests {
         });
 
         let discovery = StaticDiscovery::new(config);
-        
+
         assert_eq!(discovery.total_nodes_count().await, 2);
         assert_eq!(discovery.enabled_nodes_count().await, 1);
     }

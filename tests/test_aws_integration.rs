@@ -1,16 +1,16 @@
 //! AWS Integration Tests for Fortress
-//! 
+//!
 //! This test suite validates AWS S3, CloudHSM, and RDS integration with Fortress.
 //! Tests are designed to run against actual AWS services using test credentials.
 
 #[cfg(test)]
 mod aws_integration_tests {
     use fortress_core::{
-        storage::{StorageBackend, InMemoryStorage},
         encryption::{EncryptionAlgorithm, EncryptionProfile},
+        storage::{InMemoryStorage, StorageBackend},
     };
-    use std::env;
     use serde_json::json;
+    use std::env;
 
     /// Test configuration for AWS integration
     struct AwsTestConfig {
@@ -27,7 +27,8 @@ mod aws_integration_tests {
         fn from_env() -> Option<Self> {
             Some(Self {
                 _bucket_name: env::var("FORTRESS_TEST_S3_BUCKET").ok()?,
-                region: env::var("FORTRESS_TEST_AWS_REGION").unwrap_or_else(|_| "us-east-1".to_string()),
+                region: env::var("FORTRESS_TEST_AWS_REGION")
+                    .unwrap_or_else(|_| "us-east-1".to_string()),
                 _test_prefix: format!("fortress-test-{}", uuid::Uuid::new_v4()),
                 access_key_id: env::var("FORTRESS_TEST_AWS_ACCESS_KEY_ID").ok()?,
                 secret_access_key: env::var("FORTRESS_TEST_AWS_SECRET_ACCESS_KEY").ok()?,
@@ -90,25 +91,35 @@ mod aws_integration_tests {
         let test_data = TestData::new();
 
         // Test put operation
-        storage.put(&test_data.key, &test_data.value).await
+        storage
+            .put(&test_data.key, &test_data.value)
+            .await
             .expect("Failed to put data to storage");
 
         // Test get operation
-        let retrieved = storage.get(&test_data.key).await
+        let retrieved = storage
+            .get(&test_data.key)
+            .await
             .expect("Failed to get data from storage");
         assert_eq!(retrieved, Some(test_data.value));
 
         // Test exists operation
-        let exists = storage.exists(&test_data.key).await
+        let exists = storage
+            .exists(&test_data.key)
+            .await
             .expect("Failed to check existence in storage");
         assert!(exists);
 
         // Test delete operation
-        storage.delete(&test_data.key).await
+        storage
+            .delete(&test_data.key)
+            .await
             .expect("Failed to delete data from storage");
 
         // Verify deletion
-        let exists_after_delete = storage.exists(&test_data.key).await
+        let exists_after_delete = storage
+            .exists(&test_data.key)
+            .await
             .expect("Failed to check existence after delete");
         assert!(!exists_after_delete);
 
@@ -135,13 +146,17 @@ mod aws_integration_tests {
 
         // Test large file upload
         let start = std::time::Instant::now();
-        storage.put(&large_key, &test_data.large_value).await
+        storage
+            .put(&large_key, &test_data.large_value)
+            .await
             .expect("Failed to upload large file to storage");
         let upload_time = start.elapsed();
 
         // Test large file download
         let start = std::time::Instant::now();
-        let retrieved = storage.get(&large_key).await
+        let retrieved = storage
+            .get(&large_key)
+            .await
             .expect("Failed to download large file from storage");
         let download_time = start.elapsed();
 
@@ -151,11 +166,22 @@ mod aws_integration_tests {
         println!("Large file (10MB) download time: {:?}", download_time);
 
         // Performance assertions (adjust based on your requirements)
-        assert!(upload_time.as_secs() < 30, "Upload took too long: {:?}", upload_time);
-        assert!(download_time.as_secs() < 30, "Download took too long: {:?}", download_time);
+        assert!(
+            upload_time.as_secs() < 30,
+            "Upload took too long: {:?}",
+            upload_time
+        );
+        assert!(
+            download_time.as_secs() < 30,
+            "Download took too long: {:?}",
+            download_time
+        );
 
         // Cleanup
-        storage.delete(&large_key).await.expect("Failed to delete large file");
+        storage
+            .delete(&large_key)
+            .await
+            .expect("Failed to delete large file");
 
         config.cleanup_env_vars();
     }
@@ -176,14 +202,22 @@ mod aws_integration_tests {
         let storage: Box<dyn StorageBackend> = Box::new(InMemoryStorage::new());
 
         // Test health check
-        let health_status = storage.health_check().await
+        let health_status = storage
+            .health_check()
+            .await
             .expect("Storage health check failed");
 
         assert!(health_status.healthy, "Storage should be healthy");
-        assert!(health_status.response_time_ms < 5000, "Health check response time too high: {}ms", 
-                health_status.response_time_ms);
+        assert!(
+            health_status.response_time_ms < 5000,
+            "Health check response time too high: {}ms",
+            health_status.response_time_ms
+        );
 
-        println!("Storage health check passed in {}ms", health_status.response_time_ms);
+        println!(
+            "Storage health check passed in {}ms",
+            health_status.response_time_ms
+        );
 
         config.cleanup_env_vars();
     }
@@ -216,19 +250,25 @@ mod aws_integration_tests {
 
         // Upload test files
         for key in &keys {
-            storage.put(key, format!("content of {}", key).as_bytes()).await
+            storage
+                .put(key, format!("content of {}", key).as_bytes())
+                .await
                 .expect("Failed to upload test file");
         }
 
         // Test listing with prefix1
-        let listed_keys = storage.list_prefix(prefix1).await
+        let listed_keys = storage
+            .list_prefix(prefix1)
+            .await
             .expect("Failed to list keys with prefix1");
         assert_eq!(listed_keys.len(), 2);
         assert!(listed_keys.iter().any(|k| k.contains("file1.txt")));
         assert!(listed_keys.iter().any(|k| k.contains("file2.txt")));
 
         // Test listing with prefix2
-        let listed_keys = storage.list_prefix(prefix2).await
+        let listed_keys = storage
+            .list_prefix(prefix2)
+            .await
             .expect("Failed to list keys with prefix2");
         assert_eq!(listed_keys.len(), 2);
         assert!(listed_keys.iter().any(|k| k.contains("file3.txt")));
@@ -236,7 +276,10 @@ mod aws_integration_tests {
 
         // Cleanup test files
         for key in &keys {
-            storage.delete(key).await.expect("Failed to delete test file");
+            storage
+                .delete(key)
+                .await
+                .expect("Failed to delete test file");
         }
 
         config.cleanup_env_vars();
@@ -267,7 +310,9 @@ mod aws_integration_tests {
             let value = format!("concurrent-value-{}", i).into_bytes();
 
             let handle = tokio::spawn(async move {
-                storage_clone.put(&key, &value).await
+                storage_clone
+                    .put(&key, &value)
+                    .await
                     .expect("Failed to put data in concurrent operation");
             });
             handles.push(handle);
@@ -282,8 +327,10 @@ mod aws_integration_tests {
         for i in 0..num_operations {
             let key = format!("concurrent-{}", i);
             let expected_value = format!("concurrent-value-{}", i).into_bytes();
-            
-            let retrieved = storage.get(&key).await
+
+            let retrieved = storage
+                .get(&key)
+                .await
                 .expect("Failed to get data in concurrent test");
             assert_eq!(retrieved, Some(expected_value));
         }
@@ -291,7 +338,10 @@ mod aws_integration_tests {
         // Cleanup
         for i in 0..num_operations {
             let key = format!("concurrent-{}", i);
-            storage.delete(&key).await.expect("Failed to delete data in cleanup");
+            storage
+                .delete(&key)
+                .await
+                .expect("Failed to delete data in cleanup");
         }
 
         config.cleanup_env_vars();
@@ -318,12 +368,16 @@ mod aws_integration_tests {
         let storage: Box<dyn StorageBackend> = Box::new(InMemoryStorage::new());
 
         // Test getting non-existent key
-        let non_existent = storage.get("non-existent-key").await
+        let non_existent = storage
+            .get("non-existent-key")
+            .await
             .expect("Failed to check non-existent key");
         assert_eq!(non_existent, None);
 
         // Test deleting non-existent key (should not error)
-        storage.delete("non-existent-key").await
+        storage
+            .delete("non-existent-key")
+            .await
             .expect("Delete of non-existent key should not error");
 
         config.cleanup_env_vars();
@@ -356,8 +410,14 @@ mod aws_integration_tests {
         println!("S3 Backend Metadata:");
         println!("  Type: {}", metadata.backend_type);
         println!("  Version: {}", metadata.version);
-        println!("  Max Object Size: {} bytes", metadata.max_object_size.unwrap());
-        println!("  Supports Encryption at Rest: {}", metadata.supports_encryption_at_rest);
+        println!(
+            "  Max Object Size: {} bytes",
+            metadata.max_object_size.unwrap()
+        );
+        println!(
+            "  Supports Encryption at Rest: {}",
+            metadata.supports_encryption_at_rest
+        );
 
         config.cleanup_env_vars();
     }
@@ -369,7 +429,9 @@ mod aws_integration_tests {
         let config = match AwsTestConfig::from_env() {
             Some(cfg) => cfg,
             None => {
-                println!("Skipping S3 with Fortress encryption test - missing environment variables");
+                println!(
+                    "Skipping S3 with Fortress encryption test - missing environment variables"
+                );
                 return;
             }
         };
@@ -395,35 +457,42 @@ mod aws_integration_tests {
             "sensitive_data": "this should be encrypted"
         });
 
-        let serialized_data = serde_json::to_vec(&original_data)
-            .expect("Failed to serialize test data");
+        let serialized_data =
+            serde_json::to_vec(&original_data).expect("Failed to serialize test data");
 
         let test_key = format!("encrypted-{}", uuid::Uuid::new_v4());
 
         // Encrypt and store data
         let algorithm = fortress_core::prelude::Aes256GcmWrapper::new();
-        let encrypted_data = algorithm.encrypt(&serialized_data, &[0u8; 32])
+        let encrypted_data = algorithm
+            .encrypt(&serialized_data, &[0u8; 32])
             .expect("Failed to encrypt data");
-        
-        storage.put(&test_key, &encrypted_data).await
+
+        storage
+            .put(&test_key, &encrypted_data)
+            .await
             .expect("Failed to store encrypted data");
 
         // Retrieve and decrypt data
-        let retrieved_encrypted = storage.get(&test_key).await
+        let retrieved_encrypted = storage
+            .get(&test_key)
+            .await
             .expect("Failed to retrieve encrypted data");
-        
-        let decrypted_data = algorithm.decrypt(
-            &retrieved_encrypted.expect("No data found"),
-            &[0u8; 32]
-        ).expect("Failed to decrypt data");
 
-        let retrieved_json: serde_json::Value = serde_json::from_slice(&decrypted_data)
-            .expect("Failed to deserialize decrypted data");
+        let decrypted_data = algorithm
+            .decrypt(&retrieved_encrypted.expect("No data found"), &[0u8; 32])
+            .expect("Failed to decrypt data");
+
+        let retrieved_json: serde_json::Value =
+            serde_json::from_slice(&decrypted_data).expect("Failed to deserialize decrypted data");
 
         assert_eq!(original_data, retrieved_json);
 
         // Cleanup
-        storage.delete(&test_key).await.expect("Failed to cleanup test data");
+        storage
+            .delete(&test_key)
+            .await
+            .expect("Failed to cleanup test data");
 
         config.cleanup_env_vars();
     }

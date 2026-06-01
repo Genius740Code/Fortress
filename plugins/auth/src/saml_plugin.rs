@@ -1,5 +1,5 @@
 //! SAML Authentication Plugin for Fortress
-//! 
+//!
 //! This is a WebAssembly plugin that provides SAML 2.0 authentication
 //! including assertion validation, attribute extraction, and user mapping.
 
@@ -28,10 +28,19 @@ struct SamlConfig {
 impl Default for SamlConfig {
     fn default() -> Self {
         let mut attribute_mapping = HashMap::new();
-        attribute_mapping.insert("email".to_string(), "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress".to_string());
-        attribute_mapping.insert("name".to_string(), "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name".to_string());
-        attribute_mapping.insert("username".to_string(), "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier".to_string());
-        
+        attribute_mapping.insert(
+            "email".to_string(),
+            "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress".to_string(),
+        );
+        attribute_mapping.insert(
+            "name".to_string(),
+            "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name".to_string(),
+        );
+        attribute_mapping.insert(
+            "username".to_string(),
+            "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier".to_string(),
+        );
+
         Self {
             entity_id: "fortress-saml".to_string(),
             sso_url: "https://sso.example.com/saml".to_string(),
@@ -159,10 +168,29 @@ struct SamlSession {
 #[allow(dead_code)]
 extern "C" {
     fn auth_log(level: i32, ptr: *const u8, len: usize);
-    fn auth_store_session(session_id_ptr: *const u8, session_id_len: usize, user_data_ptr: *const u8, user_data_len: usize) -> i32;
-    fn auth_get_session(session_id_ptr: *const u8, session_id_len: usize, out_ptr: *mut u8, out_len: usize) -> i32;
+    fn auth_store_session(
+        session_id_ptr: *const u8,
+        session_id_len: usize,
+        user_data_ptr: *const u8,
+        user_data_len: usize,
+    ) -> i32;
+    fn auth_get_session(
+        session_id_ptr: *const u8,
+        session_id_len: usize,
+        out_ptr: *mut u8,
+        out_len: usize,
+    ) -> i32;
     fn auth_delete_session(session_id_ptr: *const u8, session_id_len: usize) -> i32;
-    fn auth_make_http_request(url_ptr: *const u8, url_len: usize, method_ptr: *const u8, method_len: usize, body_ptr: *const u8, body_len: usize, out_ptr: *mut u8, out_len: usize) -> i32;
+    fn auth_make_http_request(
+        url_ptr: *const u8,
+        url_len: usize,
+        method_ptr: *const u8,
+        method_len: usize,
+        body_ptr: *const u8,
+        body_len: usize,
+        out_ptr: *mut u8,
+        out_len: usize,
+    ) -> i32;
     fn get_config(key_ptr: *const u8, key_len: usize, out_ptr: *mut u8, out_len: usize) -> i32;
     fn get_timestamp() -> i64;
 }
@@ -173,11 +201,11 @@ extern "C" {
 fn write_string_to_wasm(s: &str, ptr: *mut u8, len: usize) -> usize {
     let bytes = s.as_bytes();
     let write_len = std::cmp::min(bytes.len(), len);
-    
+
     unsafe {
         std::ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, write_len);
     }
-    
+
     write_len
 }
 
@@ -201,7 +229,7 @@ fn make_http_request(url: &str, method: &str, body: Option<&str>) -> Result<Stri
     let mut response_buffer = [0u8; 4096];
     let body_ptr = body.map(|b| b.as_ptr()).unwrap_or(std::ptr::null());
     let body_len = body.map(|b| b.len()).unwrap_or(0);
-    
+
     unsafe {
         let len = auth_make_http_request(
             url.as_ptr(),
@@ -211,11 +239,14 @@ fn make_http_request(url: &str, method: &str, body: Option<&str>) -> Result<Stri
             body_ptr,
             body_len,
             response_buffer.as_mut_ptr(),
-            response_buffer.len()
+            response_buffer.len(),
         );
-        
+
         if len > 0 {
-            Ok(read_string_from_wasm(response_buffer.as_ptr(), len as usize))
+            Ok(read_string_from_wasm(
+                response_buffer.as_ptr(),
+                len as usize,
+            ))
         } else {
             Err("HTTP request failed".to_string())
         }
@@ -226,32 +257,32 @@ fn make_http_request(url: &str, method: &str, body: Option<&str>) -> Result<Stri
 fn parse_saml_assertion(assertion: &str) -> Result<SamlAssertion, String> {
     // Simplified SAML assertion parsing (in production, use proper XML parsing)
     // This is a very basic implementation for demonstration
-    
+
     // Extract ID
     let id = extract_attribute_from_assertion(assertion, "ID")
         .unwrap_or_else(|| format!("assertion-{}", unsafe { get_timestamp() }));
-    
+
     // Extract issue instant
     let issue_instant = extract_attribute_from_assertion(assertion, "IssueInstant")
         .unwrap_or_else(|| chrono::Utc::now().to_rfc3339().to_string());
-    
+
     // Extract subject name ID
     let name_id_value = extract_name_id_from_assertion(assertion)
         .unwrap_or_else(|| "unknown@example.com".to_string());
-    
+
     let subject = SamlSubject {
         name_id: SamlNameId {
             format: Some("urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress".to_string()),
             value: name_id_value,
         },
     };
-    
+
     // Extract conditions
     let conditions = extract_conditions_from_assertion(assertion);
-    
+
     // Extract attributes
     let attribute_statement = extract_attributes_from_assertion(assertion);
-    
+
     Ok(SamlAssertion {
         id,
         issue_instant,
@@ -266,7 +297,7 @@ fn extract_attribute_from_assertion(assertion: &str, attribute_name: &str) -> Op
     // Very simplified XML attribute extraction
     // In production, use proper XML parsing library
     let pattern = format!(r#"{}="([^"]*)""#, attribute_name);
-    
+
     // Simple regex-like extraction (simplified for WASM compatibility)
     if let Some(start) = assertion.find(&pattern) {
         let after_start = &assertion[start + pattern.len()..];
@@ -292,7 +323,7 @@ fn extract_conditions_from_assertion(assertion: &str) -> Option<SamlConditions> 
     // Extract conditions
     let not_before = extract_attribute_from_assertion(assertion, "NotBefore");
     let not_on_or_after = extract_attribute_from_assertion(assertion, "NotOnOrAfter");
-    
+
     if not_before.is_some() || not_on_or_after.is_some() {
         Some(SamlConditions {
             not_before,
@@ -307,7 +338,7 @@ fn extract_conditions_from_assertion(assertion: &str) -> Option<SamlConditions> 
 fn extract_attributes_from_assertion(assertion: &str) -> Option<SamlAttributeStatement> {
     // Extract attributes from assertion
     let mut attributes = Vec::new();
-    
+
     // Extract email
     if let Some(email) = extract_attribute_from_assertion(assertion, "EmailAddress") {
         attributes.push(SamlAttribute {
@@ -316,7 +347,7 @@ fn extract_attributes_from_assertion(assertion: &str) -> Option<SamlAttributeSta
             values: vec![email],
         });
     }
-    
+
     // Extract name
     if let Some(name) = extract_attribute_from_assertion(assertion, "DisplayName") {
         attributes.push(SamlAttribute {
@@ -325,7 +356,7 @@ fn extract_attributes_from_assertion(assertion: &str) -> Option<SamlAttributeSta
             values: vec![name],
         });
     }
-    
+
     // Extract roles
     if let Some(roles_str) = extract_attribute_from_assertion(assertion, "MemberOf") {
         let roles: Vec<String> = roles_str.split(',').map(|s| s.trim().to_string()).collect();
@@ -335,7 +366,7 @@ fn extract_attributes_from_assertion(assertion: &str) -> Option<SamlAttributeSta
             values: roles,
         });
     }
-    
+
     if !attributes.is_empty() {
         Some(SamlAttributeStatement { attributes })
     } else {
@@ -356,7 +387,7 @@ fn extract_signature_from_assertion(assertion: &str) -> Option<String> {
 fn validate_saml_assertion(assertion: &SamlAssertion, config: &SamlConfig) -> Result<(), String> {
     let now = unsafe { get_timestamp() } as u64;
     let clock_skew = config.clock_skew_seconds;
-    
+
     // Validate time conditions
     if let Some(conditions) = &assertion.conditions {
         if let Some(not_before) = &conditions.not_before {
@@ -365,7 +396,7 @@ fn validate_saml_assertion(assertion: &SamlAssertion, config: &SamlConfig) -> Re
                 return Err("Assertion is not yet valid".to_string());
             }
         }
-        
+
         if let Some(not_on_or_after) = &conditions.not_on_or_after {
             let not_on_or_after_timestamp = parse_saml_timestamp(not_on_or_after)?;
             if now - clock_skew > not_on_or_after_timestamp {
@@ -373,18 +404,18 @@ fn validate_saml_assertion(assertion: &SamlAssertion, config: &SamlConfig) -> Re
             }
         }
     }
-    
+
     // Validate subject
     if assertion.subject.name_id.value.is_empty() {
         return Err("Assertion missing subject".to_string());
     }
-    
+
     // In a real implementation, validate signature against certificate
     // For now, we'll just check if signature exists
     if assertion.signature.is_none() {
         return Err("Assertion missing signature".to_string());
     }
-    
+
     Ok(())
 }
 
@@ -399,7 +430,7 @@ fn parse_saml_timestamp(timestamp: &str) -> Result<u64, String> {
 
 fn create_saml_session(user_info: AuthUserInfo, assertion: &str, expires_in: u64) -> SamlSession {
     let now = unsafe { get_timestamp() } as u64;
-    
+
     SamlSession {
         user_info,
         created_at: now,
@@ -433,7 +464,7 @@ fn get_cached_session(session_id: &str) -> Option<SamlSession> {
 #[no_mangle]
 pub extern "C" fn saml_initialize() -> i32 {
     log_message(2, "Initializing SAML authentication plugin");
-    
+
     // Load configuration
     let config_key = "saml_config";
     let mut config_buffer = [0u8; 1024];
@@ -442,9 +473,9 @@ pub extern "C" fn saml_initialize() -> i32 {
             config_key.as_ptr(),
             config_key.len(),
             config_buffer.as_mut_ptr(),
-            config_buffer.len()
+            config_buffer.len(),
         );
-        
+
         if len > 0 {
             let config_json = read_string_from_wasm(config_buffer.as_ptr(), len as usize);
             match serde_json::from_str::<SamlConfig>(&config_json) {
@@ -474,12 +505,12 @@ pub extern "C" fn saml_authenticate(
     request_ptr: *const u8,
     request_len: usize,
     response_ptr: *mut u8,
-    response_len: usize
+    response_len: usize,
 ) -> i32 {
     if !*PLUGIN_INITIALIZED.get().unwrap_or(&false) {
         return 0;
     }
-    
+
     let request_json = read_string_from_wasm(request_ptr, request_len);
     let auth_request: AuthRequest = match serde_json::from_str(&request_json) {
         Ok(req) => req,
@@ -488,11 +519,11 @@ pub extern "C" fn saml_authenticate(
             return 0;
         }
     };
-    
+
     log_message(2, &format!("Processing SAML authentication request"));
-    
+
     let config = PLUGIN_CONFIG.get().unwrap();
-    
+
     match auth_request.method.as_str() {
         "SAML" => {
             // Handle SAML assertion authentication
@@ -515,19 +546,21 @@ pub extern "C" fn saml_authenticate(
                                     tenant_id: None,
                                     attributes: HashMap::new(),
                                 };
-                                
+
                                 // Extract attributes from assertion
                                 if let Some(attr_statement) = &saml_assertion.attribute_statement {
                                     for attribute in &attr_statement.attributes {
                                         match attribute.name.as_str() {
                                             "email" => {
                                                 if !attribute.values.is_empty() {
-                                                    user_info.email = Some(attribute.values[0].clone());
+                                                    user_info.email =
+                                                        Some(attribute.values[0].clone());
                                                 }
                                             }
                                             "name" => {
                                                 if !attribute.values.is_empty() {
-                                                    user_info.display_name = Some(attribute.values[0].clone());
+                                                    user_info.display_name =
+                                                        Some(attribute.values[0].clone());
                                                 }
                                             }
                                             "roles" => {
@@ -538,21 +571,27 @@ pub extern "C" fn saml_authenticate(
                                                 user_info.attributes.insert(
                                                     attribute.name.clone(),
                                                     serde_json::Value::Array(
-                                                        attribute.values.iter()
-                                                            .map(|v| serde_json::Value::String(v.clone()))
-                                                            .collect()
-                                                    )
+                                                        attribute
+                                                            .values
+                                                            .iter()
+                                                            .map(|v| {
+                                                                serde_json::Value::String(v.clone())
+                                                            })
+                                                            .collect(),
+                                                    ),
                                                 );
                                             }
                                         }
                                     }
                                 }
-                                
+
                                 // Create session
-                                let session_id = format!("saml-session-{}", unsafe { get_timestamp() });
-                                let session = create_saml_session(user_info.clone(), assertion, 3600); // 1 hour
+                                let session_id =
+                                    format!("saml-session-{}", unsafe { get_timestamp() });
+                                let session =
+                                    create_saml_session(user_info.clone(), assertion, 3600); // 1 hour
                                 cache_saml_session(&session_id, session.clone());
-                    
+
                                 let result = AuthResult {
                                     success: true,
                                     user_info: Some(user_info),
@@ -562,14 +601,25 @@ pub extern "C" fn saml_authenticate(
                                     error: None,
                                     metadata: {
                                         let mut metadata = HashMap::new();
-                                        metadata.insert("session_id".to_string(), serde_json::Value::String(session_id.clone()));
-                                        metadata.insert("assertion_id".to_string(), serde_json::Value::String(saml_assertion.id));
+                                        metadata.insert(
+                                            "session_id".to_string(),
+                                            serde_json::Value::String(session_id.clone()),
+                                        );
+                                        metadata.insert(
+                                            "assertion_id".to_string(),
+                                            serde_json::Value::String(saml_assertion.id),
+                                        );
                                         metadata
                                     },
                                 };
-                                
-                                let result_json = serde_json::to_string(&result).unwrap_or_default();
-                                return write_string_to_wasm(&result_json, response_ptr, response_len) as i32;
+
+                                let result_json =
+                                    serde_json::to_string(&result).unwrap_or_default();
+                                return write_string_to_wasm(
+                                    &result_json,
+                                    response_ptr,
+                                    response_len,
+                                ) as i32;
                             }
                             Err(e) => {
                                 let result = AuthResult {
@@ -581,9 +631,14 @@ pub extern "C" fn saml_authenticate(
                                     error: Some(format!("SAML assertion validation failed: {}", e)),
                                     metadata: HashMap::new(),
                                 };
-                                
-                                let result_json = serde_json::to_string(&result).unwrap_or_default();
-                                return write_string_to_wasm(&result_json, response_ptr, response_len) as i32;
+
+                                let result_json =
+                                    serde_json::to_string(&result).unwrap_or_default();
+                                return write_string_to_wasm(
+                                    &result_json,
+                                    response_ptr,
+                                    response_len,
+                                ) as i32;
                             }
                         }
                     }
@@ -597,9 +652,10 @@ pub extern "C" fn saml_authenticate(
                             error: Some(format!("Failed to parse SAML assertion: {}", e)),
                             metadata: HashMap::new(),
                         };
-                        
+
                         let result_json = serde_json::to_string(&result).unwrap_or_default();
-                        return write_string_to_wasm(&result_json, response_ptr, response_len) as i32;
+                        return write_string_to_wasm(&result_json, response_ptr, response_len)
+                            as i32;
                     }
                 }
             } else {
@@ -612,7 +668,7 @@ pub extern "C" fn saml_authenticate(
                     error: Some("SAML assertion is required".to_string()),
                     metadata: HashMap::new(),
                 };
-                
+
                 let result_json = serde_json::to_string(&result).unwrap_or_default();
                 return write_string_to_wasm(&result_json, response_ptr, response_len) as i32;
             }
@@ -624,10 +680,13 @@ pub extern "C" fn saml_authenticate(
                 token: None,
                 refresh_token: None,
                 expires_at: None,
-                error: Some(format!("Unsupported authentication method: {}", auth_request.method)),
+                error: Some(format!(
+                    "Unsupported authentication method: {}",
+                    auth_request.method
+                )),
                 metadata: HashMap::new(),
             };
-            
+
             let result_json = serde_json::to_string(&result).unwrap_or_default();
             return write_string_to_wasm(&result_json, response_ptr, response_len) as i32;
         }
@@ -639,30 +698,30 @@ pub extern "C" fn saml_validate_token(
     token_ptr: *const u8,
     token_len: usize,
     response_ptr: *mut u8,
-    response_len: usize
+    response_len: usize,
 ) -> i32 {
     if !*PLUGIN_INITIALIZED.get().unwrap_or(&false) {
         return 0;
     }
-    
+
     let token = read_string_from_wasm(token_ptr, token_len);
-    
+
     // Check session cache
     if let Some(session) = get_cached_session(&token) {
         let response = serde_json::json!({
             "valid": true,
             "user_info": session.user_info
         });
-        
+
         let response_json = serde_json::to_string(&response).unwrap_or_default();
         return write_string_to_wasm(&response_json, response_ptr, response_len) as i32;
     }
-    
+
     let response = serde_json::json!({
         "valid": false,
         "error": "Session not found or expired"
     });
-    
+
     let response_json = serde_json::to_string(&response).unwrap_or_default();
     return write_string_to_wasm(&response_json, response_ptr, response_len) as i32;
 }
@@ -672,12 +731,12 @@ pub extern "C" fn saml_refresh_token(
     _refresh_token_ptr: *const u8,
     _refresh_token_len: usize,
     response_ptr: *mut u8,
-    response_len: usize
+    response_len: usize,
 ) -> i32 {
     if !*PLUGIN_INITIALIZED.get().unwrap_or(&false) {
         return 0;
     }
-    
+
     // SAML doesn't typically use refresh tokens
     // Users need to re-authenticate with a new SAML assertion
     let result = AuthResult {
@@ -686,33 +745,33 @@ pub extern "C" fn saml_refresh_token(
         token: None,
         refresh_token: None,
         expires_at: None,
-        error: Some("SAML does not support token refresh. Please re-authenticate with SAML assertion.".to_string()),
+        error: Some(
+            "SAML does not support token refresh. Please re-authenticate with SAML assertion."
+                .to_string(),
+        ),
         metadata: HashMap::new(),
     };
-    
+
     let result_json = serde_json::to_string(&result).unwrap_or_default();
     return write_string_to_wasm(&result_json, response_ptr, response_len) as i32;
 }
 
 #[no_mangle]
-pub extern "C" fn saml_logout(
-    token_ptr: *const u8,
-    token_len: usize
-) -> i32 {
+pub extern "C" fn saml_logout(token_ptr: *const u8, token_len: usize) -> i32 {
     if !*PLUGIN_INITIALIZED.get().unwrap_or(&false) {
         return 0;
     }
-    
+
     let token = read_string_from_wasm(token_ptr, token_len);
     log_message(2, &format!("Logging out SAML session: {}", token));
-    
+
     // Remove from session cache
     if let Some(cache) = SESSION_CACHE.get() {
         if let Ok(mut cache) = cache.lock() {
             cache.remove(&token);
         }
     }
-    
+
     1 // Success
 }
 
@@ -728,10 +787,10 @@ pub extern "C" fn saml_health_check() -> i32 {
 #[no_mangle]
 pub extern "C" fn saml_cleanup() -> i32 {
     log_message(2, "Cleaning up SAML authentication plugin");
-    
+
     // Note: OnceLock doesn't support clearing, so we just log the cleanup
     log_message(2, "SAML plugin cleanup completed");
-    
+
     1 // Success
 }
 
@@ -780,7 +839,7 @@ pub fn get_metadata() -> PluginMetadata {
         capabilities: PluginCapabilities {
             can_generate_tokens: false, // SAML doesn't generate tokens directly
             can_validate_tokens: true,
-            can_refresh_tokens: false,  // SAML uses assertions, not refresh tokens
+            can_refresh_tokens: false, // SAML uses assertions, not refresh tokens
             supports_mfa: true,
             supports_rbac: true,
         },

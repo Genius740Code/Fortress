@@ -2,7 +2,7 @@ use std::process::Command;
 
 fn main() {
     println!("Generating gRPC code...");
-    
+
     let output = match Command::new("cargo")
         .args(&["run", "--bin", "generate-proto"])
         .current_dir("crates/fortress-server")

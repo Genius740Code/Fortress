@@ -3,13 +3,13 @@
 //! This module provides custom memory pools for frequent allocations
 //! to reduce memory fragmentation and improve allocation performance.
 
-use std::sync::Arc;
-use std::collections::{VecDeque, HashMap};
-use tokio::sync::{RwLock, Mutex};
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use serde::{Serialize, Deserialize};
-use crate::error::{FortressError, Result};
 use super::PoolSizes;
+use crate::error::{FortressError, Result};
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, VecDeque};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::Arc;
+use tokio::sync::{Mutex, RwLock};
 
 /// Memory pool for objects of a specific size
 #[derive(Debug)]
@@ -106,7 +106,7 @@ impl MemoryPool {
         let hits = self.pool_hits.load(Ordering::Relaxed);
         let misses = self.pool_misses.load(Ordering::Relaxed);
         let total = hits + misses;
-        
+
         if total == 0 {
             0.0
         } else {
@@ -126,15 +126,16 @@ impl MemoryPool {
     pub async fn preallocate(&self, count: usize) -> Result<()> {
         let mut free_objects = self.free_objects.lock().await;
         let current_len = free_objects.len();
-        
+
         if current_len < self.max_objects {
             let to_allocate = std::cmp::min(count, self.max_objects - current_len);
             for _ in 0..to_allocate {
                 free_objects.push_back(vec![0u8; self.object_size]);
             }
-            self.current_size.store(free_objects.len(), Ordering::Relaxed);
+            self.current_size
+                .store(free_objects.len(), Ordering::Relaxed);
         }
-        
+
         Ok(())
     }
 }
@@ -189,12 +190,12 @@ impl PoolAllocator {
             config.small_pool_size,
             config.small_pool_count,
         ));
-        
+
         let medium_pool = Arc::new(MemoryPool::new(
             config.medium_pool_size,
             config.medium_pool_count,
         ));
-        
+
         let large_pool = Arc::new(MemoryPool::new(
             config.large_pool_size,
             config.large_pool_count,
@@ -216,7 +217,8 @@ impl PoolAllocator {
     /// Allocate memory for the specified size
     pub async fn allocate(&self, size: usize) -> Result<Vec<u8>> {
         self.total_allocations.fetch_add(1, Ordering::Relaxed);
-        self.total_memory_allocated.fetch_add(size as u64, Ordering::Relaxed);
+        self.total_memory_allocated
+            .fetch_add(size as u64, Ordering::Relaxed);
 
         // Choose the appropriate pool based on size
         if size <= self.config.small_pool_size {
@@ -235,7 +237,8 @@ impl PoolAllocator {
     pub async fn deallocate(&self, mut object: Vec<u8>) -> Result<()> {
         let size = object.len();
         self.total_deallocations.fetch_add(1, Ordering::Relaxed);
-        self.total_memory_deallocated.fetch_add(size as u64, Ordering::Relaxed);
+        self.total_memory_deallocated
+            .fetch_add(size as u64, Ordering::Relaxed);
 
         // Clear the memory for security
         object.fill(0);
@@ -269,7 +272,9 @@ impl PoolAllocator {
         if let Some(pool) = custom_pools.get(&size) {
             pool.allocate().await
         } else {
-            Err(FortressError::memory("No custom pool found for size".to_string()))
+            Err(FortressError::memory(
+                "No custom pool found for size".to_string(),
+            ))
         }
     }
 
@@ -304,15 +309,15 @@ impl PoolAllocator {
         let small_hits = self.small_pool.pool_hits.load(Ordering::Relaxed);
         let medium_hits = self.medium_pool.pool_hits.load(Ordering::Relaxed);
         let large_hits = self.large_pool.pool_hits.load(Ordering::Relaxed);
-        
+
         let small_misses = self.small_pool.pool_misses.load(Ordering::Relaxed);
         let medium_misses = self.medium_pool.pool_misses.load(Ordering::Relaxed);
         let large_misses = self.large_pool.pool_misses.load(Ordering::Relaxed);
-        
+
         let total_hits = small_hits + medium_hits + large_hits;
         let total_misses = small_misses + medium_misses + large_misses;
         let total = total_hits + total_misses;
-        
+
         if total == 0 {
             0.0
         } else {
@@ -324,7 +329,7 @@ impl PoolAllocator {
     fn calculate_memory_efficiency(&self) -> f64 {
         let allocated = self.total_memory_allocated.load(Ordering::Relaxed);
         let deallocated = self.total_memory_deallocated.load(Ordering::Relaxed);
-        
+
         if allocated == 0 {
             0.0
         } else {
@@ -334,9 +339,15 @@ impl PoolAllocator {
 
     /// Pre-allocate all pools
     pub async fn preallocate_all(&self) -> Result<()> {
-        self.small_pool.preallocate(self.config.small_pool_count / 2).await?;
-        self.medium_pool.preallocate(self.config.medium_pool_count / 2).await?;
-        self.large_pool.preallocate(self.config.large_pool_count / 2).await?;
+        self.small_pool
+            .preallocate(self.config.small_pool_count / 2)
+            .await?;
+        self.medium_pool
+            .preallocate(self.config.medium_pool_count / 2)
+            .await?;
+        self.large_pool
+            .preallocate(self.config.large_pool_count / 2)
+            .await?;
         Ok(())
     }
 
@@ -345,12 +356,12 @@ impl PoolAllocator {
         self.small_pool.clear().await?;
         self.medium_pool.clear().await?;
         self.large_pool.clear().await?;
-        
+
         let custom_pools = self.custom_pools.read().await;
         for pool in custom_pools.values() {
             pool.clear().await?;
         }
-        
+
         Ok(())
     }
 
@@ -414,18 +425,18 @@ mod tests {
     #[tokio::test]
     async fn test_memory_pool() {
         let pool = MemoryPool::new(64, 10);
-        
+
         // Test allocation
         let obj1 = pool.allocate().await.unwrap();
         assert_eq!(obj1.len(), 64);
-        
+
         let obj2 = pool.allocate().await.unwrap();
         assert_eq!(obj2.len(), 64);
-        
+
         // Test deallocation
         pool.deallocate(obj1).await.unwrap();
         pool.deallocate(obj2).await.unwrap();
-        
+
         // Check stats
         let stats = pool.get_stats();
         assert_eq!(stats.total_allocations, 2);
@@ -436,19 +447,19 @@ mod tests {
     async fn test_pool_allocator() {
         let config = PoolSizes::default();
         let allocator = PoolAllocator::new(config).unwrap();
-        
+
         // Test small allocation
         let small = allocator.allocate(32).await.unwrap();
         assert_eq!(small.len(), 64); // Should be rounded up to pool size
-        
+
         // Test medium allocation
         let medium = allocator.allocate(512).await.unwrap();
         assert_eq!(medium.len(), 1024); // Should be rounded up to pool size
-        
+
         // Test deallocation
         allocator.deallocate(small).await.unwrap();
         allocator.deallocate(medium).await.unwrap();
-        
+
         // Check metrics
         let metrics = allocator.get_metrics().await.unwrap();
         assert_eq!(metrics.total_allocations, 2);
@@ -459,10 +470,10 @@ mod tests {
     async fn test_custom_pool() {
         let config = PoolSizes::default();
         let allocator = PoolAllocator::new(config).unwrap();
-        
+
         // Create custom pool
         allocator.create_custom_pool(128, 5).await.unwrap();
-        
+
         // Allocate from custom pool
         let custom = allocator.allocate_from_custom_pool(128).await.unwrap();
         assert_eq!(custom.len(), 128);

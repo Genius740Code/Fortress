@@ -1,19 +1,19 @@
 //! Cluster management commands for Fortress CLI
 
+use chrono::{DateTime, Utc};
 use clap::{Args, Subcommand};
+use console::style;
 use fortress_core::{
     cluster::{ClusterConfig, ClusterManager, ClusterNode, NodeState},
     error::{FortressError, Result},
 };
-use std::net::SocketAddr;
-use std::time::Duration;
 use std::collections::HashMap;
-use uuid::Uuid;
-use console::style;
-use tracing::{info, error, warn};
-use chrono::{DateTime, Utc};
-use tokio::fs;
+use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::time::Duration;
+use tokio::fs;
+use tracing::{error, info, warn};
+use uuid::Uuid;
 
 /// Cluster management commands
 #[derive(Debug, Subcommand)]
@@ -78,7 +78,7 @@ pub async fn execute_cluster_command(command: ClusterCommands) -> Result<()> {
 /// Initialize a new cluster
 async fn init_cluster(args: InitArgs) -> Result<()> {
     println!("Initializing new Fortress cluster...");
-    
+
     let config = ClusterConfig {
         node_id: Uuid::new_v4(),
         bind_address: args.bind_address,
@@ -108,7 +108,7 @@ async fn init_cluster(args: InitArgs) -> Result<()> {
 /// Join an existing cluster
 async fn join_cluster(args: JoinArgs) -> Result<()> {
     println!("Joining Fortress cluster...");
-    
+
     let config = ClusterConfig {
         node_id: Uuid::new_v4(),
         bind_address: args.bind_address,
@@ -135,7 +135,12 @@ async fn join_cluster(args: JoinArgs) -> Result<()> {
     let members = manager.get_members().await;
     println!("Cluster members ({}):", members.len());
     for (node_id, node) in members.iter() {
-        println!("  - {}: {} ({})", node_id, node.address, format_node_state(&node.state));
+        println!(
+            "  - {}: {} ({})",
+            node_id,
+            node.address,
+            format_node_state(&node.state)
+        );
     }
 
     Ok(())
@@ -145,23 +150,32 @@ async fn join_cluster(args: JoinArgs) -> Result<()> {
 async fn show_cluster_status() -> Result<()> {
     println!("Fortress Cluster Status");
     println!("========================");
-    
+
     match load_cluster_config().await {
         Some(config) => {
             println!("Node ID: {}", style(config.node_id).bold());
             println!("Bind Address: {}", style(config.bind_address).bold());
-            println!("Heartbeat Interval: {}ms", style(config.heartbeat_interval.as_millis()).bold());
-            println!("Election Timeout: {}ms", style(config.election_timeout.as_millis()).bold());
-            println!("Replication Factor: {}", style(config.replication_factor).bold());
+            println!(
+                "Heartbeat Interval: {}ms",
+                style(config.heartbeat_interval.as_millis()).bold()
+            );
+            println!(
+                "Election Timeout: {}ms",
+                style(config.election_timeout.as_millis()).bold()
+            );
+            println!(
+                "Replication Factor: {}",
+                style(config.replication_factor).bold()
+            );
             println!("Minimum Nodes: {}", style(config.min_nodes).bold());
-            
+
             if !config.seed_nodes.is_empty() {
                 println!("Seed Nodes:");
                 for seed in &config.seed_nodes {
                     println!("  - {}", style(seed).dim());
                 }
             }
-            
+
             // Try to get current status
             match get_cluster_status(&config.node_id).await {
                 Ok(status) => {
@@ -169,8 +183,14 @@ async fn show_cluster_status() -> Result<()> {
                     println!("  Role: {}", style(status.role).bold());
                     println!("  Term: {}", style(status.term).bold());
                     println!("  Members: {}", style(status.member_count).bold());
-                    println!("  Health: {}", 
-                        if status.healthy { style("Healthy").green() } else { style("Unhealthy").red() });
+                    println!(
+                        "  Health: {}",
+                        if status.healthy {
+                            style("Healthy").green()
+                        } else {
+                            style("Unhealthy").red()
+                        }
+                    );
                 }
                 Err(e) => {
                     println!("\n⚠ Could not get live status: {}", e);
@@ -179,10 +199,12 @@ async fn show_cluster_status() -> Result<()> {
             }
         }
         None => {
-            println!("⚠  Cluster not initialized. Use 'fortress cluster init' to create a new cluster.");
+            println!(
+                "⚠  Cluster not initialized. Use 'fortress cluster init' to create a new cluster."
+            );
         }
     }
-    
+
     Ok(())
 }
 
@@ -190,61 +212,63 @@ async fn show_cluster_status() -> Result<()> {
 async fn list_cluster_members() -> Result<()> {
     println!("Cluster Members");
     println!("=============");
-    
+
     match load_cluster_config().await {
-        Some(config) => {
-            match get_cluster_members(&config.node_id).await {
-                Ok(members) => {
-                    if members.is_empty() {
-                        println!("No cluster members found.");
-                        println!("This node may not be connected to a cluster.");
-                    } else {
-                        println!("Found {} member(s):", style(members.len()).bold());
-                        println!("{:<40} {:<15} {:<10} {:<15} {:<20}", 
-                            style("NODE ID").bold(), 
-                            style("ADDRESS").bold(), 
-                            style("STATE").bold(), 
-                            style("TERM").bold(),
-                            style("LAST SEEN").bold()
+        Some(config) => match get_cluster_members(&config.node_id).await {
+            Ok(members) => {
+                if members.is_empty() {
+                    println!("No cluster members found.");
+                    println!("This node may not be connected to a cluster.");
+                } else {
+                    println!("Found {} member(s):", style(members.len()).bold());
+                    println!(
+                        "{:<40} {:<15} {:<10} {:<15} {:<20}",
+                        style("NODE ID").bold(),
+                        style("ADDRESS").bold(),
+                        style("STATE").bold(),
+                        style("TERM").bold(),
+                        style("LAST SEEN").bold()
+                    );
+                    println!("{}", "-".repeat(120));
+
+                    for member in members {
+                        let state_style = match member.state.as_str() {
+                            "Leader" => style(member.state).green(),
+                            "Candidate" => style(member.state).yellow(),
+                            "Follower" => style(member.state).blue(),
+                            _ => style(member.state).dim(),
+                        };
+
+                        println!(
+                            "{:<40} {:<15} {:<10} {:<15} {:<20}",
+                            member.node_id[..36].to_string() + "...",
+                            member.address.to_string(),
+                            state_style,
+                            member.term.to_string(),
+                            member.last_seen.format("%H:%M:%S").to_string()
                         );
-                        println!("{}", "-".repeat(120));
-                        
-                        for member in members {
-                            let state_style = match member.state.as_str() {
-                                "Leader" => style(member.state).green(),
-                                "Candidate" => style(member.state).yellow(),
-                                "Follower" => style(member.state).blue(),
-                                _ => style(member.state).dim(),
-                            };
-                            
-                            println!("{:<40} {:<15} {:<10} {:<15} {:<20}", 
-                                member.node_id[..36].to_string() + "...",
-                                member.address.to_string(),
-                                state_style,
-                                member.term.to_string(),
-                                member.last_seen.format("%H:%M:%S").to_string()
-                            );
-                        }
                     }
                 }
-                Err(e) => {
-                    println!("Could not retrieve cluster members: {}", e);
-                    println!("Cluster may not be running or accessible.");
-                }
             }
-        }
+            Err(e) => {
+                println!("Could not retrieve cluster members: {}", e);
+                println!("Cluster may not be running or accessible.");
+            }
+        },
         None => {
-            println!("Cluster not initialized. Use 'fortress cluster init' to create a new cluster.");
+            println!(
+                "Cluster not initialized. Use 'fortress cluster init' to create a new cluster."
+            );
         }
     }
-    
+
     Ok(())
 }
 
 /// Leave the cluster
 async fn leave_cluster() -> Result<()> {
     println!("Leaving cluster...");
-    
+
     match load_cluster_config().await {
         Some(config) => {
             // Confirm the action
@@ -252,21 +276,21 @@ async fn leave_cluster() -> Result<()> {
             println!("Node ID: {}", style(config.node_id).bold());
             println!("Address: {}", style(config.bind_address).bold());
             println!("\n❓ Are you sure you want to leave the cluster? [y/N]");
-            
+
             // In a real implementation, you'd read user input here
             // For now, we'll proceed with the leave operation
-            
+
             match perform_cluster_leave(&config.node_id).await {
                 Ok(()) => {
                     println!("✓ Successfully left the cluster!");
                     println!("Cleaning up cluster configuration...");
-                    
+
                     // Remove cluster configuration
                     if let Err(e) = remove_cluster_config().await {
                         warn!("Failed to remove cluster config: {}", e);
                         println!("⚠  Could not clean up cluster configuration.");
                     }
-                    
+
                     println!("Node has been removed from the cluster.");
                 }
                 Err(e) => {
@@ -280,7 +304,7 @@ async fn leave_cluster() -> Result<()> {
             println!("⚠  No cluster configuration found. This node is not part of a cluster.");
         }
     }
-    
+
     Ok(())
 }
 
@@ -288,56 +312,83 @@ async fn leave_cluster() -> Result<()> {
 async fn show_cluster_health() -> Result<()> {
     println!("Cluster Health");
     println!("=============");
-    
+
     match load_cluster_config().await {
-        Some(config) => {
-            match get_cluster_health(&config.node_id).await {
-                Ok(health) => {
-                    println!("Overall Health: {}", 
-                        if health.overall_healthy { style("✓ Healthy").green().bold() } else { style("✗ Unhealthy").red().bold() });
-                    
-                    println!("\nNode Status:");
-                    println!("  Local Node: {}", style(config.node_id).bold());
-                    println!("  Term: {}", health.current_term);
-                    println!("  Members: {} / {}", health.active_members, health.expected_members);
-                    println!("  Heartbeats: {}", style(heartbeat_status(health.heartbeat_rate)).bold());
-                    
-                    println!("\nNetwork Status:");
-                    println!("  Connectivity: {}", 
-                        if health.network_connected { style("✓ Connected").green() } else { style("✗ Disconnected").red() });
-                    println!("  Latency: {}ms", style(health.avg_latency.as_millis()).bold());
-                    println!("  Messages: {}", style(health.messages_processed).bold());
-                    
-                    println!("\nReplication Status:");
-                    println!("  Replication Lag: {}ms", style(health.replication_lag.as_millis()).bold());
-                    println!("  Sync Progress: {}%", style(health.sync_percentage).bold());
-                    println!("  Success Rate: {:.1}%", style(health.replication_success_rate * 100.0).bold());
-                    
-                    if !health.issues.is_empty() {
-                        println!("\n⚠  Issues:");
-                        for issue in &health.issues {
-                            println!("  - {}", style(issue).yellow());
-                        }
+        Some(config) => match get_cluster_health(&config.node_id).await {
+            Ok(health) => {
+                println!(
+                    "Overall Health: {}",
+                    if health.overall_healthy {
+                        style("✓ Healthy").green().bold()
+                    } else {
+                        style("✗ Unhealthy").red().bold()
                     }
-                    
-                    if !health.recommendations.is_empty() {
-                        println!("\nRecommendations:");
-                        for rec in &health.recommendations {
-                            println!("  - {}", style(rec).cyan());
-                        }
+                );
+
+                println!("\nNode Status:");
+                println!("  Local Node: {}", style(config.node_id).bold());
+                println!("  Term: {}", health.current_term);
+                println!(
+                    "  Members: {} / {}",
+                    health.active_members, health.expected_members
+                );
+                println!(
+                    "  Heartbeats: {}",
+                    style(heartbeat_status(health.heartbeat_rate)).bold()
+                );
+
+                println!("\nNetwork Status:");
+                println!(
+                    "  Connectivity: {}",
+                    if health.network_connected {
+                        style("✓ Connected").green()
+                    } else {
+                        style("✗ Disconnected").red()
+                    }
+                );
+                println!(
+                    "  Latency: {}ms",
+                    style(health.avg_latency.as_millis()).bold()
+                );
+                println!("  Messages: {}", style(health.messages_processed).bold());
+
+                println!("\nReplication Status:");
+                println!(
+                    "  Replication Lag: {}ms",
+                    style(health.replication_lag.as_millis()).bold()
+                );
+                println!("  Sync Progress: {}%", style(health.sync_percentage).bold());
+                println!(
+                    "  Success Rate: {:.1}%",
+                    style(health.replication_success_rate * 100.0).bold()
+                );
+
+                if !health.issues.is_empty() {
+                    println!("\n⚠  Issues:");
+                    for issue in &health.issues {
+                        println!("  - {}", style(issue).yellow());
                     }
                 }
-                Err(e) => {
-                    println!("⚠  Could not assess cluster health: {}", e);
-                    println!("Cluster may not be running or accessible.");
+
+                if !health.recommendations.is_empty() {
+                    println!("\nRecommendations:");
+                    for rec in &health.recommendations {
+                        println!("  - {}", style(rec).cyan());
+                    }
                 }
             }
-        }
+            Err(e) => {
+                println!("⚠  Could not assess cluster health: {}", e);
+                println!("Cluster may not be running or accessible.");
+            }
+        },
         None => {
-            println!("⚠  Cluster not initialized. Use 'fortress cluster init' to create a new cluster.");
+            println!(
+                "⚠  Cluster not initialized. Use 'fortress cluster init' to create a new cluster."
+            );
         }
     }
-    
+
     Ok(())
 }
 
@@ -413,25 +464,28 @@ impl LocalClusterManager {
     fn new(node_id: Uuid) -> Self {
         Self { node_id }
     }
-    
+
     async fn get_node_state(&self) -> NodeState {
         // Try to load actual state from cluster manager
         // For now, return a default state
-        NodeState::Follower { leader: None, term: 0 }
+        NodeState::Follower {
+            leader: None,
+            term: 0,
+        }
     }
-    
+
     async fn get_members(&self) -> HashMap<Uuid, ClusterNode> {
         // Try to get actual members from cluster manager
         // For now, return empty map
         HashMap::new()
     }
-    
+
     async fn is_healthy(&self) -> bool {
         // Try to get actual health status
         // For now, return false since we can't connect
         false
     }
-    
+
     async fn get_health_metrics(&self) -> ClusterHealthMetrics {
         // Try to get actual health metrics
         // For now, return default metrics
@@ -448,41 +502,47 @@ impl LocalClusterManager {
             replication_success_rate: 0.0,
         }
     }
-    
+
     async fn transfer_leadership(&mut self) -> Result<()> {
         // Try to transfer leadership to another node
-        info!("Attempting to transfer leadership from node {}", self.node_id);
-        
+        info!(
+            "Attempting to transfer leadership from node {}",
+            self.node_id
+        );
+
         // In a real implementation, this would:
         // 1. Find a suitable follower node
         // 2. Initiate leadership transfer
         // 3. Wait for confirmation
-        
+
         Ok(())
     }
-    
+
     async fn notify_leave(&self) -> Result<()> {
         // Notify other cluster members that this node is leaving
-        info!("Notifying cluster members of node {} departure", self.node_id);
-        
+        info!(
+            "Notifying cluster members of node {} departure",
+            self.node_id
+        );
+
         // In a real implementation, this would:
         // 1. Send leave messages to all members
         // 2. Wait for acknowledgments
         // 3. Handle any failed notifications
-        
+
         Ok(())
     }
-    
+
     async fn shutdown(self) -> Result<()> {
         // Shutdown cluster services
         info!("Shutting down cluster services for node {}", self.node_id);
-        
+
         // In a real implementation, this would:
         // 1. Stop heartbeat loops
         // 2. Close network connections
         // 3. Clean up resources
         // 4. Save final state
-        
+
         Ok(())
     }
 }
@@ -495,15 +555,15 @@ async fn get_local_cluster_manager(node_id: &Uuid) -> Option<LocalClusterManager
     // 2. Connect via IPC or HTTP API
     // 3. Authenticate if needed
     // 4. Return a manager interface
-    
+
     // For now, we'll try to detect if the cluster is running
     // by checking for the cluster config and attempting a simple connection
-    
+
     let config_path = get_cluster_config_path();
     if !config_path.exists() {
         return None;
     }
-    
+
     // Try to read the config to verify cluster is initialized
     match fs::read_to_string(&config_path).await {
         Ok(_) => {
@@ -517,17 +577,18 @@ async fn get_local_cluster_manager(node_id: &Uuid) -> Option<LocalClusterManager
 /// Load cluster configuration from storage
 async fn load_cluster_config() -> Option<ClusterConfig> {
     let config_path = get_cluster_config_path();
-    
+
     if !config_path.exists() {
         return None;
     }
-    
+
     match fs::read_to_string(&config_path).await {
-        Ok(content) => {
-            serde_json::from_str(&content).ok()
-        }
+        Ok(content) => serde_json::from_str(&content).ok(),
         Err(e) => {
-            warn!("Failed to read cluster config from {:?}: {}", config_path, e);
+            warn!(
+                "Failed to read cluster config from {:?}: {}",
+                config_path, e
+            );
             None
         }
     }
@@ -536,47 +597,51 @@ async fn load_cluster_config() -> Option<ClusterConfig> {
 /// Save cluster configuration to storage
 async fn save_cluster_config(config: &ClusterConfig) -> Result<()> {
     let config_path = get_cluster_config_path();
-    
+
     // Create parent directory if needed
     if let Some(parent) = config_path.parent() {
-        fs::create_dir_all(parent).await
-            .map_err(|_e| fortress_core::error::FortressError::storage(
+        fs::create_dir_all(parent).await.map_err(|_e| {
+            fortress_core::error::FortressError::storage(
                 "Failed to create config directory".to_string(),
                 "file".to_string(),
-                fortress_core::error::StorageErrorCode::ConnectionFailed
-            ))?;
+                fortress_core::error::StorageErrorCode::ConnectionFailed,
+            )
+        })?;
     }
-    
-    let content = serde_json::to_string_pretty(config)
-        .map_err(|_e| fortress_core::error::FortressError::storage(
+
+    let content = serde_json::to_string_pretty(config).map_err(|_e| {
+        fortress_core::error::FortressError::storage(
             "Failed to serialize config".to_string(),
             "file".to_string(),
-            fortress_core::error::StorageErrorCode::InvalidOperation
-        ))?;
-    
-    fs::write(&config_path, content).await
-        .map_err(|_e| fortress_core::error::FortressError::storage(
+            fortress_core::error::StorageErrorCode::InvalidOperation,
+        )
+    })?;
+
+    fs::write(&config_path, content).await.map_err(|_e| {
+        fortress_core::error::FortressError::storage(
             "Failed to write config".to_string(),
             "file".to_string(),
-            fortress_core::error::StorageErrorCode::ConnectionFailed
-        ))?;
-    
+            fortress_core::error::StorageErrorCode::ConnectionFailed,
+        )
+    })?;
+
     Ok(())
 }
 
 /// Remove cluster configuration
 async fn remove_cluster_config() -> Result<()> {
     let config_path = get_cluster_config_path();
-    
+
     if config_path.exists() {
-        fs::remove_file(&config_path).await
-            .map_err(|_e| fortress_core::error::FortressError::storage(
+        fs::remove_file(&config_path).await.map_err(|_e| {
+            fortress_core::error::FortressError::storage(
                 "Failed to remove config".to_string(),
                 "file".to_string(),
-                fortress_core::error::StorageErrorCode::ConnectionFailed
-            ))?;
+                fortress_core::error::StorageErrorCode::ConnectionFailed,
+            )
+        })?;
     }
-    
+
     Ok(())
 }
 
@@ -590,12 +655,10 @@ fn get_cluster_config_path() -> PathBuf {
 /// Get current cluster status
 async fn get_cluster_status(node_id: &Uuid) -> Result<ClusterStatus> {
     // Load cluster configuration
-    let _config = load_cluster_config().await
-        .ok_or_else(|| FortressError::cluster(
-            "Cluster configuration not found".to_string(),
-            None,
-        ))?;
-    
+    let _config = load_cluster_config().await.ok_or_else(|| {
+        FortressError::cluster("Cluster configuration not found".to_string(), None)
+    })?;
+
     // Try to connect to local cluster manager
     match get_local_cluster_manager(node_id).await {
         Some(manager) => {
@@ -606,15 +669,15 @@ async fn get_cluster_status(node_id: &Uuid) -> Result<ClusterStatus> {
                 NodeState::Candidate { term, .. } => *term,
                 NodeState::Leader { term, .. } => *term,
             };
-            
+
             let role = match &state {
                 NodeState::Follower { .. } => "Follower".to_string(),
                 NodeState::Candidate { .. } => "Candidate".to_string(),
                 NodeState::Leader { .. } => "Leader".to_string(),
             };
-            
+
             let healthy = manager.is_healthy().await;
-            
+
             Ok(ClusterStatus {
                 role,
                 term,
@@ -641,25 +704,26 @@ async fn get_cluster_members(node_id: &Uuid) -> Result<Vec<ClusterMember>> {
         Some(manager) => {
             let members = manager.get_members().await;
             let mut cluster_members = Vec::new();
-            
+
             for (member_id, node) in members {
                 let state = match &node.state {
                     NodeState::Follower { .. } => "Follower".to_string(),
                     NodeState::Candidate { .. } => "Candidate".to_string(),
                     NodeState::Leader { .. } => "Leader".to_string(),
                 };
-                
+
                 let term = match &node.state {
                     NodeState::Follower { term, .. } => *term,
                     NodeState::Candidate { term, .. } => *term,
                     NodeState::Leader { term, .. } => *term,
                 };
-                
+
                 let last_seen = DateTime::from_timestamp(
                     (node.last_heartbeat / 1000) as i64,
                     ((node.last_heartbeat % 1000) * 1_000_000) as u32,
-                ).unwrap_or_else(|| Utc::now());
-                
+                )
+                .unwrap_or_else(|| Utc::now());
+
                 cluster_members.push(ClusterMember {
                     node_id: member_id.to_string(),
                     address: node.address,
@@ -668,15 +732,13 @@ async fn get_cluster_members(node_id: &Uuid) -> Result<Vec<ClusterMember>> {
                     last_seen,
                 });
             }
-            
+
             Ok(cluster_members)
         }
-        None => {
-            Err(FortressError::cluster(
-                "Cluster manager not accessible".to_string(),
-                None,
-            ))
-        }
+        None => Err(FortressError::cluster(
+            "Cluster manager not accessible".to_string(),
+            None,
+        )),
     }
 }
 
@@ -686,30 +748,33 @@ async fn perform_cluster_leave(node_id: &Uuid) -> Result<()> {
     match get_local_cluster_manager(node_id).await {
         Some(mut manager) => {
             info!("Node {} leaving cluster", node_id);
-            
+
             // Check if this node is the leader and transfer leadership if needed
             let state = manager.get_node_state().await;
             if matches!(state, NodeState::Leader { .. }) {
                 info!("Leader node leaving cluster, transferring leadership");
                 manager.transfer_leadership().await?;
             }
-            
+
             // Notify other cluster members
             manager.notify_leave().await?;
-            
+
             // Stop cluster services
             manager.shutdown().await?;
-            
+
             info!("Node {} successfully left cluster", node_id);
             Ok(())
         }
         None => {
             // Cluster manager not accessible, perform basic cleanup
-            info!("Cluster manager not accessible, performing basic cleanup for node {}", node_id);
-            
+            info!(
+                "Cluster manager not accessible, performing basic cleanup for node {}",
+                node_id
+            );
+
             // Simulate cleanup process
             tokio::time::sleep(Duration::from_millis(200)).await;
-            
+
             Ok(())
         }
     }
@@ -722,10 +787,10 @@ async fn get_cluster_health(node_id: &Uuid) -> Result<ClusterHealthInfo> {
         Some(manager) => {
             let health_metrics = manager.get_health_metrics().await;
             let members = manager.get_members().await;
-            
+
             let mut issues = Vec::new();
             let mut recommendations = Vec::new();
-            
+
             // Analyze health and generate issues/recommendations
             if health_metrics.active_members < health_metrics.expected_members {
                 issues.push(format!(
@@ -733,34 +798,36 @@ async fn get_cluster_health(node_id: &Uuid) -> Result<ClusterHealthInfo> {
                     health_metrics.active_members, health_metrics.expected_members
                 ));
             }
-            
+
             if health_metrics.heartbeat_rate < 0.8 {
                 issues.push("Low heartbeat rate detected".to_string());
             }
-            
+
             if health_metrics.avg_latency > Duration::from_millis(100) {
                 issues.push("High network latency detected".to_string());
                 recommendations.push("Check network connectivity and optimize routing".to_string());
             }
-            
+
             if health_metrics.replication_success_rate < 0.95 {
                 issues.push("Low replication success rate".to_string());
-                recommendations.push("Check replication configuration and network stability".to_string());
+                recommendations
+                    .push("Check replication configuration and network stability".to_string());
             }
-            
+
             if members.len() < 3 {
-                recommendations.push("Consider adding more nodes for high availability".to_string());
+                recommendations
+                    .push("Consider adding more nodes for high availability".to_string());
             }
-            
+
             if health_metrics.avg_latency > Duration::from_millis(50) {
                 recommendations.push("Monitor network latency for optimal performance".to_string());
             }
-            
-            let overall_healthy = issues.is_empty() && 
-                health_metrics.active_members >= health_metrics.expected_members &&
-                health_metrics.heartbeat_rate >= 0.9 &&
-                health_metrics.replication_success_rate >= 0.95;
-            
+
+            let overall_healthy = issues.is_empty()
+                && health_metrics.active_members >= health_metrics.expected_members
+                && health_metrics.heartbeat_rate >= 0.9
+                && health_metrics.replication_success_rate >= 0.95;
+
             Ok(ClusterHealthInfo {
                 overall_healthy,
                 current_term: health_metrics.current_term,
@@ -816,13 +883,20 @@ mod tests {
     #[test]
     fn test_format_node_state() {
         use fortress_core::cluster::NodeState;
-        
-        let follower = NodeState::Follower { leader: None, term: 1 };
+
+        let follower = NodeState::Follower {
+            leader: None,
+            term: 1,
+        };
         assert_eq!(format_node_state(&follower), "Follower");
-        
-        let candidate = NodeState::Candidate { term: 1, votes_received: 1, votes_needed: 2 };
+
+        let candidate = NodeState::Candidate {
+            term: 1,
+            votes_received: 1,
+            votes_needed: 2,
+        };
         assert_eq!(format_node_state(&candidate), "Candidate");
-        
+
         let leader = NodeState::Leader { term: 1 };
         assert_eq!(format_node_state(&leader), "Leader ⭐");
     }

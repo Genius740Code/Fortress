@@ -1,13 +1,13 @@
-use color_eyre::eyre::{Result, Context};
+use color_eyre::eyre::{Context, Result};
 use console::style;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde_json::{json, Value};
 use std::path::PathBuf;
-use tracing::{info, debug, warn, error};
 use std::process::Command;
+use tracing::{debug, error, info, warn};
 
 /// Handle data migration from external database to Fortress
-/// 
+///
 /// # Arguments
 /// * `from` - Source database type (currently only "postgres")
 /// * `to` - Target database type (always "fortress")
@@ -28,37 +28,48 @@ pub async fn handle_migrate(
     batch_size: usize,
     progress: bool,
 ) -> Result<()> {
-    println!("{}", style("Data Migration: PostgreSQL → Fortress").bold().cyan());
+    println!(
+        "{}",
+        style("Data Migration: PostgreSQL → Fortress").bold().cyan()
+    );
     println!();
-    
+
     // Validate source database type
     if from != "postgres" {
-        return Err(color_eyre::Report::msg("Only PostgreSQL migration is currently supported"));
+        return Err(color_eyre::Report::msg(
+            "Only PostgreSQL migration is currently supported",
+        ));
     }
-    
+
     println!("Connecting to PostgreSQL database...");
-    
+
     // Test PostgreSQL connection using psql command
     let test_result = Command::new("psql")
         .arg(&source)
         .arg("-c")
         .arg("SELECT 1;")
         .output();
-    
+
     match test_result {
         Ok(output) => {
             if output.status.success() {
                 info!("Connected to PostgreSQL successfully");
             } else {
-                return Err(color_eyre::Report::msg(format!("Failed to connect to PostgreSQL: {}", String::from_utf8_lossy(&output.stderr))));
+                return Err(color_eyre::Report::msg(format!(
+                    "Failed to connect to PostgreSQL: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                )));
             }
         }
         Err(e) => {
             error!("Failed to connect to PostgreSQL: {}", e);
-            return Err(color_eyre::Report::msg(format!("Database connection failed: {}", e)));
+            return Err(color_eyre::Report::msg(format!(
+                "Database connection failed: {}",
+                e
+            )));
         }
     }
-    
+
     // Get target data directory
     let target_dir = if let Some(dir) = data_dir {
         PathBuf::from(dir)
@@ -68,47 +79,49 @@ pub async fn handle_migrate(
             .join("fortress")
             .join(&to)
     };
-    
+
     println!("Target directory: {}", style(target_dir.display()).bold());
-    
-    // Initialize Fortress storage with simple filesystem backend  
-    let storage = fortress_core::storage::FileSystemStorage::new(&target_dir.to_string_lossy().to_string())
-        .context("Failed to create storage")?;
+
+    // Initialize Fortress storage with simple filesystem backend
+    let storage =
+        fortress_core::storage::FileSystemStorage::new(&target_dir.to_string_lossy().to_string())
+            .context("Failed to create storage")?;
     let storage = Box::new(storage) as Box<dyn fortress_core::storage::StorageBackend>;
-    
+
     // Get list of tables to migrate
     let tables = if let Some(table_name) = table {
         vec![table_name]
     } else {
         list_postgres_tables(&source).await?
     };
-    
+
     println!("Found {} tables to migrate", style(tables.len()).bold());
-    
+
     let mut total_rows = 0u64;
     let mut total_migrated = 0u64;
-    
+
     for table_name in &tables {
         println!("\nMigrating table: {}", style(table_name).bold().yellow());
-        
+
         // Get table schema
         let schema = get_postgres_table_schema(&source, table_name).await?;
         println!("  Table schema: {} columns", style(schema.len()).bold());
-        
+
         // Create Fortress table
         create_fortress_table(&storage, table_name, &schema).await?;
-        
+
         // Get row count
         let row_count = get_postgres_row_count(&source, table_name).await?;
         total_rows += row_count;
         println!("  Rows to migrate: {}", style(row_count).bold());
-        
+
         // Migrate data in batches
         let progress_bar = if progress {
             let pb = ProgressBar::new(row_count as u64);
-            let template_result = ProgressStyle::default_bar()
-                .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})");
-                
+            let template_result = ProgressStyle::default_bar().template(
+                "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})",
+            );
+
             let style = match template_result {
                 Ok(style) => style.progress_chars("#>-"),
                 Err(e) => {
@@ -116,84 +129,101 @@ pub async fn handle_migrate(
                     ProgressStyle::default_bar()
                 }
             };
-            
+
             pb.set_style(style);
             pb.set_message(format!("Migrating {}", table_name));
             Some(pb)
         } else {
             None
         };
-        
+
         let mut migrated_rows = 0u64;
         let mut offset = 0u64;
-        
+
         while offset < row_count {
             let batch = fetch_postgres_batch(&source, table_name, offset, batch_size).await?;
-            
+
             for row in &batch {
-                let fortress_row = serde_json::to_value(row)
-                    .context("Failed to serialize row")?;
-                
+                let fortress_row = serde_json::to_value(row).context("Failed to serialize row")?;
+
                 // Insert into Fortress
-                let row_json = serde_json::to_vec(&fortress_row)
-                    .context("Failed to serialize row")?;
-                storage.put(&format!("{}/{}", table_name, migrated_rows), &row_json).await
+                let row_json =
+                    serde_json::to_vec(&fortress_row).context("Failed to serialize row")?;
+                storage
+                    .put(&format!("{}/{}", table_name, migrated_rows), &row_json)
+                    .await
                     .context("Failed to insert row into Fortress")?;
-                
+
                 migrated_rows += 1;
                 total_migrated += 1;
             }
-            
+
             offset += batch_size as u64;
-            
+
             if let Some(ref pb) = progress_bar {
                 pb.set_position(migrated_rows);
             }
-            
-            debug!("Migrated batch: {} rows (total: {})", batch.len(), migrated_rows);
+
+            debug!(
+                "Migrated batch: {} rows (total: {})",
+                batch.len(),
+                migrated_rows
+            );
         }
-        
+
         if let Some(pb) = progress_bar {
             pb.finish_with_message(format!("Completed {}", table_name));
         }
-        
-        println!("  ✓ Migrated {} rows successfully", style(migrated_rows).bold().green());
+
+        println!(
+            "  ✓ Migrated {} rows successfully",
+            style(migrated_rows).bold().green()
+        );
     }
-    
+
     println!("\nMigration Summary:");
     println!("  Total rows processed: {}", style(total_rows).bold());
-    println!("  ✓ Total rows migrated: {}", style(total_migrated).bold().green());
+    println!(
+        "  ✓ Total rows migrated: {}",
+        style(total_migrated).bold().green()
+    );
     println!("  Tables migrated: {}", style(tables.len()).bold());
     println!("  Fortress database: {}", style(&to).bold());
     println!("  Location: {}", style(target_dir.display()).bold());
-    
+
     println!("\n✓ Migration completed successfully");
     info!("Migration from PostgreSQL to '{}' completed", &to);
-    
+
     Ok(())
 }
 
-            
 async fn list_postgres_tables(source: &str) -> Result<Vec<String>> {
     let output = Command::new("psql")
         .arg(source)
         .arg("-c")
         .arg("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name")
         .output();
-    
+
     match output {
         Ok(result) => {
             if result.status.success() {
                 let tables_str = String::from_utf8_lossy(&result.stdout);
                 Ok(tables_str.lines().map(|s| s.trim().to_string()).collect())
             } else {
-                return Err(color_eyre::Report::msg(format!("Failed to list tables: {}", String::from_utf8_lossy(&result.stderr))));
+                return Err(color_eyre::Report::msg(format!(
+                    "Failed to list tables: {}",
+                    String::from_utf8_lossy(&result.stderr)
+                )));
             }
         }
         Err(e) => {
             warn!("Could not list tables: {}", e);
             // Fallback to common tables
-            Ok(vec!["users".to_string(), "posts".to_string(), "comments".to_string()])
+            Ok(vec![
+                "users".to_string(),
+                "posts".to_string(),
+                "comments".to_string(),
+            ])
         }
     }
 }
@@ -206,18 +236,21 @@ async fn get_postgres_table_schema(source: &str, table_name: &str) -> Result<Vec
             "SELECT column_name, data_type, is_nullable, column_default 
              FROM information_schema.columns 
              WHERE table_schema = 'public' AND table_name = '{}' 
-             ORDER BY ordinal_position", table_name
+             ORDER BY ordinal_position",
+            table_name
         ))
         .output();
-    
+
     match output {
         Ok(result) => {
             if result.status.success() {
                 let schema_str = String::from_utf8_lossy(&result.stdout);
                 let mut schema = Vec::new();
                 for line in schema_str.lines() {
-                    if line.trim().is_empty() { continue; }
-                    
+                    if line.trim().is_empty() {
+                        continue;
+                    }
+
                     let parts: Vec<&str> = line.split('|').map(|s| s.trim()).collect();
                     if parts.len() >= 4 {
                         let column_info = json!({
@@ -231,7 +264,10 @@ async fn get_postgres_table_schema(source: &str, table_name: &str) -> Result<Vec
                 }
                 Ok(schema)
             } else {
-                return Err(color_eyre::Report::msg(format!("Failed to get table schema: {}", String::from_utf8_lossy(&result.stderr))));
+                return Err(color_eyre::Report::msg(format!(
+                    "Failed to get table schema: {}",
+                    String::from_utf8_lossy(&result.stderr)
+                )));
             }
         }
         Err(e) => {
@@ -253,13 +289,14 @@ async fn get_postgres_row_count(source: &str, table_name: &str) -> Result<u64> {
         .arg("-c")
         .arg(&format!("SELECT COUNT(*) FROM {}", table_name))
         .output();
-    
+
     match output {
         Ok(result) => {
             if result.status.success() {
                 let stdout_str = String::from_utf8_lossy(&result.stdout);
                 let count_str = stdout_str.trim();
-                count_str.parse::<u64>()
+                count_str
+                    .parse::<u64>()
                     .context("Failed to parse row count")
             } else {
                 warn!("Could not get row count, using default");
@@ -273,7 +310,12 @@ async fn get_postgres_row_count(source: &str, table_name: &str) -> Result<u64> {
     }
 }
 
-async fn fetch_postgres_batch(source: &str, table_name: &str, offset: u64, batch_size: usize) -> Result<Vec<Value>> {
+async fn fetch_postgres_batch(
+    source: &str,
+    table_name: &str,
+    offset: u64,
+    batch_size: usize,
+) -> Result<Vec<Value>> {
     let output = Command::new("psql")
         .arg(source)
         .arg("-c")
@@ -282,17 +324,19 @@ async fn fetch_postgres_batch(source: &str, table_name: &str, offset: u64, batch
             table_name, batch_size, offset
         ))
         .output();
-    
+
     match output {
         Ok(result) => {
             if result.status.success() {
                 let data_str = String::from_utf8_lossy(&result.stdout);
                 let mut batch_data = Vec::new();
-                
+
                 for line in data_str.lines() {
                     let line = line.trim();
-                    if line.is_empty() { continue; }
-                    
+                    if line.is_empty() {
+                        continue;
+                    }
+
                     // Parse JSON output from PostgreSQL
                     match serde_json::from_str::<Value>(line) {
                         Ok(json_value) => batch_data.push(json_value),
@@ -304,26 +348,36 @@ async fn fetch_postgres_batch(source: &str, table_name: &str, offset: u64, batch
                 }
                 Ok(batch_data)
             } else {
-                return Err(color_eyre::Report::msg(format!("Failed to fetch batch: {}", String::from_utf8_lossy(&result.stderr))));
+                return Err(color_eyre::Report::msg(format!(
+                    "Failed to fetch batch: {}",
+                    String::from_utf8_lossy(&result.stderr)
+                )));
             }
         }
         Err(e) => {
             error!("Could not fetch batch: {}", e);
-            return Err(color_eyre::Report::msg(format!("Failed to fetch batch: {}", e)));
+            return Err(color_eyre::Report::msg(format!(
+                "Failed to fetch batch: {}",
+                e
+            )));
         }
     }
 }
 
-async fn create_fortress_table(_storage: &Box<dyn fortress_core::storage::StorageBackend>, _table_name: &str, schema: &[Value]) -> Result<()> {
+async fn create_fortress_table(
+    _storage: &Box<dyn fortress_core::storage::StorageBackend>,
+    _table_name: &str,
+    schema: &[Value],
+) -> Result<()> {
     // Create table schema in Fortress
     for column in schema {
         let column_name = column["name"].as_str().unwrap_or("unknown");
         let column_type = map_postgres_type_to_fortress(column["type"].as_str().unwrap_or("text"));
-        
+
         // This would use Fortress's table creation API
         debug!("Creating column {} with type {}", column_name, column_type);
     }
-    
+
     Ok(())
 }
 

@@ -13,12 +13,12 @@
 
 use crate::error::{FortressError, Result};
 use crate::key::SecureKey;
+use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
-use base64::{Engine as _, engine::general_purpose};
 
 /// Supported TEE types
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -108,34 +108,34 @@ impl Default for SecurityPolicy {
 pub trait TeeProvider: Send + Sync {
     /// Get the TEE type
     fn tee_type(&self) -> TeeType;
-    
+
     /// Initialize the TEE provider
     async fn initialize(&mut self) -> Result<()>;
-    
+
     /// Create a new enclave
     async fn create_enclave(&self, config: &EnclaveConfig) -> Result<String>;
-    
+
     /// Start an existing enclave
     async fn start_enclave(&self, enclave_id: &str) -> Result<()>;
-    
+
     /// Stop a running enclave
     async fn stop_enclave(&self, enclave_id: &str) -> Result<()>;
-    
+
     /// Terminate an enclave
     async fn terminate_enclave(&self, enclave_id: &str) -> Result<()>;
-    
+
     /// Get enclave status
     async fn get_enclave_status(&self, enclave_id: &str) -> Result<EnclaveStatus>;
-    
+
     /// Perform attestation verification
     async fn attest_enclave(&self, enclave_id: &str) -> Result<AttestationResult>;
-    
+
     /// Send secure message to enclave
     async fn send_message(&self, enclave_id: &str, message: &[u8]) -> Result<Vec<u8>>;
-    
+
     /// Establish secure channel with enclave
     async fn establish_secure_channel(&self, enclave_id: &str) -> Result<SecureChannel>;
-    
+
     /// Get provider capabilities
     fn get_capabilities(&self) -> TeeCapabilities;
 }
@@ -228,7 +228,7 @@ impl TeeManager {
             default_policy,
         }
     }
-    
+
     /// Register a TEE provider
     pub async fn register_provider(&self, provider: Arc<dyn TeeProvider>) -> Result<()> {
         let tee_type = provider.tee_type();
@@ -236,18 +236,19 @@ impl TeeManager {
         providers.insert(tee_type, provider);
         Ok(())
     }
-    
+
     /// Create a new enclave
     pub async fn create_enclave(&self, config: EnclaveConfig) -> Result<String> {
         let providers = self.providers.read().await;
-        let provider = providers.get(&config.tee_type)
-            .ok_or_else(|| FortressError::tee(
+        let provider = providers.get(&config.tee_type).ok_or_else(|| {
+            FortressError::tee(
                 format!("No provider found for TEE type: {:?}", config.tee_type),
-                "TeeManager::create_enclave".to_string()
-            ))?;
-        
+                "TeeManager::create_enclave".to_string(),
+            )
+        })?;
+
         let enclave_id = provider.create_enclave(&config).await?;
-        
+
         let enclave_info = EnclaveInfo {
             config: config.clone(),
             status: EnclaveStatus::Creating,
@@ -255,115 +256,144 @@ impl TeeManager {
             created_at: chrono::Utc::now(),
             last_activity: chrono::Utc::now(),
         };
-        
+
         let mut enclaves = self.enclaves.write().await;
         enclaves.insert(enclave_id.clone(), enclave_info);
-        
+
         Ok(enclave_id)
     }
-    
+
     /// Start an enclave
     pub async fn start_enclave(&self, enclave_id: &str) -> Result<()> {
         let mut enclaves = self.enclaves.write().await;
-        let enclave_info = enclaves.get_mut(enclave_id)
-            .ok_or_else(|| FortressError::tee(
+        let enclave_info = enclaves.get_mut(enclave_id).ok_or_else(|| {
+            FortressError::tee(
                 format!("Enclave not found: {}", enclave_id),
-                "TeeManager::start_enclave".to_string()
-            ))?;
-        
+                "TeeManager::start_enclave".to_string(),
+            )
+        })?;
+
         let providers = self.providers.read().await;
-        let provider = providers.get(&enclave_info.config.tee_type)
-            .ok_or_else(|| FortressError::tee(
-                format!("No provider found for TEE type: {:?}", enclave_info.config.tee_type),
-                "TeeManager::start_enclave".to_string()
-            ))?;
-        
+        let provider = providers
+            .get(&enclave_info.config.tee_type)
+            .ok_or_else(|| {
+                FortressError::tee(
+                    format!(
+                        "No provider found for TEE type: {:?}",
+                        enclave_info.config.tee_type
+                    ),
+                    "TeeManager::start_enclave".to_string(),
+                )
+            })?;
+
         provider.start_enclave(enclave_id).await?;
         enclave_info.status = EnclaveStatus::Running;
         enclave_info.last_activity = chrono::Utc::now();
-        
+
         Ok(())
     }
-    
+
     /// Stop an enclave
     pub async fn stop_enclave(&self, enclave_id: &str) -> Result<()> {
         let mut enclaves = self.enclaves.write().await;
-        let enclave_info = enclaves.get_mut(enclave_id)
-            .ok_or_else(|| FortressError::tee(
+        let enclave_info = enclaves.get_mut(enclave_id).ok_or_else(|| {
+            FortressError::tee(
                 format!("Enclave not found: {}", enclave_id),
-                "TeeManager::stop_enclave".to_string()
-            ))?;
-        
+                "TeeManager::stop_enclave".to_string(),
+            )
+        })?;
+
         let providers = self.providers.read().await;
-        let provider = providers.get(&enclave_info.config.tee_type)
-            .ok_or_else(|| FortressError::tee(
-                format!("No provider found for TEE type: {:?}", enclave_info.config.tee_type),
-                "TeeManager::stop_enclave".to_string()
-            ))?;
-        
+        let provider = providers
+            .get(&enclave_info.config.tee_type)
+            .ok_or_else(|| {
+                FortressError::tee(
+                    format!(
+                        "No provider found for TEE type: {:?}",
+                        enclave_info.config.tee_type
+                    ),
+                    "TeeManager::stop_enclave".to_string(),
+                )
+            })?;
+
         provider.stop_enclave(enclave_id).await?;
         enclave_info.status = EnclaveStatus::Stopped;
         enclave_info.last_activity = chrono::Utc::now();
-        
+
         Ok(())
     }
-    
+
     /// Terminate an enclave
     pub async fn terminate_enclave(&self, enclave_id: &str) -> Result<()> {
         let mut enclaves = self.enclaves.write().await;
-        let enclave_info = enclaves.get_mut(enclave_id)
-            .ok_or_else(|| FortressError::tee(
+        let enclave_info = enclaves.get_mut(enclave_id).ok_or_else(|| {
+            FortressError::tee(
                 format!("Enclave not found: {}", enclave_id),
-                "TeeManager::terminate_enclave".to_string()
-            ))?;
-        
+                "TeeManager::terminate_enclave".to_string(),
+            )
+        })?;
+
         let providers = self.providers.read().await;
-        let provider = providers.get(&enclave_info.config.tee_type)
-            .ok_or_else(|| FortressError::tee(
-                format!("No provider found for TEE type: {:?}", enclave_info.config.tee_type),
-                "TeeManager::terminate_enclave".to_string()
-            ))?;
-        
+        let provider = providers
+            .get(&enclave_info.config.tee_type)
+            .ok_or_else(|| {
+                FortressError::tee(
+                    format!(
+                        "No provider found for TEE type: {:?}",
+                        enclave_info.config.tee_type
+                    ),
+                    "TeeManager::terminate_enclave".to_string(),
+                )
+            })?;
+
         provider.terminate_enclave(enclave_id).await?;
         enclave_info.status = EnclaveStatus::Terminated;
-        
+
         // Clean up secure channels
         let mut channels = self.channels.write().await;
         channels.retain(|_, channel| channel.enclave_id != enclave_id);
-        
+
         Ok(())
     }
-    
+
     /// Get enclave status
     pub async fn get_enclave_status(&self, enclave_id: &str) -> Result<EnclaveStatus> {
         let enclaves = self.enclaves.read().await;
-        let enclave_info = enclaves.get(enclave_id)
-            .ok_or_else(|| FortressError::tee(
+        let enclave_info = enclaves.get(enclave_id).ok_or_else(|| {
+            FortressError::tee(
                 format!("Enclave not found: {}", enclave_id),
-                "TeeManager::get_enclave_status".to_string()
-            ))?;
-        
+                "TeeManager::get_enclave_status".to_string(),
+            )
+        })?;
+
         Ok(enclave_info.status.clone())
     }
-    
+
     /// Perform attestation verification
     pub async fn attest_enclave(&self, enclave_id: &str) -> Result<AttestationResult> {
         let enclaves = self.enclaves.read().await;
-        let enclave_info = enclaves.get(enclave_id)
-            .ok_or_else(|| FortressError::tee(
+        let enclave_info = enclaves.get(enclave_id).ok_or_else(|| {
+            FortressError::tee(
                 format!("Enclave not found: {}", enclave_id),
-                "TeeManager::attest_enclave".to_string()
-            ))?;
-        
+                "TeeManager::attest_enclave".to_string(),
+            )
+        })?;
+
         let providers = self.providers.read().await;
-        let provider = providers.get(&enclave_info.config.tee_type)
-            .ok_or_else(|| FortressError::tee(
-                format!("No provider found for TEE type: {:?}", enclave_info.config.tee_type),
-                "TeeManager::attest_enclave".to_string()
-            ))?;
-        
+        let provider = providers
+            .get(&enclave_info.config.tee_type)
+            .ok_or_else(|| {
+                FortressError::tee(
+                    format!(
+                        "No provider found for TEE type: {:?}",
+                        enclave_info.config.tee_type
+                    ),
+                    "TeeManager::attest_enclave".to_string(),
+                )
+            })?;
+
         let attestation_result = provider.attest_enclave(enclave_id).await?;
-        
+
         // Update enclave info with attestation result
         drop(enclaves);
         let mut enclaves = self.enclaves.write().await;
@@ -371,93 +401,108 @@ impl TeeManager {
             enclave_info.last_attestation = Some(attestation_result.clone());
             enclave_info.last_activity = chrono::Utc::now();
         }
-        
+
         Ok(attestation_result)
     }
-    
+
     /// Establish secure channel with enclave
     pub async fn establish_secure_channel(&self, enclave_id: &str) -> Result<SecureChannel> {
         let enclaves = self.enclaves.read().await;
-        let enclave_info = enclaves.get(enclave_id)
-            .ok_or_else(|| FortressError::tee(
+        let enclave_info = enclaves.get(enclave_id).ok_or_else(|| {
+            FortressError::tee(
                 format!("Enclave not found: {}", enclave_id),
-                "TeeManager::establish_secure_channel".to_string()
-            ))?;
-        
+                "TeeManager::establish_secure_channel".to_string(),
+            )
+        })?;
+
         // Verify enclave is running and attested
         if enclave_info.status != EnclaveStatus::Running {
             return Err(FortressError::tee(
                 format!("Enclave {} is not running", enclave_id),
-                "TeeManager::establish_secure_channel".to_string()
+                "TeeManager::establish_secure_channel".to_string(),
             ));
         }
-        
+
         if let Some(ref attestation) = enclave_info.last_attestation {
             if !attestation.is_valid {
                 return Err(FortressError::tee(
                     format!("Enclave {} failed attestation", enclave_id),
-                    "TeeManager::establish_secure_channel".to_string()
+                    "TeeManager::establish_secure_channel".to_string(),
                 ));
             }
         } else if enclave_info.config.security_policy.require_attestation {
             return Err(FortressError::tee(
                 format!("Enclave {} requires attestation", enclave_id),
-                "TeeManager::establish_secure_channel".to_string()
+                "TeeManager::establish_secure_channel".to_string(),
             ));
         }
-        
+
         let providers = self.providers.read().await;
-        let provider = providers.get(&enclave_info.config.tee_type)
-            .ok_or_else(|| FortressError::tee(
-                format!("No provider found for TEE type: {:?}", enclave_info.config.tee_type),
-                "TeeManager::establish_secure_channel".to_string()
-            ))?;
-        
+        let provider = providers
+            .get(&enclave_info.config.tee_type)
+            .ok_or_else(|| {
+                FortressError::tee(
+                    format!(
+                        "No provider found for TEE type: {:?}",
+                        enclave_info.config.tee_type
+                    ),
+                    "TeeManager::establish_secure_channel".to_string(),
+                )
+            })?;
+
         let channel = provider.establish_secure_channel(enclave_id).await?;
-        
+
         // Store channel
         let mut channels = self.channels.write().await;
         channels.insert(channel.channel_id.clone(), channel.clone());
-        
+
         Ok(channel)
     }
-    
+
     /// Send secure message to enclave
     pub async fn send_message(&self, enclave_id: &str, message: &[u8]) -> Result<Vec<u8>> {
         let enclaves = self.enclaves.read().await;
-        let enclave_info = enclaves.get(enclave_id)
-            .ok_or_else(|| FortressError::tee(
+        let enclave_info = enclaves.get(enclave_id).ok_or_else(|| {
+            FortressError::tee(
                 format!("Enclave not found: {}", enclave_id),
-                "TeeManager::send_message".to_string()
-            ))?;
-        
+                "TeeManager::send_message".to_string(),
+            )
+        })?;
+
         let providers = self.providers.read().await;
-        let provider = providers.get(&enclave_info.config.tee_type)
-            .ok_or_else(|| FortressError::tee(
-                format!("No provider found for TEE type: {:?}", enclave_info.config.tee_type),
-                "TeeManager::send_message".to_string()
-            ))?;
-        
+        let provider = providers
+            .get(&enclave_info.config.tee_type)
+            .ok_or_else(|| {
+                FortressError::tee(
+                    format!(
+                        "No provider found for TEE type: {:?}",
+                        enclave_info.config.tee_type
+                    ),
+                    "TeeManager::send_message".to_string(),
+                )
+            })?;
+
         let response = provider.send_message(enclave_id, message).await?;
-        
+
         // Update last activity
         drop(enclaves);
         let mut enclaves = self.enclaves.write().await;
         if let Some(enclave_info) = enclaves.get_mut(enclave_id) {
             enclave_info.last_activity = chrono::Utc::now();
         }
-        
+
         Ok(response)
     }
-    
+
     /// List all active enclaves
     pub async fn list_enclaves(&self) -> Vec<(String, EnclaveInfo)> {
         let enclaves = self.enclaves.read().await;
-        enclaves.iter()
+        enclaves
+            .iter()
             .map(|(id, info)| (id.clone(), info.clone()))
             .collect()
     }
-    
+
     /// Get TEE capabilities for a specific TEE type
     pub async fn get_capabilities(&self, tee_type: &TeeType) -> Option<TeeCapabilities> {
         let providers = self.providers.read().await;
@@ -500,7 +545,7 @@ impl TeeAwareKeyManager {
             enclave_keys: Arc::new(RwLock::new(HashMap::new())),
         }
     }
-    
+
     /// Generate a new key within an enclave
     pub async fn generate_key_in_enclave(
         &self,
@@ -513,10 +558,10 @@ impl TeeAwareKeyManager {
         if status != EnclaveStatus::Running {
             return Err(FortressError::tee(
                 format!("Enclave {} is not running", enclave_id),
-                "TeeAwareKeyManager::generate_key_in_enclave".to_string()
+                "TeeAwareKeyManager::generate_key_in_enclave".to_string(),
             ));
         }
-        
+
         // Generate key generation request
         let request = KeyGenerationRequest {
             operation: "generate_key".to_string(),
@@ -524,31 +569,38 @@ impl TeeAwareKeyManager {
             key_size,
             key_id: Uuid::new_v4().to_string(),
         };
-        
-        let request_bytes = serde_json::to_vec(&request)
-            .map_err(|e| FortressError::tee(
+
+        let request_bytes = serde_json::to_vec(&request).map_err(|e| {
+            FortressError::tee(
                 format!("Failed to serialize key generation request: {}", e),
-                "TeeAwareKeyManager::generate_key_in_enclave".to_string()
-            ))?;
-        
+                "TeeAwareKeyManager::generate_key_in_enclave".to_string(),
+            )
+        })?;
+
         // Send request to enclave
-        let response = self.tee_manager.send_message(enclave_id, &request_bytes).await?;
-        
-        let response: KeyGenerationResponse = serde_json::from_slice(&response)
-            .map_err(|e| FortressError::tee(
+        let response = self
+            .tee_manager
+            .send_message(enclave_id, &request_bytes)
+            .await?;
+
+        let response: KeyGenerationResponse = serde_json::from_slice(&response).map_err(|e| {
+            FortressError::tee(
                 format!("Failed to deserialize key generation response: {}", e),
-                "TeeAwareKeyManager::generate_key_in_enclave".to_string()
-            ))?;
-        
+                "TeeAwareKeyManager::generate_key_in_enclave".to_string(),
+            )
+        })?;
+
         if !response.success {
             return Err(FortressError::tee(
-                response.error.unwrap_or_else(|| "Key generation failed".to_string()),
-                "TeeAwareKeyManager::generate_key_in_enclave".to_string()
+                response
+                    .error
+                    .unwrap_or_else(|| "Key generation failed".to_string()),
+                "TeeAwareKeyManager::generate_key_in_enclave".to_string(),
             ));
         }
-        
+
         let key_id = response.key_id.unwrap();
-        
+
         // Store key info
         let key_info = EnclaveKeyInfo {
             key_id: key_id.clone(),
@@ -559,13 +611,13 @@ impl TeeAwareKeyManager {
             last_accessed: chrono::Utc::now(),
             access_count: 0,
         };
-        
+
         let mut enclave_keys = self.enclave_keys.write().await;
         enclave_keys.insert(key_id.clone(), key_info);
-        
+
         Ok(key_id)
     }
-    
+
     /// Perform cryptographic operation in enclave
     pub async fn perform_operation(
         &self,
@@ -574,41 +626,50 @@ impl TeeAwareKeyManager {
         data: &[u8],
     ) -> Result<Vec<u8>> {
         let enclave_keys = self.enclave_keys.read().await;
-        let key_info = enclave_keys.get(key_id)
-            .ok_or_else(|| FortressError::tee(
+        let key_info = enclave_keys.get(key_id).ok_or_else(|| {
+            FortressError::tee(
                 format!("Key not found: {}", key_id),
-                "TeeAwareKeyManager::perform_operation".to_string()
-            ))?;
-        
+                "TeeAwareKeyManager::perform_operation".to_string(),
+            )
+        })?;
+
         // Create operation request
         let request = CryptographicOperationRequest {
             operation: operation.to_string(),
             key_id: key_id.to_string(),
             data: general_purpose::STANDARD.encode(data),
         };
-        
-        let request_bytes = serde_json::to_vec(&request)
-            .map_err(|e| FortressError::tee(
+
+        let request_bytes = serde_json::to_vec(&request).map_err(|e| {
+            FortressError::tee(
                 format!("Failed to serialize operation request: {}", e),
-                "TeeAwareKeyManager::perform_operation".to_string()
-            ))?;
-        
+                "TeeAwareKeyManager::perform_operation".to_string(),
+            )
+        })?;
+
         // Send request to enclave
-        let response = self.tee_manager.send_message(&key_info.enclave_id, &request_bytes).await?;
-        
-        let response: CryptographicOperationResponse = serde_json::from_slice(&response)
-            .map_err(|e| FortressError::tee(
-                format!("Failed to deserialize operation response: {}", e),
-                "TeeAwareKeyManager::perform_operation".to_string()
-            ))?;
-        
+        let response = self
+            .tee_manager
+            .send_message(&key_info.enclave_id, &request_bytes)
+            .await?;
+
+        let response: CryptographicOperationResponse =
+            serde_json::from_slice(&response).map_err(|e| {
+                FortressError::tee(
+                    format!("Failed to deserialize operation response: {}", e),
+                    "TeeAwareKeyManager::perform_operation".to_string(),
+                )
+            })?;
+
         if !response.success {
             return Err(FortressError::tee(
-                response.error.unwrap_or_else(|| "Operation failed".to_string()),
-                "TeeAwareKeyManager::perform_operation".to_string()
+                response
+                    .error
+                    .unwrap_or_else(|| "Operation failed".to_string()),
+                "TeeAwareKeyManager::perform_operation".to_string(),
             ));
         }
-        
+
         // Update access info
         drop(enclave_keys);
         let mut enclave_keys = self.enclave_keys.write().await;
@@ -616,14 +677,17 @@ impl TeeAwareKeyManager {
             key_info.last_accessed = chrono::Utc::now();
             key_info.access_count += 1;
         }
-        
-        general_purpose::STANDARD.decode(&response.result.unwrap_or_default())
-            .map_err(|e| FortressError::tee(
-                format!("Failed to decode operation result: {}", e),
-                "TeeAwareKeyManager::perform_operation".to_string()
-            ))
+
+        general_purpose::STANDARD
+            .decode(&response.result.unwrap_or_default())
+            .map_err(|e| {
+                FortressError::tee(
+                    format!("Failed to decode operation result: {}", e),
+                    "TeeAwareKeyManager::perform_operation".to_string(),
+                )
+            })
     }
-    
+
     /// List all enclave-protected keys
     pub async fn list_keys(&self) -> Vec<EnclaveKeyInfo> {
         let enclave_keys = self.enclave_keys.read().await;
@@ -667,17 +731,17 @@ struct CryptographicOperationResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     async fn test_tee_manager_creation() {
         let policy = SecurityPolicy::default();
         let manager = TeeManager::new(policy);
-        
+
         // Should be able to create manager without providers
         let enclaves = manager.list_enclaves().await;
         assert!(enclaves.is_empty());
     }
-    
+
     #[tokio::test]
     async fn test_enclave_config_serialization() {
         let config = EnclaveConfig {
@@ -690,14 +754,14 @@ mod tests {
             security_policy: SecurityPolicy::default(),
             parameters: HashMap::new(),
         };
-        
+
         let serialized = serde_json::to_string(&config).unwrap();
         let deserialized: EnclaveConfig = serde_json::from_str(&serialized).unwrap();
-        
+
         assert_eq!(config.enclave_id, deserialized.enclave_id);
         assert_eq!(config.tee_type, deserialized.tee_type);
     }
-    
+
     #[tokio::test]
     async fn test_attestation_result() {
         let result = AttestationResult {
@@ -709,7 +773,7 @@ mod tests {
             details: HashMap::new(),
             security_issues: vec![],
         };
-        
+
         assert!(result.is_valid);
         assert_eq!(result.tee_type, TeeType::AwsNitro);
         assert!(result.security_issues.is_empty());

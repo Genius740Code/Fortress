@@ -1,15 +1,15 @@
 //! DNS Discovery Provider
-//! 
+//!
 //! This module provides automatic discovery of Fortress cluster nodes
 //! through DNS SRV records and A/AAAA records.
 
+use crate::discovery::{DiscoveredNode, DiscoveryConfig, DiscoveryProvider, NodeHealthStatus};
+use crate::error::{FortressError, Result};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
-use serde::{Serialize, Deserialize};
-use chrono::{DateTime, Utc};
-use crate::error::{FortressError, Result};
-use crate::discovery::{DiscoveryProvider, DiscoveredNode, NodeHealthStatus, DiscoveryConfig};
 
 /// DNS discovery provider configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -74,7 +74,7 @@ impl DnsDiscovery {
     /// Create DNS resolver
     fn create_resolver(&self) -> Result<Option<trust_dns_resolver::TokioAsyncResolver>> {
         let mut resolver_config = trust_dns_resolver::config::ResolverConfig::new();
-        
+
         // Add custom DNS servers if provided
         for server in &self.config.dns_servers {
             resolver_config.add_name_server(trust_dns_resolver::config::NameServerConfig {
@@ -105,7 +105,7 @@ impl DnsDiscovery {
         };
 
         let srv_name = format!("_{}._tcp.{}", self.config.service_name, self.config.domain);
-        
+
         let name = trust_dns_resolver::proto::rr::Name::from_ascii(srv_name.as_bytes())
             .map_err(|e| FortressError::discovery(format!("Invalid SRV name: {}", e)))?;
 
@@ -183,7 +183,10 @@ impl DnsDiscovery {
     }
 
     /// Convert SRV record to discovered node
-    fn srv_record_to_node(&self, srv: &trust_dns_resolver::proto::rr::SRV) -> Result<DiscoveredNode> {
+    fn srv_record_to_node(
+        &self,
+        srv: &trust_dns_resolver::proto::rr::SRV,
+    ) -> Result<DiscoveredNode> {
         let hostname = srv.target().to_string();
         let port = srv.port() as u16;
 
@@ -221,10 +224,13 @@ impl DnsDiscovery {
         // Create metadata
         let mut metadata = HashMap::new();
         metadata.insert("ip_address".to_string(), address.clone());
-        metadata.insert("ip_type".to_string(), match ip {
-            IpAddr::V4(_) => "ipv4".to_string(),
-            IpAddr::V6(_) => "ipv6".to_string(),
-        });
+        metadata.insert(
+            "ip_type".to_string(),
+            match ip {
+                IpAddr::V4(_) => "ipv4".to_string(),
+                IpAddr::V6(_) => "ipv6".to_string(),
+            },
+        );
 
         if let Some(host) = hostname {
             metadata.insert("hostname".to_string(), host.to_string());
@@ -273,7 +279,11 @@ impl DnsDiscovery {
             return Ok(NodeHealthStatus::Unknown);
         }
 
-        let health_check_path = self.config.health_check_path.as_deref().unwrap_or("/health");
+        let health_check_path = self
+            .config
+            .health_check_path
+            .as_deref()
+            .unwrap_or("/health");
         let url = format!("http://{}:{}{}", node.address, node.port, health_check_path);
 
         // Check if we should perform health check (rate limiting)
@@ -324,9 +334,9 @@ impl DiscoveryProvider for DnsDiscovery {
 
     async fn initialize(&mut self, config: &DiscoveryConfig) -> Result<()> {
         // Extract DNS-specific config
-        let dns_config: DnsDiscoveryConfig = serde_json::from_value(
-            serde_json::to_value(&config.settings).unwrap_or_default()
-        ).unwrap_or_default();
+        let dns_config: DnsDiscoveryConfig =
+            serde_json::from_value(serde_json::to_value(&config.settings).unwrap_or_default())
+                .unwrap_or_default();
 
         self.config = dns_config;
 
@@ -334,14 +344,19 @@ impl DiscoveryProvider for DnsDiscovery {
         self.resolver = self.create_resolver().await?;
         self.initialized = true;
 
-        tracing::info!("DNS discovery provider initialized for service: {}.{}", 
-                      self.config.service_name, self.config.domain);
+        tracing::info!(
+            "DNS discovery provider initialized for service: {}.{}",
+            self.config.service_name,
+            self.config.domain
+        );
         Ok(())
     }
 
     async fn discover_nodes(&self) -> Result<Vec<DiscoveredNode>> {
         if !self.initialized {
-            return Err(FortressError::discovery("DNS discovery provider not initialized"));
+            return Err(FortressError::discovery(
+                "DNS discovery provider not initialized",
+            ));
         }
 
         let mut nodes = Vec::new();
@@ -355,7 +370,8 @@ impl DiscoveryProvider for DnsDiscovery {
                                 Ok(mut node) => {
                                     // Try to resolve the hostname to get IP addresses
                                     let hostname = srv.target().to_string().trim_end_matches('.');
-                                    if let Ok(ip_addresses) = self.resolve_a_records(hostname).await {
+                                    if let Ok(ip_addresses) = self.resolve_a_records(hostname).await
+                                    {
                                         if !ip_addresses.is_empty() {
                                             node.address = ip_addresses[0].to_string();
                                         }
@@ -414,7 +430,7 @@ impl DiscoveryProvider for DnsDiscovery {
                 match self.resolve_txt_records(&hostname).await {
                     Ok(txt_records) => {
                         let metadata = self.parse_txt_metadata(&txt_records);
-                        
+
                         // TXT records typically contain metadata, not node addresses
                         // So we'll create a metadata node
                         let node = DiscoveredNode {
@@ -444,7 +460,9 @@ impl DiscoveryProvider for DnsDiscovery {
 
     async fn check_node_health(&self, node: &DiscoveredNode) -> Result<NodeHealthStatus> {
         if !self.initialized {
-            return Err(FortressError::discovery("DNS discovery provider not initialized"));
+            return Err(FortressError::discovery(
+                "DNS discovery provider not initialized",
+            ));
         }
 
         // Perform health check if enabled
@@ -479,7 +497,7 @@ mod tests {
     fn test_dns_discovery_creation() {
         let config = DnsDiscoveryConfig::default();
         let discovery = DnsDiscovery::new(config);
-        
+
         assert_eq!(discovery.name(), "dns");
         assert!(!discovery.initialized);
         assert!(discovery.resolver.is_none());
@@ -489,15 +507,15 @@ mod tests {
     fn test_parse_txt_metadata() {
         let config = DnsDiscoveryConfig::default();
         let discovery = DnsDiscovery::new(config);
-        
+
         let txt_records = vec![
             "region=us-west-2".to_string(),
             "zone=us-west-2a".to_string(),
             "environment=production".to_string(),
         ];
-        
+
         let metadata = discovery.parse_txt_metadata(&txt_records);
-        
+
         assert_eq!(metadata.get("region"), Some(&"us-west-2".to_string()));
         assert_eq!(metadata.get("zone"), Some(&"us-west-2a".to_string()));
         assert_eq!(metadata.get("environment"), Some(&"production".to_string()));

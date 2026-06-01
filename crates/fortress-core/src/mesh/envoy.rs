@@ -1,14 +1,17 @@
 //! Envoy Service Mesh Integration
-//! 
+//!
 //! This module provides integration with Envoy proxy for advanced
 //! traffic management, security, and observability features.
 
+use crate::error::{FortressError, Result};
+use crate::mesh::{
+    MeshConfig, MeshMetrics, MeshNode, MeshNodeHealthStatus, MeshProvider, MeshType,
+    SecurityPolicy, TrafficPolicy,
+};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
-use serde::{Serialize, Deserialize};
-use chrono::{DateTime, Utc};
-use crate::error::{FortressError, Result};
-use crate::mesh::{MeshProvider, MeshConfig, MeshNode, MeshNodeHealthStatus, TrafficPolicy, SecurityPolicy, MeshMetrics, MeshType};
 
 /// Envoy mesh provider configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -79,22 +82,27 @@ impl EnvoyMesh {
 
     /// Get Envoy stats
     async fn get_envoy_stats(&self) -> Result<EnvoyStats> {
-        let client = self.client.as_ref()
+        let client = self
+            .client
+            .as_ref()
             .ok_or_else(|| FortressError::mesh("Envoy client not initialized"))?;
 
         let url = self.build_admin_url("stats");
-        let response = client.get(&url)
-            .send()
-            .await
-            .map_err(|e| FortressError::mesh(format!("Envoy stats API request failed: {}", e)))?;
+        let response =
+            client.get(&url).send().await.map_err(|e| {
+                FortressError::mesh(format!("Envoy stats API request failed: {}", e))
+            })?;
 
         if !response.status().is_success() {
-            return Err(FortressError::mesh(format!("Envoy stats API returned status: {}", response.status())));
+            return Err(FortressError::mesh(format!(
+                "Envoy stats API returned status: {}",
+                response.status()
+            )));
         }
 
-        let stats_text = response.text()
-            .await
-            .map_err(|e| FortressError::mesh(format!("Failed to read Envoy stats response: {}", e)))?;
+        let stats_text = response.text().await.map_err(|e| {
+            FortressError::mesh(format!("Failed to read Envoy stats response: {}", e))
+        })?;
 
         self.parse_envoy_stats(&stats_text)
     }
@@ -142,44 +150,52 @@ impl EnvoyMesh {
 
     /// Get Envoy clusters
     async fn get_envoy_clusters(&self) -> Result<Vec<EnvoyCluster>> {
-        let client = self.client.as_ref()
+        let client = self
+            .client
+            .as_ref()
             .ok_or_else(|| FortressError::mesh("Envoy client not initialized"))?;
 
         let url = self.build_admin_url("clusters");
-        let response = client.get(&url)
-            .send()
-            .await
-            .map_err(|e| FortressError::mesh(format!("Envoy clusters API request failed: {}", e)))?;
+        let response = client.get(&url).send().await.map_err(|e| {
+            FortressError::mesh(format!("Envoy clusters API request failed: {}", e))
+        })?;
 
         if !response.status().is_success() {
-            return Err(FortressError::mesh(format!("Envoy clusters API returned status: {}", response.status())));
+            return Err(FortressError::mesh(format!(
+                "Envoy clusters API returned status: {}",
+                response.status()
+            )));
         }
 
-        let clusters: Vec<EnvoyCluster> = response.json()
-            .await
-            .map_err(|e| FortressError::mesh(format!("Failed to parse Envoy clusters response: {}", e)))?;
+        let clusters: Vec<EnvoyCluster> = response.json().await.map_err(|e| {
+            FortressError::mesh(format!("Failed to parse Envoy clusters response: {}", e))
+        })?;
 
         Ok(clusters)
     }
 
     /// Get Envoy listeners
     async fn get_envoy_listeners(&self) -> Result<Vec<EnvoyListener>> {
-        let client = self.client.as_ref()
+        let client = self
+            .client
+            .as_ref()
             .ok_or_else(|| FortressError::mesh("Envoy client not initialized"))?;
 
         let url = self.build_admin_url("listeners");
-        let response = client.get(&url)
-            .send()
-            .await
-            .map_err(|e| FortressError::mesh(format!("Envoy listeners API request failed: {}", e)))?;
+        let response = client.get(&url).send().await.map_err(|e| {
+            FortressError::mesh(format!("Envoy listeners API request failed: {}", e))
+        })?;
 
         if !response.status().is_success() {
-            return Err(FortressError::mesh(format!("Envoy listeners API returned status: {}", response.status())));
+            return Err(FortressError::mesh(format!(
+                "Envoy listeners API returned status: {}",
+                response.status()
+            )));
         }
 
-        let listeners: Vec<EnvoyListener> = response.json()
-            .await
-            .map_err(|e| FortressError::mesh(format!("Failed to parse Envoy listeners response: {}", e)))?;
+        let listeners: Vec<EnvoyListener> = response.json().await.map_err(|e| {
+            FortressError::mesh(format!("Failed to parse Envoy listeners response: {}", e))
+        })?;
 
         Ok(listeners)
     }
@@ -187,14 +203,18 @@ impl EnvoyMesh {
     /// Convert Envoy cluster to mesh node
     fn envoy_cluster_to_mesh_node(&self, cluster: &EnvoyCluster) -> Result<MeshNode> {
         let node_id = format!("envoy-cluster-{}", cluster.name);
-        
+
         // Extract IP address from cluster endpoints
-        let ip_address = cluster.endpoints.first()
+        let ip_address = cluster
+            .endpoints
+            .first()
             .and_then(|endpoint| endpoint.address.as_ref())
             .cloned()
             .unwrap_or_else(|| "127.0.0.1".to_string());
 
-        let port = cluster.endpoints.first()
+        let port = cluster
+            .endpoints
+            .first()
             .map(|endpoint| endpoint.port)
             .unwrap_or(8080);
 
@@ -203,7 +223,7 @@ impl EnvoyMesh {
         labels.insert("mesh_provider".to_string(), "envoy".to_string());
         labels.insert("cluster_name".to_string(), cluster.name.clone());
         labels.insert("cluster_type".to_string(), cluster.cluster_type.clone());
-        
+
         if let Some(ref service_name) = cluster.service_name {
             labels.insert("service_name".to_string(), service_name.clone());
         }
@@ -212,8 +232,14 @@ impl EnvoyMesh {
         let mut metadata = HashMap::new();
         metadata.insert("cluster_name".to_string(), cluster.name.clone());
         metadata.insert("cluster_type".to_string(), cluster.cluster_type.clone());
-        metadata.insert("healthy_percentage".to_string(), cluster.healthy_percentage.to_string());
-        metadata.insert("total_endpoints".to_string(), cluster.endpoints.len().to_string());
+        metadata.insert(
+            "healthy_percentage".to_string(),
+            cluster.healthy_percentage.to_string(),
+        );
+        metadata.insert(
+            "total_endpoints".to_string(),
+            cluster.endpoints.len().to_string(),
+        );
 
         // Determine health status
         let health_status = if cluster.healthy_percentage >= 80 {
@@ -246,7 +272,7 @@ impl EnvoyMesh {
     async fn apply_envoy_traffic_policy(&self, policy: &TrafficPolicy) -> Result<()> {
         // Convert traffic policy to Envoy configuration
         let envoy_config = self.convert_traffic_policy_to_envoy_config(policy)?;
-        
+
         // Apply configuration via Envoy admin API
         self.apply_envoy_config(&envoy_config).await
     }
@@ -255,13 +281,16 @@ impl EnvoyMesh {
     async fn apply_envoy_security_policy(&self, policy: &SecurityPolicy) -> Result<()> {
         // Convert security policy to Envoy configuration
         let envoy_config = self.convert_security_policy_to_envoy_config(policy)?;
-        
+
         // Apply configuration via Envoy admin API
         self.apply_envoy_config(&envoy_config).await
     }
 
     /// Convert traffic policy to Envoy configuration
-    fn convert_traffic_policy_to_envoy_config(&self, policy: &TrafficPolicy) -> Result<serde_json::Value> {
+    fn convert_traffic_policy_to_envoy_config(
+        &self,
+        policy: &TrafficPolicy,
+    ) -> Result<serde_json::Value> {
         let mut config = serde_json::json!({
             "version_info": "1.0.0",
             "resources": []
@@ -291,7 +320,8 @@ impl EnvoyMesh {
                 }]
             });
 
-            config["resources"].as_array_mut()
+            config["resources"]
+                .as_array_mut()
                 .unwrap()
                 .push(route_config);
         }
@@ -300,7 +330,10 @@ impl EnvoyMesh {
     }
 
     /// Convert security policy to Envoy configuration
-    fn convert_security_policy_to_envoy_config(&self, policy: &SecurityPolicy) -> Result<serde_json::Value> {
+    fn convert_security_policy_to_envoy_config(
+        &self,
+        policy: &SecurityPolicy,
+    ) -> Result<serde_json::Value> {
         let mut config = serde_json::json!({
             "version_info": "1.0.0",
             "resources": []
@@ -367,7 +400,8 @@ impl EnvoyMesh {
                 }]
             });
 
-            config["resources"].as_array_mut()
+            config["resources"]
+                .as_array_mut()
                 .unwrap()
                 .push(listener_config);
         }
@@ -377,19 +411,23 @@ impl EnvoyMesh {
 
     /// Apply configuration to Envoy
     async fn apply_envoy_config(&self, config: &serde_json::Value) -> Result<()> {
-        let client = self.client.as_ref()
+        let client = self
+            .client
+            .as_ref()
             .ok_or_else(|| FortressError::mesh("Envoy client not initialized"))?;
 
         let url = self.build_admin_url("config_dump");
-        
-        let response = client.post(&url)
-            .json(config)
-            .send()
-            .await
-            .map_err(|e| FortressError::mesh(format!("Envoy config API request failed: {}", e)))?;
+
+        let response =
+            client.post(&url).json(config).send().await.map_err(|e| {
+                FortressError::mesh(format!("Envoy config API request failed: {}", e))
+            })?;
 
         if !response.status().is_success() {
-            return Err(FortressError::mesh(format!("Envoy config API returned status: {}", response.status())));
+            return Err(FortressError::mesh(format!(
+                "Envoy config API returned status: {}",
+                response.status()
+            )));
         }
 
         tracing::info!("Applied configuration to Envoy successfully");
@@ -399,7 +437,7 @@ impl EnvoyMesh {
     /// Get Envoy metrics
     async fn get_envoy_metrics(&self) -> Result<EnvoyMetrics> {
         let stats = self.get_envoy_stats().await?;
-        
+
         Ok(EnvoyMetrics {
             request_count: stats.request_total,
             request_duration_ms: 0, // Would need to calculate from histogram stats
@@ -428,9 +466,9 @@ impl MeshProvider for EnvoyMesh {
 
     async fn initialize(&mut self, config: &MeshConfig) -> Result<()> {
         // Extract Envoy-specific config
-        let envoy_config: EnvoyMeshConfig = serde_json::from_value(
-            serde_json::to_value(&config.settings).unwrap_or_default()
-        ).unwrap_or_default();
+        let envoy_config: EnvoyMeshConfig =
+            serde_json::from_value(serde_json::to_value(&config.settings).unwrap_or_default())
+                .unwrap_or_default();
 
         self.config = envoy_config;
 
@@ -438,7 +476,10 @@ impl MeshProvider for EnvoyMesh {
         self.client = Some(self.create_client());
         self.initialized = true;
 
-        tracing::info!("Envoy mesh provider initialized with admin API at {}", self.config.admin_api_address);
+        tracing::info!(
+            "Envoy mesh provider initialized with admin API at {}",
+            self.config.admin_api_address
+        );
         Ok(())
     }
 
@@ -514,7 +555,7 @@ impl MeshProvider for EnvoyMesh {
         }
 
         let envoy_metrics = self.get_envoy_metrics().await?;
-        
+
         Ok(MeshMetrics {
             request_count: envoy_metrics.request_count,
             request_duration_ms: envoy_metrics.request_duration_ms,
@@ -532,11 +573,13 @@ impl MeshProvider for EnvoyMesh {
         }
 
         // Check if Envoy admin API is accessible
-        let client = self.client.as_ref()
+        let client = self
+            .client
+            .as_ref()
             .ok_or_else(|| FortressError::mesh("Envoy client not initialized"))?;
 
         let url = self.build_admin_url("stats");
-        
+
         match client.get(&url).send().await {
             Ok(response) => {
                 if response.status().is_success() {
@@ -552,7 +595,7 @@ impl MeshProvider for EnvoyMesh {
     async fn shutdown(&mut self) -> Result<()> {
         self.client = None;
         self.initialized = false;
-        
+
         // Clear caches
         {
             let mut node_cache = self.node_cache.write().await;
@@ -562,7 +605,7 @@ impl MeshProvider for EnvoyMesh {
             let mut policy_cache = self.policy_cache.write().await;
             policy_cache.clear();
         }
-        
+
         tracing::info!("Envoy mesh provider shutdown");
         Ok(())
     }
@@ -651,7 +694,7 @@ mod tests {
     fn test_envoy_mesh_creation() {
         let config = EnvoyMeshConfig::default();
         let mesh = EnvoyMesh::new(config);
-        
+
         assert_eq!(mesh.name(), "envoy");
         assert_eq!(mesh.mesh_type(), MeshType::Envoy);
         assert!(!mesh.initialized);
@@ -665,7 +708,7 @@ mod tests {
             ..Default::default()
         };
         let mesh = EnvoyMesh::new(config);
-        
+
         let url = mesh.build_admin_url("stats");
         assert_eq!(url, "http://localhost:9901/stats");
     }

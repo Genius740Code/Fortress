@@ -3,17 +3,14 @@
 //! Implements real-time subscriptions for data changes, system events,
 //! and other live updates.
 
-use crate::graphql::{
-    context::from_context,
-    types::*,
-};
-use async_graphql::{Context, Result, Subscription, ErrorExtensions};
-use futures::{stream, Stream};
+use crate::graphql::{context::from_context, types::*};
+use async_graphql::{Context, ErrorExtensions, Result, Subscription};
+use async_stream;
 use chrono::Utc;
+use futures::{stream, Stream};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::broadcast;
-use serde::{Serialize, Deserialize};
-use async_stream;
 
 // Internal structs for EventBus - these are separate from GraphQL types
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,34 +55,43 @@ impl EventBus {
         let (data_tx, _) = broadcast::channel(1000);
         let (security_tx, _) = broadcast::channel(1000);
         let (perf_tx, _) = broadcast::channel(1000);
-        
+
         Self {
             data_changes: data_tx,
             security_events: security_tx,
             performance_metrics: perf_tx,
         }
     }
-    
-    pub fn publish_data_change(&self, event: DataChangeEventInternal) -> Result<(), broadcast::error::SendError<DataChangeEventInternal>> {
+
+    pub fn publish_data_change(
+        &self,
+        event: DataChangeEventInternal,
+    ) -> Result<(), broadcast::error::SendError<DataChangeEventInternal>> {
         self.data_changes.send(event).map(|_| ())
     }
-    
-    pub fn publish_security_event(&self, event: SecurityEventInternal) -> Result<(), broadcast::error::SendError<SecurityEventInternal>> {
+
+    pub fn publish_security_event(
+        &self,
+        event: SecurityEventInternal,
+    ) -> Result<(), broadcast::error::SendError<SecurityEventInternal>> {
         self.security_events.send(event).map(|_| ())
     }
-    
-    pub fn publish_performance_metrics(&self, metrics: PerformanceMetrics) -> Result<(), broadcast::error::SendError<PerformanceMetrics>> {
+
+    pub fn publish_performance_metrics(
+        &self,
+        metrics: PerformanceMetrics,
+    ) -> Result<(), broadcast::error::SendError<PerformanceMetrics>> {
         self.performance_metrics.send(metrics).map(|_| ())
     }
-    
+
     pub fn subscribe_data_changes(&self) -> broadcast::Receiver<DataChangeEventInternal> {
         self.data_changes.subscribe()
     }
-    
+
     pub fn subscribe_security_events(&self) -> broadcast::Receiver<SecurityEventInternal> {
         self.security_events.subscribe()
     }
-    
+
     pub fn subscribe_performance_metrics(&self) -> broadcast::Receiver<PerformanceMetrics> {
         self.performance_metrics.subscribe()
     }
@@ -106,27 +112,28 @@ impl Subscription {
 
     /// Subscribe to real-time data changes for a specific table
     async fn data_changes(
-        &self, 
-        ctx: &Context<'_>, 
-        database: String, 
+        &self,
+        ctx: &Context<'_>,
+        database: String,
         table: String,
         #[graphql(desc = "Filter by operation type")] operation: Option<DataChangeEventType>,
-        #[graphql(desc = "Filter by user ID")] user_id: Option<String>
+        #[graphql(desc = "Filter by user ID")] user_id: Option<String>,
     ) -> Result<impl Stream<Item = DataChangeEvent>> {
         let graphql_ctx = from_context(ctx)?;
-        
+
         // Validate table access permissions
         if !self::check_table_access(&graphql_ctx, &database, &table)? {
             return Err(async_graphql::Error::new("Access denied to table"));
         }
 
         // Get event bus from context
-        let event_bus = ctx.data::<Arc<EventBus>>()
+        let event_bus = ctx
+            .data::<Arc<EventBus>>()
             .map_err(|_| async_graphql::Error::new("Event bus not available"))?;
 
         // Subscribe to data changes
         let mut receiver = event_bus.subscribe_data_changes();
-        
+
         // Create filtered stream
         let filtered_stream = async_stream::stream! {
             while let Ok(event) = receiver.recv().await {
@@ -147,7 +154,7 @@ impl Subscription {
                     timestamp: event.timestamp,
                     user_id: event.user_id,
                 };
-                
+
                 // Apply filters
                 if graphql_event.database_name == database && graphql_event.table_name == table {
                     if let Some(ref op_filter) = operation {
@@ -155,13 +162,13 @@ impl Subscription {
                             continue;
                         }
                     }
-                    
+
                     if let Some(ref user_filter) = user_id {
                         if graphql_event.user_id.as_ref() != Some(user_filter) {
                             continue;
                         }
                     }
-                    
+
                     yield graphql_event;
                 }
             }
@@ -172,25 +179,28 @@ impl Subscription {
 
     /// Subscribe to security events in real-time
     async fn security_events(
-        &self, 
+        &self,
         ctx: &Context<'_>,
         #[graphql(desc = "Filter by severity")] severity: Option<SecuritySeverity>,
-        #[graphql(desc = "Filter by event type")] event_type: Option<String>
+        #[graphql(desc = "Filter by event type")] event_type: Option<String>,
     ) -> Result<impl Stream<Item = SecurityEvent>> {
         let graphql_ctx = from_context(ctx)?;
-        
+
         // Check security monitoring permissions
         if !self::check_security_permissions(&graphql_ctx)? {
-            return Err(async_graphql::Error::new("Insufficient permissions for security monitoring"));
+            return Err(async_graphql::Error::new(
+                "Insufficient permissions for security monitoring",
+            ));
         }
 
         // Get event bus from context
-        let event_bus = ctx.data::<Arc<EventBus>>()
+        let event_bus = ctx
+            .data::<Arc<EventBus>>()
             .map_err(|_| async_graphql::Error::new("Event bus not available"))?;
 
         // Subscribe to security events
         let mut receiver = event_bus.subscribe_security_events();
-        
+
         // Create filtered stream
         let filtered_stream = async_stream::stream! {
             while let Ok(event) = receiver.recv().await {
@@ -209,20 +219,20 @@ impl Subscription {
                     timestamp: event.timestamp,
                     details: event.details,
                 };
-                
+
                 // Apply filters
                 if let Some(ref severity_filter) = severity {
                     if graphql_event.severity != *severity_filter {
                         continue;
                     }
                 }
-                
+
                 if let Some(ref type_filter) = event_type {
                     if graphql_event.event_type != *type_filter {
                         continue;
                     }
                 }
-                
+
                 yield graphql_event;
             }
         };
@@ -232,15 +242,17 @@ impl Subscription {
 
     /// Subscribe to system performance metrics
     async fn performance_metrics(
-        &self, 
+        &self,
         ctx: &Context<'_>,
-        #[graphql(desc = "Update interval in seconds")] interval: Option<i32>
+        #[graphql(desc = "Update interval in seconds")] interval: Option<i32>,
     ) -> Result<impl Stream<Item = PerformanceMetrics>> {
         let graphql_ctx = from_context(ctx)?;
-        
+
         // Check monitoring permissions
         if !self::check_monitoring_permissions(&graphql_ctx)? {
-            return Err(async_graphql::Error::new("Insufficient permissions for system monitoring"));
+            return Err(async_graphql::Error::new(
+                "Insufficient permissions for system monitoring",
+            ));
         }
 
         let update_interval = interval.unwrap_or(5);
@@ -262,7 +274,7 @@ impl Subscription {
                 };
             }
         };
-        
+
         Ok(stream)
     }
 
@@ -271,7 +283,7 @@ impl Subscription {
     /// Subscribe to system health events
     async fn health_events(&self, ctx: &Context<'_>) -> Result<impl Stream<Item = HealthEvent>> {
         let graphql_ctx = from_context(ctx)?;
-        
+
         // Check permissions - require admin role
         graphql_ctx.require_role("admin")?;
 
@@ -307,14 +319,21 @@ impl Subscription {
     }
 
     /// Subscribe to key rotation events
-    async fn key_rotation_events(&self, ctx: &Context<'_>, database: Option<String>) -> Result<impl Stream<Item = KeyRotationEvent>> {
+    async fn key_rotation_events(
+        &self,
+        ctx: &Context<'_>,
+        database: Option<String>,
+    ) -> Result<impl Stream<Item = KeyRotationEvent>> {
         let graphql_ctx = from_context(ctx)?;
-        
+
         // Check permissions - require admin role
         graphql_ctx.require_role("admin")?;
 
         // Mock implementation - in production this would subscribe to actual key rotation events
-        let db_name = database.as_ref().map(|s| s.as_str()).unwrap_or("example_db");
+        let db_name = database
+            .as_ref()
+            .map(|s| s.as_str())
+            .unwrap_or("example_db");
         let stream = stream::iter(vec![
             KeyRotationEvent {
                 id: "550e8400-e29b-41d4-a716-446655440012".to_string(),
@@ -363,17 +382,24 @@ impl Subscription {
     // ==================== Audit Event Subscriptions ====================
 
     /// Subscribe to audit events
-    async fn audit_events(&self, ctx: &Context<'_>, user_id: Option<String>) -> Result<impl Stream<Item = AuditEvent>> {
+    async fn audit_events(
+        &self,
+        ctx: &Context<'_>,
+        user_id: Option<String>,
+    ) -> Result<impl Stream<Item = AuditEvent>> {
         let graphql_ctx = from_context(ctx)?;
-        
+
         // Check permissions - require admin role or self-audit
         if let Some(current_user) = &graphql_ctx.user {
-            if current_user.roles.contains(&"admin".to_string()) || 
-               user_id.as_ref() == Some(&current_user.id) {
+            if current_user.roles.contains(&"admin".to_string())
+                || user_id.as_ref() == Some(&current_user.id)
+            {
                 // Allowed
             } else {
-                return Err(async_graphql::Error::new("Insufficient permissions for audit access")
-                    .extend_with(|_, e| e.set("code", "INSUFFICIENT_PERMISSIONS")));
+                return Err(
+                    async_graphql::Error::new("Insufficient permissions for audit access")
+                        .extend_with(|_, e| e.set("code", "INSUFFICIENT_PERMISSIONS")),
+                );
             }
         } else {
             return Err(async_graphql::Error::new("Authentication required")
@@ -381,7 +407,10 @@ impl Subscription {
         }
 
         // Mock implementation - in production this would subscribe to actual audit events
-        let user_name = user_id.as_ref().map(|s| s.as_str()).unwrap_or("current_user");
+        let user_name = user_id
+            .as_ref()
+            .map(|s| s.as_str())
+            .unwrap_or("current_user");
         let stream = stream::iter(vec![
             AuditEvent {
                 id: "550e8400-e29b-41d4-a716-446655440016".to_string(),
@@ -419,9 +448,12 @@ impl Subscription {
     // ==================== Performance Subscriptions ====================
 
     /// Subscribe to performance metrics (alternative method)
-    async fn system_performance(&self, ctx: &Context<'_>) -> Result<impl Stream<Item = PerformanceMetrics>> {
+    async fn system_performance(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<impl Stream<Item = PerformanceMetrics>> {
         let graphql_ctx = from_context(ctx)?;
-        
+
         // Check permissions - require admin or monitoring role
         graphql_ctx.require_any_role(&["admin", "monitoring"])?;
 
@@ -476,8 +508,8 @@ fn check_security_permissions(
 ) -> Result<bool, async_graphql::Error> {
     // Check if user has admin or security role
     if let Some(user) = &graphql_ctx.user {
-        Ok(user.roles.contains(&"admin".to_string()) || 
-           user.roles.contains(&"security".to_string()))
+        Ok(user.roles.contains(&"admin".to_string())
+            || user.roles.contains(&"security".to_string()))
     } else {
         Ok(false)
     }
@@ -489,8 +521,8 @@ fn check_monitoring_permissions(
 ) -> Result<bool, async_graphql::Error> {
     // Check if user has admin or monitoring role
     if let Some(user) = &graphql_ctx.user {
-        Ok(user.roles.contains(&"admin".to_string()) || 
-           user.roles.contains(&"monitoring".to_string()))
+        Ok(user.roles.contains(&"admin".to_string())
+            || user.roles.contains(&"monitoring".to_string()))
     } else {
         Ok(false)
     }

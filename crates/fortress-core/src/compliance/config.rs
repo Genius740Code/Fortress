@@ -3,10 +3,10 @@
 //! Provides configuration management for compliance frameworks with validation,
 //! default settings, and environment-specific configurations.
 
-use crate::error::{FortressError, Result};
 use crate::compliance::framework::*;
-use std::collections::HashMap;
+use crate::error::{FortressError, Result};
 use chrono::Duration;
+use std::collections::HashMap;
 
 /// Compliance configuration manager
 pub struct ComplianceConfigManager {
@@ -17,34 +17,38 @@ pub struct ComplianceConfigManager {
 /// Configuration validator trait
 pub trait ConfigValidator: Send + Sync {
     /// Validate a compliance configuration
-    /// 
+    ///
     /// # Arguments
     /// * `config` - The configuration to validate
-    /// 
+    ///
     /// # Returns
     /// Vector of compliance issues found during validation
     fn validate(&self, config: &ComplianceConfig) -> Result<Vec<ComplianceIssue>>;
-    
+
     /// Get the default configuration for this validator
-    /// 
+    ///
     /// # Returns
     /// Default compliance configuration
     fn get_default_config(&self) -> ComplianceConfig;
-    
+
     /// Merge two configurations with override logic
-    /// 
+    ///
     /// # Arguments
     /// * `base` - The base configuration
     /// * `override_config` - The configuration to override with
-    /// 
+    ///
     /// # Returns
     /// Merged configuration
-    fn merge_configs(&self, base: &ComplianceConfig, override_config: &ComplianceConfig) -> Result<ComplianceConfig>;
+    fn merge_configs(
+        &self,
+        base: &ComplianceConfig,
+        override_config: &ComplianceConfig,
+    ) -> Result<ComplianceConfig>;
 }
 
 impl ComplianceConfigManager {
     /// Create a new compliance configuration manager
-    /// 
+    ///
     /// # Returns
     /// Manager with default validators for GDPR, HIPAA, and PCI-DSS
     pub fn new() -> Self {
@@ -60,11 +64,11 @@ impl ComplianceConfigManager {
     }
 
     /// Add a new configuration to the manager
-    /// 
+    ///
     /// # Arguments
     /// * `name` - Name identifier for the configuration
     /// * `config` - The compliance configuration to add
-    /// 
+    ///
     /// # Returns
     /// Ok if successful, Err if validation fails
     pub fn add_config(&mut self, name: String, config: ComplianceConfig) -> Result<()> {
@@ -82,10 +86,10 @@ impl ComplianceConfigManager {
     }
 
     /// Get a configuration by name
-    /// 
+    ///
     /// # Arguments
     /// * `name` - Name of the configuration to retrieve
-    /// 
+    ///
     /// # Returns
     /// Reference to the configuration if found, None otherwise
     pub fn get_config(&self, name: &str) -> Option<&ComplianceConfig> {
@@ -93,10 +97,10 @@ impl ComplianceConfigManager {
     }
 
     /// Validate a compliance configuration against all enabled frameworks
-    /// 
+    ///
     /// # Arguments
     /// * `config` - The configuration to validate
-    /// 
+    ///
     /// # Returns
     /// Vector of compliance issues found during validation
     pub fn validate_config(&self, config: &ComplianceConfig) -> Result<Vec<ComplianceIssue>> {
@@ -123,38 +127,46 @@ impl ComplianceConfigManager {
     }
 
     /// Get the default configuration for a specific compliance framework
-    /// 
+    ///
     /// # Arguments
     /// * `framework` - The compliance framework to get defaults for
-    /// 
+    ///
     /// # Returns
     /// Default configuration if framework is supported, None otherwise
     pub fn get_default_config(&self, framework: ComplianceFramework) -> Option<ComplianceConfig> {
-        self.validators.get(&framework).map(|v| v.get_default_config())
+        self.validators
+            .get(&framework)
+            .map(|v| v.get_default_config())
     }
 
     /// Merge two configurations using the appropriate validator
-    /// 
+    ///
     /// # Arguments
     /// * `base_name` - Name of the base configuration
     /// * `override_name` - Name of the configuration to override with
-    /// 
+    ///
     /// # Returns
     /// Merged configuration
     pub fn merge_configs(&self, base_name: &str, override_name: &str) -> Result<ComplianceConfig> {
-        let base = self.configs.get(base_name)
-            .ok_or_else(|| FortressError::compliance(format!("Base config '{}' not found", base_name)))?;
-        let override_config = self.configs.get(override_name)
-            .ok_or_else(|| FortressError::compliance(format!("Override config '{}' not found", override_name)))?;
+        let base = self.configs.get(base_name).ok_or_else(|| {
+            FortressError::compliance(format!("Base config '{}' not found", base_name))
+        })?;
+        let override_config = self.configs.get(override_name).ok_or_else(|| {
+            FortressError::compliance(format!("Override config '{}' not found", override_name))
+        })?;
 
         // Use the first framework's validator for merging
-        let framework = base.enabled_frameworks.first()
+        let framework = base
+            .enabled_frameworks
+            .first()
             .ok_or_else(|| FortressError::compliance("No frameworks enabled in base config"))?;
 
         if let Some(validator) = self.validators.get(framework) {
             validator.merge_configs(base, override_config)
         } else {
-            Err(FortressError::compliance("No validator available for framework"))
+            Err(FortressError::compliance(
+                "No validator available for framework",
+            ))
         }
     }
 }
@@ -248,7 +260,10 @@ impl ConfigValidator for GdprConfigValidator {
                 storage_location: "gdpr_audit_storage".to_string(),
             },
             encryption: EncryptionConfig {
-                required_algorithms: vec!["AES-256-GCM".to_string(), "ChaCha20-Poly1305".to_string()],
+                required_algorithms: vec![
+                    "AES-256-GCM".to_string(),
+                    "ChaCha20-Poly1305".to_string(),
+                ],
                 minimum_key_strength: 256,
                 encryption_at_rest_required: true,
                 encryption_in_transit_required: true,
@@ -268,16 +283,31 @@ impl ConfigValidator for GdprConfigValidator {
         }
     }
 
-    fn merge_configs(&self, base: &ComplianceConfig, override_config: &ComplianceConfig) -> Result<ComplianceConfig> {
+    fn merge_configs(
+        &self,
+        base: &ComplianceConfig,
+        override_config: &ComplianceConfig,
+    ) -> Result<ComplianceConfig> {
         let _base = base; // Suppress unused warning
         Ok(ComplianceConfig {
             enabled_frameworks: override_config.enabled_frameworks.clone(),
             default_retention_period: override_config.default_retention_period,
             breach_notification: BreachNotificationConfig {
-                notification_deadline_hours: override_config.breach_notification.notification_deadline_hours,
-                notification_recipients: override_config.breach_notification.notification_recipients.clone(),
-                regulatory_bodies: override_config.breach_notification.regulatory_bodies.clone(),
-                notification_template: override_config.breach_notification.notification_template.clone(),
+                notification_deadline_hours: override_config
+                    .breach_notification
+                    .notification_deadline_hours,
+                notification_recipients: override_config
+                    .breach_notification
+                    .notification_recipients
+                    .clone(),
+                regulatory_bodies: override_config
+                    .breach_notification
+                    .regulatory_bodies
+                    .clone(),
+                notification_template: override_config
+                    .breach_notification
+                    .notification_template
+                    .clone(),
             },
             audit_logging: ComplianceAuditConfig {
                 enabled: override_config.audit_logging.enabled,
@@ -289,7 +319,9 @@ impl ConfigValidator for GdprConfigValidator {
                 required_algorithms: override_config.encryption.required_algorithms.clone(),
                 minimum_key_strength: override_config.encryption.minimum_key_strength,
                 encryption_at_rest_required: override_config.encryption.encryption_at_rest_required,
-                encryption_in_transit_required: override_config.encryption.encryption_in_transit_required,
+                encryption_in_transit_required: override_config
+                    .encryption
+                    .encryption_in_transit_required,
             },
             access_control: AccessControlConfig {
                 rbac_enabled: override_config.access_control.rbac_enabled,
@@ -297,10 +329,22 @@ impl ConfigValidator for GdprConfigValidator {
                 session_timeout_minutes: override_config.access_control.session_timeout_minutes,
                 password_policy: PasswordPolicy {
                     min_length: override_config.access_control.password_policy.min_length,
-                    require_special_chars: override_config.access_control.password_policy.require_special_chars,
-                    require_numbers: override_config.access_control.password_policy.require_numbers,
-                    require_uppercase: override_config.access_control.password_policy.require_uppercase,
-                    expiration_days: override_config.access_control.password_policy.expiration_days,
+                    require_special_chars: override_config
+                        .access_control
+                        .password_policy
+                        .require_special_chars,
+                    require_numbers: override_config
+                        .access_control
+                        .password_policy
+                        .require_numbers,
+                    require_uppercase: override_config
+                        .access_control
+                        .password_policy
+                        .require_uppercase,
+                    expiration_days: override_config
+                        .access_control
+                        .password_policy
+                        .expiration_days,
                 },
             },
         })
@@ -318,7 +362,8 @@ impl ConfigValidator for HipaaConfigValidator {
         if !config.audit_logging.enabled {
             issues.push(ComplianceIssue {
                 severity: EventSeverity::Error,
-                description: "HIPAA requires comprehensive audit logging for PHI access".to_string(),
+                description: "HIPAA requires comprehensive audit logging for PHI access"
+                    .to_string(),
                 affected_section: "audit_logging".to_string(),
                 recommendation: "Enable audit logging for HIPAA compliance".to_string(),
             });
@@ -357,7 +402,8 @@ impl ConfigValidator for HipaaConfigValidator {
         if !config.access_control.mfa_required {
             issues.push(ComplianceIssue {
                 severity: EventSeverity::Warning,
-                description: "HIPAA recommends multi-factor authentication for remote access".to_string(),
+                description: "HIPAA recommends multi-factor authentication for remote access"
+                    .to_string(),
                 affected_section: "access_control".to_string(),
                 recommendation: "Enable MFA for enhanced security".to_string(),
             });
@@ -409,7 +455,11 @@ impl ConfigValidator for HipaaConfigValidator {
         }
     }
 
-    fn merge_configs(&self, base: &ComplianceConfig, override_config: &ComplianceConfig) -> Result<ComplianceConfig> {
+    fn merge_configs(
+        &self,
+        base: &ComplianceConfig,
+        override_config: &ComplianceConfig,
+    ) -> Result<ComplianceConfig> {
         GdprConfigValidator.merge_configs(base, override_config)
     }
 }
@@ -434,7 +484,8 @@ impl ConfigValidator for PciDssConfigValidator {
         if !config.encryption.encryption_in_transit_required {
             issues.push(ComplianceIssue {
                 severity: EventSeverity::Error,
-                description: "PCI-DSS requires encryption of cardholder data in transit".to_string(),
+                description: "PCI-DSS requires encryption of cardholder data in transit"
+                    .to_string(),
                 affected_section: "encryption".to_string(),
                 recommendation: "Enable encryption in transit for cardholder data".to_string(),
             });
@@ -496,7 +547,11 @@ impl ConfigValidator for PciDssConfigValidator {
                 storage_location: "pci_dss_audit_storage".to_string(),
             },
             encryption: EncryptionConfig {
-                required_algorithms: vec!["AES-256-GCM".to_string(), "RSA-2048".to_string(), "Triple-DES".to_string()],
+                required_algorithms: vec![
+                    "AES-256-GCM".to_string(),
+                    "RSA-2048".to_string(),
+                    "Triple-DES".to_string(),
+                ],
                 minimum_key_strength: 128,
                 encryption_at_rest_required: true,
                 encryption_in_transit_required: true,
@@ -516,7 +571,11 @@ impl ConfigValidator for PciDssConfigValidator {
         }
     }
 
-    fn merge_configs(&self, base: &ComplianceConfig, override_config: &ComplianceConfig) -> Result<ComplianceConfig> {
+    fn merge_configs(
+        &self,
+        base: &ComplianceConfig,
+        override_config: &ComplianceConfig,
+    ) -> Result<ComplianceConfig> {
         GdprConfigValidator.merge_configs(base, override_config)
     }
 }

@@ -70,16 +70,18 @@ impl MemcachedPool {
     /// Create a new Memcached connection pool
     async fn new(config: MemcachedConfig) -> Result<Self> {
         let mut clients = Vec::new();
-        
+
         for server in &config.servers {
             let client = ClientBuilder::new(server)
                 .binary_protocol(config.enable_binary_protocol)
                 .connect()
-                .map_err(|e| FortressError::storage(
-                    format!("Failed to connect to Memcached server {}: {}", server, e),
-                    "memcached_cache".to_string(),
-                    crate::error::StorageErrorCode::ConnectionFailed,
-                ))?;
+                .map_err(|e| {
+                    FortressError::storage(
+                        format!("Failed to connect to Memcached server {}: {}", server, e),
+                        "memcached_cache".to_string(),
+                        crate::error::StorageErrorCode::ConnectionFailed,
+                    )
+                })?;
             clients.push(client);
         }
 
@@ -119,12 +121,12 @@ impl MemcachedPool {
         // Simple consistent hashing using key hash
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
         key.hash(&mut hasher);
         let hash = hasher.finish();
         let index = (hash as usize) % self.clients.len();
-        
+
         Ok(self.clients[index].clone())
     }
 }
@@ -143,7 +145,7 @@ impl MemcachedCache {
     /// Create a new Memcached cache
     pub async fn new(config: MemcachedConfig) -> Result<Self> {
         let pool = Arc::new(MemcachedPool::new(config.clone()).await?);
-        
+
         Ok(Self {
             pool,
             config,
@@ -170,21 +172,23 @@ impl MemcachedCache {
         T: Send + Sync + 'static,
     {
         if !self.config.enable_retry {
-            return operation().map_err(|e| FortressError::storage(
-                format!("Memcached operation failed: {}", e),
-                "memcached_cache".to_string(),
-                crate::error::StorageErrorCode::OperationFailed,
-            ));
+            return operation().map_err(|e| {
+                FortressError::storage(
+                    format!("Memcached operation failed: {}", e),
+                    "memcached_cache".to_string(),
+                    crate::error::StorageErrorCode::OperationFailed,
+                )
+            });
         }
 
         let mut last_error = None;
-        
+
         for attempt in 0..=self.config.max_retries {
             match operation() {
                 Ok(result) => return Ok(result),
                 Err(e) => {
                     last_error = Some(e.clone());
-                    
+
                     if attempt < self.config.max_retries {
                         tokio::time::sleep(Duration::from_millis(self.config.retry_delay_ms)).await;
                     }
@@ -193,7 +197,11 @@ impl MemcachedCache {
         }
 
         Err(FortressError::storage(
-            format!("Memcached operation failed after {} attempts: {}", self.config.max_retries, last_error.unwrap()),
+            format!(
+                "Memcached operation failed after {} attempts: {}",
+                self.config.max_retries,
+                last_error.unwrap()
+            ),
             "memcached_cache".to_string(),
             crate::error::StorageErrorCode::OperationFailed,
         ))
@@ -203,12 +211,13 @@ impl MemcachedCache {
     fn compress_data(&self, data: &[u8]) -> Result<Vec<u8>> {
         if self.config.enable_compression {
             // Use LZ4 compression for speed
-            let compressed = lz4::block::compress(data, None, true)
-                .map_err(|e| FortressError::storage(
+            let compressed = lz4::block::compress(data, None, true).map_err(|e| {
+                FortressError::storage(
                     format!("Compression failed: {}", e),
                     "memcached_cache".to_string(),
                     crate::error::StorageErrorCode::CorruptedData,
-                ))?;
+                )
+            })?;
             Ok(compressed)
         } else {
             Ok(data.to_vec())
@@ -218,12 +227,13 @@ impl MemcachedCache {
     /// Decompress data if needed
     fn decompress_data(&self, data: &[u8]) -> Result<Vec<u8>> {
         if self.config.enable_compression {
-            let decompressed = lz4::block::decompress(data, None)
-                .map_err(|e| FortressError::storage(
+            let decompressed = lz4::block::decompress(data, None).map_err(|e| {
+                FortressError::storage(
                     format!("Decompression failed: {}", e),
                     "memcached_cache".to_string(),
                     crate::error::StorageErrorCode::CorruptedData,
-                ))?;
+                )
+            })?;
             Ok(decompressed)
         } else {
             Ok(data.to_vec())
@@ -238,7 +248,7 @@ impl MemcachedCache {
     /// Update statistics
     async fn update_stats(&self, operation: &str, success: bool, elapsed_us: f64) {
         let mut stats = self.statistics.write().await;
-        
+
         match operation {
             "get" => {
                 if success {
@@ -247,11 +257,15 @@ impl MemcachedCache {
                     stats.misses += 1;
                 }
                 stats.hit_ratio = stats.hits as f64 / (stats.hits + stats.misses) as f64;
-                stats.avg_get_time_us = (stats.avg_get_time_us * (stats.hits + stats.misses - 1) as f64 + elapsed_us) / (stats.hits + stats.misses) as f64;
+                stats.avg_get_time_us =
+                    (stats.avg_get_time_us * (stats.hits + stats.misses - 1) as f64 + elapsed_us)
+                        / (stats.hits + stats.misses) as f64;
             }
             "set" => {
                 stats.sets += 1;
-                stats.avg_set_time_us = (stats.avg_set_time_us * (stats.sets - 1) as f64 + elapsed_us) / stats.sets as f64;
+                stats.avg_set_time_us = (stats.avg_set_time_us * (stats.sets - 1) as f64
+                    + elapsed_us)
+                    / stats.sets as f64;
             }
             "delete" => {
                 stats.deletes += 1;
@@ -269,10 +283,8 @@ impl crate::distributed_cache::DistributedCache for MemcachedCache {
         let full_key = self.get_full_key(key);
 
         let client = self.pool.get_client_for_key(&full_key).await?;
-        
-        let result = self.execute_with_retry(|| {
-            client.get(&full_key)
-        }).await;
+
+        let result = self.execute_with_retry(|| client.get(&full_key)).await;
 
         let elapsed_us = start.elapsed().as_micros() as f64;
         let success = result.is_ok() && result.as_ref().unwrap().is_some();
@@ -294,14 +306,16 @@ impl crate::distributed_cache::DistributedCache for MemcachedCache {
         let compressed_value = self.compress_data(&value)?;
 
         let client = self.pool.get_client_for_key(&full_key).await?;
-        
-        let result = self.execute_with_retry(|| {
-            if let Some(ttl) = ttl_seconds {
-                client.set_with_expiration(&full_key, &compressed_value, ttl as u32)
-            } else {
-                client.set(&full_key, &compressed_value)
-            }
-        }).await;
+
+        let result = self
+            .execute_with_retry(|| {
+                if let Some(ttl) = ttl_seconds {
+                    client.set_with_expiration(&full_key, &compressed_value, ttl as u32)
+                } else {
+                    client.set(&full_key, &compressed_value)
+                }
+            })
+            .await;
 
         let elapsed_us = start.elapsed().as_micros() as f64;
         let success = result.is_ok();
@@ -314,9 +328,7 @@ impl crate::distributed_cache::DistributedCache for MemcachedCache {
         let full_key = self.get_full_key(key);
         let client = self.pool.get_client_for_key(&full_key).await?;
 
-        let result = self.execute_with_retry(|| {
-            client.delete(&full_key)
-        }).await;
+        let result = self.execute_with_retry(|| client.delete(&full_key)).await;
 
         if result.is_ok() && result.as_ref().unwrap() {
             self.update_stats("delete", true, 0.0).await;
@@ -329,21 +341,18 @@ impl crate::distributed_cache::DistributedCache for MemcachedCache {
         let full_key = self.get_full_key(key);
         let client = self.pool.get_client_for_key(&full_key).await?;
 
-        self.execute_with_retry(|| {
-            client.get(&full_key).map(|value| value.is_some())
-        }).await
+        self.execute_with_retry(|| client.get(&full_key).map(|value| value.is_some()))
+            .await
     }
 
     async fn clear(&self) -> Result<()> {
         // Memcached doesn't support selective clearing by prefix
         // We would need to track all keys or use flush_all
         // For now, we'll implement flush_all with a warning
-        
+
         let client = self.pool.get_client().await?;
-        
-        self.execute_with_retry(|| {
-            client.flush()
-        }).await?;
+
+        self.execute_with_retry(|| client.flush()).await?;
 
         // Update statistics
         let mut stats = self.statistics.write().await;
@@ -355,7 +364,7 @@ impl crate::distributed_cache::DistributedCache for MemcachedCache {
 
     async fn mget(&self, keys: &[&str]) -> Result<Vec<Option<Vec<u8>>>> {
         let mut results = Vec::new();
-        
+
         for key in keys {
             let result = self.get(key).await?;
             results.push(result);
@@ -379,25 +388,26 @@ impl crate::distributed_cache::DistributedCache for MemcachedCache {
             if delta > 0 {
                 client.increment(&full_key, delta as u64).map(|v| v as i64)
             } else {
-                client.decrement(&full_key, (-delta) as u64).map(|v| v as i64)
+                client
+                    .decrement(&full_key, (-delta) as u64)
+                    .map(|v| v as i64)
             }
-        }).await
+        })
+        .await
     }
 
     async fn get_statistics(&self) -> Result<crate::distributed_cache::CacheStatistics> {
         let stats = self.statistics.read().await;
-        
+
         // Get Memcached server stats
         let client = self.pool.get_client().await?;
-        
-        let server_stats = self.execute_with_retry(|| {
-            client.stats()
-        }).await;
+
+        let server_stats = self.execute_with_retry(|| client.stats()).await;
 
         if let Ok(server_stats) = server_stats {
             // Parse server statistics for additional info
             let mut cache_stats = stats.clone();
-            
+
             for (server_name, server_data) in server_stats {
                 for (key, value) in server_data {
                     match key.as_str() {
@@ -415,7 +425,7 @@ impl crate::distributed_cache::DistributedCache for MemcachedCache {
                     }
                 }
             }
-            
+
             Ok(cache_stats)
         } else {
             Ok(stats.clone())
@@ -439,12 +449,12 @@ impl crate::distributed_cache::DistributedCache for MemcachedCache {
     async fn health_check(&self) -> Result<bool> {
         let test_key = self.get_full_key("health_check");
         let test_value = b"test".to_vec();
-        
+
         // Try to set and get a test value
         if let Err(_) = self.set("health_check", test_value.clone(), Some(1)).await {
             return Ok(false);
         }
-        
+
         match self.get("health_check").await {
             Ok(Some(retrieved)) if retrieved == test_value => {
                 let _ = self.delete("health_check").await;
@@ -457,7 +467,9 @@ impl crate::distributed_cache::DistributedCache for MemcachedCache {
 
 /// Factory function to create Memcached cache
 #[cfg(feature = "memcached")]
-pub async fn create_memcached_cache(config: MemcachedConfig) -> Result<Box<dyn crate::distributed_cache::DistributedCache>> {
+pub async fn create_memcached_cache(
+    config: MemcachedConfig,
+) -> Result<Box<dyn crate::distributed_cache::DistributedCache>> {
     let cache = MemcachedCache::new(config).await?;
     Ok(Box::new(cache))
 }
@@ -465,7 +477,9 @@ pub async fn create_memcached_cache(config: MemcachedConfig) -> Result<Box<dyn c
 /// Factory function that returns error when Memcached feature is not enabled
 #[cfg(not(feature = "memcached"))]
 #[cfg(feature = "distributed-cache")]
-pub async fn create_memcached_cache(_config: MemcachedConfig) -> Result<Box<dyn crate::distributed_cache::DistributedCache>> {
+pub async fn create_memcached_cache(
+    _config: MemcachedConfig,
+) -> Result<Box<dyn crate::distributed_cache::DistributedCache>> {
     Err(FortressError::storage(
         "Memcached support not enabled. Enable the 'memcached' feature in Cargo.toml".to_string(),
         "memcached_cache".to_string(),
@@ -488,15 +502,15 @@ mod tests {
         // Test set and get
         let key = "test_key";
         let value = b"test_value".to_vec();
-        
+
         cache.set(key, value.clone(), None).await.unwrap();
         let retrieved = cache.get(key).await.unwrap();
-        
+
         assert_eq!(retrieved, Some(value));
-        
+
         // Test exists
         assert!(cache.exists(key).await.unwrap());
-        
+
         // Test delete
         assert!(cache.delete(key).await.unwrap());
         assert!(!cache.exists(key).await.unwrap());
@@ -510,15 +524,15 @@ mod tests {
 
         let key = "ttl_test";
         let value = b"test_value".to_vec();
-        
+
         cache.set(key, value.clone(), Some(1)).await.unwrap();
-        
+
         // Should be available immediately
         assert!(cache.get(key).await.unwrap().is_some());
-        
+
         // Wait for expiration
         tokio::time::sleep(Duration::from_secs(2)).await;
-        
+
         // Should be expired
         assert!(cache.get(key).await.unwrap().is_none());
     }
@@ -530,19 +544,19 @@ mod tests {
         let cache = MemcachedCache::new(config).await.unwrap();
 
         let key = "counter";
-        
+
         // Increment from non-existent (should start at 0)
         let result = cache.increment(key, 5).await.unwrap();
         assert_eq!(result, 5);
-        
+
         // Increment existing value
         let result = cache.increment(key, 3).await.unwrap();
         assert_eq!(result, 8);
-        
+
         // Test decrement
         let result = cache.increment(key, -2).await.unwrap();
         assert_eq!(result, 6);
-        
+
         // Verify stored value
         let stored = cache.get(key).await.unwrap();
         assert_eq!(stored, Some(b"6".to_vec()));
@@ -559,12 +573,12 @@ mod tests {
             ("key2", b"value2".to_vec(), None),
             ("key3", b"value3".to_vec(), None),
         ];
-        
+
         cache.mset(&entries).await.unwrap();
-        
+
         let keys = vec!["key1", "key2", "key3"];
         let results = cache.mget(&keys).await.unwrap();
-        
+
         assert_eq!(results.len(), 3);
         assert_eq!(results[0], Some(b"value1".to_vec()));
         assert_eq!(results[1], Some(b"value2".to_vec()));
@@ -585,24 +599,21 @@ mod tests {
     #[ignore] // Requires Memcached server
     async fn test_memcached_consistent_hashing() {
         let config = MemcachedConfig {
-            servers: vec![
-                "localhost:11211".to_string(),
-                "localhost:11212".to_string(),
-            ],
+            servers: vec!["localhost:11211".to_string(), "localhost:11212".to_string()],
             enable_consistent_hashing: true,
             ..Default::default()
         };
-        
+
         let cache = MemcachedCache::new(config).await.unwrap();
 
         // Test that the same key always goes to the same server
         let key = "test_consistent_key";
         let value = b"test_value".to_vec();
-        
+
         cache.set(key, value.clone(), None).await.unwrap();
         let retrieved1 = cache.get(key).await.unwrap();
         let retrieved2 = cache.get(key).await.unwrap();
-        
+
         assert_eq!(retrieved1, Some(value.clone()));
         assert_eq!(retrieved2, Some(value));
     }

@@ -1,9 +1,9 @@
 //! Enhanced error reporting system with structured error handling
-//! 
+//!
 //! Provides comprehensive error messages, troubleshooting steps,
 //! and documentation integration for better user experience.
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
 
@@ -21,7 +21,7 @@ pub enum FortressError {
         related_docs: Vec<String>,
         troubleshooting_steps: Vec<String>,
     },
-    
+
     DatabaseError {
         database: String,
         host: String,
@@ -33,7 +33,7 @@ pub enum FortressError {
         troubleshooting_steps: Vec<String>,
         common_causes: Vec<String>,
     },
-    
+
     ConfigurationError {
         field: String,
         value: String,
@@ -43,7 +43,7 @@ pub enum FortressError {
         help_text: String,
         validation_rules: Vec<String>,
     },
-    
+
     AuthenticationError {
         reason: String,
         error_code: String,
@@ -52,7 +52,7 @@ pub enum FortressError {
         suggestion: Option<String>,
         security_recommendations: Vec<String>,
     },
-    
+
     KeyError {
         operation: String,
         key_id: Option<String>,
@@ -62,7 +62,7 @@ pub enum FortressError {
         suggestion: Option<String>,
         recovery_steps: Vec<String>,
     },
-    
+
     NetworkError {
         operation: String,
         endpoint: String,
@@ -71,7 +71,7 @@ pub enum FortressError {
         timeout_info: Option<String>,
         retry_strategy: Vec<String>,
     },
-    
+
     FileSystemError {
         operation: String,
         path: String,
@@ -80,7 +80,7 @@ pub enum FortressError {
         permission_info: Option<String>,
         alternative_paths: Vec<String>,
     },
-    
+
     ComplianceError {
         regulation: String,
         requirement: String,
@@ -89,7 +89,7 @@ pub enum FortressError {
         remediation_steps: Vec<String>,
         audit_trail: Vec<String>,
     },
-    
+
     PerformanceError {
         metric: String,
         threshold: String,
@@ -98,7 +98,7 @@ pub enum FortressError {
         help_text: String,
         optimization_suggestions: Vec<String>,
     },
-    
+
     PluginError {
         plugin_name: String,
         operation: String,
@@ -107,7 +107,7 @@ pub enum FortressError {
         plugin_version: Option<String>,
         compatibility_info: Vec<String>,
     },
-    
+
     CliError {
         command: String,
         reason: String,
@@ -121,17 +121,46 @@ pub enum FortressError {
 impl fmt::Display for FortressError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            FortressError::EncryptionError { reason, .. } => write!(f, "Encryption failed: {}", reason),
-            FortressError::DatabaseError { database, host, port, .. } => write!(f, "Database connection failed: {}@{}:{}", database, host, port),
-            FortressError::ConfigurationError { field, .. } => write!(f, "Configuration error: {}", field),
-            FortressError::AuthenticationError { reason, .. } => write!(f, "Authentication failed: {}", reason),
-            FortressError::KeyError { operation, .. } => write!(f, "Key management error: {}", operation),
-            FortressError::NetworkError { operation, .. } => write!(f, "Network error: {}", operation),
-            FortressError::FileSystemError { operation, .. } => write!(f, "File system error: {}", operation),
-            FortressError::ComplianceError { regulation, .. } => write!(f, "Compliance violation: {}", regulation),
-            FortressError::PerformanceError { metric, .. } => write!(f, "Performance degradation: {}", metric),
-            FortressError::PluginError { plugin_name, .. } => write!(f, "Plugin error: {}", plugin_name),
-            FortressError::CliError { command, .. } => write!(f, "CLI error in command '{}': {}", command, command),
+            FortressError::EncryptionError { reason, .. } => {
+                write!(f, "Encryption failed: {}", reason)
+            }
+            FortressError::DatabaseError {
+                database,
+                host,
+                port,
+                ..
+            } => write!(
+                f,
+                "Database connection failed: {}@{}:{}",
+                database, host, port
+            ),
+            FortressError::ConfigurationError { field, .. } => {
+                write!(f, "Configuration error: {}", field)
+            }
+            FortressError::AuthenticationError { reason, .. } => {
+                write!(f, "Authentication failed: {}", reason)
+            }
+            FortressError::KeyError { operation, .. } => {
+                write!(f, "Key management error: {}", operation)
+            }
+            FortressError::NetworkError { operation, .. } => {
+                write!(f, "Network error: {}", operation)
+            }
+            FortressError::FileSystemError { operation, .. } => {
+                write!(f, "File system error: {}", operation)
+            }
+            FortressError::ComplianceError { regulation, .. } => {
+                write!(f, "Compliance violation: {}", regulation)
+            }
+            FortressError::PerformanceError { metric, .. } => {
+                write!(f, "Performance degradation: {}", metric)
+            }
+            FortressError::PluginError { plugin_name, .. } => {
+                write!(f, "Plugin error: {}", plugin_name)
+            }
+            FortressError::CliError { command, .. } => {
+                write!(f, "CLI error in command '{}': {}", command, command)
+            }
         }
     }
 }
@@ -155,7 +184,7 @@ impl FortressError {
         }
         self
     }
-    
+
     pub fn error_code(&self) -> &str {
         match self {
             FortressError::EncryptionError { error_code, .. } => error_code,
@@ -171,7 +200,7 @@ impl FortressError {
             FortressError::CliError { error_code, .. } => error_code,
         }
     }
-    
+
     pub fn help_text(&self) -> &str {
         match self {
             FortressError::EncryptionError { help_text, .. } => help_text,
@@ -187,20 +216,44 @@ impl FortressError {
             FortressError::CliError { help_text, .. } => help_text,
         }
     }
-    
+
     pub fn troubleshooting_steps(&self) -> Vec<String> {
         match self {
-            FortressError::EncryptionError { troubleshooting_steps, .. } => troubleshooting_steps.clone(),
-            FortressError::DatabaseError { troubleshooting_steps, .. } => troubleshooting_steps.clone(),
-            FortressError::ConfigurationError { validation_rules, .. } => validation_rules.clone(),
-            FortressError::AuthenticationError { security_recommendations, .. } => security_recommendations.clone(),
+            FortressError::EncryptionError {
+                troubleshooting_steps,
+                ..
+            } => troubleshooting_steps.clone(),
+            FortressError::DatabaseError {
+                troubleshooting_steps,
+                ..
+            } => troubleshooting_steps.clone(),
+            FortressError::ConfigurationError {
+                validation_rules, ..
+            } => validation_rules.clone(),
+            FortressError::AuthenticationError {
+                security_recommendations,
+                ..
+            } => security_recommendations.clone(),
             FortressError::KeyError { recovery_steps, .. } => recovery_steps.clone(),
             FortressError::NetworkError { retry_strategy, .. } => retry_strategy.clone(),
-            FortressError::FileSystemError { alternative_paths, .. } => alternative_paths.clone(),
-            FortressError::ComplianceError { remediation_steps, .. } => remediation_steps.clone(),
-            FortressError::PerformanceError { optimization_suggestions, .. } => optimization_suggestions.clone(),
-            FortressError::PluginError { compatibility_info, .. } => compatibility_info.clone(),
-            FortressError::CliError { suggestion, example_usage, .. } => {
+            FortressError::FileSystemError {
+                alternative_paths, ..
+            } => alternative_paths.clone(),
+            FortressError::ComplianceError {
+                remediation_steps, ..
+            } => remediation_steps.clone(),
+            FortressError::PerformanceError {
+                optimization_suggestions,
+                ..
+            } => optimization_suggestions.clone(),
+            FortressError::PluginError {
+                compatibility_info, ..
+            } => compatibility_info.clone(),
+            FortressError::CliError {
+                suggestion,
+                example_usage,
+                ..
+            } => {
                 let mut steps = vec![
                     "Check command syntax and parameters".to_string(),
                     "Run 'fortress help' for available commands".to_string(),
@@ -216,7 +269,7 @@ impl FortressError {
             }
         }
     }
-    
+
     pub fn severity(&self) -> ErrorSeverity {
         match self {
             FortressError::EncryptionError { .. } => ErrorSeverity::High,
@@ -255,15 +308,21 @@ impl FortressError {
             ],
         }
     }
-    
-    pub fn database_connection_failed(database: impl Into<String>, host: impl Into<String>, port: u16) -> Self {
+
+    pub fn database_connection_failed(
+        database: impl Into<String>,
+        host: impl Into<String>,
+        port: u16,
+    ) -> Self {
         FortressError::DatabaseError {
             database: database.into(),
             host: host.into(),
             port,
             source: None,
             error_code: "DB001".to_string(),
-            help_text: "Database connection failed. Check database server status and network connectivity.".to_string(),
+            help_text:
+                "Database connection failed. Check database server status and network connectivity."
+                    .to_string(),
             troubleshooting_steps: vec![
                 "Verify database server is running and accessible".to_string(),
                 "Check network connectivity to database host".to_string(),
@@ -281,8 +340,12 @@ impl FortressError {
             ],
         }
     }
-    
-    pub fn configuration_error(field: impl Into<String>, value: impl Into<String>, expected_format: impl Into<String>) -> Self {
+
+    pub fn configuration_error(
+        field: impl Into<String>,
+        value: impl Into<String>,
+        expected_format: impl Into<String>,
+    ) -> Self {
         FortressError::ConfigurationError {
             field: field.into(),
             value: value.into(),
@@ -298,12 +361,13 @@ impl FortressError {
             ],
         }
     }
-    
+
     pub fn authentication_failed(reason: impl Into<String>) -> Self {
         FortressError::AuthenticationError {
             reason: reason.into(),
             error_code: "AUTH001".to_string(),
-            help_text: "Authentication failed. Please check your credentials and try again.".to_string(),
+            help_text: "Authentication failed. Please check your credentials and try again."
+                .to_string(),
             suggestion: None,
             security_recommendations: vec![
                 "Use strong, unique passwords".to_string(),
@@ -313,13 +377,14 @@ impl FortressError {
             ],
         }
     }
-    
+
     pub fn key_operation_failed(operation: impl Into<String>, key_id: Option<&str>) -> Self {
         FortressError::KeyError {
             operation: operation.into(),
             key_id: key_id.map(|k| k.into()),
             error_code: "KEY001".to_string(),
-            help_text: "Key management operation failed. Check key permissions and availability.".to_string(),
+            help_text: "Key management operation failed. Check key permissions and availability."
+                .to_string(),
             suggestion: None,
             recovery_steps: vec![
                 "Verify key exists and is accessible".to_string(),
@@ -330,13 +395,15 @@ impl FortressError {
             ],
         }
     }
-    
+
     pub fn network_error(operation: impl Into<String>, endpoint: impl Into<String>) -> Self {
         FortressError::NetworkError {
             operation: operation.into(),
             endpoint: endpoint.into(),
             error_code: "NET001".to_string(),
-            help_text: "Network operation failed. Check network connectivity and service availability.".to_string(),
+            help_text:
+                "Network operation failed. Check network connectivity and service availability."
+                    .to_string(),
             timeout_info: Some("Default timeout is 30 seconds".to_string()),
             retry_strategy: vec![
                 "Wait 5 seconds and retry".to_string(),
@@ -347,14 +414,17 @@ impl FortressError {
             ],
         }
     }
-    
+
     pub fn file_system_error(operation: impl Into<String>, path: impl Into<String>) -> Self {
         FortressError::FileSystemError {
             operation: operation.into(),
             path: path.into(),
             error_code: "FS001".to_string(),
-            help_text: "File system operation failed. Check file permissions and disk space.".to_string(),
-            permission_info: Some("Ensure the process has read/write permissions to the target directory".to_string()),
+            help_text: "File system operation failed. Check file permissions and disk space."
+                .to_string(),
+            permission_info: Some(
+                "Ensure the process has read/write permissions to the target directory".to_string(),
+            ),
             alternative_paths: vec![
                 "Try using an alternative directory with proper permissions".to_string(),
                 "Check if the file is locked by another process".to_string(),
@@ -362,8 +432,11 @@ impl FortressError {
             ],
         }
     }
-    
-    pub fn compliance_violation(regulation: impl Into<String>, requirement: impl Into<String>) -> Self {
+
+    pub fn compliance_violation(
+        regulation: impl Into<String>,
+        requirement: impl Into<String>,
+    ) -> Self {
         FortressError::ComplianceError {
             regulation: regulation.into(),
             requirement: requirement.into(),
@@ -383,14 +456,19 @@ impl FortressError {
             ],
         }
     }
-    
-    pub fn performance_degradation(metric: impl Into<String>, threshold: impl Into<String>, actual_value: impl Into<String>) -> Self {
+
+    pub fn performance_degradation(
+        metric: impl Into<String>,
+        threshold: impl Into<String>,
+        actual_value: impl Into<String>,
+    ) -> Self {
         FortressError::PerformanceError {
             metric: metric.into(),
             threshold: threshold.into(),
             actual_value: actual_value.into(),
             error_code: "PERF001".to_string(),
-            help_text: "Performance threshold exceeded. Consider optimization or resource scaling.".to_string(),
+            help_text: "Performance threshold exceeded. Consider optimization or resource scaling."
+                .to_string(),
             optimization_suggestions: vec![
                 "Review and optimize database queries".to_string(),
                 "Consider adding indexes to improve query performance".to_string(),
@@ -400,13 +478,14 @@ impl FortressError {
             ],
         }
     }
-    
+
     pub fn plugin_error(plugin_name: impl Into<String>, operation: impl Into<String>) -> Self {
         FortressError::PluginError {
             plugin_name: plugin_name.into(),
             operation: operation.into(),
             error_code: "PLUGIN001".to_string(),
-            help_text: "Plugin operation failed. Check plugin configuration and compatibility.".to_string(),
+            help_text: "Plugin operation failed. Check plugin configuration and compatibility."
+                .to_string(),
             plugin_version: Some("Check plugin documentation for version requirements".to_string()),
             compatibility_info: vec![
                 "Verify plugin is compatible with current Fortress version".to_string(),
@@ -416,7 +495,7 @@ impl FortressError {
             ],
         }
     }
-    
+
     pub fn io_error(message: impl Into<String>) -> Self {
         FortressError::FileSystemError {
             operation: "IO operation".to_string(),
@@ -430,7 +509,7 @@ impl FortressError {
             ],
         }
     }
-    
+
     pub fn cli(command: impl Into<String>, reason: impl Into<String>) -> Self {
         let cmd_str = command.into();
         let reason_str = reason.into();
@@ -439,11 +518,14 @@ impl FortressError {
             reason: reason_str.clone(),
             error_code: "CLI001".to_string(),
             help_text: format!("CLI command '{}' failed: {}", cmd_str, reason_str),
-            suggestion: Some(format!("Check 'fortress help {}' for correct usage", cmd_str)),
+            suggestion: Some(format!(
+                "Check 'fortress help {}' for correct usage",
+                cmd_str
+            )),
             example_usage: Some(format!("fortress {} <options>", cmd_str)),
         }
     }
-    
+
     pub fn is_recoverable(&self) -> bool {
         match self.severity() {
             ErrorSeverity::Low | ErrorSeverity::Medium => true,
@@ -558,11 +640,9 @@ pub struct ErrorReport {
 
 impl ErrorAnalyzer {
     pub fn new() -> Self {
-        Self {
-            errors: Vec::new(),
-        }
+        Self { errors: Vec::new() }
     }
-    
+
     pub fn report_error(&mut self, error: &FortressError, context: HashMap<String, String>) {
         let report = ErrorReport {
             timestamp: chrono::Utc::now(),
@@ -571,34 +651,39 @@ impl ErrorAnalyzer {
             context,
             severity: error.severity(),
         };
-        
+
         self.errors.push(report);
-        
+
         // Keep only last 1000 errors
         if self.errors.len() > 1000 {
             self.errors.remove(0);
         }
     }
-    
+
     pub fn get_error_summary(&self, hours: u64) -> ErrorSummary {
         let cutoff = chrono::Utc::now() - chrono::Duration::hours(hours as i64);
-        let recent_errors: Vec<_> = self.errors.iter()
+        let recent_errors: Vec<_> = self
+            .errors
+            .iter()
             .filter(|e| e.timestamp > cutoff)
             .collect();
-        
+
         let mut error_counts = HashMap::new();
         let mut severity_counts = HashMap::new();
-        
+
         for error in &recent_errors {
             *error_counts.entry(error.error_code.clone()).or_insert(0) += 1;
-            *severity_counts.entry(format!("{:?}", error.severity)).or_insert(0) += 1;
+            *severity_counts
+                .entry(format!("{:?}", error.severity))
+                .or_insert(0) += 1;
         }
-        
+
         ErrorSummary {
             total_errors: recent_errors.len(),
             error_counts: error_counts.clone(),
             severity_counts,
-            most_common: error_counts.iter()
+            most_common: error_counts
+                .iter()
                 .max_by_key(|(_, &count)| count)
                 .map(|(code, count)| (code.clone(), *count)),
             time_period_hours: hours,

@@ -3,23 +3,22 @@
 //! This module provides the main TokenManager that coordinates all token operations
 //! including creation, validation, renewal, revocation, and lease management.
 
-use chrono::{DateTime, Utc, Duration, Timelike};
-use serde::{Serialize, Deserialize};
+use chrono::{DateTime, Duration, Timelike, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::error::{FortressError, Result, TokenErrorCode};
 use super::{
-    types::{
-        Token, TokenInfo, TokenMetadata, TokenType, TokenRole,
-        CreateTokenRequest, RenewTokenRequest, RevokeTokenRequest,
-        TokenValidationResult, TokenLookupResult, TokenSearchCriteria,
-        TokenSearchResults, TokenUsageStats, TokenCreationContext,
-    },
     lease::LeaseManager,
-    revocation::{RevocationList, RevocationEntry, RevocationReason},
+    revocation::{RevocationEntry, RevocationList, RevocationReason},
+    types::{
+        CreateTokenRequest, RenewTokenRequest, RevokeTokenRequest, Token, TokenCreationContext,
+        TokenInfo, TokenLookupResult, TokenMetadata, TokenRole, TokenSearchCriteria,
+        TokenSearchResults, TokenType, TokenUsageStats, TokenValidationResult,
+    },
 };
+use crate::error::{FortressError, Result, TokenErrorCode};
 
 /// Token manager configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -112,7 +111,10 @@ impl TokenManager {
             if let Some(tokens) = entity_tokens.get(&request.entity_id) {
                 if tokens.len() as u32 >= max_tokens {
                     return Err(FortressError::token_with_id(
-                        format!("Entity {} has reached maximum token limit", request.entity_id),
+                        format!(
+                            "Entity {} has reached maximum token limit",
+                            request.entity_id
+                        ),
                         None,
                         TokenErrorCode::CreationFailed,
                     ));
@@ -131,7 +133,9 @@ impl TokenManager {
 
         // Apply request settings
         token.renewable = request.renewable;
-        token.max_renewals = request.max_renewals.or(Some(self.config.default_max_renewals));
+        token.max_renewals = request
+            .max_renewals
+            .or(Some(self.config.default_max_renewals));
         token.path_suffixes = request.path_suffixes.unwrap_or_default();
         token.parent_token = request.parent_token;
         token.ip_restrictions = request.ip_restrictions.unwrap_or_default();
@@ -147,9 +151,9 @@ impl TokenManager {
         // Create token info
         let token_info = TokenInfo {
             token: token.clone(),
-            display_name: request.display_name.unwrap_or_else(|| {
-                format!("{} Token", request.token_type.display_name())
-            }),
+            display_name: request
+                .display_name
+                .unwrap_or_else(|| format!("{} Token", request.token_type.display_name())),
             description: request.description,
             usage_stats: TokenUsageStats::default(),
             creation_context: TokenCreationContext {
@@ -197,7 +201,11 @@ impl TokenManager {
     }
 
     /// Validate a token
-    pub async fn validate_token(&self, token_id: &str, context: &TokenValidationContext) -> Result<TokenValidationResult> {
+    pub async fn validate_token(
+        &self,
+        token_id: &str,
+        context: &TokenValidationContext,
+    ) -> Result<TokenValidationResult> {
         let mut errors = Vec::new();
         let mut warnings = Vec::new();
         let mut token_info = None;
@@ -239,11 +247,13 @@ impl TokenManager {
 
                 // Check path suffix restrictions
                 if !context.request_path.is_empty() {
-                    let path_allowed = info.token.path_suffixes.is_empty() || 
-                        info.token.path_suffixes.iter().any(|suffix| {
-                            context.request_path.starts_with(suffix)
-                        });
-                    
+                    let path_allowed = info.token.path_suffixes.is_empty()
+                        || info
+                            .token
+                            .path_suffixes
+                            .iter()
+                            .any(|suffix| context.request_path.starts_with(suffix));
+
                     if !path_allowed {
                         errors.push("Path not allowed for this token".to_string());
                     }
@@ -285,12 +295,13 @@ impl TokenManager {
     /// Renew a token
     pub async fn renew_token(&self, request: RenewTokenRequest) -> Result<TokenInfo> {
         let mut tokens = self.tokens.write().await;
-        let token_info = tokens.get_mut(&request.token_id)
-            .ok_or_else(|| FortressError::token_with_id(
+        let token_info = tokens.get_mut(&request.token_id).ok_or_else(|| {
+            FortressError::token_with_id(
                 "Token not found",
                 Some(request.token_id.clone()),
                 TokenErrorCode::TokenNotFound,
-            ))?;
+            )
+        })?;
 
         // Check if token is renewable
         if !token_info.token.is_renewable() {
@@ -462,7 +473,11 @@ impl TokenManager {
             Vec::new()
         };
 
-        Ok(TokenSearchResults::new(paginated_tokens, criteria, total_count))
+        Ok(TokenSearchResults::new(
+            paginated_tokens,
+            criteria,
+            total_count,
+        ))
     }
 
     /// Get token statistics
@@ -487,12 +502,14 @@ impl TokenManager {
         // Count tokens by type and role
         for token_info in tokens.values() {
             // Count by type
-            *stats.tokens_by_type
+            *stats
+                .tokens_by_type
                 .entry(token_info.token.token_type.clone())
                 .or_insert(0) += 1;
 
             // Count by role
-            *stats.tokens_by_role
+            *stats
+                .tokens_by_role
                 .entry(token_info.token.role.clone())
                 .or_insert(0) += 1;
 
@@ -557,7 +574,10 @@ impl TokenManager {
         // Check TTL limits
         if request.ttl > self.config.max_ttl {
             return Err(FortressError::token_with_id(
-                format!("TTL exceeds maximum allowed duration of {:?}", self.config.max_ttl),
+                format!(
+                    "TTL exceeds maximum allowed duration of {:?}",
+                    self.config.max_ttl
+                ),
                 None,
                 TokenErrorCode::CreationFailed,
             ));
@@ -575,7 +595,10 @@ impl TokenManager {
         if let Some(max_renewals) = request.max_renewals {
             if max_renewals > self.config.max_max_renewals {
                 return Err(FortressError::token_with_id(
-                    format!("Maximum renewals exceeds allowed limit of {}", self.config.max_max_renewals),
+                    format!(
+                        "Maximum renewals exceeds allowed limit of {}",
+                        self.config.max_max_renewals
+                    ),
                     None,
                     TokenErrorCode::CreationFailed,
                 ));
@@ -595,7 +618,11 @@ impl TokenManager {
     }
 
     /// Check if token matches search criteria
-    fn token_matches_criteria(&self, token_info: &TokenInfo, criteria: &TokenSearchCriteria) -> bool {
+    fn token_matches_criteria(
+        &self,
+        token_info: &TokenInfo,
+        criteria: &TokenSearchCriteria,
+    ) -> bool {
         // Token type filter
         if let Some(ref token_type) = criteria.token_type {
             if token_info.token.token_type != *token_type {
@@ -690,15 +717,15 @@ impl TokenManager {
         let mut tokens = self.tokens.write().await;
         if let Some(token_info) = tokens.get_mut(token_id) {
             let now = Utc::now();
-            
+
             token_info.usage_stats.usage_count += 1;
             token_info.usage_stats.last_used = Some(now);
-            
+
             if failed {
                 token_info.usage_stats.failed_auth_count += 1;
                 token_info.usage_stats.last_failed_auth = Some(now);
             }
-            
+
             // Update hourly statistics (simplified)
             let hour = now.hour() as u32;
             token_info.usage_stats.peak_usage_hour = Some(hour);
@@ -715,36 +742,40 @@ impl TokenManager {
         let interval = self.config.cleanup_interval;
 
         let task = tokio::spawn(async move {
-            let mut interval_timer = tokio::time::interval(std::time::Duration::from_secs(interval.num_seconds() as u64));
-            
+            let mut interval_timer = tokio::time::interval(std::time::Duration::from_secs(
+                interval.num_seconds() as u64,
+            ));
+
             loop {
                 interval_timer.tick().await;
-                
+
                 // Clean up expired tokens
                 {
                     let mut tokens_guard = tokens.write().await;
                     let mut entity_tokens_guard = entity_tokens.write().await;
                     let mut metadata_guard = token_metadata.write().await;
                     let _now = Utc::now();
-                    
+
                     let mut expired_token_ids = Vec::new();
-                    
+
                     for (token_id, token_info) in tokens_guard.iter() {
                         if token_info.token.is_expired() {
                             expired_token_ids.push(token_id.clone());
                         }
                     }
-                    
+
                     for token_id in expired_token_ids {
                         if let Some(token_info) = tokens_guard.remove(&token_id) {
                             // Update entity mapping
-                            if let Some(tokens) = entity_tokens_guard.get_mut(&token_info.token.entity_id) {
+                            if let Some(tokens) =
+                                entity_tokens_guard.get_mut(&token_info.token.entity_id)
+                            {
                                 tokens.retain(|id| id != &token_id);
                                 if tokens.is_empty() {
                                     entity_tokens_guard.remove(&token_info.token.entity_id);
                                 }
                             }
-                            
+
                             // Remove metadata
                             metadata_guard.remove(&token_id);
                         }
@@ -854,7 +885,7 @@ mod tests {
     #[tokio::test]
     async fn test_create_token() {
         let mut token_manager = TokenManager::new();
-        
+
         let request = CreateTokenRequest {
             token_type: TokenType::User,
             role: TokenRole::Admin,
@@ -865,7 +896,7 @@ mod tests {
         };
 
         let token_info = token_manager.create_token(request).await.unwrap();
-        
+
         assert_eq!(token_info.token.token_type, TokenType::User);
         assert_eq!(token_info.token.role, TokenRole::Admin);
         assert!(token_info.token.has_policy("default"));
@@ -876,7 +907,7 @@ mod tests {
     #[tokio::test]
     async fn test_token_validation() {
         let mut token_manager = TokenManager::new();
-        
+
         // Create token
         let request = CreateTokenRequest {
             token_type: TokenType::User,
@@ -888,11 +919,14 @@ mod tests {
         };
 
         let token_info = token_manager.create_token(request).await.unwrap();
-        
+
         // Validate token
         let context = TokenValidationContext::default();
-        let result = token_manager.validate_token(&token_info.token.id, &context).await.unwrap();
-        
+        let result = token_manager
+            .validate_token(&token_info.token.id, &context)
+            .await
+            .unwrap();
+
         assert!(result.valid);
         assert!(result.token_info.is_some());
         assert!(result.errors.is_empty());
@@ -901,7 +935,7 @@ mod tests {
     #[tokio::test]
     async fn test_token_renewal() {
         let mut token_manager = TokenManager::new();
-        
+
         let request = CreateTokenRequest {
             token_type: TokenType::Service,
             role: TokenRole::Operator,
@@ -912,7 +946,7 @@ mod tests {
         };
 
         let token_info = token_manager.create_token(request).await.unwrap();
-        
+
         // Renew token
         let renew_request = RenewTokenRequest {
             token_id: token_info.token.id.clone(),
@@ -928,7 +962,7 @@ mod tests {
     #[tokio::test]
     async fn test_token_revocation() {
         let mut token_manager = TokenManager::new();
-        
+
         let request = CreateTokenRequest {
             token_type: TokenType::User,
             role: TokenRole::Admin,
@@ -939,7 +973,7 @@ mod tests {
         };
 
         let token_info = token_manager.create_token(request).await.unwrap();
-        
+
         // Revoke token
         let revoke_request = RevokeTokenRequest {
             token_id: token_info.token.id.clone(),
@@ -949,10 +983,13 @@ mod tests {
         };
 
         token_manager.revoke_token(revoke_request).await.unwrap();
-        
+
         // Token should no longer be valid
         let context = TokenValidationContext::default();
-        let result = token_manager.validate_token(&token_info.token.id, &context).await.unwrap();
+        let result = token_manager
+            .validate_token(&token_info.token.id, &context)
+            .await
+            .unwrap();
         assert!(!result.valid);
         assert!(result.errors.contains(&"Token is revoked".to_string()));
     }
@@ -960,7 +997,7 @@ mod tests {
     #[tokio::test]
     async fn test_entity_token_listing() {
         let mut token_manager = TokenManager::new();
-        
+
         // Create multiple tokens for same entity
         for _i in 0..3 {
             let request = CreateTokenRequest {
@@ -977,7 +1014,7 @@ mod tests {
         // List entity tokens
         let entity_tokens = token_manager.list_entity_tokens("user123").await.unwrap();
         assert_eq!(entity_tokens.len(), 3);
-        
+
         // All should belong to the same entity
         for token_info in &entity_tokens {
             assert_eq!(token_info.token.entity_id, "user123");
@@ -987,7 +1024,7 @@ mod tests {
     #[tokio::test]
     async fn test_token_search() {
         let mut token_manager = TokenManager::new();
-        
+
         // Create tokens with different types and roles
         let user_request = CreateTokenRequest {
             token_type: TokenType::User,
@@ -1034,7 +1071,7 @@ mod tests {
     #[tokio::test]
     async fn test_token_statistics() {
         let mut token_manager = TokenManager::new();
-        
+
         // Create tokens with different types
         let types = vec![TokenType::User, TokenType::Service, TokenType::Batch];
         for (i, token_type) in types.iter().enumerate() {
@@ -1060,7 +1097,7 @@ mod tests {
     #[tokio::test]
     async fn test_token_validation_context() {
         let mut token_manager = TokenManager::new();
-        
+
         // Create token with IP restrictions
         let request = CreateTokenRequest {
             token_type: TokenType::User,
@@ -1073,31 +1110,39 @@ mod tests {
         };
 
         let token_info = token_manager.create_token(request).await.unwrap();
-        
+
         // Test with allowed IP
         let context = TokenValidationContext {
             ip_address: Some("192.168.1.1".to_string()),
             ..Default::default()
         };
 
-        let result = token_manager.validate_token(&token_info.token.id, &context).await.unwrap();
+        let result = token_manager
+            .validate_token(&token_info.token.id, &context)
+            .await
+            .unwrap();
         assert!(result.valid);
-        
+
         // Test with disallowed IP
         let context = TokenValidationContext {
             ip_address: Some("10.0.0.1".to_string()),
             ..Default::default()
         };
 
-        let result = token_manager.validate_token(&token_info.token.id, &context).await.unwrap();
+        let result = token_manager
+            .validate_token(&token_info.token.id, &context)
+            .await
+            .unwrap();
         assert!(!result.valid);
-        assert!(result.errors.contains(&"IP address not allowed".to_string()));
+        assert!(result
+            .errors
+            .contains(&"IP address not allowed".to_string()));
     }
 
     #[tokio::test]
     async fn test_cleanup_expired_tokens() {
         let mut token_manager = TokenManager::new();
-        
+
         // Create token with very short TTL
         let request = CreateTokenRequest {
             token_type: TokenType::User,
@@ -1109,11 +1154,11 @@ mod tests {
         };
 
         let token_info = token_manager.create_token(request).await.unwrap();
-        
+
         // Should have 1 token initially
         let stats = token_manager.get_statistics().await.unwrap();
         assert_eq!(stats.total_tokens, 1);
-        
+
         // Wait for token to expire (in real test, you'd use time mocking)
         // For now, manually expire it
         {
@@ -1122,11 +1167,11 @@ mod tests {
                 token_info.token.expires_time = Utc::now() - Duration::seconds(1);
             }
         }
-        
+
         // Run cleanup
         let cleaned_count = token_manager.cleanup_expired_tokens().await.unwrap();
         assert_eq!(cleaned_count, 1);
-        
+
         // Should have 0 tokens now
         let stats = token_manager.get_statistics().await.unwrap();
         assert_eq!(stats.total_tokens, 0);

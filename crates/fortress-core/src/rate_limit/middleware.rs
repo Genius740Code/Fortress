@@ -1,14 +1,14 @@
 //! Rate Limiting Middleware
-//! 
+//!
 //! This module provides HTTP middleware for rate limiting requests
 //! with configurable algorithms and storage backends.
 
+use crate::error::{FortressError, Result};
+use crate::rate_limit::{RateLimitAction, RateLimitContext, RateLimitManager, RateLimitResult};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use serde::{Serialize, Deserialize};
-use chrono::{DateTime, Utc};
-use crate::error::{FortressError, Result};
-use crate::rate_limit::{RateLimitManager, RateLimitContext, RateLimitResult, RateLimitAction};
 
 /// HTTP request for rate limiting
 #[derive(Debug, Clone)]
@@ -61,7 +61,10 @@ impl RateLimitMiddleware {
     }
 
     /// Process an HTTP request through rate limiting
-    pub async fn process_request(&self, request: &HttpRequest) -> Result<RateLimitMiddlewareResult> {
+    pub async fn process_request(
+        &self,
+        request: &HttpRequest,
+    ) -> Result<RateLimitMiddlewareResult> {
         // Check if request should bypass rate limiting
         if self.should_bypass(request) {
             return Ok(RateLimitMiddlewareResult {
@@ -90,7 +93,8 @@ impl RateLimitMiddleware {
 
         // Log rate limiting decision
         if self.config.logging_enabled {
-            self.log_rate_limit_decision(request, &rate_limit_results, allowed).await;
+            self.log_rate_limit_decision(request, &rate_limit_results, allowed)
+                .await;
         }
 
         Ok(RateLimitMiddlewareResult {
@@ -123,25 +127,31 @@ impl RateLimitMiddleware {
     /// Create rate limit context from HTTP request
     fn create_context(&self, request: &HttpRequest) -> RateLimitContext {
         // Extract user ID from headers or query params
-        let user_id = request.headers.get("X-User-ID")
+        let user_id = request
+            .headers
+            .get("X-User-ID")
             .or_else(|| request.headers.get("User-ID"))
             .or_else(|| request.query_params.get("user_id"))
             .cloned();
 
         // Extract API key from headers or query params
-        let api_key = request.headers.get("X-API-Key")
+        let api_key = request
+            .headers
+            .get("X-API-Key")
             .or_else(|| request.headers.get("API-Key"))
             .or_else(|| request.query_params.get("api_key"))
             .cloned();
 
         // Extract token from headers
-        let token = request.headers.get("Authorization")
+        let token = request
+            .headers
+            .get("Authorization")
             .or_else(|| request.headers.get("X-Auth-Token"))
             .cloned();
 
         // Create metadata from headers and query params
         let mut metadata = HashMap::new();
-        
+
         // Add query params to metadata
         for (key, value) in &request.query_params {
             metadata.insert(key.clone(), serde_json::Value::String(value.clone()));
@@ -171,21 +181,34 @@ impl RateLimitMiddleware {
     /// Create rate limit response
     fn create_rate_limit_response(&self, results: &[RateLimitResult]) -> HttpResponse {
         // Find the most restrictive result
-        let most_restrictive = results.iter()
+        let most_restrictive = results
+            .iter()
             .filter(|r| !r.allowed)
             .min_by(|a, b| a.priority.cmp(&b.priority))
             .unwrap_or_else(|| &results[0]);
 
         let mut headers = HashMap::new();
-        
+
         // Add rate limit headers
         if self.config.response_headers {
-            headers.insert("X-RateLimit-Limit".to_string(), most_restrictive.limit.to_string());
-            headers.insert("X-RateLimit-Remaining".to_string(), most_restrictive.remaining.to_string());
-            headers.insert("X-RateLimit-Reset".to_string(), most_restrictive.reset_time.timestamp().to_string());
-            
+            headers.insert(
+                "X-RateLimit-Limit".to_string(),
+                most_restrictive.limit.to_string(),
+            );
+            headers.insert(
+                "X-RateLimit-Remaining".to_string(),
+                most_restrictive.remaining.to_string(),
+            );
+            headers.insert(
+                "X-RateLimit-Reset".to_string(),
+                most_restrictive.reset_time.timestamp().to_string(),
+            );
+
             if let Some(retry_after) = most_restrictive.retry_after {
-                headers.insert("Retry-After".to_string(), retry_after.num_seconds().to_string());
+                headers.insert(
+                    "Retry-After".to_string(),
+                    retry_after.num_seconds().to_string(),
+                );
             }
         }
 
@@ -218,9 +241,14 @@ impl RateLimitMiddleware {
     }
 
     /// Log rate limiting decision
-    async fn log_rate_limit_decision(&self, request: &HttpRequest, results: &[RateLimitResult], allowed: bool) {
+    async fn log_rate_limit_decision(
+        &self,
+        request: &HttpRequest,
+        results: &[RateLimitResult],
+        allowed: bool,
+    ) {
         let log_level = if allowed { "INFO" } else { "WARN" };
-        
+
         tracing::info!(
             target: "rate_limit",
             method = %request.method,
@@ -240,8 +268,8 @@ impl RateLimitMiddleware {
                 limit = result.limit,
                 remaining = result.remaining,
                 action = ?result.action,
-                "Rule evaluation: {} - {} ({}/{})", 
-                result.rule_name, 
+                "Rule evaluation: {} - {} ({}/{})",
+                result.rule_name,
                 if result.allowed { "ALLOWED" } else { "REJECTED" },
                 result.remaining,
                 result.limit
@@ -288,7 +316,11 @@ impl WebRateLimitMiddleware {
     }
 
     /// Process a web request (generic interface)
-    pub async fn process_web_request<F, R>(&self, request: &R, context_extractor: F) -> Result<RateLimitMiddlewareResult>
+    pub async fn process_web_request<F, R>(
+        &self,
+        request: &R,
+        context_extractor: F,
+    ) -> Result<RateLimitMiddlewareResult>
     where
         F: Fn(&R) -> HttpRequest,
     {
@@ -306,9 +338,13 @@ impl WebRateLimitMiddleware {
 fn generate_request_id() -> String {
     use std::sync::atomic::{AtomicU64, Ordering};
     static COUNTER: AtomicU64 = AtomicU64::new(0);
-    
+
     let id = COUNTER.fetch_add(1, Ordering::SeqCst);
-    format!("req-{}-{}", Utc::now().timestamp_nanos_opt().unwrap_or(0), id)
+    format!(
+        "req-{}-{}",
+        Utc::now().timestamp_nanos_opt().unwrap_or(0),
+        id
+    )
 }
 
 /// Rate limiting middleware for HTTP servers
@@ -333,13 +369,19 @@ impl HttpRateLimitMiddleware {
     /// Get rate limiting headers for successful requests
     pub fn get_rate_limit_headers(&self, results: &[RateLimitResult]) -> HashMap<String, String> {
         let mut headers = HashMap::new();
-        
+
         if let Some(result) = results.first() {
             headers.insert("X-RateLimit-Limit".to_string(), result.limit.to_string());
-            headers.insert("X-RateLimit-Remaining".to_string(), result.remaining.to_string());
-            headers.insert("X-RateLimit-Reset".to_string(), result.reset_time.timestamp().to_string());
+            headers.insert(
+                "X-RateLimit-Remaining".to_string(),
+                result.remaining.to_string(),
+            );
+            headers.insert(
+                "X-RateLimit-Reset".to_string(),
+                result.reset_time.timestamp().to_string(),
+            );
         }
-        
+
         headers
     }
 
@@ -364,10 +406,7 @@ impl Default for RateLimitMiddlewareConfig {
                 "/metrics".to_string(),
                 "/status".to_string(),
             ],
-            bypass_ips: vec![
-                "127.0.0.1".to_string(),
-                "::1".to_string(),
-            ],
+            bypass_ips: vec!["127.0.0.1".to_string(), "::1".to_string()],
         }
     }
 }
@@ -392,7 +431,7 @@ mod tests {
     fn test_generate_request_id() {
         let id1 = generate_request_id();
         let id2 = generate_request_id();
-        
+
         assert_ne!(id1, id2);
         assert!(id1.starts_with("req-"));
         assert!(id2.starts_with("req-"));
@@ -403,10 +442,10 @@ mod tests {
         let mut headers = HashMap::new();
         headers.insert("X-User-ID".to_string(), "user123".to_string());
         headers.insert("X-API-Key".to_string(), "key456".to_string());
-        
+
         let mut query_params = HashMap::new();
         query_params.insert("param1".to_string(), "value1".to_string());
-        
+
         let request = HttpRequest {
             method: "GET".to_string(),
             path: "/api/test".to_string(),
@@ -416,12 +455,18 @@ mod tests {
             remote_addr: "192.168.1.1".to_string(),
             timestamp: Utc::now(),
         };
-        
+
         assert_eq!(request.method, "GET");
         assert_eq!(request.path, "/api/test");
         assert_eq!(request.remote_addr, "192.168.1.1");
-        assert_eq!(request.headers.get("X-User-ID"), Some(&"user123".to_string()));
-        assert_eq!(request.headers.get("X-API-Key"), Some(&"key456".to_string()));
+        assert_eq!(
+            request.headers.get("X-User-ID"),
+            Some(&"user123".to_string())
+        );
+        assert_eq!(
+            request.headers.get("X-API-Key"),
+            Some(&"key456".to_string())
+        );
     }
 
     #[test]
@@ -429,7 +474,7 @@ mod tests {
         let config = RateLimitMiddlewareConfig::default();
         let middleware = RateLimitMiddleware::new(
             crate::rate_limit::RateLimitManager::new(crate::rate_limit::RateLimitConfig::default()),
-            config
+            config,
         );
 
         // Test bypass path
@@ -442,7 +487,7 @@ mod tests {
             remote_addr: "192.168.1.1".to_string(),
             timestamp: Utc::now(),
         };
-        
+
         assert!(middleware.should_bypass(&request));
 
         // Test bypass IP
@@ -455,7 +500,7 @@ mod tests {
             remote_addr: "127.0.0.1".to_string(),
             timestamp: Utc::now(),
         };
-        
+
         assert!(middleware.should_bypass(&request));
 
         // Test non-bypass
@@ -468,7 +513,7 @@ mod tests {
             remote_addr: "192.168.1.100".to_string(),
             timestamp: Utc::now(),
         };
-        
+
         assert!(!middleware.should_bypass(&request));
     }
 
@@ -477,7 +522,7 @@ mod tests {
         let config = RateLimitMiddlewareConfig::default();
         let middleware = RateLimitMiddleware::new(
             crate::rate_limit::RateLimitManager::new(crate::rate_limit::RateLimitConfig::default()),
-            config
+            config,
         );
 
         let mut headers = HashMap::new();
@@ -507,30 +552,38 @@ mod tests {
         assert_eq!(context.token, Some("Bearer token789".to_string()));
         assert_eq!(context.path, "/api/test");
         assert_eq!(context.method, "POST");
-        
+
         // Check metadata
         assert!(context.metadata.contains_key("param1"));
-        assert_eq!(context.metadata.get("param1").unwrap(), &serde_json::Value::String("value1".to_string()));
+        assert_eq!(
+            context.metadata.get("param1").unwrap(),
+            &serde_json::Value::String("value1".to_string())
+        );
         assert!(context.metadata.contains_key("X-Custom"));
-        assert_eq!(context.metadata.get("X-Custom").unwrap(), &serde_json::Value::String("custom_value".to_string()));
+        assert_eq!(
+            context.metadata.get("X-Custom").unwrap(),
+            &serde_json::Value::String("custom_value".to_string())
+        );
     }
 
     #[test]
     fn test_web_rate_limit_middleware() {
-        let manager = crate::rate_limit::RateLimitManager::new(crate::rate_limit::RateLimitConfig::default());
+        let manager =
+            crate::rate_limit::RateLimitManager::new(crate::rate_limit::RateLimitConfig::default());
         let config = RateLimitMiddlewareConfig::default();
         let middleware = WebRateLimitMiddleware::new(manager, config);
-        
+
         // Test that inner middleware is accessible
         assert_eq!(middleware.inner().name(), "rate_limit");
     }
 
     #[test]
     fn test_http_rate_limit_middleware() {
-        let manager = crate::rate_limit::RateLimitManager::new(crate::rate_limit::RateLimitConfig::default());
+        let manager =
+            crate::rate_limit::RateLimitManager::new(crate::rate_limit::RateLimitConfig::default());
         let config = RateLimitMiddlewareConfig::default();
         let middleware = HttpRateLimitMiddleware::new(manager, config);
-        
+
         // Test that inner middleware is accessible
         assert_eq!(middleware.inner().name(), "rate_limit");
     }

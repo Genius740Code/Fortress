@@ -3,19 +3,19 @@
 //! This module provides the main policy evaluation engine that evaluates
 //! HCL policies against request contexts to determine access permissions.
 
+use chrono::{Datelike, Duration, Timelike};
+use regex::Regex;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use chrono::{Duration, Datelike, Timelike};
-use regex::Regex;
-use serde::{Serialize, Deserialize};
 
+use super::builtin_functions::register_builtin_functions;
 use crate::error::{FortressError, Result};
 use crate::policy_hcl::types::{
-    ParsedPolicy, PolicyContext, PolicyResult, PolicyEvaluationResult,
-    ConstraintOperator, ParameterType, PolicyConstraint, RoleStore, PolicyFunction,
+    ConstraintOperator, ParameterType, ParsedPolicy, PolicyConstraint, PolicyContext,
+    PolicyEvaluationResult, PolicyFunction, PolicyResult, RoleStore,
 };
-use super::builtin_functions::register_builtin_functions;
 
 /// HCL Policy Engine
 pub struct HclPolicyEngine {
@@ -43,7 +43,7 @@ impl HclPolicyEngine {
     /// Create a new HCL policy engine
     pub fn new(role_store: Arc<dyn RoleStore>) -> Self {
         let functions = register_builtin_functions();
-        
+
         Self {
             policies: Arc::new(RwLock::new(HashMap::new())),
             functions: Arc::new(RwLock::new(functions)),
@@ -81,15 +81,17 @@ impl HclPolicyEngine {
     /// Evaluate policies for a request
     pub async fn evaluate_policies(&self, context: &PolicyContext) -> Result<PolicyResult> {
         let start_time = std::time::Instant::now();
-        
+
         let policies = self.policies.read().await;
         let functions = self.functions.read().await;
-        
+
         // Find matching policies
         let matching_policies = self.find_matching_policies(&policies, &context.path);
-        
+
         if matching_policies.is_empty() {
-            return Ok(PolicyResult::denied("No matching policies found".to_string()));
+            return Ok(PolicyResult::denied(
+                "No matching policies found".to_string(),
+            ));
         }
 
         let mut allowed_capabilities = Vec::new();
@@ -101,8 +103,11 @@ impl HclPolicyEngine {
         // Evaluate each matching policy
         for policy in &matching_policies {
             let evaluation_start = std::time::Instant::now();
-            
-            match self.evaluate_single_policy(policy, context, &functions).await {
+
+            match self
+                .evaluate_single_policy(policy, context, &functions)
+                .await
+            {
                 Ok(result) => {
                     if result.allowed {
                         // Add capabilities from this policy
@@ -111,12 +116,16 @@ impl HclPolicyEngine {
                                 allowed_capabilities.push(capability.clone());
                             }
                         }
-                        
+
                         // Update TTL (use the minimum)
-                        if policy.min_ttl.is_some() && Duration::seconds(policy.min_ttl.unwrap()) < final_ttl {
+                        if policy.min_ttl.is_some()
+                            && Duration::seconds(policy.min_ttl.unwrap()) < final_ttl
+                        {
                             final_ttl = Duration::seconds(policy.min_ttl.unwrap());
                         }
-                        if policy.max_ttl.is_some() && Duration::seconds(policy.max_ttl.unwrap()) > final_ttl {
+                        if policy.max_ttl.is_some()
+                            && Duration::seconds(policy.max_ttl.unwrap()) > final_ttl
+                        {
                             final_ttl = Duration::seconds(policy.max_ttl.unwrap());
                         }
                     } else {
@@ -125,9 +134,9 @@ impl HclPolicyEngine {
                             denial_reasons.push(format!("{}: {}", policy.name, reason));
                         }
                     }
-                    
+
                     applied_policies.push(policy.name.clone());
-                    
+
                     // Update policy usage stats
                     let mut stats = self.stats.write().await;
                     *stats.policy_usage.entry(policy.name.clone()).or_insert(0) += 1;
@@ -137,14 +146,15 @@ impl HclPolicyEngine {
                     denial_reasons.push(format!("{}: {}", policy.name, e));
                 }
             }
-            
+
             // Update evaluation time stats
             let evaluation_time = evaluation_start.elapsed().as_millis() as f64;
             let mut stats = self.stats.write().await;
             stats.total_evaluations += 1;
-            stats.avg_evaluation_time_ms = 
-                (stats.avg_evaluation_time_ms * (stats.total_evaluations - 1) as f64 + evaluation_time) / 
-                stats.total_evaluations as f64;
+            stats.avg_evaluation_time_ms = (stats.avg_evaluation_time_ms
+                * (stats.total_evaluations - 1) as f64
+                + evaluation_time)
+                / stats.total_evaluations as f64;
         }
 
         // Update final stats
@@ -162,7 +172,10 @@ impl HclPolicyEngine {
         if overall_allowed {
             let mut result = PolicyResult::allowed(allowed_capabilities, final_ttl);
             result.applied_policies = applied_policies;
-            result.add_metadata("evaluation_time_ms".to_string(), evaluation_time.to_string());
+            result.add_metadata(
+                "evaluation_time_ms".to_string(),
+                evaluation_time.to_string(),
+            );
             Ok(result)
         } else {
             let reason = if denial_reasons.is_empty() {
@@ -170,10 +183,13 @@ impl HclPolicyEngine {
             } else {
                 denial_reasons.join("; ")
             };
-            
+
             let mut result = PolicyResult::denied(reason);
             result.applied_policies = applied_policies;
-            result.add_metadata("evaluation_time_ms".to_string(), evaluation_time.to_string());
+            result.add_metadata(
+                "evaluation_time_ms".to_string(),
+                evaluation_time.to_string(),
+            );
             Ok(result)
         }
     }
@@ -227,7 +243,10 @@ impl HclPolicyEngine {
                 if let Some(param_str) = param_value.as_str() {
                     if !allowed_values.contains(&param_str.to_string()) {
                         return Ok(PolicyEvaluationResult::denied(
-                            format!("Parameter '{}' value '{}' is not allowed", param_name, param_str),
+                            format!(
+                                "Parameter '{}' value '{}' is not allowed",
+                                param_name, param_str
+                            ),
                             policy.name.clone(),
                         ));
                     }
@@ -237,7 +256,10 @@ impl HclPolicyEngine {
 
         // Evaluate constraints
         for constraint in &policy.constraints {
-            if !self.evaluate_constraint(constraint, context, functions).await? {
+            if !self
+                .evaluate_constraint(constraint, context, functions)
+                .await?
+            {
                 return Ok(PolicyEvaluationResult::denied(
                     format!("Constraint failed: {}", constraint.field),
                     policy.name.clone(),
@@ -248,7 +270,7 @@ impl HclPolicyEngine {
         let evaluation_time = start_time.elapsed().as_millis() as u64;
         let mut result = PolicyEvaluationResult::allowed(allowed_capabilities, policy.name.clone());
         result.evaluation_time_ms = evaluation_time;
-        
+
         Ok(result)
     }
 
@@ -257,16 +279,27 @@ impl HclPolicyEngine {
         // Simple capability check - could be enhanced
         match capability {
             "read" => context.operation == "read" || context.operation == "list",
-            "write" => context.operation == "write" || context.operation == "create" || context.operation == "update",
+            "write" => {
+                context.operation == "write"
+                    || context.operation == "create"
+                    || context.operation == "update"
+            }
             "delete" => context.operation == "delete",
             "list" => context.operation == "list",
-            "sudo" => context.token.token.has_role(&crate::token::TokenRole::Admin),
+            "sudo" => context
+                .token
+                .token
+                .has_role(&crate::token::TokenRole::Admin),
             _ => false,
         }
     }
 
     /// Validate parameter type
-    fn validate_parameter_type(&self, value: &serde_json::Value, param_type: &ParameterType) -> bool {
+    fn validate_parameter_type(
+        &self,
+        value: &serde_json::Value,
+        param_type: &ParameterType,
+    ) -> bool {
         match param_type {
             ParameterType::String => value.is_string(),
             ParameterType::Number => value.is_number(),
@@ -286,44 +319,54 @@ impl HclPolicyEngine {
         functions: &HashMap<String, Box<dyn PolicyFunction>>,
     ) -> Result<bool> {
         // Get the field value
-        let field_value = self.extract_field_value(&constraint.field, context, functions).await?;
-        
+        let field_value = self
+            .extract_field_value(&constraint.field, context, functions)
+            .await?;
+
         // Evaluate the constraint
         match constraint.operator {
             ConstraintOperator::Equals => self.evaluate_equals(&field_value, &constraint.value),
             ConstraintOperator::NotEquals => {
                 let result = self.evaluate_equals(&field_value, &constraint.value)?;
                 Ok(!result)
-            },
+            }
             ConstraintOperator::Contains => self.evaluate_contains(&field_value, &constraint.value),
             ConstraintOperator::NotContains => {
                 let result = self.evaluate_contains(&field_value, &constraint.value)?;
                 Ok(!result)
-            },
-            ConstraintOperator::GreaterThan => self.evaluate_greater_than(&field_value, &constraint.value),
-            ConstraintOperator::LessThan => self.evaluate_less_than(&field_value, &constraint.value),
+            }
+            ConstraintOperator::GreaterThan => {
+                self.evaluate_greater_than(&field_value, &constraint.value)
+            }
+            ConstraintOperator::LessThan => {
+                self.evaluate_less_than(&field_value, &constraint.value)
+            }
             ConstraintOperator::GreaterThanOrEqual => {
                 let equals = self.evaluate_equals(&field_value, &constraint.value)?;
                 let greater = self.evaluate_greater_than(&field_value, &constraint.value)?;
                 Ok(equals || greater)
-            },
+            }
             ConstraintOperator::LessThanOrEqual => {
                 let equals = self.evaluate_equals(&field_value, &constraint.value)?;
                 let less = self.evaluate_less_than(&field_value, &constraint.value)?;
                 Ok(equals || less)
-            },
+            }
             ConstraintOperator::In => self.evaluate_in(&field_value, &constraint.value),
             ConstraintOperator::NotIn => {
                 let result = self.evaluate_in(&field_value, &constraint.value)?;
                 Ok(!result)
-            },
+            }
             ConstraintOperator::Matches => self.evaluate_matches(&field_value, &constraint.value),
             ConstraintOperator::NotMatches => {
                 let result = self.evaluate_matches(&field_value, &constraint.value)?;
                 Ok(!result)
-            },
-            ConstraintOperator::StartsWith => self.evaluate_starts_with(&field_value, &constraint.value),
-            ConstraintOperator::EndsWith => self.evaluate_ends_with(&field_value, &constraint.value),
+            }
+            ConstraintOperator::StartsWith => {
+                self.evaluate_starts_with(&field_value, &constraint.value)
+            }
+            ConstraintOperator::EndsWith => {
+                self.evaluate_ends_with(&field_value, &constraint.value)
+            }
         }
     }
 
@@ -338,18 +381,22 @@ impl HclPolicyEngine {
         if field.contains('(') && field.ends_with(')') {
             let func_name = field.split('(').next().unwrap();
             let args_str = field.split('(').nth(1).unwrap().trim_end_matches(')');
-            
+
             let mut args = Vec::new();
             if !args_str.is_empty() {
                 // Simple argument parsing - could be enhanced
                 if args_str.starts_with('"') && args_str.ends_with('"') {
-                    args.push(serde_json::Value::String(args_str[1..args_str.len()-1].to_string()));
+                    args.push(serde_json::Value::String(
+                        args_str[1..args_str.len() - 1].to_string(),
+                    ));
                 } else {
                     // Try to parse as number or boolean
                     if let Ok(num) = args_str.parse::<i64>() {
                         args.push(serde_json::Value::Number(num.into()));
                     } else if let Ok(num) = args_str.parse::<f64>() {
-                        args.push(serde_json::Value::Number(serde_json::Number::from_f64(num).unwrap()));
+                        args.push(serde_json::Value::Number(
+                            serde_json::Number::from_f64(num).unwrap(),
+                        ));
                     } else if args_str == "true" {
                         args.push(serde_json::Value::Bool(true));
                     } else if args_str == "false" {
@@ -359,11 +406,14 @@ impl HclPolicyEngine {
                     }
                 }
             }
-            
+
             if let Some(func) = functions.get(func_name) {
                 return func.evaluate(&args, context);
             } else {
-                return Err(FortressError::policy(format!("Unknown function: {}", func_name)));
+                return Err(FortressError::policy(format!(
+                    "Unknown function: {}",
+                    func_name
+                )));
             }
         }
 
@@ -373,17 +423,28 @@ impl HclPolicyEngine {
             "path" => Ok(serde_json::Value::String(context.path.clone())),
             "operation" => Ok(serde_json::Value::String(context.operation.clone())),
             "ip" => Ok(serde_json::Value::String(
-                context.ip_address.clone().unwrap_or_else(|| "unknown".to_string())
+                context
+                    .ip_address
+                    .clone()
+                    .unwrap_or_else(|| "unknown".to_string()),
             )),
             "user_agent" => Ok(serde_json::Value::String(
-                context.user_agent.clone().unwrap_or_else(|| "unknown".to_string())
+                context
+                    .user_agent
+                    .clone()
+                    .unwrap_or_else(|| "unknown".to_string()),
             )),
             "method" => Ok(serde_json::Value::String(
-                context.method.clone().unwrap_or_else(|| "unknown".to_string())
+                context
+                    .method
+                    .clone()
+                    .unwrap_or_else(|| "unknown".to_string()),
             )),
             "time" => Ok(serde_json::Value::Number(context.time.timestamp().into())),
             "hour" => Ok(serde_json::Value::Number(context.time.hour().into())),
-            "day" => Ok(serde_json::Value::Number(context.time.weekday().num_days_from_sunday().into())),
+            "day" => Ok(serde_json::Value::Number(
+                context.time.weekday().num_days_from_sunday().into(),
+            )),
             "month" => Ok(serde_json::Value::Number(context.time.month().into())),
             "year" => Ok(serde_json::Value::Number(context.time.year().into())),
             _ => {
@@ -407,7 +468,11 @@ impl HclPolicyEngine {
     }
 
     /// Evaluate contains constraint
-    fn evaluate_contains(&self, left: &serde_json::Value, right: &serde_json::Value) -> Result<bool> {
+    fn evaluate_contains(
+        &self,
+        left: &serde_json::Value,
+        right: &serde_json::Value,
+    ) -> Result<bool> {
         if let (Some(left_str), Some(right_str)) = (left.as_str(), right.as_str()) {
             Ok(left_str.contains(right_str))
         } else {
@@ -416,7 +481,11 @@ impl HclPolicyEngine {
     }
 
     /// Evaluate greater than constraint
-    fn evaluate_greater_than(&self, left: &serde_json::Value, right: &serde_json::Value) -> Result<bool> {
+    fn evaluate_greater_than(
+        &self,
+        left: &serde_json::Value,
+        right: &serde_json::Value,
+    ) -> Result<bool> {
         if let (Some(left_num), Some(right_num)) = (left.as_f64(), right.as_f64()) {
             Ok(left_num > right_num)
         } else {
@@ -425,7 +494,11 @@ impl HclPolicyEngine {
     }
 
     /// Evaluate less than constraint
-    fn evaluate_less_than(&self, left: &serde_json::Value, right: &serde_json::Value) -> Result<bool> {
+    fn evaluate_less_than(
+        &self,
+        left: &serde_json::Value,
+        right: &serde_json::Value,
+    ) -> Result<bool> {
         if let (Some(left_num), Some(right_num)) = (left.as_f64(), right.as_f64()) {
             Ok(left_num < right_num)
         } else {
@@ -443,11 +516,14 @@ impl HclPolicyEngine {
     }
 
     /// Evaluate matches constraint
-    fn evaluate_matches(&self, left: &serde_json::Value, right: &serde_json::Value) -> Result<bool> {
+    fn evaluate_matches(
+        &self,
+        left: &serde_json::Value,
+        right: &serde_json::Value,
+    ) -> Result<bool> {
         if let (Some(left_str), Some(right_str)) = (left.as_str(), right.as_str()) {
-            let regex = Regex::new(right_str).map_err(|e| {
-                FortressError::policy(format!("Invalid regex: {}", e))
-            })?;
+            let regex = Regex::new(right_str)
+                .map_err(|e| FortressError::policy(format!("Invalid regex: {}", e)))?;
             Ok(regex.is_match(left_str))
         } else {
             Ok(false)
@@ -455,7 +531,11 @@ impl HclPolicyEngine {
     }
 
     /// Evaluate starts with constraint
-    fn evaluate_starts_with(&self, left: &serde_json::Value, right: &serde_json::Value) -> Result<bool> {
+    fn evaluate_starts_with(
+        &self,
+        left: &serde_json::Value,
+        right: &serde_json::Value,
+    ) -> Result<bool> {
         if let (Some(left_str), Some(right_str)) = (left.as_str(), right.as_str()) {
             Ok(left_str.starts_with(right_str))
         } else {
@@ -464,7 +544,11 @@ impl HclPolicyEngine {
     }
 
     /// Evaluate ends with constraint
-    fn evaluate_ends_with(&self, left: &serde_json::Value, right: &serde_json::Value) -> Result<bool> {
+    fn evaluate_ends_with(
+        &self,
+        left: &serde_json::Value,
+        right: &serde_json::Value,
+    ) -> Result<bool> {
         if let (Some(left_str), Some(right_str)) = (left.as_str(), right.as_str()) {
             Ok(left_str.ends_with(right_str))
         } else {
@@ -473,7 +557,11 @@ impl HclPolicyEngine {
     }
 
     /// Find policies that match a path
-    fn find_matching_policies(&self, policies: &HashMap<String, ParsedPolicy>, path: &str) -> Vec<ParsedPolicy> {
+    fn find_matching_policies(
+        &self,
+        policies: &HashMap<String, ParsedPolicy>,
+        path: &str,
+    ) -> Vec<ParsedPolicy> {
         policies
             .values()
             .filter(|policy| policy.matches_path(path))
@@ -492,7 +580,7 @@ impl HclPolicyEngine {
     pub async fn get_statistics(&self) -> PolicyEngineStatistics {
         let stats = self.stats.read().await;
         let policies = self.policies.read().await;
-        
+
         PolicyEngineStatistics {
             total_policies: policies.len() as u64,
             total_evaluations: stats.total_evaluations,
@@ -531,7 +619,9 @@ pub struct PolicyEngineStatistics {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::token::{TokenType, TokenRole, Token, TokenInfo, TokenUsageStats, TokenCreationContext};
+    use crate::token::{
+        Token, TokenCreationContext, TokenInfo, TokenRole, TokenType, TokenUsageStats,
+    };
 
     fn create_test_token() -> TokenInfo {
         let token = Token::new(
@@ -556,8 +646,14 @@ mod tests {
         let mut context = PolicyContext::new(token, "secret/data".to_string(), "read".to_string());
         context.ip_address = Some("192.168.1.1".to_string());
         context.user_agent = Some("Mozilla/5.0".to_string());
-        context.add_parameter("environment".to_string(), serde_json::Value::String("production".to_string()));
-        context.add_parameter("data_type".to_string(), serde_json::Value::String("sensitive".to_string()));
+        context.add_parameter(
+            "environment".to_string(),
+            serde_json::Value::String("production".to_string()),
+        );
+        context.add_parameter(
+            "data_type".to_string(),
+            serde_json::Value::String("sensitive".to_string()),
+        );
         context
     }
 
@@ -565,7 +661,7 @@ mod tests {
     async fn test_policy_engine_creation() {
         let role_store = Arc::new(crate::policy_hcl::types::InMemoryRoleStore::new());
         let engine = HclPolicyEngine::new(role_store);
-        
+
         let stats = engine.get_statistics().await;
         assert_eq!(stats.total_policies, 0);
         assert_eq!(stats.total_evaluations, 0);
@@ -575,16 +671,16 @@ mod tests {
     async fn test_load_and_evaluate_policy() {
         let role_store = Arc::new(crate::policy_hcl::types::InMemoryRoleStore::new());
         let engine = HclPolicyEngine::new(role_store);
-        
+
         let mut policy = ParsedPolicy::new("test-policy".to_string(), "secret/*".to_string());
         policy.add_capability("read".to_string());
         policy.add_capability("list".to_string());
-        
+
         engine.load_policy(policy.clone()).await.unwrap();
-        
+
         let context = create_test_context();
         let result = engine.evaluate_policies(&context).await.unwrap();
-        
+
         assert!(result.allowed);
         assert!(result.allowed_capabilities.contains(&"read".to_string()));
         assert!(result.allowed_capabilities.contains(&"list".to_string()));
@@ -594,10 +690,10 @@ mod tests {
     async fn test_policy_constraints() {
         let role_store = Arc::new(crate::policy_hcl::types::InMemoryRoleStore::new());
         let engine = HclPolicyEngine::new(role_store);
-        
+
         let mut policy = ParsedPolicy::new("test-policy".to_string(), "secret/*".to_string());
         policy.add_capability("read".to_string());
-        
+
         // Add IP constraint
         let constraint = crate::policy_hcl::types::PolicyConstraint {
             field: "ip".to_string(),
@@ -606,18 +702,18 @@ mod tests {
             description: None,
         };
         policy.add_constraint(constraint);
-        
+
         engine.load_policy(policy).await.unwrap();
-        
+
         let context = create_test_context();
         let result = engine.evaluate_policies(&context).await.unwrap();
-        
+
         assert!(result.allowed);
-        
+
         // Test with wrong IP
         let mut context_wrong_ip = create_test_context();
         context_wrong_ip.ip_address = Some("10.0.0.1".to_string());
-        
+
         let result = engine.evaluate_policies(&context_wrong_ip).await.unwrap();
         assert!(!result.allowed);
     }
@@ -626,31 +722,43 @@ mod tests {
     async fn test_policy_with_parameters() {
         let role_store = Arc::new(crate::policy_hcl::types::InMemoryRoleStore::new());
         let engine = HclPolicyEngine::new(role_store);
-        
+
         let mut policy = ParsedPolicy::new("test-policy".to_string(), "secret/*".to_string());
         policy.add_capability("read".to_string());
         policy.add_required_parameter("environment".to_string(), ParameterType::String);
-        policy.add_allowed_parameter("environment".to_string(), vec!["production".to_string(), "staging".to_string()]);
-        
+        policy.add_allowed_parameter(
+            "environment".to_string(),
+            vec!["production".to_string(), "staging".to_string()],
+        );
+
         engine.load_policy(policy).await.unwrap();
-        
+
         // Test with valid parameters
         let context = create_test_context();
         let result = engine.evaluate_policies(&context).await.unwrap();
         assert!(result.allowed);
-        
+
         // Test with missing required parameter
         let mut context_missing_param = create_test_context();
         context_missing_param.parameters.remove("environment");
-        
-        let result = engine.evaluate_policies(&context_missing_param).await.unwrap();
+
+        let result = engine
+            .evaluate_policies(&context_missing_param)
+            .await
+            .unwrap();
         assert!(!result.allowed);
-        
+
         // Test with disallowed parameter value
         let mut context_wrong_param = create_test_context();
-        context_wrong_param.add_parameter("environment".to_string(), serde_json::Value::String("development".to_string()));
-        
-        let result = engine.evaluate_policies(&context_wrong_param).await.unwrap();
+        context_wrong_param.add_parameter(
+            "environment".to_string(),
+            serde_json::Value::String("development".to_string()),
+        );
+
+        let result = engine
+            .evaluate_policies(&context_wrong_param)
+            .await
+            .unwrap();
         assert!(!result.allowed);
     }
 
@@ -658,24 +766,24 @@ mod tests {
     async fn test_multiple_policies() {
         let role_store = Arc::new(crate::policy_hcl::types::InMemoryRoleStore::new());
         let engine = HclPolicyEngine::new(role_store);
-        
+
         // Add first policy
         let mut policy1 = ParsedPolicy::new("policy1".to_string(), "secret/*".to_string());
         policy1.add_capability("read".to_string());
         policy1.min_ttl = Some(300);
-        
+
         engine.load_policy(policy1).await.unwrap();
-        
+
         // Add second policy
         let mut policy2 = ParsedPolicy::new("policy2".to_string(), "secret/*".to_string());
         policy2.add_capability("list".to_string());
         policy2.max_ttl = Some(7200);
-        
+
         engine.load_policy(policy2).await.unwrap();
-        
+
         let context = create_test_context();
         let result = engine.evaluate_policies(&context).await.unwrap();
-        
+
         assert!(result.allowed);
         assert!(result.allowed_capabilities.contains(&"read".to_string()));
         assert!(result.allowed_capabilities.contains(&"list".to_string()));
@@ -686,19 +794,19 @@ mod tests {
     async fn test_policy_statistics() {
         let role_store = Arc::new(crate::policy_hcl::types::InMemoryRoleStore::new());
         let engine = HclPolicyEngine::new(role_store);
-        
+
         let mut policy = ParsedPolicy::new("test-policy".to_string(), "secret/*".to_string());
         policy.add_capability("read".to_string());
-        
+
         engine.load_policy(policy).await.unwrap();
-        
+
         let context = create_test_context();
-        
+
         // Evaluate multiple times
         for _ in 0..5 {
             engine.evaluate_policies(&context).await.unwrap();
         }
-        
+
         let stats = engine.get_statistics().await;
         assert_eq!(stats.total_policies, 1);
         assert_eq!(stats.total_evaluations, 5);
@@ -712,27 +820,40 @@ mod tests {
     async fn test_custom_function_registration() {
         let role_store = Arc::new(crate::policy_hcl::types::InMemoryRoleStore::new());
         let engine = HclPolicyEngine::new(role_store);
-        
+
         // Register a custom function
         struct CustomFunction;
         impl PolicyFunction for CustomFunction {
-            fn evaluate(&self, args: &[serde_json::Value], _context: &PolicyContext) -> Result<serde_json::Value> {
+            fn evaluate(
+                &self,
+                args: &[serde_json::Value],
+                _context: &PolicyContext,
+            ) -> Result<serde_json::Value> {
                 if args.len() != 1 {
                     return Err(FortressError::policy("custom() takes one argument"));
                 }
                 Ok(args[0].clone())
             }
-            
-            fn name(&self) -> &str { "custom" }
-            fn description(&self) -> &str { "Custom test function" }
-            fn parameter_types(&self) -> Vec<ParameterType> { vec![ParameterType::String] }
+
+            fn name(&self) -> &str {
+                "custom"
+            }
+            fn description(&self) -> &str {
+                "Custom test function"
+            }
+            fn parameter_types(&self) -> Vec<ParameterType> {
+                vec![ParameterType::String]
+            }
         }
-        
-        engine.register_function(Box::new(CustomFunction)).await.unwrap();
-        
+
+        engine
+            .register_function(Box::new(CustomFunction))
+            .await
+            .unwrap();
+
         let mut policy = ParsedPolicy::new("test-policy".to_string(), "secret/*".to_string());
         policy.add_capability("read".to_string());
-        
+
         // Add constraint using custom function
         let constraint = PolicyConstraint {
             field: "custom(\"test\")".to_string(),
@@ -741,9 +862,9 @@ mod tests {
             description: None,
         };
         policy.add_constraint(constraint);
-        
+
         engine.load_policy(policy).await.unwrap();
-        
+
         let context = create_test_context();
         let result = engine.evaluate_policies(&context).await.unwrap();
         assert!(result.allowed);
@@ -753,27 +874,27 @@ mod tests {
     fn test_constraint_evaluation() {
         let role_store = Arc::new(crate::policy_hcl::types::InMemoryRoleStore::new());
         let engine = HclPolicyEngine::new(role_store);
-        
+
         // Test equals
         let left = serde_json::Value::String("test".to_string());
         let right = serde_json::Value::String("test".to_string());
         assert!(engine.evaluate_equals(&left, &right).unwrap());
-        
+
         // Test not equals
         let left = serde_json::Value::String("test".to_string());
         let right = serde_json::Value::String("other".to_string());
         assert!(!engine.evaluate_equals(&left, &right).unwrap());
-        
+
         // Test contains
         let left = serde_json::Value::String("hello world".to_string());
         let right = serde_json::Value::String("world".to_string());
         assert!(engine.evaluate_contains(&left, &right).unwrap());
-        
+
         // Test greater than
         let left = serde_json::Value::Number(10.into());
         let right = serde_json::Value::Number(5.into());
         assert!(engine.evaluate_greater_than(&left, &right).unwrap());
-        
+
         // Test in
         let left = serde_json::Value::String("test".to_string());
         let right = serde_json::Value::Array(vec![
@@ -781,17 +902,17 @@ mod tests {
             serde_json::Value::String("other".to_string()),
         ]);
         assert!(engine.evaluate_in(&left, &right).unwrap());
-        
+
         // Test matches
         let left = serde_json::Value::String("hello world".to_string());
         let right = serde_json::Value::String("hello.*".to_string());
         assert!(engine.evaluate_matches(&left, &right).unwrap());
-        
+
         // Test starts with
         let left = serde_json::Value::String("hello world".to_string());
         let right = serde_json::Value::String("hello".to_string());
         assert!(engine.evaluate_starts_with(&left, &right).unwrap());
-        
+
         // Test ends with
         let left = serde_json::Value::String("hello world".to_string());
         let right = serde_json::Value::String("world".to_string());
@@ -802,27 +923,27 @@ mod tests {
     fn test_parameter_validation() {
         let role_store = Arc::new(crate::policy_hcl::types::InMemoryRoleStore::new());
         let engine = HclPolicyEngine::new(role_store);
-        
+
         // Test string validation
         let value = serde_json::Value::String("test".to_string());
         assert!(engine.validate_parameter_type(&value, &ParameterType::String));
         assert!(!engine.validate_parameter_type(&value, &ParameterType::Number));
-        
+
         // Test number validation
         let value = serde_json::Value::Number(42.into());
         assert!(engine.validate_parameter_type(&value, &ParameterType::Number));
         assert!(!engine.validate_parameter_type(&value, &ParameterType::String));
-        
+
         // Test boolean validation
         let value = serde_json::Value::Bool(true);
         assert!(engine.validate_parameter_type(&value, &ParameterType::Boolean));
         assert!(!engine.validate_parameter_type(&value, &ParameterType::String));
-        
+
         // Test array validation
         let value = serde_json::Value::Array(vec![serde_json::Value::String("test".to_string())]);
         assert!(engine.validate_parameter_type(&value, &ParameterType::Array));
         assert!(!engine.validate_parameter_type(&value, &ParameterType::String));
-        
+
         // Test object validation
         let value = serde_json::Value::Object(serde_json::Map::new());
         assert!(engine.validate_parameter_type(&value, &ParameterType::Object));
@@ -833,22 +954,31 @@ mod tests {
     async fn test_path_matching() {
         let role_store = Arc::new(crate::policy_hcl::types::InMemoryRoleStore::new());
         let engine = HclPolicyEngine::new(role_store);
-        
+
         let _policies: std::collections::HashMap<String, ParsedPolicy> = HashMap::new();
-        
+
         // Test exact match
         let policy = ParsedPolicy::new("exact".to_string(), "secret/data".to_string());
-        let matching = engine.find_matching_policies(&HashMap::from([("exact".to_string(), policy)]), "secret/data");
+        let matching = engine.find_matching_policies(
+            &HashMap::from([("exact".to_string(), policy)]),
+            "secret/data",
+        );
         assert_eq!(matching.len(), 1);
-        
+
         // Test wildcard match
         let policy = ParsedPolicy::new("wildcard".to_string(), "secret/*".to_string());
-        let matching = engine.find_matching_policies(&HashMap::from([("wildcard".to_string(), policy)]), "secret/data");
+        let matching = engine.find_matching_policies(
+            &HashMap::from([("wildcard".to_string(), policy)]),
+            "secret/data",
+        );
         assert_eq!(matching.len(), 1);
-        
+
         // Test no match
         let policy = ParsedPolicy::new("nomatch".to_string(), "secret/*".to_string());
-        let matching = engine.find_matching_policies(&HashMap::from([("nomatch".to_string(), policy)]), "public/data");
+        let matching = engine.find_matching_policies(
+            &HashMap::from([("nomatch".to_string(), policy)]),
+            "public/data",
+        );
         assert_eq!(matching.len(), 0);
     }
 }

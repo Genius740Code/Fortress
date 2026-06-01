@@ -11,14 +11,14 @@
 //! - **Aggregate Proofs**: Combine multiple proofs for efficient verification
 //! - **Selective Disclosure**: Choose what information to reveal in proofs
 
-use crate::error::{FortressError, Result, AuditErrorCode};
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use chrono::{DateTime, Utc};
-use sha2::{Sha256, Digest};
+use crate::error::{AuditErrorCode, FortressError, Result};
 use base64::Engine as _;
-use rand::rngs::OsRng;
+use chrono::{DateTime, Utc};
 use merlin::Transcript;
+use rand::rngs::OsRng;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 
 /// Zero-knowledge proof for audit verification
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -188,7 +188,7 @@ impl ZkProofGenerator {
     pub fn new(parameters: ZkProofParameters) -> Self {
         Self {
             parameters,
-            rng: OsRng{},
+            rng: OsRng {},
         }
     }
 
@@ -203,10 +203,10 @@ impl ZkProofGenerator {
         let (commitment, _randomness) = self.commit_to_value(value)?;
 
         // Generate mock range proof (in a real implementation, this would use actual Bulletproofs)
-        let proof_data = format!("range_proof_{}_{}_{}", 
-            value, 
-            params.min_value, 
-            params.max_value);
+        let proof_data = format!(
+            "range_proof_{}_{}_{}",
+            value, params.min_value, params.max_value
+        );
 
         Ok(ZkAuditProof {
             proof_type: ZkProofType::RangeProof,
@@ -236,9 +236,7 @@ impl ZkProofGenerator {
 
         // Generate membership proof
         let proof = {
-            let mock_proof = format!("membership_proof_{}_{}", 
-                event_hash, 
-                params.event_type);
+            let mock_proof = format!("membership_proof_{}_{}", event_hash, params.event_type);
             mock_proof
         };
 
@@ -280,7 +278,10 @@ impl ZkProofGenerator {
         let proof = {
             let disclosed_fields_str = params.disclosed_fields.join(",");
             let hidden_fields_str = params.hidden_fields.join(",");
-            format!("selective_proof_{}_{}", disclosed_fields_str, hidden_fields_str)
+            format!(
+                "selective_proof_{}_{}",
+                disclosed_fields_str, hidden_fields_str
+            )
         };
 
         Ok(ZkAuditProof {
@@ -301,14 +302,21 @@ impl ZkProofGenerator {
     ) -> Result<ZkAuditProof> {
         // Create transcript for integrity proof
         let mut transcript = Transcript::new(b"audit_integrity_proof");
-        transcript.append_message(b"log_commitment", audit_log_commitment.log_hash_commitment.as_bytes());
-        transcript.append_message(b"count_commitment", audit_log_commitment.count_commitment.as_bytes());
+        transcript.append_message(
+            b"log_commitment",
+            audit_log_commitment.log_hash_commitment.as_bytes(),
+        );
+        transcript.append_message(
+            b"count_commitment",
+            audit_log_commitment.count_commitment.as_bytes(),
+        );
 
         // Generate integrity proof
         let proof = {
-            format!("integrity_proof_{}_{}", 
-                audit_log_commitment.log_hash_commitment,
-                audit_log_commitment.count_commitment)
+            format!(
+                "integrity_proof_{}_{}",
+                audit_log_commitment.log_hash_commitment, audit_log_commitment.count_commitment
+            )
         };
 
         Ok(ZkAuditProof {
@@ -332,11 +340,13 @@ impl ZkProofGenerator {
     ) -> Result<ZkAuditProof> {
         if proofs.len() > self.parameters.max_aggregation_size {
             return Err(FortressError::audit(
-                format!("Too many proofs for aggregation: {} > {}", 
-                    proofs.len(), 
-                    self.parameters.max_aggregation_size),
+                format!(
+                    "Too many proofs for aggregation: {} > {}",
+                    proofs.len(),
+                    self.parameters.max_aggregation_size
+                ),
                 None,
-                AuditErrorCode::PolicyNotFound
+                AuditErrorCode::PolicyNotFound,
             ));
         }
 
@@ -348,9 +358,7 @@ impl ZkProofGenerator {
 
         // Generate aggregate proof
         let proof = {
-            let proof_ids: Vec<String> = proofs.iter()
-                .map(|p| p.proof_data.clone())
-                .collect();
+            let proof_ids: Vec<String> = proofs.iter().map(|p| p.proof_data.clone()).collect();
             format!("aggregate_proof_{}", proof_ids.join("_"))
         };
 
@@ -371,13 +379,17 @@ impl ZkProofGenerator {
         use rand::RngCore;
         self.rng.fill_bytes(&mut blinding_bytes);
         let randomness = base64::engine::general_purpose::STANDARD.encode(blinding_bytes);
-        
+
         // Create simple commitment (in real implementation, this would use Pedersen commitment)
-        let commitment_data = format!("{}:{}", value, base64::engine::general_purpose::STANDARD.encode(blinding_bytes));
+        let commitment_data = format!(
+            "{}:{}",
+            value,
+            base64::engine::general_purpose::STANDARD.encode(blinding_bytes)
+        );
         let mut hasher = Sha256::new();
         hasher.update(commitment_data.as_bytes());
         let commitment = base64::engine::general_purpose::STANDARD.encode(hasher.finalize());
-        
+
         Ok((commitment, randomness))
     }
 
@@ -387,13 +399,12 @@ impl ZkProofGenerator {
         let mut hasher = Sha256::new();
         hasher.update(value.as_bytes());
         let hash = hasher.finalize();
-        
+
         // Convert hash to numeric value
         let hash_num = u64::from_le_bytes([
-            hash[0], hash[1], hash[2], hash[3], 
-            hash[4], hash[5], hash[6], hash[7]
+            hash[0], hash[1], hash[2], hash[3], hash[4], hash[5], hash[6], hash[7],
         ]);
-        
+
         self.commit_to_value(hash_num)
     }
 
@@ -402,7 +413,7 @@ impl ZkProofGenerator {
         let mut hasher = Sha256::new();
         hasher.update(b"zk_audit_verification_key");
         hasher.update(self.parameters.default_bit_length.to_string().as_bytes());
-        
+
         let result = hasher.finalize();
         base64::engine::general_purpose::STANDARD.encode(result)
     }
@@ -414,7 +425,7 @@ impl ZkProofGenerator {
         let entry_hash = base64::engine::general_purpose::STANDARD.encode(hasher.finalize());
 
         let mut commitments = HashMap::new();
-        
+
         // Create commitments for each field (simplified)
         let fields = vec!["hash", "timestamp", "event_type", "principal"];
         for field in fields {
@@ -440,8 +451,12 @@ impl ZkProofGenerator {
     ) -> Result<AuditLogCommitment> {
         let (hash_commitment, hash_randomness) = self.commit_to_string(log_hash)?;
         let (count_commitment, count_randomness) = self.commit_to_value(entry_count)?;
-        
-        let time_string = format!("{}|{}", time_range.0.to_rfc3339(), time_range.1.to_rfc3339());
+
+        let time_string = format!(
+            "{}|{}",
+            time_range.0.to_rfc3339(),
+            time_range.1.to_rfc3339()
+        );
         let (time_commitment, time_randomness) = self.commit_to_string(&time_string)?;
 
         Ok(AuditLogCommitment {
@@ -468,19 +483,24 @@ impl ZkProofVerifier {
         params: RangeProofParams,
     ) -> Result<bool> {
         // Extract commitment from proof
-        let commitment = proof.commitments.get(0)
-            .ok_or_else(|| FortressError::audit("No commitment found in proof".to_string(), None, AuditErrorCode::VerificationFailed))?;
+        let commitment = proof.commitments.get(0).ok_or_else(|| {
+            FortressError::audit(
+                "No commitment found in proof".to_string(),
+                None,
+                AuditErrorCode::VerificationFailed,
+            )
+        })?;
 
         // Parse proof data (simplified mock implementation)
-        let _expected_pattern = format!("range_proof_{}_{}_{}", 
-            commitment, 
-            params.min_value, 
-            params.max_value);
-        
+        let _expected_pattern = format!(
+            "range_proof_{}_{}_{}",
+            commitment, params.min_value, params.max_value
+        );
+
         let proof_data = &proof.proof_data;
-        Ok(proof_data.starts_with("range_proof_") && 
-           proof_data.contains(&params.min_value.to_string()) &&
-           proof_data.contains(&params.max_value.to_string()))
+        Ok(proof_data.starts_with("range_proof_")
+            && proof_data.contains(&params.min_value.to_string())
+            && proof_data.contains(&params.max_value.to_string()))
     }
 
     /// Verify membership proof
@@ -493,14 +513,13 @@ impl ZkProofVerifier {
             return Err(FortressError::audit(
                 "Proof type mismatch".to_string(),
                 None,
-                AuditErrorCode::PolicyNotFound
+                AuditErrorCode::PolicyNotFound,
             ));
         }
 
         // Mock verification
         let proof_data = &proof.proof_data;
-        Ok(proof_data.starts_with("membership_proof_") && 
-           proof_data.contains(&params.event_type))
+        Ok(proof_data.starts_with("membership_proof_") && proof_data.contains(&params.event_type))
     }
 
     /// Verify selective disclosure proof
@@ -513,16 +532,19 @@ impl ZkProofVerifier {
             return Err(FortressError::audit(
                 "Proof type mismatch".to_string(),
                 None,
-                AuditErrorCode::PolicyNotFound
+                AuditErrorCode::PolicyNotFound,
             ));
         }
 
         // Verify that commitments match the disclosure policy
         let disclosed_fields_str = params.disclosed_fields.join(",");
         let hidden_fields_str = params.hidden_fields.join(",");
-        
-        let expected_pattern = format!("selective_proof_{}_{}", disclosed_fields_str, hidden_fields_str);
-        
+
+        let expected_pattern = format!(
+            "selective_proof_{}_{}",
+            disclosed_fields_str, hidden_fields_str
+        );
+
         Ok(proof.proof_data == expected_pattern)
     }
 
@@ -536,15 +558,16 @@ impl ZkProofVerifier {
             return Err(FortressError::audit(
                 "Proof type mismatch".to_string(),
                 None,
-                AuditErrorCode::PolicyNotFound
+                AuditErrorCode::PolicyNotFound,
             ));
         }
 
         // Verify that proof matches the commitment
-        let expected_pattern = format!("integrity_proof_{}_{}", 
-            commitment.log_hash_commitment,
-            commitment.count_commitment);
-        
+        let expected_pattern = format!(
+            "integrity_proof_{}_{}",
+            commitment.log_hash_commitment, commitment.count_commitment
+        );
+
         Ok(proof.proof_data == expected_pattern)
     }
 
@@ -558,17 +581,18 @@ impl ZkProofVerifier {
             return Err(FortressError::audit(
                 "Proof type mismatch".to_string(),
                 None,
-                AuditErrorCode::PolicyNotFound
+                AuditErrorCode::PolicyNotFound,
             ));
         }
 
         // Verify that aggregate proof contains all individual proofs
-        let individual_proof_ids: Vec<String> = individual_proofs.iter()
+        let individual_proof_ids: Vec<String> = individual_proofs
+            .iter()
             .map(|p| p.proof_data.clone())
             .collect();
-        
+
         let expected_pattern = format!("aggregate_proof_{}", individual_proof_ids.join("_"));
-        
+
         Ok(proof.proof_data == expected_pattern)
     }
 
@@ -618,7 +642,7 @@ mod tests {
     async fn test_zk_proof_generator_creation() {
         let params = ZkProofParameters::default();
         let generator = ZkProofGenerator::new(params);
-        
+
         assert!(generator.parameters.default_bit_length == 64);
         assert!(generator.parameters.enable_aggregation);
     }
@@ -627,13 +651,13 @@ mod tests {
     async fn test_range_proof_generation() {
         let params = ZkProofParameters::default();
         let mut generator = ZkProofGenerator::new(params);
-        
+
         let range_params = RangeProofParams {
             min_value: 100,
             max_value: 1000,
             bit_length: 16,
         };
-        
+
         let metadata = ZkProofMetadata {
             audit_log_id: "test_log".to_string(),
             time_range: (Utc::now(), Utc::now()),
@@ -641,9 +665,11 @@ mod tests {
             entry_count: Some(500),
             proof_parameters: HashMap::new(),
         };
-        
-        let proof = generator.generate_range_proof(500, range_params, metadata).unwrap();
-        
+
+        let proof = generator
+            .generate_range_proof(500, range_params, metadata)
+            .unwrap();
+
         assert_eq!(proof.proof_type, ZkProofType::RangeProof);
         assert!(!proof.proof_data.is_empty());
         assert!(!proof.commitments.is_empty());
@@ -653,13 +679,13 @@ mod tests {
     async fn test_membership_proof_generation() {
         let params = ZkProofParameters::default();
         let mut generator = ZkProofGenerator::new(params);
-        
+
         let membership_params = MembershipProofParams {
             target_event_hash: "event_hash_123".to_string(),
             event_type: "Authentication".to_string(),
             include_timestamp: true,
         };
-        
+
         let metadata = ZkProofMetadata {
             audit_log_id: "test_log".to_string(),
             time_range: (Utc::now(), Utc::now()),
@@ -667,9 +693,11 @@ mod tests {
             entry_count: None,
             proof_parameters: HashMap::new(),
         };
-        
-        let proof = generator.generate_membership_proof("event_hash_123", &[], membership_params, metadata).unwrap();
-        
+
+        let proof = generator
+            .generate_membership_proof("event_hash_123", &[], membership_params, metadata)
+            .unwrap();
+
         assert_eq!(proof.proof_type, ZkProofType::MembershipProof);
         assert!(!proof.proof_data.is_empty());
     }
@@ -678,15 +706,15 @@ mod tests {
     async fn test_selective_disclosure_proof() {
         let params = ZkProofParameters::default();
         let mut generator = ZkProofGenerator::new(params);
-        
+
         let blinded_entry = generator.blind_audit_entry("test_audit_entry").unwrap();
-        
+
         let disclosure_params = SelectiveDisclosureParams {
             disclosed_fields: vec!["event_type".to_string(), "timestamp".to_string()],
             hidden_fields: vec!["principal".to_string(), "resource".to_string()],
             disclosure_policy: DisclosurePolicy::NonSensitiveOnly,
         };
-        
+
         let metadata = ZkProofMetadata {
             audit_log_id: "test_log".to_string(),
             time_range: (Utc::now(), Utc::now()),
@@ -694,9 +722,11 @@ mod tests {
             entry_count: None,
             proof_parameters: HashMap::new(),
         };
-        
-        let proof = generator.generate_selective_disclosure_proof(&blinded_entry, disclosure_params, metadata).unwrap();
-        
+
+        let proof = generator
+            .generate_selective_disclosure_proof(&blinded_entry, disclosure_params, metadata)
+            .unwrap();
+
         assert_eq!(proof.proof_type, ZkProofType::SelectiveDisclosure);
         assert!(!proof.proof_data.is_empty());
     }
@@ -705,13 +735,11 @@ mod tests {
     async fn test_integrity_proof() {
         let params = ZkProofParameters::default();
         let mut generator = ZkProofGenerator::new(params);
-        
-        let commitment = generator.create_audit_log_commitment(
-            "log_hash_123",
-            1000,
-            (Utc::now(), Utc::now()),
-        ).unwrap();
-        
+
+        let commitment = generator
+            .create_audit_log_commitment("log_hash_123", 1000, (Utc::now(), Utc::now()))
+            .unwrap();
+
         let metadata = ZkProofMetadata {
             audit_log_id: "test_log".to_string(),
             time_range: (Utc::now(), Utc::now()),
@@ -719,9 +747,11 @@ mod tests {
             entry_count: Some(1000),
             proof_parameters: HashMap::new(),
         };
-        
-        let proof = generator.generate_integrity_proof(&commitment, metadata).unwrap();
-        
+
+        let proof = generator
+            .generate_integrity_proof(&commitment, metadata)
+            .unwrap();
+
         assert_eq!(proof.proof_type, ZkProofType::IntegrityProof);
         assert!(!proof.proof_data.is_empty());
     }
@@ -730,7 +760,7 @@ mod tests {
     async fn test_aggregate_proof() {
         let params = ZkProofParameters::default();
         let mut generator = ZkProofGenerator::new(params);
-        
+
         let metadata = ZkProofMetadata {
             audit_log_id: "test_log".to_string(),
             time_range: (Utc::now(), Utc::now()),
@@ -738,22 +768,36 @@ mod tests {
             entry_count: None,
             proof_parameters: HashMap::new(),
         };
-        
+
         // Create individual proofs
-        let proof1 = generator.generate_range_proof(
-            100, 
-            RangeProofParams { min_value: 50, max_value: 150, bit_length: 8 },
-            metadata.clone(),
-        ).unwrap();
-        
-        let proof2 = generator.generate_range_proof(
-            200, 
-            RangeProofParams { min_value: 150, max_value: 250, bit_length: 8 },
-            metadata.clone(),
-        ).unwrap();
-        
-        let aggregate_proof = generator.generate_aggregate_proof(vec![proof1, proof2], metadata).unwrap();
-        
+        let proof1 = generator
+            .generate_range_proof(
+                100,
+                RangeProofParams {
+                    min_value: 50,
+                    max_value: 150,
+                    bit_length: 8,
+                },
+                metadata.clone(),
+            )
+            .unwrap();
+
+        let proof2 = generator
+            .generate_range_proof(
+                200,
+                RangeProofParams {
+                    min_value: 150,
+                    max_value: 250,
+                    bit_length: 8,
+                },
+                metadata.clone(),
+            )
+            .unwrap();
+
+        let aggregate_proof = generator
+            .generate_aggregate_proof(vec![proof1, proof2], metadata)
+            .unwrap();
+
         assert_eq!(aggregate_proof.proof_type, ZkProofType::AggregateProof);
         assert_eq!(aggregate_proof.commitments.len(), 2); // Two commitments from two proofs
     }
@@ -761,17 +805,17 @@ mod tests {
     #[tokio::test]
     async fn test_zk_proof_verification() {
         let verifier = ZkProofVerifier::new();
-        
+
         let params = ZkProofParameters::default();
         let mut generator = ZkProofGenerator::new(params);
-        
+
         // Generate and verify range proof
         let range_params = RangeProofParams {
             min_value: 100,
             max_value: 1000,
             bit_length: 16,
         };
-        
+
         let metadata = ZkProofMetadata {
             audit_log_id: "test_log".to_string(),
             time_range: (Utc::now(), Utc::now()),
@@ -779,18 +823,22 @@ mod tests {
             entry_count: Some(500),
             proof_parameters: HashMap::new(),
         };
-        
-        let proof = generator.generate_range_proof(500, range_params, metadata).unwrap();
-        
-        let is_valid = verifier.verify_range_proof(
-            &proof,
-            RangeProofParams {
-                min_value: 100,
-                max_value: 1000,
-                bit_length: 16,
-            },
-        ).unwrap();
-        
+
+        let proof = generator
+            .generate_range_proof(500, range_params, metadata)
+            .unwrap();
+
+        let is_valid = verifier
+            .verify_range_proof(
+                &proof,
+                RangeProofParams {
+                    min_value: 100,
+                    max_value: 1000,
+                    bit_length: 16,
+                },
+            )
+            .unwrap();
+
         assert!(is_valid);
     }
 
@@ -798,9 +846,11 @@ mod tests {
     async fn test_audit_entry_blinding() {
         let params = ZkProofParameters::default();
         let mut generator = ZkProofGenerator::new(params);
-        
-        let blinded_entry = generator.blind_audit_entry("test_audit_entry_data").unwrap();
-        
+
+        let blinded_entry = generator
+            .blind_audit_entry("test_audit_entry_data")
+            .unwrap();
+
         assert!(!blinded_entry.blinded_hash.is_empty());
         assert!(!blinded_entry.blinded_timestamp.is_empty());
         assert_eq!(blinded_entry.commitments.len(), 4); // hash, timestamp, event_type, principal
@@ -809,10 +859,10 @@ mod tests {
     #[tokio::test]
     async fn test_proof_freshness_verification() {
         let verifier = ZkProofVerifier::new();
-        
+
         let params = ZkProofParameters::default();
         let mut generator = ZkProofGenerator::new(params);
-        
+
         let metadata = ZkProofMetadata {
             audit_log_id: "test_log".to_string(),
             time_range: (Utc::now(), Utc::now()),
@@ -820,20 +870,22 @@ mod tests {
             entry_count: Some(500),
             proof_parameters: HashMap::new(),
         };
-        
-        let proof = generator.generate_range_proof(
-            500,
-            RangeProofParams {
-                min_value: 100,
-                max_value: 1000,
-                bit_length: 16,
-            },
-            metadata,
-        ).unwrap();
-        
+
+        let proof = generator
+            .generate_range_proof(
+                500,
+                RangeProofParams {
+                    min_value: 100,
+                    max_value: 1000,
+                    bit_length: 16,
+                },
+                metadata,
+            )
+            .unwrap();
+
         // Should be fresh (created just now)
         assert!(verifier.verify_proof_freshness(&proof, 1));
-        
+
         // Should not be fresh if we require very recent proof
         assert!(!verifier.verify_proof_freshness(&proof, 0));
     }

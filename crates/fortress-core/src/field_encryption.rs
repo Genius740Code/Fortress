@@ -12,9 +12,9 @@
 //! - **Compliance support**: Meet regulatory requirements with appropriate algorithms
 //! - **Key isolation**: Separate keys per field or field groups
 
-use crate::error::{FortressError, Result, EncryptionErrorCode};
 use crate::encryption::{EncryptionProfile, PerformanceProfile};
-use crate::key::{KeyId};
+use crate::error::{EncryptionErrorCode, FortressError, Result};
+use crate::key::KeyId;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -33,11 +33,11 @@ pub enum FieldIdentifier {
     /// Nested field path (e.g., "user.profile.email")
     Path(Vec<String>),
     /// Indexed field (e.g., array elements)
-    Indexed { 
+    Indexed {
         /// Field path
-        path: Vec<String>, 
+        path: Vec<String>,
         /// Array index
-        index: usize 
+        index: usize,
     },
 }
 
@@ -120,10 +120,7 @@ pub struct FieldEncryptionConfig {
 
 impl FieldEncryptionConfig {
     /// Create a new field encryption configuration
-    pub fn new(
-        field: FieldIdentifier,
-        strategy: FieldEncryptionStrategy,
-    ) -> Self {
+    pub fn new(field: FieldIdentifier, strategy: FieldEncryptionStrategy) -> Self {
         let now = Utc::now();
         Self {
             id: Uuid::new_v4().to_string(),
@@ -291,7 +288,10 @@ pub trait FieldEncryptionManager: Send + Sync {
     ) -> Result<DecryptedField>;
 
     /// Get configuration for a field
-    async fn get_field_config(&self, field: &FieldIdentifier) -> Result<Option<FieldEncryptionConfig>>;
+    async fn get_field_config(
+        &self,
+        field: &FieldIdentifier,
+    ) -> Result<Option<FieldEncryptionConfig>>;
 
     /// Set configuration for a field
     async fn set_field_config(&self, config: FieldEncryptionConfig) -> Result<()>;
@@ -341,7 +341,11 @@ pub trait FieldAlgorithmSelector: Send + Sync {
     ) -> Result<String>;
 
     /// Get recommended algorithm for data type
-    fn recommend_algorithm_for_type(&self, data_type: &str, sensitivity: FieldSensitivity) -> Result<String>;
+    fn recommend_algorithm_for_type(
+        &self,
+        data_type: &str,
+        sensitivity: FieldSensitivity,
+    ) -> Result<String>;
 }
 
 /// Sensitivity level for field data
@@ -390,7 +394,8 @@ impl FieldAlgorithmSelector for DefaultAlgorithmSelector {
                 PerformanceProfile::HighPerformance => "aegis256",
                 PerformanceProfile::Hardware => "blake3encrypt",
                 PerformanceProfile::Quantum => "compositeencrypt",
-            }.to_string()),
+            }
+            .to_string()),
             FieldEncryptionStrategy::Algorithm(name) => Ok(name.clone()),
             FieldEncryptionStrategy::Profile(profile_name) => Ok(profile_name.clone()),
             FieldEncryptionStrategy::DedicatedKey | FieldEncryptionStrategy::DerivedKey => {
@@ -400,13 +405,19 @@ impl FieldAlgorithmSelector for DefaultAlgorithmSelector {
         }
     }
 
-    fn recommend_algorithm_for_type(&self, data_type: &str, sensitivity: FieldSensitivity) -> Result<String> {
+    fn recommend_algorithm_for_type(
+        &self,
+        data_type: &str,
+        sensitivity: FieldSensitivity,
+    ) -> Result<String> {
         match (data_type, sensitivity) {
             // High-performance for large data
             ("blob", FieldSensitivity::Internal) => Ok("aes256ctr".to_string()),
             ("blob", FieldSensitivity::Confidential) => Ok("blake3encrypt".to_string()),
-            ("blob", FieldSensitivity::Restricted | FieldSensitivity::Critical) => Ok("compositeencrypt".to_string()),
-            
+            ("blob", FieldSensitivity::Restricted | FieldSensitivity::Critical) => {
+                Ok("compositeencrypt".to_string())
+            }
+
             // Standard for text fields
             ("text" | "string", FieldSensitivity::Public) => Err(FortressError::encryption(
                 "Public data should not be encrypted",
@@ -414,16 +425,22 @@ impl FieldAlgorithmSelector for DefaultAlgorithmSelector {
                 EncryptionErrorCode::AlgorithmNotSupported,
             )),
             ("text" | "string", FieldSensitivity::Internal) => Ok("xchacha20poly1305".to_string()),
-            ("text" | "string", FieldSensitivity::Confidential) => Ok("argon2idencrypt".to_string()),
-            ("text" | "string", FieldSensitivity::Restricted | FieldSensitivity::Critical) => Ok("compositeencrypt".to_string()),
-            
+            ("text" | "string", FieldSensitivity::Confidential) => {
+                Ok("argon2idencrypt".to_string())
+            }
+            ("text" | "string", FieldSensitivity::Restricted | FieldSensitivity::Critical) => {
+                Ok("compositeencrypt".to_string())
+            }
+
             // High security for identifiers
             ("email" | "phone" | "ssn" | "credit_card", _) => Ok("compositeencrypt".to_string()),
-            
+
             // Balanced for numeric data
-            ("number" | "decimal" | "integer", FieldSensitivity::Internal) => Ok("xchacha20poly1305".to_string()),
+            ("number" | "decimal" | "integer", FieldSensitivity::Internal) => {
+                Ok("xchacha20poly1305".to_string())
+            }
             ("number" | "decimal" | "integer", _) => Ok("argon2idencrypt".to_string()),
-            
+
             // Default to balanced
             _ => Ok("xchacha20poly1305".to_string()),
         }
@@ -467,22 +484,30 @@ mod tests {
 
         // Test strategy-based selection
         let field = FieldIdentifier::name("test");
-        let algorithm = selector.select_algorithm(
-            &field,
-            &FieldEncryptionStrategy::Default,
-            PerformanceProfile::Lightning,
-            &[],
-        ).unwrap();
+        let algorithm = selector
+            .select_algorithm(
+                &field,
+                &FieldEncryptionStrategy::Default,
+                PerformanceProfile::Lightning,
+                &[],
+            )
+            .unwrap();
         assert_eq!(algorithm, "aegis256");
 
         // Test data type recommendations
-        let algorithm = selector.recommend_algorithm_for_type("email", FieldSensitivity::Restricted).unwrap();
+        let algorithm = selector
+            .recommend_algorithm_for_type("email", FieldSensitivity::Restricted)
+            .unwrap();
         assert_eq!(algorithm, "compositeencrypt");
 
-        let algorithm = selector.recommend_algorithm_for_type("blob", FieldSensitivity::Internal).unwrap();
+        let algorithm = selector
+            .recommend_algorithm_for_type("blob", FieldSensitivity::Internal)
+            .unwrap();
         assert_eq!(algorithm, "aes256ctr");
 
-        let algorithm = selector.recommend_algorithm_for_type("text", FieldSensitivity::Confidential).unwrap();
+        let algorithm = selector
+            .recommend_algorithm_for_type("text", FieldSensitivity::Confidential)
+            .unwrap();
         assert_eq!(algorithm, "argon2idencrypt");
     }
 }

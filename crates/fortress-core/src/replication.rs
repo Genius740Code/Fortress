@@ -3,13 +3,13 @@
 //! This module provides data replication across cluster nodes with consistency
 //! guarantees, conflict resolution, and recovery mechanisms.
 
-use crate::cluster::{NodeId, ClusterNode};
+use crate::cluster::{ClusterNode, NodeId};
 use crate::error::{FortressError, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::{mpsc, RwLock};
 use uuid::Uuid;
 
 /// Unique identifier for replication operations
@@ -106,7 +106,7 @@ impl ReplicationOperation {
             deadline
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_else(|_| Duration::from_secs(0))
-                .as_millis() as u64
+                .as_millis() as u64,
         );
         self
     }
@@ -118,7 +118,7 @@ impl ReplicationOperation {
             deadline
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_else(|_| Duration::from_secs(0))
-                .as_millis() as u64
+                .as_millis() as u64,
         );
         self
     }
@@ -126,18 +126,14 @@ impl ReplicationOperation {
     /// Check if operation has met consistency requirements
     pub fn meets_consistency(&self) -> bool {
         match self.consistency_level {
-            ConsistencyLevel::All => {
-                self.acknowledged_nodes.len() == self.target_nodes.len()
-            }
+            ConsistencyLevel::All => self.acknowledged_nodes.len() == self.target_nodes.len(),
             ConsistencyLevel::Majority => {
                 self.acknowledged_nodes.len() > self.target_nodes.len() / 2
             }
             ConsistencyLevel::Quorum => {
                 self.acknowledged_nodes.len() >= (self.target_nodes.len() / 2) + 1
             }
-            ConsistencyLevel::Count(required) => {
-                self.acknowledged_nodes.len() >= required
-            }
+            ConsistencyLevel::Count(required) => self.acknowledged_nodes.len() >= required,
             ConsistencyLevel::Eventual => true, // Always true for eventual consistency
         }
     }
@@ -176,7 +172,8 @@ impl ReplicationOperation {
 
         if self.meets_consistency() {
             self.status = ReplicationStatus::Completed;
-        } else if self.acknowledged_nodes.len() + self.failed_nodes.len() == self.target_nodes.len() {
+        } else if self.acknowledged_nodes.len() + self.failed_nodes.len() == self.target_nodes.len()
+        {
             self.status = ReplicationStatus::Partial {
                 success_count: self.acknowledged_nodes.len(),
                 failure_count: self.failed_nodes.len(),
@@ -331,10 +328,10 @@ impl ReplicationManager {
     pub async fn start(&mut self) -> Result<()> {
         // Start message processing
         self.start_message_processing().await?;
-        
+
         // Start operation monitoring
         self.start_operation_monitoring().await?;
-        
+
         // Start cleanup task
         self.start_cleanup_task().await?;
 
@@ -349,8 +346,9 @@ impl ReplicationManager {
         data: Vec<u8>,
         consistency_level: Option<ConsistencyLevel>,
     ) -> Result<ReplicationId> {
-        let consistency = consistency_level.unwrap_or_else(|| self.config.default_consistency.clone());
-        
+        let consistency =
+            consistency_level.unwrap_or_else(|| self.config.default_consistency.clone());
+
         // Get target nodes (all nodes except self)
         let cluster_nodes = self.cluster_nodes.read().await;
         let target_nodes: Vec<NodeId> = cluster_nodes
@@ -366,26 +364,23 @@ impl ReplicationManager {
             ));
         }
 
-        let operation = ReplicationOperation::new(
-            key.clone(),
-            data.clone(),
-            target_nodes,
-            consistency,
-        );
+        let operation =
+            ReplicationOperation::new(key.clone(), data.clone(), target_nodes, consistency);
 
         let operation_id = operation.id;
 
         // Store operation
-        self.active_operations.write().await.insert(operation_id, operation);
+        self.active_operations
+            .write()
+            .await
+            .insert(operation_id, operation);
 
         // Send replication requests
         let cluster_nodes = self.cluster_nodes.read().await;
         let active_operations = self.active_operations.read().await;
-        let operation = active_operations.get(&operation_id)
-            .ok_or_else(|| FortressError::cluster(
-                format!("Operation {} not found", operation_id),
-                None,
-            ))?;
+        let operation = active_operations.get(&operation_id).ok_or_else(|| {
+            FortressError::cluster(format!("Operation {} not found", operation_id), None)
+        })?;
 
         for &node_id in &operation.target_nodes {
             if let Some(_node) = cluster_nodes.get(&node_id) {
@@ -398,8 +393,12 @@ impl ReplicationManager {
 
                 // Send actual message
                 if let Err(e) = self.send_replication_message(node_id, message).await {
-                    tracing::warn!("Failed to send replication request to node {}: {}", node_id, e);
-                    
+                    tracing::warn!(
+                        "Failed to send replication request to node {}: {}",
+                        node_id,
+                        e
+                    );
+
                     // Mark node as failed for this operation
                     let mut active_operations = self.active_operations.write().await;
                     if let Some(op) = active_operations.get_mut(&operation_id) {
@@ -412,16 +411,25 @@ impl ReplicationManager {
             }
         }
 
-        tracing::info!("Started replication operation {} for key {}", operation_id, key);
+        tracing::info!(
+            "Started replication operation {} for key {}",
+            operation_id,
+            key
+        );
         Ok(operation_id)
     }
 
     /// Get replication operation status
-    pub async fn get_operation_status(&self, operation_id: ReplicationId) -> Option<ReplicationOperation> {
+    pub async fn get_operation_status(
+        &self,
+        operation_id: ReplicationId,
+    ) -> Option<ReplicationOperation> {
         let active = self.active_operations.read().await;
         let completed = self.completed_operations.read().await;
-        
-        active.get(&operation_id).cloned()
+
+        active
+            .get(&operation_id)
+            .cloned()
             .or_else(|| completed.get(&operation_id).cloned())
     }
 
@@ -434,14 +442,15 @@ impl ReplicationManager {
         let deadline_timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_else(|_| Duration::from_secs(0))
-            .as_millis() as u64 + timeout.as_millis() as u64;
-        
+            .as_millis() as u64
+            + timeout.as_millis() as u64;
+
         loop {
             let now_timestamp = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_else(|_| Duration::from_secs(0))
                 .as_millis() as u64;
-            
+
             if now_timestamp >= deadline_timestamp {
                 break;
             }
@@ -450,7 +459,7 @@ impl ReplicationManager {
                     return Ok(operation);
                 }
             }
-            
+
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
 
@@ -475,18 +484,30 @@ impl ReplicationManager {
                 }
             }
         }
-        
+
         Ok(())
     }
 
     /// Handle incoming replication message
     async fn handle_replication_message(&self, message: ReplicationMessage) -> Result<()> {
         match message {
-            ReplicationMessage::ReplicateRequest { operation_id, key, data, from_node } => {
-                self.handle_replicate_request(operation_id, key, data, from_node).await?;
+            ReplicationMessage::ReplicateRequest {
+                operation_id,
+                key,
+                data,
+                from_node,
+            } => {
+                self.handle_replicate_request(operation_id, key, data, from_node)
+                    .await?;
             }
-            ReplicationMessage::ReplicateAck { operation_id, from_node, success, error } => {
-                self.handle_replication_ack(operation_id, from_node, success, error).await?;
+            ReplicationMessage::ReplicateAck {
+                operation_id,
+                from_node,
+                success,
+                error,
+            } => {
+                self.handle_replication_ack(operation_id, from_node, success, error)
+                    .await?;
             }
             ReplicationMessage::SyncRequest { from_node, keys } => {
                 self.handle_sync_request(from_node, keys).await?;
@@ -506,12 +527,16 @@ impl ReplicationManager {
         _data: Vec<u8>,
         from_node: NodeId,
     ) -> Result<()> {
-        tracing::debug!("Received replication request for operation {} key {} from node {}", 
-                       operation_id, key, from_node);
-        
+        tracing::debug!(
+            "Received replication request for operation {} key {} from node {}",
+            operation_id,
+            key,
+            from_node
+        );
+
         // In a real implementation, this would store the data locally
         // For now, we'll simulate successful storage
-        
+
         // Send acknowledgment back to the requesting node
         let ack_message = ReplicationMessage::ReplicateAck {
             operation_id,
@@ -519,48 +544,63 @@ impl ReplicationManager {
             success: true,
             error: None,
         };
-        
+
         if let Err(_) = self.channels.outgoing.send((from_node, ack_message)) {
-            tracing::warn!("Failed to send replication acknowledgment to node {}", from_node);
+            tracing::warn!(
+                "Failed to send replication acknowledgment to node {}",
+                from_node
+            );
         } else {
             tracing::debug!("Sent replication acknowledgment to node {}", from_node);
         }
-        
+
         Ok(())
     }
 
     /// Handle sync request from another node
     async fn handle_sync_request(&self, from_node: NodeId, keys: Vec<String>) -> Result<()> {
-        tracing::debug!("Received sync request from node {} for keys: {:?}", from_node, keys);
-        
+        tracing::debug!(
+            "Received sync request from node {} for keys: {:?}",
+            from_node,
+            keys
+        );
+
         // In a real implementation, this would retrieve the requested data from local storage
         // For now, we'll return empty data
         let sync_data: HashMap<String, Vec<u8>> = HashMap::new();
-        
+
         let response = ReplicationMessage::SyncResponse {
             from_node: self.node_id,
             data: sync_data,
         };
-        
+
         if let Err(_) = self.channels.outgoing.send((from_node, response)) {
             tracing::warn!("Failed to send sync response to node {}", from_node);
         } else {
             tracing::debug!("Sent sync response to node {}", from_node);
         }
-        
+
         Ok(())
     }
 
     /// Handle sync response from another node
-    async fn handle_sync_response(&self, from_node: NodeId, data: HashMap<String, Vec<u8>>) -> Result<()> {
-        tracing::debug!("Received sync response from node {} with {} keys", from_node, data.len());
-        
+    async fn handle_sync_response(
+        &self,
+        from_node: NodeId,
+        data: HashMap<String, Vec<u8>>,
+    ) -> Result<()> {
+        tracing::debug!(
+            "Received sync response from node {} with {} keys",
+            from_node,
+            data.len()
+        );
+
         // In a real implementation, this would update local storage with the received data
         for (key, _value) in data {
             tracing::debug!("Syncing key {} from node {}", key, from_node);
             // Store the data locally
         }
-        
+
         Ok(())
     }
 
@@ -572,61 +612,70 @@ impl ReplicationManager {
 
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(1));
-            
+
             loop {
                 interval.tick().await;
-                
+
                 let now_timestamp = SystemTime::now()
                     .duration_since(UNIX_EPOCH)
                     .unwrap_or_else(|_| Duration::from_secs(0))
                     .as_millis() as u64;
-                
+
                 // Check for timed out operations
                 let mut timed_out_operations = Vec::new();
-                
+
                 {
                     let active = active_operations.read().await;
                     for (operation_id, operation) in active.iter() {
                         // Check if operation has exceeded its timeout
                         let operation_age = now_timestamp.saturating_sub(operation.created_at);
-                        
+
                         let timeout_ms = if let Some(deadline) = operation.deadline {
                             deadline.saturating_sub(operation.created_at)
                         } else {
                             replication_timeout.as_millis() as u64
                         };
-                        
+
                         if operation_age > timeout_ms {
                             timed_out_operations.push(*operation_id);
                         }
                     }
                 }
-                
+
                 // Handle timed out operations
                 if !timed_out_operations.is_empty() {
                     let mut active = active_operations.write().await;
                     let mut completed = completed_operations.write().await;
-                    
+
                     for operation_id in timed_out_operations {
                         if let Some(mut operation) = active.remove(&operation_id) {
-                            let timeout_error = format!("Operation timed out after {}ms", 
-                                                      now_timestamp.saturating_sub(operation.created_at));
+                            let timeout_error = format!(
+                                "Operation timed out after {}ms",
+                                now_timestamp.saturating_sub(operation.created_at)
+                            );
                             operation.status = ReplicationStatus::Failed(timeout_error.clone());
-                            
-                            tracing::warn!("Replication operation {} timed out: {}", operation_id, timeout_error);
-                            
+
+                            tracing::warn!(
+                                "Replication operation {} timed out: {}",
+                                operation_id,
+                                timeout_error
+                            );
+
                             completed.insert(operation_id, operation);
                         }
                     }
                 }
-                
+
                 // Log current operation status
                 let active_count = active_operations.read().await.len();
                 let completed_count = completed_operations.read().await.len();
-                
+
                 if active_count > 0 {
-                    tracing::debug!("Monitoring {} active operations, {} completed operations", 
-                                  active_count, completed_count);
+                    tracing::debug!(
+                        "Monitoring {} active operations, {} completed operations",
+                        active_count,
+                        completed_count
+                    );
                 }
             }
         });
@@ -642,46 +691,52 @@ impl ReplicationManager {
 
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(cleanup_interval);
-            
+
             loop {
                 interval.tick().await;
-                
+
                 let now_timestamp = SystemTime::now()
                     .duration_since(UNIX_EPOCH)
                     .unwrap_or_else(|_| Duration::from_secs(0))
                     .as_millis() as u64;
-                
+
                 let retention_ms = retention_period.as_millis() as u64;
                 let mut operations_to_remove = Vec::new();
-                
+
                 // Find operations older than retention period
                 {
                     let completed = completed_operations.read().await;
                     for (operation_id, operation) in completed.iter() {
                         let operation_age = now_timestamp.saturating_sub(operation.created_at);
-                        
+
                         if operation_age > retention_ms {
                             operations_to_remove.push(*operation_id);
                         }
                     }
                 }
-                
+
                 // Remove old operations
                 if !operations_to_remove.is_empty() {
                     let mut completed = completed_operations.write().await;
                     let removed_count = operations_to_remove.len();
-                    
+
                     for operation_id in operations_to_remove {
                         completed.remove(&operation_id);
                     }
-                    
-                    tracing::info!("Cleaned up {} old completed operations (older than {} seconds)", 
-                                 removed_count, retention_period.as_secs());
+
+                    tracing::info!(
+                        "Cleaned up {} old completed operations (older than {} seconds)",
+                        removed_count,
+                        retention_period.as_secs()
+                    );
                 }
-                
+
                 // Log cleanup status
                 let remaining_count = completed_operations.read().await.len();
-                tracing::debug!("Cleanup completed: {} operations retained in memory", remaining_count);
+                tracing::debug!(
+                    "Cleanup completed: {} operations retained in memory",
+                    remaining_count
+                );
             }
         });
 
@@ -726,19 +781,32 @@ impl ReplicationManager {
     ) -> Result<()> {
         // In a real implementation, this would use actual network communication
         // For now, we'll simulate the message sending and handle the response
-        
-        tracing::debug!("Sending replication message to node {}: {:?}", node_id, message);
-        
+
+        tracing::debug!(
+            "Sending replication message to node {}: {:?}",
+            node_id,
+            message
+        );
+
         // Simulate network latency and processing
         tokio::time::sleep(Duration::from_millis(5)).await;
-        
+
         // Handle the message based on its type
         match message {
-            ReplicationMessage::ReplicateRequest { operation_id, key, data: _, from_node } => {
+            ReplicationMessage::ReplicateRequest {
+                operation_id,
+                key,
+                data: _,
+                from_node,
+            } => {
                 // Simulate processing the replication request
-                tracing::debug!("Processing replication request for operation {} key {} from node {}", 
-                               operation_id, key, from_node);
-                
+                tracing::debug!(
+                    "Processing replication request for operation {} key {} from node {}",
+                    operation_id,
+                    key,
+                    from_node
+                );
+
                 // Simulate sending acknowledgment
                 let _ack_message = ReplicationMessage::ReplicateAck {
                     operation_id,
@@ -746,11 +814,15 @@ impl ReplicationManager {
                     success: true,
                     error: None,
                 };
-                
+
                 // Handle the acknowledgment
-                self.handle_replication_ack(operation_id, node_id, true, None).await?;
-                
-                tracing::debug!("Successfully processed replication request for operation {}", operation_id);
+                self.handle_replication_ack(operation_id, node_id, true, None)
+                    .await?;
+
+                tracing::debug!(
+                    "Successfully processed replication request for operation {}",
+                    operation_id
+                );
             }
             _ => {
                 return Err(FortressError::cluster(
@@ -759,45 +831,64 @@ impl ReplicationManager {
                 ));
             }
         }
-        
+
         Ok(())
     }
 
     /// Handle replication acknowledgment
-    async fn handle_replication_ack(&self, operation_id: ReplicationId, from_node: NodeId, success: bool, error: Option<String>) -> Result<()> {
+    async fn handle_replication_ack(
+        &self,
+        operation_id: ReplicationId,
+        from_node: NodeId,
+        success: bool,
+        error: Option<String>,
+    ) -> Result<()> {
         let mut active_operations = self.active_operations.write().await;
-        
+
         if let Some(operation) = active_operations.get_mut(&operation_id) {
             if success {
                 operation.acknowledge_node(from_node);
-                tracing::debug!("Node {} acknowledged replication operation {}", from_node, operation_id);
+                tracing::debug!(
+                    "Node {} acknowledged replication operation {}",
+                    from_node,
+                    operation_id
+                );
             } else {
                 let error_msg = error.unwrap_or_else(|| "Unknown error".to_string());
                 operation.fail_node(from_node, error_msg.clone());
-                tracing::warn!("Node {} failed replication operation {}: {}", from_node, operation_id, error_msg);
+                tracing::warn!(
+                    "Node {} failed replication operation {}: {}",
+                    from_node,
+                    operation_id,
+                    error_msg
+                );
             }
-            
+
             operation.update_status();
-            
+
             // If operation is complete, move it to completed operations
             if operation.is_complete() {
-                let completed_op = active_operations.remove(&operation_id)
-                    .ok_or_else(|| FortressError::cluster(
+                let completed_op = active_operations.remove(&operation_id).ok_or_else(|| {
+                    FortressError::cluster(
                         format!("Operation {} not found for completion", operation_id),
                         None,
-                    ))?;
+                    )
+                })?;
                 drop(active_operations); // Release the lock before accessing completed_operations
-                
+
                 let mut completed_operations = self.completed_operations.write().await;
                 completed_operations.insert(operation_id, completed_op.clone());
-                
-                tracing::info!("Replication operation {} completed with status: {:?}", 
-                             operation_id, completed_op.status);
+
+                tracing::info!(
+                    "Replication operation {} completed with status: {:?}",
+                    operation_id,
+                    completed_op.status
+                );
             }
         } else {
             tracing::warn!("Received ack for unknown operation {}", operation_id);
         }
-        
+
         Ok(())
     }
 }
@@ -819,18 +910,18 @@ pub struct ReplicationStatistics {
 
 #[cfg(test)]
 mod tests {
-use super::*;
-use std::sync::Arc;
+    use super::*;
+    use std::sync::Arc;
 
-#[test]
-fn test_replication_operation_creation() {
-    let target_nodes = vec![Uuid::new_v4(), Uuid::new_v4()];
-    let operation = ReplicationOperation::new(
-        "test_key".to_string(),
-        b"test_data".to_vec(),
-        target_nodes.clone(),
-        ConsistencyLevel::Quorum,
-    );
+    #[test]
+    fn test_replication_operation_creation() {
+        let target_nodes = vec![Uuid::new_v4(), Uuid::new_v4()];
+        let operation = ReplicationOperation::new(
+            "test_key".to_string(),
+            b"test_data".to_vec(),
+            target_nodes.clone(),
+            ConsistencyLevel::Quorum,
+        );
 
         assert_eq!(operation.key, "test_key");
         assert_eq!(operation.data, b"test_data");
@@ -853,10 +944,10 @@ fn test_replication_operation_creation() {
 
         // Should need 2 acknowledgments for quorum (3 nodes / 2 + 1)
         assert!(!operation.meets_consistency());
-        
+
         operation.acknowledge_node(Uuid::new_v4());
         assert!(!operation.meets_consistency());
-        
+
         operation.acknowledge_node(Uuid::new_v4());
         assert!(operation.meets_consistency());
     }

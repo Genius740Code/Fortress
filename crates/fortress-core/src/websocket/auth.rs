@@ -1,9 +1,9 @@
 //! WebSocket authentication and authorization
 
-use crate::error::{FortressError, Result};
 use crate::auth::{AuthManager, TokenClaims};
-use crate::websocket::message::{WebSocketMessage, MessagePayload, AuthMethod};
-use jsonwebtoken::{decode, Validation, DecodingKey};
+use crate::error::{FortressError, Result};
+use crate::websocket::message::{AuthMethod, MessagePayload, WebSocketMessage};
+use jsonwebtoken::{decode, DecodingKey, Validation};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -92,7 +92,11 @@ impl WebSocketAuthenticator {
     }
 
     /// Authenticate WebSocket connection
-    pub async fn authenticate(&self, message: &WebSocketMessage, client_ip: &str) -> Result<AuthResult> {
+    pub async fn authenticate(
+        &self,
+        message: &WebSocketMessage,
+        client_ip: &str,
+    ) -> Result<AuthResult> {
         // Check rate limiting
         if self.config.enable_rate_limiting {
             if let Err(e) = self.check_rate_limit(client_ip).await {
@@ -138,9 +142,18 @@ impl WebSocketAuthenticator {
 
         // Authenticate based on method
         let result = match auth_payload.method {
-            AuthMethod::JWT => self.authenticate_jwt(&auth_payload.token, client_ip).await?,
-            AuthMethod::APIKey => self.authenticate_api_key(&auth_payload.token, client_ip).await?,
-            AuthMethod::Session => self.authenticate_session(&auth_payload.token, client_ip).await?,
+            AuthMethod::JWT => {
+                self.authenticate_jwt(&auth_payload.token, client_ip)
+                    .await?
+            }
+            AuthMethod::APIKey => {
+                self.authenticate_api_key(&auth_payload.token, client_ip)
+                    .await?
+            }
+            AuthMethod::Session => {
+                self.authenticate_session(&auth_payload.token, client_ip)
+                    .await?
+            }
         };
 
         // Update rate limiting and failed attempts
@@ -164,7 +177,7 @@ impl WebSocketAuthenticator {
         match token_data {
             Ok(data) => {
                 let claims = data.claims;
-                
+
                 // Check token expiration
                 if claims.exp < chrono::Utc::now().timestamp() as u64 {
                     return Ok(AuthResult {
@@ -213,7 +226,7 @@ impl WebSocketAuthenticator {
     async fn authenticate_api_key(&self, api_key: &str, _client_ip: &str) -> Result<AuthResult> {
         // In a real implementation, validate API key against database
         // For now, we'll simulate basic validation
-        
+
         if api_key.len() < 32 {
             return Ok(AuthResult {
                 success: false,
@@ -228,7 +241,7 @@ impl WebSocketAuthenticator {
         // SECURE: Validate API key against secure store
         // In production: database lookup with proper validation
         let api_key_hash = self.hash_api_key(api_key)?;
-        
+
         // Simulate secure API key validation
         // In real implementation: query database for hashed API key
         if !self.is_valid_api_key(&api_key_hash).await? {
@@ -241,10 +254,10 @@ impl WebSocketAuthenticator {
                 timestamp: chrono::Utc::now(),
             });
         }
-        
+
         // Retrieve user associated with this API key
         let user_id = self.get_user_by_api_key(&api_key_hash).await?;
-        
+
         Ok(AuthResult {
             success: true,
             user_id: Some(user_id),
@@ -256,10 +269,14 @@ impl WebSocketAuthenticator {
     }
 
     /// Authenticate with session token
-    async fn authenticate_session(&self, session_token: &str, _client_ip: &str) -> Result<AuthResult> {
+    async fn authenticate_session(
+        &self,
+        session_token: &str,
+        _client_ip: &str,
+    ) -> Result<AuthResult> {
         // In a real implementation, validate session token against session store
         // For now, we'll simulate basic validation
-        
+
         if session_token.len() < 16 {
             return Ok(AuthResult {
                 success: false,
@@ -274,7 +291,7 @@ impl WebSocketAuthenticator {
         // SECURE: Validate session token against session store
         // In production: secure session store lookup with proper validation
         let session_data = self.validate_session_token(session_token).await?;
-        
+
         if session_data.is_none() {
             return Ok(AuthResult {
                 success: false,
@@ -285,11 +302,10 @@ impl WebSocketAuthenticator {
                 timestamp: chrono::Utc::now(),
             });
         }
-        
-        let session = session_data.ok_or_else(|| {
-            FortressError::authentication("Invalid session data", None)
-        })?;
-        
+
+        let session = session_data
+            .ok_or_else(|| FortressError::authentication("Invalid session data", None))?;
+
         Ok(AuthResult {
             success: true,
             user_id: Some(session.user_id),
@@ -305,14 +321,20 @@ impl WebSocketAuthenticator {
         // In a real implementation, check user database
         // For now, we'll simulate validation
         if user_id.is_empty() {
-            return Err(FortressError::authentication("User ID cannot be empty", None));
+            return Err(FortressError::authentication(
+                "User ID cannot be empty",
+                None,
+            ));
         }
-        
+
         // Simulate user lookup
         if user_id.starts_with("blocked_") {
-            return Err(FortressError::authentication("User is blocked", Some(user_id.to_string())));
+            return Err(FortressError::authentication(
+                "User is blocked",
+                Some(user_id.to_string()),
+            ));
         }
-        
+
         Ok(())
     }
 
@@ -320,24 +342,29 @@ impl WebSocketAuthenticator {
     async fn check_rate_limit(&self, client_ip: &str) -> Result<()> {
         let mut rate_limits = self.ip_rate_limits.write().await;
         let now = Instant::now();
-        
-        let rate_info = rate_limits.entry(client_ip.to_string()).or_insert_with(|| RateLimitInfo {
-            attempts: 0,
-            first_attempt: now,
-            last_attempt: now,
-        });
+
+        let rate_info = rate_limits
+            .entry(client_ip.to_string())
+            .or_insert_with(|| RateLimitInfo {
+                attempts: 0,
+                first_attempt: now,
+                last_attempt: now,
+            });
 
         // Reset if window has passed
-        if now.duration_since(rate_info.first_attempt) > Duration::from_secs(self.config.attempt_window_seconds) {
+        if now.duration_since(rate_info.first_attempt)
+            > Duration::from_secs(self.config.attempt_window_seconds)
+        {
             rate_info.attempts = 0;
             rate_info.first_attempt = now;
         }
 
         // Check if rate limit exceeded
         if rate_info.attempts >= self.config.max_attempts_per_ip {
-            return Err(FortressError::websocket(
-                format!("Rate limit exceeded for IP: {}", client_ip)
-            ));
+            return Err(FortressError::websocket(format!(
+                "Rate limit exceeded for IP: {}",
+                client_ip
+            )));
         }
 
         rate_info.attempts += 1;
@@ -349,13 +376,14 @@ impl WebSocketAuthenticator {
     /// Check if IP is locked out
     async fn check_ip_lockout(&self, client_ip: &str) -> Result<()> {
         let failed_attempts = self.failed_attempts.read().await;
-        
+
         if let Some(attempt_info) = failed_attempts.get(client_ip) {
             if let Some(locked_until) = attempt_info.locked_until {
                 if Instant::now() < locked_until {
-                    return Err(FortressError::websocket(
-                        format!("IP {} is locked out until {:?}", client_ip, locked_until)
-                    ));
+                    return Err(FortressError::websocket(format!(
+                        "IP {} is locked out until {:?}",
+                        client_ip, locked_until
+                    )));
                 }
             }
         }
@@ -368,7 +396,7 @@ impl WebSocketAuthenticator {
         // Clear failed attempts for this IP
         let mut failed_attempts = self.failed_attempts.write().await;
         failed_attempts.remove(client_ip);
-        
+
         // Reset rate limit
         let mut rate_limits = self.ip_rate_limits.write().await;
         rate_limits.remove(client_ip);
@@ -378,33 +406,40 @@ impl WebSocketAuthenticator {
     async fn record_failed_auth(&self, client_ip: &str) {
         let mut failed_attempts = self.failed_attempts.write().await;
         let now = Instant::now();
-        
-        let attempt_info = failed_attempts.entry(client_ip.to_string()).or_insert_with(|| FailedAttemptInfo {
-            count: 0,
-            last_attempt: now,
-            locked_until: None,
-        });
+
+        let attempt_info = failed_attempts
+            .entry(client_ip.to_string())
+            .or_insert_with(|| FailedAttemptInfo {
+                count: 0,
+                last_attempt: now,
+                locked_until: None,
+            });
 
         attempt_info.count += 1;
         attempt_info.last_attempt = now;
 
         // Check if should lock out
         if attempt_info.count >= self.config.max_attempts_per_ip {
-            attempt_info.locked_until = Some(now + Duration::from_secs(self.config.lockout_duration_seconds));
-            
-            tracing::warn!("IP {} locked out due to too many failed attempts", client_ip);
+            attempt_info.locked_until =
+                Some(now + Duration::from_secs(self.config.lockout_duration_seconds));
+
+            tracing::warn!(
+                "IP {} locked out due to too many failed attempts",
+                client_ip
+            );
         }
     }
 
     /// Clean up old rate limit and failed attempt records
     pub async fn cleanup(&self) {
         let now = Instant::now();
-        
+
         // Clean up rate limits
         {
             let mut rate_limits = self.ip_rate_limits.write().await;
             rate_limits.retain(|_, info| {
-                now.duration_since(info.last_attempt) <= Duration::from_secs(self.config.attempt_window_seconds * 2)
+                now.duration_since(info.last_attempt)
+                    <= Duration::from_secs(self.config.attempt_window_seconds * 2)
             });
         }
 
@@ -415,7 +450,8 @@ impl WebSocketAuthenticator {
                 if let Some(locked_until) = info.locked_until {
                     now < locked_until
                 } else {
-                    now.duration_since(info.last_attempt) <= Duration::from_secs(self.config.lockout_duration_seconds * 2)
+                    now.duration_since(info.last_attempt)
+                        <= Duration::from_secs(self.config.lockout_duration_seconds * 2)
                 }
             });
         }
@@ -423,15 +459,15 @@ impl WebSocketAuthenticator {
 
     /// SECURE: Hash API key using secure cryptographic hash
     fn hash_api_key(&self, api_key: &str) -> Result<String> {
-        use sha2::{Sha256, Digest};
-        
+        use sha2::{Digest, Sha256};
+
         let mut hasher = Sha256::new();
         hasher.update(api_key.as_bytes());
         hasher.update(b"fortress_api_key_salt"); // Secure salt
-        
+
         Ok(format!("{:x}", hasher.finalize()))
     }
-    
+
     /// SECURE: Validate API key against secure store
     async fn is_valid_api_key(&self, api_key_hash: &str) -> Result<bool> {
         // In production: query database for hashed API key
@@ -439,29 +475,28 @@ impl WebSocketAuthenticator {
         let known_valid_hashes = vec![
             "5f4dcc3b5aa765d61d8327deb882cf99", // Simulated hash
         ];
-        
+
         Ok(known_valid_hashes.contains(&api_key_hash))
     }
-    
+
     /// SECURE: Get user ID associated with API key
     async fn get_user_by_api_key(&self, _api_key_hash: &str) -> Result<String> {
         // In production: query database for user associated with API key
         // For demo, return simulated user ID
         Ok("user_12345678".to_string())
     }
-    
+
     /// SECURE: Validate session token and return session data
     async fn validate_session_token(&self, session_token: &str) -> Result<Option<SessionData>> {
-        
         use std::time::{SystemTime, UNIX_EPOCH};
-        
+
         // In production: query secure session store
         // For demo, simulate session validation
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_else(|_| Duration::from_secs(0))
             .as_secs();
-        
+
         // Simulate session store lookup
         if session_token.len() >= 16 && session_token.starts_with("fortress_session_") {
             Ok(Some(SessionData {
@@ -478,10 +513,13 @@ impl WebSocketAuthenticator {
     pub async fn get_stats(&self) -> AuthStats {
         let rate_limits = self.ip_rate_limits.read().await;
         let failed_attempts = self.failed_attempts.read().await;
-        
+
         AuthStats {
             active_rate_limits: rate_limits.len(),
-            active_lockouts: failed_attempts.values().filter(|info| info.locked_until.is_some()).count(),
+            active_lockouts: failed_attempts
+                .values()
+                .filter(|info| info.locked_until.is_some())
+                .count(),
             total_failed_attempts: failed_attempts.values().map(|info| info.count).sum(),
         }
     }
@@ -513,7 +551,7 @@ impl Default for AuthConfig {
     fn default() -> Self {
         Self {
             max_attempts_per_ip: 10,
-            attempt_window_seconds: 300, // 5 minutes
+            attempt_window_seconds: 300,   // 5 minutes
             lockout_duration_seconds: 900, // 15 minutes
             jwt_secret: "default-secret-change-in-production".to_string(),
             token_expiration_seconds: 3600, // 1 hour

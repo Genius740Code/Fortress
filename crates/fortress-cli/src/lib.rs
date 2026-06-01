@@ -26,16 +26,16 @@ pub mod commands;
 /// Handles loading, validation, and management of Fortress configuration files
 /// with support for multiple environments and configuration formats.
 pub mod config_manager;
-/// Utility functions
-///
-/// Common utility functions used throughout the CLI including formatting,
-/// validation, and helper functions for various operations.
-pub mod utils;
 /// Type definitions
 ///
 /// Common types and enums used across the CLI including command types,
 /// configuration structures, and shared data structures.
 pub mod types;
+/// Utility functions
+///
+/// Common utility functions used throughout the CLI including formatting,
+/// validation, and helper functions for various operations.
+pub mod utils;
 
 /// Configuration wizard
 ///
@@ -83,7 +83,7 @@ pub mod api_versioning;
 pub mod integration_tests;
 
 // Re-export commonly used types
-pub use color_eyre::eyre::{Result, Context};
-pub use types::{Commands, KeyAction, ConfigAction};
-pub use enhanced_error::FortressError;
+pub use color_eyre::eyre::{Context, Result};
 pub use config_wizard::{ConfigurationWizard, FortressConfig};
+pub use enhanced_error::FortressError;
+pub use types::{Commands, ConfigAction, KeyAction};

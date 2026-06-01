@@ -56,13 +56,13 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub mod build {
     /// Build timestamp
     pub const TIMESTAMP: &str = "unknown";
-    
+
     /// Git commit SHA
     pub const GIT_SHA: &str = "unknown";
-    
+
     /// Rust version
     pub const RUST_VERSION: &str = "unknown";
-    
+
     /// Target triple
     pub const TARGET: &str = "unknown";
 }

@@ -1,15 +1,15 @@
 //! Service Mesh Integration Module
-//! 
+//!
 //! This module provides integration with various service mesh platforms
 //! including Envoy, Istio, and Linkerd for enhanced traffic management,
 //! security, and observability.
 
+use crate::error::{FortressError, Result};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use serde::{Serialize, Deserialize};
-use chrono::{DateTime, Utc};
-use crate::error::{FortressError, Result};
 
 pub mod envoy;
 pub mod istio;
@@ -218,34 +218,34 @@ pub struct MeshMetrics {
 pub trait MeshProvider: Send + Sync {
     /// Name of the mesh provider
     fn name(&self) -> &str;
-    
+
     /// Mesh type
     fn mesh_type(&self) -> MeshType;
-    
+
     /// Initialize the mesh provider
     async fn initialize(&mut self, config: &MeshConfig) -> Result<()>;
-    
+
     /// Get mesh nodes
     async fn get_mesh_nodes(&self) -> Result<Vec<MeshNode>>;
-    
+
     /// Get traffic policies
     async fn get_traffic_policies(&self) -> Result<Vec<TrafficPolicy>>;
-    
+
     /// Get security policies
     async fn get_security_policies(&self) -> Result<Vec<SecurityPolicy>>;
-    
+
     /// Apply traffic policy
     async fn apply_traffic_policy(&self, policy: &TrafficPolicy) -> Result<()>;
-    
+
     /// Apply security policy
     async fn apply_security_policy(&self, policy: &SecurityPolicy) -> Result<()>;
-    
+
     /// Get mesh metrics
     async fn get_metrics(&self) -> Result<MeshMetrics>;
-    
+
     /// Check mesh health
     async fn check_mesh_health(&self) -> Result<MeshNodeHealthStatus>;
-    
+
     /// Shutdown the mesh provider
     async fn shutdown(&mut self) -> Result<()>;
 }
@@ -282,7 +282,11 @@ impl MeshManager {
     }
 
     /// Add a mesh provider
-    pub async fn add_provider(&mut self, name: String, provider: Box<dyn MeshProvider>) -> Result<()> {
+    pub async fn add_provider(
+        &mut self,
+        name: String,
+        provider: Box<dyn MeshProvider>,
+    ) -> Result<()> {
         let mut providers = self.providers.write().await;
         providers.insert(name, provider);
         Ok(())
@@ -291,10 +295,14 @@ impl MeshManager {
     /// Initialize all providers
     pub async fn initialize(&mut self) -> Result<()> {
         let mut providers = self.providers.write().await;
-        
+
         for (name, provider) in providers.iter_mut() {
-            provider.initialize(&self.config).await
-                .map_err(|e| FortressError::mesh(format!("Failed to initialize mesh provider {}: {}", name, e)))?;
+            provider.initialize(&self.config).await.map_err(|e| {
+                FortressError::mesh(format!(
+                    "Failed to initialize mesh provider {}: {}",
+                    name, e
+                ))
+            })?;
         }
 
         Ok(())
@@ -310,7 +318,8 @@ impl MeshManager {
                 Ok(mut nodes) => {
                     // Add provider tag to each node
                     for node in &mut nodes {
-                        node.labels.insert("mesh_provider".to_string(), name.clone());
+                        node.labels
+                            .insert("mesh_provider".to_string(), name.clone());
                     }
                     all_nodes.extend(nodes);
                 }
@@ -340,7 +349,9 @@ impl MeshManager {
                 Ok(mut policies) => {
                     // Add provider tag to each policy
                     for policy in &mut policies {
-                        policy.labels.insert("mesh_provider".to_string(), name.clone());
+                        policy
+                            .labels
+                            .insert("mesh_provider".to_string(), name.clone());
                     }
                     all_policies.extend(policies);
                 }
@@ -370,7 +381,9 @@ impl MeshManager {
                 Ok(mut policies) => {
                     // Add provider tag to each policy
                     for policy in &mut policies {
-                        policy.labels.insert("mesh_provider".to_string(), name.clone());
+                        policy
+                            .labels
+                            .insert("mesh_provider".to_string(), name.clone());
                     }
                     all_policies.extend(policies);
                 }
@@ -402,7 +415,10 @@ impl MeshManager {
         }
 
         if !errors.is_empty() {
-            return Err(FortressError::mesh(format!("Failed to apply traffic policy: {}", errors.join("; "))));
+            return Err(FortressError::mesh(format!(
+                "Failed to apply traffic policy: {}",
+                errors.join("; ")
+            )));
         }
 
         // Update cache
@@ -424,7 +440,10 @@ impl MeshManager {
         }
 
         if !errors.is_empty() {
-            return Err(FortressError::mesh(format!("Failed to apply security policy: {}", errors.join("; "))));
+            return Err(FortressError::mesh(format!(
+                "Failed to apply security policy: {}",
+                errors.join("; ")
+            )));
         }
 
         // Update cache
@@ -468,7 +487,8 @@ impl MeshManager {
         if provider_count > 0 {
             aggregated_metrics.request_duration_ms /= provider_count;
             aggregated_metrics.request_success_rate = if aggregated_metrics.request_count > 0 {
-                (aggregated_metrics.request_count - aggregated_metrics.request_error_count) as f64 / aggregated_metrics.request_count as f64
+                (aggregated_metrics.request_count - aggregated_metrics.request_error_count) as f64
+                    / aggregated_metrics.request_count as f64
             } else {
                 0.0
             };
@@ -518,7 +538,7 @@ impl MeshManager {
     /// Shutdown the mesh manager
     pub async fn shutdown(&mut self) -> Result<()> {
         let mut providers = self.providers.write().await;
-        
+
         for (name, provider) in providers.iter_mut() {
             if let Err(e) = provider.shutdown().await {
                 tracing::warn!("Failed to shutdown mesh provider {}: {}", name, e);
@@ -561,17 +581,20 @@ mod tests {
     #[test]
     fn test_mesh_node_health_status_equality() {
         assert_eq!(MeshNodeHealthStatus::Healthy, MeshNodeHealthStatus::Healthy);
-        assert_ne!(MeshNodeHealthStatus::Healthy, MeshNodeHealthStatus::Unhealthy);
+        assert_ne!(
+            MeshNodeHealthStatus::Healthy,
+            MeshNodeHealthStatus::Unhealthy
+        );
     }
 
     #[tokio::test]
     async fn test_mesh_manager_creation() {
         let config = MeshConfig::default();
         let manager = MeshManager::new(config);
-        
+
         let nodes = manager.get_mesh_nodes().await;
         assert!(nodes.is_empty());
-        
+
         let metrics = manager.get_metrics().await;
         assert_eq!(metrics.request_count, 0);
     }

@@ -3,56 +3,69 @@
 //! This module provides a complete GraphQL API for all Fortress operations including
 //! database management, table operations, data CRUD, encryption management, and more.
 
-pub mod schema;
-pub mod enhanced_schema;
-pub mod query;
-pub mod mutation;
-pub mod subscription;
-pub mod types;
-pub mod context;
-pub mod cache;
-pub mod optimized_queries;
-pub mod optimized_mutations;
-pub mod performance;
-pub mod benchmark;
-pub mod security;
 pub mod auth;
+pub mod benchmark;
+pub mod cache;
+pub mod context;
 pub mod encryption;
-pub mod query_executor;
-#[cfg(test)]
-pub mod security_tests;
+pub mod enhanced_schema;
 #[cfg(test)]
 pub mod integration_test;
+pub mod mutation;
+pub mod optimized_mutations;
+pub mod optimized_queries;
+pub mod performance;
+pub mod query;
+pub mod query_executor;
+pub mod schema;
+pub mod security;
+#[cfg(test)]
+pub mod security_tests;
+pub mod subscription;
+pub mod types;
 
 // Include tests when running tests
 #[cfg(test)]
 mod tests;
 
 // Re-export GraphQL components
-pub use schema::{FortressSchema, create_schema};
-pub use enhanced_schema::{EnhancedGraphQLSchema, create_enhanced_schema, ResourceUsage};
+pub use auth::{
+    AuthConfig, AuthManager, AuthResult, AuthenticatedUser, Claims, Permission,
+    PolicyEvaluationResult, Role, SecurityPolicy, Session, SessionStats, TokenRefreshResult,
+    TokenVerificationResult,
+};
+pub use benchmark::{BenchmarkConfig, BenchmarkResults, PerformanceBenchmark};
+pub use cache::{CacheConfig, GraphQLCacheManager};
 pub use context::GraphQLContext;
-pub use types::*;
-pub use cache::{GraphQLCacheManager, CacheConfig};
-pub use optimized_queries::OptimizedQuery;
+pub use encryption::{
+    DataEncryptionManager, DataProtectionPolicy, DataProtectionPolicyManager, DecryptedField,
+    EncryptedField, EncryptedRecord, EncryptionConfig, EncryptionStats, FieldEncryptionConfig,
+    PolicyEvaluationResult as DataPolicyEvaluationResult, UserContext,
+};
+pub use enhanced_schema::{create_enhanced_schema, EnhancedGraphQLSchema, ResourceUsage};
 pub use optimized_mutations::OptimizedMutation;
-pub use performance::{PerformanceMonitor, QueryAnalyzer, ResourceMonitor, SerializableOperationMetrics};
-pub use benchmark::{PerformanceBenchmark, BenchmarkConfig, BenchmarkResults};
-pub use security::{SecurityManager, SecurityConfig, SecurityRequest, SecurityValidationResult, RateLimiter, InputValidator, QueryComplexityAnalyzer, SecurityAuditLogger, SecurityStats};
-pub use auth::{AuthManager, AuthConfig, AuthenticatedUser, Claims, Role, Permission, Session, AuthResult, TokenVerificationResult, TokenRefreshResult, SessionStats, SecurityPolicy, PolicyEvaluationResult};
-pub use encryption::{DataEncryptionManager, EncryptionConfig, FieldEncryptionConfig, EncryptedField, DecryptedField, EncryptedRecord, EncryptionStats, DataProtectionPolicyManager, DataProtectionPolicy, PolicyEvaluationResult as DataPolicyEvaluationResult, UserContext};
+pub use optimized_queries::OptimizedQuery;
+pub use performance::{
+    PerformanceMonitor, QueryAnalyzer, ResourceMonitor, SerializableOperationMetrics,
+};
+pub use schema::{create_schema, FortressSchema};
+pub use security::{
+    InputValidator, QueryComplexityAnalyzer, RateLimiter, SecurityAuditLogger, SecurityConfig,
+    SecurityManager, SecurityRequest, SecurityStats, SecurityValidationResult,
+};
+pub use types::*;
 
 // GraphQL HTTP handlers
+use crate::handlers::AppState;
 use axum::{
-    response::{Html, Response, Json},
-    extract::{State, Request},
     body::Body,
+    extract::{Request, State},
     http::StatusCode,
     response::IntoResponse,
+    response::{Html, Json, Response},
 };
-use std::sync::Arc;
-use crate::handlers::AppState;
 use serde_json::json;
+use std::sync::Arc;
 
 /// GraphQL HTTP handler
 pub async fn graphql_handler(
@@ -68,7 +81,7 @@ pub async fn graphql_handler(
         "status": "operational",
         "dynamic_secrets": "implemented"
     });
-    
+
     Ok(Json(response).into_response())
 }
 

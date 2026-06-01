@@ -3,9 +3,9 @@
 //! Provides the request context for GraphQL operations including authentication,
 //! database connections, and other services.
 
-use async_graphql::{Context, Result, Error, ErrorExtensions};
-use std::sync::Arc;
 use crate::handlers::AppState;
+use async_graphql::{Context, Error, ErrorExtensions, Result};
+use std::sync::Arc;
 
 /// GraphQL context for each request
 pub struct GraphQLContext {
@@ -48,8 +48,7 @@ impl GraphQLContext {
     /// Get the authenticated user or return an error
     pub fn require_auth(&self) -> Result<&AuthenticatedUser> {
         self.user.as_ref().ok_or_else(|| {
-            Error::new("Authentication required")
-                .extend_with(|_, e| e.set("code", "AUTH_REQUIRED"))
+            Error::new("Authentication required").extend_with(|_, e| e.set("code", "AUTH_REQUIRED"))
         })
     }
 
@@ -67,7 +66,10 @@ impl GraphQLContext {
     /// Check if the user has any of the required roles
     pub fn require_any_role(&self, roles: &[&str]) -> Result<&AuthenticatedUser> {
         let user = self.require_auth()?;
-        if roles.iter().any(|role| user.roles.contains(&role.to_string())) {
+        if roles
+            .iter()
+            .any(|role| user.roles.contains(&role.to_string()))
+        {
             Ok(user)
         } else {
             Err(Error::new(format!("Required one of roles: {:?}", roles))
@@ -86,9 +88,8 @@ impl GraphQLContext {
             // For now, map roles to permissions
             // In a real implementation, this would check a more sophisticated permission system
             match permission {
-                "admin.query" | "query.statistics" | "query.explain" | "cache.clear" | "cache.stats" | "pool.stats" => {
-                    user.roles.contains(&"admin".to_string())
-                }
+                "admin.query" | "query.statistics" | "query.explain" | "cache.clear"
+                | "cache.stats" | "pool.stats" => user.roles.contains(&"admin".to_string()),
                 _ => user.roles.contains(&"user".to_string()),
             }
         } else {
@@ -106,9 +107,7 @@ impl GraphQLContext {
 
 /// Get the GraphQL context from the request
 pub fn from_context<'a>(ctx: &'a Context<'a>) -> Result<&'a GraphQLContext> {
-    ctx.data::<GraphQLContext>()
-        .map_err(|_| {
-            Error::new("GraphQL context not found")
-                .extend_with(|_, e| e.set("code", "INTERNAL_ERROR"))
-        })
+    ctx.data::<GraphQLContext>().map_err(|_| {
+        Error::new("GraphQL context not found").extend_with(|_, e| e.set("code", "INTERNAL_ERROR"))
+    })
 }

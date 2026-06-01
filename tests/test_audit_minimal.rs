@@ -2,27 +2,28 @@
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-    use fortress_core::audit::{
-        AuditConfig, AuditEntry, AuditEventType, SecurityLevel, EventOutcome,
-        DefaultAuditLogger,
-    };
     use base64::Engine as _;
+    use fortress_core::audit::{
+        AuditConfig, AuditEntry, AuditEventType, DefaultAuditLogger, EventOutcome, SecurityLevel,
+    };
+    use std::collections::HashMap;
 
     #[test]
     fn test_basic_audit_functionality() {
         // Create audit configuration
         let mut config = AuditConfig::default();
-        config.hmac_key = Some(base64::engine::general_purpose::STANDARD.encode("test_hmac_key_32_bytes_long_1234"));
+        config.hmac_key = Some(
+            base64::engine::general_purpose::STANDARD.encode("test_hmac_key_32_bytes_long_1234"),
+        );
         config.log_path = Some("test_audit.log".to_string());
 
         // Create audit logger
         let mut logger = DefaultAuditLogger::new(config).unwrap();
-        
+
         // Create a test entry
         let mut metadata = HashMap::new();
         metadata.insert("test".to_string(), "value".to_string());
-        
+
         let entry = AuditEntry {
             id: "test-1".to_string(),
             timestamp: 1234567890,
@@ -50,12 +51,12 @@ mod tests {
         );
 
         assert!(result.is_ok());
-        
+
         let created_entry = result.unwrap();
         assert!(!created_entry.id.is_empty());
         assert!(!created_entry.current_hash.is_empty());
         assert!(!created_entry.signature.is_empty());
-        
+
         // Clean up
         std::fs::remove_file("test_audit.log").ok();
     }

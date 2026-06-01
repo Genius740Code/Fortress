@@ -2,10 +2,10 @@
 //!
 //! Contains all GraphQL types, enums, and scalars used in the Fortress GraphQL API.
 
-use async_graphql::{SimpleObject, InputObject, Enum};
+use async_graphql::{Enum, InputObject, SimpleObject};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use serde::{Serialize, Deserialize};
 
 // ==================== Enums ====================
 

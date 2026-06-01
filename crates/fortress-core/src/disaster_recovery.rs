@@ -3,21 +3,21 @@
 //! This module provides the implementation of the DisasterRecoveryManager trait
 //! with comprehensive recovery planning, execution, and testing capabilities.
 
-use crate::storage::StorageBackend;
-use crate::error::{FortressError, Result};
 use crate::backup::utils;
 use crate::backup::{
-    RestoreStatus, RestoreOperationStatus, TestResult, StepTestResult, DisasterRecoveryPlan,
-    RecoveryPriority, RecoveryStep, DisasterRecoveryManager, BackupManager, BackupConfig,
-    VerificationLevel, RetentionPolicy
+    BackupConfig, BackupManager, DisasterRecoveryManager, DisasterRecoveryPlan, RecoveryPriority,
+    RecoveryStep, RestoreOperationStatus, RestoreStatus, RetentionPolicy, StepTestResult,
+    TestResult, VerificationLevel,
 };
 use crate::error::StorageErrorCode;
+use crate::error::{FortressError, Result};
+use crate::storage::StorageBackend;
+use async_trait::async_trait;
 use chrono::Utc;
-use std::sync::Arc;
 use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
-use async_trait::async_trait;
 
 /// Default disaster recovery manager implementation
 #[derive(Debug)]
@@ -59,19 +59,20 @@ impl DefaultDisasterRecoveryManager {
     /// Save recovery plan to storage
     async fn save_plan(&self, plan: &DisasterRecoveryPlan) -> Result<()> {
         let plan_key = format!("plans/{}.json", plan.plan_id);
-        let plan_data = serde_json::to_vec(plan)
-            .map_err(|e| FortressError::storage(
+        let plan_data = serde_json::to_vec(plan).map_err(|e| {
+            FortressError::storage(
                 format!("Failed to serialize recovery plan: {}", e),
                 "disaster_recovery".to_string(),
                 StorageErrorCode::InvalidOperation,
-            ))?;
+            )
+        })?;
 
         self.plan_storage.put(&plan_key, &plan_data).await?;
-        
+
         // Update cache
         let mut plans = self.plans.write().await;
         plans.insert(plan.plan_id.clone(), plan.clone());
-        
+
         Ok(())
     }
 
@@ -92,12 +93,13 @@ impl DefaultDisasterRecoveryManager {
             None => return Ok(None),
         };
 
-        let plan: DisasterRecoveryPlan = serde_json::from_slice(&plan_data)
-            .map_err(|e| FortressError::storage(
+        let plan: DisasterRecoveryPlan = serde_json::from_slice(&plan_data).map_err(|e| {
+            FortressError::storage(
                 format!("Failed to deserialize recovery plan: {}", e),
                 "disaster_recovery".to_string(),
                 StorageErrorCode::CorruptedData,
-            ))?;
+            )
+        })?;
 
         // Update cache
         let mut plans = self.plans.write().await;
@@ -109,18 +111,21 @@ impl DefaultDisasterRecoveryManager {
     /// Save test result to storage
     async fn save_test_result(&self, result: &TestResult) -> Result<()> {
         let test_key = format!("tests/{}.json", result.test_id);
-        let test_data = serde_json::to_vec(result)
-            .map_err(|e| FortressError::storage(
+        let test_data = serde_json::to_vec(result).map_err(|e| {
+            FortressError::storage(
                 format!("Failed to serialize test result: {}", e),
                 "disaster_recovery".to_string(),
                 StorageErrorCode::InvalidOperation,
-            ))?;
+            )
+        })?;
 
         self.plan_storage.put(&test_key, &test_data).await?;
 
         // Update history cache
         let mut history = self.test_history.write().await;
-        let plan_tests = history.entry(result.plan_id.clone()).or_insert_with(Vec::new);
+        let plan_tests = history
+            .entry(result.plan_id.clone())
+            .or_insert_with(Vec::new);
         plan_tests.push(result.clone());
 
         // Keep only last 10 test results per plan
@@ -145,7 +150,10 @@ impl DefaultDisasterRecoveryManager {
 
         // Execute the step based on its command
         if let Some(command) = &step.command {
-            match self.execute_recovery_command(command, backup_id, target_storage).await {
+            match self
+                .execute_recovery_command(command, backup_id, target_storage)
+                .await
+            {
                 Ok(()) => {
                     // Verify step if criteria specified
                     if let Some(criteria) = &step.verification_criteria {
@@ -211,12 +219,11 @@ impl DefaultDisasterRecoveryManager {
 
             let backup_to_restore = parts[1];
             let config = BackupConfig::default(); // Use default config for recovery
-            
-            let restore_status = self.backup_manager.restore_backup(
-                backup_to_restore,
-                target_storage,
-                &config,
-            ).await?;
+
+            let restore_status = self
+                .backup_manager
+                .restore_backup(backup_to_restore, target_storage, &config)
+                .await?;
 
             match restore_status.status {
                 RestoreOperationStatus::Completed => Ok(()),
@@ -239,20 +246,25 @@ impl DefaultDisasterRecoveryManager {
 
             let backup_to_verify = parts[1];
             let level_str = parts[2];
-            
+
             let level = match level_str {
                 "basic" => VerificationLevel::Basic,
                 "full" => VerificationLevel::Full,
                 "comprehensive" => VerificationLevel::Comprehensive,
-                _ => return Err(FortressError::configuration(
-                    "Invalid verification level".to_string(),
-                    Some("command".to_string()),
-                    crate::error::ConfigurationErrorCode::InvalidValue,
-                )),
+                _ => {
+                    return Err(FortressError::configuration(
+                        "Invalid verification level".to_string(),
+                        Some("command".to_string()),
+                        crate::error::ConfigurationErrorCode::InvalidValue,
+                    ))
+                }
             };
 
-            let is_valid = self.backup_manager.verify_backup(backup_to_verify, level).await?;
-            
+            let is_valid = self
+                .backup_manager
+                .verify_backup(backup_to_verify, level)
+                .await?;
+
             if is_valid {
                 Ok(())
             } else {
@@ -273,12 +285,13 @@ impl DefaultDisasterRecoveryManager {
                 ));
             }
 
-            let _max_age_days = parts[1].parse::<u32>()
-                .map_err(|_| FortressError::configuration(
+            let _max_age_days = parts[1].parse::<u32>().map_err(|_| {
+                FortressError::configuration(
                     "Invalid max age days".to_string(),
                     Some("command".to_string()),
                     crate::error::ConfigurationErrorCode::InvalidValue,
-                ))?;
+                )
+            })?;
 
             let policy = RetentionPolicy {
                 max_full_backups: 10,
@@ -345,17 +358,22 @@ impl DefaultDisasterRecoveryManager {
                 ));
             }
 
-            let min_count = parts[1].parse::<u64>()
-                .map_err(|_| FortressError::configuration(
+            let min_count = parts[1].parse::<u64>().map_err(|_| {
+                FortressError::configuration(
                     "Invalid backup count".to_string(),
                     Some("criteria".to_string()),
                     crate::error::ConfigurationErrorCode::InvalidValue,
-                ))?;
+                )
+            })?;
 
             let backups = self.backup_manager.list_backups().await?;
             if (backups.len() as u64) < min_count {
                 return Err(FortressError::storage(
-                    format!("Insufficient backup count: {} < {}", backups.len(), min_count),
+                    format!(
+                        "Insufficient backup count: {} < {}",
+                        backups.len(),
+                        min_count
+                    ),
                     "disaster_recovery".to_string(),
                     StorageErrorCode::InvalidOperation,
                 ));
@@ -544,25 +562,28 @@ impl DisasterRecoveryManager for DefaultDisasterRecoveryManager {
     fn get_recovery_plan<'a>(
         &'a self,
         plan_id: &'a str,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Option<DisasterRecoveryPlan>>> + Send + 'a>> {
-        Box::pin(async move {
-            self.load_plan(plan_id).await
-        })
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<Option<DisasterRecoveryPlan>>> + Send + 'a>,
+    > {
+        Box::pin(async move { self.load_plan(plan_id).await })
     }
 
     fn list_recovery_plans<'a>(
         &'a self,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<DisasterRecoveryPlan>>> + Send + 'a>> {
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<Vec<DisasterRecoveryPlan>>> + Send + 'a>,
+    > {
         Box::pin(async move {
             let plan_keys = self.plan_storage.list_prefix("plans/").await?;
             let mut plans = Vec::new();
 
             for key in plan_keys {
                 if key.ends_with(".json") {
-                    let plan_id = key.strip_prefix("plans/")
+                    let plan_id = key
+                        .strip_prefix("plans/")
                         .and_then(|s| s.strip_suffix(".json"))
                         .unwrap_or("unknown");
-                    
+
                     if let Ok(Some(plan)) = self.load_plan(plan_id).await {
                         plans.push(plan);
                     }
@@ -570,18 +591,18 @@ impl DisasterRecoveryManager for DefaultDisasterRecoveryManager {
             }
 
             // Sort by priority and name
-            plans.sort_by(|a, b| {
-                match (&a.priority, &b.priority) {
-                    (RecoveryPriority::Critical, RecoveryPriority::Critical) => a.name.cmp(&b.name),
-                    (RecoveryPriority::Critical, _) => std::cmp::Ordering::Less,
-                    (RecoveryPriority::High, RecoveryPriority::Critical) => std::cmp::Ordering::Greater,
-                    (RecoveryPriority::High, RecoveryPriority::High) => a.name.cmp(&b.name),
-                    (RecoveryPriority::High, _) => std::cmp::Ordering::Less,
-                    (RecoveryPriority::Medium, RecoveryPriority::Critical | RecoveryPriority::High) => std::cmp::Ordering::Greater,
-                    (RecoveryPriority::Medium, RecoveryPriority::Medium) => a.name.cmp(&b.name),
-                    (RecoveryPriority::Medium, _) => std::cmp::Ordering::Less,
-                    (RecoveryPriority::Low, _) => std::cmp::Ordering::Greater,
+            plans.sort_by(|a, b| match (&a.priority, &b.priority) {
+                (RecoveryPriority::Critical, RecoveryPriority::Critical) => a.name.cmp(&b.name),
+                (RecoveryPriority::Critical, _) => std::cmp::Ordering::Less,
+                (RecoveryPriority::High, RecoveryPriority::Critical) => std::cmp::Ordering::Greater,
+                (RecoveryPriority::High, RecoveryPriority::High) => a.name.cmp(&b.name),
+                (RecoveryPriority::High, _) => std::cmp::Ordering::Less,
+                (RecoveryPriority::Medium, RecoveryPriority::Critical | RecoveryPriority::High) => {
+                    std::cmp::Ordering::Greater
                 }
+                (RecoveryPriority::Medium, RecoveryPriority::Medium) => a.name.cmp(&b.name),
+                (RecoveryPriority::Medium, _) => std::cmp::Ordering::Less,
+                (RecoveryPriority::Low, _) => std::cmp::Ordering::Greater,
             });
 
             Ok(plans)
@@ -593,14 +614,16 @@ impl DisasterRecoveryManager for DefaultDisasterRecoveryManager {
         plan_id: &'a str,
         backup_id: &'a str,
         target_storage: &'a dyn StorageBackend,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<RestoreStatus>> + Send + 'a>> {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<RestoreStatus>> + Send + 'a>>
+    {
         Box::pin(async move {
-            let plan = self.load_plan(plan_id).await?
-                .ok_or_else(|| FortressError::storage(
+            let plan = self.load_plan(plan_id).await?.ok_or_else(|| {
+                FortressError::storage(
                     format!("Recovery plan not found: {}", plan_id),
                     "disaster_recovery".to_string(),
                     StorageErrorCode::NotFound,
-                ))?;
+                )
+            })?;
 
             let restore_id = utils::generate_restore_id();
             let start_time = Utc::now();
@@ -610,21 +633,29 @@ impl DisasterRecoveryManager for DefaultDisasterRecoveryManager {
 
             // Execute each step
             for step in &plan.recovery_steps {
-                match self.execute_recovery_step(step, backup_id, target_storage).await {
+                match self
+                    .execute_recovery_step(step, backup_id, target_storage)
+                    .await
+                {
                     Ok(step_result) => {
                         if step_result.passed {
                             items_restored += 1;
                         } else {
-                            let error_msg = format!("Step {} failed: {:?}", step.step_number, step_result.issues);
+                            let error_msg = format!(
+                                "Step {} failed: {:?}",
+                                step.step_number, step_result.issues
+                            );
                             errors.push(error_msg.clone());
-                            
+
                             if step.critical {
                                 // Stop execution on critical step failure
                                 return Ok(RestoreStatus {
                                     restore_id,
                                     backup_id: backup_id.to_string(),
                                     status: RestoreOperationStatus::Failed,
-                                    progress_percentage: (items_restored as f32 / total_items as f32) * 100.0,
+                                    progress_percentage: (items_restored as f32
+                                        / total_items as f32)
+                                        * 100.0,
                                     items_restored,
                                     total_items,
                                     started_at: start_time,
@@ -635,15 +666,17 @@ impl DisasterRecoveryManager for DefaultDisasterRecoveryManager {
                         }
                     }
                     Err(e) => {
-                        let error_msg = format!("Step {} execution failed: {}", step.step_number, e);
+                        let error_msg =
+                            format!("Step {} execution failed: {}", step.step_number, e);
                         errors.push(error_msg.clone());
-                        
+
                         if step.critical {
                             return Ok(RestoreStatus {
                                 restore_id,
                                 backup_id: backup_id.to_string(),
                                 status: RestoreOperationStatus::Failed,
-                                progress_percentage: (items_restored as f32 / total_items as f32) * 100.0,
+                                progress_percentage: (items_restored as f32 / total_items as f32)
+                                    * 100.0,
                                 items_restored,
                                 total_items,
                                 started_at: start_time,
@@ -680,12 +713,13 @@ impl DisasterRecoveryManager for DefaultDisasterRecoveryManager {
         plan_id: &'a str,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<TestResult>> + Send + 'a>> {
         Box::pin(async move {
-            let plan = self.load_plan(plan_id).await?
-                .ok_or_else(|| FortressError::storage(
+            let plan = self.load_plan(plan_id).await?.ok_or_else(|| {
+                FortressError::storage(
                     format!("Recovery plan not found: {}", plan_id),
                     "disaster_recovery".to_string(),
                     StorageErrorCode::NotFound,
-                ))?;
+                )
+            })?;
 
             let test_id = self.generate_test_id();
             let start_time = std::time::Instant::now();
@@ -699,14 +733,20 @@ impl DisasterRecoveryManager for DefaultDisasterRecoveryManager {
 
             // Test each step
             for step in &plan.recovery_steps {
-                match self.execute_recovery_step(step, "test_backup", &*test_storage).await {
+                match self
+                    .execute_recovery_step(step, "test_backup", &*test_storage)
+                    .await
+                {
                     Ok(step_result) => {
                         if !step_result.passed {
                             all_passed = false;
                             issues.extend(step_result.issues.clone());
-                            
+
                             if step.critical {
-                                recommendations.push(format!("Critical step {} failed: {:?}", step.step_number, step_result.issues));
+                                recommendations.push(format!(
+                                    "Critical step {} failed: {:?}",
+                                    step.step_number, step_result.issues
+                                ));
                             }
                         }
                         step_results.push(step_result);
@@ -715,11 +755,12 @@ impl DisasterRecoveryManager for DefaultDisasterRecoveryManager {
                         all_passed = false;
                         let error_msg = format!("Step {} test failed: {}", step.step_number, e);
                         issues.push(error_msg.clone());
-                        
+
                         if step.critical {
-                            recommendations.push(format!("Critical step {} failed: {}", step.step_number, e));
+                            recommendations
+                                .push(format!("Critical step {} failed: {}", step.step_number, e));
                         }
-                        
+
                         step_results.push(StepTestResult {
                             step_number: step.step_number,
                             passed: false,
@@ -735,7 +776,8 @@ impl DisasterRecoveryManager for DefaultDisasterRecoveryManager {
                 recommendations.push("All tests passed successfully".to_string());
             } else {
                 recommendations.push("Review failed steps and update the plan".to_string());
-                recommendations.push("Consider increasing time estimates for failed steps".to_string());
+                recommendations
+                    .push("Consider increasing time estimates for failed steps".to_string());
             }
 
             let duration = start_time.elapsed().as_secs();
@@ -768,12 +810,13 @@ impl DisasterRecoveryManager for DefaultDisasterRecoveryManager {
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + 'a>> {
         Box::pin(async move {
             // Verify plan exists
-            let _existing = self.load_plan(&plan.plan_id).await?
-                .ok_or_else(|| FortressError::storage(
+            let _existing = self.load_plan(&plan.plan_id).await?.ok_or_else(|| {
+                FortressError::storage(
                     format!("Recovery plan not found: {}", plan.plan_id),
                     "disaster_recovery".to_string(),
                     StorageErrorCode::NotFound,
-                ))?;
+                )
+            })?;
 
             self.save_plan(&plan).await
         })
@@ -800,24 +843,20 @@ impl DisasterRecoveryManager for DefaultDisasterRecoveryManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::InMemoryStorage;
     use crate::backup_manager::DefaultBackupManager;
+    use crate::storage::InMemoryStorage;
     use std::sync::Arc;
 
     #[tokio::test]
     async fn test_disaster_recovery_manager_creation() {
         let plan_storage = Arc::new(InMemoryStorage::new());
         let backup_storage = Arc::new(InMemoryStorage::new());
-        let backup_manager = Arc::new(DefaultBackupManager::new(
-            backup_storage.clone(),
-            None,
-            BackupConfig::default(),
-        ).unwrap());
-
-        let dr_manager = DefaultDisasterRecoveryManager::new(
-            plan_storage.clone(),
-            backup_manager,
+        let backup_manager = Arc::new(
+            DefaultBackupManager::new(backup_storage.clone(), None, BackupConfig::default())
+                .unwrap(),
         );
+
+        let dr_manager = DefaultDisasterRecoveryManager::new(plan_storage.clone(), backup_manager);
 
         assert!(!dr_manager.plans.read().await.is_empty());
     }
@@ -826,31 +865,25 @@ mod tests {
     async fn test_create_recovery_plan() {
         let plan_storage = Arc::new(InMemoryStorage::new());
         let backup_storage = Arc::new(InMemoryStorage::new());
-        let backup_manager = Arc::new(DefaultBackupManager::new(
-            backup_storage.clone(),
-            None,
-            BackupConfig::default(),
-        ).unwrap());
-
-        let dr_manager = DefaultDisasterRecoveryManager::new(
-            plan_storage.clone(),
-            backup_manager,
+        let backup_manager = Arc::new(
+            DefaultBackupManager::new(backup_storage.clone(), None, BackupConfig::default())
+                .unwrap(),
         );
+
+        let dr_manager = DefaultDisasterRecoveryManager::new(plan_storage.clone(), backup_manager);
 
         let plan = DisasterRecoveryPlan {
             plan_id: "test_plan".to_string(),
             name: "Test Plan".to_string(),
             description: "Test recovery plan".to_string(),
-            recovery_steps: vec![
-                RecoveryStep {
-                    step_number: 1,
-                    description: "Test step".to_string(),
-                    command: None,
-                    expected_duration_minutes: 5,
-                    critical: true,
-                    verification_criteria: Some("storage_health".to_string()),
-                },
-            ],
+            recovery_steps: vec![RecoveryStep {
+                step_number: 1,
+                description: "Test step".to_string(),
+                command: None,
+                expected_duration_minutes: 5,
+                critical: true,
+                verification_criteria: Some("storage_health".to_string()),
+            }],
             required_resources: vec!["Test resource".to_string()],
             estimated_recovery_time_minutes: 5,
             priority: RecoveryPriority::High,
@@ -864,23 +897,19 @@ mod tests {
     async fn test_list_recovery_plans() {
         let plan_storage = Arc::new(InMemoryStorage::new());
         let backup_storage = Arc::new(InMemoryStorage::new());
-        let backup_manager = Arc::new(DefaultBackupManager::new(
-            backup_storage.clone(),
-            None,
-            BackupConfig::default(),
-        ).unwrap());
-
-        let dr_manager = DefaultDisasterRecoveryManager::new(
-            plan_storage.clone(),
-            backup_manager,
+        let backup_manager = Arc::new(
+            DefaultBackupManager::new(backup_storage.clone(), None, BackupConfig::default())
+                .unwrap(),
         );
+
+        let dr_manager = DefaultDisasterRecoveryManager::new(plan_storage.clone(), backup_manager);
 
         // Create default plans
         dr_manager.create_default_plans().await.unwrap();
 
         let plans = dr_manager.list_recovery_plans().await.unwrap();
         assert_eq!(plans.len(), 3);
-        
+
         // Verify plans are sorted by priority
         assert!(matches!(plans[0].priority, RecoveryPriority::Critical));
         assert!(matches!(plans[1].priority, RecoveryPriority::High));
@@ -891,16 +920,12 @@ mod tests {
     async fn test_recovery_plan_validation() {
         let plan_storage = Arc::new(InMemoryStorage::new());
         let backup_storage = Arc::new(InMemoryStorage::new());
-        let backup_manager = Arc::new(DefaultBackupManager::new(
-            backup_storage.clone(),
-            None,
-            BackupConfig::default(),
-        ).unwrap());
-
-        let dr_manager = DefaultDisasterRecoveryManager::new(
-            plan_storage.clone(),
-            backup_manager,
+        let backup_manager = Arc::new(
+            DefaultBackupManager::new(backup_storage.clone(), None, BackupConfig::default())
+                .unwrap(),
         );
+
+        let dr_manager = DefaultDisasterRecoveryManager::new(plan_storage.clone(), backup_manager);
 
         // Test invalid plan (no steps)
         let invalid_plan = DisasterRecoveryPlan {
@@ -928,40 +953,47 @@ mod tests {
             last_tested: None,
         };
 
-        assert!(dr_manager.create_recovery_plan(invalid_plan2).await.is_err());
+        assert!(dr_manager
+            .create_recovery_plan(invalid_plan2)
+            .await
+            .is_err());
     }
 
     #[tokio::test]
     async fn test_recovery_plan_commands() {
         let plan_storage = Arc::new(InMemoryStorage::new());
         let backup_storage = Arc::new(InMemoryStorage::new());
-        let backup_manager = Arc::new(DefaultBackupManager::new(
-            backup_storage.clone(),
-            None,
-            BackupConfig::default(),
-        ).unwrap());
-
-        let dr_manager = DefaultDisasterRecoveryManager::new(
-            plan_storage.clone(),
-            backup_manager,
+        let backup_manager = Arc::new(
+            DefaultBackupManager::new(backup_storage.clone(), None, BackupConfig::default())
+                .unwrap(),
         );
+
+        let dr_manager = DefaultDisasterRecoveryManager::new(plan_storage.clone(), backup_manager);
 
         let test_storage = Arc::new(InMemoryStorage::new());
 
         // Test storage health verification
-        let result = dr_manager.verify_step_criteria("storage_health", &*test_storage).await;
+        let result = dr_manager
+            .verify_step_criteria("storage_health", &*test_storage)
+            .await;
         assert!(result.is_ok());
 
         // Test key exists verification
         test_storage.put("test_key", b"test_data").await.unwrap();
-        let result = dr_manager.verify_step_criteria("key_exists:test_key", &*test_storage).await;
+        let result = dr_manager
+            .verify_step_criteria("key_exists:test_key", &*test_storage)
+            .await;
         assert!(result.is_ok());
 
-        let result = dr_manager.verify_step_criteria("key_exists:nonexistent", &*test_storage).await;
+        let result = dr_manager
+            .verify_step_criteria("key_exists:nonexistent", &*test_storage)
+            .await;
         assert!(result.is_err());
 
         // Test backup count verification
-        let result = dr_manager.verify_step_criteria("backup_count:0", &*test_storage).await;
+        let result = dr_manager
+            .verify_step_criteria("backup_count:0", &*test_storage)
+            .await;
         assert!(result.is_err()); // Should fail since we have backups
     }
 }

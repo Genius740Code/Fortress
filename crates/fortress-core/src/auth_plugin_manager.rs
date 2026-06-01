@@ -5,14 +5,14 @@
 
 use crate::auth_plugin::*;
 use crate::error::{FortressError, Result};
+use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::time::{interval, Duration};
-use tracing::{info, warn, error, debug};
-use base64::{Engine as _, engine::general_purpose};
+use tracing::{debug, error, info, warn};
 
 /// Hot-swappable authentication plugin manager with comprehensive lifecycle management
 pub struct HotSwappableAuthPluginManager {
@@ -161,10 +161,10 @@ impl HotSwappableAuthPluginManager {
 
         let handle = tokio::spawn(async move {
             let mut interval = interval(health_check_interval);
-            
+
             loop {
                 interval.tick().await;
-                
+
                 let plugins_snapshot = {
                     let plugins_read = plugins.read().await;
                     plugins_read.clone()
@@ -200,8 +200,10 @@ impl HotSwappableAuthPluginManager {
                     }
                 }
 
-                info!("Health check completed: {} healthy, {} unhealthy plugins", 
-                       healthy_plugins, unhealthy_plugins);
+                info!(
+                    "Health check completed: {} healthy, {} unhealthy plugins",
+                    healthy_plugins, unhealthy_plugins
+                );
             }
         });
 
@@ -216,7 +218,7 @@ impl HotSwappableAuthPluginManager {
     /// Scan plugin directory for available plugins
     async fn scan_plugin_directory(&self) -> Result<()> {
         let plugin_dir = Path::new(&self.config.plugin_directory);
-        
+
         if !plugin_dir.exists() {
             warn!("Plugin directory does not exist: {:?}", plugin_dir);
             return Ok(());
@@ -224,14 +226,17 @@ impl HotSwappableAuthPluginManager {
 
         info!("Scanning plugin directory: {:?}", plugin_dir);
 
-        let mut entries = tokio::fs::read_dir(plugin_dir).await
-            .map_err(|e| FortressError::plugin(format!("Failed to read plugin directory: {}", e)))?;
+        let mut entries = tokio::fs::read_dir(plugin_dir).await.map_err(|e| {
+            FortressError::plugin(format!("Failed to read plugin directory: {}", e))
+        })?;
 
-        while let Some(entry) = entries.next_entry().await
-            .map_err(|e| FortressError::plugin(format!("Failed to read directory entry: {}", e)))? {
-            
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .map_err(|e| FortressError::plugin(format!("Failed to read directory entry: {}", e)))?
+        {
             let path = entry.path();
-            
+
             // Look for .wasm files
             if path.extension().and_then(|s| s.to_str()) == Some("wasm") {
                 if let Err(e) = self.register_plugin_file(&path).await {
@@ -245,16 +250,18 @@ impl HotSwappableAuthPluginManager {
 
     /// Register a plugin file from the filesystem
     async fn register_plugin_file(&self, file_path: &Path) -> Result<()> {
-        let file_name = file_path.file_stem()
+        let file_name = file_path
+            .file_stem()
             .and_then(|s| s.to_str())
             .ok_or_else(|| FortressError::plugin("Invalid plugin file name"))?;
 
         // Read plugin metadata from companion JSON file
         let metadata_path = file_path.with_extension("json");
         let metadata = if metadata_path.exists() {
-            let metadata_content = tokio::fs::read_to_string(&metadata_path).await
+            let metadata_content = tokio::fs::read_to_string(&metadata_path)
+                .await
                 .map_err(|e| FortressError::plugin(format!("Failed to read metadata: {}", e)))?;
-            
+
             serde_json::from_str(&metadata_content)
                 .map_err(|e| FortressError::plugin(format!("Failed to parse metadata: {}", e)))?
         } else {
@@ -306,7 +313,10 @@ impl HotSwappableAuthPluginManager {
         let registry_entry = {
             let registry = self.registry.read().await;
             registry.get(plugin_name).cloned()
-        }.ok_or_else(|| FortressError::plugin(format!("Plugin not found in registry: {}", plugin_name)))?;
+        }
+        .ok_or_else(|| {
+            FortressError::plugin(format!("Plugin not found in registry: {}", plugin_name))
+        })?;
 
         // Update status to loading
         {
@@ -317,7 +327,8 @@ impl HotSwappableAuthPluginManager {
         }
 
         // Read WASM file
-        let wasm_bytes = tokio::fs::read(&registry_entry.file_path).await
+        let wasm_bytes = tokio::fs::read(&registry_entry.file_path)
+            .await
             .map_err(|e| FortressError::plugin(format!("Failed to read plugin file: {}", e)))?;
 
         // Create plugin instance
@@ -329,13 +340,15 @@ impl HotSwappableAuthPluginManager {
 
         // Initialize plugin
         let mut plugin = plugin;
-        plugin.initialize(serde_json::Value::Object(Default::default())).await?;
+        plugin
+            .initialize(serde_json::Value::Object(Default::default()))
+            .await?;
 
         // Store plugin
         {
             let mut plugins = self.plugins.write().await;
             let mut method_to_plugin = self.method_to_plugin.write().await;
-            
+
             let plugin_arc = Arc::new(plugin) as Arc<dyn AuthPlugin>;
             plugins.insert(plugin_name.to_string(), plugin_arc.clone());
 
@@ -388,7 +401,7 @@ impl HotSwappableAuthPluginManager {
         {
             let mut plugins = self.plugins.write().await;
             let mut method_to_plugin = self.method_to_plugin.write().await;
-            
+
             plugins.remove(plugin_name);
 
             // Remove method mappings for this plugin
@@ -417,7 +430,10 @@ impl HotSwappableAuthPluginManager {
 
     /// Hot-swap a plugin (reload without downtime)
     pub async fn hot_swap_plugin(&self, request: PluginReloadRequest) -> Result<()> {
-        info!("Hot-swapping plugin: {} (force: {})", request.plugin_name, request.force);
+        info!(
+            "Hot-swapping plugin: {} (force: {})",
+            request.plugin_name, request.force
+        );
 
         // Check if plugin is currently loaded
         let is_loaded = {
@@ -426,9 +442,10 @@ impl HotSwappableAuthPluginManager {
         };
 
         if is_loaded && !request.force {
-            return Err(FortressError::plugin(
-                format!("Plugin {} is already loaded. Use force=true to reload.", request.plugin_name)
-            ));
+            return Err(FortressError::plugin(format!(
+                "Plugin {} is already loaded. Use force=true to reload.",
+                request.plugin_name
+            )));
         }
 
         // If plugin is loaded, unload it first
@@ -445,7 +462,10 @@ impl HotSwappableAuthPluginManager {
 
     /// Deploy a new plugin version
     pub async fn deploy_plugin(&self, deployment: PluginDeployment) -> Result<()> {
-        info!("Deploying plugin: {} v{}", deployment.name, deployment.version);
+        info!(
+            "Deploying plugin: {} v{}",
+            deployment.name, deployment.version
+        );
 
         match deployment.strategy {
             DeploymentStrategy::Immediate => {
@@ -468,13 +488,15 @@ impl HotSwappableAuthPluginManager {
     /// Immediate deployment strategy
     async fn deploy_immediate(&self, deployment: PluginDeployment) -> Result<()> {
         // Decode and write plugin file
-        let plugin_bytes = general_purpose::STANDARD.decode(&deployment.file_data)
+        let plugin_bytes = general_purpose::STANDARD
+            .decode(&deployment.file_data)
             .map_err(|e| FortressError::plugin(format!("Failed to decode plugin data: {}", e)))?;
 
-        let plugin_path = Path::new(&self.config.plugin_directory)
-            .join(format!("{}.wasm", deployment.name));
+        let plugin_path =
+            Path::new(&self.config.plugin_directory).join(format!("{}.wasm", deployment.name));
 
-        tokio::fs::write(&plugin_path, plugin_bytes).await
+        tokio::fs::write(&plugin_path, plugin_bytes)
+            .await
             .map_err(|e| FortressError::plugin(format!("Failed to write plugin file: {}", e)))?;
 
         // Write metadata
@@ -482,7 +504,8 @@ impl HotSwappableAuthPluginManager {
         let metadata_content = serde_json::to_string_pretty(&deployment.config)
             .map_err(|e| FortressError::plugin(format!("Failed to serialize metadata: {}", e)))?;
 
-        tokio::fs::write(metadata_path, metadata_content).await
+        tokio::fs::write(metadata_path, metadata_content)
+            .await
             .map_err(|e| FortressError::plugin(format!("Failed to write metadata file: {}", e)))?;
 
         // Register and load the plugin
@@ -494,7 +517,10 @@ impl HotSwappableAuthPluginManager {
 
     /// Rolling deployment strategy
     async fn deploy_rolling(&self, deployment: PluginDeployment) -> Result<()> {
-        info!("Starting rolling deployment for plugin: {}", deployment.name);
+        info!(
+            "Starting rolling deployment for plugin: {}",
+            deployment.name
+        );
 
         // For simplicity, implement as immediate deployment
         // In a real implementation, this would gradually replace instances
@@ -505,7 +531,10 @@ impl HotSwappableAuthPluginManager {
 
     /// Blue-green deployment strategy
     async fn deploy_blue_green(&self, deployment: PluginDeployment) -> Result<()> {
-        info!("Starting blue-green deployment for plugin: {}", deployment.name);
+        info!(
+            "Starting blue-green deployment for plugin: {}",
+            deployment.name
+        );
 
         // For simplicity, implement as immediate deployment
         // In a real implementation, this would maintain both versions
@@ -516,8 +545,10 @@ impl HotSwappableAuthPluginManager {
 
     /// Canary deployment strategy
     async fn deploy_canary(&self, deployment: PluginDeployment, percentage: f64) -> Result<()> {
-        info!("Starting canary deployment for plugin: {} ({}% traffic)", 
-               deployment.name, percentage);
+        info!(
+            "Starting canary deployment for plugin: {} ({}% traffic)",
+            deployment.name, percentage
+        );
 
         // For simplicity, implement as immediate deployment
         // In a real implementation, this would route percentage of traffic
@@ -540,14 +571,16 @@ impl HotSwappableAuthPluginManager {
         // Try default method
         let default_method = self.default_method.read().await;
         if method == &*default_method {
-            return Err(FortressError::plugin(
-                format!("No plugin available for default method: {:?}", method)
-            ));
+            return Err(FortressError::plugin(format!(
+                "No plugin available for default method: {:?}",
+                method
+            )));
         }
 
-        Err(FortressError::plugin(
-            format!("No plugin found for authentication method: {:?}", method)
-        ))
+        Err(FortressError::plugin(format!(
+            "No plugin found for authentication method: {:?}",
+            method
+        )))
     }
 
     /// Authenticate using appropriate plugin
@@ -575,10 +608,12 @@ impl HotSwappableAuthPluginManager {
             } else {
                 stats.failed_auths += 1;
             }
-            
+
             // Update average authentication time
             let total_requests = stats.total_requests;
-            stats.avg_auth_time_ms = (stats.avg_auth_time_ms * (total_requests - 1) as f64 + elapsed) / total_requests as f64;
+            stats.avg_auth_time_ms = (stats.avg_auth_time_ms * (total_requests - 1) as f64
+                + elapsed)
+                / total_requests as f64;
         }
 
         result
@@ -605,7 +640,9 @@ impl HotSwappableAuthPluginManager {
     /// Get plugin metadata
     pub async fn get_plugin_metadata(&self, plugin_name: &str) -> Option<AuthPluginMetadata> {
         let registry = self.registry.read().await;
-        registry.get(plugin_name).map(|entry| entry.metadata.clone())
+        registry
+            .get(plugin_name)
+            .map(|entry| entry.metadata.clone())
     }
 
     /// Get plugin manager statistics
@@ -619,9 +656,10 @@ impl HotSwappableAuthPluginManager {
         // Check if a plugin supports this method
         let method_to_plugin = self.method_to_plugin.read().await;
         if !method_to_plugin.contains_key(&method) {
-            return Err(FortressError::plugin(
-                format!("No plugin available for method: {:?}", method)
-            ));
+            return Err(FortressError::plugin(format!(
+                "No plugin available for method: {:?}",
+                method
+            )));
         }
 
         {
@@ -729,7 +767,7 @@ mod tests {
         };
 
         let manager = HotSwappableAuthPluginManager::new(config).await.unwrap();
-        
+
         // Initially no plugins should be registered
         let registered = manager.list_registered_plugins().await;
         assert_eq!(registered.len(), 0);
@@ -752,7 +790,7 @@ mod tests {
         };
 
         let manager = HotSwappableAuthPluginManager::new(config).await.unwrap();
-        
+
         // Default method should be JWT
         let default_method = manager.get_default_method().await;
         assert_eq!(default_method, AuthMethod::JWT);

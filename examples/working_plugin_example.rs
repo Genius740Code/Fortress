@@ -1,5 +1,5 @@
 //! Working Plugin Example
-//! 
+//!
 //! This example demonstrates a complete end-to-end plugin workflow:
 //! 1. Loading a plugin from the testplugin directory
 //! 2. Registering it with the plugin manager

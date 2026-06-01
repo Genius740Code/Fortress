@@ -1,5 +1,5 @@
 //! Security Audit Logging Module
-//! 
+//!
 //! Provides comprehensive security audit logging for all security events.
 //! This module tracks authentication attempts, authorization decisions,
 //! and other security-relevant events for compliance and monitoring.
@@ -218,16 +218,19 @@ impl SecurityLogger {
     }
 
     /// Set alert callback
-    pub fn with_alert_callback<F>(mut self, callback: F) -> Self 
-    where 
-        F: Fn(&SecurityAuditEvent) + Send + Sync + 'static
+    pub fn with_alert_callback<F>(mut self, callback: F) -> Self
+    where
+        F: Fn(&SecurityAuditEvent) + Send + Sync + 'static,
     {
         self.alert_callback = Some(Box::new(callback));
         self
     }
 
     /// Log a security event
-    pub async fn log_security_event(&self, mut event: SecurityAuditEvent) -> Result<(), FortressError> {
+    pub async fn log_security_event(
+        &self,
+        mut event: SecurityAuditEvent,
+    ) -> Result<(), FortressError> {
         // Calculate risk score if not set
         if event.risk_score == 0 {
             event.calculate_risk_score();
@@ -300,7 +303,7 @@ impl SecurityLogger {
         let audit_log = self.audit_log.lock().await;
         let start = (page.saturating_sub(1) * page_size) as usize;
         let end = std::cmp::min(start + page_size as usize, audit_log.len());
-        
+
         if start >= audit_log.len() {
             return Ok(Vec::new());
         }
@@ -309,7 +312,10 @@ impl SecurityLogger {
     }
 
     /// Get events by user ID
-    pub async fn get_events_by_user(&self, user_id: &str) -> Result<Vec<SecurityAuditEvent>, FortressError> {
+    pub async fn get_events_by_user(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<SecurityAuditEvent>, FortressError> {
         let audit_log = self.audit_log.lock().await;
         Ok(audit_log
             .iter()
@@ -319,7 +325,10 @@ impl SecurityLogger {
     }
 
     /// Get events by risk score threshold
-    pub async fn get_high_risk_events(&self, min_risk_score: RiskScore) -> Result<Vec<SecurityAuditEvent>, FortressError> {
+    pub async fn get_high_risk_events(
+        &self,
+        min_risk_score: RiskScore,
+    ) -> Result<Vec<SecurityAuditEvent>, FortressError> {
         let audit_log = self.audit_log.lock().await;
         Ok(audit_log
             .iter()
@@ -345,12 +354,12 @@ impl SecurityLogger {
     /// Get security statistics
     pub async fn get_security_stats(&self) -> Result<SecurityStats, FortressError> {
         let audit_log = self.audit_log.lock().await;
-        
+
         let mut stats = SecurityStats::default();
-        
+
         for event in audit_log.iter() {
             stats.total_events += 1;
-            
+
             // Count by event type
             match event.event_type {
                 SecurityEventType::Authentication => stats.authentication_events += 1,
@@ -362,7 +371,7 @@ impl SecurityLogger {
                 SecurityEventType::ThreatDetection => stats.threats_detected += 1,
                 SecurityEventType::Compliance => stats.compliance_events += 1,
             }
-            
+
             // Count by result
             match event.result {
                 SecurityEventResult::Success => stats.successful_events += 1,
@@ -371,7 +380,7 @@ impl SecurityLogger {
                 SecurityEventResult::Warning => stats.warnings += 1,
                 SecurityEventResult::Error => stats.errors += 1,
             }
-            
+
             // Risk score statistics
             if event.risk_score >= 80 {
                 stats.critical_risk_events += 1;
@@ -383,7 +392,7 @@ impl SecurityLogger {
                 stats.low_risk_events += 1;
             }
         }
-        
+
         Ok(stats)
     }
 
@@ -419,18 +428,19 @@ pub struct SecurityStats {
 }
 
 /// Global security logger instance
-static GLOBAL_SECURITY_LOGGER: std::sync::OnceLock<Arc<SecurityLogger>> = std::sync::OnceLock::new();
+static GLOBAL_SECURITY_LOGGER: std::sync::OnceLock<Arc<SecurityLogger>> =
+    std::sync::OnceLock::new();
 
 /// Initialize global security logger
 pub fn init_security_logger(config: SecurityLoggerConfig) -> Result<(), FortressError> {
     let logger = Arc::new(SecurityLogger::new(config));
-    GLOBAL_SECURITY_LOGGER
-        .set(logger)
-        .map_err(|_| FortressError::configuration(
+    GLOBAL_SECURITY_LOGGER.set(logger).map_err(|_| {
+        FortressError::configuration(
             "Security logger already initialized".to_string(),
             None,
             crate::error::ConfigurationErrorCode::InvalidFormat,
-        ))?;
+        )
+    })?;
     Ok(())
 }
 
@@ -482,12 +492,13 @@ mod tests {
     #[tokio::test]
     async fn test_security_logger() {
         let logger = SecurityLogger::default();
-        
+
         let event = SecurityAuditEvent::new(
             SecurityEventType::Authentication,
             "login_attempt".to_string(),
             SecurityEventResult::Success,
-        ).with_user("test_user".to_string());
+        )
+        .with_user("test_user".to_string());
 
         logger.log_security_event(event).await.unwrap();
 
@@ -511,13 +522,21 @@ mod tests {
     #[tokio::test]
     async fn test_security_stats() {
         let logger = SecurityLogger::default();
-        
+
         // Add some test events
         for i in 0..10 {
             let event = SecurityAuditEvent::new(
-                if i % 2 == 0 { SecurityEventType::Authentication } else { SecurityEventType::Authorization },
+                if i % 2 == 0 {
+                    SecurityEventType::Authentication
+                } else {
+                    SecurityEventType::Authorization
+                },
                 format!("test_event_{}", i),
-                if i % 3 == 0 { SecurityEventResult::Success } else { SecurityEventResult::Failure },
+                if i % 3 == 0 {
+                    SecurityEventResult::Success
+                } else {
+                    SecurityEventResult::Failure
+                },
             );
             logger.log_security_event(event).await.unwrap();
         }
@@ -533,7 +552,7 @@ mod tests {
     #[tokio::test]
     async fn test_event_filtering() {
         let logger = SecurityLogger::default();
-        
+
         // Add events with different risk scores
         for i in 0..5 {
             let mut event = SecurityAuditEvent::new(

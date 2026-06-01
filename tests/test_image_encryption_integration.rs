@@ -9,13 +9,13 @@
 //! - API service integration
 
 use fortress_core::{
-    image_encryption::*,
     encryption::{ChaCha20Poly1305, SecureKey},
     error::Result,
-    image_encryption::ImageDataClassification,
-    image_encryption::thumbnails::{ThumbnailFormat, ThumbnailOptions},
     image_encryption::streaming::{StreamingResult, StreamingStatus},
+    image_encryption::thumbnails::{ThumbnailFormat, ThumbnailOptions},
+    image_encryption::ImageDataClassification,
     image_encryption::SortOrder,
+    image_encryption::*,
 };
 use std::collections::HashMap;
 use tokio::time::{sleep, Duration};
@@ -54,7 +54,11 @@ impl ImageStore for MockImageStore {
         Ok(images.remove(image_id).is_some())
     }
 
-    async fn store_thumbnail(&self, _image_id: &str, thumbnail: &EncryptedThumbnail) -> Result<String> {
+    async fn store_thumbnail(
+        &self,
+        _image_id: &str,
+        thumbnail: &EncryptedThumbnail,
+    ) -> Result<String> {
         let id = uuid::Uuid::new_v4().to_string();
         let mut thumbnails = self.thumbnails.write().await;
         thumbnails.insert(id.clone(), thumbnail.clone());
@@ -75,7 +79,11 @@ impl ImageStore for MockImageStore {
         Ok(Vec::new())
     }
 
-    async fn store_streaming_result(&self, _session_id: &str, _result: &StreamingResult) -> Result<()> {
+    async fn store_streaming_result(
+        &self,
+        _session_id: &str,
+        _result: &StreamingResult,
+    ) -> Result<()> {
         Ok(())
     }
 
@@ -109,13 +117,13 @@ impl KeyManager for MockKeyManager {
 
     async fn get_key(&self, key_id: &str) -> Result<SecureKey> {
         let keys = self.keys.read().await;
-        keys.get(key_id)
-            .cloned()
-            .ok_or_else(|| fortress_core::error::FortressError::key_management(
+        keys.get(key_id).cloned().ok_or_else(|| {
+            fortress_core::error::FortressError::key_management(
                 format!("Key not found: {}", key_id),
                 Some("mock_key_manager".to_string()),
                 fortress_core::error::KeyErrorCode::KeyNotFound,
-            ))
+            )
+        })
     }
 
     async fn delete_key(&self, key_id: &str) -> Result<bool> {
@@ -135,8 +143,8 @@ fn create_test_jpeg() -> Vec<u8> {
     vec![
         0xFF, 0xD8, // JPEG SOI
         0xFF, 0xE0, 0x00, 0x10, // APP0 marker
-        b'J', b'F', b'I', b'F', 0x00, 0x01, 0x01, 0x01, 0x00, 0x48, 0x00, 0x48, 0x00, 0x00,
-        0xFF, 0xD9, // JPEG EOI
+        b'J', b'F', b'I', b'F', 0x00, 0x01, 0x01, 0x01, 0x00, 0x48, 0x00, 0x48, 0x00, 0x00, 0xFF,
+        0xD9, // JPEG EOI
     ]
 }
 
@@ -163,9 +171,9 @@ async fn test_complete_image_encryption_workflow() -> Result<()> {
     let algorithm = Box::new(ChaCha20Poly1305::new());
     let image_store = std::sync::Arc::new(MockImageStore::new());
     let key_manager = std::sync::Arc::new(MockKeyManager::new());
-    
+
     let service = ImageEncryptionService::new(algorithm, image_store.clone(), key_manager.clone())?;
-    
+
     // Test JPEG encryption
     let jpeg_data = create_test_jpeg();
     let encrypt_request = EncryptImageRequest {
@@ -179,14 +187,12 @@ async fn test_complete_image_encryption_workflow() -> Result<()> {
             custom_options: HashMap::new(),
         },
         key_id: None,
-        thumbnail_options: vec![
-            ThumbnailOptions {
-                size: ThumbnailSize::Medium,
-                format: ThumbnailFormat::Jpeg,
-                quality: Some(75),
-                ..Default::default()
-            },
-        ],
+        thumbnail_options: vec![ThumbnailOptions {
+            size: ThumbnailSize::Medium,
+            format: ThumbnailFormat::Jpeg,
+            quality: Some(75),
+            ..Default::default()
+        }],
         permissions: Some(AccessPermissions {
             classification: ImageDataClassification::Internal,
             viewers: vec!["test_user".to_string()],
@@ -195,40 +201,50 @@ async fn test_complete_image_encryption_workflow() -> Result<()> {
             ..Default::default()
         }),
     };
-    
+
     // Encrypt image
     let encrypt_response = service.encrypt_image(encrypt_request).await?;
-    
+
     // Verify encryption
     assert!(!encrypt_response.image_id.is_empty());
     assert!(!encrypt_response.key_id.is_empty());
-    assert_eq!(encrypt_response.encrypted_image.original_size, jpeg_data.len());
-    assert_eq!(encrypt_response.encrypted_image.format_info.format, ImageFormat::Jpeg);
+    assert_eq!(
+        encrypt_response.encrypted_image.original_size,
+        jpeg_data.len()
+    );
+    assert_eq!(
+        encrypt_response.encrypted_image.format_info.format,
+        ImageFormat::Jpeg
+    );
     assert!(!encrypt_response.thumbnail_ids.is_empty());
-    
+
     // Test decryption
     let decrypt_request = DecryptImageRequest {
         image_id: encrypt_response.image_id.clone(),
         key_id: encrypt_response.key_id.clone(),
         include_metadata: true,
     };
-    
+
     let decrypt_response = service.decrypt_image(decrypt_request).await?;
-    
+
     // Verify decryption
     assert_eq!(decrypt_response.image_data, jpeg_data);
     assert!(decrypt_response.metadata.is_some());
     assert_eq!(decrypt_response.format_info.format, ImageFormat::Jpeg);
-    
+
     // Test metadata retrieval
     let metadata_request = GetImageMetadataRequest {
         image_id: encrypt_response.image_id.clone(),
         key_id: encrypt_response.key_id.clone(),
     };
-    
+
     let metadata_response = service.get_image_metadata(metadata_request).await?;
-    assert!(metadata_response.metadata.basic_info.creation_date.is_some());
-    
+    assert!(metadata_response
+        .metadata
+        .basic_info
+        .creation_date
+        .is_some());
+
     Ok(())
 }
 
@@ -238,12 +254,12 @@ async fn test_streaming_encryption_workflow() -> Result<()> {
     let algorithm = Box::new(ChaCha20Poly1305::new());
     let image_store = std::sync::Arc::new(MockImageStore::new());
     let key_manager = std::sync::Arc::new(MockKeyManager::new());
-    
+
     let service = ImageEncryptionService::new(algorithm, image_store.clone(), key_manager.clone())?;
-    
+
     // Create large test image (5MB)
     let large_image_data = vec![0u8; 5 * 1024 * 1024];
-    
+
     // Start streaming encryption
     let streaming_request = StartStreamingRequest {
         image_data: large_image_data.clone(),
@@ -265,25 +281,27 @@ async fn test_streaming_encryption_workflow() -> Result<()> {
             compression_level: None,
         }),
     };
-    
-    let streaming_response = service.start_streaming_encryption(streaming_request).await?;
-    
+
+    let streaming_response = service
+        .start_streaming_encryption(streaming_request)
+        .await?;
+
     // Verify session started
     assert!(!streaming_response.session_id.is_empty());
     assert!(!streaming_response.image_key_id.is_empty());
     assert!(!streaming_response.thumbnail_key_id.is_empty());
-    
+
     // Wait a bit for processing
     sleep(Duration::from_millis(100)).await;
-    
+
     // Check streaming status
     let status_request = GetStreamingStatusRequest {
         session_id: streaming_response.session_id.clone(),
     };
-    
+
     let status_response = service.get_streaming_status(status_request).await?;
     assert_eq!(status_response.session_id, streaming_response.session_id);
-    
+
     // Verify status progression
     match status_response.state.status {
         StreamingStatus::Completed | StreamingStatus::InProgress => {
@@ -293,7 +311,7 @@ async fn test_streaming_encryption_workflow() -> Result<()> {
             // Other states are also valid depending on timing
         }
     }
-    
+
     Ok(())
 }
 
@@ -303,9 +321,9 @@ async fn test_thumbnail_generation_workflow() -> Result<()> {
     let algorithm = Box::new(ChaCha20Poly1305::new());
     let image_store = std::sync::Arc::new(MockImageStore::new());
     let key_manager = std::sync::Arc::new(MockKeyManager::new());
-    
+
     let service = ImageEncryptionService::new(algorithm, image_store.clone(), key_manager.clone())?;
-    
+
     // First encrypt an image
     let jpeg_data = create_test_jpeg();
     let encrypt_request = EncryptImageRequest {
@@ -315,9 +333,9 @@ async fn test_thumbnail_generation_workflow() -> Result<()> {
         thumbnail_options: vec![], // No thumbnails initially
         permissions: None,
     };
-    
+
     let encrypt_response = service.encrypt_image(encrypt_request).await?;
-    
+
     // Generate thumbnails for the encrypted image
     let thumbnail_request = GenerateThumbnailsRequest {
         image_id: encrypt_response.image_id.clone(),
@@ -344,15 +362,15 @@ async fn test_thumbnail_generation_workflow() -> Result<()> {
             },
         ],
     };
-    
+
     let thumbnail_response = service.generate_thumbnails(thumbnail_request).await?;
-    
+
     // Verify thumbnail generation
     assert_eq!(thumbnail_response.thumbnail_ids.len(), 3);
     assert!(!thumbnail_response.thumbnail_ids[0].is_empty());
     assert!(!thumbnail_response.thumbnail_ids[1].is_empty());
     assert!(!thumbnail_response.thumbnail_ids[2].is_empty());
-    
+
     Ok(())
 }
 
@@ -362,16 +380,28 @@ async fn test_image_search_workflow() -> Result<()> {
     let algorithm = Box::new(ChaCha20Poly1305::new());
     let image_store = std::sync::Arc::new(MockImageStore::new());
     let key_manager = std::sync::Arc::new(MockKeyManager::new());
-    
+
     let service = ImageEncryptionService::new(algorithm, image_store.clone(), key_manager.clone())?;
-    
+
     // Encrypt multiple images with different properties
     let images = vec![
-        (create_test_jpeg(), ImageFormat::Jpeg, ImageDataClassification::Public),
-        (create_test_png(), ImageFormat::Png, ImageDataClassification::Internal),
-        (create_test_jpeg(), ImageFormat::Jpeg, ImageDataClassification::Confidential),
+        (
+            create_test_jpeg(),
+            ImageFormat::Jpeg,
+            ImageDataClassification::Public,
+        ),
+        (
+            create_test_png(),
+            ImageFormat::Png,
+            ImageDataClassification::Internal,
+        ),
+        (
+            create_test_jpeg(),
+            ImageFormat::Jpeg,
+            ImageDataClassification::Confidential,
+        ),
     ];
-    
+
     let mut image_ids = Vec::new();
     for (data, _expected_format, classification) in images {
         let encrypt_request = EncryptImageRequest {
@@ -387,11 +417,11 @@ async fn test_image_search_workflow() -> Result<()> {
                 ..Default::default()
             }),
         };
-        
+
         let response = service.encrypt_image(encrypt_request).await?;
         image_ids.push(response.image_id);
     }
-    
+
     // Test search by format
     let search_request = SearchImagesRequest {
         filter: ImageFilter {
@@ -410,13 +440,13 @@ async fn test_image_search_workflow() -> Result<()> {
             },
         },
     };
-    
+
     let search_response = service.search_images(search_request).await?;
-    
+
     // Verify search results (mock implementation returns empty, but structure is validated)
     assert!(search_response.total_count <= 10);
     assert_eq!(search_response.results.len(), search_response.total_count);
-    
+
     Ok(())
 }
 
@@ -426,48 +456,46 @@ async fn test_image_deletion_workflow() -> Result<()> {
     let algorithm = Box::new(ChaCha20Poly1305::new());
     let image_store = std::sync::Arc::new(MockImageStore::new());
     let key_manager = std::sync::Arc::new(MockKeyManager::new());
-    
+
     let service = ImageEncryptionService::new(algorithm, image_store.clone(), key_manager.clone())?;
-    
+
     // Encrypt an image
     let jpeg_data = create_test_jpeg();
     let encrypt_request = EncryptImageRequest {
         image_data: jpeg_data,
         options: EncryptionOptions::default(),
         key_id: None,
-        thumbnail_options: vec![
-            ThumbnailOptions {
-                size: ThumbnailSize::Small,
-                format: ThumbnailFormat::Jpeg,
-                ..Default::default()
-            },
-        ],
+        thumbnail_options: vec![ThumbnailOptions {
+            size: ThumbnailSize::Small,
+            format: ThumbnailFormat::Jpeg,
+            ..Default::default()
+        }],
         permissions: None,
     };
-    
+
     let encrypt_response = service.encrypt_image(encrypt_request).await?;
-    
+
     // Verify image exists
     let stored_image = image_store.get_image(&encrypt_response.image_id).await?;
     assert!(stored_image.is_some());
-    
+
     // Delete the image
     let delete_request = DeleteImageRequest {
         image_id: encrypt_response.image_id.clone(),
         user_id: Some("test_user".to_string()),
         reason: Some("Test cleanup".to_string()),
     };
-    
+
     let delete_response = service.delete_image(delete_request).await?;
-    
+
     // Verify deletion
     assert!(delete_response.deleted);
     assert_eq!(delete_response.deleted_thumbnails, 0); // Mock returns 0
-    
+
     // Verify image is gone
     let stored_image = image_store.get_image(&encrypt_response.image_id).await?;
     assert!(stored_image.is_none());
-    
+
     Ok(())
 }
 
@@ -478,25 +506,37 @@ async fn test_format_detection_and_validation() -> Result<()> {
     let detected_format = ImageFormatDetector::detect(&jpeg_data)?;
     assert_eq!(detected_format, ImageFormat::Jpeg);
     assert!(detected_format.validate_data(&jpeg_data)?);
-    
+
     // Test PNG detection
     let png_data = create_test_png();
     let detected_format = ImageFormatDetector::detect(&png_data)?;
     assert_eq!(detected_format, ImageFormat::Png);
     assert!(detected_format.validate_data(&png_data)?);
-    
+
     // Test extension detection
-    assert_eq!(ImageFormatDetector::detect_from_extension("jpg"), ImageFormat::Jpeg);
-    assert_eq!(ImageFormatDetector::detect_from_extension("png"), ImageFormat::Png);
-    assert_eq!(ImageFormatDetector::detect_from_extension("tiff"), ImageFormat::Tiff);
-    assert_eq!(ImageFormatDetector::detect_from_extension("unknown"), ImageFormat::Unknown);
-    
+    assert_eq!(
+        ImageFormatDetector::detect_from_extension("jpg"),
+        ImageFormat::Jpeg
+    );
+    assert_eq!(
+        ImageFormatDetector::detect_from_extension("png"),
+        ImageFormat::Png
+    );
+    assert_eq!(
+        ImageFormatDetector::detect_from_extension("tiff"),
+        ImageFormat::Tiff
+    );
+    assert_eq!(
+        ImageFormatDetector::detect_from_extension("unknown"),
+        ImageFormat::Unknown
+    );
+
     // Test format properties
     assert!(ImageFormat::Png.supports_lossless());
     assert!(!ImageFormat::Jpeg.supports_lossless());
     assert!(ImageFormat::Tiff.supports_multiple_pages());
     assert!(!ImageFormat::Jpeg.supports_multiple_pages());
-    
+
     Ok(())
 }
 
@@ -506,11 +546,11 @@ async fn test_encryption_mode_variations() -> Result<()> {
     let algorithm = Box::new(ChaCha20Poly1305::new());
     let image_store = std::sync::Arc::new(MockImageStore::new());
     let key_manager = std::sync::Arc::new(MockKeyManager::new());
-    
+
     let service = ImageEncryptionService::new(algorithm, image_store.clone(), key_manager.clone())?;
-    
+
     let jpeg_data = create_test_jpeg();
-    
+
     // Test different encryption modes
     let modes = vec![
         EncryptionMode::Full,
@@ -518,7 +558,7 @@ async fn test_encryption_mode_variations() -> Result<()> {
         EncryptionMode::FormatAware,
         // Regional would need region definitions, skip for now
     ];
-    
+
     for mode in modes {
         let encrypt_request = EncryptImageRequest {
             image_data: jpeg_data.clone(),
@@ -534,28 +574,34 @@ async fn test_encryption_mode_variations() -> Result<()> {
             thumbnail_options: vec![],
             permissions: None,
         };
-        
+
         let encrypt_response = service.encrypt_image(encrypt_request).await?;
-        
+
         // Verify encryption worked
         assert!(!encrypt_response.image_id.is_empty());
-        assert_eq!(encrypt_response.encrypted_image.encryption_options.encryption_mode, mode);
-        
+        assert_eq!(
+            encrypt_response
+                .encrypted_image
+                .encryption_options
+                .encryption_mode,
+            mode
+        );
+
         // Test decryption
         let decrypt_request = DecryptImageRequest {
             image_id: encrypt_response.image_id.clone(),
             key_id: encrypt_response.key_id.clone(),
             include_metadata: false,
         };
-        
+
         let decrypt_response = service.decrypt_image(decrypt_request).await?;
-        
+
         // Verify decryption restored original data (for modes that support it)
         if matches!(mode, EncryptionMode::Full | EncryptionMode::FormatAware) {
             assert_eq!(decrypt_response.image_data, jpeg_data);
         }
     }
-    
+
     Ok(())
 }
 
@@ -565,9 +611,9 @@ async fn test_error_handling_and_validation() -> Result<()> {
     let algorithm = Box::new(ChaCha20Poly1305::new());
     let image_store = std::sync::Arc::new(MockImageStore::new());
     let key_manager = std::sync::Arc::new(MockKeyManager::new());
-    
+
     let service = ImageEncryptionService::new(algorithm, image_store.clone(), key_manager.clone())?;
-    
+
     // Test empty image data
     let encrypt_request = EncryptImageRequest {
         image_data: vec![],
@@ -576,39 +622,37 @@ async fn test_error_handling_and_validation() -> Result<()> {
         thumbnail_options: vec![],
         permissions: None,
     };
-    
+
     let result = service.encrypt_image(encrypt_request).await;
     assert!(result.is_err());
-    
+
     // Test invalid image ID for decryption
     let decrypt_request = DecryptImageRequest {
         image_id: "nonexistent_id".to_string(),
         key_id: "some_key".to_string(),
         include_metadata: false,
     };
-    
+
     let result = service.decrypt_image(decrypt_request).await;
     assert!(result.is_err());
-    
+
     // Test invalid thumbnail options
     let jpeg_data = create_test_jpeg();
     let encrypt_request = EncryptImageRequest {
         image_data: jpeg_data,
         options: EncryptionOptions::default(),
         key_id: None,
-        thumbnail_options: vec![
-            ThumbnailOptions {
-                size: ThumbnailSize::Custom(0, 100), // Invalid size
-                format: ThumbnailFormat::Jpeg,
-                ..Default::default()
-            },
-        ],
+        thumbnail_options: vec![ThumbnailOptions {
+            size: ThumbnailSize::Custom(0, 100), // Invalid size
+            format: ThumbnailFormat::Jpeg,
+            ..Default::default()
+        }],
         permissions: None,
     };
-    
+
     let result = service.encrypt_image(encrypt_request).await;
     assert!(result.is_err());
-    
+
     Ok(())
 }
 
@@ -618,11 +662,11 @@ async fn test_thumbnail_size_and_format_variations() -> Result<()> {
     let algorithm = Box::new(ChaCha20Poly1305::new());
     let image_store = std::sync::Arc::new(MockImageStore::new());
     let key_manager = std::sync::Arc::new(MockKeyManager::new());
-    
+
     let service = ImageEncryptionService::new(algorithm, image_store.clone(), key_manager.clone())?;
-    
+
     let jpeg_data = create_test_jpeg();
-    
+
     // Test different thumbnail sizes and formats
     let sizes = vec![
         ThumbnailSize::Small,
@@ -631,38 +675,40 @@ async fn test_thumbnail_size_and_format_variations() -> Result<()> {
         ThumbnailSize::ExtraLarge,
         ThumbnailSize::Custom(200, 150),
     ];
-    
+
     let formats = vec![
         ThumbnailFormat::Jpeg,
         ThumbnailFormat::Png,
         ThumbnailFormat::WebP,
     ];
-    
+
     for size in sizes {
         for format in &formats {
             let encrypt_request = EncryptImageRequest {
                 image_data: jpeg_data.clone(),
                 options: EncryptionOptions::default(),
                 key_id: None,
-                thumbnail_options: vec![
-                    ThumbnailOptions {
-                        size,
-                        format: *format,
-                        quality: if format.supports_transparency() { None } else { Some(75) },
-                        ..Default::default()
+                thumbnail_options: vec![ThumbnailOptions {
+                    size,
+                    format: *format,
+                    quality: if format.supports_transparency() {
+                        None
+                    } else {
+                        Some(75)
                     },
-                ],
+                    ..Default::default()
+                }],
                 permissions: None,
             };
-            
+
             let encrypt_response = service.encrypt_image(encrypt_request).await?;
-            
+
             // Verify thumbnail was generated
             assert_eq!(encrypt_response.thumbnail_ids.len(), 1);
             assert!(!encrypt_response.thumbnail_ids[0].is_empty());
         }
     }
-    
+
     Ok(())
 }
 
@@ -674,14 +720,14 @@ fn test_thumbnail_size_properties() {
     assert_eq!(ThumbnailSize::Large.dimensions(), (256, 256));
     assert_eq!(ThumbnailSize::ExtraLarge.dimensions(), (512, 512));
     assert_eq!(ThumbnailSize::Custom(200, 150).dimensions(), (200, 150));
-    
+
     // Test size names
     assert_eq!(ThumbnailSize::Small.name(), "small");
     assert_eq!(ThumbnailSize::Medium.name(), "medium");
     assert_eq!(ThumbnailSize::Large.name(), "large");
     assert_eq!(ThumbnailSize::ExtraLarge.name(), "xlarge");
     assert_eq!(ThumbnailSize::Custom(100, 100).name(), "custom");
-    
+
     // Test max file sizes
     assert_eq!(ThumbnailSize::Small.max_file_size(), 8 * 1024);
     assert_eq!(ThumbnailSize::Medium.max_file_size(), 32 * 1024);
@@ -703,7 +749,7 @@ fn test_data_classification_levels() {
 fn test_encryption_options_validation() {
     let algorithm = ChaCha20Poly1305::new();
     let encryptor = ImageEncryptor::new(Box::new(algorithm));
-    
+
     // Test valid options
     let valid_options = EncryptionOptions {
         algorithm: "chacha20poly1305".to_string(),
@@ -713,19 +759,19 @@ fn test_encryption_options_validation() {
         quality: Some(85),
         custom_options: HashMap::new(),
     };
-    
+
     assert!(encryptor.validate_options(&valid_options).is_ok());
-    
+
     // Test invalid algorithm
     let mut invalid_options = valid_options.clone();
     invalid_options.algorithm = "invalid_algorithm".to_string();
     assert!(encryptor.validate_options(&invalid_options).is_err());
-    
+
     // Test invalid chunk size
     let mut invalid_options = valid_options.clone();
     invalid_options.chunk_size = Some(0);
     assert!(encryptor.validate_options(&invalid_options).is_err());
-    
+
     // Test invalid quality
     let mut invalid_options = valid_options.clone();
     invalid_options.quality = Some(150);

@@ -4,19 +4,22 @@
 //! including database connections, external services, and internal metrics.
 
 use crate::config::FeatureFlags;
-use crate::models::{HealthResponse, HealthStatus, ComponentHealth};
 use crate::error::{ServerError, ServerResult};
+use crate::models::{ComponentHealth, HealthResponse, HealthStatus};
 use chrono::{DateTime, Utc};
+use fortress_core::audit::{
+    AuditConfig, AuditEntry, AuditEventType, AuditLogger, AuditQuery, AuditStatistics,
+    EventOutcome, IntegrityReport, SecurityLevel,
+};
 use fortress_core::encryption::PerformanceProfile;
-use fortress_core::audit::{AuditConfig, AuditEntry, AuditEventType, SecurityLevel, EventOutcome, AuditStatistics, AuditLogger, AuditQuery, IntegrityReport};
-use fortress_core::encryption::{EncryptionAlgorithm, Aegis256};
-use fortress_core::key::{SecureKey, InMemoryKeyManager, KeyManager, KeyMetadata};
+use fortress_core::encryption::{Aegis256, EncryptionAlgorithm};
 use fortress_core::error::FortressError;
+use fortress_core::key::{InMemoryKeyManager, KeyManager, KeyMetadata, SecureKey};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
-use tracing::{info, error};
+use tracing::{error, info};
 use uuid::Uuid;
 
 /// Simple in-memory audit logger for health checks
@@ -34,12 +37,12 @@ impl AuditLogger for InMemoryAuditLogger {
         // Just return success for health check
         Ok(())
     }
-    
+
     fn query(&self, _query: AuditQuery) -> Result<Vec<AuditEntry>, FortressError> {
         // Return empty results for health check
         Ok(vec![])
     }
-    
+
     fn verify_integrity(&self) -> Result<IntegrityReport, FortressError> {
         // Return a simple integrity report
         Ok(IntegrityReport {
@@ -49,7 +52,7 @@ impl AuditLogger for InMemoryAuditLogger {
             violation_details: vec![],
         })
     }
-    
+
     fn get_statistics(&self) -> Result<AuditStatistics, FortressError> {
         // Return empty statistics for health check
         Ok(AuditStatistics {
@@ -61,7 +64,7 @@ impl AuditLogger for InMemoryAuditLogger {
             log_size: 0,
         })
     }
-    
+
     fn rotate_logs(&self) -> Result<(), FortressError> {
         // Just return success for health check
         Ok(())
@@ -153,13 +156,15 @@ impl HealthChecker {
         let response_time = start.elapsed().as_millis() as u64;
 
         let mut components = self.components.write().await;
-        let status = components.entry(name.to_string()).or_insert_with(|| ComponentStatus {
-            status: HealthStatus::Healthy,
-            message: None,
-            last_check: Utc::now(),
-            response_time_ms: None,
-            consecutive_failures: 0,
-        });
+        let status = components
+            .entry(name.to_string())
+            .or_insert_with(|| ComponentStatus {
+                status: HealthStatus::Healthy,
+                message: None,
+                last_check: Utc::now(),
+                response_time_ms: None,
+                consecutive_failures: 0,
+            });
 
         status.last_check = Utc::now();
         status.response_time_ms = Some(response_time);
@@ -169,12 +174,12 @@ impl HealthChecker {
                 status.status = HealthStatus::Healthy;
                 status.message = None;
                 status.consecutive_failures = 0;
-                
+
                 if response_time > 1000 {
                     status.status = HealthStatus::Degraded;
                     status.message = Some("High response time".to_string());
                 }
-                
+
                 info!(
                     component = %name,
                     response_time_ms = response_time,
@@ -185,13 +190,13 @@ impl HealthChecker {
             Err(e) => {
                 status.consecutive_failures += 1;
                 status.message = Some(e.to_string());
-                
+
                 if status.consecutive_failures >= 3 {
                     status.status = HealthStatus::Unhealthy;
                 } else {
                     status.status = HealthStatus::Degraded;
                 }
-                
+
                 error!(
                     component = %name,
                     error = %e,
@@ -212,14 +217,17 @@ impl HealthChecker {
         message: Option<String>,
     ) {
         let mut components = self.components.write().await;
-        
-        let component_status = components.entry(name.to_string()).or_insert_with(|| ComponentStatus {
-            status: HealthStatus::Healthy,
-            message: None,
-            last_check: Utc::now(),
-            response_time_ms: None,
-            consecutive_failures: 0,
-        });
+
+        let component_status =
+            components
+                .entry(name.to_string())
+                .or_insert_with(|| ComponentStatus {
+                    status: HealthStatus::Healthy,
+                    message: None,
+                    last_check: Utc::now(),
+                    response_time_ms: None,
+                    consecutive_failures: 0,
+                });
 
         component_status.status = status;
         component_status.message = message;
@@ -232,41 +240,51 @@ impl HealthChecker {
 
         // Check core Fortress components
         if self.features.auth_enabled {
-            let _ = self.check_component("auth", || async {
-                // Check authentication system
-                self.check_auth_system().await
-            }).await;
+            let _ = self
+                .check_component("auth", || async {
+                    // Check authentication system
+                    self.check_auth_system().await
+                })
+                .await;
         }
 
         if self.features.field_encryption {
-            let _ = self.check_component("encryption", || async {
-                // Check encryption system
-                self.check_encryption_system().await
-            }).await;
+            let _ = self
+                .check_component("encryption", || async {
+                    // Check encryption system
+                    self.check_encryption_system().await
+                })
+                .await;
         }
 
         // Check storage backend
-        let _ = self.check_component("storage", || async {
-            self.check_storage_backend().await
-        }).await;
+        let _ = self
+            .check_component("storage", || async { self.check_storage_backend().await })
+            .await;
 
         // Check key management
-        let _ = self.check_component("key_management", || async {
-            self.check_key_management().await
-        }).await;
+        let _ = self
+            .check_component("key_management", || async {
+                self.check_key_management().await
+            })
+            .await;
 
         // Check audit logging
         if self.features.audit_enabled {
-            let _ = self.check_component("audit_logging", || async {
-                self.check_audit_logging().await
-            }).await;
+            let _ = self
+                .check_component("audit_logging", || async {
+                    self.check_audit_logging().await
+                })
+                .await;
         }
 
         // Check metrics collection
         if self.features.metrics_enabled {
-            let _ = self.check_component("metrics", || async {
-                self.check_metrics_collection().await
-            }).await;
+            let _ = self
+                .check_component("metrics", || async {
+                    self.check_metrics_collection().await
+                })
+                .await;
         }
 
         info!("Comprehensive health checks completed");
@@ -284,17 +302,16 @@ impl HealthChecker {
     async fn check_encryption_system(&self) -> ServerResult<()> {
         // Test encryption/decryption with default algorithm
         let algorithm = Aegis256::new();
-        let key = SecureKey::generate(algorithm.key_size())
-            .expect("Failed to generate secure key");
-        
+        let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate secure key");
+
         let plaintext = b"health_check_test";
         let ciphertext = algorithm.encrypt(plaintext, key.as_bytes())?;
         let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes())?;
-        
+
         if plaintext != &decrypted[..] {
             return Err(ServerError::internal("Encryption test failed"));
         }
-        
+
         Ok(())
     }
 
@@ -311,9 +328,8 @@ impl HealthChecker {
         // Test key generation
         let key_manager = InMemoryKeyManager::new();
         let algorithm = Aegis256::new();
-        let key = SecureKey::generate(algorithm.key_size())
-            .expect("Failed to generate secure key");
-        
+        let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate secure key");
+
         // Store the key
         let key_id = "test_key".to_string();
         let now = Utc::now();
@@ -327,14 +343,14 @@ impl HealthChecker {
             PerformanceProfile::Balanced,
         );
         key_manager.store_key(&key_id, &key, &metadata).await?;
-        
+
         // Retrieve the key
         let (retrieved_key, _retrieved_metadata) = key_manager.retrieve_key(&key_id).await?;
-        
+
         if retrieved_key.as_bytes() != key.as_bytes() {
             return Err(ServerError::internal("Key retrieval failed"));
         }
-        
+
         Ok(())
     }
 
@@ -343,7 +359,7 @@ impl HealthChecker {
         // Test audit log creation
         let audit_config = AuditConfig::default();
         let mut audit_logger = InMemoryAuditLogger::new(audit_config);
-        
+
         let entry = AuditEntry {
             id: Uuid::new_v4().to_string(),
             timestamp: Utc::now().timestamp_millis() as u64,
@@ -358,9 +374,9 @@ impl HealthChecker {
             current_hash: "test_hash".to_string(),
             signature: "test_signature".to_string(),
         };
-        
+
         audit_logger.log(entry)?;
-        
+
         Ok(())
     }
 
@@ -370,19 +386,21 @@ impl HealthChecker {
         metrics::counter!("test_counter", 1);
         metrics::gauge!("test_gauge", 42.0);
         metrics::histogram!("test_histogram", 100.0);
-        
+
         Ok(())
     }
 
     /// Get component-specific health
     pub async fn get_component_health(&self, component_name: &str) -> Option<ComponentHealth> {
         let components = self.components.read().await;
-        components.get(component_name).map(|status| ComponentHealth {
-            status: status.status.clone(),
-            message: status.message.clone(),
-            response_time_ms: status.response_time_ms,
-            last_check: status.last_check,
-        })
+        components
+            .get(component_name)
+            .map(|status| ComponentHealth {
+                status: status.status.clone(),
+                message: status.message.clone(),
+                response_time_ms: status.response_time_ms,
+                last_check: status.last_check,
+            })
     }
 
     /// Reset component health
@@ -402,7 +420,7 @@ impl HealthChecker {
 pub trait HealthCheck: Send + Sync {
     /// Check the health of the component
     async fn check_health(&self) -> ServerResult<()>;
-    
+
     /// Get component name
     fn name(&self) -> &str;
 }
@@ -435,11 +453,11 @@ impl HealthCheckRegistry {
     /// Run all registered health checks
     pub async fn run_all_checks(&self, health_checker: &HealthChecker) {
         let checks = self.checks.read().await;
-        
+
         for (name, check) in checks.iter() {
-            let _ = health_checker.check_component(name, || async {
-                check.check_health().await
-            }).await;
+            let _ = health_checker
+                .check_component(name, || async { check.check_health().await })
+                .await;
         }
     }
 }
@@ -459,7 +477,7 @@ mod tests {
     async fn test_health_checker_creation() {
         let features = FeatureFlags::default();
         let health_checker = HealthChecker::new(features);
-        
+
         let health = health_checker.get_health().await;
         assert_eq!(health.status, HealthStatus::Healthy);
         assert!(!health.components.is_empty());
@@ -469,73 +487,90 @@ mod tests {
     async fn test_component_health_check() {
         let features = FeatureFlags::default();
         let health_checker = HealthChecker::new(features);
-        
+
         // Test successful check
-        health_checker.check_component("test_component", || async {
-            Ok(())
-        }).await.unwrap();
-        
+        health_checker
+            .check_component("test_component", || async { Ok(()) })
+            .await
+            .unwrap();
+
         let health = health_checker.get_health().await;
         assert!(health.components.contains_key("test_component"));
-        assert_eq!(health.components["test_component"].status, HealthStatus::Healthy);
+        assert_eq!(
+            health.components["test_component"].status,
+            HealthStatus::Healthy
+        );
     }
 
     #[tokio::test]
     async fn test_component_health_check_failure() {
         let features = FeatureFlags::default();
         let health_checker = HealthChecker::new(features);
-        
+
         // Test failed check
-        let _ = health_checker.check_component("failing_component", || async {
-            Err(ServerError::internal("Test failure"))
-        }).await;
-        
+        let _ = health_checker
+            .check_component("failing_component", || async {
+                Err(ServerError::internal("Test failure"))
+            })
+            .await;
+
         let health = health_checker.get_health().await;
         assert!(health.components.contains_key("failing_component"));
-        assert_eq!(health.components["failing_component"].status, HealthStatus::Degraded);
+        assert_eq!(
+            health.components["failing_component"].status,
+            HealthStatus::Degraded
+        );
     }
 
     #[tokio::test]
     async fn test_manual_component_health() {
         let features = FeatureFlags::default();
         let health_checker = HealthChecker::new(features);
-        
-        health_checker.set_component_health(
-            "manual_component",
-            HealthStatus::Degraded,
-            Some("Manual test".to_string()),
-        ).await;
-        
+
+        health_checker
+            .set_component_health(
+                "manual_component",
+                HealthStatus::Degraded,
+                Some("Manual test".to_string()),
+            )
+            .await;
+
         let health = health_checker.get_health().await;
         assert!(health.components.contains_key("manual_component"));
-        assert_eq!(health.components["manual_component"].status, HealthStatus::Degraded);
-        assert_eq!(health.components["manual_component"].message, Some("Manual test".to_string()));
+        assert_eq!(
+            health.components["manual_component"].status,
+            HealthStatus::Degraded
+        );
+        assert_eq!(
+            health.components["manual_component"].message,
+            Some("Manual test".to_string())
+        );
     }
 
     #[tokio::test]
     async fn test_health_check_registry() {
         let registry = HealthCheckRegistry::new();
-        
+
         struct TestHealthCheck;
-        
+
         #[async_trait::async_trait]
         impl HealthCheck for TestHealthCheck {
             async fn check_health(&self) -> ServerResult<()> {
                 Ok(())
             }
-            
+
             fn name(&self) -> &str {
                 "test_check"
             }
         }
-        
+
         let check = Arc::new(TestHealthCheck);
         registry.register(check.clone()).await;
-        
+
         let features = FeatureFlags::default();
         let health_checker = HealthChecker::new(features);
         registry.run_all_checks(&health_checker).await;
-        
+
         let health = health_checker.get_health().await;
         assert!(health.components.contains_key("test_check"));
     }

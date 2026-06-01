@@ -294,10 +294,10 @@ impl EnhancedPerformanceMonitor {
 
         tokio::spawn(async move {
             let mut interval_timer = tokio::time::interval(interval);
-            
+
             loop {
                 interval_timer.tick().await;
-                
+
                 // Perform aggregation and cleanup
                 let mut samples_guard = samples.write().await;
                 if samples_guard.len() > 10000 {
@@ -318,26 +318,27 @@ impl EnhancedPerformanceMonitor {
 
         tokio::spawn(async move {
             let mut interval_timer = tokio::time::interval(interval);
-            
+
             loop {
                 interval_timer.tick().await;
-                
+
                 let now = chrono::Utc::now();
                 let cutoff_time = now - chrono::Duration::minutes(baseline_window as i64);
-                
+
                 let samples_guard = samples.read().await;
-                let recent_samples: Vec<_> = samples_guard.iter()
+                let recent_samples: Vec<_> = samples_guard
+                    .iter()
                     .filter(|sample| sample.timestamp > cutoff_time)
                     .collect();
-                
+
                 if !recent_samples.is_empty() {
                     let new_baselines = Self::calculate_baselines(&recent_samples);
-                    
+
                     let mut baselines_guard = baselines.write().await;
                     for (operation_type, baseline) in new_baselines {
                         baselines_guard.insert(operation_type, baseline);
                     }
-                    
+
                     let mut last_update_guard = last_update.write().await;
                     *last_update_guard = now;
                 }
@@ -356,17 +357,20 @@ impl EnhancedPerformanceMonitor {
 
         tokio::spawn(async move {
             let mut interval_timer = tokio::time::interval(interval);
-            
+
             loop {
                 interval_timer.tick().await;
-                
+
                 let samples_guard = samples.read().await;
                 let baselines_guard = baselines.read().await;
-                
-                let recent_samples: Vec<_> = samples_guard.iter()
-                    .filter(|sample| sample.timestamp > chrono::Utc::now() - chrono::Duration::minutes(5))
+
+                let recent_samples: Vec<_> = samples_guard
+                    .iter()
+                    .filter(|sample| {
+                        sample.timestamp > chrono::Utc::now() - chrono::Duration::minutes(5)
+                    })
                     .collect();
-                
+
                 if !recent_samples.is_empty() {
                     let new_anomalies = Self::detect_anomalies(
                         &recent_samples,
@@ -374,11 +378,11 @@ impl EnhancedPerformanceMonitor {
                         &thresholds,
                         sensitivity,
                     );
-                    
+
                     if !new_anomalies.is_empty() {
                         let mut anomalies_guard = anomalies.write().await;
                         anomalies_guard.extend(new_anomalies);
-                        
+
                         // Keep only last 1000 anomalies
                         if anomalies_guard.len() > 1000 {
                             let excess = anomalies_guard.len() - 1000;
@@ -402,7 +406,7 @@ impl EnhancedPerformanceMonitor {
         }
 
         let operation_id = uuid::Uuid::new_v4().to_string();
-        
+
         // Get current system snapshot if correlation is enabled
         let initial_system_snapshot = if self.config.enable_system_correlation {
             self.system_monitor.get_current_snapshot().await
@@ -442,7 +446,7 @@ impl EnhancedPerformanceMonitor {
         let mut active_operations = self.active_operations.write().await;
         if let Some(context) = active_operations.remove(&operation_id) {
             let duration = context.start_time.elapsed();
-            
+
             // Get current system snapshot if correlation is enabled
             let system_snapshot = if self.config.enable_system_correlation {
                 self.system_monitor.get_current_snapshot().await
@@ -487,13 +491,16 @@ impl EnhancedPerformanceMonitor {
     }
 
     /// Calculate performance baselines from samples
-    fn calculate_baselines(samples: &[&EnhancedProfileSample]) -> HashMap<String, PerformanceBaseline> {
+    fn calculate_baselines(
+        samples: &[&EnhancedProfileSample],
+    ) -> HashMap<String, PerformanceBaseline> {
         let mut baselines = HashMap::new();
         let mut grouped_samples: HashMap<String, Vec<&EnhancedProfileSample>> = HashMap::new();
 
         // Group samples by operation type
         for sample in samples {
-            grouped_samples.entry(sample.operation_type.clone())
+            grouped_samples
+                .entry(sample.operation_type.clone())
                 .or_insert_with(Vec::new)
                 .push(sample);
         }
@@ -509,7 +516,8 @@ impl EnhancedPerformanceMonitor {
             let baseline_end = timestamps.iter().max().unwrap();
 
             // Calculate response time percentiles
-            let mut durations: Vec<f64> = operation_samples.iter()
+            let mut durations: Vec<f64> = operation_samples
+                .iter()
                 .map(|s| s.duration_us as f64 / 1000.0) // Convert to milliseconds
                 .collect();
             durations.sort_by(|a, b| a.partial_cmp(b).unwrap());
@@ -520,7 +528,9 @@ impl EnhancedPerformanceMonitor {
             let p99_response_time_ms = durations[durations.len() * 99 / 100];
 
             // Calculate throughput
-            let time_window_ms = baseline_end.signed_duration_since(*baseline_start).num_milliseconds() as f64;
+            let time_window_ms = baseline_end
+                .signed_duration_since(*baseline_start)
+                .num_milliseconds() as f64;
             let throughput_ops_per_sec = if time_window_ms > 0.0 {
                 (operation_samples.len() as f64) / (time_window_ms / 1000.0)
             } else {
@@ -554,20 +564,23 @@ impl EnhancedPerformanceMonitor {
                 0.0
             };
 
-            baselines.insert(operation_type.clone(), PerformanceBaseline {
-                operation_type: operation_type.clone(),
-                baseline_start: *baseline_start,
-                baseline_end: *baseline_end,
-                avg_response_time_ms,
-                p50_response_time_ms,
-                p95_response_time_ms,
-                p99_response_time_ms,
-                throughput_ops_per_sec,
-                error_rate_percent,
-                avg_cpu_usage_percent,
-                avg_memory_usage_percent,
-                sample_count: operation_samples.len(),
-            });
+            baselines.insert(
+                operation_type.clone(),
+                PerformanceBaseline {
+                    operation_type: operation_type.clone(),
+                    baseline_start: *baseline_start,
+                    baseline_end: *baseline_end,
+                    avg_response_time_ms,
+                    p50_response_time_ms,
+                    p95_response_time_ms,
+                    p99_response_time_ms,
+                    throughput_ops_per_sec,
+                    error_rate_percent,
+                    avg_cpu_usage_percent,
+                    avg_memory_usage_percent,
+                    sample_count: operation_samples.len(),
+                },
+            );
         }
 
         baselines
@@ -591,22 +604,33 @@ impl EnhancedPerformanceMonitor {
                     anomalies.push(PerformanceAnomaly {
                         id: uuid::Uuid::new_v4().to_string(),
                         anomaly_type: AnomalyType::HighResponseTime,
-                        severity: Self::calculate_severity(response_time_ms, baseline.p95_response_time_ms, thresholds.max_response_time_ms as f64),
-                        description: format!("Response time {}ms is significantly higher than baseline {:.1}ms", 
-                                        response_time_ms, baseline.p95_response_time_ms),
+                        severity: Self::calculate_severity(
+                            response_time_ms,
+                            baseline.p95_response_time_ms,
+                            thresholds.max_response_time_ms as f64,
+                        ),
+                        description: format!(
+                            "Response time {}ms is significantly higher than baseline {:.1}ms",
+                            response_time_ms, baseline.p95_response_time_ms
+                        ),
                         operation_type: sample.operation_type.clone(),
                         expected_value: baseline.p95_response_time_ms,
                         actual_value: response_time_ms,
-                        deviation_percent: ((response_time_ms - baseline.p95_response_time_ms) / baseline.p95_response_time_ms) * 100.0,
+                        deviation_percent: ((response_time_ms - baseline.p95_response_time_ms)
+                            / baseline.p95_response_time_ms)
+                            * 100.0,
                         timestamp: sample.timestamp,
-                        recommended_action: "Investigate slow operations and consider optimization".to_string(),
+                        recommended_action: "Investigate slow operations and consider optimization"
+                            .to_string(),
                     });
                 }
 
                 // Check system resource anomalies
                 if let Some(ref system_snapshot) = sample.system_snapshot {
                     // CPU usage anomaly
-                    if system_snapshot.cpu.overall_usage_percent > baseline.avg_cpu_usage_percent * (1.0 + sensitivity) {
+                    if system_snapshot.cpu.overall_usage_percent
+                        > baseline.avg_cpu_usage_percent * (1.0 + sensitivity)
+                    {
                         anomalies.push(PerformanceAnomaly {
                             id: uuid::Uuid::new_v4().to_string(),
                             anomaly_type: AnomalyType::HighCpuUsage,
@@ -624,20 +648,32 @@ impl EnhancedPerformanceMonitor {
                     }
 
                     // Memory usage anomaly
-                    if system_snapshot.memory.usage_percent > baseline.avg_memory_usage_percent * (1.0 + sensitivity) {
+                    if system_snapshot.memory.usage_percent
+                        > baseline.avg_memory_usage_percent * (1.0 + sensitivity)
+                    {
                         anomalies.push(PerformanceAnomaly {
                             id: uuid::Uuid::new_v4().to_string(),
                             anomaly_type: AnomalyType::HighMemoryUsage,
-                            severity: Self::calculate_severity(system_snapshot.memory.usage_percent, 
-                                                            baseline.avg_memory_usage_percent, thresholds.max_memory_usage_percent),
-                            description: format!("Memory usage {:.1}% is significantly higher than baseline {:.1}%", 
-                                            system_snapshot.memory.usage_percent, baseline.avg_memory_usage_percent),
+                            severity: Self::calculate_severity(
+                                system_snapshot.memory.usage_percent,
+                                baseline.avg_memory_usage_percent,
+                                thresholds.max_memory_usage_percent,
+                            ),
+                            description: format!(
+                                "Memory usage {:.1}% is significantly higher than baseline {:.1}%",
+                                system_snapshot.memory.usage_percent,
+                                baseline.avg_memory_usage_percent
+                            ),
                             operation_type: sample.operation_type.clone(),
                             expected_value: baseline.avg_memory_usage_percent,
                             actual_value: system_snapshot.memory.usage_percent,
-                            deviation_percent: ((system_snapshot.memory.usage_percent - baseline.avg_memory_usage_percent) / baseline.avg_memory_usage_percent) * 100.0,
+                            deviation_percent: ((system_snapshot.memory.usage_percent
+                                - baseline.avg_memory_usage_percent)
+                                / baseline.avg_memory_usage_percent)
+                                * 100.0,
                             timestamp: sample.timestamp,
-                            recommended_action: "Check for memory leaks or optimize memory usage".to_string(),
+                            recommended_action: "Check for memory leaks or optimize memory usage"
+                                .to_string(),
                         });
                     }
                 }
@@ -685,12 +721,17 @@ impl EnhancedPerformanceMonitor {
         let anomalies = self.anomalies.read().await;
 
         let total_samples = samples.len();
-        let recent_samples: Vec<_> = samples.iter()
+        let recent_samples: Vec<_> = samples
+            .iter()
             .filter(|sample| sample.timestamp > chrono::Utc::now() - chrono::Duration::minutes(60))
             .collect();
 
         let avg_response_time_ms = if !recent_samples.is_empty() {
-            recent_samples.iter().map(|s| s.duration_us as f64 / 1000.0).sum::<f64>() / recent_samples.len() as f64
+            recent_samples
+                .iter()
+                .map(|s| s.duration_us as f64 / 1000.0)
+                .sum::<f64>()
+                / recent_samples.len() as f64
         } else {
             0.0
         };
@@ -702,8 +743,11 @@ impl EnhancedPerformanceMonitor {
             0.0
         };
 
-        let recent_anomalies = anomalies.iter()
-            .filter(|anomaly| anomaly.timestamp > chrono::Utc::now() - chrono::Duration::minutes(60))
+        let recent_anomalies = anomalies
+            .iter()
+            .filter(|anomaly| {
+                anomaly.timestamp > chrono::Utc::now() - chrono::Duration::minutes(60)
+            })
             .count();
 
         Ok(PerformanceSummary {
@@ -757,26 +801,25 @@ mod tests {
         let config = EnhancedPerformanceConfig::default();
         let system_config = SystemResourceConfig::default();
         let system_monitor = Arc::new(SystemResourceMonitor::new(system_config));
-        
+
         let monitor = EnhancedPerformanceMonitor::new(config, system_monitor);
-        
+
         // Test starting an operation
-        let operation_id = monitor.start_operation(
-            "test_operation".to_string(),
-            "test_name".to_string(),
-            HashMap::new(),
-        ).await;
-        
+        let operation_id = monitor
+            .start_operation(
+                "test_operation".to_string(),
+                "test_name".to_string(),
+                HashMap::new(),
+            )
+            .await;
+
         assert!(!operation_id.is_empty());
-        
+
         // Test finishing the operation
-        monitor.finish_operation(
-            operation_id,
-            true,
-            None,
-            HashMap::new(),
-            HashMap::new(),
-        ).await.unwrap();
+        monitor
+            .finish_operation(operation_id, true, None, HashMap::new(), HashMap::new())
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
@@ -784,12 +827,12 @@ mod tests {
         let config = EnhancedPerformanceConfig::default();
         let system_config = SystemResourceConfig::default();
         let system_monitor = Arc::new(SystemResourceMonitor::new(system_config));
-        
+
         let monitor = EnhancedPerformanceMonitor::new(config, system_monitor);
-        
+
         // Wait for some data collection
         sleep(Duration::from_millis(100)).await;
-        
+
         let summary = monitor.get_performance_summary().await.unwrap();
         assert_eq!(summary.total_samples, 0); // No operations performed yet
     }

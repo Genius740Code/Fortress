@@ -3,9 +3,9 @@
 //! This module provides production-ready rate limiting with multiple algorithms,
 //! distributed storage support, and comprehensive DDoS protection mechanisms.
 
-use crate::config::{NetworkConfig, RateLimitConfig, RateLimitAlgorithm};
-use crate::error::{ServerError, ServerResult};
 use crate::auth::TokenClaims;
+use crate::config::{NetworkConfig, RateLimitAlgorithm, RateLimitConfig};
+use crate::error::{ServerError, ServerResult};
 use axum::{
     extract::{Request, State},
     http::{header, HeaderValue, StatusCode},
@@ -16,13 +16,9 @@ use dashmap::DashMap;
 use serde::Serialize;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use tower_http::{
-    cors::CorsLayer,
-    timeout::TimeoutLayer,
-    trace::TraceLayer,
-};
-use tower_http::classify::{SharedClassifier, ServerErrorsAsFailures};
-use tracing::{info, warn, error};
+use tower_http::classify::{ServerErrorsAsFailures, SharedClassifier};
+use tower_http::{cors::CorsLayer, timeout::TimeoutLayer, trace::TraceLayer};
+use tracing::{error, info, warn};
 
 /// Advanced rate limiter with multiple algorithms and DDoS protection
 #[derive(Clone)]
@@ -58,7 +54,7 @@ struct TokenBucketState {
 #[derive(Clone, Debug)]
 struct SlidingWindowState {
     /// Request timestamps in the current window
-    request_timestamps: Vec<Instant>,
+    request_timestamps: std::collections::VecDeque<Instant>,
     /// Window size
     window_size: Duration,
 }
@@ -212,8 +208,12 @@ impl DdosProtection {
 
         // Check global request rate
         self.cleanup_global_requests(now);
-        let current_rps = self.global_requests.iter().map(|entry| *entry.value()).sum::<u32>();
-        
+        let current_rps = self
+            .global_requests
+            .iter()
+            .map(|entry| *entry.value())
+            .sum::<u32>();
+
         if current_rps > self.config.global_rps_threshold {
             warn!(
                 current_rps = current_rps,
@@ -224,17 +224,18 @@ impl DdosProtection {
         }
 
         // Check IP-specific request rate
-        let mut ip_info = self.suspicious_ips
-            .entry(ip.clone())
-            .or_insert_with(|| SuspiciousIpInfo {
-                requests_per_minute: 0,
-                failed_requests: 0,
-                last_activity: now,
-                reputation_score: 100, // Start with perfect reputation
-                blocked: false,
-                block_expiry: None,
-                window_start: now,
-            });
+        let mut ip_info =
+            self.suspicious_ips
+                .entry(ip.clone())
+                .or_insert_with(|| SuspiciousIpInfo {
+                    requests_per_minute: 0,
+                    failed_requests: 0,
+                    last_activity: now,
+                    reputation_score: 100, // Start with perfect reputation
+                    blocked: false,
+                    block_expiry: None,
+                    window_start: now,
+                });
 
         // Reset per-minute counter if window passed
         if now.duration_since(ip_info.window_start) >= Duration::from_secs(60) {
@@ -245,10 +246,11 @@ impl DdosProtection {
         // Decay reputation over time
         let hours_since_last_activity = now.duration_since(ip_info.last_activity).as_secs() / 3600;
         if hours_since_last_activity > 0 {
-            ip_info.reputation_score = (ip_info.reputation_score + 
-                (hours_since_last_activity as u8 * self.config.reputation_decay_rate)).min(100);
+            ip_info.reputation_score = (ip_info.reputation_score
+                + (hours_since_last_activity as u8 * self.config.reputation_decay_rate))
+                .min(100);
         }
-        
+
         // Update request tracking
         ip_info.requests_per_minute += 1;
         ip_info.last_activity = now;
@@ -258,11 +260,11 @@ impl DdosProtection {
 
     async fn record_failed_request(&self, client_id: &str) {
         let ip = self.extract_ip_from_client_id(client_id);
-        
+
         if let Some(mut ip_info) = self.suspicious_ips.get_mut(&ip) {
             ip_info.failed_requests += 1;
             ip_info.reputation_score = ip_info.reputation_score.saturating_sub(5);
-            
+
             // Block if too many failed requests
             if ip_info.failed_requests > 10 {
                 ip_info.blocked = true;
@@ -281,9 +283,8 @@ impl DdosProtection {
         let cleanup_threshold = Duration::from_secs(3600); // 1 hour
 
         // Cleanup old IP entries
-        self.suspicious_ips.retain(|_, info| {
-            now.duration_since(info.last_activity) < cleanup_threshold
-        });
+        self.suspicious_ips
+            .retain(|_, info| now.duration_since(info.last_activity) < cleanup_threshold);
 
         // Cleanup global requests
         self.cleanup_global_requests(now);
@@ -291,7 +292,8 @@ impl DdosProtection {
 
     fn cleanup_global_requests(&self, now: Instant) {
         let cutoff = now - Duration::from_secs(60); // Keep last minute
-        self.global_requests.retain(|&timestamp, _| timestamp > cutoff);
+        self.global_requests
+            .retain(|&timestamp, _| timestamp > cutoff);
     }
 
     fn extract_ip_from_client_id(&self, client_id: &str) -> String {
@@ -319,11 +321,17 @@ impl AdvancedRateLimiter {
     pub fn new(config: RateLimitConfig) -> Self {
         let ddos_config = DdosConfig {
             enabled: config.ddos_protection.enabled,
-            global_rps_threshold: config.ddos_protection.global_rps_threshold
+            global_rps_threshold: config
+                .ddos_protection
+                .global_rps_threshold
                 .unwrap_or_else(|| config.requests_per_minute / 60),
-            ip_rps_threshold: config.ddos_protection.ip_rps_threshold
+            ip_rps_threshold: config
+                .ddos_protection
+                .ip_rps_threshold
                 .unwrap_or_else(|| config.requests_per_minute / 600), // 10% of per-minute limit
-            auto_block_threshold: config.ddos_protection.auto_block_threshold
+            auto_block_threshold: config
+                .ddos_protection
+                .auto_block_threshold
                 .unwrap_or_else(|| config.requests_per_minute * 2),
             block_duration: Duration::from_secs(config.ddos_protection.block_duration_seconds),
             reputation_decay_rate: config.ddos_protection.reputation_decay_rate,
@@ -355,14 +363,18 @@ impl AdvancedRateLimiter {
         }
 
         // Increment total requests
-        self.metrics.total_requests.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.metrics
+            .total_requests
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
         // Track global request for DDoS detection
         track_global_request(&self.ddos_protection);
 
         // Check DDoS protection first
         if let Err(e) = self.ddos_protection.check_ddos_protection(client_id).await {
-            self.metrics.ddos_blocks.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            self.metrics
+                .ddos_blocks
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             return Err(e);
         }
 
@@ -376,11 +388,15 @@ impl AdvancedRateLimiter {
 
         match result {
             Ok(()) => {
-                self.metrics.allowed_requests.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                self.metrics
+                    .allowed_requests
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 Ok(())
             }
             Err(e) => {
-                self.metrics.blocked_requests.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                self.metrics
+                    .blocked_requests
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 self.ddos_protection.record_failed_request(client_id).await;
                 Err(e)
             }
@@ -390,7 +406,8 @@ impl AdvancedRateLimiter {
     /// Token bucket algorithm implementation
     async fn check_token_bucket(&self, client_id: &str) -> ServerResult<()> {
         let now = Instant::now();
-        let mut state = self.token_bucket_storage
+        let mut state = self
+            .token_bucket_storage
             .entry(client_id.to_string())
             .or_insert_with(|| TokenBucketState {
                 tokens: self.config.burst_size,
@@ -401,7 +418,7 @@ impl AdvancedRateLimiter {
         // Refill tokens based on time elapsed
         let time_elapsed = now.duration_since(state.last_refill);
         let tokens_to_add = (time_elapsed.as_secs() as u32 * self.config.requests_per_minute) / 60;
-        
+
         if tokens_to_add > 0 {
             state.tokens = (state.tokens + tokens_to_add).min(state.burst_capacity);
             state.last_refill = now;
@@ -421,17 +438,22 @@ impl AdvancedRateLimiter {
     async fn check_sliding_window(&self, client_id: &str) -> ServerResult<()> {
         let now = Instant::now();
         let window_size = Duration::from_secs(60);
-        let mut state = self.sliding_window_storage
+        let mut state = self
+            .sliding_window_storage
             .entry(client_id.to_string())
             .or_insert_with(|| SlidingWindowState {
-                request_timestamps: Vec::new(),
+                request_timestamps: std::collections::VecDeque::new(),
                 window_size,
             });
 
         // Remove old timestamps outside the window
-        state.request_timestamps.retain(|&timestamp| {
-            now.duration_since(timestamp) < window_size
-        });
+        while let Some(&timestamp) = state.request_timestamps.front() {
+            if now.duration_since(timestamp) >= window_size {
+                state.request_timestamps.pop_front();
+            } else {
+                break;
+            }
+        }
 
         // Check if we're at the limit
         if state.request_timestamps.len() as u32 >= self.config.requests_per_minute {
@@ -439,7 +461,7 @@ impl AdvancedRateLimiter {
         }
 
         // Add current request timestamp
-        state.request_timestamps.push(now);
+        state.request_timestamps.push_back(now);
         Ok(())
     }
 
@@ -447,7 +469,8 @@ impl AdvancedRateLimiter {
     async fn check_fixed_window(&self, client_id: &str) -> ServerResult<()> {
         let now = Instant::now();
         let window_duration = Duration::from_secs(60);
-        let mut state = self.fixed_window_storage
+        let mut state = self
+            .fixed_window_storage
             .entry(client_id.to_string())
             .or_insert_with(|| FixedWindowState {
                 request_count: 0,
@@ -476,8 +499,9 @@ impl AdvancedRateLimiter {
         let now = Instant::now();
         let leak_rate = self.config.requests_per_minute / 60;
         let max_queue_size = self.config.burst_size;
-        
-        let mut state = self.leaky_bucket_storage
+
+        let mut state = self
+            .leaky_bucket_storage
             .entry(client_id.to_string())
             .or_insert_with(|| LeakyBucketState {
                 queue_size: 0,
@@ -489,7 +513,7 @@ impl AdvancedRateLimiter {
         // Leak tokens based on time elapsed
         let time_elapsed = now.duration_since(state.last_leak);
         let tokens_to_leak = (time_elapsed.as_secs() as u32 * leak_rate).min(state.queue_size);
-        
+
         if tokens_to_leak > 0 {
             state.queue_size -= tokens_to_leak;
             state.last_leak = now;
@@ -506,7 +530,10 @@ impl AdvancedRateLimiter {
     }
 
     /// Get rate limit headers for a client
-    pub async fn get_rate_limit_headers(&self, client_id: &str) -> Option<(HeaderValue, HeaderValue, HeaderValue)> {
+    pub async fn get_rate_limit_headers(
+        &self,
+        client_id: &str,
+    ) -> Option<(HeaderValue, HeaderValue, HeaderValue)> {
         if !self.config.enabled {
             return None;
         }
@@ -522,7 +549,9 @@ impl AdvancedRateLimiter {
             RateLimitAlgorithm::SlidingWindow => {
                 if let Some(state) = self.sliding_window_storage.get(client_id) {
                     let now = Instant::now();
-                    let count = state.request_timestamps.iter()
+                    let count = state
+                        .request_timestamps
+                        .iter()
                         .filter(|&&timestamp| now.duration_since(timestamp) < state.window_size)
                         .count() as u32;
                     self.config.requests_per_minute.saturating_sub(count)
@@ -532,7 +561,9 @@ impl AdvancedRateLimiter {
             }
             RateLimitAlgorithm::FixedWindow => {
                 if let Some(state) = self.fixed_window_storage.get(client_id) {
-                    self.config.requests_per_minute.saturating_sub(state.request_count)
+                    self.config
+                        .requests_per_minute
+                        .saturating_sub(state.request_count)
                 } else {
                     self.config.requests_per_minute
                 }
@@ -549,7 +580,8 @@ impl AdvancedRateLimiter {
         let reset_timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
-            .as_secs() + 60;
+            .as_secs()
+            + 60;
 
         Some((
             HeaderValue::from_str(&remaining.to_string()).ok()?,
@@ -561,10 +593,22 @@ impl AdvancedRateLimiter {
     /// Get rate limiting metrics
     pub fn get_metrics(&self) -> RateLimitMetricsSnapshot {
         RateLimitMetricsSnapshot {
-            total_requests: self.metrics.total_requests.load(std::sync::atomic::Ordering::Relaxed),
-            allowed_requests: self.metrics.allowed_requests.load(std::sync::atomic::Ordering::Relaxed),
-            blocked_requests: self.metrics.blocked_requests.load(std::sync::atomic::Ordering::Relaxed),
-            ddos_blocks: self.metrics.ddos_blocks.load(std::sync::atomic::Ordering::Relaxed),
+            total_requests: self
+                .metrics
+                .total_requests
+                .load(std::sync::atomic::Ordering::Relaxed),
+            allowed_requests: self
+                .metrics
+                .allowed_requests
+                .load(std::sync::atomic::Ordering::Relaxed),
+            blocked_requests: self
+                .metrics
+                .blocked_requests
+                .load(std::sync::atomic::Ordering::Relaxed),
+            ddos_blocks: self
+                .metrics
+                .ddos_blocks
+                .load(std::sync::atomic::Ordering::Relaxed),
         }
     }
 
@@ -574,25 +618,22 @@ impl AdvancedRateLimiter {
         let cleanup_threshold = Duration::from_secs(300); // 5 minutes
 
         // Cleanup token bucket storage
-        self.token_bucket_storage.retain(|_, state| {
-            now.duration_since(state.last_refill) < cleanup_threshold
-        });
+        self.token_bucket_storage
+            .retain(|_, state| now.duration_since(state.last_refill) < cleanup_threshold);
 
         // Cleanup sliding window storage
         self.sliding_window_storage.retain(|_, state| {
-            !state.request_timestamps.is_empty() &&
-            now.duration_since(*state.request_timestamps.last().unwrap()) < cleanup_threshold
+            !state.request_timestamps.is_empty()
+                && now.duration_since(*state.request_timestamps.back().unwrap()) < cleanup_threshold
         });
 
         // Cleanup fixed window storage
-        self.fixed_window_storage.retain(|_, state| {
-            now.duration_since(state.window_start) < cleanup_threshold
-        });
+        self.fixed_window_storage
+            .retain(|_, state| now.duration_since(state.window_start) < cleanup_threshold);
 
         // Cleanup leaky bucket storage
-        self.leaky_bucket_storage.retain(|_, state| {
-            now.duration_since(state.last_leak) < cleanup_threshold
-        });
+        self.leaky_bucket_storage
+            .retain(|_, state| now.duration_since(state.last_leak) < cleanup_threshold);
 
         // Cleanup DDoS protection data
         self.ddos_protection.cleanup().await;
@@ -607,19 +648,23 @@ pub async fn advanced_rate_limit_middleware(
 ) -> Result<Response, StatusCode> {
     // Extract client ID (IP address or authenticated user)
     let client_id = extract_client_id(&request);
-    
+
     // Check rate limit
     match rate_limiter.check_rate_limit(&client_id).await {
         Ok(()) => {
             let mut response = next.run(request).await;
-            
+
             // Add rate limit headers
-            if let Some((remaining, limit, reset)) = rate_limiter.get_rate_limit_headers(&client_id).await {
-                response.headers_mut().insert("X-RateLimit-Remaining", remaining);
+            if let Some((remaining, limit, reset)) =
+                rate_limiter.get_rate_limit_headers(&client_id).await
+            {
+                response
+                    .headers_mut()
+                    .insert("X-RateLimit-Remaining", remaining);
                 response.headers_mut().insert("X-RateLimit-Limit", limit);
                 response.headers_mut().insert("X-RateLimit-Reset", reset);
             }
-            
+
             Ok(response)
         }
         Err(ServerError::RateLimit) => {
@@ -650,14 +695,11 @@ pub async fn rate_limit_middleware(
 }
 
 /// Request logging middleware
-pub async fn request_logging_middleware(
-    request: Request,
-    next: Next,
-) -> Response {
+pub async fn request_logging_middleware(request: Request, next: Next) -> Response {
     let start = Instant::now();
     let method = request.method().clone();
     let uri = request.uri().clone();
-    
+
     // Extract headers and user info before moving request
     let user_agent = request
         .headers()
@@ -672,10 +714,10 @@ pub async fn request_logging_middleware(
         .map(|claims| claims.sub.clone());
 
     let response = next.run(request).await;
-    
+
     let duration = start.elapsed();
     let status = response.status();
-    
+
     if status.is_server_error() {
         error!(
             method = %method,
@@ -767,46 +809,64 @@ pub async fn tenant_isolation_middleware(
 }
 
 /// Security headers middleware
-pub async fn security_headers_middleware(
-    request: Request,
-    next: Next,
-) -> Response {
+pub async fn security_headers_middleware(request: Request, next: Next) -> Response {
     let mut response = next.run(request).await;
-    
+
     let headers = response.headers_mut();
-    
+
     // Security headers
-    headers.insert("X-Content-Type-Options", HeaderValue::from_static("nosniff"));
+    headers.insert(
+        "X-Content-Type-Options",
+        HeaderValue::from_static("nosniff"),
+    );
     headers.insert("X-Frame-Options", HeaderValue::from_static("DENY"));
-    headers.insert("X-XSS-Protection", HeaderValue::from_static("1; mode=block"));
-    headers.insert("Strict-Transport-Security", HeaderValue::from_static("max-age=31536000; includeSubDomains"));
-    headers.insert("Referrer-Policy", HeaderValue::from_static("strict-origin-when-cross-origin"));
-    headers.insert("Content-Security-Policy", HeaderValue::from_static("default-src 'self'"));
-    
+    headers.insert(
+        "X-XSS-Protection",
+        HeaderValue::from_static("1; mode=block"),
+    );
+    headers.insert(
+        "Strict-Transport-Security",
+        HeaderValue::from_static("max-age=31536000; includeSubDomains"),
+    );
+    headers.insert(
+        "Referrer-Policy",
+        HeaderValue::from_static("strict-origin-when-cross-origin"),
+    );
+    headers.insert(
+        "Content-Security-Policy",
+        HeaderValue::from_static("default-src 'self'"),
+    );
+
     response
 }
 
 /// Create CORS layer with optimized parsing
 pub fn create_cors_layer(config: &crate::config::CorsConfig) -> CorsLayer {
-    use tower_http::cors::CorsLayer;
-    use tower_http::cors::Any;
     use http::{HeaderName, Method};
-    
+    use tower_http::cors::Any;
+    use tower_http::cors::CorsLayer;
+
     // Parse and cache CORS configuration once per function call
     // This avoids repeated parsing on every request while staying thread-safe
     // For even better performance, consider caching at application startup
     let allow_any_origin = config.allowed_origins.iter().any(|s| s == "*");
 
-    let origins: Vec<_> = config.allowed_origins.iter()
+    let origins: Vec<_> = config
+        .allowed_origins
+        .iter()
         .filter(|s| s.as_str() != "*")
         .filter_map(|s| s.as_str().parse().ok())
         .collect();
-    
-    let methods: Vec<Method> = config.allowed_methods.iter()
+
+    let methods: Vec<Method> = config
+        .allowed_methods
+        .iter()
         .filter_map(|s| s.as_str().parse().ok())
         .collect();
-    
-    let headers: Vec<HeaderName> = config.allowed_headers.iter()
+
+    let headers: Vec<HeaderName> = config
+        .allowed_headers
+        .iter()
         .filter_map(|s| s.as_str().parse().ok())
         .collect();
 
@@ -819,11 +879,11 @@ pub fn create_cors_layer(config: &crate::config::CorsConfig) -> CorsLayer {
     } else {
         cors_layer.allow_origin(origins)
     };
-    
+
     if config.allow_credentials {
         cors_layer = cors_layer.allow_credentials(true);
     }
-    
+
     cors_layer
 }
 
@@ -880,9 +940,9 @@ impl Default for MiddlewareStack {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::DdosProtectionConfig;
     use axum::body::Body;
     use axum::http::Method;
-    use crate::config::DdosProtectionConfig;
 
     #[test]
     fn test_client_id_extraction() {
@@ -905,7 +965,7 @@ mod tests {
             .unwrap();
 
         request.extensions_mut().insert(claims);
-        
+
         let client_id = extract_client_id(&request);
         assert_eq!(client_id, "user:user123");
     }
@@ -922,13 +982,13 @@ mod tests {
         };
 
         let rate_limiter = AdvancedRateLimiter::new(config);
-        
+
         // First request should succeed
         rate_limiter.check_rate_limit("client1").await.unwrap();
-        
+
         // Second request should succeed
         rate_limiter.check_rate_limit("client1").await.unwrap();
-        
+
         // Third request should fail
         assert!(matches!(
             rate_limiter.check_rate_limit("client1").await,

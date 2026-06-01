@@ -2,19 +2,16 @@
 
 use crate::error::{FortressError, Result};
 use crate::websocket::{
+    auth::{AuthConfig, WebSocketAuthenticator},
     connection::ConnectionManager,
-    auth::{WebSocketAuthenticator, AuthConfig},
-    message::{WebSocketMessage, MessageType, MessagePayload},
+    message::{MessagePayload, MessageType, WebSocketMessage},
 };
-use std::sync::Arc;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::RwLock;
-use tokio_tungstenite::{
-    accept_async,
-    WebSocketStream,
-};
+use tokio_tungstenite::{accept_async, WebSocketStream};
 
 /// WebSocket server configuration
 #[derive(Debug, Clone)]
@@ -73,9 +70,12 @@ impl WebSocketServer {
     /// Create new WebSocket server
     pub fn new(
         config: WebSocketServerConfig,
-        auth_manager: Arc<crate::auth::AuthManager>
+        auth_manager: Arc<crate::auth::AuthManager>,
     ) -> Result<Self> {
-        let authenticator = Arc::new(WebSocketAuthenticator::new(auth_manager, config.auth_config.clone()));
+        let authenticator = Arc::new(WebSocketAuthenticator::new(
+            auth_manager,
+            config.auth_config.clone(),
+        ));
         let connection_manager = Arc::new(ConnectionManager::new());
 
         Ok(Self {
@@ -100,7 +100,11 @@ impl WebSocketServer {
             FortressError::websocket(format!("Failed to bind to {}: {}", bind_addr, e))
         })?;
 
-        tracing::info!("WebSocket server listening on {} (TLS: {})", bind_addr, self.config.enable_tls);
+        tracing::info!(
+            "WebSocket server listening on {} (TLS: {})",
+            bind_addr,
+            self.config.enable_tls
+        );
 
         *self.state.write().await = ServerState::Running;
 
@@ -136,21 +140,33 @@ impl WebSocketServer {
     /// Validate TLS configuration
     fn validate_tls_config(&self) -> Result<()> {
         if self.config.enable_tls {
-            let cert_file = self.config.tls_cert_file.as_ref()
-                .ok_or_else(|| FortressError::websocket("TLS enabled but certificate file not specified"))?;
-            let key_file = self.config.tls_key_file.as_ref()
-                .ok_or_else(|| FortressError::websocket("TLS enabled but private key file not specified"))?;
+            let cert_file = self.config.tls_cert_file.as_ref().ok_or_else(|| {
+                FortressError::websocket("TLS enabled but certificate file not specified")
+            })?;
+            let key_file = self.config.tls_key_file.as_ref().ok_or_else(|| {
+                FortressError::websocket("TLS enabled but private key file not specified")
+            })?;
 
             // Check if certificate files exist
             if !std::path::Path::new(cert_file).exists() {
-                return Err(FortressError::websocket(format!("TLS certificate file not found: {}", cert_file)));
+                return Err(FortressError::websocket(format!(
+                    "TLS certificate file not found: {}",
+                    cert_file
+                )));
             }
 
             if !std::path::Path::new(key_file).exists() {
-                return Err(FortressError::websocket(format!("TLS private key file not found: {}", key_file)));
+                return Err(FortressError::websocket(format!(
+                    "TLS private key file not found: {}",
+                    key_file
+                )));
             }
 
-            tracing::info!("TLS configuration validated - Cert: {}, Key: {}", cert_file, key_file);
+            tracing::info!(
+                "TLS configuration validated - Cert: {}, Key: {}",
+                cert_file,
+                key_file
+            );
         }
 
         Ok(())
@@ -159,7 +175,7 @@ impl WebSocketServer {
     /// Stop the WebSocket server
     pub async fn stop(&self) -> Result<()> {
         *self.state.write().await = ServerState::Stopping;
-        
+
         // Close all connections
         let connections = self.connection_manager.get_all_connections().await;
         for connection in connections {
@@ -173,23 +189,28 @@ impl WebSocketServer {
     /// Handle new connection
     async fn handle_connection(&self, stream: TcpStream, addr: SocketAddr) -> Result<()> {
         let client_ip = addr.ip().to_string();
-        
+
         // Check connection limits
         let stats = self.connection_manager.get_stats().await;
         if stats.active_connections >= self.config.max_connections {
-            tracing::warn!("Connection limit reached, rejecting connection from {}", client_ip);
+            tracing::warn!(
+                "Connection limit reached, rejecting connection from {}",
+                client_ip
+            );
             return Err(FortressError::websocket("Connection limit reached"));
         }
 
         // Perform WebSocket handshake
-        let ws_stream = accept_async(stream).await
+        let ws_stream = accept_async(stream)
+            .await
             .map_err(|e| FortressError::websocket(format!("WebSocket handshake failed: {}", e)))?;
 
         // Extract user agent from handshake
         let user_agent = self.extract_user_agent(&ws_stream).await;
 
         // Create connection
-        let connection = self.connection_manager
+        let connection = self
+            .connection_manager
             .add_connection(ws_stream, client_ip.clone(), user_agent)
             .await?;
 
@@ -197,24 +218,35 @@ impl WebSocketServer {
         connection.start_processing().await?;
 
         // Handle connection lifecycle
-        self.handle_connection_lifecycle(connection, client_ip).await
+        self.handle_connection_lifecycle(connection, client_ip)
+            .await
     }
 
     /// Handle connection lifecycle
-    async fn handle_connection_lifecycle(&self, connection: Arc<crate::websocket::connection::WebSocketConnection>, client_ip: String) -> Result<()> {
+    async fn handle_connection_lifecycle(
+        &self,
+        connection: Arc<crate::websocket::connection::WebSocketConnection>,
+        client_ip: String,
+    ) -> Result<()> {
         // Wait for authentication
-        let auth_result = self.wait_for_authentication(&connection, &client_ip).await?;
-        
+        let auth_result = self
+            .wait_for_authentication(&connection, &client_ip)
+            .await?;
+
         if !auth_result.success {
             let error_msg = WebSocketMessage::error(
                 "AUTH_FAILED".to_string(),
-                auth_result.error.unwrap_or_else(|| "Authentication failed".to_string()),
+                auth_result
+                    .error
+                    .unwrap_or_else(|| "Authentication failed".to_string()),
                 None,
             );
             let _ = connection.send_message(error_msg).await;
             let _ = connection.close().await;
-            
-            self.connection_manager.remove_connection(&connection.info.read().await.id).await;
+
+            self.connection_manager
+                .remove_connection(&connection.info.read().await.id)
+                .await;
             return Ok(());
         }
 
@@ -222,18 +254,20 @@ impl WebSocketServer {
         let user_id = auth_result.user_id.ok_or_else(|| {
             FortressError::authentication(
                 "Authentication failed: missing user ID",
-                Some("websocket_connection".to_string())
+                Some("websocket_connection".to_string()),
             )
         })?;
-        
+
         let session_id = auth_result.session_id.ok_or_else(|| {
             FortressError::authentication(
                 "Authentication failed: missing session ID",
-                Some("websocket_connection".to_string())
+                Some("websocket_connection".to_string()),
             )
         })?;
-        
-        connection.set_authenticated(user_id, Some(session_id)).await;
+
+        connection
+            .set_authenticated(user_id, Some(session_id))
+            .await;
 
         // Send authentication success message
         let success_msg = WebSocketMessage::new(
@@ -246,7 +280,10 @@ impl WebSocketServer {
         );
         let _ = connection.send_message(success_msg).await;
 
-        tracing::info!("WebSocket connection authenticated: {}", connection.info.read().await.id);
+        tracing::info!(
+            "WebSocket connection authenticated: {}",
+            connection.info.read().await.id
+        );
 
         // Maintain connection
         self.maintain_connection(&connection).await
@@ -256,14 +293,14 @@ impl WebSocketServer {
     async fn wait_for_authentication(
         &self,
         connection: &Arc<crate::websocket::connection::WebSocketConnection>,
-        _client_ip: &str
+        _client_ip: &str,
     ) -> Result<crate::websocket::auth::AuthResult> {
         // In a real implementation, this would wait for the first message
         // For now, we'll simulate authentication timeout
-        
+
         let timeout = Duration::from_secs(30); // 30 second auth timeout
         let start_time = Instant::now();
-        
+
         while start_time.elapsed() < timeout {
             // Check if connection is authenticated
             if connection.is_authenticated().await {
@@ -276,10 +313,10 @@ impl WebSocketServer {
                     timestamp: chrono::Utc::now(),
                 });
             }
-            
+
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
-        
+
         // Authentication timeout
         Ok(crate::websocket::auth::AuthResult {
             success: false,
@@ -294,40 +331,48 @@ impl WebSocketServer {
     /// Maintain connection with ping/pong
     async fn maintain_connection(
         &self,
-        connection: &Arc<crate::websocket::connection::WebSocketConnection>
+        connection: &Arc<crate::websocket::connection::WebSocketConnection>,
     ) -> Result<()> {
         let ping_interval = Duration::from_secs(self.config.ping_interval_seconds);
         let mut last_ping = Instant::now();
-        
+
         loop {
             // Check connection state
             let state = connection.get_state().await;
             if state == crate::websocket::connection::ConnectionState::Disconnected {
                 break;
             }
-            
+
             // Send ping if interval has passed
             if last_ping.elapsed() >= ping_interval {
                 let ping_msg = WebSocketMessage::ping();
                 if let Err(e) = connection.send_message(ping_msg).await {
-                    tracing::error!("Failed to send ping to {}: {}", connection.info.read().await.id, e);
+                    tracing::error!(
+                        "Failed to send ping to {}: {}",
+                        connection.info.read().await.id,
+                        e
+                    );
                     break;
                 }
                 last_ping = Instant::now();
             }
-            
+
             // Check for connection timeout
             let now = Instant::now();
-            if now.duration_since(connection.info.read().await.last_activity) > Duration::from_secs(self.config.connection_timeout_seconds) {
+            if now.duration_since(connection.info.read().await.last_activity)
+                > Duration::from_secs(self.config.connection_timeout_seconds)
+            {
                 tracing::info!("Connection {} timed out", connection.info.read().await.id);
                 break;
             }
-            
+
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
-        
+
         // Clean up connection
-        self.connection_manager.remove_connection(&connection.info.read().await.id).await;
+        self.connection_manager
+            .remove_connection(&connection.info.read().await.id)
+            .await;
         Ok(())
     }
 
@@ -335,21 +380,23 @@ impl WebSocketServer {
     async fn start_background_tasks(&self) {
         // Start broadcast processor
         self.connection_manager.start_broadcast_processor().await;
-        
+
         // Start cleanup task
         let connection_manager = self.connection_manager.clone();
         let authenticator = self.authenticator.clone();
         let connection_timeout = Duration::from_secs(self.config.connection_timeout_seconds);
-        
+
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(60)); // Every minute
-            
+
             loop {
                 interval.tick().await;
-                
+
                 // Cleanup idle connections
-                connection_manager.cleanup_idle_connections(connection_timeout).await;
-                
+                connection_manager
+                    .cleanup_idle_connections(connection_timeout)
+                    .await;
+
                 // Cleanup auth data
                 authenticator.cleanup().await;
             }
@@ -373,7 +420,7 @@ impl WebSocketServer {
         // 1. Use a custom handshake handler to capture headers
         // 2. Parse the Sec-WebSocket-Protocol and User-Agent headers
         // 3. Store the user agent in connection metadata
-        
+
         // For now, we'll extract from connection info if available
         // This could be enhanced by implementing a custom handshake processor
         if let Some(peer_addr) = stream.get_ref().peer_addr().ok() {
@@ -405,7 +452,7 @@ impl Default for WebSocketServerConfig {
             tls_key_file: None,
             max_connections: 1000,
             connection_timeout_seconds: 300, // 5 minutes
-            ping_interval_seconds: 30, // 30 seconds
+            ping_interval_seconds: 30,       // 30 seconds
             auth_config: AuthConfig::default(),
             enable_compression: true,
             max_message_size: 1024 * 1024, // 1MB

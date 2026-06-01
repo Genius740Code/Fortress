@@ -3,13 +3,13 @@
 //! This module provides the default implementation of the FieldEncryptionManager trait
 //! with in-memory storage for configurations and metadata.
 
-use crate::error::{FortressError, Result, EncryptionErrorCode};
-use crate::field_encryption::{
-    FieldEncryptionManager, FieldEncryptionConfig, FieldIdentifier, FieldEncryptionStrategy,
-    FieldEncryptionMetadata, EncryptedField, DecryptedField, FieldAlgorithmSelector,
-    DefaultAlgorithmSelector,
-};
 use crate::encryption::{create_algorithm, EncryptionAlgorithm};
+use crate::error::{EncryptionErrorCode, FortressError, Result};
+use crate::field_encryption::{
+    DecryptedField, DefaultAlgorithmSelector, EncryptedField, FieldAlgorithmSelector,
+    FieldEncryptionConfig, FieldEncryptionManager, FieldEncryptionMetadata,
+    FieldEncryptionStrategy, FieldIdentifier,
+};
 use crate::key::{KeyManager, SecureKey};
 
 use async_trait::async_trait;
@@ -56,7 +56,10 @@ impl DefaultFieldEncryptionManager {
     }
 
     /// Get or create a key for a field configuration
-    async fn get_or_create_key(&self, config: &FieldEncryptionConfig) -> Result<(SecureKey, String)> {
+    async fn get_or_create_key(
+        &self,
+        config: &FieldEncryptionConfig,
+    ) -> Result<(SecureKey, String)> {
         match &config.key_id {
             Some(key_id) => {
                 // Use existing key
@@ -65,13 +68,12 @@ impl DefaultFieldEncryptionManager {
             }
             None => {
                 // Generate a new key for this field
-                let algorithm_name = config.algorithm_name()
-                    .unwrap_or(&self.default_algorithm);
+                let algorithm_name = config.algorithm_name().unwrap_or(&self.default_algorithm);
                 let algorithm = create_algorithm(algorithm_name)?;
-                
+
                 let key = self.key_manager.generate_key(algorithm.as_ref()).await?;
                 let key_id = Uuid::new_v4().to_string();
-                
+
                 // Store the key with metadata
                 let metadata = crate::key::KeyMetadata::new(
                     key_id.clone(),
@@ -82,7 +84,7 @@ impl DefaultFieldEncryptionManager {
                     format!("field:{}", config.field.as_string()),
                     config.performance_profile,
                 );
-                
+
                 self.key_manager.store_key(&key_id, &key, &metadata).await?;
                 Ok((key, key_id))
             }
@@ -90,10 +92,12 @@ impl DefaultFieldEncryptionManager {
     }
 
     /// Get algorithm instance for a configuration
-    async fn get_algorithm(&self, config: &FieldEncryptionConfig) -> Result<Box<dyn EncryptionAlgorithm>> {
-        let _algorithm_name = config.algorithm_name()
-            .unwrap_or(&self.default_algorithm);
-        
+    async fn get_algorithm(
+        &self,
+        config: &FieldEncryptionConfig,
+    ) -> Result<Box<dyn EncryptionAlgorithm>> {
+        let _algorithm_name = config.algorithm_name().unwrap_or(&self.default_algorithm);
+
         // Use the algorithm selector to choose the best algorithm for this field
         let selected_algorithm = self.algorithm_selector.select_algorithm(
             &config.field,
@@ -101,7 +105,7 @@ impl DefaultFieldEncryptionManager {
             config.performance_profile,
             &config.compliance_tags,
         )?;
-        
+
         create_algorithm(&selected_algorithm)
     }
 
@@ -111,18 +115,19 @@ impl DefaultFieldEncryptionManager {
         if nonce_size == 0 {
             return Ok(Vec::new());
         }
-        
+
         match crate::trng::random_bytes(nonce_size) {
             Ok(bytes) => Ok(bytes),
             Err(_) => {
                 // Fallback to getrandom
                 let mut nonce = vec![0u8; nonce_size];
-                getrandom::getrandom(&mut nonce)
-                    .map_err(|e| FortressError::encryption(
+                getrandom::getrandom(&mut nonce).map_err(|e| {
+                    FortressError::encryption(
                         format!("Failed to generate nonce: {}", e),
                         "nonce_generation".to_string(),
                         EncryptionErrorCode::AlgorithmNotSupported,
-                    ))?;
+                    )
+                })?;
                 Ok(nonce)
             }
         }
@@ -146,10 +151,8 @@ impl FieldEncryptionManager for DefaultFieldEncryptionManager {
             Some(config) => config,
             None => {
                 // Create default configuration
-                let default_config = FieldEncryptionConfig::new(
-                    field.clone(),
-                    FieldEncryptionStrategy::Default,
-                );
+                let default_config =
+                    FieldEncryptionConfig::new(field.clone(), FieldEncryptionStrategy::Default);
                 default_config
             }
         };
@@ -183,7 +186,11 @@ impl FieldEncryptionManager for DefaultFieldEncryptionManager {
         };
 
         // Create metadata with actual key version
-        let key_version = self.key_manager.get_active_key_version(&key_id).await.unwrap_or(1);
+        let key_version = self
+            .key_manager
+            .get_active_key_version(&key_id)
+            .await
+            .unwrap_or(1);
         let mut metadata = FieldEncryptionMetadata::new(
             config.id.clone(),
             field.clone(),
@@ -231,7 +238,10 @@ impl FieldEncryptionManager for DefaultFieldEncryptionManager {
         })
     }
 
-    async fn get_field_config(&self, field: &FieldIdentifier) -> Result<Option<FieldEncryptionConfig>> {
+    async fn get_field_config(
+        &self,
+        field: &FieldIdentifier,
+    ) -> Result<Option<FieldEncryptionConfig>> {
         let configs = self.configs.read().await;
         Ok(configs.get(&field.as_string()).cloned())
     }
@@ -299,13 +309,12 @@ impl FieldEncryptionManagerBuilder {
             )
         })?;
 
-        let algorithm_selector = self.algorithm_selector
+        let algorithm_selector = self
+            .algorithm_selector
             .unwrap_or_else(|| Arc::new(DefaultAlgorithmSelector));
 
-        let mut manager = DefaultFieldEncryptionManager::with_algorithm_selector(
-            key_manager,
-            algorithm_selector,
-        );
+        let mut manager =
+            DefaultFieldEncryptionManager::with_algorithm_selector(key_manager, algorithm_selector);
 
         if let Some(default_algorithm) = self.default_algorithm {
             manager = manager.with_default_algorithm(default_algorithm);
@@ -324,8 +333,8 @@ impl Default for FieldEncryptionManagerBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
     use crate::key::InMemoryKeyManager;
+    use std::collections::HashMap;
 
     #[tokio::test]
     async fn test_field_encryption_roundtrip() {
@@ -336,7 +345,10 @@ mod tests {
         let plaintext = b"user@example.com";
 
         // Encrypt the field
-        let encrypted = field_manager.encrypt_field(&field, plaintext).await.unwrap();
+        let encrypted = field_manager
+            .encrypt_field(&field, plaintext)
+            .await
+            .unwrap();
         assert!(!encrypted.ciphertext.is_empty());
         assert_eq!(encrypted.metadata.field, field);
 
@@ -356,7 +368,7 @@ mod tests {
         let field_manager = DefaultFieldEncryptionManager::new(key_manager);
 
         let field = FieldIdentifier::name("ssn");
-        
+
         // Initially no configuration
         let config = field_manager.get_field_config(&field).await.unwrap();
         assert!(config.is_none());
@@ -368,7 +380,10 @@ mod tests {
         )
         .with_compliance_tag("HIPAA");
 
-        field_manager.set_field_config(new_config.clone()).await.unwrap();
+        field_manager
+            .set_field_config(new_config.clone())
+            .await
+            .unwrap();
 
         // Retrieve the configuration
         let retrieved = field_manager.get_field_config(&field).await.unwrap();
@@ -401,7 +416,10 @@ mod tests {
             );
         }
 
-        let decrypted_fields = field_manager.decrypt_fields_batch(&decrypt_inputs).await.unwrap();
+        let decrypted_fields = field_manager
+            .decrypt_fields_batch(&decrypt_inputs)
+            .await
+            .unwrap();
         assert_eq!(decrypted_fields.len(), 2);
 
         // Verify results

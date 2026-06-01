@@ -1,14 +1,14 @@
 //! Consul Discovery Provider
-//! 
+//!
 //! This module provides automatic discovery of Fortress cluster nodes
 //! through HashiCorp Consul's service discovery and health checking.
 
+use crate::discovery::{DiscoveredNode, DiscoveryConfig, DiscoveryProvider, NodeHealthStatus};
+use crate::error::{FortressError, Result};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
-use serde::{Serialize, Deserialize};
-use chrono::{DateTime, Utc};
-use crate::error::{FortressError, Result};
-use crate::discovery::{DiscoveryProvider, DiscoveredNode, NodeHealthStatus, DiscoveryConfig};
 
 /// Consul discovery provider configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -74,8 +74,8 @@ impl ConsulDiscovery {
 
     /// Create HTTP client for Consul API
     fn create_client(&self) -> reqwest::Client {
-        let mut client_builder = reqwest::Client::builder()
-            .timeout(Duration::from_secs(self.config.timeout_seconds));
+        let mut client_builder =
+            reqwest::Client::builder().timeout(Duration::from_secs(self.config.timeout_seconds));
 
         // Add authentication token if provided
         if let Some(ref token) = self.config.token {
@@ -86,7 +86,9 @@ impl ConsulDiscovery {
             });
         }
 
-        client_builder.build().unwrap_or_else(|_| reqwest::Client::new())
+        client_builder
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new())
     }
 
     /// Build Consul API URL
@@ -97,14 +99,16 @@ impl ConsulDiscovery {
 
     /// Query Consul for services
     async fn query_consul_services(&self) -> Result<Vec<ConsulService>> {
-        let client = self.client.as_ref()
+        let client = self
+            .client
+            .as_ref()
             .ok_or_else(|| FortressError::discovery("Consul client not initialized"))?;
 
         let mut url = self.build_api_url(&format!("catalog/service/{}", self.config.service_name));
 
         // Add query parameters
         let mut params = Vec::new();
-        
+
         if let Some(ref tag) = self.config.tag {
             params.push(format!("tag={}", tag));
         }
@@ -117,32 +121,37 @@ impl ConsulDiscovery {
             url = format!("{}?{}", url, params.join("&"));
         }
 
-        let response = client.get(&url)
-            .send()
-            .await
-            .map_err(|e| FortressError::discovery(format!("Consul API request failed: {}", e)))?;
+        let response =
+            client.get(&url).send().await.map_err(|e| {
+                FortressError::discovery(format!("Consul API request failed: {}", e))
+            })?;
 
         if !response.status().is_success() {
-            return Err(FortressError::discovery(format!("Consul API returned status: {}", response.status())));
+            return Err(FortressError::discovery(format!(
+                "Consul API returned status: {}",
+                response.status()
+            )));
         }
 
-        let services: Vec<ConsulService> = response.json()
-            .await
-            .map_err(|e| FortressError::discovery(format!("Failed to parse Consul response: {}", e)))?;
+        let services: Vec<ConsulService> = response.json().await.map_err(|e| {
+            FortressError::discovery(format!("Failed to parse Consul response: {}", e))
+        })?;
 
         Ok(services)
     }
 
     /// Query Consul for service health
     async fn query_consul_health(&self) -> Result<HashMap<String, ConsulHealthStatus>> {
-        let client = self.client.as_ref()
+        let client = self
+            .client
+            .as_ref()
             .ok_or_else(|| FortressError::discovery("Consul client not initialized"))?;
 
         let mut url = self.build_api_url(&format!("health/service/{}", self.config.service_name));
 
         // Add query parameters
         let mut params = Vec::new();
-        
+
         if let Some(ref tag) = self.config.tag {
             params.push(format!("tag={}", tag));
         }
@@ -159,13 +168,15 @@ impl ConsulDiscovery {
             url = format!("{}?{}", url, params.join("&"));
         }
 
-        let response = client.get(&url)
-            .send()
-            .await
-            .map_err(|e| FortressError::discovery(format!("Consul health API request failed: {}", e)))?;
+        let response = client.get(&url).send().await.map_err(|e| {
+            FortressError::discovery(format!("Consul health API request failed: {}", e))
+        })?;
 
         if !response.status().is_success() {
-            return Err(FortressError::discovery(format!("Consul health API returned status: {}", response.status())));
+            return Err(FortressError::discovery(format!(
+                "Consul health API returned status: {}",
+                response.status()
+            )));
         }
 
         // Parse health checks
@@ -177,9 +188,9 @@ impl ConsulDiscovery {
             status: String,
         }
 
-        let health_checks: Vec<HealthCheck> = response.json()
-            .await
-            .map_err(|e| FortressError::discovery(format!("Failed to parse Consul health response: {}", e)))?;
+        let health_checks: Vec<HealthCheck> = response.json().await.map_err(|e| {
+            FortressError::discovery(format!("Failed to parse Consul health response: {}", e))
+        })?;
 
         let mut health_map = HashMap::new();
         for check in health_checks {
@@ -196,7 +207,11 @@ impl ConsulDiscovery {
     }
 
     /// Convert Consul service to discovered node
-    fn consul_service_to_node(&self, service: &ConsulService, health_status: Option<ConsulHealthStatus>) -> Result<DiscoveredNode> {
+    fn consul_service_to_node(
+        &self,
+        service: &ConsulService,
+        health_status: Option<ConsulHealthStatus>,
+    ) -> Result<DiscoveredNode> {
         // Determine the actual address and port to use
         let (address, port) = if !service.service_address.is_empty() && service.service_port != 0 {
             (service.service_address.clone(), service.service_port)
@@ -209,7 +224,7 @@ impl ConsulDiscovery {
         tags.insert("discovery_type".to_string(), "consul".to_string());
         tags.insert("service".to_string(), service.name.clone());
         tags.insert("node".to_string(), service.node.clone());
-        
+
         for tag in &service.tags {
             tags.insert(tag.clone(), "true".to_string());
         }
@@ -285,11 +300,11 @@ impl ConsulDiscovery {
     /// Generate cache key
     fn generate_cache_key(&self) -> String {
         let mut key = self.config.service_name.clone();
-        
+
         if let Some(ref tag) = self.config.tag {
             key.push_str(&format!("_{}", tag));
         }
-        
+
         if let Some(ref dc) = self.config.datacenter {
             key.push_str(&format!("_{}", dc));
         }
@@ -306,9 +321,9 @@ impl DiscoveryProvider for ConsulDiscovery {
 
     async fn initialize(&mut self, config: &DiscoveryConfig) -> Result<()> {
         // Extract Consul-specific config
-        let consul_config: ConsulDiscoveryConfig = serde_json::from_value(
-            serde_json::to_value(&config.settings).unwrap_or_default()
-        ).unwrap_or_default();
+        let consul_config: ConsulDiscoveryConfig =
+            serde_json::from_value(serde_json::to_value(&config.settings).unwrap_or_default())
+                .unwrap_or_default();
 
         self.config = consul_config;
 
@@ -316,14 +331,19 @@ impl DiscoveryProvider for ConsulDiscovery {
         self.client = Some(self.create_client());
         self.initialized = true;
 
-        tracing::info!("Consul discovery provider initialized for service: {} at {}", 
-                      self.config.service_name, self.config.address);
+        tracing::info!(
+            "Consul discovery provider initialized for service: {} at {}",
+            self.config.service_name,
+            self.config.address
+        );
         Ok(())
     }
 
     async fn discover_nodes(&self) -> Result<Vec<DiscoveredNode>> {
         if !self.initialized {
-            return Err(FortressError::discovery("Consul discovery provider not initialized"));
+            return Err(FortressError::discovery(
+                "Consul discovery provider not initialized",
+            ));
         }
 
         let cache_key = self.generate_cache_key();
@@ -331,14 +351,17 @@ impl DiscoveryProvider for ConsulDiscovery {
         // Check cache first
         if self.is_cache_valid(&cache_key).await {
             if let Some(cached_nodes) = self.get_cached_services(&cache_key).await {
-                tracing::debug!("Using cached Consul discovery results: {} nodes", cached_nodes.len());
+                tracing::debug!(
+                    "Using cached Consul discovery results: {} nodes",
+                    cached_nodes.len()
+                );
                 return Ok(cached_nodes);
             }
         }
 
         // Query Consul for services
         let services = self.query_consul_services().await?;
-        
+
         // Query Consul for health status
         let health_status = match self.query_consul_health().await {
             Ok(health) => Some(health),
@@ -351,7 +374,8 @@ impl DiscoveryProvider for ConsulDiscovery {
         // Convert services to discovered nodes
         let mut nodes = Vec::new();
         for service in services {
-            let service_health = health_status.as_ref()
+            let service_health = health_status
+                .as_ref()
                 .and_then(|health| health.get(&service.id))
                 .cloned();
 
@@ -372,27 +396,36 @@ impl DiscoveryProvider for ConsulDiscovery {
 
     async fn check_node_health(&self, node: &DiscoveredNode) -> Result<NodeHealthStatus> {
         if !self.initialized {
-            return Err(FortressError::discovery("Consul discovery provider not initialized"));
+            return Err(FortressError::discovery(
+                "Consul discovery provider not initialized",
+            ));
         }
 
         // Extract service ID from node ID
-        let service_id = node.id.strip_prefix("consul-")
+        let service_id = node
+            .id
+            .strip_prefix("consul-")
             .ok_or_else(|| FortressError::discovery("Invalid Consul node ID"))?;
 
         // Query Consul for the specific service health
-        let client = self.client.as_ref()
+        let client = self
+            .client
+            .as_ref()
             .ok_or_else(|| FortressError::discovery("Consul client not initialized"))?;
 
-        let mut url = self.build_api_url(&format!("health/service/{}/{}", self.config.service_name, service_id));
+        let mut url = self.build_api_url(&format!(
+            "health/service/{}/{}",
+            self.config.service_name, service_id
+        ));
 
         if let Some(ref datacenter) = self.config.datacenter {
             url = format!("{}?dc={}", url, datacenter);
         }
 
-        let response = client.get(&url)
-            .send()
-            .await
-            .map_err(|e| FortressError::discovery(format!("Consul health check failed: {}", e)))?;
+        let response =
+            client.get(&url).send().await.map_err(|e| {
+                FortressError::discovery(format!("Consul health check failed: {}", e))
+            })?;
 
         if !response.status().is_success() {
             return Ok(NodeHealthStatus::Unknown);
@@ -404,9 +437,9 @@ impl DiscoveryProvider for ConsulDiscovery {
             status: String,
         }
 
-        let health_checks: Vec<HealthCheck> = response.json()
-            .await
-            .map_err(|e| FortressError::discovery(format!("Failed to parse health check response: {}", e)))?;
+        let health_checks: Vec<HealthCheck> = response.json().await.map_err(|e| {
+            FortressError::discovery(format!("Failed to parse health check response: {}", e))
+        })?;
 
         if health_checks.is_empty() {
             return Ok(NodeHealthStatus::Unknown);
@@ -435,11 +468,11 @@ impl DiscoveryProvider for ConsulDiscovery {
     async fn shutdown(&mut self) -> Result<()> {
         self.client = None;
         self.initialized = false;
-        
+
         // Clear cache
         let mut cache = self.service_cache.write().await;
         cache.clear();
-        
+
         tracing::info!("Consul discovery provider shutdown");
         Ok(())
     }
@@ -464,7 +497,7 @@ mod tests {
     fn test_consul_discovery_creation() {
         let config = ConsulDiscoveryConfig::default();
         let discovery = ConsulDiscovery::new(config);
-        
+
         assert_eq!(discovery.name(), "consul");
         assert!(!discovery.initialized);
         assert!(discovery.client.is_none());
@@ -477,7 +510,7 @@ mod tests {
             ..Default::default()
         };
         let discovery = ConsulDiscovery::new(config);
-        
+
         let url = discovery.build_api_url("catalog/service/test");
         assert_eq!(url, "http://localhost:8500/v1/catalog/service/test");
     }
@@ -486,17 +519,17 @@ mod tests {
     fn test_generate_cache_key() {
         let mut config = ConsulDiscoveryConfig::default();
         let discovery = ConsulDiscovery::new(config.clone());
-        
+
         // Basic service name
         let key = discovery.generate_cache_key();
         assert_eq!(key, "fortress");
-        
+
         // With tag
         config.tag = Some("production".to_string());
         let discovery = ConsulDiscovery::new(config.clone());
         let key = discovery.generate_cache_key();
         assert_eq!(key, "fortress_production");
-        
+
         // With datacenter
         config.datacenter = Some("dc1".to_string());
         let discovery = ConsulDiscovery::new(config);

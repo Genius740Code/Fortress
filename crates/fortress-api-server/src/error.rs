@@ -8,9 +8,9 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
+use fortress_core::error::FortressError;
 use serde_json::json;
 use thiserror::Error;
-use fortress_core::error::FortressError;
 
 /// Server result type
 pub type ServerResult<T> = Result<T, ServerError>;
@@ -98,7 +98,7 @@ impl ServerError {
             ServerError::PayloadTooLarge(_) => StatusCode::PAYLOAD_TOO_LARGE,
             ServerError::Timeout => StatusCode::REQUEST_TIMEOUT,
             ServerError::Unavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
-            
+
             // Core Fortress errors need special handling
             ServerError::Core(core_err) => match core_err {
                 FortressError::Encryption { .. } => StatusCode::INTERNAL_SERVER_ERROR,
@@ -113,7 +113,7 @@ impl ServerError {
                 FortressError::Authentication { .. } => StatusCode::UNAUTHORIZED,
                 _ => StatusCode::INTERNAL_SERVER_ERROR,
             },
-            
+
             // All other errors are internal server errors
             ServerError::Serialization(_)
             | ServerError::Network(_)
@@ -173,7 +173,7 @@ impl IntoResponse for ServerError {
     fn into_response(self) -> Response {
         let status = self.status_code();
         let error_code = self.error_code();
-        
+
         // Use sanitized error message to prevent information disclosure
         let message = crate::handlers::sanitize_error(&self);
 
@@ -266,21 +266,54 @@ mod tests {
 
     #[test]
     fn test_error_status_codes() {
-        assert_eq!(ServerError::auth("test").status_code(), StatusCode::UNAUTHORIZED);
-        assert_eq!(ServerError::access_denied("test").status_code(), StatusCode::FORBIDDEN);
-        assert_eq!(ServerError::validation("test").status_code(), StatusCode::BAD_REQUEST);
-        assert_eq!(ServerError::not_found("test").status_code(), StatusCode::NOT_FOUND);
-        assert_eq!(ServerError::conflict("test").status_code(), StatusCode::CONFLICT);
-        assert_eq!(ServerError::RateLimit.status_code(), StatusCode::TOO_MANY_REQUESTS);
-        assert_eq!(ServerError::Timeout.status_code(), StatusCode::REQUEST_TIMEOUT);
-        assert_eq!(ServerError::internal("test").status_code(), StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(
+            ServerError::auth("test").status_code(),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            ServerError::access_denied("test").status_code(),
+            StatusCode::FORBIDDEN
+        );
+        assert_eq!(
+            ServerError::validation("test").status_code(),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            ServerError::not_found("test").status_code(),
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            ServerError::conflict("test").status_code(),
+            StatusCode::CONFLICT
+        );
+        assert_eq!(
+            ServerError::RateLimit.status_code(),
+            StatusCode::TOO_MANY_REQUESTS
+        );
+        assert_eq!(
+            ServerError::Timeout.status_code(),
+            StatusCode::REQUEST_TIMEOUT
+        );
+        assert_eq!(
+            ServerError::internal("test").status_code(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
     }
 
     #[test]
     fn test_error_codes() {
-        assert_eq!(ServerError::auth("test").error_code(), "AUTHENTICATION_FAILED");
-        assert_eq!(ServerError::access_denied("test").error_code(), "ACCESS_DENIED");
-        assert_eq!(ServerError::validation("test").error_code(), "VALIDATION_FAILED");
+        assert_eq!(
+            ServerError::auth("test").error_code(),
+            "AUTHENTICATION_FAILED"
+        );
+        assert_eq!(
+            ServerError::access_denied("test").error_code(),
+            "ACCESS_DENIED"
+        );
+        assert_eq!(
+            ServerError::validation("test").error_code(),
+            "VALIDATION_FAILED"
+        );
         assert_eq!(ServerError::not_found("test").error_code(), "NOT_FOUND");
         assert_eq!(ServerError::internal("test").error_code(), "INTERNAL_ERROR");
     }
@@ -290,7 +323,7 @@ mod tests {
         assert!(ServerError::auth("test").is_client_error());
         assert!(ServerError::validation("test").is_client_error());
         assert!(ServerError::not_found("test").is_client_error());
-        
+
         assert!(ServerError::internal("test").is_server_error());
         assert!(ServerError::network("test").is_server_error());
         assert!(ServerError::config("test").is_server_error());
@@ -301,7 +334,7 @@ mod tests {
         assert!(ServerError::internal("test").should_log_error());
         assert!(ServerError::network("test").should_log_error());
         assert!(ServerError::config("test").should_log_error());
-        
+
         assert!(!ServerError::auth("test").should_log_error());
         assert!(!ServerError::validation("test").should_log_error());
         assert!(!ServerError::not_found("test").should_log_error());

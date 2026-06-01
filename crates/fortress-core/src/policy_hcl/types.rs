@@ -2,13 +2,13 @@
 //!
 //! This module defines the core types used throughout the HCL policy engine.
 
+use crate::error::Result;
+use crate::token::TokenInfo;
+use chrono::{DateTime, Duration, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use serde::{Serialize, Deserialize};
-use chrono::{DateTime, Utc, Duration};
-use crate::token::TokenInfo;
-use crate::error::Result;
 
 /// Parsed HCL policy
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -197,11 +197,7 @@ pub struct PolicyContext {
 
 impl PolicyContext {
     /// Create a new policy context
-    pub fn new(
-        token: TokenInfo,
-        path: String,
-        operation: String,
-    ) -> Self {
+    pub fn new(token: TokenInfo, path: String, operation: String) -> Self {
         Self {
             token,
             path,
@@ -351,14 +347,18 @@ impl PolicyEvaluationResult {
 /// Policy function trait
 pub trait PolicyFunction: Send + Sync {
     /// Evaluate function with given arguments and context
-    fn evaluate(&self, args: &[serde_json::Value], context: &PolicyContext) -> crate::error::Result<serde_json::Value>;
-    
+    fn evaluate(
+        &self,
+        args: &[serde_json::Value],
+        context: &PolicyContext,
+    ) -> crate::error::Result<serde_json::Value>;
+
     /// Get function name
     fn name(&self) -> &str;
-    
+
     /// Get function description
     fn description(&self) -> &str;
-    
+
     /// Get parameter types
     fn parameter_types(&self) -> Vec<ParameterType>;
 }
@@ -367,16 +367,16 @@ pub trait PolicyFunction: Send + Sync {
 pub trait RoleStore: Send + Sync {
     /// Add a role to an entity
     fn add_role(&self, entity_id: &str, role: &str) -> Result<()>;
-    
+
     /// Remove a role from an entity
     fn remove_role(&self, entity_id: &str, role: &str) -> Result<()>;
-    
+
     /// Get all roles for an entity
     fn get_roles(&self, entity_id: &str) -> Result<Vec<String>>;
-    
+
     /// Check if an entity has a specific role
     fn check_role(&self, entity_id: &str, role: &str) -> Result<bool>;
-    
+
     /// List all entities with a specific role
     fn list_entities_with_role(&self, role: &str) -> Result<Vec<String>>;
 }
@@ -397,7 +397,8 @@ impl InMemoryRoleStore {
     /// Add a role to an entity
     pub fn add_role(&self, entity_id: &str, role: &str) -> Result<()> {
         let mut roles = self.roles.blocking_write();
-        roles.entry(entity_id.to_string())
+        roles
+            .entry(entity_id.to_string())
             .or_insert_with(Vec::new)
             .push(role.to_string());
         Ok(())
@@ -431,13 +432,13 @@ impl InMemoryRoleStore {
     pub fn list_entities_with_role(&self, role: &str) -> Result<Vec<String>> {
         let roles = self.roles.blocking_read();
         let mut entities = Vec::new();
-        
+
         for (entity_id, entity_roles) in roles.iter() {
             if entity_roles.contains(&role.to_string()) {
                 entities.push(entity_id.clone());
             }
         }
-        
+
         Ok(entities)
     }
 }
@@ -455,7 +456,8 @@ impl RoleStore for InMemoryRoleStore {
 
     fn add_role(&self, entity_id: &str, role: &str) -> Result<()> {
         let mut roles = self.roles.blocking_write();
-        roles.entry(entity_id.to_string())
+        roles
+            .entry(entity_id.to_string())
             .or_insert_with(Vec::new)
             .push(role.to_string());
         Ok(())
@@ -475,13 +477,13 @@ impl RoleStore for InMemoryRoleStore {
     fn list_entities_with_role(&self, role: &str) -> Result<Vec<String>> {
         let roles = self.roles.blocking_read();
         let mut entities = Vec::new();
-        
+
         for (entity_id, entity_roles) in roles.iter() {
             if entity_roles.contains(&role.to_string()) {
                 entities.push(entity_id.clone());
             }
         }
-        
+
         Ok(entities)
     }
 }
@@ -596,12 +598,12 @@ impl Default for PolicyStatistics {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::token::{TokenType, TokenRole};
+    use crate::token::{TokenRole, TokenType};
 
     #[test]
     fn test_parsed_policy_creation() {
         let policy = ParsedPolicy::new("test-policy".to_string(), "secret/*".to_string());
-        
+
         assert_eq!(policy.name, "test-policy");
         assert_eq!(policy.path, "secret/*");
         assert!(policy.capabilities.is_empty());
@@ -611,10 +613,10 @@ mod tests {
     #[test]
     fn test_policy_capabilities() {
         let mut policy = ParsedPolicy::new("test-policy".to_string(), "secret/*".to_string());
-        
+
         policy.add_capability("read".to_string());
         policy.add_capability("list".to_string());
-        
+
         assert!(policy.allows_capability("read"));
         assert!(policy.allows_capability("list"));
         assert!(!policy.allows_capability("write"));
@@ -625,7 +627,7 @@ mod tests {
         let policy1 = ParsedPolicy::new("test-policy".to_string(), "*".to_string());
         let policy2 = ParsedPolicy::new("test-policy".to_string(), "secret/*".to_string());
         let policy3 = ParsedPolicy::new("test-policy".to_string(), "secret/data".to_string());
-        
+
         assert!(policy1.matches_path("any/path"));
         assert!(policy2.matches_path("secret/data/test"));
         assert!(policy2.matches_path("secret/metadata"));
@@ -643,7 +645,7 @@ mod tests {
             chrono::Duration::hours(1),
             "user123".to_string(),
         );
-        
+
         let token_info = crate::token::TokenInfo {
             token: token.clone(),
             display_name: "Test Token".to_string(),
@@ -651,17 +653,27 @@ mod tests {
             usage_stats: Default::default(),
             creation_context: Default::default(),
         };
-        
-        let mut context = PolicyContext::new(token_info, "secret/data".to_string(), "read".to_string());
-        
-        context.add_parameter("key".to_string(), serde_json::Value::String("test-key".to_string()));
+
+        let mut context =
+            PolicyContext::new(token_info, "secret/data".to_string(), "read".to_string());
+
+        context.add_parameter(
+            "key".to_string(),
+            serde_json::Value::String("test-key".to_string()),
+        );
         context.add_header("X-Request-ID".to_string(), "req-123".to_string());
-        
+
         assert_eq!(context.path, "secret/data");
         assert_eq!(context.operation, "read");
         assert!(context.has_parameter("key"));
-        assert_eq!(context.get_parameter("key"), Some(&serde_json::Value::String("test-key".to_string())));
-        assert_eq!(context.get_header("X-Request-ID"), Some(&"req-123".to_string()));
+        assert_eq!(
+            context.get_parameter("key"),
+            Some(&serde_json::Value::String("test-key".to_string()))
+        );
+        assert_eq!(
+            context.get_header("X-Request-ID"),
+            Some(&"req-123".to_string())
+        );
     }
 
     #[test]
@@ -670,11 +682,11 @@ mod tests {
             vec!["read".to_string(), "list".to_string()],
             chrono::Duration::hours(1),
         );
-        
+
         assert!(result.allowed);
         assert_eq!(result.allowed_capabilities.len(), 2);
         assert!(result.reason.is_none());
-        
+
         let denied = PolicyResult::denied("Access denied".to_string());
         assert!(!denied.allowed);
         assert_eq!(denied.reason, Some("Access denied".to_string()));
@@ -683,30 +695,30 @@ mod tests {
     #[test]
     fn test_in_memory_role_store() {
         let role_store = InMemoryRoleStore::new();
-        
+
         // Add roles
         role_store.add_role("user1", "admin").unwrap();
         role_store.add_role("user1", "operator").unwrap();
         role_store.add_role("user2", "operator").unwrap();
-        
+
         // Check roles
         assert!(role_store.check_role("user1", "admin").unwrap());
         assert!(role_store.check_role("user1", "operator").unwrap());
         assert!(!role_store.check_role("user1", "auditor").unwrap());
         assert!(!role_store.check_role("user2", "admin").unwrap());
-        
+
         // Get all roles
         let user1_roles = role_store.get_roles("user1").unwrap();
         assert_eq!(user1_roles.len(), 2);
         assert!(user1_roles.contains(&"admin".to_string()));
         assert!(user1_roles.contains(&"operator".to_string()));
-        
+
         // List entities with role
         let operators = role_store.list_entities_with_role("operator").unwrap();
         assert_eq!(operators.len(), 2);
         assert!(operators.contains(&"user1".to_string()));
         assert!(operators.contains(&"user2".to_string()));
-        
+
         // Remove role
         role_store.remove_role("user1", "admin").unwrap();
         assert!(!role_store.check_role("user1", "admin").unwrap());
@@ -718,16 +730,14 @@ mod tests {
         let valid = PolicyValidationResult::valid();
         assert!(valid.valid);
         assert!(valid.errors.is_empty());
-        
-        let errors = vec![
-            PolicyCompilationError {
-                message: "Syntax error".to_string(),
-                line: Some(1),
-                column: Some(5),
-                error_type: PolicyErrorType::Syntax,
-            }
-        ];
-        
+
+        let errors = vec![PolicyCompilationError {
+            message: "Syntax error".to_string(),
+            line: Some(1),
+            column: Some(5),
+            error_type: PolicyErrorType::Syntax,
+        }];
+
         let invalid = PolicyValidationResult::invalid(errors);
         assert!(!invalid.valid);
         assert_eq!(invalid.errors.len(), 1);
@@ -742,7 +752,7 @@ mod tests {
             ConstraintOperator::GreaterThan,
             ConstraintOperator::In,
         ];
-        
+
         for op in operators {
             // Just test that they can be created and compared
             let op2 = op.clone();
@@ -759,7 +769,7 @@ mod tests {
             ParameterType::Array,
             ParameterType::Object,
         ];
-        
+
         for param_type in types {
             // Just test that they can be created and compared
             let param_type2 = param_type.clone();

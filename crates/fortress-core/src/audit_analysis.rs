@@ -3,12 +3,12 @@
 //! This module provides comprehensive analysis capabilities for audit logs,
 //! including pattern detection, anomaly detection, and security insights.
 
+use chrono::Timelike;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
-use serde::{Deserialize, Serialize};
-use chrono::Timelike;
 
-use crate::audit::{AuditEntry, AuditEventType, SecurityLevel, AuditQuery, EventOutcome};
+use crate::audit::{AuditEntry, AuditEventType, AuditQuery, EventOutcome, SecurityLevel};
 use crate::error::Result;
 
 /// Analysis engine for audit logs
@@ -62,15 +62,21 @@ impl AuditAnalyzer {
             *entries_by_type.entry(entry.event_type.clone()).or_insert(0) += 1;
 
             // Count by security level
-            *entries_by_level.entry(entry.security_level.clone()).or_insert(0) += 1;
+            *entries_by_level
+                .entry(entry.security_level.clone())
+                .or_insert(0) += 1;
 
             // Count by outcome
             *entries_by_outcome.entry(entry.outcome.clone()).or_insert(0) += 1;
 
             // Track failed authentications
-            if entry.event_type == AuditEventType::Authentication && entry.outcome == EventOutcome::Failure {
+            if entry.event_type == AuditEventType::Authentication
+                && entry.outcome == EventOutcome::Failure
+            {
                 if let Some(principal) = &entry.principal {
-                    *failed_auth_by_principal.entry(principal.clone()).or_insert(0) += 1;
+                    *failed_auth_by_principal
+                        .entry(principal.clone())
+                        .or_insert(0) += 1;
                 }
             }
 
@@ -138,7 +144,8 @@ impl AuditAnalyzer {
 
                 for window in sorted_timestamps.windows(10) {
                     let time_span = window[9] - window[0];
-                    if time_span < 300_000 { // 5 minutes in milliseconds
+                    if time_span < 300_000 {
+                        // 5 minutes in milliseconds
                         anomalies.push(SecurityAnomaly {
                             anomaly_type: AnomalyType::BruteForceAttack,
                             severity: SecurityLevel::High,
@@ -169,7 +176,8 @@ impl AuditAnalyzer {
     /// Detect privilege escalation attempts
     fn detect_privilege_escalation(&self) -> Result<Vec<SecurityAnomaly>> {
         let mut anomalies = Vec::new();
-        let mut role_changes_by_principal: HashMap<String, Vec<(u64, String, String)>> = HashMap::new();
+        let mut role_changes_by_principal: HashMap<String, Vec<(u64, String, String)>> =
+            HashMap::new();
 
         // Track role changes
         for entry in &self.entries {
@@ -177,10 +185,14 @@ impl AuditAnalyzer {
                 if let Some(principal) = &entry.principal {
                     if let Some(action) = Some(entry.action.clone()) {
                         if action.contains("role") || action.contains("permission") {
-                        role_changes_by_principal
-                            .entry(principal.clone())
-                            .or_insert_with(Vec::new)
-                            .push((entry.timestamp, action.clone(), format!("{:?}", entry.outcome)));
+                            role_changes_by_principal
+                                .entry(principal.clone())
+                                .or_insert_with(Vec::new)
+                                .push((
+                                    entry.timestamp,
+                                    action.clone(),
+                                    format!("{:?}", entry.outcome),
+                                ));
                         }
                     }
                 }
@@ -239,8 +251,7 @@ impl AuditAnalyzer {
                     severity: SecurityLevel::Medium,
                     description: format!(
                         "Principal {} accessed {} different resources (potential data scraping)",
-                        principal,
-                        total_resources
+                        principal, total_resources
                     ),
                     timestamp: SystemTime::now()
                         .duration_since(UNIX_EPOCH)
@@ -267,7 +278,9 @@ impl AuditAnalyzer {
 
         // Count access events by time window (1-minute buckets)
         for entry in &self.entries {
-            if entry.event_type == AuditEventType::DataAccess && entry.outcome == EventOutcome::Success {
+            if entry.event_type == AuditEventType::DataAccess
+                && entry.outcome == EventOutcome::Success
+            {
                 let time_bucket = (entry.timestamp / 60_000) * 60_000; // Round to nearest minute
                 *access_events_by_time.entry(time_bucket).or_insert(0) += 1;
             }
@@ -344,10 +357,10 @@ impl AuditAnalyzer {
     /// Detect time-based anomalies
     fn detect_time_based_anomalies(&self) -> Result<Vec<SecurityAnomaly>> {
         let mut anomalies = Vec::new();
-        
+
         // Group entries by hour of day
         let mut entries_by_hour: HashMap<u32, u64> = HashMap::new();
-        
+
         for entry in &self.entries {
             let datetime = chrono::DateTime::from_timestamp(
                 (entry.timestamp / 1000) as i64,
@@ -361,8 +374,10 @@ impl AuditAnalyzer {
 
         // Detect unusual activity during off-hours (e.g., 2 AM - 4 AM)
         let off_hours_total: u64 = (2..=4).map(|h| entries_by_hour.get(&h).unwrap_or(&0)).sum();
-        let business_hours_total: u64 = (9..=17).map(|h| entries_by_hour.get(&h).unwrap_or(&0)).sum();
-        
+        let business_hours_total: u64 = (9..=17)
+            .map(|h| entries_by_hour.get(&h).unwrap_or(&0))
+            .sum();
+
         if business_hours_total > 0 && off_hours_total as f64 / business_hours_total as f64 > 0.5 {
             anomalies.push(SecurityAnomaly {
                 anomaly_type: AnomalyType::UnusualTimePattern,
@@ -423,14 +438,22 @@ impl AuditAnalyzer {
 
             // Principal filter
             if let Some(principal) = &query.principal {
-                if entry.principal.as_ref().map_or(true, |p| !p.contains(principal)) {
+                if entry
+                    .principal
+                    .as_ref()
+                    .map_or(true, |p| !p.contains(principal))
+                {
                     continue;
                 }
             }
 
             // Resource filter
             if let Some(resource) = &query.resource {
-                if entry.resource.as_ref().map_or(true, |r| !r.contains(resource)) {
+                if entry
+                    .resource
+                    .as_ref()
+                    .map_or(true, |r| !r.contains(resource))
+                {
                     continue;
                 }
             }
@@ -588,7 +611,10 @@ impl ReportGenerator {
         let mut recommendations = Vec::new();
 
         // Check for brute force attacks
-        if anomalies.iter().any(|a| matches!(a.anomaly_type, AnomalyType::BruteForceAttack)) {
+        if anomalies
+            .iter()
+            .any(|a| matches!(a.anomaly_type, AnomalyType::BruteForceAttack))
+        {
             recommendations.push(SecurityRecommendation {
                 priority: SecurityLevel::High,
                 category: "Authentication Security".to_string(),
@@ -598,7 +624,10 @@ impl ReportGenerator {
         }
 
         // Check for privilege escalation
-        if anomalies.iter().any(|a| matches!(a.anomaly_type, AnomalyType::PrivilegeEscalation)) {
+        if anomalies
+            .iter()
+            .any(|a| matches!(a.anomaly_type, AnomalyType::PrivilegeEscalation))
+        {
             recommendations.push(SecurityRecommendation {
                 priority: SecurityLevel::Critical,
                 category: "Access Control".to_string(),
@@ -608,7 +637,10 @@ impl ReportGenerator {
         }
 
         // Check for unusual access patterns
-        if anomalies.iter().any(|a| matches!(a.anomaly_type, AnomalyType::UnusualAccessPattern)) {
+        if anomalies
+            .iter()
+            .any(|a| matches!(a.anomaly_type, AnomalyType::UnusualAccessPattern))
+        {
             recommendations.push(SecurityRecommendation {
                 priority: SecurityLevel::Medium,
                 category: "Data Access".to_string(),
@@ -618,7 +650,10 @@ impl ReportGenerator {
         }
 
         // Check for configuration tampering
-        if anomalies.iter().any(|a| matches!(a.anomaly_type, AnomalyType::ConfigurationTampering)) {
+        if anomalies
+            .iter()
+            .any(|a| matches!(a.anomaly_type, AnomalyType::ConfigurationTampering))
+        {
             recommendations.push(SecurityRecommendation {
                 priority: SecurityLevel::Critical,
                 category: "Configuration Management".to_string(),
@@ -662,26 +697,24 @@ pub struct SecurityRecommendation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::audit::{AuditEntry, AuditEventType, SecurityLevel, EventOutcome};
+    use crate::audit::{AuditEntry, AuditEventType, EventOutcome, SecurityLevel};
 
     #[test]
     fn test_anomaly_detection() {
-        let entries = vec![
-            AuditEntry {
-                id: "1".to_string(),
-                timestamp: 1000,
-                event_type: AuditEventType::Authentication,
-                security_level: SecurityLevel::Medium,
-                principal: Some("user1".to_string()),
-                resource: None,
-                action: "login".to_string(),
-                outcome: EventOutcome::Failure,
-                metadata: HashMap::new(),
-                previous_hash: None,
-                current_hash: "hash1".to_string(),
-                signature: "sig1".to_string(),
-            },
-        ];
+        let entries = vec![AuditEntry {
+            id: "1".to_string(),
+            timestamp: 1000,
+            event_type: AuditEventType::Authentication,
+            security_level: SecurityLevel::Medium,
+            principal: Some("user1".to_string()),
+            resource: None,
+            action: "login".to_string(),
+            outcome: EventOutcome::Failure,
+            metadata: HashMap::new(),
+            previous_hash: None,
+            current_hash: "hash1".to_string(),
+            signature: "sig1".to_string(),
+        }];
 
         let analyzer = AuditAnalyzer::new(entries);
         let anomalies = analyzer.detect_anomalies().unwrap();
@@ -690,22 +723,20 @@ mod tests {
 
     #[test]
     fn test_insights_generation() {
-        let entries = vec![
-            AuditEntry {
-                id: "1".to_string(),
-                timestamp: 1000,
-                event_type: AuditEventType::Authentication,
-                security_level: SecurityLevel::Medium,
-                principal: Some("user1".to_string()),
-                resource: None,
-                action: "login".to_string(),
-                outcome: EventOutcome::Success,
-                metadata: HashMap::new(),
-                previous_hash: None,
-                current_hash: "hash1".to_string(),
-                signature: "sig1".to_string(),
-            },
-        ];
+        let entries = vec![AuditEntry {
+            id: "1".to_string(),
+            timestamp: 1000,
+            event_type: AuditEventType::Authentication,
+            security_level: SecurityLevel::Medium,
+            principal: Some("user1".to_string()),
+            resource: None,
+            action: "login".to_string(),
+            outcome: EventOutcome::Success,
+            metadata: HashMap::new(),
+            previous_hash: None,
+            current_hash: "hash1".to_string(),
+            signature: "sig1".to_string(),
+        }];
 
         let analyzer = AuditAnalyzer::new(entries);
         let insights = analyzer.generate_insights().unwrap();

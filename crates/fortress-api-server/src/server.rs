@@ -3,36 +3,38 @@
 //! This module contains the core server implementation that ties together
 //! all the components and provides the HTTP API.
 
+use crate::auth::require_jwt_middleware;
+use crate::auth::{AuthManager, InMemoryUserStore, OidcProviderConfig, OidcUserStore};
 use crate::config::ServerConfig;
 use crate::error::{ServerError, ServerResult};
-use crate::health::{HealthChecker, HealthCheckRegistry};
+use crate::handlers::AppState;
+use crate::health::{HealthCheckRegistry, HealthChecker};
 use crate::metrics::MetricsCollector;
 use crate::middleware::{create_cors_layer, create_timeout_layer};
 use crate::prelude::*;
-use crate::handlers::AppState;
-use crate::auth::{AuthManager, OidcProviderConfig, OidcUserStore, InMemoryUserStore};
 use axum::{
-    Router,
     middleware::from_fn_with_state,
-    routing::{get, post, put, delete},
+    routing::{delete, get, post, put},
+    Router,
 };
-use crate::auth::require_jwt_middleware;
-use tracing::info;
+use chrono::Utc;
+use fortress_core::error::FortressError;
+use fortress_core::error::{EncryptionErrorCode, StorageErrorCode};
+use fortress_core::field_encryption::{
+    DecryptedField, EncryptedField, FieldEncryptionManager, FieldIdentifier,
+};
+use fortress_core::field_encryption_manager::DefaultFieldEncryptionManager;
+use fortress_core::key::InMemoryKeyManager;
 use fortress_core::storage::StorageBackend;
+use fortress_core::storage::{FileSystemStorage, StorageMetadata};
+use fortress_core::tenant::{GlobalResourceLimits, InMemoryTenantManager};
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::signal;
-use fortress_core::error::FortressError;
-use fortress_core::error::{EncryptionErrorCode, StorageErrorCode};
-use fortress_core::storage::{StorageMetadata, FileSystemStorage};
-use fortress_core::field_encryption::{FieldIdentifier, FieldEncryptionManager, EncryptedField, DecryptedField};
-use fortress_core::tenant::{InMemoryTenantManager, GlobalResourceLimits};
-use fortress_core::key::InMemoryKeyManager;
-use fortress_core::field_encryption_manager::DefaultFieldEncryptionManager;
-use std::collections::HashMap;
-use chrono::Utc;
 use tokio::time::interval;
+use tracing::info;
 
 /// Query parameters for storage queries
 #[derive(Debug, Clone)]
@@ -122,7 +124,8 @@ impl FortressServer {
 
     /// Start the server
     pub async fn listen(self, bind_addr: &str) -> ServerResult<()> {
-        let addr: SocketAddr = bind_addr.parse()
+        let addr: SocketAddr = bind_addr
+            .parse()
             .map_err(|e| ServerError::config(format!("Invalid bind address: {}", e)))?;
 
         info!(
@@ -133,21 +136,23 @@ impl FortressServer {
 
         // Create the router
         let app = self.create_router().await?;
-        
+
         // Bind the listener
-        let listener = tokio::net::TcpListener::bind(addr).await
+        let listener = tokio::net::TcpListener::bind(addr)
+            .await
             .map_err(|e| ServerError::network(format!("Failed to bind to {}: {}", addr, e)))?;
-        
+
         info!(
             bind_addr = %addr,
             "Fortress server listening"
         );
-        
+
         // Actually start the server
-        axum::serve(listener, app).await
+        axum::serve(listener, app)
+            .await
             .map_err(|e| ServerError::network(format!("Server error: {}", e)))?;
         info!("Fortress server stopped gracefully");
-        
+
         Ok(())
     }
 
@@ -205,7 +210,9 @@ impl FortressServer {
                 let oidc_store = OidcUserStore::new(provider_config);
                 Arc::new(oidc_store)
             } else {
-                return Err(ServerError::internal("OIDC enabled but no configuration provided"));
+                return Err(ServerError::internal(
+                    "OIDC enabled but no configuration provided",
+                ));
             }
         } else if config.features.bootstrap_default_admin {
             let user_store = InMemoryUserStore::new();
@@ -227,7 +234,7 @@ impl FortressServer {
         } else {
             Arc::new(InMemoryUserStore::new())
         };
-        
+
         let auth_manager = AuthManager::new(
             &config.security.jwt_secret,
             chrono::Duration::seconds(config.security.token_expiration as i64),
@@ -237,7 +244,9 @@ impl FortressServer {
     }
 
     /// Create field encryption manager
-    fn create_field_encryption_manager(config: &ServerConfig) -> ServerResult<Arc<dyn FieldEncryptionManager>> {
+    fn create_field_encryption_manager(
+        config: &ServerConfig,
+    ) -> ServerResult<Arc<dyn FieldEncryptionManager>> {
         if config.features.field_encryption {
             let key_manager = Arc::new(InMemoryKeyManager::new());
             let manager = DefaultFieldEncryptionManager::new(key_manager);
@@ -256,12 +265,15 @@ impl FortressServer {
                 Ok(Arc::new(storage))
             }
             "filesystem" => {
-                let storage = FileSystemStorage::new("/tmp/fortress")
-                    .map_err(|e| ServerError::Core(e))?;
+                let storage =
+                    FileSystemStorage::new("/tmp/fortress").map_err(|e| ServerError::Core(e))?;
                 Ok(Arc::new(storage))
             }
             _ => {
-                return Err(ServerError::Configuration(format!("Unsupported storage backend: {}", &config.core.storage.backend)));
+                return Err(ServerError::Configuration(format!(
+                    "Unsupported storage backend: {}",
+                    &config.core.storage.backend
+                )));
             }
         }
     }
@@ -331,7 +343,11 @@ impl FieldEncryptionManager for NoOpFieldEncryptionManager {
         _field: &FieldIdentifier,
         _plaintext: &[u8],
     ) -> Result<EncryptedField, FortressError> {
-        Err(FortressError::encryption("Field encryption is disabled", "none", EncryptionErrorCode::InvalidKeyLength))
+        Err(FortressError::encryption(
+            "Field encryption is disabled",
+            "none",
+            EncryptionErrorCode::InvalidKeyLength,
+        ))
     }
 
     async fn decrypt_field(
@@ -339,22 +355,42 @@ impl FieldEncryptionManager for NoOpFieldEncryptionManager {
         _ciphertext: &[u8],
         _metadata: &fortress_core::field_encryption::FieldEncryptionMetadata,
     ) -> Result<DecryptedField, FortressError> {
-        Err(FortressError::encryption("Field encryption is disabled", "none", EncryptionErrorCode::InvalidKeyLength))
+        Err(FortressError::encryption(
+            "Field encryption is disabled",
+            "none",
+            EncryptionErrorCode::InvalidKeyLength,
+        ))
     }
 
-    async fn get_field_config(&self, _field: &FieldIdentifier) -> Result<Option<fortress_core::field_encryption::FieldEncryptionConfig>, FortressError> {
+    async fn get_field_config(
+        &self,
+        _field: &FieldIdentifier,
+    ) -> Result<Option<fortress_core::field_encryption::FieldEncryptionConfig>, FortressError> {
         Ok(None)
     }
 
-    async fn set_field_config(&self, _config: fortress_core::field_encryption::FieldEncryptionConfig) -> Result<(), FortressError> {
-        Err(FortressError::encryption("Field encryption is disabled", "none", EncryptionErrorCode::InvalidKeyLength))
+    async fn set_field_config(
+        &self,
+        _config: fortress_core::field_encryption::FieldEncryptionConfig,
+    ) -> Result<(), FortressError> {
+        Err(FortressError::encryption(
+            "Field encryption is disabled",
+            "none",
+            EncryptionErrorCode::InvalidKeyLength,
+        ))
     }
 
     async fn remove_field_config(&self, _field: &FieldIdentifier) -> Result<(), FortressError> {
-        Err(FortressError::encryption("Field encryption is disabled", "none", EncryptionErrorCode::InvalidKeyLength))
+        Err(FortressError::encryption(
+            "Field encryption is disabled",
+            "none",
+            EncryptionErrorCode::InvalidKeyLength,
+        ))
     }
 
-    async fn list_field_configs(&self) -> Result<Vec<fortress_core::field_encryption::FieldEncryptionConfig>, FortressError> {
+    async fn list_field_configs(
+        &self,
+    ) -> Result<Vec<fortress_core::field_encryption::FieldEncryptionConfig>, FortressError> {
         Ok(vec![])
     }
 }
@@ -363,7 +399,8 @@ impl FieldEncryptionManager for NoOpFieldEncryptionManager {
 #[derive(Debug)]
 struct InMemoryStorage {
     data: Arc<parking_lot::RwLock<HashMap<String, crate::handlers::StorageRecord>>>,
-    transactions: Arc<parking_lot::RwLock<HashMap<String, HashMap<String, crate::handlers::StorageRecord>>>>,
+    transactions:
+        Arc<parking_lot::RwLock<HashMap<String, HashMap<String, crate::handlers::StorageRecord>>>>,
 }
 
 impl InMemoryStorage {
@@ -378,16 +415,22 @@ impl InMemoryStorage {
 #[async_trait::async_trait]
 impl StorageBackend for InMemoryStorage {
     async fn put(&self, key: &str, value: &[u8]) -> Result<(), FortressError> {
-        let record = serde_json::from_slice::<crate::handlers::StorageRecord>(value)
-            .map_err(|_e| FortressError::storage("Invalid record format", "serde", crate::server::StorageErrorCode::ConnectionFailed))?;
-        
+        let record =
+            serde_json::from_slice::<crate::handlers::StorageRecord>(value).map_err(|_e| {
+                FortressError::storage(
+                    "Invalid record format",
+                    "serde",
+                    crate::server::StorageErrorCode::ConnectionFailed,
+                )
+            })?;
+
         // Check if there are any active transactions
         let transactions = self.transactions.read();
         if !transactions.is_empty() {
             // If there are active transactions, this operation is part of a transaction
             // For simplicity, we'll just modify the main data (in production, you'd want transaction-specific isolation)
         }
-        
+
         let mut data = self.data.write();
         data.insert(key.to_string(), record);
         Ok(())
@@ -396,9 +439,13 @@ impl StorageBackend for InMemoryStorage {
     async fn get(&self, key: &str) -> Result<Option<Vec<u8>>, FortressError> {
         let data = self.data.read();
         if let Some(record) = data.get(key) {
-            serde_json::to_vec(record)
-                .map(Some)
-                .map_err(|_e| FortressError::storage("Serialization error", "serde", crate::server::StorageErrorCode::ConnectionFailed))
+            serde_json::to_vec(record).map(Some).map_err(|_e| {
+                FortressError::storage(
+                    "Serialization error",
+                    "serde",
+                    crate::server::StorageErrorCode::ConnectionFailed,
+                )
+            })
         } else {
             Ok(None)
         }
@@ -407,7 +454,11 @@ impl StorageBackend for InMemoryStorage {
     async fn delete(&self, key: &str) -> Result<(), FortressError> {
         let mut data = self.data.write();
         data.remove(key).map(|_| ()).ok_or_else(|| {
-            FortressError::storage("Data not found", "Data not found", crate::server::StorageErrorCode::NotFound)
+            FortressError::storage(
+                "Data not found",
+                "Data not found",
+                crate::server::StorageErrorCode::NotFound,
+            )
         })
     }
 
@@ -418,7 +469,8 @@ impl StorageBackend for InMemoryStorage {
 
     async fn list_prefix(&self, prefix: &str) -> Result<Vec<String>, FortressError> {
         let data = self.data.read();
-        let keys: Vec<String> = data.keys()
+        let keys: Vec<String> = data
+            .keys()
             .filter(|k| k.starts_with(prefix))
             .cloned()
             .collect();
@@ -446,7 +498,10 @@ impl StorageBackend for InMemoryStorage {
             healthy: true,
             response_time_ms: 1,
             details: HashMap::from([
-                ("status".to_string(), "In-memory storage is healthy".to_string()),
+                (
+                    "status".to_string(),
+                    "In-memory storage is healthy".to_string(),
+                ),
                 ("last_check".to_string(), Utc::now().to_rfc3339()),
                 ("storage_size".to_string(), "1GB".to_string()),
             ]),
@@ -460,54 +515,67 @@ impl StorageBackend for InMemoryStorage {
         limit: Option<usize>,
     ) -> Result<Vec<String>, FortressError> {
         let data = self.data.read();
-        let mut keys: Vec<String> = data.keys()
+        let mut keys: Vec<String> = data
+            .keys()
             .filter(|key| key.starts_with(prefix))
             .cloned()
             .collect();
-        
+
         keys.sort();
-        
+
         let start = offset.unwrap_or(0);
         let end = if let Some(limit) = limit {
             std::cmp::min(start + limit, keys.len())
         } else {
             keys.len()
         };
-        
+
         if start >= keys.len() {
             return Ok(Vec::new());
         }
-        
+
         Ok(keys[start..end].to_vec())
     }
 
-    async fn begin_transaction(&self) -> Result<fortress_core::storage::TransactionId, FortressError> {
+    async fn begin_transaction(
+        &self,
+    ) -> Result<fortress_core::storage::TransactionId, FortressError> {
         use fortress_core::storage::TransactionId;
         let transaction_id = TransactionId(uuid::Uuid::new_v4());
         let mut transactions = self.transactions.write();
-        
+
         // Create a snapshot of current data for this transaction
         let data = self.data.read();
         let snapshot = data.clone();
         transactions.insert(transaction_id.0.to_string(), snapshot);
-        
+
         Ok(transaction_id)
     }
 
-    async fn commit_transaction(&self, transaction_id: &fortress_core::storage::TransactionId) -> Result<(), FortressError> {
+    async fn commit_transaction(
+        &self,
+        transaction_id: &fortress_core::storage::TransactionId,
+    ) -> Result<(), FortressError> {
         let mut transactions = self.transactions.write();
         transactions.remove(&transaction_id.0.to_string());
         Ok(())
     }
 
-    async fn rollback_transaction(&self, transaction_id: &fortress_core::storage::TransactionId) -> Result<(), FortressError> {
+    async fn rollback_transaction(
+        &self,
+        transaction_id: &fortress_core::storage::TransactionId,
+    ) -> Result<(), FortressError> {
         let mut transactions = self.transactions.write();
         if let Some(snapshot) = transactions.remove(&transaction_id.0.to_string()) {
             let mut data = self.data.write();
             *data = snapshot;
             Ok(())
         } else {
-            Err(FortressError::storage("Transaction not found", "in_memory", crate::server::StorageErrorCode::NotFound))
+            Err(FortressError::storage(
+                "Transaction not found",
+                "in_memory",
+                crate::server::StorageErrorCode::NotFound,
+            ))
         }
     }
 }

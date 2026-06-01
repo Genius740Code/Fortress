@@ -3,17 +3,17 @@
 //! This module provides advanced MySQL integration with support for push/pull operations,
 //! JSON operations, full-text search, and optimized performance features.
 
-use crate::error::{FortressError, Result, KeyErrorCode, StorageErrorCode};
+use crate::error::{FortressError, KeyErrorCode, Result, StorageErrorCode};
 use crate::key::{KeyId, KeyMetadata, SecureKey};
 use crate::storage::StorageBackend;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use sha2::Digest;
 use sqlx::Row;
 use std::collections::HashMap;
 use std::str::FromStr;
 use uuid::Uuid;
-use sha2::Digest;
 
 /// Enhanced MySQL configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -48,7 +48,7 @@ pub struct MySQLConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MySQLPartitioning {
     /// Partition by date range
-    ByDate { 
+    ByDate {
         /// Column name for partitioning
         column: String,
         /// Partition interval (daily, weekly, monthly)
@@ -95,11 +95,13 @@ impl MySQLDatabase {
     pub async fn new(config: MySQLConfig) -> Result<Self> {
         // Build connection options
         let mut options = sqlx::mysql::MySqlConnectOptions::from_str(&config.connection_string)
-            .map_err(|e| FortressError::storage(
-                format!("Invalid MySQL connection string: {}", e),
-                "mysql".to_string(),
-                StorageErrorCode::ConnectionFailed,
-            ))?;
+            .map_err(|e| {
+                FortressError::storage(
+                    format!("Invalid MySQL connection string: {}", e),
+                    "mysql".to_string(),
+                    StorageErrorCode::ConnectionFailed,
+                )
+            })?;
 
         // Configure SSL if enabled
         if config.ssl_enabled {
@@ -109,14 +111,18 @@ impl MySQLDatabase {
         // Create connection pool
         let pool = sqlx::mysql::MySqlPoolOptions::new()
             .max_connections(config.max_connections)
-            .acquire_timeout(std::time::Duration::from_secs(config.connection_timeout_seconds))
+            .acquire_timeout(std::time::Duration::from_secs(
+                config.connection_timeout_seconds,
+            ))
             .connect_with(options)
             .await
-            .map_err(|e| FortressError::storage(
-                format!("Failed to connect to MySQL: {}", e),
-                "mysql".to_string(),
-                StorageErrorCode::ConnectionFailed,
-            ))?;
+            .map_err(|e| {
+                FortressError::storage(
+                    format!("Failed to connect to MySQL: {}", e),
+                    "mysql".to_string(),
+                    StorageErrorCode::ConnectionFailed,
+                )
+            })?;
 
         let mut db = Self { config, pool };
 
@@ -153,11 +159,13 @@ impl MySQLDatabase {
         sqlx::query(&create_keys_table)
             .execute(&self.pool)
             .await
-            .map_err(|e| FortressError::storage(
-                format!("Failed to create keys table: {}", e),
-                "mysql".to_string(),
-                StorageErrorCode::InvalidOperation,
-            ))?;
+            .map_err(|e| {
+                FortressError::storage(
+                    format!("Failed to create keys table: {}", e),
+                    "mysql".to_string(),
+                    StorageErrorCode::InvalidOperation,
+                )
+            })?;
 
         // Create data table
         let create_data_table = format!(
@@ -182,11 +190,13 @@ impl MySQLDatabase {
         sqlx::query(&create_data_table)
             .execute(&self.pool)
             .await
-            .map_err(|e| FortressError::storage(
-                format!("Failed to create data table: {}", e),
-                "mysql".to_string(),
-                StorageErrorCode::InvalidOperation,
-            ))?;
+            .map_err(|e| {
+                FortressError::storage(
+                    format!("Failed to create data table: {}", e),
+                    "mysql".to_string(),
+                    StorageErrorCode::InvalidOperation,
+                )
+            })?;
 
         // Apply partitioning if configured
         if let Some(partitioning) = &self.config.partitioning {
@@ -216,11 +226,13 @@ impl MySQLDatabase {
                 sqlx::query(&partition_sql)
                     .execute(&self.pool)
                     .await
-                    .map_err(|e| FortressError::storage(
-                format!("Failed to apply date partitioning: {}", e),
-                "mysql".to_string(),
-                StorageErrorCode::InvalidOperation,
-            ))?;
+                    .map_err(|e| {
+                        FortressError::storage(
+                            format!("Failed to apply date partitioning: {}", e),
+                            "mysql".to_string(),
+                            StorageErrorCode::InvalidOperation,
+                        )
+                    })?;
             }
             MySQLPartitioning::ByHash { column, partitions } => {
                 let partition_sql = format!(
@@ -231,19 +243,19 @@ impl MySQLDatabase {
                 sqlx::query(&partition_sql)
                     .execute(&self.pool)
                     .await
-                    .map_err(|e| FortressError::storage(
-                        format!("Failed to apply hash partitioning: {}", e),
-                        "mysql".to_string(),
-                        StorageErrorCode::InvalidOperation,
-                    ))?;
+                    .map_err(|e| {
+                        FortressError::storage(
+                            format!("Failed to apply hash partitioning: {}", e),
+                            "mysql".to_string(),
+                            StorageErrorCode::InvalidOperation,
+                        )
+                    })?;
             }
             MySQLPartitioning::ByRange { column, ranges } => {
                 let mut partition_definitions = Vec::new();
                 for (i, (start, end)) in ranges.iter().enumerate() {
-                    partition_definitions.push(format!(
-                        "PARTITION p{} VALUES LESS THAN ({})",
-                        i, end
-                    ));
+                    partition_definitions
+                        .push(format!("PARTITION p{} VALUES LESS THAN ({})", i, end));
                 }
                 partition_definitions.push("PARTITION p_max VALUES LESS THAN MAXVALUE".to_string());
 
@@ -257,24 +269,32 @@ impl MySQLDatabase {
                 sqlx::query(&partition_sql)
                     .execute(&self.pool)
                     .await
-                    .map_err(|e| FortressError::storage(
-                        format!("Failed to apply range partitioning: {}", e),
-                        "mysql".to_string(),
-                        StorageErrorCode::InvalidOperation,
-                    ))?;
+                    .map_err(|e| {
+                        FortressError::storage(
+                            format!("Failed to apply range partitioning: {}", e),
+                            "mysql".to_string(),
+                            StorageErrorCode::InvalidOperation,
+                        )
+                    })?;
             }
         }
         Ok(())
     }
 
     /// Store a key in the database
-    pub async fn store_key(&self, key_id: &KeyId, key: &SecureKey, metadata: &KeyMetadata) -> Result<()> {
-        let metadata_json = serde_json::to_string(metadata)
-            .map_err(|e| FortressError::storage(
+    pub async fn store_key(
+        &self,
+        key_id: &KeyId,
+        key: &SecureKey,
+        metadata: &KeyMetadata,
+    ) -> Result<()> {
+        let metadata_json = serde_json::to_string(metadata).map_err(|e| {
+            FortressError::storage(
                 format!("Failed to serialize metadata: {}", e),
                 "mysql".to_string(),
                 StorageErrorCode::SerializationError,
-            ))?;
+            )
+        })?;
 
         let store_key_query = format!(
             r#"
@@ -303,11 +323,13 @@ impl MySQLDatabase {
             .bind("active")
             .execute(&self.pool)
             .await
-            .map_err(|e| FortressError::storage(
-                format!("Failed to store key: {}", e),
-                "mysql".to_string(),
-                StorageErrorCode::WriteError,
-            ))?;
+            .map_err(|e| {
+                FortressError::storage(
+                    format!("Failed to store key: {}", e),
+                    "mysql".to_string(),
+                    StorageErrorCode::WriteError,
+                )
+            })?;
 
         Ok(())
     }
@@ -327,23 +349,26 @@ impl MySQLDatabase {
             .bind(key_id.to_string())
             .fetch_optional(&self.pool)
             .await
-            .map_err(|e| FortressError::storage(
-                format!("Failed to retrieve key: {}", e),
-                "mysql".to_string(),
-                StorageErrorCode::ReadError,
-            ))?;
+            .map_err(|e| {
+                FortressError::storage(
+                    format!("Failed to retrieve key: {}", e),
+                    "mysql".to_string(),
+                    StorageErrorCode::ReadError,
+                )
+            })?;
 
         if let Some(row) = row {
             let key_data: Vec<u8> = row.get(2);
             let secure_key = SecureKey::from_bytes(&key_data);
 
             let metadata_str: String = row.get(3);
-            let metadata: KeyMetadata = serde_json::from_str(&metadata_str)
-                .map_err(|e| FortressError::storage(
+            let metadata: KeyMetadata = serde_json::from_str(&metadata_str).map_err(|e| {
+                FortressError::storage(
                     format!("Failed to deserialize metadata: {}", e),
                     "mysql".to_string(),
                     StorageErrorCode::CorruptedData,
-                ))?;
+                )
+            })?;
 
             Ok(Some((secure_key, metadata)))
         } else {
@@ -353,23 +378,32 @@ impl MySQLDatabase {
 
     /// Delete a key from the database
     pub async fn delete_key(&self, key_id: &KeyId) -> Result<()> {
-        let delete_key_query = format!("UPDATE {} SET status = 'deleted', updated_at = ? WHERE id = ?", self.config.keys_table);
+        let delete_key_query = format!(
+            "UPDATE {} SET status = 'deleted', updated_at = ? WHERE id = ?",
+            self.config.keys_table
+        );
         sqlx::query(&delete_key_query)
             .bind(Utc::now())
             .bind(key_id.to_string())
             .execute(&self.pool)
             .await
-            .map_err(|e| FortressError::storage(
-                format!("Failed to delete key: {}", e),
-                "mysql".to_string(),
-                StorageErrorCode::DeleteError,
-            ))?;
+            .map_err(|e| {
+                FortressError::storage(
+                    format!("Failed to delete key: {}", e),
+                    "mysql".to_string(),
+                    StorageErrorCode::DeleteError,
+                )
+            })?;
 
         Ok(())
     }
 
     /// List all keys with optional filtering
-    pub async fn list_keys(&self, prefix: Option<&str>, limit: Option<u32>) -> Result<Vec<(KeyId, KeyMetadata)>> {
+    pub async fn list_keys(
+        &self,
+        prefix: Option<&str>,
+        limit: Option<u32>,
+    ) -> Result<Vec<(KeyId, KeyMetadata)>> {
         let mut query = format!(
             "SELECT id, name, algorithm, metadata, created_at, updated_at, version, status FROM {} WHERE status = 'active'",
             self.config.keys_table
@@ -393,32 +427,33 @@ impl MySQLDatabase {
             sql_query = sql_query.bind(param);
         }
 
-        let rows = sql_query
-            .fetch_all(&self.pool)
-            .await
-            .map_err(|e| FortressError::storage(
+        let rows = sql_query.fetch_all(&self.pool).await.map_err(|e| {
+            FortressError::storage(
                 format!("Failed to list keys: {}", e),
                 "mysql".to_string(),
                 StorageErrorCode::ReadError,
-            ))?;
+            )
+        })?;
 
         let mut keys = Vec::new();
         for row in rows {
             let id_str: String = row.get(0);
-            let key_id = KeyId::from_str(&id_str)
-                .map_err(|e| FortressError::key_management(
+            let key_id = KeyId::from_str(&id_str).map_err(|e| {
+                FortressError::key_management(
                     format!("Invalid key ID: {}", e),
                     Some(id_str.clone()),
                     KeyErrorCode::InvalidKeyFormat,
-                ))?;
+                )
+            })?;
 
             let metadata_str: String = row.get(3);
-            let metadata: KeyMetadata = serde_json::from_str(&metadata_str)
-                .map_err(|e| FortressError::storage(
+            let metadata: KeyMetadata = serde_json::from_str(&metadata_str).map_err(|e| {
+                FortressError::storage(
                     format!("Failed to deserialize metadata: {}", e),
                     "mysql".to_string(),
                     StorageErrorCode::CorruptedData,
-                ))?;
+                )
+            })?;
 
             keys.push((key_id, metadata));
         }
@@ -427,7 +462,12 @@ impl MySQLDatabase {
     }
 
     /// Store encrypted data
-    pub async fn store_data(&self, key_id: &KeyId, data: &[u8], metadata: Option<&serde_json::Value>) -> Result<String> {
+    pub async fn store_data(
+        &self,
+        key_id: &KeyId,
+        data: &[u8],
+        metadata: Option<&serde_json::Value>,
+    ) -> Result<String> {
         let data_id = Uuid::new_v4().to_string();
         let checksum = format!("{:x}", sha2::Sha256::digest(data));
         let metadata_json = metadata.map(|m| serde_json::to_string(m)).transpose()?;
@@ -450,27 +490,34 @@ impl MySQLDatabase {
             .bind(1)
             .execute(&self.pool)
             .await
-            .map_err(|e| FortressError::storage(
-                format!("Failed to store data: {}", e),
-                "mysql".to_string(),
-                StorageErrorCode::WriteError,
-            ))?;
+            .map_err(|e| {
+                FortressError::storage(
+                    format!("Failed to store data: {}", e),
+                    "mysql".to_string(),
+                    StorageErrorCode::WriteError,
+                )
+            })?;
 
         Ok(data_id)
     }
 
     /// Retrieve encrypted data
     pub async fn get_data(&self, data_id: &str) -> Result<Option<Vec<u8>>> {
-        let get_data_query = format!("SELECT data, checksum FROM {} WHERE id = ?", self.config.data_table);
+        let get_data_query = format!(
+            "SELECT data, checksum FROM {} WHERE id = ?",
+            self.config.data_table
+        );
         let row = sqlx::query(&get_data_query)
             .bind(data_id)
             .fetch_optional(&self.pool)
             .await
-            .map_err(|e| FortressError::storage(
-                format!("Failed to retrieve data: {}", e),
-                "mysql".to_string(),
-                StorageErrorCode::ReadError,
-            ))?;
+            .map_err(|e| {
+                FortressError::storage(
+                    format!("Failed to retrieve data: {}", e),
+                    "mysql".to_string(),
+                    StorageErrorCode::ReadError,
+                )
+            })?;
 
         if let Some(row) = row {
             // Verify checksum
@@ -492,7 +539,11 @@ impl MySQLDatabase {
     }
 
     /// Perform full-text search on keys
-    pub async fn search_keys(&self, query: &str, limit: Option<u32>) -> Result<Vec<(KeyId, KeyMetadata)>> {
+    pub async fn search_keys(
+        &self,
+        query: &str,
+        limit: Option<u32>,
+    ) -> Result<Vec<(KeyId, KeyMetadata)>> {
         let mut sql_query = format!(
             r#"
             SELECT id, name, algorithm, metadata, created_at, updated_at, version, status,
@@ -513,29 +564,33 @@ impl MySQLDatabase {
             .bind(query)
             .fetch_all(&self.pool)
             .await
-            .map_err(|e| FortressError::storage(
-                format!("Failed to search keys: {}", e),
-                "mysql".to_string(),
-                StorageErrorCode::ReadError,
-            ))?;
+            .map_err(|e| {
+                FortressError::storage(
+                    format!("Failed to search keys: {}", e),
+                    "mysql".to_string(),
+                    StorageErrorCode::ReadError,
+                )
+            })?;
 
         let mut keys = Vec::new();
         for row in rows {
             let id_str: String = row.get(0);
-            let key_id = KeyId::from_str(&id_str)
-                .map_err(|e| FortressError::key_management(
+            let key_id = KeyId::from_str(&id_str).map_err(|e| {
+                FortressError::key_management(
                     format!("Invalid key ID: {}", e),
                     Some(id_str.clone()),
                     KeyErrorCode::InvalidKeyFormat,
-                ))?;
+                )
+            })?;
 
             let metadata_str: String = row.get(3);
-            let metadata: KeyMetadata = serde_json::from_str(&metadata_str)
-                .map_err(|e| FortressError::storage(
+            let metadata: KeyMetadata = serde_json::from_str(&metadata_str).map_err(|e| {
+                FortressError::storage(
                     format!("Failed to deserialize metadata: {}", e),
                     "mysql".to_string(),
                     StorageErrorCode::CorruptedData,
-                ))?;
+                )
+            })?;
 
             keys.push((key_id, metadata));
         }
@@ -545,35 +600,47 @@ impl MySQLDatabase {
 
     /// Get database statistics
     pub async fn get_statistics(&self) -> Result<MySQLStats> {
-        let key_count_query = format!("SELECT COUNT(*) as count FROM {} WHERE status = 'active'", self.config.keys_table);
+        let key_count_query = format!(
+            "SELECT COUNT(*) as count FROM {} WHERE status = 'active'",
+            self.config.keys_table
+        );
         let key_count_row = sqlx::query(&key_count_query)
             .fetch_one(&self.pool)
             .await
-            .map_err(|e| FortressError::storage(
-                format!("Failed to get key count: {}", e),
-                "mysql".to_string(),
-                StorageErrorCode::ReadError,
-            ))?;
+            .map_err(|e| {
+                FortressError::storage(
+                    format!("Failed to get key count: {}", e),
+                    "mysql".to_string(),
+                    StorageErrorCode::ReadError,
+                )
+            })?;
 
         let data_count_query = format!("SELECT COUNT(*) as count FROM {}", self.config.data_table);
         let data_count_row = sqlx::query(&data_count_query)
             .fetch_one(&self.pool)
             .await
-            .map_err(|e| FortressError::storage(
-                format!("Failed to get data count: {}", e),
-                "mysql".to_string(),
-                StorageErrorCode::ReadError,
-            ))?;
+            .map_err(|e| {
+                FortressError::storage(
+                    format!("Failed to get data count: {}", e),
+                    "mysql".to_string(),
+                    StorageErrorCode::ReadError,
+                )
+            })?;
 
-        let size_query = format!("SELECT SUM(LENGTH(key_data)) as total_size FROM {} WHERE status = 'active'", self.config.keys_table);
+        let size_query = format!(
+            "SELECT SUM(LENGTH(key_data)) as total_size FROM {} WHERE status = 'active'",
+            self.config.keys_table
+        );
         let size_row = sqlx::query(&size_query)
             .fetch_one(&self.pool)
             .await
-            .map_err(|e| FortressError::storage(
-                format!("Failed to get database size: {}", e),
-                "mysql".to_string(),
-                StorageErrorCode::ReadError,
-            ))?;
+            .map_err(|e| {
+                FortressError::storage(
+                    format!("Failed to get database size: {}", e),
+                    "mysql".to_string(),
+                    StorageErrorCode::ReadError,
+                )
+            })?;
 
         Ok(MySQLStats {
             key_count: key_count_row.get::<i64, _>(0) as u64,
@@ -593,7 +660,7 @@ impl MySQLDatabase {
 impl StorageBackend for MySQLDatabase {
     async fn put(&self, key: &str, value: &[u8]) -> Result<()> {
         let checksum = format!("{:x}", sha2::Sha256::digest(value));
-        
+
         let put_query = format!(
             r#"
             INSERT INTO {} (id, data, checksum, created_at, updated_at)
@@ -609,26 +676,33 @@ impl StorageBackend for MySQLDatabase {
             .bind(Utc::now())
             .execute(&self.pool)
             .await
-            .map_err(|e| FortressError::storage(
-                format!("Failed to put data: {}", e),
-                "mysql".to_string(),
-                StorageErrorCode::WriteError,
-            ))?;
+            .map_err(|e| {
+                FortressError::storage(
+                    format!("Failed to put data: {}", e),
+                    "mysql".to_string(),
+                    StorageErrorCode::WriteError,
+                )
+            })?;
 
         Ok(())
     }
 
     async fn get(&self, key: &str) -> Result<Option<Vec<u8>>> {
-        let get_query = format!("SELECT data, checksum FROM {} WHERE id = ?", self.config.data_table);
+        let get_query = format!(
+            "SELECT data, checksum FROM {} WHERE id = ?",
+            self.config.data_table
+        );
         let row = sqlx::query(&get_query)
             .bind(key)
             .fetch_optional(&self.pool)
             .await
-            .map_err(|e| FortressError::storage(
-                format!("Failed to get data: {}", e),
-                "mysql".to_string(),
-                StorageErrorCode::ReadError,
-            ))?;
+            .map_err(|e| {
+                FortressError::storage(
+                    format!("Failed to get data: {}", e),
+                    "mysql".to_string(),
+                    StorageErrorCode::ReadError,
+                )
+            })?;
 
         if let Some(row) = row {
             // Verify checksum
@@ -655,26 +729,33 @@ impl StorageBackend for MySQLDatabase {
             .bind(key)
             .execute(&self.pool)
             .await
-            .map_err(|e| FortressError::storage(
-                format!("Failed to delete data: {}", e),
-                "mysql".to_string(),
-                StorageErrorCode::DeleteError,
-            ))?;
+            .map_err(|e| {
+                FortressError::storage(
+                    format!("Failed to delete data: {}", e),
+                    "mysql".to_string(),
+                    StorageErrorCode::DeleteError,
+                )
+            })?;
 
         Ok(())
     }
 
     async fn exists(&self, key: &str) -> Result<bool> {
-        let existence_query = format!("SELECT COUNT(*) as count FROM {} WHERE id = ?", self.config.data_table);
+        let existence_query = format!(
+            "SELECT COUNT(*) as count FROM {} WHERE id = ?",
+            self.config.data_table
+        );
         let row = sqlx::query(&existence_query)
             .bind(key)
             .fetch_one(&self.pool)
             .await
-            .map_err(|e| FortressError::storage(
-                format!("Failed to check existence: {}", e),
-                "mysql".to_string(),
-                StorageErrorCode::ReadError,
-            ))?;
+            .map_err(|e| {
+                FortressError::storage(
+                    format!("Failed to check existence: {}", e),
+                    "mysql".to_string(),
+                    StorageErrorCode::ReadError,
+                )
+            })?;
 
         let count: i64 = row.get(0);
         Ok(count > 0)
@@ -684,12 +765,17 @@ impl StorageBackend for MySQLDatabase {
         self.list_prefix_paginated(prefix, None, None).await
     }
 
-    async fn list_prefix_paginated(&self, prefix: &str, limit: Option<usize>, offset: Option<usize>) -> Result<Vec<String>> {
+    async fn list_prefix_paginated(
+        &self,
+        prefix: &str,
+        limit: Option<usize>,
+        offset: Option<usize>,
+    ) -> Result<Vec<String>> {
         let limit = limit.unwrap_or(1000) as u32; // Default limit
         let offset = offset.unwrap_or(0) as u32;
-        
+
         let prefix_query = format!(
-            "SELECT id FROM {} WHERE id LIKE ? LIMIT ? OFFSET ?", 
+            "SELECT id FROM {} WHERE id LIKE ? LIMIT ? OFFSET ?",
             self.config.data_table
         );
         let rows = sqlx::query(&prefix_query)
@@ -698,20 +784,30 @@ impl StorageBackend for MySQLDatabase {
             .bind(offset)
             .fetch_all(&self.pool)
             .await
-            .map_err(|e| FortressError::storage(
-                format!("Failed to list prefix: {}", e),
-                "mysql".to_string(),
-                StorageErrorCode::ReadError,
-            ))?;
-        Ok(rows.into_iter().map(|row| row.get::<String, _>(0)).collect())
+            .map_err(|e| {
+                FortressError::storage(
+                    format!("Failed to list prefix: {}", e),
+                    "mysql".to_string(),
+                    StorageErrorCode::ReadError,
+                )
+            })?;
+        Ok(rows
+            .into_iter()
+            .map(|row| row.get::<String, _>(0))
+            .collect())
     }
 
-    async fn list_prefix_with_legacy_params(&self, prefix: &str, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<String>> {
+    async fn list_prefix_with_legacy_params(
+        &self,
+        prefix: &str,
+        limit: Option<u32>,
+        offset: Option<u32>,
+    ) -> Result<Vec<String>> {
         let limit = limit.unwrap_or(1000); // Default limit
         let offset = offset.unwrap_or(0);
-        
+
         let prefix_query = format!(
-            "SELECT id FROM {} WHERE id LIKE ? LIMIT ? OFFSET ?", 
+            "SELECT id FROM {} WHERE id LIKE ? LIMIT ? OFFSET ?",
             self.config.data_table
         );
         let rows = sqlx::query(&prefix_query)
@@ -720,12 +816,17 @@ impl StorageBackend for MySQLDatabase {
             .bind(offset)
             .fetch_all(&self.pool)
             .await
-            .map_err(|e| FortressError::storage(
-                format!("Failed to list prefix: {}", e),
-                "mysql".to_string(),
-                StorageErrorCode::ReadError,
-            ))?;
-        Ok(rows.into_iter().map(|row| row.get::<String, _>(0)).collect())
+            .map_err(|e| {
+                FortressError::storage(
+                    format!("Failed to list prefix: {}", e),
+                    "mysql".to_string(),
+                    StorageErrorCode::ReadError,
+                )
+            })?;
+        Ok(rows
+            .into_iter()
+            .map(|row| row.get::<String, _>(0))
+            .collect())
     }
 
     fn metadata(&self) -> crate::storage::StorageMetadata {
@@ -760,15 +861,17 @@ impl StorageBackend for MySQLDatabase {
 
     async fn health_check(&self) -> Result<crate::storage::HealthStatus> {
         let start = std::time::Instant::now();
-        
+
         sqlx::query("SELECT 1")
             .fetch_one(&self.pool)
             .await
-            .map_err(|e| FortressError::storage(
-                format!("MySQL health check failed: {}", e),
-                "mysql".to_string(),
-                StorageErrorCode::ConnectionFailed,
-            ))?;
+            .map_err(|e| {
+                FortressError::storage(
+                    format!("MySQL health check failed: {}", e),
+                    "mysql".to_string(),
+                    StorageErrorCode::ConnectionFailed,
+                )
+            })?;
 
         let response_time = start.elapsed().as_millis() as u64;
 
@@ -812,20 +915,24 @@ impl MySQLPoolManager {
     /// Get or create a connection pool
     pub async fn get_pool(&mut self, config: &MySQLConfig) -> Result<sqlx::mysql::MySqlPool> {
         let pool_key = format!("{}:{}", config.database_name, config.connection_string);
-        
+
         if let Some(pool) = self.pools.get(&pool_key) {
             Ok(pool.clone())
         } else {
             let pool = sqlx::mysql::MySqlPoolOptions::new()
                 .max_connections(config.max_connections)
-                .acquire_timeout(std::time::Duration::from_secs(config.connection_timeout_seconds))
+                .acquire_timeout(std::time::Duration::from_secs(
+                    config.connection_timeout_seconds,
+                ))
                 .connect(&config.connection_string)
                 .await
-                .map_err(|e| FortressError::storage(
-                    format!("Failed to create MySQL pool: {}", e),
-                    "mysql".to_string(),
-                    StorageErrorCode::ConnectionFailed,
-                ))?;
+                .map_err(|e| {
+                    FortressError::storage(
+                        format!("Failed to create MySQL pool: {}", e),
+                        "mysql".to_string(),
+                        StorageErrorCode::ConnectionFailed,
+                    )
+                })?;
 
             self.pools.insert(pool_key, pool.clone());
             Ok(pool)
@@ -923,10 +1030,10 @@ mod tests {
     #[tokio::test]
     async fn test_mysql_pool_manager() {
         let mut manager = MySQLPoolManager::new();
-        
+
         // Test that the manager is created correctly
         assert_eq!(manager.pools.len(), 0);
-        
+
         // Close all pools (should not panic even when empty)
         manager.close_all().await;
         assert_eq!(manager.pools.len(), 0);

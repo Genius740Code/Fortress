@@ -12,8 +12,8 @@
 //! - **Verifiable computation**: Allow verification of computation integrity
 //! - **Network communication**: Handle message passing between parties
 
-use crate::error::{FortressError, Result, EncryptionErrorCode};
-use crate::encryption::{EncryptionAlgorithm, create_algorithm};
+use crate::encryption::{create_algorithm, EncryptionAlgorithm};
+use crate::error::{EncryptionErrorCode, FortressError, Result};
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -107,11 +107,7 @@ pub struct SecretShare {
 
 impl SecretShare {
     /// Create a new secret share
-    pub fn new(
-        party_id: PartyId,
-        session_id: SessionId,
-        share_data: Vec<u8>,
-    ) -> Self {
+    pub fn new(party_id: PartyId, session_id: SessionId, share_data: Vec<u8>) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
             party_id,
@@ -166,10 +162,7 @@ pub struct ComputationConfig {
 
 impl ComputationConfig {
     /// Create a new computation configuration
-    pub fn new(
-        computation_type: impl Into<String>,
-        sharing_scheme: SecretSharingScheme,
-    ) -> Self {
+    pub fn new(computation_type: impl Into<String>, sharing_scheme: SecretSharingScheme) -> Self {
         Self {
             session_id: Uuid::new_v4().to_string(),
             computation_type: computation_type.into(),
@@ -422,7 +415,12 @@ impl ShamirSecretSharing {
     }
 
     /// Generate shares using Shamir's scheme
-    fn generate_shares(&self, secret: &[u8], threshold: usize, total_shares: usize) -> Result<Vec<Vec<u8>>> {
+    fn generate_shares(
+        &self,
+        secret: &[u8],
+        threshold: usize,
+        total_shares: usize,
+    ) -> Result<Vec<Vec<u8>>> {
         if threshold > total_shares {
             return Err(FortressError::encryption(
                 "Threshold cannot be greater than total shares",
@@ -442,12 +440,12 @@ impl ShamirSecretSharing {
         // This is a simplified implementation
         // In practice, you'd use finite field arithmetic
         let mut shares = Vec::new();
-        
+
         for i in 1..=total_shares {
             // Create share (x, f(x)) where x is the share index
             let mut share_data = Vec::new();
             share_data.extend_from_slice(&(i as u64).to_le_bytes());
-            
+
             // For simplicity, we'll just XOR with the secret and index
             // Real implementation would use polynomial evaluation
             let mut share_value = secret.to_vec();
@@ -455,7 +453,7 @@ impl ShamirSecretSharing {
                 *byte ^= (i as u8).wrapping_mul(0x5A);
             }
             share_data.extend_from_slice(&share_value);
-            
+
             shares.push(share_data);
         }
 
@@ -493,7 +491,7 @@ impl ShamirSecretSharing {
 
         let secret_data = &first_share[8..];
         let mut reconstructed = secret_data.to_vec();
-        
+
         // Reverse the XOR operation
         let index = u64::from_le_bytes(first_share[..8].try_into().unwrap()) as u8;
         for byte in reconstructed.iter_mut() {
@@ -527,21 +525,31 @@ impl MpcProtocol for ShamirSecretSharing {
         config: &ComputationConfig,
     ) -> Result<Vec<SecretShare>> {
         let (threshold, total_shares) = match &config.sharing_scheme {
-            SecretSharingScheme::Shamir { threshold, total_shares } => (*threshold, *total_shares),
-            _ => return Err(FortressError::encryption(
-                "Invalid sharing scheme for Shamir protocol",
-                "shamir",
-                EncryptionErrorCode::AlgorithmNotSupported,
-            )),
+            SecretSharingScheme::Shamir {
+                threshold,
+                total_shares,
+            } => (*threshold, *total_shares),
+            _ => {
+                return Err(FortressError::encryption(
+                    "Invalid sharing scheme for Shamir protocol",
+                    "shamir",
+                    EncryptionErrorCode::AlgorithmNotSupported,
+                ))
+            }
         };
 
         let share_data = self.generate_shares(secret, threshold, total_shares)?;
         let mut shares = Vec::new();
 
         for (i, data) in share_data.into_iter().enumerate() {
-            let party_id = config.parties.keys().nth(i).unwrap_or(&"unknown".to_string()).clone();
-            let share = SecretShare::new(party_id, config.session_id.clone(), data)
-                .with_share_index(i + 1);
+            let party_id = config
+                .parties
+                .keys()
+                .nth(i)
+                .unwrap_or(&"unknown".to_string())
+                .clone();
+            let share =
+                SecretShare::new(party_id, config.session_id.clone(), data).with_share_index(i + 1);
             shares.push(share);
         }
 
@@ -555,11 +563,13 @@ impl MpcProtocol for ShamirSecretSharing {
     ) -> Result<Vec<u8>> {
         let threshold = match &config.sharing_scheme {
             SecretSharingScheme::Shamir { threshold, .. } => *threshold,
-            _ => return Err(FortressError::encryption(
-                "Invalid sharing scheme for Shamir protocol",
-                "shamir",
-                EncryptionErrorCode::AlgorithmNotSupported,
-            )),
+            _ => {
+                return Err(FortressError::encryption(
+                    "Invalid sharing scheme for Shamir protocol",
+                    "shamir",
+                    EncryptionErrorCode::AlgorithmNotSupported,
+                ))
+            }
         };
 
         let share_data: Vec<Vec<u8>> = shares.iter().map(|s| s.share_data.clone()).collect();
@@ -601,12 +611,16 @@ mod tests {
         let threshold = 3;
         let total_shares = 5;
 
-        let shares = shamir.generate_shares(secret, threshold, total_shares).unwrap();
+        let shares = shamir
+            .generate_shares(secret, threshold, total_shares)
+            .unwrap();
         assert_eq!(shares.len(), total_shares);
 
         // Reconstruct with threshold shares
         let threshold_shares: Vec<Vec<u8>> = shares.iter().take(threshold).cloned().collect();
-        let reconstructed = shamir.reconstruct_secret(&threshold_shares, threshold).unwrap();
+        let reconstructed = shamir
+            .reconstruct_secret(&threshold_shares, threshold)
+            .unwrap();
         assert_eq!(reconstructed, secret);
     }
 
@@ -670,7 +684,9 @@ mod tests {
         assert_eq!(shares.len(), 3);
 
         // Reconstruct secret
-        let reconstructed = MpcProtocol::reconstruct_secret(&shamir, &shares[..2], &config).await.unwrap();
+        let reconstructed = MpcProtocol::reconstruct_secret(&shamir, &shares[..2], &config)
+            .await
+            .unwrap();
         assert_eq!(reconstructed, secret);
     }
 }

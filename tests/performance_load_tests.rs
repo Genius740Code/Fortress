@@ -1,17 +1,17 @@
 #![cfg(any())]
 //! Performance & Load Tests for Fortress
-//! 
+//!
 //! Section 4.2: Performance & Load Tests
 //! - High-concurrency tests
 //! - Memory usage tests  
 //! - Scalability tests
 
-use std::sync::Arc;
-use std::time::{Duration, Instant};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
-use tokio::sync::{Semaphore, RwLock, Mutex};
+use tokio::sync::{Mutex, RwLock, Semaphore};
 
 use fortress_core::error::Result;
 
@@ -27,7 +27,7 @@ impl MockDatabase {
             data: Arc::new(RwLock::new(HashMap::new())),
         }
     }
-    
+
     pub async fn execute_operation(&self, operation_type: &str, record_id: &str) -> Result<String> {
         // Simulate database operation
         tokio::time::sleep(Duration::from_millis(2)).await;
@@ -79,13 +79,16 @@ impl MockCluster {
         if node_id < self.nodes.len() {
             let node = &self.nodes[node_id];
             node.request_count.fetch_add(1, Ordering::Relaxed);
-            
+
             // Simulate cluster processing
             tokio::time::sleep(Duration::from_micros(50 + (request_id % 200) as u64)).await;
-            
+
             Ok(format!("cluster:{}:req:{}", node.name, request_id))
         } else {
-            Err(fortress_core::error::FortressError::cluster("Node not found", None))
+            Err(fortress_core::error::FortressError::cluster(
+                "Node not found",
+                None,
+            ))
         }
     }
 }
@@ -101,13 +104,13 @@ impl LoadBalancer {
             instances: Arc::new(RwLock::new(Vec::new())),
         }
     }
-    
+
     pub fn new_with_instances(instances: Vec<Arc<MockServiceInstance>>) -> Self {
         Self {
             instances: Arc::new(RwLock::new(instances)),
         }
     }
-    
+
     pub async fn process_request(&self, request: String) -> Result<String> {
         // Simulate load balancer processing
         tokio::time::sleep(Duration::from_millis(2)).await;
@@ -118,7 +121,7 @@ impl LoadBalancer {
             Ok(format!("No instances available for: {}", request))
         }
     }
-    
+
     pub fn get_load_distribution(&self) -> Vec<(String, usize)> {
         // Return mock load distribution
         vec![
@@ -142,7 +145,7 @@ impl SharedResource {
             counter: Arc::new(Mutex::new(0)),
         }
     }
-    
+
     pub async fn expensive_operation(&self) -> Result<()> {
         // Simulate expensive operation
         tokio::time::sleep(Duration::from_millis(10)).await;
@@ -150,14 +153,14 @@ impl SharedResource {
         *counter += 1;
         Ok(())
     }
-    
+
     pub async fn read_operation(&self) -> Result<()> {
         // Simulate read operation
         tokio::time::sleep(Duration::from_millis(5)).await;
         let _counter = self.counter.lock().await;
         Ok(())
     }
-    
+
     pub async fn write_operation(&self) -> Result<()> {
         // Simulate write operation
         tokio::time::sleep(Duration::from_millis(8)).await;
@@ -178,11 +181,11 @@ impl ConnectionPool {
             connections: Arc::new(RwLock::new(Vec::new())),
         }
     }
-    
+
     pub fn new_with_config(_config: ()) -> Self {
         Self::new()
     }
-    
+
     pub async fn execute_operation(&self, operation: String) -> Result<String> {
         // Simulate database operation
         tokio::time::sleep(Duration::from_millis(3)).await;
@@ -190,7 +193,7 @@ impl ConnectionPool {
         connections.push(operation.clone());
         Ok(format!("Result: {}", operation))
     }
-    
+
     pub fn get_stats(&self) -> ConnectionPoolStats {
         ConnectionPoolStats {
             active_connections: 10,
@@ -211,11 +214,11 @@ impl ResourceManager {
             resources: Arc::new(RwLock::new(HashMap::new())),
         }
     }
-    
+
     pub fn new_with_config(_config: ()) -> Self {
         Self::new()
     }
-    
+
     pub async fn execute_operation(&self, operation: String) -> Result<String> {
         // Simulate resource operation
         tokio::time::sleep(Duration::from_millis(4)).await;
@@ -223,7 +226,7 @@ impl ResourceManager {
         resources.insert(operation.clone(), "processed".to_string());
         Ok(format!("Resource processed: {}", operation))
     }
-    
+
     pub fn get_utilization_metrics(&self) -> ResourceUtilizationMetrics {
         ResourceUtilizationMetrics {
             cpu_usage: 45.2,
@@ -233,11 +236,11 @@ impl ResourceManager {
     }
 }
 
-use fortress_core::encryption::{Aegis256, EncryptionAlgorithm};
+use fortress_core::audit::{AuditConfig, AuditLogger, DefaultAuditLogger};
 use fortress_core::auth::AuthManager;
-use fortress_core::websocket::auth::AuthConfig;
 use fortress_core::cache_manager::{CacheManager, CacheManagerConfig, MockCacheManager};
-use fortress_core::audit::{AuditLogger, AuditConfig, DefaultAuditLogger};
+use fortress_core::encryption::{Aegis256, EncryptionAlgorithm};
+use fortress_core::websocket::auth::AuthConfig;
 
 // Result structures - moved here to fix forward declaration issues
 #[derive(Debug)]
@@ -272,14 +275,38 @@ pub struct HighConcurrencyResults {
 impl HighConcurrencyResults {
     pub fn new() -> Self {
         Self {
-            concurrent_auth: ConcurrentAuthResult { test_results: Vec::new(), overall_success: false },
-            concurrent_encryption: ConcurrentEncryptionResult { test_results: Vec::new(), overall_success: false },
-            concurrent_database: ConcurrentDatabaseResult { test_results: Vec::new(), overall_success: false },
-            concurrent_cache: ConcurrentCacheResult { test_results: Vec::new(), overall_success: false },
-            concurrent_audit: ConcurrentAuditResult { test_results: Vec::new(), overall_success: false },
-            load_balancing: LoadBalancingResult { test_results: Vec::new(), overall_success: false },
-            resource_contention: ResourceContentionResult { test_results: Vec::new(), overall_success: false },
-            connection_pooling: ConnectionPoolingResult { test_results: Vec::new(), overall_success: false },
+            concurrent_auth: ConcurrentAuthResult {
+                test_results: Vec::new(),
+                overall_success: false,
+            },
+            concurrent_encryption: ConcurrentEncryptionResult {
+                test_results: Vec::new(),
+                overall_success: false,
+            },
+            concurrent_database: ConcurrentDatabaseResult {
+                test_results: Vec::new(),
+                overall_success: false,
+            },
+            concurrent_cache: ConcurrentCacheResult {
+                test_results: Vec::new(),
+                overall_success: false,
+            },
+            concurrent_audit: ConcurrentAuditResult {
+                test_results: Vec::new(),
+                overall_success: false,
+            },
+            load_balancing: LoadBalancingResult {
+                test_results: Vec::new(),
+                overall_success: false,
+            },
+            resource_contention: ResourceContentionResult {
+                test_results: Vec::new(),
+                overall_success: false,
+            },
+            connection_pooling: ConnectionPoolingResult {
+                test_results: Vec::new(),
+                overall_success: false,
+            },
         }
     }
 }
@@ -297,12 +324,30 @@ pub struct MemoryUsageResults {
 impl MemoryUsageResults {
     pub fn new() -> Self {
         Self {
-            allocation_patterns: MemoryAllocationResult { test_results: Vec::new(), overall_success: false },
-            memory_leaks: MemoryLeakResult { test_results: Vec::new(), overall_success: false },
-            memory_pressure: MemoryPressureResult { test_results: Vec::new(), overall_success: false },
-            garbage_collection: GarbageCollectionResult { test_results: Vec::new(), overall_success: false },
-            memory_fragmentation: MemoryFragmentationResult { test_results: Vec::new(), overall_success: false },
-            cache_memory: CacheMemoryResult { test_results: Vec::new(), overall_success: false },
+            allocation_patterns: MemoryAllocationResult {
+                test_results: Vec::new(),
+                overall_success: false,
+            },
+            memory_leaks: MemoryLeakResult {
+                test_results: Vec::new(),
+                overall_success: false,
+            },
+            memory_pressure: MemoryPressureResult {
+                test_results: Vec::new(),
+                overall_success: false,
+            },
+            garbage_collection: GarbageCollectionResult {
+                test_results: Vec::new(),
+                overall_success: false,
+            },
+            memory_fragmentation: MemoryFragmentationResult {
+                test_results: Vec::new(),
+                overall_success: false,
+            },
+            cache_memory: CacheMemoryResult {
+                test_results: Vec::new(),
+                overall_success: false,
+            },
         }
     }
 }
@@ -320,12 +365,35 @@ pub struct ScalabilityResults {
 impl ScalabilityResults {
     pub fn new() -> Self {
         Self {
-            horizontal: HorizontalScalabilityResult { test_results: Vec::new(), scalability_efficiency: 0.0, overall_success: false },
-            vertical: VerticalScalabilityResult { test_results: Vec::new(), vertical_efficiency: 0.0, overall_success: false },
-            load: LoadScalabilityResult { test_results: Vec::new(), load_efficiency: 0.0, overall_success: false },
-            performance_degradation: PerformanceDegradationResult { test_results: Vec::new(), overall_success: false },
-            resource_scaling: ResourceScalingResult { test_results: Vec::new(), scaling_efficiency: 0.0, overall_success: false },
-            multi_tenant: MultiTenantScalabilityResult { test_results: Vec::new(), tenant_efficiency: 0.0, overall_success: false },
+            horizontal: HorizontalScalabilityResult {
+                test_results: Vec::new(),
+                scalability_efficiency: 0.0,
+                overall_success: false,
+            },
+            vertical: VerticalScalabilityResult {
+                test_results: Vec::new(),
+                vertical_efficiency: 0.0,
+                overall_success: false,
+            },
+            load: LoadScalabilityResult {
+                test_results: Vec::new(),
+                load_efficiency: 0.0,
+                overall_success: false,
+            },
+            performance_degradation: PerformanceDegradationResult {
+                test_results: Vec::new(),
+                overall_success: false,
+            },
+            resource_scaling: ResourceScalingResult {
+                test_results: Vec::new(),
+                scaling_efficiency: 0.0,
+                overall_success: false,
+            },
+            multi_tenant: MultiTenantScalabilityResult {
+                test_results: Vec::new(),
+                tenant_efficiency: 0.0,
+                overall_success: false,
+            },
         }
     }
 }
@@ -432,7 +500,9 @@ impl PerformanceLoadTests {
                 let handle = tokio::spawn(async move {
                     let _permit = semaphore.acquire().await.unwrap();
                     let req_start = Instant::now();
-                    let result = auth_manager.authenticate_api_key("test_key", &client_ip).await;
+                    let result = auth_manager
+                        .authenticate_api_key("test_key", &client_ip)
+                        .await;
                     let req_time = req_start.elapsed();
                     (result.is_ok(), req_time)
                 });
@@ -475,11 +545,18 @@ impl PerformanceLoadTests {
                 success_rate,
             });
 
-            println!("    Concurrency {}: {:.2} req/sec, {:.1}% success, avg response {:?}", 
-                concurrent_count, requests_per_second, success_rate * 100.0, avg_response_time);
+            println!(
+                "    Concurrency {}: {:.2} req/sec, {:.1}% success, avg response {:?}",
+                concurrent_count,
+                requests_per_second,
+                success_rate * 100.0,
+                avg_response_time
+            );
         }
 
-        let overall_success = test_results.iter().all(|r| r.success_rate > 0.95 && r.requests_per_second > 100.0);
+        let overall_success = test_results
+            .iter()
+            .all(|r| r.success_rate > 0.95 && r.requests_per_second > 100.0);
 
         Ok(ConcurrentAuthResult {
             test_results,
@@ -518,10 +595,10 @@ impl PerformanceLoadTests {
 
                         // Encrypt
                         let ciphertext = algorithm.encrypt(&test_data, &key).unwrap();
-                        
+
                         // Decrypt
                         let _plaintext = algorithm.decrypt(&ciphertext, &key).unwrap();
-                        
+
                         op_start.elapsed()
                     });
 
@@ -548,7 +625,8 @@ impl PerformanceLoadTests {
                 let total_time = start.elapsed();
                 let avg_operation_time = total_operation_time / (*concurrent_count) as u32;
                 let operations_per_second = (*concurrent_count) as f64 / total_time.as_secs_f64();
-                let throughput_mbps = (data_size as f64 * 2.0) / (1024.0 * 1024.0) / avg_operation_time.as_secs_f64();
+                let throughput_mbps =
+                    (data_size as f64 * 2.0) / (1024.0 * 1024.0) / avg_operation_time.as_secs_f64();
 
                 test_results.push(EncryptionConcurrencyTest {
                     data_size,
@@ -561,12 +639,16 @@ impl PerformanceLoadTests {
                     throughput_mbps,
                 });
 
-                println!("    {}B @ {} concurrent: {:.2} ops/sec, {:.2} MB/s", 
-                    data_size, concurrent_count, operations_per_second, throughput_mbps);
+                println!(
+                    "    {}B @ {} concurrent: {:.2} ops/sec, {:.2} MB/s",
+                    data_size, concurrent_count, operations_per_second, throughput_mbps
+                );
             }
         }
 
-        let overall_success = test_results.iter().all(|r| r.operations_per_second > 50.0 && r.throughput_mbps > 10.0);
+        let overall_success = test_results
+            .iter()
+            .all(|r| r.operations_per_second > 50.0 && r.throughput_mbps > 10.0);
 
         Ok(ConcurrentEncryptionResult {
             test_results,
@@ -601,9 +683,11 @@ impl PerformanceLoadTests {
                     let handle = tokio::spawn(async move {
                         let _permit = semaphore.acquire().await.unwrap();
                         let op_start = Instant::now();
-                        
-                        let result = mock_db.execute_operation(&operation_type, &record_id.to_string()).await;
-                        
+
+                        let result = mock_db
+                            .execute_operation(&operation_type, &record_id.to_string())
+                            .await;
+
                         (result.is_ok(), op_start.elapsed())
                     });
 
@@ -630,7 +714,7 @@ impl PerformanceLoadTests {
                         }
                     }
                 }
-                
+
                 let total_time = start.elapsed();
                 let avg_response_time = if successful_ops > 0 {
                     total_response_time / successful_ops as u32
@@ -652,12 +736,19 @@ impl PerformanceLoadTests {
                     success_rate,
                 });
 
-                println!("    {} @ {} concurrent: {:.2} ops/sec, {:.1}% success", 
-                    operation_type, concurrent_count, operations_per_second, success_rate * 100.0);
+                println!(
+                    "    {} @ {} concurrent: {:.2} ops/sec, {:.1}% success",
+                    operation_type,
+                    concurrent_count,
+                    operations_per_second,
+                    success_rate * 100.0
+                );
             }
         }
 
-        let overall_success = test_results.iter().all(|r| r.success_rate > 0.95 && r.operations_per_second > 100.0);
+        let overall_success = test_results
+            .iter()
+            .all(|r| r.success_rate > 0.95 && r.operations_per_second > 100.0);
 
         Ok(ConcurrentDatabaseResult {
             test_results,
@@ -678,7 +769,10 @@ impl PerformanceLoadTests {
         for i in 0..1000 {
             let key = format!("key_{}", i);
             let value = format!("value_{}", i);
-            cache_manager.set(&key, value.as_bytes().to_vec(), None).await.unwrap();
+            cache_manager
+                .set(&key, value.as_bytes().to_vec(), None)
+                .await
+                .unwrap();
         }
 
         for concurrent_count in concurrent_levels {
@@ -700,12 +794,18 @@ impl PerformanceLoadTests {
                     let operation_result = if i % 10 < 7 {
                         // Get operation
                         let key = format!("key_{}", i % 1000);
-                        cache_manager.get(&key).await.map(|_| Some::<Vec<u8>>(vec![]))
+                        cache_manager
+                            .get(&key)
+                            .await
+                            .map(|_| Some::<Vec<u8>>(vec![]))
                     } else {
                         // Set operation
                         let key = format!("new_key_{}", i);
                         let value = format!("new_value_{}", i);
-                        cache_manager.set(&key, value.as_bytes().to_vec(), None).await.map(|_| Some::<Vec<u8>>(vec![]))
+                        cache_manager
+                            .set(&key, value.as_bytes().to_vec(), None)
+                            .await
+                            .map(|_| Some::<Vec<u8>>(vec![]))
                     };
 
                     (operation_result.is_ok(), op_start.elapsed())
@@ -748,11 +848,17 @@ impl PerformanceLoadTests {
                 success_rate,
             });
 
-            println!("    Cache @ {} concurrent: {:.2} ops/sec, {:.1}% success", 
-                concurrent_count, operations_per_second, success_rate * 100.0);
+            println!(
+                "    Cache @ {} concurrent: {:.2} ops/sec, {:.1}% success",
+                concurrent_count,
+                operations_per_second,
+                success_rate * 100.0
+            );
         }
 
-        let overall_success = test_results.iter().all(|r| r.success_rate > 0.95 && r.operations_per_second > 1000.0);
+        let overall_success = test_results
+            .iter()
+            .all(|r| r.success_rate > 0.95 && r.operations_per_second > 1000.0);
 
         Ok(ConcurrentCacheResult {
             test_results,
@@ -804,22 +910,23 @@ impl PerformanceLoadTests {
                     });
 
                     let result = {
-                    let mut audit = audit_manager.write().await;
-                    audit.log(fortress_core::audit::AuditEntry {
-                        id: format!("audit_{}", i),
-                        timestamp: chrono::Utc::now().timestamp_millis() as u64,
-                        event_type: fortress_core::audit::AuditEventType::DataAccess,
-                        security_level: fortress_core::audit::SecurityLevel::Low,
-                        principal: Some(format!("user_{}", i)),
-                        resource: Some(format!("resource_{}", i % 100)),
-                        action: "data_access".to_string(),
-                        outcome: fortress_core::audit::EventOutcome::Success,
-                        metadata: serde_json::from_value(audit_event.clone()).unwrap_or_default(),
-                        previous_hash: None,
-                        current_hash: format!("hash_{}", i),
-                        signature: format!("sig_{}", i),
-                    })
-                };
+                        let mut audit = audit_manager.write().await;
+                        audit.log(fortress_core::audit::AuditEntry {
+                            id: format!("audit_{}", i),
+                            timestamp: chrono::Utc::now().timestamp_millis() as u64,
+                            event_type: fortress_core::audit::AuditEventType::DataAccess,
+                            security_level: fortress_core::audit::SecurityLevel::Low,
+                            principal: Some(format!("user_{}", i)),
+                            resource: Some(format!("resource_{}", i % 100)),
+                            action: "data_access".to_string(),
+                            outcome: fortress_core::audit::EventOutcome::Success,
+                            metadata: serde_json::from_value(audit_event.clone())
+                                .unwrap_or_default(),
+                            previous_hash: None,
+                            current_hash: format!("hash_{}", i),
+                            signature: format!("sig_{}", i),
+                        })
+                    };
                     (result.is_ok(), op_start.elapsed())
                 });
 
@@ -860,11 +967,17 @@ impl PerformanceLoadTests {
                 success_rate,
             });
 
-            println!("    Audit @ {} concurrent: {:.2} logs/sec, {:.1}% success", 
-                concurrent_count, logs_per_second, success_rate * 100.0);
+            println!(
+                "    Audit @ {} concurrent: {:.2} logs/sec, {:.1}% success",
+                concurrent_count,
+                logs_per_second,
+                success_rate * 100.0
+            );
         }
 
-        let overall_success = test_results.iter().all(|r| r.success_rate > 0.95 && r.logs_per_second > 500.0);
+        let overall_success = test_results
+            .iter()
+            .all(|r| r.success_rate > 0.95 && r.logs_per_second > 500.0);
 
         Ok(ConcurrentAuditResult {
             test_results,
@@ -880,7 +993,7 @@ impl PerformanceLoadTests {
         let instances: Vec<Arc<MockServiceInstance>> = (0..num_instances)
             .map(|i| Arc::new(MockServiceInstance::new(format!("instance_{}", i), 0.95)))
             .collect();
-        
+
         let load_balancer = Arc::new(LoadBalancer::new_with_instances(instances));
         let total_requests = 10000;
         let concurrent_levels = vec![100, 500, 1000];
@@ -901,7 +1014,9 @@ impl PerformanceLoadTests {
                     let _permit = semaphore.acquire().await.unwrap();
                     let req_start = Instant::now();
 
-                    let result = load_balancer.process_request(format!("request_{}", i)).await;
+                    let result = load_balancer
+                        .process_request(format!("request_{}", i))
+                        .await;
                     (result.is_ok(), req_start.elapsed())
                 });
 
@@ -947,11 +1062,17 @@ impl PerformanceLoadTests {
                 load_distribution: load_distribution.iter().map(|(_, count)| *count).collect(),
             });
 
-            println!("    Load Balancer @ {} concurrent: {:.2} req/sec, {:.1}% success", 
-                concurrent_count, requests_per_second, success_rate * 100.0);
+            println!(
+                "    Load Balancer @ {} concurrent: {:.2} req/sec, {:.1}% success",
+                concurrent_count,
+                requests_per_second,
+                success_rate * 100.0
+            );
         }
 
-        let overall_success = test_results.iter().all(|r| r.success_rate > 0.98 && r.requests_per_second > 1000.0);
+        let overall_success = test_results
+            .iter()
+            .all(|r| r.success_rate > 0.98 && r.requests_per_second > 1000.0);
 
         Ok(LoadBalancingResult {
             test_results,
@@ -1031,8 +1152,12 @@ impl PerformanceLoadTests {
                 success_rate,
             });
 
-            println!("    Contention @ {} threads: {:.2} ops/sec, {:.1}% success", 
-                contention_count, operations_per_second, success_rate * 100.0);
+            println!(
+                "    Contention @ {} threads: {:.2} ops/sec, {:.1}% success",
+                contention_count,
+                operations_per_second,
+                success_rate * 100.0
+            );
         }
 
         let overall_success = test_results.iter().all(|r| r.success_rate > 0.95);
@@ -1067,7 +1192,9 @@ impl PerformanceLoadTests {
                     let _permit = semaphore.acquire().await.unwrap();
                     let op_start = Instant::now();
 
-                    let result = connection_pool.execute_operation(format!("operation_{}", i)).await;
+                    let result = connection_pool
+                        .execute_operation(format!("operation_{}", i))
+                        .await;
                     (result.is_ok(), op_start.elapsed())
                 });
 
@@ -1111,11 +1238,17 @@ impl PerformanceLoadTests {
                 pool_stats,
             });
 
-            println!("    Pool @ {} concurrent: {:.2} ops/sec, {:.1}% success", 
-                concurrent_count, operations_per_second, success_rate * 100.0);
+            println!(
+                "    Pool @ {} concurrent: {:.2} ops/sec, {:.1}% success",
+                concurrent_count,
+                operations_per_second,
+                success_rate * 100.0
+            );
         }
 
-        let overall_success = test_results.iter().all(|r| r.success_rate > 0.98 && r.operations_per_second > 200.0);
+        let overall_success = test_results
+            .iter()
+            .all(|r| r.success_rate > 0.98 && r.operations_per_second > 200.0);
 
         Ok(ConnectionPoolingResult {
             test_results,
@@ -1201,12 +1334,16 @@ impl PerformanceLoadTests {
                     deallocation_rate_mb_per_sec,
                 });
 
-                println!("    {}B x {} allocations: {:.2} MB/s alloc, {:.2} MB/s dealloc", 
-                    size, count, allocation_rate_mb_per_sec, deallocation_rate_mb_per_sec);
+                println!(
+                    "    {}B x {} allocations: {:.2} MB/s alloc, {:.2} MB/s dealloc",
+                    size, count, allocation_rate_mb_per_sec, deallocation_rate_mb_per_sec
+                );
             }
         }
 
-        let overall_success = test_results.iter().all(|r| r.allocation_rate_mb_per_sec > 100.0);
+        let overall_success = test_results
+            .iter()
+            .all(|r| r.allocation_rate_mb_per_sec > 100.0);
 
         Ok(MemoryAllocationResult {
             test_results,
@@ -1230,7 +1367,7 @@ impl PerformanceLoadTests {
 
         for (scenario_name, iterations) in leak_scenarios {
             let initial_memory = self.get_memory_usage();
-            
+
             // Simulate potential memory leak scenario
             let start = Instant::now();
             let mut objects = Vec::new();
@@ -1240,24 +1377,24 @@ impl PerformanceLoadTests {
                     "Session Objects" => {
                         let session = format!("session_{}", i);
                         objects.push(session);
-                    },
+                    }
                     "Cache Entries" => {
                         let cache_entry = format!("cache_key_{} -> cache_value_{}", i, i);
                         objects.push(cache_entry);
-                    },
+                    }
                     "Encryption Keys" => {
                         let key = vec![i as u8; 32];
                         objects.push(format!("key_{}", i));
                         drop(key); // Explicitly drop to avoid actual memory accumulation
-                    },
+                    }
                     "Audit Logs" => {
                         let log = format!("audit_log_{}: User {} performed action", i, i);
                         objects.push(log);
-                    },
+                    }
                     "Network Connections" => {
                         let conn = format!("connection_{}: 192.168.1.{}", i, i % 255);
                         objects.push(conn);
-                    },
+                    }
                     _ => {}
                 }
 
@@ -1272,8 +1409,8 @@ impl PerformanceLoadTests {
             let test_duration = start.elapsed();
 
             // Calculate memory leak rate (MB per minute)
-            let memory_leak_rate_mb_per_min = memory_increase as f64 / (1024.0 * 1024.0) / 
-                                           (test_duration.as_secs_f64() / 60.0);
+            let memory_leak_rate_mb_per_min =
+                memory_increase as f64 / (1024.0 * 1024.0) / (test_duration.as_secs_f64() / 60.0);
 
             test_results.push(MemoryLeakTest {
                 scenario_name: scenario_name.to_string(),
@@ -1285,12 +1422,18 @@ impl PerformanceLoadTests {
                 memory_leak_rate_mb_per_min,
             });
 
-            println!("    {}: {:.2} MB increase, {:.2} MB/min leak rate", 
-                scenario_name, memory_increase as f64 / (1024.0 * 1024.0), memory_leak_rate_mb_per_min);
+            println!(
+                "    {}: {:.2} MB increase, {:.2} MB/min leak rate",
+                scenario_name,
+                memory_increase as f64 / (1024.0 * 1024.0),
+                memory_leak_rate_mb_per_min
+            );
         }
 
         // Acceptable leak rate is less than 1 MB per minute
-        let overall_success = test_results.iter().all(|r| r.memory_leak_rate_mb_per_min < 1.0);
+        let overall_success = test_results
+            .iter()
+            .all(|r| r.memory_leak_rate_mb_per_min < 1.0);
 
         Ok(MemoryLeakResult {
             test_results,
@@ -1303,9 +1446,9 @@ impl PerformanceLoadTests {
         println!("  🏋️  Testing memory pressure handling...");
 
         let pressure_levels = vec![
-            ("Low Pressure", 100 * 1024 * 1024),    // 100 MB
-            ("Medium Pressure", 500 * 1024 * 1024),  // 500 MB
-            ("High Pressure", 1000 * 1024 * 1024),   // 1 GB
+            ("Low Pressure", 100 * 1024 * 1024),      // 100 MB
+            ("Medium Pressure", 500 * 1024 * 1024),   // 500 MB
+            ("High Pressure", 1000 * 1024 * 1024),    // 1 GB
             ("Extreme Pressure", 2000 * 1024 * 1024), // 2 GB
         ];
 
@@ -1322,7 +1465,7 @@ impl PerformanceLoadTests {
 
             for i in 0..target_blocks {
                 memory_blocks.push(vec![42u8; block_size]);
-                
+
                 // Check if we're approaching the target
                 if i % 100 == 0 {
                     let current_memory = self.get_memory_usage();
@@ -1341,16 +1484,17 @@ impl PerformanceLoadTests {
 
             for i in 0..100 {
                 let test_start = Instant::now();
-                
+
                 // Simulate various operations under memory pressure
                 let _result = self.simulate_operation_under_pressure(i).await;
-                
+
                 let test_time = test_start.elapsed();
                 performance_results.push(test_time);
             }
 
             let _performance_end = performance_start.elapsed();
-            let avg_operation_time = performance_results.iter().sum::<Duration>() / performance_results.len() as u32;
+            let avg_operation_time =
+                performance_results.iter().sum::<Duration>() / performance_results.len() as u32;
 
             // Cleanup memory
             drop(memory_blocks);
@@ -1371,14 +1515,18 @@ impl PerformanceLoadTests {
                 avg_operation_time,
             });
 
-            println!("    {}: {:.2} MB increase, {:.2} MB recovered, avg op {:?}", 
-                pressure_name, 
+            println!(
+                "    {}: {:.2} MB increase, {:.2} MB recovered, avg op {:?}",
+                pressure_name,
                 memory_increase as f64 / (1024.0 * 1024.0),
                 memory_recovered as f64 / (1024.0 * 1024.0),
-                avg_operation_time);
+                avg_operation_time
+            );
         }
 
-        let overall_success = test_results.iter().all(|r| r.memory_recovered > r.memory_increase * 80 / 100);
+        let overall_success = test_results
+            .iter()
+            .all(|r| r.memory_recovered > r.memory_increase * 80 / 100);
 
         Ok(MemoryPressureResult {
             test_results,
@@ -1391,10 +1539,10 @@ impl PerformanceLoadTests {
         println!("  🗑️  Testing garbage collection impact...");
 
         let gc_scenarios = vec![
-            ("Small Objects", 100000, 1024),      // 100K objects of 1KB each
-            ("Medium Objects", 10000, 10240),     // 10K objects of 10KB each
-            ("Large Objects", 1000, 102400),       // 1K objects of 100KB each
-            ("Mixed Objects", 50000, 2048),        // 50K objects of 2KB each
+            ("Small Objects", 100000, 1024),  // 100K objects of 1KB each
+            ("Medium Objects", 10000, 10240), // 10K objects of 10KB each
+            ("Large Objects", 1000, 102400),  // 1K objects of 100KB each
+            ("Mixed Objects", 50000, 2048),   // 50K objects of 2KB each
         ];
 
         let mut test_results = Vec::new();
@@ -1418,7 +1566,9 @@ impl PerformanceLoadTests {
             // Phase 2: Usage (simulate work)
             let usage_start = Instant::now();
             for (i, ref obj) in objects.iter().enumerate() {
-                let _hash: u64 = obj.iter().enumerate()
+                let _hash: u64 = obj
+                    .iter()
+                    .enumerate()
                     .map(|(j, &x)| ((x as u64) << (j % 8)) ^ (i as u64))
                     .sum();
             }
@@ -1456,11 +1606,13 @@ impl PerformanceLoadTests {
                 gc_efficiency,
             });
 
-            println!("    {}: allocated {:.2} MB, freed {:.2} MB, {:.1}% efficiency", 
+            println!(
+                "    {}: allocated {:.2} MB, freed {:.2} MB, {:.1}% efficiency",
                 scenario_name,
                 memory_allocated as f64 / (1024.0 * 1024.0),
                 memory_freed as f64 / (1024.0 * 1024.0),
-                gc_efficiency * 100.0);
+                gc_efficiency * 100.0
+            );
         }
 
         let overall_success = test_results.iter().all(|r| r.gc_efficiency > 0.8);
@@ -1493,10 +1645,14 @@ impl PerformanceLoadTests {
 
             // Phase 1: Allocate with varying sizes to create fragmentation
             for i in 0..allocation_count {
-                let size = if i % 3 == 0 { max_size } 
-                          else if i % 3 == 1 { max_size / 2 } 
-                          else { max_size / 4 };
-                
+                let size = if i % 3 == 0 {
+                    max_size
+                } else if i % 3 == 1 {
+                    max_size / 2
+                } else {
+                    max_size / 4
+                };
+
                 let allocation = vec![42u8; size];
                 allocations.push((i, allocation));
             }
@@ -1518,14 +1674,12 @@ impl PerformanceLoadTests {
             // Phase 3: Try to allocate large blocks in fragmented memory
             let large_allocation_start = Instant::now();
             let mut large_allocations = Vec::new();
-            
+
             for _i in 0..100 {
-                match std::panic::catch_unwind(|| {
-                    vec![42u8; max_size * 2]
-                }) {
+                match std::panic::catch_unwind(|| vec![42u8; max_size * 2]) {
                     Ok(allocation) => {
                         large_allocations.push(allocation);
-                    },
+                    }
                     Err(_) => {
                         break; // Allocation failed due to fragmentation
                     }
@@ -1561,13 +1715,17 @@ impl PerformanceLoadTests {
                 large_allocation_time,
             });
 
-            println!("    {}: {:.1}% fragmentation, {:.1}% large alloc success", 
+            println!(
+                "    {}: {:.1}% fragmentation, {:.1}% large alloc success",
                 scenario_name,
                 fragmentation_ratio * 100.0,
-                large_allocation_success_rate * 100.0);
+                large_allocation_success_rate * 100.0
+            );
         }
 
-        let overall_success = test_results.iter().all(|r| r.large_allocation_success_rate > 0.5);
+        let overall_success = test_results
+            .iter()
+            .all(|r| r.large_allocation_success_rate > 0.5);
 
         Ok(MemoryFragmentationResult {
             test_results,
@@ -1601,7 +1759,10 @@ impl PerformanceLoadTests {
             for i in 0..cache_capacity {
                 let key = format!("key_{}", i);
                 let value = format!("value_with_some_additional_data_{}", i);
-                cache_manager.set(&key, value.as_bytes().to_vec(), None).await.unwrap();
+                cache_manager
+                    .set(&key, value.as_bytes().to_vec(), None)
+                    .await
+                    .unwrap();
             }
             let fill_time = fill_start.elapsed();
 
@@ -1659,14 +1820,18 @@ impl PerformanceLoadTests {
                 hit_rate,
             });
 
-            println!("    {}: {:.2} MB used, {:.1} bytes/entry, {:.1}% hit rate", 
+            println!(
+                "    {}: {:.2} MB used, {:.1} bytes/entry, {:.1}% hit rate",
                 cache_name,
                 memory_used as f64 / (1024.0 * 1024.0),
                 memory_per_entry,
-                hit_rate * 100.0);
+                hit_rate * 100.0
+            );
         }
 
-        let overall_success = test_results.iter().all(|r| r.hit_rate > 0.8 && r.memory_per_entry < 1000.0);
+        let overall_success = test_results
+            .iter()
+            .all(|r| r.hit_rate > 0.8 && r.memory_per_entry < 1000.0);
 
         Ok(CacheMemoryResult {
             test_results,
@@ -1774,13 +1939,20 @@ impl PerformanceLoadTests {
                 success_rate,
             });
 
-            println!("    {} nodes: {:.2} req/sec, {:.1}% success", 
-                node_count, requests_per_second, success_rate * 100.0);
+            println!(
+                "    {} nodes: {:.2} req/sec, {:.1}% success",
+                node_count,
+                requests_per_second,
+                success_rate * 100.0
+            );
         }
 
         // Calculate scalability efficiency
         let baseline_rps = test_results.first().unwrap().requests_per_second;
-        let max_rps = test_results.iter().map(|r| r.requests_per_second).fold(0.0, f64::max);
+        let max_rps = test_results
+            .iter()
+            .map(|r| r.requests_per_second)
+            .fold(0.0, f64::max);
         let scalability_efficiency = max_rps / baseline_rps;
 
         let overall_success = scalability_efficiency > 0.7; // At least 70% linear scaling
@@ -1822,7 +1994,9 @@ impl PerformanceLoadTests {
 
                         // Simulate CPU and memory intensive work
                         let data = vec![42u8; memory_size];
-                        let _result: u64 = data.iter().enumerate()
+                        let _result: u64 = data
+                            .iter()
+                            .enumerate()
                             .map(|(j, &x)| (x as u64).wrapping_mul((j as u64).wrapping_add(1)))
                             .sum();
 
@@ -1862,19 +2036,25 @@ impl PerformanceLoadTests {
                     throughput,
                 });
 
-                println!("    {} cores, {} MB: {:.2} work/sec", 
-                    cores, memory_mb, throughput);
+                println!(
+                    "    {} cores, {} MB: {:.2} work/sec",
+                    cores, memory_mb, throughput
+                );
             }
         }
 
         // Calculate vertical scaling efficiency
-        let baseline_throughput = test_results.iter()
+        let baseline_throughput = test_results
+            .iter()
             .filter(|r| r.cpu_cores == 1 && r.memory_mb == 1024)
             .map(|r| r.throughput)
             .next()
             .unwrap_or(1.0);
 
-        let max_throughput = test_results.iter().map(|r| r.throughput).fold(0.0, f64::max);
+        let max_throughput = test_results
+            .iter()
+            .map(|r| r.throughput)
+            .fold(0.0, f64::max);
         let vertical_efficiency = max_throughput / baseline_throughput;
 
         let overall_success = vertical_efficiency > 0.6; // At least 60% vertical scaling
@@ -1920,7 +2100,9 @@ impl PerformanceLoadTests {
                     let _permit = semaphore.acquire().await.unwrap();
                     let req_start = Instant::now();
 
-                    let result = load_balancer.process_request(format!("load_req_{}", i)).await;
+                    let result = load_balancer
+                        .process_request(format!("load_req_{}", i))
+                        .await;
                     (result.is_ok(), req_start.elapsed())
                 });
 
@@ -1962,20 +2144,31 @@ impl PerformanceLoadTests {
                 success_rate,
             });
 
-            println!("    {}: {:.2} req/sec, {:.1}% success, avg {:?}", 
-                load_name, requests_per_second, success_rate * 100.0, avg_response_time);
+            println!(
+                "    {}: {:.2} req/sec, {:.1}% success, avg {:?}",
+                load_name,
+                requests_per_second,
+                success_rate * 100.0,
+                avg_response_time
+            );
         }
 
         // Calculate load scalability efficiency
-        let light_load_rps = test_results.iter()
+        let light_load_rps = test_results
+            .iter()
             .find(|r| r.load_name == "Light Load")
             .map(|r| r.requests_per_second)
             .unwrap_or(1.0);
 
-        let max_rps = test_results.iter().map(|r| r.requests_per_second).fold(0.0, f64::max);
+        let max_rps = test_results
+            .iter()
+            .map(|r| r.requests_per_second)
+            .fold(0.0, f64::max);
         let load_efficiency = max_rps / light_load_rps;
 
-        let overall_success = test_results.iter().all(|r| r.success_rate > 0.95 && r.requests_per_second > 100.0);
+        let overall_success = test_results
+            .iter()
+            .all(|r| r.success_rate > 0.95 && r.requests_per_second > 100.0);
 
         Ok(LoadScalabilityResult {
             test_results,
@@ -2005,12 +2198,15 @@ impl PerformanceLoadTests {
 
             // Degraded performance
             let degraded_start = Instant::now();
-            let degraded_result = self.run_degraded_performance(scenario_name, base_operations).await;
+            let degraded_result = self
+                .run_degraded_performance(scenario_name, base_operations)
+                .await;
             let degraded_time = degraded_start.elapsed();
 
             let performance_degradation = if baseline_time.as_nanos() > 0 {
-                (degraded_time.as_nanos() as f64 - baseline_time.as_nanos() as f64) / 
-                baseline_time.as_nanos() as f64 * 100.0
+                (degraded_time.as_nanos() as f64 - baseline_time.as_nanos() as f64)
+                    / baseline_time.as_nanos() as f64
+                    * 100.0
             } else {
                 0.0
             };
@@ -2032,11 +2228,15 @@ impl PerformanceLoadTests {
                 throughput_degradation,
             });
 
-            println!("    {}: {:.1}% performance degradation, {:.1}% throughput loss", 
-                scenario_name, performance_degradation, throughput_degradation);
+            println!(
+                "    {}: {:.1}% performance degradation, {:.1}% throughput loss",
+                scenario_name, performance_degradation, throughput_degradation
+            );
         }
 
-        let overall_success = test_results.iter().all(|r| r.performance_degradation < 200.0); // Less than 200% degradation
+        let overall_success = test_results
+            .iter()
+            .all(|r| r.performance_degradation < 200.0); // Less than 200% degradation
 
         Ok(PerformanceDegradationResult {
             test_results,
@@ -2049,10 +2249,10 @@ impl PerformanceLoadTests {
         println!("  📊 Testing resource scaling...");
 
         let resource_configs = vec![
-            ("Minimal", 1, 512, 100),      // 1 core, 512MB RAM, 100 connections
-            ("Standard", 2, 1024, 500),    // 2 cores, 1GB RAM, 500 connections
-            ("Enhanced", 4, 2048, 1000),   // 4 cores, 2GB RAM, 1000 connections
-            ("Premium", 8, 4096, 2000),    // 8 cores, 4GB RAM, 2000 connections
+            ("Minimal", 1, 512, 100),       // 1 core, 512MB RAM, 100 connections
+            ("Standard", 2, 1024, 500),     // 2 cores, 1GB RAM, 500 connections
+            ("Enhanced", 4, 2048, 1000),    // 4 cores, 2GB RAM, 1000 connections
+            ("Premium", 8, 4096, 2000),     // 8 cores, 4GB RAM, 2000 connections
             ("Enterprise", 16, 8192, 5000), // 16 cores, 8GB RAM, 5000 connections
         ];
 
@@ -2061,7 +2261,7 @@ impl PerformanceLoadTests {
         for (config_name, cpu_cores, memory_mb, max_connections) in resource_configs {
             let start = Instant::now();
 
-            // Create resource manager 
+            // Create resource manager
             let resource_manager = Arc::new(ResourceManager::new_with_config(()));
 
             // Test resource utilization under load
@@ -2077,7 +2277,9 @@ impl PerformanceLoadTests {
                     let _permit = semaphore.acquire().await.unwrap();
                     let op_start = Instant::now();
 
-                    let result = resource_manager.execute_operation(format!("res_op_{}", i)).await;
+                    let result = resource_manager
+                        .execute_operation(format!("res_op_{}", i))
+                        .await;
                     (result.is_ok(), op_start.elapsed())
                 });
 
@@ -2127,19 +2329,24 @@ impl PerformanceLoadTests {
                 resource_metrics,
             });
 
-            println!("    {}: {:.2} ops/sec, {:.1}% CPU, {:.1}% RAM", 
-                config_name, operations_per_second, 
+            println!(
+                "    {}: {:.2} ops/sec, {:.1}% CPU, {:.1}% RAM",
+                config_name,
+                operations_per_second,
                 resource_metrics_clone.cpu_utilization * 100.0,
-                resource_metrics_clone.memory_utilization * 100.0);
+                resource_metrics_clone.memory_utilization * 100.0
+            );
         }
 
         // Calculate scaling efficiency
-        let minimal_ops_per_sec = test_results.iter()
+        let minimal_ops_per_sec = test_results
+            .iter()
             .find(|r| r.config_name == "Minimal")
             .map(|r| r.operations_per_second)
             .unwrap_or(1.0);
 
-        let enterprise_ops_per_sec = test_results.iter()
+        let enterprise_ops_per_sec = test_results
+            .iter()
             .find(|r| r.config_name == "Enterprise")
             .map(|r| r.operations_per_second)
             .unwrap_or(1.0);
@@ -2168,7 +2375,7 @@ impl PerformanceLoadTests {
 
             // Create multi-tenant environment
             let tenant_manager = Arc::new(TenantManager::new());
-            
+
             // Initialize tenants
             for i in 0..tenant_count {
                 let tenant_id = format!("tenant_{}", i);
@@ -2187,7 +2394,9 @@ impl PerformanceLoadTests {
                     let handle = tokio::spawn(async move {
                         let op_start = Instant::now();
 
-                        let result = tenant_manager.execute_tenant_operation(&tenant_id, operation_id).await;
+                        let result = tenant_manager
+                            .execute_tenant_operation(&tenant_id, operation_id)
+                            .await;
                         (result.is_ok(), op_start.elapsed())
                     });
 
@@ -2242,18 +2451,26 @@ impl PerformanceLoadTests {
                 isolation_metrics,
             });
 
-            println!("    {} tenants: {:.2} ops/sec, {:.1}% success, {:.1}% isolation", 
-                tenant_count, operations_per_second, success_rate * 100.0,
-                isolation_metrics_clone.isolation_score * 100.0);
+            println!(
+                "    {} tenants: {:.2} ops/sec, {:.1}% success, {:.1}% isolation",
+                tenant_count,
+                operations_per_second,
+                success_rate * 100.0,
+                isolation_metrics_clone.isolation_score * 100.0
+            );
         }
 
         // Calculate multi-tenant scaling efficiency
-        let single_tenant_ops = test_results.iter()
+        let single_tenant_ops = test_results
+            .iter()
             .find(|r| r.tenant_count == 1)
             .map(|r| r.operations_per_second)
             .unwrap_or(1.0);
 
-        let max_tenant_ops = test_results.iter().map(|r| r.operations_per_second).fold(0.0, f64::max);
+        let max_tenant_ops = test_results
+            .iter()
+            .map(|r| r.operations_per_second)
+            .fold(0.0, f64::max);
         let tenant_efficiency = max_tenant_ops / single_tenant_ops;
 
         let overall_success = tenant_efficiency > 0.5; // At least 50% efficiency with multiple tenants
@@ -2270,7 +2487,10 @@ impl PerformanceLoadTests {
         // This is a mock implementation - in real code you'd use platform-specific APIs
         // For now, return a simulated value based on current timestamp
         use std::time::{SystemTime, UNIX_EPOCH};
-        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
         (timestamp % 1000) as usize * 1024 * 1024 // Simulate 0-999 MB
     }
 
@@ -2280,23 +2500,23 @@ impl PerformanceLoadTests {
             0 => {
                 // String operation
                 let _result = format!("operation_{}_result", operation_id);
-            },
+            }
             1 => {
                 // Math operation
                 let _result = (operation_id as f64).sin().cos().tan();
-            },
+            }
             2 => {
                 // Collection operation
                 let vec: Vec<usize> = (0..100).map(|i| i * operation_id).collect();
                 let _result = vec.iter().sum::<usize>();
-            },
+            }
             3 => {
                 // Encryption simulation
                 let data = vec![operation_id as u8; 1024];
                 let key = vec![42u8; 32];
                 // Simulate encryption work without actual encryption
                 let _result: Vec<u8> = data.iter().zip(key.iter()).map(|(d, k)| d ^ k).collect();
-            },
+            }
             _ => {}
         }
         Ok(())
@@ -2304,42 +2524,42 @@ impl PerformanceLoadTests {
 
     async fn run_baseline_performance(&self, operations: usize) -> f64 {
         let start = Instant::now();
-        
+
         for i in 0..operations {
             let _result = format!("baseline_op_{}", i);
         }
-        
+
         let duration = start.elapsed();
         operations as f64 / duration.as_secs_f64()
     }
 
     async fn run_degraded_performance(&self, scenario: &str, operations: usize) -> f64 {
         let start = Instant::now();
-        
+
         for i in 0..operations {
             match scenario {
                 "Memory Pressure" => {
                     // Allocate and deallocate memory to simulate pressure
                     let _data = vec![42u8; 10240];
-                },
+                }
                 "CPU Contention" => {
                     // CPU-intensive operation
                     let _result = (i as f64).sin().cos().tan().sqrt();
-                },
+                }
                 "I/O Bottleneck" => {
                     // Simulate I/O delay
                     tokio::time::sleep(Duration::from_micros(100)).await;
-                },
+                }
                 "Network Latency" => {
                     // Simulate network delay
                     tokio::time::sleep(Duration::from_millis(1)).await;
-                },
+                }
                 _ => {
                     let _result = format!("degraded_op_{}", i);
                 }
             }
         }
-        
+
         let duration = start.elapsed();
         operations as f64 / duration.as_secs_f64()
     }
@@ -2347,7 +2567,7 @@ impl PerformanceLoadTests {
     fn print_high_concurrency_summary(&self, results: &HighConcurrencyResults) {
         println!("\n📊 High-Concurrency Test Summary");
         println!("=================================");
-        
+
         let mut passed_categories = 0;
         let total_categories = 8;
 
@@ -2407,15 +2627,18 @@ impl PerformanceLoadTests {
             println!("❌ Connection Pooling: FAILED");
         }
 
-        println!("\nHigh-Concurrency Results: {}/{} categories passed ({:.1}%)", 
-            passed_categories, total_categories, 
-            (passed_categories as f64 / total_categories as f64) * 100.0);
+        println!(
+            "\nHigh-Concurrency Results: {}/{} categories passed ({:.1}%)",
+            passed_categories,
+            total_categories,
+            (passed_categories as f64 / total_categories as f64) * 100.0
+        );
     }
 
     fn print_memory_usage_summary(&self, results: &MemoryUsageResults) {
         println!("\n💾 Memory Usage Test Summary");
         println!("============================");
-        
+
         let mut passed_categories = 0;
         let total_categories = 6;
 
@@ -2461,15 +2684,18 @@ impl PerformanceLoadTests {
             println!("❌ Cache Memory Usage: FAILED");
         }
 
-        println!("\nMemory Usage Results: {}/{} categories passed ({:.1}%)", 
-            passed_categories, total_categories, 
-            (passed_categories as f64 / total_categories as f64) * 100.0);
+        println!(
+            "\nMemory Usage Results: {}/{} categories passed ({:.1}%)",
+            passed_categories,
+            total_categories,
+            (passed_categories as f64 / total_categories as f64) * 100.0
+        );
     }
 
     fn print_scalability_summary(&self, results: &ScalabilityResults) {
         println!("\n📈 Scalability Test Summary");
         println!("===========================");
-        
+
         let mut passed_categories = 0;
         let total_categories = 6;
 
@@ -2515,33 +2741,43 @@ impl PerformanceLoadTests {
             println!("❌ Multi-Tenant Scalability: FAILED");
         }
 
-        println!("\nScalability Results: {}/{} categories passed ({:.1}%)", 
-            passed_categories, total_categories, 
-            (passed_categories as f64 / total_categories as f64) * 100.0);
+        println!(
+            "\nScalability Results: {}/{} categories passed ({:.1}%)",
+            passed_categories,
+            total_categories,
+            (passed_categories as f64 / total_categories as f64) * 100.0
+        );
     }
 
-    fn generate_comprehensive_report(&self, results: &PerformanceLoadTestResults, total_time: Duration) {
+    fn generate_comprehensive_report(
+        &self,
+        results: &PerformanceLoadTestResults,
+        total_time: Duration,
+    ) {
         println!("\n🎯 COMPREHENSIVE PERFORMANCE & LOAD TEST REPORT");
         println!("==============================================");
-        
+
         // Executive Summary
         println!("\n📋 EXECUTIVE SUMMARY");
         println!("===================");
         println!("Total test execution time: {:?}", total_time);
         println!("Test sections completed: 3/3");
-        
+
         // Calculate overall success metrics
-        let high_concurrency_score = self.calculate_high_concurrency_score(&results.high_concurrency);
+        let high_concurrency_score =
+            self.calculate_high_concurrency_score(&results.high_concurrency);
         let memory_usage_score = self.calculate_memory_usage_score(&results.memory_usage);
         let scalability_score = self.calculate_scalability_score(&results.scalability);
-        
+
         let overall_score = (high_concurrency_score + memory_usage_score + scalability_score) / 3.0;
-        
+
         println!("Overall Performance Score: {:.1}/100", overall_score);
-        
+
         if overall_score >= 90.0 {
             println!("🏆 GRADE: A+ (EXCELLENT)");
-            println!("Fortress demonstrates exceptional performance and scalability characteristics.");
+            println!(
+                "Fortress demonstrates exceptional performance and scalability characteristics."
+            );
         } else if overall_score >= 80.0 {
             println!("🥇 GRADE: A (VERY GOOD)");
             println!("Fortress shows strong performance with minor optimization opportunities.");
@@ -2559,30 +2795,38 @@ impl PerformanceLoadTests {
         // Detailed Results
         println!("\n📊 DETAILED RESULTS");
         println!("===================");
-        
-        println!("\n🔥 High-Concurrency Performance: {:.1}/100", high_concurrency_score);
+
+        println!(
+            "\n🔥 High-Concurrency Performance: {:.1}/100",
+            high_concurrency_score
+        );
         self.print_high_concurrency_detailed(&results.high_concurrency);
-        
-        println!("\n💾 Memory Usage Performance: {:.1}/100", memory_usage_score);
+
+        println!(
+            "\n💾 Memory Usage Performance: {:.1}/100",
+            memory_usage_score
+        );
         self.print_memory_usage_detailed(&results.memory_usage);
-        
+
         println!("\n📈 Scalability Performance: {:.1}/100", scalability_score);
         self.print_scalability_summary(&results.scalability);
 
         // Recommendations
         println!("\n💡 PERFORMANCE RECOMMENDATIONS");
         println!("=============================");
-        
+
         if high_concurrency_score < 80.0 {
             println!("🔧 Optimize concurrent operations for better throughput");
             println!("🔧 Consider implementing connection pooling and load balancing");
         }
-        
+
         if memory_usage_score < 80.0 {
-            println!("🔧 Review memory allocation patterns and implement better garbage collection");
+            println!(
+                "🔧 Review memory allocation patterns and implement better garbage collection"
+            );
             println!("🔧 Consider implementing memory pools and object reuse patterns");
         }
-        
+
         if scalability_score < 80.0 {
             println!("🔧 Improve horizontal and vertical scaling capabilities");
             println!("🔧 Optimize resource utilization under different load patterns");
@@ -2595,7 +2839,7 @@ impl PerformanceLoadTests {
     fn calculate_high_concurrency_score(&self, results: &HighConcurrencyResults) -> f64 {
         let mut score = 0.0;
         let mut total_weight = 0.0;
-        
+
         let tests = [
             (&results.concurrent_auth.overall_success, 15.0),
             (&results.concurrent_encryption.overall_success, 15.0),
@@ -2606,14 +2850,14 @@ impl PerformanceLoadTests {
             (&results.resource_contention.overall_success, 10.0),
             (&results.connection_pooling.overall_success, 10.0),
         ];
-        
+
         for (success, weight) in tests {
             if *success {
                 score += weight;
             }
             total_weight += weight;
         }
-        
+
         if total_weight > 0.0 {
             (score / total_weight) * 100.0
         } else {
@@ -2624,7 +2868,7 @@ impl PerformanceLoadTests {
     fn calculate_memory_usage_score(&self, results: &MemoryUsageResults) -> f64 {
         let mut score = 0.0;
         let mut total_weight = 0.0;
-        
+
         let tests = [
             (&results.allocation_patterns.overall_success, 20.0),
             (&results.memory_leaks.overall_success, 20.0),
@@ -2633,14 +2877,14 @@ impl PerformanceLoadTests {
             (&results.memory_fragmentation.overall_success, 15.0),
             (&results.cache_memory.overall_success, 15.0),
         ];
-        
+
         for (success, weight) in tests {
             if *success {
                 score += weight;
             }
             total_weight += weight;
         }
-        
+
         if total_weight > 0.0 {
             (score / total_weight) * 100.0
         } else {
@@ -2651,7 +2895,7 @@ impl PerformanceLoadTests {
     fn calculate_scalability_score(&self, results: &ScalabilityResults) -> f64 {
         let mut score = 0.0;
         let mut total_weight = 0.0;
-        
+
         let tests = [
             (&results.horizontal.overall_success, 20.0),
             (&results.vertical.overall_success, 15.0),
@@ -2660,14 +2904,14 @@ impl PerformanceLoadTests {
             (&results.resource_scaling.overall_success, 20.0),
             (&results.multi_tenant.overall_success, 15.0),
         ];
-        
+
         for (success, weight) in tests {
             if *success {
                 score += weight;
             }
             total_weight += weight;
         }
-        
+
         if total_weight > 0.0 {
             (score / total_weight) * 100.0
         } else {
@@ -2676,26 +2920,123 @@ impl PerformanceLoadTests {
     }
 
     fn print_high_concurrency_detailed(&self, results: &HighConcurrencyResults) {
-        println!("  Concurrent Authentication: {}", if results.concurrent_auth.overall_success { "✅ PASSED" } else { "❌ FAILED" });
-        println!("  Concurrent Encryption: {}", if results.concurrent_encryption.overall_success { "✅ PASSED" } else { "❌ FAILED" });
-        println!("  Concurrent Database: {}", if results.concurrent_database.overall_success { "✅ PASSED" } else { "❌ FAILED" });
-        println!("  Concurrent Cache: {}", if results.concurrent_cache.overall_success { "✅ PASSED" } else { "❌ FAILED" });
-        println!("  Concurrent Audit: {}", if results.concurrent_audit.overall_success { "✅ PASSED" } else { "❌ FAILED" });
-        println!("  Load Balancing: {}", if results.load_balancing.overall_success { "✅ PASSED" } else { "❌ FAILED" });
-        println!("  Resource Contention: {}", if results.resource_contention.overall_success { "✅ PASSED" } else { "❌ FAILED" });
-        println!("  Connection Pooling: {}", if results.connection_pooling.overall_success { "✅ PASSED" } else { "❌ FAILED" });
+        println!(
+            "  Concurrent Authentication: {}",
+            if results.concurrent_auth.overall_success {
+                "✅ PASSED"
+            } else {
+                "❌ FAILED"
+            }
+        );
+        println!(
+            "  Concurrent Encryption: {}",
+            if results.concurrent_encryption.overall_success {
+                "✅ PASSED"
+            } else {
+                "❌ FAILED"
+            }
+        );
+        println!(
+            "  Concurrent Database: {}",
+            if results.concurrent_database.overall_success {
+                "✅ PASSED"
+            } else {
+                "❌ FAILED"
+            }
+        );
+        println!(
+            "  Concurrent Cache: {}",
+            if results.concurrent_cache.overall_success {
+                "✅ PASSED"
+            } else {
+                "❌ FAILED"
+            }
+        );
+        println!(
+            "  Concurrent Audit: {}",
+            if results.concurrent_audit.overall_success {
+                "✅ PASSED"
+            } else {
+                "❌ FAILED"
+            }
+        );
+        println!(
+            "  Load Balancing: {}",
+            if results.load_balancing.overall_success {
+                "✅ PASSED"
+            } else {
+                "❌ FAILED"
+            }
+        );
+        println!(
+            "  Resource Contention: {}",
+            if results.resource_contention.overall_success {
+                "✅ PASSED"
+            } else {
+                "❌ FAILED"
+            }
+        );
+        println!(
+            "  Connection Pooling: {}",
+            if results.connection_pooling.overall_success {
+                "✅ PASSED"
+            } else {
+                "❌ FAILED"
+            }
+        );
     }
 
     fn print_memory_usage_detailed(&self, results: &MemoryUsageResults) {
-        println!("  Memory Allocation Patterns: {}", if results.allocation_patterns.overall_success { "✅ PASSED" } else { "❌ FAILED" });
-        println!("  Memory Leak Detection: {}", if results.memory_leaks.overall_success { "✅ PASSED" } else { "❌ FAILED" });
-        println!("  Memory Pressure Handling: {}", if results.memory_pressure.overall_success { "✅ PASSED" } else { "❌ FAILED" });
-        println!("  Garbage Collection Impact: {}", if results.garbage_collection.overall_success { "✅ PASSED" } else { "❌ FAILED" });
-        println!("  Memory Fragmentation: {}", if results.memory_fragmentation.overall_success { "✅ PASSED" } else { "❌ FAILED" });
-        println!("  Cache Memory Usage: {}", if results.cache_memory.overall_success { "✅ PASSED" } else { "❌ FAILED" });
+        println!(
+            "  Memory Allocation Patterns: {}",
+            if results.allocation_patterns.overall_success {
+                "✅ PASSED"
+            } else {
+                "❌ FAILED"
+            }
+        );
+        println!(
+            "  Memory Leak Detection: {}",
+            if results.memory_leaks.overall_success {
+                "✅ PASSED"
+            } else {
+                "❌ FAILED"
+            }
+        );
+        println!(
+            "  Memory Pressure Handling: {}",
+            if results.memory_pressure.overall_success {
+                "✅ PASSED"
+            } else {
+                "❌ FAILED"
+            }
+        );
+        println!(
+            "  Garbage Collection Impact: {}",
+            if results.garbage_collection.overall_success {
+                "✅ PASSED"
+            } else {
+                "❌ FAILED"
+            }
+        );
+        println!(
+            "  Memory Fragmentation: {}",
+            if results.memory_fragmentation.overall_success {
+                "✅ PASSED"
+            } else {
+                "❌ FAILED"
+            }
+        );
+        println!(
+            "  Cache Memory Usage: {}",
+            if results.cache_memory.overall_success {
+                "✅ PASSED"
+            } else {
+                "❌ FAILED"
+            }
+        );
     }
 }
-
 
 // Result structures moved to beginning of file
 
@@ -2723,10 +3064,14 @@ impl TenantManager {
         Ok(())
     }
 
-    async fn execute_tenant_operation(&self, tenant_id: &str, operation_id: usize) -> Result<String> {
+    async fn execute_tenant_operation(
+        &self,
+        tenant_id: &str,
+        operation_id: usize,
+    ) -> Result<String> {
         // Simulate tenant isolation
         let tenants = self.tenants.read().await;
-        
+
         if let Some(_tenant) = tenants.get(tenant_id) {
             // Simulate tenant-specific operation
             tokio::time::sleep(Duration::from_micros(100 + (operation_id % 100) as u64)).await;
@@ -2735,7 +3080,7 @@ impl TenantManager {
             Err(fortress_core::error::FortressError::key_management(
                 "Tenant not found".to_string(),
                 Some(tenant_id.to_string()),
-                fortress_core::error::KeyErrorCode::KeyNotFound
+                fortress_core::error::KeyErrorCode::KeyNotFound,
             ))
         }
     }
@@ -3196,46 +3541,72 @@ mod tests {
     #[tokio::test]
     async fn test_performance_load_tests_complete() {
         let results = PerformanceLoadTests::run_all_tests().await.unwrap();
-        
+
         // Verify that all test categories have results
-        assert!(!results.high_concurrency.concurrent_auth.test_results.is_empty(), 
-                "Should have concurrent auth results");
-        assert!(!results.memory_usage.allocation_patterns.test_results.is_empty(), 
-                "Should have memory allocation results");
-        assert!(!results.scalability.horizontal.test_results.is_empty(), 
-                "Should have horizontal scalability results");
+        assert!(
+            !results
+                .high_concurrency
+                .concurrent_auth
+                .test_results
+                .is_empty(),
+            "Should have concurrent auth results"
+        );
+        assert!(
+            !results
+                .memory_usage
+                .allocation_patterns
+                .test_results
+                .is_empty(),
+            "Should have memory allocation results"
+        );
+        assert!(
+            !results.scalability.horizontal.test_results.is_empty(),
+            "Should have horizontal scalability results"
+        );
     }
 
     #[tokio::test]
     async fn test_high_concurrency_only() {
         let tests = PerformanceLoadTests;
         let results = tests.test_high_concurrency_scenarios().await.unwrap();
-        
-        assert!(!results.concurrent_auth.test_results.is_empty(), 
-                "Should have concurrent auth results");
-        assert!(!results.concurrent_encryption.test_results.is_empty(), 
-                "Should have concurrent encryption results");
+
+        assert!(
+            !results.concurrent_auth.test_results.is_empty(),
+            "Should have concurrent auth results"
+        );
+        assert!(
+            !results.concurrent_encryption.test_results.is_empty(),
+            "Should have concurrent encryption results"
+        );
     }
 
     #[tokio::test]
     async fn test_memory_usage_only() {
         let tests = PerformanceLoadTests;
         let results = tests.test_memory_usage_scenarios().await.unwrap();
-        
-        assert!(!results.allocation_patterns.test_results.is_empty(), 
-                "Should have memory allocation results");
-        assert!(!results.memory_leaks.test_results.is_empty(), 
-                "Should have memory leak results");
+
+        assert!(
+            !results.allocation_patterns.test_results.is_empty(),
+            "Should have memory allocation results"
+        );
+        assert!(
+            !results.memory_leaks.test_results.is_empty(),
+            "Should have memory leak results"
+        );
     }
 
     #[tokio::test]
     async fn test_scalability_only() {
         let tests = PerformanceLoadTests;
         let results = tests.test_scalability_scenarios().await.unwrap();
-        
-        assert!(!results.horizontal.test_results.is_empty(), 
-                "Should have horizontal scalability results");
-        assert!(!results.vertical.test_results.is_empty(), 
-                "Should have vertical scalability results");
+
+        assert!(
+            !results.horizontal.test_results.is_empty(),
+            "Should have horizontal scalability results"
+        );
+        assert!(
+            !results.vertical.test_results.is_empty(),
+            "Should have vertical scalability results"
+        );
     }
 }

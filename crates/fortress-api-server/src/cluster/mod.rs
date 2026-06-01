@@ -11,28 +11,28 @@
 //! - **Failover**: Automatic leader failover and recovery
 //! - **Cluster Management**: Monitoring and administrative tools
 
-pub mod raft;
-pub mod node;
 pub mod discovery;
-pub mod replication;
 pub mod failover;
 pub mod management;
 pub mod network;
+pub mod node;
+pub mod raft;
+pub mod replication;
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
 
 /// Re-export commonly used types
 pub mod prelude {
-    pub use crate::cluster::raft::{RaftNode, RaftConfig, RaftRole};
-    pub use crate::cluster::node::{ClusterNode, NodeStatus, NodeConfig};
-    pub use crate::cluster::discovery::{NodeDiscovery, DiscoveryConfig};
-    pub use crate::cluster::replication::{DataReplicator, ReplicationConfig};
-    pub use crate::cluster::failover::{FailoverManager, FailoverConfig};
+    pub use crate::cluster::discovery::{DiscoveryConfig, NodeDiscovery};
+    pub use crate::cluster::failover::{FailoverConfig, FailoverManager};
     pub use crate::cluster::management::ClusterManager;
-    pub use crate::cluster::network::{NetworkManager, NetworkConfig};
-    pub use crate::cluster::{ClusterMessage, ClusterError, ClusterResult};
+    pub use crate::cluster::network::{NetworkConfig, NetworkManager};
+    pub use crate::cluster::node::{ClusterNode, NodeConfig, NodeStatus};
+    pub use crate::cluster::raft::{RaftConfig, RaftNode, RaftRole};
+    pub use crate::cluster::replication::{DataReplicator, ReplicationConfig};
+    pub use crate::cluster::{ClusterError, ClusterMessage, ClusterResult};
 }
 
 /// Cluster-wide message types
@@ -65,39 +65,39 @@ pub enum ClusterError {
     /// Network-related error
     #[error("Network error: {0}")]
     Network(#[from] network::NetworkError),
-    
+
     /// Raft consensus error
     #[error("Raft consensus error: {0}")]
     Raft(#[from] raft::RaftError),
-    
+
     /// Node discovery error
     #[error("Node discovery error: {0}")]
     Discovery(#[from] discovery::DiscoveryError),
-    
+
     /// Data replication error
     #[error("Data replication error: {0}")]
     Replication(#[from] replication::ReplicationError),
-    
+
     /// Failover error
     #[error("Failover error: {0}")]
     Failover(#[from] failover::FailoverError),
-    
+
     /// Cluster management error
     #[error("Cluster management error: {0}")]
     Management(#[from] management::ManagementError),
-    
+
     /// Configuration error
     #[error("Configuration error: {0}")]
     Configuration(String),
-    
+
     /// Node not found error
     #[error("Node not found: {0}")]
     NodeNotFound(Uuid),
-    
+
     /// Cluster not ready error
     #[error("Cluster is not ready")]
     ClusterNotReady,
-    
+
     /// Leadership transfer failed error
     #[error("Leadership transfer failed: {0}")]
     LeadershipTransferFailed(String),
@@ -111,46 +111,46 @@ pub type ClusterResult<T> = Result<T, ClusterError>;
 pub struct ClusterConfig {
     /// Unique identifier for this node
     pub node_id: Uuid,
-    
+
     /// Address this node listens on
     pub listen_addr: String,
-    
+
     /// Initial cluster members (if joining existing cluster)
     pub join_addresses: Vec<String>,
-    
+
     /// Raft configuration
     pub raft: RaftConfig,
-    
+
     /// Node discovery configuration
     pub discovery: DiscoveryConfig,
-    
+
     /// Data replication configuration
     pub replication: ReplicationConfig,
-    
+
     /// Failover configuration
     pub failover: FailoverConfig,
-    
+
     /// Network configuration
     pub network: NetworkConfig,
-    
+
     /// Election timeout in milliseconds
     pub election_timeout_ms: u64,
-    
+
     /// Heartbeat interval in milliseconds
     pub heartbeat_interval_ms: u64,
-    
+
     /// Maximum number of nodes in cluster
     pub max_nodes: usize,
-    
+
     /// Enable TLS for cluster communication
     pub enable_tls: bool,
-    
+
     /// TLS certificate path
     pub tls_cert_path: Option<String>,
-    
+
     /// TLS private key path
     pub tls_key_path: Option<String>,
-    
+
     /// CA certificate path for verification
     pub tls_ca_path: Option<String>,
 }
@@ -177,9 +177,9 @@ impl Default for ClusterConfig {
     }
 }
 
-/// Import specific configurations
-use crate::cluster::raft::RaftConfig;
 use crate::cluster::discovery::DiscoveryConfig;
-use crate::cluster::replication::ReplicationConfig;
 use crate::cluster::failover::FailoverConfig;
 use crate::cluster::network::NetworkConfig;
+/// Import specific configurations
+use crate::cluster::raft::RaftConfig;
+use crate::cluster::replication::ReplicationConfig;

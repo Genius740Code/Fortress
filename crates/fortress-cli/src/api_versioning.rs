@@ -1,6 +1,6 @@
-use serde::{Serialize, Deserialize};
-use async_graphql::{SimpleObject, Context, Result, Object, Enum, Union};
+use async_graphql::{Context, Enum, Object, Result, SimpleObject, Union};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(SimpleObject, Clone, Serialize, Deserialize)]
@@ -118,13 +118,17 @@ impl VersionRegistry {
             default_version: "v2".to_string(),
             deprecation_manager: DeprecationManager::new(),
         };
-        
+
         // Register supported versions
         registry.register_version(ApiVersion {
             version: "v1".to_string(),
             deprecated: false,
             removal_date: None,
-            supported_until: Some(DateTime::parse_from_rfc3339("2024-12-31T23:59:59Z").unwrap().with_timezone(&Utc)),
+            supported_until: Some(
+                DateTime::parse_from_rfc3339("2024-12-31T23:59:59Z")
+                    .unwrap()
+                    .with_timezone(&Utc),
+            ),
             migration_guide: Some("https://docs.fortress.security/migration/v1-to-v2".to_string()),
             features: vec![
                 "basic_authentication".to_string(),
@@ -141,7 +145,7 @@ impl VersionRegistry {
                 forward_compatible: false,
             },
         });
-        
+
         registry.register_version(ApiVersion {
             version: "v2".to_string(),
             deprecated: false,
@@ -169,7 +173,10 @@ impl VersionRegistry {
                     component: "queries".to_string(),
                     description: "Query response format changed to include metadata".to_string(),
                     migration_required: false,
-                    affected_operations: vec!["execute_query".to_string(), "batch_queries".to_string()],
+                    affected_operations: vec![
+                        "execute_query".to_string(),
+                        "batch_queries".to_string(),
+                    ],
                 },
             ],
             compatibility: CompatibilityInfo {
@@ -180,7 +187,7 @@ impl VersionRegistry {
                 forward_compatible: true,
             },
         });
-        
+
         registry.register_version(ApiVersion {
             version: "v3".to_string(),
             deprecated: false,
@@ -200,13 +207,20 @@ impl VersionRegistry {
                     component: "encryption".to_string(),
                     description: "Default encryption algorithm changed to AEGIS256".to_string(),
                     migration_required: true,
-                    affected_operations: vec!["encrypt".to_string(), "decrypt".to_string(), "key_generate".to_string()],
+                    affected_operations: vec![
+                        "encrypt".to_string(),
+                        "decrypt".to_string(),
+                        "key_generate".to_string(),
+                    ],
                 },
                 BreakingChange {
                     component: "compliance".to_string(),
                     description: "Compliance framework data structure changed".to_string(),
                     migration_required: true,
-                    affected_operations: vec!["compliance_audit".to_string(), "compliance_report".to_string()],
+                    affected_operations: vec![
+                        "compliance_audit".to_string(),
+                        "compliance_report".to_string(),
+                    ],
                 },
             ],
             compatibility: CompatibilityInfo {
@@ -217,18 +231,18 @@ impl VersionRegistry {
                 forward_compatible: true,
             },
         });
-        
+
         registry
     }
-    
+
     pub fn register_version(&mut self, version: ApiVersion) {
         self.versions.insert(version.version.clone(), version);
     }
-    
+
     pub fn get_version(&self, version: &str) -> Option<&ApiVersion> {
         self.versions.get(version)
     }
-    
+
     pub fn is_supported(&self, version: &str) -> bool {
         if let Some(api_version) = self.get_version(version) {
             !api_version.deprecated && api_version.removal_date.is_none()
@@ -236,7 +250,7 @@ impl VersionRegistry {
             false
         }
     }
-    
+
     pub fn is_deprecated(&self, version: &str) -> bool {
         if let Some(api_version) = self.get_version(version) {
             api_version.deprecated
@@ -244,25 +258,25 @@ impl VersionRegistry {
             false
         }
     }
-    
+
     pub fn get_default_version(&self) -> &str {
         &self.default_version
     }
-    
+
     pub fn list_supported_versions(&self) -> Vec<&ApiVersion> {
-        self.versions.values()
+        self.versions
+            .values()
             .filter(|v| !v.deprecated && v.removal_date.is_none())
             .collect()
     }
-    
+
     pub fn list_deprecated_versions(&self) -> Vec<&ApiVersion> {
-        self.versions.values()
-            .filter(|v| v.deprecated)
-            .collect()
+        self.versions.values().filter(|v| v.deprecated).collect()
     }
-    
+
     pub fn get_compatible_versions(&self, client_version: &str) -> Vec<&ApiVersion> {
-        self.versions.values()
+        self.versions
+            .values()
             .filter(|v| {
                 // Simple version compatibility check
                 // In a real implementation, this would use semantic versioning
@@ -270,22 +284,22 @@ impl VersionRegistry {
             })
             .collect()
     }
-    
+
     pub fn get_migration_path(&self, from: &str, to: &str) -> Option<Vec<String>> {
         // Simple migration path calculation
         // In a real implementation, this would be more sophisticated
         if from == to {
             return Some(vec![from.to_string()]);
         }
-        
+
         let mut path = vec![from.to_string()];
-        
+
         // For now, assume direct migration is possible
         if self.get_version(to).is_some() {
             path.push(to.to_string());
             return Some(path);
         }
-        
+
         None
     }
 }
@@ -297,14 +311,15 @@ pub struct UserResolver;
 impl UserResolver {
     /// Get user information with version-aware response
     async fn user(
-        &self, 
-        ctx: &Context<'_>, 
-        id: String, 
-        version: Option<String>
+        &self,
+        ctx: &Context<'_>,
+        id: String,
+        version: Option<String>,
     ) -> Result<UserResponse> {
         let version_registry = ctx.data::<VersionRegistry>()?;
-        let requested_version = version.unwrap_or_else(|| version_registry.get_default_version().to_string());
-        
+        let requested_version =
+            version.unwrap_or_else(|| version_registry.get_default_version().to_string());
+
         // Validate version
         if !version_registry.is_supported(&requested_version) {
             return Err(async_graphql::Error::new(format!(
@@ -313,54 +328,58 @@ impl UserResolver {
                 version_registry.get_default_version()
             )));
         }
-        
+
         match requested_version.as_str() {
             "v1" => {
                 let user = fetch_user_v1(&id).await?;
                 Ok(UserResponse::V1(user))
-            },
+            }
             "v2" => {
                 let user = fetch_user_v2(&id).await?;
                 Ok(UserResponse::V2(user))
-            },
+            }
             "v3" => {
                 let user = fetch_user_v3(&id).await?;
                 Ok(UserResponse::V3(user))
-            },
+            }
             _ => Err(async_graphql::Error::new("Unsupported version")),
         }
     }
-    
+
     /// List users with version filtering
     async fn users(
-        &self, 
-        ctx: &Context<'_>, 
+        &self,
+        ctx: &Context<'_>,
         version: Option<String>,
-        #[graphql(desc = "Filter by user status")] status: Option<String>
+        #[graphql(desc = "Filter by user status")] status: Option<String>,
     ) -> Result<Vec<UserResponse>> {
         let version_registry = ctx.data::<VersionRegistry>()?;
-        let requested_version = version.unwrap_or_else(|| version_registry.get_default_version().to_string());
-        
+        let requested_version =
+            version.unwrap_or_else(|| version_registry.get_default_version().to_string());
+
         if !version_registry.is_supported(&requested_version) {
-            return Err(async_graphql::Error::new(format!("Version {} is not supported", requested_version)));
+            return Err(async_graphql::Error::new(format!(
+                "Version {} is not supported",
+                requested_version
+            )));
         }
-        
+
         let users = match requested_version.as_str() {
             "v1" => {
                 let v1_users = fetch_users_v1(status).await?;
                 v1_users.into_iter().map(UserResponse::V1).collect()
-            },
+            }
             "v2" => {
                 let v2_users = fetch_users_v2(status).await?;
                 v2_users.into_iter().map(UserResponse::V2).collect()
-            },
+            }
             "v3" => {
                 let v3_users = fetch_users_v3(status).await?;
                 v3_users.into_iter().map(UserResponse::V3).collect()
-            },
+            }
             _ => return Err(async_graphql::Error::new("Unsupported version")),
         };
-        
+
         Ok(users)
     }
 }
@@ -475,24 +494,29 @@ impl DeprecationManager {
         let mut manager = Self {
             deprecations: HashMap::new(),
         };
-        
+
         // Register deprecations
         manager.register_deprecation(ApiDeprecation {
             deprecated_version: "v1".to_string(),
-            removal_date: DateTime::parse_from_rfc3339("2024-12-31T23:59:59Z").unwrap().with_timezone(&Utc),
+            removal_date: DateTime::parse_from_rfc3339("2024-12-31T23:59:59Z")
+                .unwrap()
+                .with_timezone(&Utc),
             alternative: "v2".to_string(),
             migration_guide: "https://docs.fortress.security/migration/v1-to-v2".to_string(),
-            warning_message: "API v1 is deprecated and will be removed on 2024-12-31. Please migrate to v2.".to_string(),
+            warning_message:
+                "API v1 is deprecated and will be removed on 2024-12-31. Please migrate to v2."
+                    .to_string(),
             urgency: DeprecationUrgency::High,
         });
-        
+
         manager
     }
-    
+
     pub fn register_deprecation(&mut self, deprecation: ApiDeprecation) {
-        self.deprecations.insert(deprecation.deprecated_version.clone(), deprecation);
+        self.deprecations
+            .insert(deprecation.deprecated_version.clone(), deprecation);
     }
-    
+
     pub fn check_deprecation(&self, requested_version: &str) -> Option<DeprecationWarning> {
         if let Some(deprecation) = self.deprecations.get(requested_version) {
             Some(DeprecationWarning {
@@ -506,7 +530,7 @@ impl DeprecationManager {
             None
         }
     }
-    
+
     pub fn get_upcoming_deprecations(&self) -> Vec<&ApiDeprecation> {
         let now = Utc::now();
         self.deprecations
@@ -514,7 +538,7 @@ impl DeprecationManager {
             .filter(|d| d.removal_date > now)
             .collect()
     }
-    
+
     pub fn get_expired_deprecations(&self) -> Vec<&ApiDeprecation> {
         let now = Utc::now();
         self.deprecations
@@ -524,7 +548,6 @@ impl DeprecationManager {
     }
 }
 
-
 // Version information endpoint
 pub struct VersionResolver;
 
@@ -533,88 +556,111 @@ impl VersionResolver {
     /// Get API version information
     async fn version_info(&self, ctx: &Context<'_>) -> Result<VersionInfo> {
         let version_registry = ctx.data::<VersionRegistry>()?;
-        
-        let supported = version_registry.list_supported_versions().into_iter().cloned().collect();
-        let deprecated = version_registry.list_deprecated_versions().into_iter().cloned().collect();
+
+        let supported = version_registry
+            .list_supported_versions()
+            .into_iter()
+            .cloned()
+            .collect();
+        let deprecated = version_registry
+            .list_deprecated_versions()
+            .into_iter()
+            .cloned()
+            .collect();
         let removed = vec![]; // Would contain removed versions
-        
+
         let mut release_notes = HashMap::new();
-        release_notes.insert("v1".to_string(), ReleaseNotes {
-            version: "v1".to_string(),
-            release_date: DateTime::parse_from_rfc3339("2023-01-15T00:00:00Z").unwrap().with_timezone(&Utc),
-            features: vec![
-                "Basic authentication".to_string(),
-                "Simple encryption".to_string(),
-                "Basic queries".to_string(),
-            ],
-            bug_fixes: vec![
-                "Fixed memory leak in encryption module".to_string(),
-                "Improved error handling".to_string(),
-            ],
-            security_updates: vec![
-                "Updated cryptographic libraries".to_string(),
-                "Fixed authentication bypass".to_string(),
-            ],
-            breaking_changes: vec![],
-            migration_notes: None,
-        });
-        
-        release_notes.insert("v2".to_string(), ReleaseNotes {
-            version: "v2".to_string(),
-            release_date: DateTime::parse_from_rfc3339("2023-06-01T00:00:00Z").unwrap().with_timezone(&Utc),
-            features: vec![
-                "Enhanced authentication with MFA".to_string(),
-                "Field-level encryption".to_string(),
-                "Real-time subscriptions".to_string(),
-                "Performance monitoring".to_string(),
-            ],
-            bug_fixes: vec![
-                "Fixed connection pooling issues".to_string(),
-                "Improved cache performance".to_string(),
-            ],
-            security_updates: vec![
-                "Added rate limiting".to_string(),
-                "Enhanced input validation".to_string(),
-            ],
-            breaking_changes: vec![
-                BreakingChange {
+        release_notes.insert(
+            "v1".to_string(),
+            ReleaseNotes {
+                version: "v1".to_string(),
+                release_date: DateTime::parse_from_rfc3339("2023-01-15T00:00:00Z")
+                    .unwrap()
+                    .with_timezone(&Utc),
+                features: vec![
+                    "Basic authentication".to_string(),
+                    "Simple encryption".to_string(),
+                    "Basic queries".to_string(),
+                ],
+                bug_fixes: vec![
+                    "Fixed memory leak in encryption module".to_string(),
+                    "Improved error handling".to_string(),
+                ],
+                security_updates: vec![
+                    "Updated cryptographic libraries".to_string(),
+                    "Fixed authentication bypass".to_string(),
+                ],
+                breaking_changes: vec![],
+                migration_notes: None,
+            },
+        );
+
+        release_notes.insert(
+            "v2".to_string(),
+            ReleaseNotes {
+                version: "v2".to_string(),
+                release_date: DateTime::parse_from_rfc3339("2023-06-01T00:00:00Z")
+                    .unwrap()
+                    .with_timezone(&Utc),
+                features: vec![
+                    "Enhanced authentication with MFA".to_string(),
+                    "Field-level encryption".to_string(),
+                    "Real-time subscriptions".to_string(),
+                    "Performance monitoring".to_string(),
+                ],
+                bug_fixes: vec![
+                    "Fixed connection pooling issues".to_string(),
+                    "Improved cache performance".to_string(),
+                ],
+                security_updates: vec![
+                    "Added rate limiting".to_string(),
+                    "Enhanced input validation".to_string(),
+                ],
+                breaking_changes: vec![BreakingChange {
                     component: "authentication".to_string(),
                     description: "JWT token format changed".to_string(),
                     migration_required: true,
                     affected_operations: vec!["login".to_string()],
-                },
-            ],
-            migration_notes: Some("Update authentication flow to handle new token format".to_string()),
-        });
-        
-        release_notes.insert("v3".to_string(), ReleaseNotes {
-            version: "v3".to_string(),
-            release_date: DateTime::parse_from_rfc3339("2024-01-01T00:00:00Z").unwrap().with_timezone(&Utc),
-            features: vec![
-                "Quantum-resistant cryptography".to_string(),
-                "Advanced compliance reporting".to_string(),
-                "ML-powered analytics".to_string(),
-                "Zero-knowledge proofs".to_string(),
-            ],
-            bug_fixes: vec![
-                "Fixed performance regression in queries".to_string(),
-                "Improved memory efficiency".to_string(),
-            ],
-            security_updates: vec![
-                "Added post-quantum encryption support".to_string(),
-                "Enhanced audit logging".to_string(),
-            ],
-            breaking_changes: vec![
-                BreakingChange {
+                }],
+                migration_notes: Some(
+                    "Update authentication flow to handle new token format".to_string(),
+                ),
+            },
+        );
+
+        release_notes.insert(
+            "v3".to_string(),
+            ReleaseNotes {
+                version: "v3".to_string(),
+                release_date: DateTime::parse_from_rfc3339("2024-01-01T00:00:00Z")
+                    .unwrap()
+                    .with_timezone(&Utc),
+                features: vec![
+                    "Quantum-resistant cryptography".to_string(),
+                    "Advanced compliance reporting".to_string(),
+                    "ML-powered analytics".to_string(),
+                    "Zero-knowledge proofs".to_string(),
+                ],
+                bug_fixes: vec![
+                    "Fixed performance regression in queries".to_string(),
+                    "Improved memory efficiency".to_string(),
+                ],
+                security_updates: vec![
+                    "Added post-quantum encryption support".to_string(),
+                    "Enhanced audit logging".to_string(),
+                ],
+                breaking_changes: vec![BreakingChange {
                     component: "encryption".to_string(),
                     description: "Default algorithm changed to AEGIS256".to_string(),
                     migration_required: true,
                     affected_operations: vec!["encrypt".to_string(), "decrypt".to_string()],
-                },
-            ],
-            migration_notes: Some("Migrate existing encrypted data to new algorithm".to_string()),
-        });
-        
+                }],
+                migration_notes: Some(
+                    "Migrate existing encrypted data to new algorithm".to_string(),
+                ),
+            },
+        );
+
         Ok(VersionInfo {
             current: version_registry.get_default_version().to_string(),
             supported,
@@ -624,33 +670,33 @@ impl VersionResolver {
             release_notes,
         })
     }
-    
+
     /// Check if a specific version is supported
-    async fn is_version_supported(
-        &self, 
-        ctx: &Context<'_>, 
-        version: String
-    ) -> Result<bool> {
+    async fn is_version_supported(&self, ctx: &Context<'_>, version: String) -> Result<bool> {
         let version_registry = ctx.data::<VersionRegistry>()?;
         Ok(version_registry.is_supported(&version))
     }
-    
+
     /// Get deprecation warnings for a version
     async fn deprecation_warnings(
-        &self, 
-        ctx: &Context<'_>, 
-        version: String
+        &self,
+        ctx: &Context<'_>,
+        version: String,
     ) -> Result<Option<DeprecationWarning>> {
         let version_registry = ctx.data::<VersionRegistry>()?;
         let deprecation_manager = &version_registry.deprecation_manager;
         Ok(deprecation_manager.check_deprecation(&version))
     }
-    
+
     /// Get upcoming deprecations
     async fn upcoming_deprecations(&self, ctx: &Context<'_>) -> Result<Vec<ApiDeprecation>> {
         let version_registry = ctx.data::<VersionRegistry>()?;
         let deprecation_manager = &version_registry.deprecation_manager;
-        Ok(deprecation_manager.get_upcoming_deprecations().into_iter().cloned().collect())
+        Ok(deprecation_manager
+            .get_upcoming_deprecations()
+            .into_iter()
+            .cloned()
+            .collect())
     }
 }
 
@@ -664,22 +710,26 @@ impl MigrationResolver {
         &self,
         ctx: &Context<'_>,
         from_version: String,
-        to_version: String
+        to_version: String,
     ) -> Result<MigrationScript> {
         let version_registry = ctx.data::<VersionRegistry>()?;
-        
+
         // Validate versions
         if !version_registry.is_supported(&to_version) {
-            return Err(async_graphql::Error::new(format!("Target version {} is not supported", to_version)));
+            return Err(async_graphql::Error::new(format!(
+                "Target version {} is not supported",
+                to_version
+            )));
         }
-        
+
         let script = match (from_version.as_str(), to_version.as_str()) {
             ("v1", "v2") => MigrationScript {
                 from_version: from_version.clone(),
                 to_version: to_version.clone(),
                 steps: vec![
                     MigrationStep {
-                        description: "Update user queries to include profile information".to_string(),
+                        description: "Update user queries to include profile information"
+                            .to_string(),
                         code: r#"
 # Old query
 query GetUser($id: ID!) {
@@ -706,10 +756,13 @@ query GetUser($id: ID!) {
     lastLogin
     permissions
   }
-}"#.to_string(),
+}"#
+                        .to_string(),
                         breaking_change: false,
                         estimated_duration_secs: 30,
-                        verification_query: Some("query { user(id: \"test\", version: \"v2\") { id } }".to_string()),
+                        verification_query: Some(
+                            "query { user(id: \"test\", version: \"v2\") { id } }".to_string(),
+                        ),
                     },
                     MigrationStep {
                         description: "Update authentication to use enhanced JWT tokens".to_string(),
@@ -737,10 +790,14 @@ mutation Login($email: String!, $password: String!) {
       permissions
     }
   }
-}"#.to_string(),
+}"#
+                        .to_string(),
                         breaking_change: true,
                         estimated_duration_secs: 60,
-                        verification_query: Some("mutation { login(email: \"test\", password: \"test\") { token } }".to_string()),
+                        verification_query: Some(
+                            "mutation { login(email: \"test\", password: \"test\") { token } }"
+                                .to_string(),
+                        ),
                     },
                 ],
                 estimated_time_secs: 7200,
@@ -756,7 +813,8 @@ mutation Login($email: String!, $password: String!) {
                 to_version: to_version.clone(),
                 steps: vec![
                     MigrationStep {
-                        description: "Update encryption to use quantum-resistant algorithms".to_string(),
+                        description: "Update encryption to use quantum-resistant algorithms"
+                            .to_string(),
                         code: r#"
 # Old encryption
 mutation EncryptData($data: String!, $keyId: ID!) {
@@ -778,10 +836,14 @@ mutation EncryptData($data: String!, $keyId: ID!) {
             }
         }
     }
-}"#.to_string(),
+}"#
+                        .to_string(),
                         breaking_change: true,
                         estimated_duration_secs: 45,
-                        verification_query: Some("mutation { encrypt(data: \"test\", keyId: \"test\") { algorithm } }".to_string()),
+                        verification_query: Some(
+                            "mutation { encrypt(data: \"test\", keyId: \"test\") { algorithm } }"
+                                .to_string(),
+                        ),
                     },
                     MigrationStep {
                         description: "Enable advanced compliance features".to_string(),
@@ -796,10 +858,13 @@ mutation UpdateComplianceConfig {
     success
         message
     }
-}"#.to_string(),
+}"#
+                        .to_string(),
                         breaking_change: false,
                         estimated_duration_secs: 15,
-                        verification_query: Some("query { complianceConfig { framework } }".to_string()),
+                        verification_query: Some(
+                            "query { complianceConfig { framework } }".to_string(),
+                        ),
                     },
                 ],
                 estimated_time_secs: 14400,
@@ -813,23 +878,24 @@ mutation UpdateComplianceConfig {
             },
             _ => return Err(async_graphql::Error::new("Migration path not supported")),
         };
-        
+
         Ok(script)
     }
-    
+
     /// Validate migration readiness
     async fn validate_migration_readiness(
         &self,
         ctx: &Context<'_>,
         from_version: String,
-        to_version: String
+        to_version: String,
     ) -> Result<MigrationReadiness> {
         let version_registry = ctx.data::<VersionRegistry>()?;
-        
+
         // Check if migration path exists
-        let migration_path = version_registry.get_migration_path(&from_version, &to_version)
+        let migration_path = version_registry
+            .get_migration_path(&from_version, &to_version)
             .ok_or_else(|| async_graphql::Error::new("No migration path available"))?;
-        
+
         // Perform readiness checks
         let checks = vec![
             ReadinessCheck {
@@ -853,9 +919,9 @@ mutation UpdateComplianceConfig {
                 message: "Sufficient resources available for migration".to_string(),
             },
         ];
-        
+
         let estimated_downtime = std::time::Duration::from_secs(900);
-        
+
         Ok(MigrationReadiness {
             ready: checks.iter().all(|c| matches!(c.status, CheckStatus::Pass)),
             migration_path,
@@ -874,7 +940,6 @@ pub struct MigrationReadiness {
     pub estimated_downtime_secs: u64,
     pub recommended_maintenance_window: Option<String>,
 }
-
 
 #[derive(SimpleObject, Clone)]
 pub struct ReadinessCheck {
@@ -949,72 +1014,66 @@ async fn fetch_user_v3(_id: &str) -> Result<UserV3> {
 }
 
 async fn fetch_users_v1(_status: Option<String>) -> Result<Vec<UserV1>> {
-    Ok(vec![
-        UserV1 {
-            id: "user_123".to_string(),
-            name: "John Doe".to_string(),
-            email: "john@example.com".to_string(),
-            created_at: Utc::now(),
-        }
-    ])
+    Ok(vec![UserV1 {
+        id: "user_123".to_string(),
+        name: "John Doe".to_string(),
+        email: "john@example.com".to_string(),
+        created_at: Utc::now(),
+    }])
 }
 
 async fn fetch_users_v2(_status: Option<String>) -> Result<Vec<UserV2>> {
-    Ok(vec![
-        UserV2 {
-            id: "user_123".to_string(),
-            name: "John Doe".to_string(),
-            email: "john@example.com".to_string(),
-            profile: UserProfile {
-                bio: Some("Software Developer".to_string()),
-                avatar_url: Some("https://example.com/avatar.jpg".to_string()),
-                preferences: serde_json::json!({"theme": "dark"}),
-            },
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-            last_login: Some(Utc::now()),
-            permissions: vec!["read".to_string(), "write".to_string()],
-        }
-    ])
+    Ok(vec![UserV2 {
+        id: "user_123".to_string(),
+        name: "John Doe".to_string(),
+        email: "john@example.com".to_string(),
+        profile: UserProfile {
+            bio: Some("Software Developer".to_string()),
+            avatar_url: Some("https://example.com/avatar.jpg".to_string()),
+            preferences: serde_json::json!({"theme": "dark"}),
+        },
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+        last_login: Some(Utc::now()),
+        permissions: vec!["read".to_string(), "write".to_string()],
+    }])
 }
 
 async fn fetch_users_v3(_status: Option<String>) -> Result<Vec<UserV3>> {
-    Ok(vec![
-        UserV3 {
-            id: "user_123".to_string(),
-            name: "John Doe".to_string(),
-            email: "john@example.com".to_string(),
-            profile: UserProfileV3 {
-                bio: Some("Software Developer".to_string()),
-                avatar_url: Some("https://example.com/avatar.jpg".to_string()),
-                preferences: serde_json::json!({"theme": "dark"}),
-                privacy_settings: PrivacySettings {
-                    profile_visibility: "public".to_string(),
-                    data_sharing: false,
-                    analytics_opt_out: true,
-                },
-                notification_settings: NotificationSettings {
-                    email_notifications: true,
-                    push_notifications: false,
-                    security_alerts: true,
-                },
+    Ok(vec![UserV3 {
+        id: "user_123".to_string(),
+        name: "John Doe".to_string(),
+        email: "john@example.com".to_string(),
+        profile: UserProfileV3 {
+            bio: Some("Software Developer".to_string()),
+            avatar_url: Some("https://example.com/avatar.jpg".to_string()),
+            preferences: serde_json::json!({"theme": "dark"}),
+            privacy_settings: PrivacySettings {
+                profile_visibility: "public".to_string(),
+                data_sharing: false,
+                analytics_opt_out: true,
             },
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-            last_login: Some(Utc::now()),
-            permissions: vec!["read".to_string(), "write".to_string(), "admin".to_string()],
-            security_context: SecurityContext {
-                mfa_enabled: true,
-                last_password_change: Utc::now(),
-                failed_login_attempts: 0,
-                device_trust_score: 0.95,
+            notification_settings: NotificationSettings {
+                email_notifications: true,
+                push_notifications: false,
+                security_alerts: true,
             },
-            compliance_flags: ComplianceFlags {
-                gdpr_compliant: true,
-                data_retention_days: 365,
-                audit_required: true,
-                classification: "confidential".to_string(),
-            },
-        }
-    ])
+        },
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+        last_login: Some(Utc::now()),
+        permissions: vec!["read".to_string(), "write".to_string(), "admin".to_string()],
+        security_context: SecurityContext {
+            mfa_enabled: true,
+            last_password_change: Utc::now(),
+            failed_login_attempts: 0,
+            device_trust_score: 0.95,
+        },
+        compliance_flags: ComplianceFlags {
+            gdpr_compliant: true,
+            data_retention_days: 365,
+            audit_required: true,
+            classification: "confidential".to_string(),
+        },
+    }])
 }

@@ -4,30 +4,36 @@
 //! distributed tracing, advanced metrics, structured logging, and monitoring
 //! dashboards integration.
 
-pub mod tracing;
-pub mod metrics;
-pub mod logging;
-pub mod health;
 pub mod alerts;
 pub mod dashboard;
-pub mod system_resources;
 pub mod enhanced_performance;
+pub mod health;
+pub mod logging;
+pub mod metrics;
 pub mod realtime_dashboard;
+pub mod system_resources;
+pub mod tracing;
 
-pub use tracing::{ObservabilityTracer, TraceConfig, SpanContext};
-pub use metrics::{AdvancedMetricsCollector, MetricRegistry, MetricType};
-pub use logging::{StructuredLogger, LogConfig, LogFormat};
-pub use health::{HealthChecker, HealthStatus, ComponentHealth};
 pub use alerts::{AlertManager, AlertRule, NotificationChannel};
-pub use dashboard::{DashboardManager, DashboardConfig, Widget};
-pub use system_resources::{SystemResourceMonitor, SystemResourceConfig, SystemSnapshot, ResourceAlert};
-pub use enhanced_performance::{EnhancedPerformanceMonitor, EnhancedPerformanceConfig, PerformanceAnomaly, PerformanceBaseline};
-pub use realtime_dashboard::{RealTimeDashboard, RealTimeDashboardConfig, DashboardMessage, DashboardStatistics};
+pub use dashboard::{DashboardConfig, DashboardManager, Widget};
+pub use enhanced_performance::{
+    EnhancedPerformanceConfig, EnhancedPerformanceMonitor, PerformanceAnomaly, PerformanceBaseline,
+};
+pub use health::{ComponentHealth, HealthChecker, HealthStatus};
+pub use logging::{LogConfig, LogFormat, StructuredLogger};
+pub use metrics::{AdvancedMetricsCollector, MetricRegistry, MetricType};
+pub use realtime_dashboard::{
+    DashboardMessage, DashboardStatistics, RealTimeDashboard, RealTimeDashboardConfig,
+};
+pub use system_resources::{
+    ResourceAlert, SystemResourceConfig, SystemResourceMonitor, SystemSnapshot,
+};
+pub use tracing::{ObservabilityTracer, SpanContext, TraceConfig};
 
-use std::sync::Arc;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 #[cfg(feature = "observability")]
-use tracing::{info, warn, error, debug};
+use tracing::{debug, error, info, warn};
 
 /// Comprehensive observability configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -97,7 +103,7 @@ impl ObservabilityManager {
         let metrics = AdvancedMetricsCollector::new(config.metrics.clone())?;
         let logger = StructuredLogger::new(config.logging.clone());
         let health_checker = HealthChecker::new(config.health.clone());
-        
+
         // Create a mock metrics provider for alerts
         let mock_provider = Arc::new(crate::observability::alerts::MockMetricsProvider::new());
         let alert_manager = AlertManager::new(config.alerts.clone(), mock_provider);
