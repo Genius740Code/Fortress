@@ -596,7 +596,7 @@ impl Default for BackupCodesConfig {
             enabled: true,
             code_count: 10,
             code_length: 8,
-            valid_for_seconds: 604800, // 7 days
+            valid_for_seconds: 31536000, // 365 days
         }
     }
 }
@@ -1420,7 +1420,7 @@ impl AuthManager {
                     enabled: true,
                     code_count: 10,
                     code_length: 8,
-                    valid_for_seconds: 604800, // 7 days
+                    valid_for_seconds: 31536000, // 365 days
                 },
                 adaptive_auth: true,
                 risk_based_methods: RiskBasedMfaMethods {
@@ -2195,12 +2195,12 @@ impl AuthManager {
     }
 
     /// Get session manager reference
-    pub fn session_manager(&self) -> std::sync::RwLockReadGuard<SessionManager> {
+    pub fn session_manager(&self) -> std::sync::RwLockReadGuard<'_, SessionManager> {
         self.session_manager.read().unwrap()
     }
 
     /// Get mutable session manager reference
-    pub fn session_manager_mut(&self) -> std::sync::RwLockWriteGuard<SessionManager> {
+    pub fn session_manager_mut(&self) -> std::sync::RwLockWriteGuard<'_, SessionManager> {
         self.session_manager.write().unwrap()
     }
 

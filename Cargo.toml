@@ -212,7 +212,7 @@ debug = true
 [lib]
 name = "fortress"
 path = "src/lib.rs"
-crate-type = ["cdylib", "rlib"]
+crate-type = ["rlib"]
 
 [[example]]
 name = "working_plugin_example"

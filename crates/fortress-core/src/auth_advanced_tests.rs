@@ -15,7 +15,7 @@ mod tests {
 
         // Create a test user
         let _user_id = auth
-            .create_user("testuser".to_string(), "Password123!".to_string())
+            .create_user("testuser".to_string(), "test@example.com".to_string(), "Password123!".to_string())
             .await
             .expect("Failed to create test user");
 
@@ -290,13 +290,13 @@ mod tests {
             enabled: true,
             code_count: 10,
             code_length: 8,
-            valid_for_seconds: 604800, // 7 days
+            valid_for_seconds: 31536000, // 365 days
         };
 
         assert!(config.enabled);
         assert_eq!(config.code_count, 10);
         assert_eq!(config.code_length, 8);
-        assert_eq!(config.valid_for_seconds, 604800);
+        assert_eq!(config.valid_for_seconds, 31536000);
     }
 
     #[tokio::test]
@@ -340,7 +340,7 @@ mod tests {
 
         // Create a test user
         let _user_id = auth
-            .create_user("testuser".to_string(), "Password123!".to_string())
+            .create_user("testuser".to_string(), "test@example.com".to_string(), "Password123!".to_string())
             .await
             .expect("Failed to create test user");
 
@@ -392,7 +392,7 @@ mod tests {
 
         // Create a test user
         let _user_id = auth
-            .create_user("testuser".to_string(), "Password123!".to_string())
+            .create_user("testuser".to_string(), "test@example.com".to_string(), "Password123!".to_string())
             .await
             .expect("Failed to create test user");
 
@@ -459,7 +459,7 @@ mod tests {
 
         // Create a test user
         let _user_id = auth
-            .create_user("testuser".to_string(), "Password123!".to_string())
+            .create_user("testuser".to_string(), "test@example.com".to_string(), "Password123!".to_string())
             .await
             .expect("Failed to create test user");
 
@@ -496,7 +496,7 @@ mod tests {
             // Simulate 35 days of logins
             let mut auth_mut = AuthManager::new();
             auth_mut
-                .create_user("testuser".to_string(), "Password123!".to_string())
+                .create_user("testuser".to_string(), "test@example.com".to_string(), "Password123!".to_string())
                 .await
                 .unwrap();
 
@@ -523,7 +523,7 @@ mod tests {
         // After 30+ days, device should be trusted
         let mut auth_final = AuthManager::new();
         auth_final
-            .create_user("testuser".to_string(), "Password123!".to_string())
+            .create_user("testuser".to_string(), "test@example.com".to_string(), "Password123!".to_string())
             .await
             .unwrap();
 

@@ -7,7 +7,6 @@ use crate::error::{FortressError, Result, SealErrorCode};
 
 /// Finite field arithmetic for Shamir's Secret Sharing
 pub mod field {
-    use crate::error::FortressError;
 
     /// Prime field modulo 2^255 - 19 (used in Ed25519)
     // Issue 10: PRIME is not actually a prime number, breaking finite field arithmetic.

@@ -486,7 +486,7 @@ mod tests {
         {
             let mut auth = service.auth_manager.write().unwrap();
             let secure_password = crate::utils::generate_password(16);
-            auth.create_user("admin".to_string(), secure_password)
+            auth.create_user("admin".to_string(), "test@example.com".to_string(), secure_password)
                 .await
                 .unwrap();
         }
@@ -518,13 +518,13 @@ mod tests {
         // Create users with secure credentials
         {
             let mut auth = service.auth_manager.write().unwrap();
-            auth.create_user("admin".to_string(), crate::utils::generate_password(16))
+            auth.create_user("admin".to_string(), "test@example.com".to_string(), crate::utils::generate_password(16))
                 .await
                 .unwrap();
-            auth.create_user("user1".to_string(), crate::utils::generate_password(16))
+            auth.create_user("user1".to_string(), "test@example.com".to_string(), crate::utils::generate_password(16))
                 .await
                 .unwrap();
-            auth.create_user("user2".to_string(), crate::utils::generate_password(16))
+            auth.create_user("user2".to_string(), "test@example.com".to_string(), crate::utils::generate_password(16))
                 .await
                 .unwrap();
             auth.create_user("requester".to_string(), crate::utils::generate_password(16))
@@ -615,10 +615,10 @@ mod tests {
         // Create users with secure credentials
         {
             let mut auth = service.auth_manager.write().unwrap();
-            auth.create_user("admin".to_string(), crate::utils::generate_password(16))
+            auth.create_user("admin".to_string(), "test@example.com".to_string(), crate::utils::generate_password(16))
                 .await
                 .unwrap();
-            auth.create_user("user1".to_string(), crate::utils::generate_password(16))
+            auth.create_user("user1".to_string(), "test@example.com".to_string(), crate::utils::generate_password(16))
                 .await
                 .unwrap();
             auth.create_user("requester".to_string(), crate::utils::generate_password(16))

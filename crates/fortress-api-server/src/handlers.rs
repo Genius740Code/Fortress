@@ -242,10 +242,7 @@ pub async fn store_data(
     let key_bytes = key.0.as_bytes();
 
     // Encrypt data
-    let data_json = serde_json::to_string(&request.data)
-        .map_err(|e| ServerError::serialization(e.to_string()))?;
-
-    let plaintext = data_json.as_bytes();
+    let plaintext = data_str.as_bytes();
     let ciphertext = match Aegis256::new().encrypt(plaintext, key_bytes) {
         Ok(ciphertext) => ciphertext,
         Err(e) => return Err(ServerError::Core(e)),
@@ -263,29 +260,29 @@ pub async fn store_data(
                 let field_bytes = serde_json::to_vec(&field_value)
                     .map_err(|e| ServerError::serialization(e.to_string()))?;
 
-                if let Ok(_encrypted_field) = state
+                let _encrypted_field = state
                     .field_encryption_manager
                     .encrypt_field(&field_id, &field_bytes)
                     .await
-                {
-                    metadata.insert(
-                        field_name.clone(),
-                        FieldEncryptionMetadata {
-                            config_id: "default".to_string(),
-                            field: field_name.clone(),
-                            algorithm: field_config.algorithm.clone(),
-                            key_id: field_config
-                                .key_id
-                                .clone()
-                                .unwrap_or_else(|| "default".to_string()),
-                            key_version: 1,
-                            encrypted_at: Utc::now(),
-                            nonce: None,
-                            tag: None,
-                            metadata: HashMap::new(),
-                        },
-                    );
-                }
+                    .map_err(|e| ServerError::Core(e))?;
+
+                metadata.insert(
+                    field_name.clone(),
+                    FieldEncryptionMetadata {
+                        config_id: "default".to_string(),
+                        field: field_name.clone(),
+                        algorithm: field_config.algorithm.clone(),
+                        key_id: field_config
+                            .key_id
+                            .clone()
+                            .unwrap_or_else(|| "default".to_string()),
+                        key_version: 1,
+                        encrypted_at: Utc::now(),
+                        nonce: None,
+                        tag: None,
+                        metadata: HashMap::new(),
+                    },
+                );
             }
         }
         Some(metadata)

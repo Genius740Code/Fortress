@@ -6,6 +6,7 @@
 
 use crate::error::Result;
 use crate::key::{InMemoryKeyManager, KeyId, KeyManager, KeyMetadata, SecureKey};
+use crate::encryption::EncryptionAlgorithm;
 use async_trait::async_trait;
 use std::sync::Arc;
 
