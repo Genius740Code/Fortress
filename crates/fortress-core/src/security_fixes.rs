@@ -98,7 +98,7 @@ impl SecurityHeaders {
     /// Create default security headers
     pub fn default() -> Self {
         Self {
-            content_security_policy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'none';".to_string(),
+            content_security_policy: "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'none';".to_string(),
             x_frame_options: "DENY".to_string(),
             x_content_type_options: "nosniff".to_string(),
             x_xss_protection: "1; mode=block".to_string(),

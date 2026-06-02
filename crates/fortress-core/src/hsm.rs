@@ -226,6 +226,8 @@ pub struct AwsCloudHsmProvider {
     cluster_id: Arc<RwLock<Option<String>>>,
     /// Is initialized
     initialized: Arc<RwLock<bool>>,
+    /// Indicates if the provider is operating in simulation mode
+    is_simulated: bool,
 }
 
 /// AWS CloudHSM client wrapper
@@ -271,6 +273,7 @@ impl AwsCloudHsmProvider {
             client_config: Arc::new(RwLock::new(None)),
             cluster_id: Arc::new(RwLock::new(None)),
             initialized: Arc::new(RwLock::new(false)),
+            is_simulated: true, // Always true for simulated implementation
         })
     }
 
@@ -350,6 +353,29 @@ impl AwsCloudHsmProvider {
 
             // Update ops per second (simplified calculation)
             metrics.ops_per_second = 1000.0 / metrics.avg_latency_ms;
+        }
+    }
+
+    fn is_simulated(&self) -> bool {
+        self.is_simulated
+    }
+
+    /// Placeholder for actual HSM key generation
+    async fn hsm_api_generate_key(
+        &self,
+        _key_id: &KeyId,
+        _algorithm: &dyn EncryptionAlgorithm,
+        _conn_id: &str,
+    ) -> Result<()> {
+        // Simulate potential failure for retry logic testing
+        if rand::random::<f64>() < 0.2 { // 20% chance of failure
+            Err(FortressError::key_management(
+                "Simulated HSM API key generation failure".to_string(),
+                None,
+                KeyErrorCode::ProviderError,
+            ))
+        } else {
+            Ok(())
         }
     }
 }
@@ -484,38 +510,8 @@ impl HsmProvider for AwsCloudHsmProvider {
             ));
         }
 
-        // Implement AWS CloudHSM key generation with retry logic
-        let retries = 3;
-        let last_error = None;
-
-        while retries > 0 {
-            // Simulate key generation based on algorithm
-            match algorithm.name() {
-                "AES-256-GCM" => {
-                    // Simulate AES key generation
-                    log::debug!("Generating AES-256-GCM key for {}", key_id);
-                    tokio::time::sleep(tokio::time::Duration::from_millis(60)).await;
-                }
-                "RSA-2048" | "RSA-4096" => {
-                    // Simulate RSA key generation
-                    log::debug!("Generating {} key for {}", algorithm.name(), key_id);
-                    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-                }
-                "ECDSA-P256" | "ECDSA-P384" => {
-                    // Simulate ECDSA key generation
-                    log::debug!("Generating {} key for {}", algorithm.name(), key_id);
-                    tokio::time::sleep(tokio::time::Duration::from_millis(80)).await;
-                }
-                _ => {
-                    self.return_connection(&_conn_id).await;
-                    return Err(FortressError::key_management(
-                        format!("Unsupported algorithm: {}", algorithm.name()),
-                        None,
-                        KeyErrorCode::ProviderError,
-                    ));
-                }
-            }
-
+        if self.is_simulated() {
+            log::warn!("SIMULATED: Generating key {} with algorithm {} in AWS CloudHSM. No actual key will be generated in a physical HSM.", key_id, algorithm.name());
             // Simulate network latency
             tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
@@ -529,19 +525,41 @@ impl HsmProvider for AwsCloudHsmProvider {
                 operation_time
             );
             return Ok(());
+        } else {
+            // Implement AWS CloudHSM key generation with retry logic for non-simulated mode
+            let retries = 3;
+            let mut last_error: Option<FortressError> = None;
+
+            for attempt in 0..retries {
+                match self.hsm_api_generate_key(key_id, algorithm, &_conn_id).await {
+                    Ok(_) => {
+                        self.return_connection(&_conn_id).await;
+                        let operation_time = start_time.elapsed().as_millis() as u64;
+                        self.update_metrics(operation_time, true).await;
+                        log::info!("Key {} generated successfully in AWS CloudHSM after {} attempts in {}ms", key_id, attempt + 1, operation_time);
+                        return Ok(());
+                    },
+                    Err(e) => {
+                        log::warn!("Attempt {} failed to generate key {}: {:?}", attempt + 1, key_id, e);
+                        last_error = Some(e);
+                        // Implement exponential backoff or other retry strategy
+                        tokio::time::sleep(tokio::time::Duration::from_millis(100 * (attempt + 1) as u64)).await;
+                    }
+                }
+            }
+
+            self.return_connection(&_conn_id).await;
+            let operation_time = start_time.elapsed().as_millis() as u64;
+            self.update_metrics(operation_time, false).await;
+
+            Err(last_error.unwrap_or_else(|| {
+                FortressError::key_management(
+                    "Key generation failed after retries".to_string(),
+                    None,
+                    KeyErrorCode::ProviderError,
+                )
+            }))
         }
-
-        self.return_connection(&_conn_id).await;
-        let operation_time = start_time.elapsed().as_millis() as u64;
-        self.update_metrics(operation_time, false).await;
-
-        Err(last_error.unwrap_or_else(|| {
-            FortressError::key_management(
-                "Key generation failed after retries".to_string(),
-                None,
-                KeyErrorCode::ProviderError,
-            )
-        }))
     }
 
     async fn get_key_metadata(&self, key_id: &KeyId) -> Result<KeyMetadata> {

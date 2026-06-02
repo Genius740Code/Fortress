@@ -18,6 +18,7 @@ use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
+use tokio::sync::Mutex;
 
 use std::sync::Arc;
 
@@ -161,9 +162,10 @@ pub trait KeyManager: Send + Sync {
 
 pub struct InMemoryKeyManager {
     keys: Arc<RwLock<HashMap<KeyId, (SecureKey, KeyMetadata)>>>,
-
     /// Cache for versioned key IDs to avoid repeated string allocations
     versioned_cache: Arc<VersionedKeyCache>,
+    /// Locks for key transitions to prevent concurrent modifications
+    key_transition_locks: Arc<Mutex<HashMap<KeyId, Arc<Mutex<()>>>>>,
 }
 
 impl InMemoryKeyManager {
@@ -173,6 +175,7 @@ impl InMemoryKeyManager {
         Self {
             keys: Arc::new(RwLock::new(HashMap::new())),
             versioned_cache: Arc::new(VersionedKeyCache::new()),
+            key_transition_locks: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
@@ -559,28 +562,21 @@ impl KeyManager for InMemoryKeyManager {
         key_id: &KeyId,
         algorithm: &dyn EncryptionAlgorithm,
     ) -> Result<u32> {
-        use std::sync::Arc;
-        use tokio::sync::Mutex;
+        use tokio::sync::{Mutex, RwLock};
 
-        // Lock to prevent concurrent transitions on the same key
-        static TRANSITION_LOCKS: std::sync::LazyLock<Arc<Mutex<HashMap<String, ()>>>> =
-            std::sync::LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
+        // Per-key locking to prevent concurrent transitions on the same key
+        static TRANSITION_LOCKS: std::sync::LazyLock<Arc<RwLock<HashMap<String, Arc<Mutex<()>>>>>> =
+            std::sync::LazyLock::new(|| Arc::new(RwLock::new(HashMap::new())));
 
-        let lock = TRANSITION_LOCKS.clone();
-        let mut locks = lock.lock().await;
+        let key_lock = {
+            let mut locks = TRANSITION_LOCKS.write().await;
+            locks
+                .entry(key_id.clone())
+                .or_insert_with(|| Arc::new(Mutex::new(())))
+                .clone()
+        };
 
-        // Check if transition is already in progress
-        if locks.contains_key(key_id) {
-            return Err(FortressError::key_management(
-                "Key transition already in progress",
-                Some(key_id.clone()),
-                KeyErrorCode::RotationFailed,
-            ));
-        }
-
-        // Mark transition as in progress
-        locks.insert(key_id.clone(), ());
-        drop(locks);
+        let _guard = key_lock.lock().await;
 
         // Ensure lock is released on completion or failure
         let result = self
@@ -588,7 +584,7 @@ impl KeyManager for InMemoryKeyManager {
             .await;
 
         // Release lock
-        let mut locks = lock.lock().await;
+        let mut locks = self.key_transition_locks.lock().await;
         locks.remove(key_id);
         drop(locks);
 
