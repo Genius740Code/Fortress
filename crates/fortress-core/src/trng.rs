@@ -751,59 +751,36 @@ impl Default for EntropySeededRng {
     }
 }
 
-/// Global TRNG instance for convenience
-static GLOBAL_TRNG: std::sync::OnceLock<std::sync::Mutex<Option<Arc<EntropySeededRng>>>> =
-    std::sync::OnceLock::new();
+// Global TRNG instance using thread-local storage for better performance and reduced contention
+thread_local! {
+    static THREAD_TRNG: std::cell::RefCell<Option<Arc<EntropySeededRng>>> = std::cell::RefCell::new(None);
+}
 
-/// Initialize the global TRNG instance
+/// Initialize the thread-local TRNG instance (now no-op as it initializes lazily)
 pub fn init_global_trng() -> Result<()> {
-    let trng = match EntropySeededRng::new() {
-        Ok(trng) => Arc::new(trng),
-        Err(e) => {
-            tracing::warn!(
-                "Failed to initialize full TRNG: {}, using CSPRNG fallback",
-                e
-            );
-            Arc::new(EntropySeededRng::default())
-        }
-    };
-
-    let global = GLOBAL_TRNG.get_or_init(|| std::sync::Mutex::new(None));
-    let mut guard = global.lock().map_err(|_| {
-        FortressError::key_management(
-            "Failed to acquire lock on global TRNG during initialization",
-            None,
-            crate::error::KeyErrorCode::ProviderError,
-        )
-    })?;
-    *guard = Some(trng);
     Ok(())
 }
 
-/// Get the global TRNG instance (initializes if needed)
+/// Get the thread-local TRNG instance (initializes if needed)
 pub fn global_trng() -> Result<Arc<EntropySeededRng>> {
-    let global = GLOBAL_TRNG.get_or_init(|| std::sync::Mutex::new(None));
-    let mut guard = global.lock().map_err(|_| {
-        FortressError::key_management(
-            "Failed to acquire lock on global TRNG",
-            None,
-            crate::error::KeyErrorCode::ProviderError,
-        )
-    })?;
+    THREAD_TRNG.with(|trng| {
+        let mut trng = trng.borrow_mut();
+        if trng.is_none() {
+            let new_trng = match EntropySeededRng::new() {
+                Ok(t) => Arc::new(t),
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to initialize full TRNG: {}, using CSPRNG fallback",
+                        e
+                    );
+                    Arc::new(EntropySeededRng::default())
+                }
+            };
+            *trng = Some(new_trng);
+        }
 
-    if guard.is_none() {
-        *guard = Some(Arc::new(EntropySeededRng::default()));
-    }
-
-    // Since we initialize if None above, this should always be Some
-    match guard.as_ref() {
-        Some(trng) => Ok(trng.clone()),
-        None => Err(FortressError::key_management(
-            "Failed to initialize global TRNG",
-            None,
-            crate::error::KeyErrorCode::ProviderError,
-        )),
-    }
+        Ok(trng.as_ref().unwrap().clone())
+    })
 }
 
 /// Convenience function to generate random bytes using global TRNG
