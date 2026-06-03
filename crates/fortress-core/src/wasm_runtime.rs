@@ -113,15 +113,22 @@ impl WasmPluginLoader {
         auth_token: Option<&str>,
     ) -> Result<WasmPlugin> {
         // SECURITY: Require authentication for plugin loading to prevent unauthorized code execution
-        if self.require_auth && auth_token.is_none() {
-            return Err(FortressError::authentication(
-                "Authentication required for plugin deployment",
-                None,
-            ));
-        }
+        if self.require_auth {
+            let token = auth_token.ok_or_else(|| {
+                FortressError::authentication(
+                    "Authentication required for plugin deployment",
+                    None,
+                )
+            })?;
 
-        // In a real implementation, validate the auth_token here
-        // For now, we'll check that a token was provided if required
+            // Validate token using token manager (placeholder until auth service is properly accessible)
+            if token.is_empty() {
+                return Err(FortressError::authentication(
+                    "Empty authentication token",
+                    None,
+                ));
+            }
+        }
 
         // Create runtime context
         let context = Arc::new(RwLock::new(WasmContext {
