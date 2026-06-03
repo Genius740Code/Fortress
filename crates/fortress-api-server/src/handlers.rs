@@ -239,7 +239,7 @@ pub async fn store_data(
         .retrieve_key(&key_id)
         .await
         .map_err(ServerError::Core)?;
-    let key_bytes = key.0.as_bytes();
+    let key_bytes = key.0.as_bytes().ok_or_else(|| ServerError::Internal("HSM keys not supported for local encryption".to_string()))?;
 
     // Encrypt data
     let plaintext = data_str.as_bytes();
@@ -398,7 +398,7 @@ pub async fn retrieve_data(
         .retrieve_key(&storage_record.key_id)
         .await
         .map_err(|e| ServerError::Core(e))?;
-    let key_bytes = key.0.as_bytes();
+    let key_bytes = key.0.as_bytes().ok_or_else(|| ServerError::Internal("HSM keys not supported for local decryption".to_string()))?;
 
     // Decrypt the data
     let plaintext = Aegis256::new()
@@ -1029,7 +1029,7 @@ fn get_memory_usage() -> String {
 fn generate_key_fingerprint(key: &SecureKey) -> String {
     use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
-    hasher.update(key.as_bytes());
+    hasher.update(key.as_bytes().unwrap_or(&[]));
     format!("{:x}", hasher.finalize())[..16].to_string()
 }
 

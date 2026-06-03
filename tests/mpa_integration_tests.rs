@@ -39,7 +39,7 @@ async fn setup_comprehensive_mpa_test() -> (MpaService, Vec<UserId>) {
     for (_i, (username, password, _role)) in user_configs.iter().enumerate() {
         let mut auth = auth_manager.write().unwrap();
         let user_id = auth
-            .create_user(username.to_string(), password.to_string())
+            .create_user(username.to_string(), "test@example.com".to_string(), password.to_string())
             .await
             .unwrap();
         users.push(user_id);

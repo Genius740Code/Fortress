@@ -325,10 +325,9 @@ lru = "0.12"
 
 
 aws-sdk-cloudhsmv2 = { version = "0.28", optional = true }
-
 aws-config = { version = "0.55", optional = true }
-
 aws-types = { version = "0.55", optional = true }
+aws-sdk-kms = { version = "0.28", optional = true }
 
 
 
@@ -474,7 +473,7 @@ hardware-acceleration = ["ring/std"]
 
 fips = []
 
-hsm = ["aws-sdk-cloudhsmv2", "aws-config", "aws-types"]  # Removed pkcs11 dependency
+hsm = ["aws-sdk-cloudhsmv2", "aws-config", "aws-types", "aws-sdk-kms"]  # Removed pkcs11 dependency
 
 performance-optimization = ["dashmap", "crossbeam", "atomic", "metrics", "parking_lot", "rayon"]
 

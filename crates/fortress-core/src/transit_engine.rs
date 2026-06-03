@@ -312,7 +312,7 @@ impl TransitEngine {
             created_at: Utc::now(),
             key_type,
             latest: true,
-            key_size_bits: (key_bytes.len() * 8) as u32,
+            key_size_bits: (key_bytes.expect("SecureKey is local").len() * 8) as u32,
             metadata: HashMap::new(),
         };
 
@@ -486,7 +486,7 @@ impl TransitEngine {
         let secure_key = SecureKey::from_bytes(&[0u8; 32]); // In real implementation, get from key manager
         let mut ciphertext = self
             .cipher
-            .encrypt(&plaintext_with_aad, secure_key.as_bytes())?;
+            .encrypt(&plaintext_with_aad, secure_key.as_bytes().expect("SecureKey is local"))?;
 
         // Add nonce to ciphertext
         ciphertext.extend_from_slice(&nonce_bytes);
@@ -556,7 +556,7 @@ impl TransitEngine {
 
         // Decrypt using AEGIS-256
         let secure_key = SecureKey::from_bytes(&[0u8; 32]); // In real implementation, get from key manager
-        let plaintext_with_aad = self.cipher.decrypt(ciphertext, secure_key.as_bytes())?;
+        let plaintext_with_aad = self.cipher.decrypt(ciphertext, secure_key.as_bytes().expect("SecureKey is local"))?;
 
         // Remove associated data
         if plaintext_with_aad.len() < aad.len() {

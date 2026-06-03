@@ -93,7 +93,7 @@ impl HighPerformanceEncryptor {
         let profiler = Arc::new(PerformanceProfiler::new());
 
         let adaptive_encryptor = if config.enable_simd {
-            Some(AdaptiveEncryptor::new(algorithm.clone(), &key.as_bytes()))
+            Some(AdaptiveEncryptor::new(algorithm.clone(), key.as_bytes().expect("SecureKey is local")))
         } else {
             None
         };
@@ -154,7 +154,7 @@ impl HighPerformanceEncryptor {
                 Ok(adaptive_encryptor.encrypt(data)?)
             } else {
                 // Use standard encryption
-                self.algorithm.encrypt(data, &self.key.as_bytes())
+                self.algorithm.encrypt(data, self.key.as_bytes().expect("SecureKey is local"))
             }
         } else if let Some(adaptive_encryptor) = &self.adaptive_encryptor {
             // Use SIMD-optimized encryptor
@@ -162,7 +162,7 @@ impl HighPerformanceEncryptor {
             Ok(adaptive_encryptor.encrypt(data)?)
         } else {
             // Use standard encryption
-            self.algorithm.encrypt(data, &self.key.as_bytes())
+            self.algorithm.encrypt(data, self.key.as_bytes().expect("SecureKey is local"))
         }
     }
 
@@ -170,7 +170,7 @@ impl HighPerformanceEncryptor {
     pub async fn encrypt_batch(&self, data_batch: &[&[u8]]) -> Result<Vec<Vec<u8>>, FortressError> {
         if let Some(async_service) = &self.async_service {
             async_service
-                .encrypt_batch(data_batch, &self.key.as_bytes())
+                .encrypt_batch(data_batch, self.key.as_bytes().expect("SecureKey is local"))
                 .await
         } else {
             // Fallback to individual encryption

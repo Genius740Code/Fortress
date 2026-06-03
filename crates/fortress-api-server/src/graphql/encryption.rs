@@ -235,7 +235,7 @@ impl DataEncryptionManager {
 
             let encrypted_data =
                 algorithm
-                    .encrypt(data.as_bytes(), key.as_bytes())
+                    .encrypt(data.as_bytes(), key.as_bytes().expect("Key material must be local"))
                     .map_err(|e| {
                         Error::new(format!("Encryption failed: {}", e))
                             .extend_with(|_, e| e.set("code", "ENCRYPTION_FAILED"))
@@ -326,7 +326,7 @@ impl DataEncryptionManager {
             // Decrypt the data
             let algorithm = self.get_algorithm(&field_config.encryption_algorithm)?;
             let decrypted_data = algorithm
-                .decrypt(&encrypted_bytes, key.as_bytes())
+                .decrypt(&encrypted_bytes, key.as_bytes().expect("Key material must be local"))
                 .map_err(|e| {
                     Error::new(format!("Decryption failed: {}", e))
                         .extend_with(|_, e| e.set("code", "DECRYPTION_FAILED"))
@@ -476,7 +476,7 @@ impl DataEncryptionManager {
             })?;
 
         // Update key metadata
-        let key_id = hex::encode(new_key.as_bytes());
+        let key_id = hex::encode(new_key.as_bytes().expect("Key material must be local"));
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -676,7 +676,7 @@ impl DataEncryptionManager {
                     .extend_with(|_, e| e.set("code", "KEY_GENERATION_FAILED"))
             })?;
 
-        let key_id = hex::encode(key.as_bytes());
+        let key_id = hex::encode(key.as_bytes().expect("Key material must be local"));
 
         // Store key metadata
         let now = SystemTime::now()

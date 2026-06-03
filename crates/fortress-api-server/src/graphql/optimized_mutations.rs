@@ -471,7 +471,7 @@ impl OptimizedMutation {
             "tags": input.tags.clone().unwrap_or_default(),
             "table_count": 0,
             "storage_size_bytes": 0,
-            "key_id": hex::encode(encryption_key.as_bytes()),
+            "key_id": hex::encode(encryption_key.as_bytes().unwrap_or(&[])),
         });
 
         // Store database metadata

@@ -2078,10 +2078,8 @@ impl KeyManager for HsmKeyManager {
             cache.insert(key_id.clone(), metadata.clone());
         }
 
-        // Return a placeholder SecureKey - the actual key is stored in HSM
-        // This is a limitation of the current design - we may need to refactor
-        // SecureKey to support HSM references
-        Ok(SecureKey::generate(algorithm.key_size()).expect("Failed to generate secure key"))
+        // Return HSM key handle
+        Ok(SecureKey::from_hsm(key_id))
     }
 
     async fn store_key(
@@ -2091,7 +2089,6 @@ impl KeyManager for HsmKeyManager {
         _metadata: &KeyMetadata,
     ) -> Result<()> {
         // For HSM, we don't store external keys - we generate them internally
-        // This method is kept for compatibility but may not be fully functional
         Err(FortressError::key_management(
             "HSM key manager does not support storing external keys. Use generate_key instead.",
             None,
@@ -2117,10 +2114,8 @@ impl KeyManager for HsmKeyManager {
             }
         };
 
-        // Return a placeholder key - actual operations should use HSM provider directly
-        let key = SecureKey::generate(256).expect("Failed to generate secure key"); // Default size
-
-        Ok((key, metadata))
+        // Return HSM key handle
+        Ok((SecureKey::from_hsm(key_id.clone()), metadata))
     }
 
     async fn delete_key(&self, key_id: &KeyId) -> Result<()> {
@@ -2168,10 +2163,6 @@ impl KeyManager for HsmKeyManager {
             let mut cache = self.metadata_cache.write().await;
             cache.insert(key_id.clone(), metadata.clone());
         }
-
-        // Return placeholder key
-        let _key =
-            SecureKey::generate(algorithm.key_size()).expect("Failed to generate secure key");
 
         Ok(())
     }
@@ -2302,10 +2293,10 @@ impl KeyManager for HsmKeyManager {
 
     async fn get_active_key(&self, purpose: &str) -> Result<(SecureKey, KeyMetadata)> {
         let keys = self.list_keys().await?;
-        for (_key_id, metadata) in keys {
+        for (key_id, metadata) in keys {
             if metadata.purpose == purpose && metadata.is_active() {
-                let key = SecureKey::generate(256).expect("Failed to generate secure key"); // Placeholder - real HSM would use provider
-                return Ok((key, metadata));
+                // Return HSM key handle
+                return Ok((SecureKey::from_hsm(key_id), metadata));
             }
         }
         Err(FortressError::key_management(
@@ -2383,10 +2374,6 @@ impl KeyManager for HsmKeyManager {
             .generate_key(&new_key_id, algorithm)
             .await?;
 
-        // Store backup of old key
-        let _backup_key_id = format!("{}_v{}_backup", key_id, old_metadata.version);
-        // In real HSM, this would involve key export/import operations
-
         // Update main key metadata to point to new version
         use chrono::{Duration as ChronoDuration, Utc};
         let new_metadata = KeyMetadata::new(
@@ -2402,8 +2389,6 @@ impl KeyManager for HsmKeyManager {
         .with_metadata("transition_started".to_string(), Utc::now().to_rfc3339());
 
         // Store new key metadata
-        // Note: In real HSM implementation, this would update the HSM's metadata
-        // For now, we'll just cache it locally
         {
             let mut cache = self.metadata_cache.write().await;
             cache.insert(new_key_id.to_string(), new_metadata.clone());

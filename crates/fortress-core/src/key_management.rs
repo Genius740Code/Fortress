@@ -201,6 +201,7 @@ pub async fn create_cli_key_manager() -> Result<UnifiedKeyManager> {
 mod tests {
     use super::*;
     use crate::encryption::Aegis256;
+    use crate::encryption::EncryptionAlgorithm;
 
     #[tokio::test]
     async fn test_list_key_ids() {

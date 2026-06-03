@@ -527,7 +527,7 @@ mod tests {
             auth.create_user("user2".to_string(), "test@example.com".to_string(), crate::utils::generate_password(16))
                 .await
                 .unwrap();
-            auth.create_user("requester".to_string(), crate::utils::generate_password(16))
+            auth.create_user("requester".to_string(), "test@example.com".to_string(), crate::utils::generate_password(16))
                 .await
                 .unwrap();
         }
@@ -621,7 +621,7 @@ mod tests {
             auth.create_user("user1".to_string(), "test@example.com".to_string(), crate::utils::generate_password(16))
                 .await
                 .unwrap();
-            auth.create_user("requester".to_string(), crate::utils::generate_password(16))
+            auth.create_user("requester".to_string(), "test@example.com".to_string(), crate::utils::generate_password(16))
                 .await
                 .unwrap();
         }

@@ -831,7 +831,7 @@ impl MetadataProcessor {
 
         let encrypted_data_bytes = self
             .encryption_algorithm
-            .encrypt(metadata_json.as_bytes(), key.as_bytes())?;
+            .encrypt(metadata_json.as_bytes(), key.as_bytes().expect("Key material must be local for metadata encryption"))?;
 
         let encrypted_data = EncryptedData::new(
             Bytes::from(encrypted_data_bytes),
@@ -916,7 +916,7 @@ impl MetadataProcessor {
 
         let decrypted_bytes = self.encryption_algorithm.decrypt(
             &encrypted_metadata.encrypted_metadata.ciphertext,
-            key.as_bytes(),
+            key.as_bytes().expect("Key material must be local for metadata decryption"),
         )?;
 
         // Deserialize metadata

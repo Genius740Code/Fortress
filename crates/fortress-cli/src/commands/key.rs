@@ -529,7 +529,7 @@ async fn generate_enhanced_key(algorithm: &str, length: usize, format: &str) -> 
                 .await
                 .map_err(|e| color_eyre::eyre::eyre!("Failed to generate key: {}", e))?;
 
-            let key_bytes = key.as_bytes();
+            let key_bytes = key.as_bytes().expect("Key material must be local");
 
             // Format output
             match format.to_lowercase().as_str() {

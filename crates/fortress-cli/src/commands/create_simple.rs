@@ -337,7 +337,7 @@ async fn generate_simple_keys(path: &PathBuf) -> Result<()> {
 
     // Save the key securely
     let key_path = keys_dir.join("master.key");
-    let key_data = key.as_bytes();
+    let key_data = key.as_bytes().expect("Key material must be local for CLI");
 
     tokio::fs::write(&key_path, key_data)
         .await

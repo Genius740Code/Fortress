@@ -320,7 +320,7 @@ impl ThumbnailGenerator {
 
         let encrypted_thumbnail_data = self
             .encryption_algorithm
-            .encrypt(&thumbnail_data, thumbnail_key.as_bytes())?;
+            .encrypt(&thumbnail_data, thumbnail_key.as_bytes().expect("SecureKey is local"))?;
 
         let encrypted_data = EncryptedData::new(
             Bytes::from(encrypted_thumbnail_data),
@@ -634,7 +634,7 @@ impl ThumbnailGenerator {
     ) -> Result<Vec<u8>> {
         let decrypted_data = self.encryption_algorithm.decrypt(
             &encrypted_thumbnail.encrypted_data.ciphertext,
-            thumbnail_key.as_bytes(),
+            thumbnail_key.as_bytes().expect("SecureKey is local"),
         )?;
 
         Ok(decrypted_data)

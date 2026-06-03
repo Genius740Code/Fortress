@@ -124,9 +124,10 @@ impl FortressGrpcService {
         };
 
         // Encrypt the data
+        let key_bytes = key.0.as_bytes().ok_or_else(|| "HSM keys not supported for local encryption".to_string())?;
         match self.encryption_manager.encrypt(
             &request.plaintext,
-            key.0.as_bytes(), // Use only the SecureKey part
+            key_bytes, // Use only the SecureKey part
         ) {
             Ok(encrypted_data) => {
                 info!(
@@ -172,9 +173,10 @@ impl FortressGrpcService {
         };
 
         // Decrypt the data
+        let key_bytes = key.0.as_bytes().ok_or_else(|| "HSM keys not supported for local decryption".to_string())?;
         match self.encryption_manager.decrypt(
             &request.ciphertext,
-            key.0.as_bytes(), // Use only the SecureKey part
+            key_bytes, // Use only the SecureKey part
         ) {
             Ok(decrypted_data) => {
                 info!(

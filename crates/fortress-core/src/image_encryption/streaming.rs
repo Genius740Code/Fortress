@@ -765,7 +765,7 @@ impl StreamingImageDecryptor {
             // Decrypt chunk
             let decrypted_chunk = self
                 .encryption_algorithm
-                .decrypt(&chunk.data, key.as_bytes())?;
+                .decrypt(&chunk.data, key.as_bytes().expect("SecureKey is local"))?;
 
             // Verify checksum
             let calculated_checksum = calculate_checksum(&chunk.data);

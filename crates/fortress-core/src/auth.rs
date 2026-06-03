@@ -2561,7 +2561,7 @@ mod tests {
         let mut auth = AuthManager::new();
 
         let _user_id = auth
-            .create_user("testuser".to_string(), "Password123!".to_string())
+            .create_user("testuser".to_string(), "test@example.com".to_string(), "Password123!".to_string())
             .await
             .expect("Failed to create test user");
 
@@ -2584,7 +2584,7 @@ mod tests {
         let mut auth = AuthManager::new();
 
         let user_id = auth
-            .create_user("testuser".to_string(), "Password123!".to_string())
+            .create_user("testuser".to_string(), "test@example.com".to_string(), "Password123!".to_string())
             .await
             .expect("Failed to create test user");
 
@@ -2615,7 +2615,7 @@ mod tests {
         let mut auth = AuthManager::new();
 
         let user_id = auth
-            .create_user("testuser".to_string(), "Password123!".to_string())
+            .create_user("testuser".to_string(), "test@example.com".to_string(), "Password123!".to_string())
             .await
             .expect("Failed to create test user");
 
@@ -2650,7 +2650,7 @@ mod tests {
         let mut auth = AuthManager::new();
 
         let _user_id = auth
-            .create_user("testuser".to_string(), "Password123!".to_string())
+            .create_user("testuser".to_string(), "test@example.com".to_string(), "Password123!".to_string())
             .await
             .expect("Failed to create test user");
 
@@ -2711,7 +2711,7 @@ mod tests {
         let mut auth = AuthManager::new();
 
         let _user_id = auth
-            .create_user("testuser".to_string(), "Password123!".to_string())
+            .create_user("testuser".to_string(), "test@example.com".to_string(), "Password123!".to_string())
             .await
             .expect("Failed to create test user");
 
@@ -2739,7 +2739,7 @@ mod tests {
         let mut auth = AuthManager::new();
 
         let _user_id = auth
-            .create_user("testuser".to_string(), "Password123!".to_string())
+            .create_user("testuser".to_string(), "test@example.com".to_string(), "Password123!".to_string())
             .await
             .expect("Failed to create test user");
 
@@ -2779,7 +2779,7 @@ mod tests {
         let mut auth = AuthManager::new();
 
         let user_id = auth
-            .create_user("testuser".to_string(), "Password123!".to_string())
+            .create_user("testuser".to_string(), "test@example.com".to_string(), "Password123!".to_string())
             .await
             .expect("Failed to create test user");
 
@@ -2811,7 +2811,7 @@ mod tests {
         let mut auth = AuthManager::new();
 
         let user_id = auth
-            .create_user("testuser".to_string(), "Password123!".to_string())
+            .create_user("testuser".to_string(), "test@example.com".to_string(), "Password123!".to_string())
             .await
             .expect("Failed to create test user");
 
@@ -2922,7 +2922,7 @@ mod tests {
         let mut auth = AuthManager::new();
 
         let user_id = auth
-            .create_user("testuser".to_string(), "Password123!".to_string())
+            .create_user("testuser".to_string(), "test@example.com".to_string(), "Password123!".to_string())
             .await
             .expect("Failed to create test user");
 
@@ -2946,7 +2946,7 @@ mod tests {
         let mut auth = AuthManager::new();
 
         let user_id = auth
-            .create_user("testuser".to_string(), "Password123!".to_string())
+            .create_user("testuser".to_string(), "test@example.com".to_string(), "Password123!".to_string())
             .await
             .expect("Failed to create test user");
 
@@ -2992,7 +2992,7 @@ mod tests {
         let mut auth = AuthManager::new();
 
         let user_id = auth
-            .create_user("apikey_user".to_string(), "Password123!".to_string())
+            .create_user("apikey_user".to_string(), "test@example.com".to_string(), "Password123!".to_string())
             .await
             .expect("Failed to create user");
 
@@ -3110,7 +3110,7 @@ mod tests {
         let mut auth = AuthManager::new();
 
         let user_id = auth
-            .create_user("testuser".to_string(), "Password123!".to_string())
+            .create_user("testuser".to_string(), "test@example.com".to_string(), "Password123!".to_string())
             .await
             .expect("Failed to create test user");
 
@@ -3157,7 +3157,7 @@ mod tests {
         let mut auth = AuthManager::new();
 
         let _user_id = auth
-            .create_user("testuser".to_string(), "Password123!".to_string())
+            .create_user("testuser".to_string(), "test@example.com".to_string(), "Password123!".to_string())
             .await
             .expect("Failed to create test user");
 
@@ -3199,7 +3199,7 @@ mod tests {
         let mut auth = AuthManager::new();
 
         let user_id = auth
-            .create_user("testuser".to_string(), "Password123!".to_string())
+            .create_user("testuser".to_string(), "test@example.com".to_string(), "Password123!".to_string())
             .await
             .expect("Failed to create test user");
 
@@ -3255,7 +3255,7 @@ mod tests {
         let mut auth = AuthManager::new();
 
         let user_id = auth
-            .create_user("testuser".to_string(), "Password123!".to_string())
+            .create_user("testuser".to_string(), "test@example.com".to_string(), "Password123!".to_string())
             .await
             .expect("Failed to create test user");
 
@@ -3297,7 +3297,7 @@ mod tests {
         let mut auth = AuthManager::new();
 
         let _user_id = auth
-            .create_user("testuser".to_string(), "Password123!".to_string())
+            .create_user("testuser".to_string(), "test@example.com".to_string(), "Password123!".to_string())
             .await
             .expect("Failed to create test user");
 

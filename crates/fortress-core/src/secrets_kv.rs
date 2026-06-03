@@ -1085,7 +1085,7 @@ mod tests {
             ..Default::default()
         };
 
-        let engine = KvEngine::with_config(config);
+        let engine = KvEngine::with_config(config).unwrap();
 
         // Store a secret
         let secret_data = json!({
@@ -1153,7 +1153,7 @@ mod tests {
             ..Default::default()
         };
 
-        let engine = KvEngine::with_config(config);
+        let engine = KvEngine::with_config(config).unwrap();
 
         // Store a secret
         let secret_data = json!({
@@ -1223,7 +1223,7 @@ mod tests {
             master_key: None,
         };
 
-        let engine = KvEngine::with_config(config);
+        let engine = KvEngine::with_config(config).unwrap();
 
         // Write a secret
         let secret_data = json!({
@@ -1285,7 +1285,7 @@ mod tests {
             master_key: None,
         };
 
-        let engine = KvEngine::with_config(config);
+        let engine = KvEngine::with_config(config).unwrap();
 
         // Write a secret
         let secret_data = json!({

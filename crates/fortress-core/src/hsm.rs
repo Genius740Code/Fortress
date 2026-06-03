@@ -15,6 +15,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+#[cfg(feature = "hsm")]
+use aws_config;
+#[cfg(feature = "hsm")]
+use aws_sdk_kms;
 
 /// HSM provider configuration
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -199,7 +203,16 @@ impl HsmKeyManagerInner {
     /// Create a new HSM key manager
     pub async fn new(config: HsmConfig) -> Result<Self> {
         let provider: Arc<dyn HsmProvider> = match config.provider {
+            #[cfg(feature = "hsm")]
             HsmProviderType::AwsCloudHsm => Arc::new(AwsCloudHsmProvider::new().await?),
+            #[cfg(not(feature = "hsm"))]
+            HsmProviderType::AwsCloudHsm => {
+                return Err(FortressError::key_management(
+                    "HSM feature is not enabled, cannot use AWS CloudHSM provider".to_string(),
+                    None,
+                    KeyErrorCode::ProviderError,
+                ));
+            }
             HsmProviderType::Pkcs11 => Arc::new(Pkcs11Provider::new().await?),
             HsmProviderType::AzureDedicatedHsm => Arc::new(AzureDedicatedHsmProvider::new().await?),
             HsmProviderType::GoogleCloudHsm => Arc::new(GoogleCloudHsmProvider::new().await?),
@@ -218,6 +231,7 @@ impl HsmKeyManagerInner {
     }
 }
 
+#[cfg(feature = "hsm")]
 /// AWS CloudHSM provider implementation
 pub struct AwsCloudHsmProvider {
     /// AWS client configuration
@@ -228,8 +242,11 @@ pub struct AwsCloudHsmProvider {
     initialized: Arc<RwLock<bool>>,
     /// Indicates if the provider is operating in simulation mode
     is_simulated: bool,
+    /// AWS KMS client for cryptographic operations
+    kms_client: aws_sdk_kms::Client,
 }
 
+#[cfg(feature = "hsm")]
 /// AWS CloudHSM client wrapper
 struct AwsHsmClient {
     /// CloudHSM client ID
@@ -242,6 +259,7 @@ struct AwsHsmClient {
     metrics: Arc<RwLock<HsmMetrics>>,
 }
 
+#[cfg(feature = "hsm")]
 /// HSM connection for connection pooling
 struct HsmPoolConnection {
     /// Connection ID
@@ -252,6 +270,7 @@ struct HsmPoolConnection {
     active: bool,
 }
 
+#[cfg(feature = "hsm")]
 /// HSM performance metrics
 struct HsmMetrics {
     /// Operations per second
@@ -264,16 +283,21 @@ struct HsmMetrics {
     connection_count: usize,
 }
 
+#[cfg(feature = "hsm")]
 impl AwsCloudHsmProvider {
     /// Create a new AWS CloudHSM provider with connection pooling and metrics
     pub async fn new() -> Result<Self> {
         log::info!("Initializing AWS CloudHSM provider with connection pooling");
+
+        let config = aws_config::load_from_env().await;
+        let kms_client = aws_sdk_kms::Client::new(&config);
 
         Ok(Self {
             client_config: Arc::new(RwLock::new(None)),
             cluster_id: Arc::new(RwLock::new(None)),
             initialized: Arc::new(RwLock::new(false)),
             is_simulated: true, // Always true for simulated implementation
+            kms_client,
         })
     }
 
@@ -380,6 +404,7 @@ impl AwsCloudHsmProvider {
     }
 }
 
+#[cfg(feature = "hsm")]
 #[async_trait]
 impl HsmProvider for AwsCloudHsmProvider {
     async fn initialize(&self, config: &HsmConfig) -> Result<()> {

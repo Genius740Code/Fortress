@@ -315,7 +315,7 @@ impl SecureProtocolHandler {
         };
 
         // Encrypt with AES-256-GCM
-        let cipher = Aes256Gcm::new_from_slice(key.as_bytes()).map_err(|e| {
+        let cipher = Aes256Gcm::new_from_slice(key.as_bytes().expect("Key material must be local for TEE communication")).map_err(|e| {
             FortressError::tee(
                 format!("Failed to create cipher: {}", e),
                 "SecureProtocolHandler::encrypt_payload".to_string(),
@@ -400,7 +400,7 @@ impl SecureProtocolHandler {
         };
 
         // Decrypt with AES-256-GCM
-        let cipher = Aes256Gcm::new_from_slice(key.as_bytes()).map_err(|e| {
+        let cipher = Aes256Gcm::new_from_slice(key.as_bytes().expect("Key material must be local for TEE communication")).map_err(|e| {
             FortressError::tee(
                 format!("Failed to create cipher: {}", e),
                 "SecureProtocolHandler::decrypt_payload".to_string(),
@@ -453,7 +453,7 @@ impl SecureProtocolHandler {
 
         type HmacSha256 = Hmac<Sha256>;
 
-        let mut mac = <HmacSha256 as hmac::Mac>::new_from_slice(key.as_bytes()).map_err(|e| {
+        let mut mac = <HmacSha256 as hmac::Mac>::new_from_slice(key.as_bytes().expect("Key material must be local for TEE communication")).map_err(|e| {
             FortressError::tee(
                 format!("Failed to create HMAC: {}", e),
                 "SecureProtocolHandler::sign_message".to_string(),
@@ -509,7 +509,7 @@ impl SecureProtocolHandler {
 
         type HmacSha256 = Hmac<Sha256>;
 
-        let mut mac = <HmacSha256 as hmac::Mac>::new_from_slice(key.as_bytes()).map_err(|e| {
+        let mut mac = <HmacSha256 as hmac::Mac>::new_from_slice(key.as_bytes().expect("Key material must be local for TEE communication")).map_err(|e| {
             FortressError::tee(
                 format!("Failed to create HMAC: {}", e),
                 "SecureProtocolHandler::verify_message_signature".to_string(),
@@ -581,7 +581,7 @@ impl SecureProtocolHandler {
 
         // Create key exchange data
         let key_exchange = KeyExchangeData {
-            public_key: general_purpose::STANDARD.encode(new_key.as_bytes()),
+            public_key: general_purpose::STANDARD.encode(new_key.as_bytes().expect("Key material must be local")),
             algorithm: "AES-256-GCM".to_string(),
             parameters: HashMap::new(),
             nonce: Uuid::new_v4().to_string(),

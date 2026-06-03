@@ -137,7 +137,7 @@ impl ImageEncryptor {
 
         let encrypted_data_bytes = self
             .encryption_algorithm
-            .encrypt(&processed_data, key.as_bytes())?;
+            .encrypt(&processed_data, key.as_bytes().expect("SecureKey is local"))?;
 
         let encrypted_data = EncryptedData::new(
             Bytes::from(encrypted_data_bytes),
@@ -259,7 +259,7 @@ impl ImageEncryptor {
 
         let decrypted_bytes = self
             .encryption_algorithm
-            .decrypt(&encrypted_image.encrypted_data.ciphertext, key.as_bytes())?;
+            .decrypt(&encrypted_image.encrypted_data.ciphertext, key.as_bytes().expect("SecureKey is local"))?;
 
         // Process the decrypted data based on encryption mode
 

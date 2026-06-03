@@ -303,10 +303,11 @@ impl HealthChecker {
         // Test encryption/decryption with default algorithm
         let algorithm = Aegis256::new();
         let key = SecureKey::generate(algorithm.key_size()).expect("Failed to generate secure key");
+        let key_bytes = key.as_bytes().unwrap_or(&[]);
 
         let plaintext = b"health_check_test";
-        let ciphertext = algorithm.encrypt(plaintext, key.as_bytes())?;
-        let decrypted = algorithm.decrypt(&ciphertext, key.as_bytes())?;
+        let ciphertext = algorithm.encrypt(plaintext, key_bytes)?;
+        let decrypted = algorithm.decrypt(&ciphertext, key_bytes)?;
 
         if plaintext != &decrypted[..] {
             return Err(ServerError::internal("Encryption test failed"));

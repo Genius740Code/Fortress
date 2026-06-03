@@ -177,12 +177,12 @@ impl FieldEncryptionManager for DefaultFieldEncryptionManager {
 
         // Encrypt the data
         let ciphertext = if nonce.is_empty() {
-            algorithm.encrypt(plaintext, &key.as_bytes())?
+            algorithm.encrypt(plaintext, key.as_bytes().expect("Key material must be local for field encryption"))?
         } else {
             // For algorithms with nonce, we need to handle it properly
             // This is a simplified implementation - in practice, you'd need
             // to handle the nonce according to each algorithm's requirements
-            algorithm.encrypt(plaintext, &key.as_bytes())?
+            algorithm.encrypt(plaintext, key.as_bytes().expect("Key material must be local for field encryption"))?
         };
 
         // Create metadata with actual key version
@@ -229,7 +229,7 @@ impl FieldEncryptionManager for DefaultFieldEncryptionManager {
         let algorithm = create_algorithm(&metadata.algorithm)?;
 
         // Decrypt the data
-        let plaintext = algorithm.decrypt(ciphertext, &key.as_bytes())?;
+        let plaintext = algorithm.decrypt(ciphertext, key.as_bytes().expect("Key material must be local for field decryption"))?;
 
         Ok(DecryptedField {
             plaintext,
