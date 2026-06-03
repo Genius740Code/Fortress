@@ -30,6 +30,20 @@ impl SimdEncryptor {
     #[cfg(target_feature = "avx2")]
     #[target_feature(enable = "avx2")]
     unsafe fn encrypt_avx2(&self, plaintext: &[u8]) -> Result<Vec<u8>, FortressError> {
+        if !is_x86_feature_detected!("avx2") {
+            return Err(FortressError::encryption(
+                "AVX2 not supported",
+                self.algorithm.name(),
+                EncryptionErrorCode::AlgorithmNotSupported,
+            ));
+        }
+        if plaintext.as_ptr() as usize % 32 != 0 {
+            return Err(FortressError::encryption(
+                "Input not aligned to 32 bytes",
+                self.algorithm.name(),
+                EncryptionErrorCode::InvalidInput,
+            ));
+        }
         // Fallback to the provided algorithm for secure encryption.
         // The simulated AVX2 encryption (XOR) is insecure and has been removed.
         self.algorithm.encrypt(plaintext, &self.keys)
@@ -39,6 +53,20 @@ impl SimdEncryptor {
     #[cfg(target_feature = "avx512f")]
     #[target_feature(enable = "avx512f")]
     unsafe fn encrypt_avx512(&self, plaintext: &[u8]) -> Result<Vec<u8>, FortressError> {
+        if !is_x86_feature_detected!("avx512f") {
+            return Err(FortressError::encryption(
+                "AVX-512 not supported",
+                self.algorithm.name(),
+                EncryptionErrorCode::AlgorithmNotSupported,
+            ));
+        }
+        if plaintext.as_ptr() as usize % 64 != 0 {
+            return Err(FortressError::encryption(
+                "Input not aligned to 64 bytes",
+                self.algorithm.name(),
+                EncryptionErrorCode::InvalidInput,
+            ));
+        }
         // Fallback to the provided algorithm for secure encryption.
         // The simulated AVX-512 encryption (XOR) is insecure and has been removed.
         self.algorithm.encrypt(plaintext, &self.keys)
