@@ -4,7 +4,7 @@
 //! enabling internal services to authenticate using industry-standard OIDC protocols.
 //! Includes support for Rego policies for authorization decisions.
 
-use crate::auth::{AuthManager, TokenClaims, User};
+use crate::auth::{AuthManager, FortressPasswordHash, TokenClaims, User};
 use crate::error::EncryptionErrorCode;
 use crate::error::FortressError;
 use base64::{engine::general_purpose, Engine as _};
@@ -603,7 +603,7 @@ impl OidcProvider {
             active: true,
             created_at: current_timestamp(),
             last_login: None,
-            password_hash: String::new(),
+            password_hash: FortressPasswordHash(String::new()),
         };
 
         // Generate access token

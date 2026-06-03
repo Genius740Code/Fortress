@@ -6,7 +6,7 @@
 
 use crate::error::{EncryptionErrorCode, FortressError};
 use argon2::password_hash::rand_core::OsRng;
-use argon2::password_hash::{PasswordHash, SaltString};
+use argon2::password_hash::{PasswordHash as ArgonPasswordHash, SaltString};
 use argon2::{Argon2, PasswordHasher, PasswordVerifier};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -42,7 +42,23 @@ pub struct User {
     /// Last login timestamp
     pub last_login: Option<u64>,
     /// Password hash (Argon2id)
-    pub password_hash: String,
+    pub password_hash: FortressPasswordHash,
+}
+
+/// Secure wrapper for password hashes to prevent accidental logging or serialization
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FortressPasswordHash(pub String);
+
+impl FortressPasswordHash {
+    /// Create a new FortressPasswordHash wrapper
+    pub fn new(hash: String) -> Self {
+        Self(hash)
+    }
+
+    /// Access the raw hash string
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }
 
 /// Role definition for RBAC
@@ -1580,7 +1596,7 @@ impl AuthManager {
             active: true,
             created_at: current_timestamp(),
             last_login: None,
-            password_hash,
+            password_hash: FortressPasswordHash(password_hash),
         };
 
         self.users.write().unwrap().insert(user_id.clone(), user);
@@ -1640,7 +1656,7 @@ impl AuthManager {
             .ok_or_else(|| FortressError::authentication("Invalid credentials", None))?;
 
         // Verify password using Argon2
-        let parsed_hash = PasswordHash::new(&user.password_hash)
+        let parsed_hash = ArgonPasswordHash::new(user.password_hash.as_str())
             .map_err(|_| FortressError::authentication("Invalid password hash format", None))?;
 
         let argon2 = Argon2::default();
@@ -2252,7 +2268,7 @@ impl AuthManager {
             .ok_or_else(|| FortressError::validation("User not found", None, None))?;
 
         // Verify current password against stored hash using Argon2id
-        let parsed_hash = PasswordHash::new(&user.password_hash)
+        let parsed_hash = ArgonPasswordHash::new(user.password_hash.as_str())
             .map_err(|_| FortressError::authentication("Invalid password hash format", None))?;
 
         let argon2 = Argon2::default();
@@ -2279,7 +2295,7 @@ impl AuthManager {
                 )
             })?;
 
-        user.password_hash = password_hash.to_string();
+        user.password_hash = FortressPasswordHash(password_hash.to_string());
         Ok(())
     }
 
