@@ -15,7 +15,7 @@ use uuid::Uuid;
 #[derive(Debug)]
 pub struct SubscriptionManager {
     /// Active subscriptions
-    subscriptions: Arc<RwLock<HashMap<String, Subscription>>>,
+    subscriptions: Arc<RwLock<HashMap<String, Arc<Subscription>>>>,
     /// Topic to subscription mapping
     topic_subscriptions: Arc<RwLock<HashMap<String, Vec<String>>>>,
     /// Connection to subscription mapping
@@ -36,19 +36,19 @@ pub struct Subscription {
     /// Subscription topic
     pub topic: String,
     /// Subscription filters
-    pub filters: Vec<SubscriptionFilter>,
+    pub filters: Arc<Vec<SubscriptionFilter>>,
     /// Subscription options
     pub options: SubscriptionOptions,
     /// Created at timestamp
     pub created_at: Instant,
     /// Last activity timestamp
-    pub last_activity: Instant,
+    pub last_activity: Arc<RwLock<Instant>>,
     /// Subscription status
-    pub status: SubscriptionStatus,
+    pub status: Arc<RwLock<SubscriptionStatus>>,
     /// Message count
-    pub message_count: u64,
+    pub message_count: Arc<RwLock<u64>>,
     /// Last message timestamp
-    pub last_message_at: Option<Instant>,
+    pub last_message_at: Arc<RwLock<Option<Instant>>>,
 }
 
 /// Subscription options
@@ -85,7 +85,7 @@ pub enum SubscriptionStatus {
 #[derive(Debug, Clone)]
 pub enum SubscriptionEvent {
     /// New subscription created
-    Created { subscription: Subscription },
+    Created { subscription: Arc<Subscription> },
     /// Subscription updated
     Updated {
         subscription_id: String,
@@ -150,37 +150,38 @@ impl SubscriptionManager {
             id: subscription_id,
             connection_id: connection_id,
             topic: topic,
-            filters,
+            filters: Arc::new(filters),
             options,
             created_at: Instant::now(),
-            last_activity: Instant::now(),
-            status: SubscriptionStatus::Active,
-            message_count: 0,
-            last_message_at: None,
+            last_activity: Arc::new(RwLock::new(Instant::now())),
+            status: Arc::new(RwLock::new(SubscriptionStatus::Active)),
+            message_count: Arc::new(RwLock::new(0)),
+            last_message_at: Arc::new(RwLock::new(None)),
         };
 
         // Add to subscriptions
+        let subscription_arc = Arc::new(subscription);
         {
             let mut subscriptions = self.subscriptions.write().await;
-            subscriptions.insert(subscription.id.clone(), subscription.clone());
+            subscriptions.insert(subscription_arc.id.clone(), subscription_arc.clone());
         }
 
         // Update topic mapping
         {
             let mut topic_subscriptions = self.topic_subscriptions.write().await;
             topic_subscriptions
-                .entry(subscription.topic.clone())
+                .entry(subscription_arc.topic.clone())
                 .or_insert_with(Vec::new)
-                .push(subscription.id.clone());
+                .push(subscription_arc.id.clone());
         }
 
         // Update connection mapping
         {
             let mut connection_subscriptions = self.connection_subscriptions.write().await;
             connection_subscriptions
-                .entry(subscription.connection_id.clone())
+                .entry(subscription_arc.connection_id.clone())
                 .or_insert_with(Vec::new)
-                .push(subscription.id.clone());
+                .push(subscription_arc.id.clone());
         }
 
         // Update statistics
@@ -192,7 +193,7 @@ impl SubscriptionManager {
                 stats.peak_subscriptions = stats.active_subscriptions;
             }
 
-            if !stats.messages_per_topic.contains_key(&subscription.topic) {
+            if !stats.messages_per_topic.contains_key(&subscription_arc.topic) {
                 stats.total_topics += 1;
             }
         }
@@ -200,32 +201,32 @@ impl SubscriptionManager {
         // Send event
         tracing::info!(
             "Created subscription {} for topic {} on connection {}",
-            subscription.id,
-            subscription.topic,
-            subscription.connection_id
+            subscription_arc.id,
+            subscription_arc.topic,
+            subscription_arc.connection_id
         );
         let event = SubscriptionEvent::Created {
-            subscription: subscription.clone(),
+            subscription: subscription_arc.clone(),
         };
         let _ = self.event_sender.send(event);
-        Ok(subscription.id.to_string())
+        Ok(subscription_arc.id.to_string())
     }
 
     /// Cancel subscription
     pub async fn unsubscribe(&self, subscription_id: &str) -> Result<()> {
-        let subscription = {
+        let subscription_arc = {
             let mut subscriptions = self.subscriptions.write().await;
             subscriptions.remove(subscription_id)
         };
 
-        if let Some(sub) = subscription {
+        if let Some(sub_arc) = subscription_arc {
             // Remove from topic mapping
             {
                 let mut topic_subscriptions = self.topic_subscriptions.write().await;
-                if let Some(subscriptions) = topic_subscriptions.get_mut(&sub.topic) {
+                if let Some(subscriptions) = topic_subscriptions.get_mut(&sub_arc.topic) {
                     subscriptions.retain(|id| id != subscription_id);
                     if subscriptions.is_empty() {
-                        topic_subscriptions.remove(&sub.topic);
+                        topic_subscriptions.remove(&sub_arc.topic);
                     }
                 }
             }
@@ -233,10 +234,10 @@ impl SubscriptionManager {
             // Remove from connection mapping
             {
                 let mut connection_subscriptions = self.connection_subscriptions.write().await;
-                if let Some(subscriptions) = connection_subscriptions.get_mut(&sub.connection_id) {
+                if let Some(subscriptions) = connection_subscriptions.get_mut(&sub_arc.connection_id) {
                     subscriptions.retain(|id| id != subscription_id);
                     if subscriptions.is_empty() {
-                        connection_subscriptions.remove(&sub.connection_id);
+                        connection_subscriptions.remove(&sub_arc.connection_id);
                     }
                 }
             }
@@ -259,7 +260,7 @@ impl SubscriptionManager {
             tracing::info!(
                 "Cancelled subscription {} for topic {}",
                 subscription_id,
-                sub.topic
+                sub_arc.topic
             );
         } else {
             return Err(FortressError::websocket(format!(
@@ -319,7 +320,7 @@ impl SubscriptionManager {
 
             for sub_id in &subscription_ids {
                 if let Some(subscription) = subscriptions.get(sub_id) {
-                    if subscription.status == SubscriptionStatus::Active
+                    if *subscription.status.read().await == SubscriptionStatus::Active
                         && self.matches_filters(subscription, &message)
                     {
                         matching.push(sub_id.clone());
@@ -352,12 +353,12 @@ impl SubscriptionManager {
 
         // Update subscription activity
         {
-            let mut subscriptions = self.subscriptions.write().await;
+            let subscriptions = self.subscriptions.write().await;
             for subscription_id in &matching_subscriptions {
-                if let Some(subscription) = subscriptions.get_mut(subscription_id) {
-                    subscription.last_activity = Instant::now();
-                    subscription.message_count += 1;
-                    subscription.last_message_at = Some(Instant::now());
+                if let Some(subscription) = subscriptions.get(subscription_id) {
+                    *subscription.last_activity.write().await = Instant::now();
+                    *subscription.message_count.write().await += 1;
+                    *subscription.last_message_at.write().await = Some(Instant::now());
                 }
             }
         }
@@ -366,13 +367,13 @@ impl SubscriptionManager {
     }
 
     /// Check if message matches subscription filters
-    fn matches_filters(&self, subscription: &Subscription, message: &WebSocketMessage) -> bool {
+    fn matches_filters(&self, subscription: &Arc<Subscription>, message: &WebSocketMessage) -> bool {
         if subscription.filters.is_empty() {
             return true;
         }
 
         if let MessagePayload::DataUpdate(data_update) = &message.payload {
-            for filter in &subscription.filters {
+            for filter in subscription.filters.iter() {
                 if !self.matches_filter(filter, data_update) {
                     return false;
                 }
@@ -471,7 +472,7 @@ impl SubscriptionManager {
     }
 
     /// Get subscription by ID
-    pub async fn get_subscription(&self, subscription_id: &str) -> Option<Subscription> {
+    pub async fn get_subscription(&self, subscription_id: &str) -> Option<Arc<Subscription>> {
         self.subscriptions
             .read()
             .await
@@ -480,7 +481,7 @@ impl SubscriptionManager {
     }
 
     /// Get subscriptions for connection
-    pub async fn get_connection_subscriptions(&self, connection_id: &str) -> Vec<Subscription> {
+    pub async fn get_connection_subscriptions(&self, connection_id: &str) -> Vec<Arc<Subscription>> {
         let subscription_ids: Vec<String> = {
             let connection_subscriptions = self.connection_subscriptions.read().await;
             connection_subscriptions
@@ -497,7 +498,7 @@ impl SubscriptionManager {
     }
 
     /// Get subscriptions for topic
-    pub async fn get_topic_subscriptions(&self, topic: &str) -> Vec<Subscription> {
+    pub async fn get_topic_subscriptions(&self, topic: &str) -> Vec<Arc<Subscription>> {
         let subscription_ids: Vec<String> = {
             let topic_subscriptions = self.topic_subscriptions.read().await;
             topic_subscriptions.get(topic).cloned().unwrap_or_default()
@@ -511,7 +512,7 @@ impl SubscriptionManager {
     }
 
     /// Get all subscriptions
-    pub async fn get_all_subscriptions(&self) -> Vec<Subscription> {
+    pub async fn get_all_subscriptions(&self) -> Vec<Arc<Subscription>> {
         self.subscriptions.read().await.values().cloned().collect()
     }
 
@@ -533,16 +534,23 @@ impl SubscriptionManager {
     /// Clean up expired subscriptions
     pub async fn cleanup_expired_subscriptions(&self, timeout: Duration) {
         let now = Instant::now();
-        let expired_subscriptions: Vec<String> = {
-            let subscriptions = self.subscriptions.read().await;
-            subscriptions
+        let all_subscriptions: Vec<(String, Arc<Subscription>)> = {
+            let subscriptions_read_guard = self.subscriptions.read().await;
+            subscriptions_read_guard
                 .iter()
-                .filter(|(_, sub)| now.duration_since(sub.last_activity) > timeout)
-                .map(|(id, _)| id.clone())
+                .map(|(id, sub)| (id.clone(), sub.clone()))
                 .collect()
         };
 
-        for subscription_id in expired_subscriptions {
+        let mut expired_subscription_ids = Vec::new();
+        for (id, sub) in all_subscriptions {
+            let last_activity = sub.last_activity.read().await;
+            if now.duration_since(*last_activity) > timeout {
+                expired_subscription_ids.push(id);
+            }
+        }
+
+        for subscription_id in expired_subscription_ids {
             let _ = self.unsubscribe(&subscription_id).await;
         }
     }
