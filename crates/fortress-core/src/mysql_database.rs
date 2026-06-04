@@ -3,6 +3,7 @@
 //! This module provides advanced MySQL integration with support for push/pull operations,
 //! JSON operations, full-text search, and optimized performance features.
 
+use regex::Regex;
 use crate::error::{FortressError, KeyErrorCode, Result, StorageErrorCode};
 use crate::key::{KeyId, KeyMetadata, SecureKey};
 use crate::storage::StorageBackend;
@@ -42,6 +43,53 @@ pub struct MySQLConfig {
     pub partitioning: Option<MySQLPartitioning>,
     /// Replication settings
     pub replication: MySQLReplicationConfig,
+}
+
+impl MySQLConfig {
+    /// Validates the MySQL configuration, particularly table names, to prevent SQL injection.
+    pub fn validate(&self) -> Result<()> {
+        let identifier_regex = Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_]*$").map_err(|e| {
+            FortressError::storage(
+                format!("Failed to compile regex for identifier validation: {}", e),
+                "mysql".to_string(),
+                StorageErrorCode::InvalidConfiguration,
+            )
+        })?;
+
+        // Validate keys_table
+        if !identifier_regex.is_match(&self.keys_table) {
+            return Err(FortressError::storage(
+                format!("Invalid characters in keys_table name: '{}'. Table names must be alphanumeric and can contain underscores, starting with a letter or underscore.", self.keys_table),
+                "mysql".to_string(),
+                StorageErrorCode::InvalidConfiguration,
+            ));
+        }
+        if self.keys_table.len() > 64 { // Common max length for identifiers
+            return Err(FortressError::storage(
+                format!("keys_table name '{}' exceeds maximum allowed length of 64 characters.", self.keys_table),
+                "mysql".to_string(),
+                StorageErrorCode::InvalidConfiguration,
+            ));
+        }
+
+        // Validate data_table
+        if !identifier_regex.is_match(&self.data_table) {
+            return Err(FortressError::storage(
+                format!("Invalid characters in data_table name: '{}'. Table names must be alphanumeric and can contain underscores, starting with a letter or underscore.", self.data_table),
+                "mysql".to_string(),
+                StorageErrorCode::InvalidConfiguration,
+            ));
+        }
+        if self.data_table.len() > 64 { // Common max length for identifiers
+            return Err(FortressError::storage(
+                format!("data_table name '{}' exceeds maximum allowed length of 64 characters.", self.data_table),
+                "mysql".to_string(),
+                StorageErrorCode::InvalidConfiguration,
+            ));
+        }
+
+        Ok(())
+    }
 }
 
 /// MySQL table partitioning configuration
@@ -125,6 +173,9 @@ impl MySQLDatabase {
             })?;
 
         let mut db = Self { config, pool };
+
+        // Validate configuration
+        db.config.validate()?;
 
         // Initialize database schema
         db.initialize_schema().await?;
