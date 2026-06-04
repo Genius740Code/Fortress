@@ -188,10 +188,9 @@ cron = "0.12"
 
 uuid = { version = "1.6", features = ["v4", "serde", "fast-rng"] }
 
-
+url = "2.2.2"
 
 # Async utilities
-
 futures = "0.3"
 
 async-trait = "0.1"

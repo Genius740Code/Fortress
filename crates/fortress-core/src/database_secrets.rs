@@ -88,6 +88,7 @@ use chrono::{DateTime, Duration, Utc};
 
 use rand::rngs::OsRng;
 use rand::RngCore;
+use url;
 
 #[cfg(feature = "performance-optimization")]
 use dashmap::DashMap;
@@ -311,12 +312,19 @@ impl DatabaseEngine {
             let db_password: std::string::String = std::env::var("DB_ADMIN_PASSWORD")
                 .map_err(|_| FortressError::config("DB_ADMIN_PASSWORD not set"))?;
 
-            let conn_string = format!(
-                "{}?user={}&password={}",
-                config.database_url,
-                urlencoding::encode(&db_user),
-                urlencoding::encode(&db_password)
-            );
+            let mut db_url = Url::parse(&config.database_url).map_err(|e| {
+                FortressError::config(format!("Invalid PostgreSQL database URL: {}", e))
+            })?;
+
+            // Replace user and password in the URL with admin credentials
+            db_url
+                .set_username(&db_user)
+                .map_err(|_| FortressError::config("Failed to set username in URL"))?;
+            db_url
+                .set_password(Some(&db_password))
+                .map_err(|_| FortressError::config("Failed to set password in URL"))?;
+            
+            let conn_string = db_url.to_string();
 
             match Client::connect(&conn_string, NoTls).await {
                 Ok(mut client) => {
@@ -438,31 +446,23 @@ impl DatabaseEngine {
 
         #[cfg(feature = "mysql")]
         {
-            // Parse database URL to get host and database name
+            let mut db_url = Url::parse(&config.database_url).map_err(|e| {
+                FortressError::config(format!("Invalid MySQL database URL: {}", e))
+            })?;
 
-            let url_parts: Vec<&str> = config.database_url.split('@').collect();
+            // Replace user and password in the URL with admin credentials
+            db_url
+                .set_username(&db_user)
+                .map_err(|_| FortressError::config("Failed to set username in URL"))?;
+            db_url
+                .set_password(Some(&db_password))
+                .map_err(|_| FortressError::config("Failed to set password in URL"))?;
+            
+            let conn_url = db_url.to_string();
 
-            if url_parts.len() < 2 {
-                return Err(FortressError::secrets(
-                    "Invalid database URL format".to_string(),
-                ));
-            }
-
-            let host_db = url_parts[1];
-
-            let host_parts: Vec<&str> = host_db.split('/').collect();
-
-            let host = host_parts.get(0).unwrap_or(&"localhost:3306");
-
-            let database = host_parts.get(1).unwrap_or("mysql");
-
-            // Create connection URL with environment variables
-            let db_user = std::env::var("DB_ADMIN_USER")
-                .map_err(|_| FortressError::config("DB_ADMIN_USER not set"))?;
-            let db_password: std::string::String = std::env::var("DB_ADMIN_PASSWORD")
-                .map_err(|_| FortressError::config("DB_ADMIN_PASSWORD not set"))?;
-
-            let conn_url = format!("mysql://{}:{}@{}/{}", db_user, db_password, host, database);
+            // Extract host and database from the parsed URL
+            let host = db_url.host_str().unwrap_or("localhost");
+            let database = db_url.path_segments().and_then(|mut p| p.next()).unwrap_or("mysql");
 
             match Pool::new(conn_url.as_str()).await {
                 Ok(pool) => {
@@ -766,12 +766,19 @@ impl DatabaseEngine {
                     let db_password: std::string::String = std::env::var("DB_ADMIN_PASSWORD")
                         .map_err(|_| FortressError::config("DB_ADMIN_PASSWORD not set"))?;
 
-                    let conn_string = format!(
-                        "{}?user={}&password={}",
-                        config.database_url,
-                        urlencoding::encode(&db_user),
-                        urlencoding::encode(&db_password)
-                    );
+                    let mut db_url = Url::parse(&config.database_url).map_err(|e| {
+                        FortressError::config(format!("Invalid PostgreSQL database URL: {}", e))
+                    })?;
+
+                    // Replace user and password in the URL with admin credentials
+                    db_url
+                        .set_username(&db_user)
+                        .map_err(|_| FortressError::config("Failed to set username in URL"))?;
+                    db_url
+                        .set_password(Some(&db_password))
+                        .map_err(|_| FortressError::config("Failed to set password in URL"))?;
+                    
+                    let conn_string = db_url.to_string();
 
                     if let Ok(mut client) = Client::connect(&conn_string, NoTls).await {
                         // Drop user with parameterized query
@@ -801,16 +808,13 @@ impl DatabaseEngine {
             DatabaseType::MySQL => {
                 #[cfg(feature = "mysql")]
                 {
-                    let url_parts: Vec<&str> = config.database_url.split('@').collect();
+                    let db_url = Url::parse(&config.database_url).map_err(|e| {
+                        FortressError::config(format!("Invalid MySQL database URL: {}", e))
+                    })?;
 
-                    if url_parts.len() >= 2 {
-                        let host_db = url_parts[1];
+                    let host = db_url.host_str().unwrap_or("localhost:3306");
 
-                        let host_parts: Vec<&str> = host_db.split('/').collect();
-
-                        let host = host_parts.get(0).unwrap_or(&"localhost:3306");
-
-                        if let Ok(mut conn) = mysql::Pool::new(host).await {
+                    if let Ok(mut conn) = mysql::Pool::new(host).await {
                             // Drop user with parameterized query
                             let drop_query = "DROP USER IF EXISTS ?";
                             if let Err(e) = conn.exec_drop(drop_query, (username,)).await {
@@ -826,9 +830,8 @@ impl DatabaseEngine {
                         } else {
                             log::warn!("Failed to get MySQL connection for user drop");
                         }
-                    } else {
-                        log::warn!("Failed to create MySQL connection pool for user drop");
-                    }
+                    // Removed the else block that was causing the compilation error.
+                    // The error handling for URL parsing is now done earlier.
                 }
 
                 #[cfg(not(feature = "mysql"))]
@@ -1597,6 +1600,14 @@ impl SecretsEngine for DatabaseEngine {
             .get("database_url")
             .and_then(|v| v.as_str())
             .ok_or_else(|| FortressError::secrets("database_url is required".to_string()))?;
+
+        // Validate database_url as a proper URL
+        if url::Url::parse(database_url).is_err() {
+            return Err(FortressError::secrets(format!(
+                "Invalid database_url format: {}",
+                database_url
+            )));
+        }
 
         let admin_username = config
             .get("admin_username")
