@@ -516,7 +516,7 @@ impl RaftEngine {
                 let current_state = state.read().await;
                 let heartbeat_time = *last_heartbeat.read().await;
                 let current_term = persistent_state.read().await.current_term;
-                let members = cluster_members.read().await;
+                let _members = cluster_members.read().await;
 
                 // Only check election timeout if we're a follower
                 if matches!(*current_state, RaftState::Follower) {
@@ -529,26 +529,31 @@ impl RaftEngine {
                         );
 
                     if time_since_heartbeat > randomized_timeout {
-                        info!("Election timeout for node {}, starting election", node_id);
+                        info!(
+                            "Node {} election timeout. Current term: {}. Last heartbeat: {:?}. Time since heartbeat: {:?}. Randomized timeout: {:?}",
+                            node_id, current_term, heartbeat_time, time_since_heartbeat, randomized_timeout
+                        );
 
-                        // Start election
-                        drop(current_state);
-                        let _ = heartbeat_time;
-                        drop(members);
+                        // Ensure we are still a follower before initiating election
+                        // This prevents multiple elections from being triggered if state changes quickly
+                        let state_check = state.read().await;
+                        if matches!(*state_check, RaftState::Follower) {
+                            drop(state_check); // Release read lock before acquiring write locks in start_election
 
-                        if let Err(e) = Self::start_election(
-                            node_id,
-                            &state,
-                            &persistent_state,
-                            &cluster_members,
-                            current_term,
-                        )
-                        .await
-                        {
-                            error!("Failed to start election: {}", e);
+                            if let Err(e) = RaftEngine::start_election(
+                                node_id,
+                                &state,
+                                &persistent_state,
+                                &cluster_members,
+                                current_term, // Pass the current term as start_election will increment it
+                            )
+                            .await
+                            {
+                                error!("Error starting election on node {}: {:?}", node_id, e);
+                            }
                         }
-                    }
-                }
+                    } // This closes: if time_since_heartbeat > randomized_timeout
+                } // This closes: if matches!(*current_state, RaftState::Follower)
             }
         });
 
