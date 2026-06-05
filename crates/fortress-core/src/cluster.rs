@@ -365,49 +365,46 @@ impl ClusterManager {
 
         // Send length prefix followed by data
         let length = request_bytes.len() as u32;
-        if let Err(e) = stream.write_all(&length.to_le_bytes()).await {
-            tracing::warn!("Failed to send length to seed node {}: {}", addr, e);
-            return Err(FortressError::cluster(
-                format!("Failed to send length to seed node {}: {}", addr, e),
-                None,
-            ));
-        }
+        tokio::time::timeout(Duration::from_secs(5), stream.write_all(&length.to_le_bytes()))
+            .await
+            .map_err(|_| {
+                FortressError::cluster(
+                    format!("Timeout sending length to seed node {}", addr),
+                    None,
+                )
+            })??;
 
-        if let Err(e) = stream.write_all(&request_bytes).await {
-            tracing::warn!("Failed to send join request to seed node {}: {}", addr, e);
-            return Err(FortressError::cluster(
-                format!("Failed to send join request to seed node {}: {}", addr, e),
-                None,
-            ));
-        }
+        tokio::time::timeout(Duration::from_secs(5), stream.write_all(&request_bytes))
+            .await
+            .map_err(|_| {
+                FortressError::cluster(
+                    format!("Timeout sending join request to seed node {}", addr),
+                    None,
+                )
+            })??;
 
         // Read response
         let mut length_bytes = [0u8; 4];
-        if let Err(e) = stream.read_exact(&mut length_bytes).await {
-            tracing::warn!(
-                "Failed to read response length from seed node {}: {}",
-                addr,
-                e
-            );
-            return Err(FortressError::cluster(
-                format!(
-                    "Failed to read response length from seed node {}: {}",
-                    addr, e
-                ),
-                None,
-            ));
-        }
+        tokio::time::timeout(Duration::from_secs(5), stream.read_exact(&mut length_bytes))
+            .await
+            .map_err(|_| {
+                FortressError::cluster(
+                    format!("Timeout reading response length from seed node {}", addr),
+                    None,
+                )
+            })??;
 
         let response_length = u32::from_le_bytes(length_bytes) as usize;
         let mut response_bytes = vec![0u8; response_length];
 
-        if let Err(e) = stream.read_exact(&mut response_bytes).await {
-            tracing::warn!("Failed to read response from seed node {}: {}", addr, e);
-            return Err(FortressError::cluster(
-                format!("Failed to read response from seed node {}: {}", addr, e),
-                None,
-            ));
-        }
+        tokio::time::timeout(Duration::from_secs(5), stream.read_exact(&mut response_bytes))
+            .await
+            .map_err(|_| {
+                FortressError::cluster(
+                    format!("Timeout reading response from seed node {}", addr),
+                    None,
+                )
+            })??;
 
         // Parse response
         let response: serde_json::Value = serde_json::from_slice(&response_bytes).map_err(|e| {
@@ -876,31 +873,34 @@ impl ClusterManager {
 
         // Send length prefix followed by data
         let length = command_bytes.len() as u32;
-        if let Err(e) = stream.write_all(&length.to_le_bytes()).await {
-            return Err(FortressError::cluster(
-                format!("Failed to send command length to node {}: {}", node_id, e),
-                None,
-            ));
-        }
+        tokio::time::timeout(Duration::from_secs(3), stream.write_all(&length.to_le_bytes()))
+            .await
+            .map_err(|_| {
+                FortressError::cluster(
+                    format!("Timeout sending command length to node {}", node_id),
+                    None,
+                )
+            })??;
 
-        if let Err(e) = stream.write_all(&command_bytes).await {
-            return Err(FortressError::cluster(
-                format!("Failed to send command to node {}: {}", node_id, e),
-                None,
-            ));
-        }
+        tokio::time::timeout(Duration::from_secs(3), stream.write_all(&command_bytes))
+            .await
+            .map_err(|_| {
+                FortressError::cluster(
+                    format!("Timeout sending command to node {}", node_id),
+                    None,
+                )
+            })??;
 
         // Read acknowledgment
         let mut length_bytes = [0u8; 4];
-        if let Err(e) = stream.read_exact(&mut length_bytes).await {
-            return Err(FortressError::cluster(
-                format!(
-                    "Failed to read acknowledgment length from node {}: {}",
-                    node_id, e
-                ),
-                None,
-            ));
-        }
+        tokio::time::timeout(Duration::from_secs(3), stream.read_exact(&mut length_bytes))
+            .await
+            .map_err(|_| {
+                FortressError::cluster(
+                    format!("Timeout reading acknowledgment length from node {}", node_id),
+                    None,
+                )
+            })??;
 
         let ack_length = u32::from_le_bytes(length_bytes) as usize;
         if ack_length > 1024 {
@@ -915,12 +915,14 @@ impl ClusterManager {
         }
 
         let mut ack_bytes = vec![0u8; ack_length];
-        if let Err(e) = stream.read_exact(&mut ack_bytes).await {
-            return Err(FortressError::cluster(
-                format!("Failed to read acknowledgment from node {}: {}", node_id, e),
-                None,
-            ));
-        }
+        tokio::time::timeout(Duration::from_secs(3), stream.read_exact(&mut ack_bytes))
+            .await
+            .map_err(|_| {
+                FortressError::cluster(
+                    format!("Timeout reading acknowledgment from node {}", node_id),
+                    None,
+                )
+            })??;
 
         // Parse acknowledgment
         let ack: serde_json::Value = serde_json::from_slice(&ack_bytes).map_err(|e| {
