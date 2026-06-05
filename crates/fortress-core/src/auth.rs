@@ -553,7 +553,7 @@ pub struct MfaConfig {
 impl Default for MfaConfig {
     fn default() -> Self {
         Self {
-            required: false,
+            required: true,
             totp_config: TotpConfig::default(),
             hardware_token_config: HardwareTokenConfig::default(),
             backup_codes_config: BackupCodesConfig::default(),
