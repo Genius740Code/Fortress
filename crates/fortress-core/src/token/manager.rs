@@ -208,7 +208,8 @@ impl TokenManager {
     ) -> Result<TokenValidationResult> {
         let mut errors = Vec::new();
         let mut warnings = Vec::new();
-        let mut token_info = None;
+        let mut token_info_option = None;
+        let mut validation_successful = false; // Flag to track if validation passed initially
 
         // Check if token is revoked
         if self.revocation_list.is_revoked(token_id).await {
@@ -222,9 +223,8 @@ impl TokenManager {
             });
         }
 
-        // Get token info
         {
-            let tokens = self.tokens.read().await;
+            let tokens = self.tokens.read().await; // Acquire read lock
             if let Some(info) = tokens.get(token_id) {
                 // Check expiration
                 if info.token.is_expired() {
@@ -268,24 +268,25 @@ impl TokenManager {
                     warnings.push("Token is not renewable".to_string());
                 }
 
-                token_info = Some(info.clone());
+                token_info_option = Some(info.clone());
+                validation_successful = errors.is_empty();
             } else {
                 errors.push("Token not found".to_string());
             }
-        }
+        } // Read lock on `tokens` is released here
 
-        let valid = errors.is_empty();
-
-        // Update usage statistics if tracking is enabled
-        if valid && self.config.enable_usage_tracking {
-            self.update_usage_stats(token_id, true, false).await;
-        } else if !valid && self.config.enable_usage_tracking {
-            self.update_usage_stats(token_id, false, true).await;
+        // Now, outside the read lock, update usage statistics if tracking is enabled
+        if self.config.enable_usage_tracking {
+            if validation_successful {
+                self.update_usage_stats(token_id, true, false).await;
+            } else {
+                self.update_usage_stats(token_id, false, true).await;
+            }
         }
 
         Ok(TokenValidationResult {
-            valid,
-            token_info,
+            valid: validation_successful,
+            token_info: token_info_option,
             errors,
             warnings,
             validated_at: Utc::now(),
@@ -381,6 +382,12 @@ impl TokenManager {
             tokens.remove(&request.token_id);
         }
 
+        // Remove metadata
+        {
+            let mut token_metadata = self.token_metadata.write().await;
+            token_metadata.remove(&request.token_id);
+        }
+
         // Update entity mapping
         if let Some(ref token_info) = token_info {
             let mut entity_tokens = self.entity_tokens.write().await;
@@ -390,12 +397,6 @@ impl TokenManager {
                     entity_tokens.remove(&token_info.token.entity_id);
                 }
             }
-        }
-
-        // Remove metadata
-        {
-            let mut token_metadata = self.token_metadata.write().await;
-            token_metadata.remove(&request.token_id);
         }
 
         Ok(())
@@ -408,7 +409,7 @@ impl TokenManager {
 
         Ok(TokenLookupResult {
             found: token_info.is_some(),
-            token_info,
+            token_info: token_info,
             looked_up_at: Utc::now(),
         })
     }
@@ -535,8 +536,8 @@ impl TokenManager {
     /// Cleanup expired tokens
     pub async fn cleanup_expired_tokens(&self) -> Result<u64> {
         let mut tokens = self.tokens.write().await;
-        let mut entity_tokens = self.entity_tokens.write().await;
         let mut token_metadata = self.token_metadata.write().await;
+        let mut entity_tokens = self.entity_tokens.write().await;
 
         let mut expired_count = 0;
         let mut expired_token_ids = Vec::new();
@@ -752,8 +753,8 @@ impl TokenManager {
                 // Clean up expired tokens
                 {
                     let mut tokens_guard = tokens.write().await;
-                    let mut entity_tokens_guard = entity_tokens.write().await;
                     let mut metadata_guard = token_metadata.write().await;
+                    let mut entity_tokens_guard = entity_tokens.write().await;
                     let _now = Utc::now();
 
                     let mut expired_token_ids = Vec::new();

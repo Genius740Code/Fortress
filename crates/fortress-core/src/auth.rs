@@ -459,6 +459,34 @@ pub struct AuthConfig {
     pub lockout_config: AccountLockoutConfig,
 }
 
+impl AuthConfig {
+    /// Validates the authentication configuration.
+    pub fn validate(&self) -> crate::error::Result<()> {
+        if self.token_expiration == 0 {
+            return Err(FortressError::configuration(
+                "Token expiration must be positive",
+                Some("token_expiration".to_string()),
+                crate::error::ConfigurationErrorCode::InvalidValue,
+            ));
+        }
+        if self.session_timeout == 0 {
+            return Err(FortressError::configuration(
+                "Session timeout must be positive",
+                Some("session_timeout".to_string()),
+                crate::error::ConfigurationErrorCode::InvalidValue,
+            ));
+        }
+        if self.max_sessions_per_user > 1000 {
+            return Err(FortressError::configuration(
+                "Max sessions per user too large",
+                Some("max_sessions_per_user".to_string()),
+                crate::error::ConfigurationErrorCode::InvalidValue,
+            ));
+        }
+        Ok(())
+    }
+}
+
 impl Default for AuthConfig {
     fn default() -> Self {
         Self {

@@ -41,14 +41,21 @@ pub struct Subscription {
     pub options: SubscriptionOptions,
     /// Created at timestamp
     pub created_at: Instant,
+    /// Inner mutable data for the subscription
+    pub inner: Arc<RwLock<SubscriptionInner>>,
+}
+
+/// Inner mutable data for a subscription
+#[derive(Debug, Clone)]
+pub struct SubscriptionInner {
     /// Last activity timestamp
-    pub last_activity: Arc<RwLock<Instant>>,
+    pub last_activity: Instant,
     /// Subscription status
-    pub status: Arc<RwLock<SubscriptionStatus>>,
+    pub status: SubscriptionStatus,
     /// Message count
-    pub message_count: Arc<RwLock<u64>>,
+    pub message_count: u64,
     /// Last message timestamp
-    pub last_message_at: Arc<RwLock<Option<Instant>>>,
+    pub last_message_at: Option<Instant>,
 }
 
 /// Subscription options
@@ -153,10 +160,12 @@ impl SubscriptionManager {
             filters: Arc::new(filters),
             options,
             created_at: Instant::now(),
-            last_activity: Arc::new(RwLock::new(Instant::now())),
-            status: Arc::new(RwLock::new(SubscriptionStatus::Active)),
-            message_count: Arc::new(RwLock::new(0)),
-            last_message_at: Arc::new(RwLock::new(None)),
+            inner: Arc::new(RwLock::new(SubscriptionInner {
+                last_activity: Instant::now(),
+                status: SubscriptionStatus::Active,
+                message_count: 0,
+                last_message_at: None,
+            })),
         };
 
         // Add to subscriptions
@@ -314,13 +323,13 @@ impl SubscriptionManager {
 
         // Filter active subscriptions and apply filters
         let (matching_subscriptions, exclude_connections): (Vec<String>, Vec<String>) = {
-            let subscriptions = self.subscriptions.read().await;
+            let subscriptions_read_guard = self.subscriptions.read().await;
             let mut matching = Vec::new();
             let mut exclude = Vec::new();
 
             for sub_id in &subscription_ids {
-                if let Some(subscription) = subscriptions.get(sub_id) {
-                    if *subscription.status.read().await == SubscriptionStatus::Active
+                if let Some(subscription) = subscriptions_read_guard.get(sub_id) {
+                    if subscription.inner.read().await.status == SubscriptionStatus::Active
                         && self.matches_filters(subscription, &message)
                     {
                         matching.push(sub_id.clone());
@@ -329,7 +338,7 @@ impl SubscriptionManager {
                     }
                 }
             }
-
+            // subscriptions_read_guard is dropped here, releasing the read lock
             (matching, exclude)
         };
 
@@ -356,9 +365,10 @@ impl SubscriptionManager {
             let subscriptions = self.subscriptions.write().await;
             for subscription_id in &matching_subscriptions {
                 if let Some(subscription) = subscriptions.get(subscription_id) {
-                    *subscription.last_activity.write().await = Instant::now();
-                    *subscription.message_count.write().await += 1;
-                    *subscription.last_message_at.write().await = Some(Instant::now());
+                    let mut inner = subscription.inner.write().await;
+                    inner.last_activity = Instant::now();
+                    inner.message_count += 1;
+                    inner.last_message_at = Some(Instant::now());
                 }
             }
         }
@@ -544,8 +554,8 @@ impl SubscriptionManager {
 
         let mut expired_subscription_ids = Vec::new();
         for (id, sub) in all_subscriptions {
-            let last_activity = sub.last_activity.read().await;
-            if now.duration_since(*last_activity) > timeout {
+            let inner = sub.inner.read().await;
+            if now.duration_since(inner.last_activity) > timeout {
                 expired_subscription_ids.push(id);
             }
         }

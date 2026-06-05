@@ -72,6 +72,41 @@ pub struct CacheManagerConfig {
     pub prediction_confidence_threshold: f64,
 }
 
+impl CacheManagerConfig {
+    /// Validates the cache manager configuration.
+    pub fn validate(&self) -> crate::error::Result<()> {
+        if self.default_ttl_seconds == 0 {
+            return Err(FortressError::configuration(
+                "Default TTL must be positive",
+                Some("default_ttl_seconds".to_string()),
+                crate::error::ConfigurationErrorCode::InvalidValue,
+            ));
+        }
+        if self.health_check_interval_seconds == 0 {
+            return Err(FortressError::configuration(
+                "Health check interval must be positive",
+                Some("health_check_interval_seconds".to_string()),
+                crate::error::ConfigurationErrorCode::InvalidValue,
+            ));
+        }
+        if self.pattern_learning_window_hours == 0 {
+            return Err(FortressError::configuration(
+                "Pattern learning window must be positive",
+                Some("pattern_learning_window_hours".to_string()),
+                crate::error::ConfigurationErrorCode::InvalidValue,
+            ));
+        }
+        if self.prediction_confidence_threshold < 0.0 || self.prediction_confidence_threshold > 1.0 {
+            return Err(FortressError::configuration(
+                "Prediction confidence threshold must be between 0 and 1",
+                Some("prediction_confidence_threshold".to_string()),
+                crate::error::ConfigurationErrorCode::InvalidValue,
+            ));
+        }
+        Ok(())
+    }
+}
+
 /// Cache types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum CacheType {
@@ -1073,6 +1108,7 @@ impl CacheManager for FortressCacheManager {
 /// Factory function to create cache manager
 #[cfg(feature = "distributed-cache")]
 pub async fn create_cache_manager(config: CacheManagerConfig) -> Result<Box<dyn CacheManager>> {
+    config.validate()?;
     let manager = FortressCacheManager::new(config).await?;
     Ok(Box::new(manager))
 }
