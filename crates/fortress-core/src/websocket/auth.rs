@@ -9,6 +9,45 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 
+/// Token bucket for rate limiting
+#[derive(Debug, Clone)]
+pub struct TokenBucket {
+    tokens: f64,
+    last_refill: Instant,
+    fill_rate_per_sec: f64, // tokens per second
+    capacity: f64,
+}
+
+impl TokenBucket {
+    pub fn new(capacity: f64, fill_rate_per_sec: f64) -> Self {
+        TokenBucket {
+            tokens: capacity,
+            last_refill: Instant::now(),
+            fill_rate_per_sec,
+            capacity,
+        }
+    }
+
+    /// Attempts to consume one token. Returns true if successful, false otherwise.
+    pub fn check(&mut self) -> bool {
+        self.refill();
+        if self.tokens >= 1.0 {
+            self.tokens -= 1.0;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Refills the bucket with tokens based on elapsed time and fill rate.
+    fn refill(&mut self) {
+        let now = Instant::now();
+        let elapsed = now.duration_since(self.last_refill).as_secs_f64();
+        self.tokens = (self.tokens + elapsed * self.fill_rate_per_sec).min(self.capacity);
+        self.last_refill = now;
+    }
+}
+
 /// Authentication result
 #[derive(Debug, Clone)]
 pub struct AuthResult {
@@ -31,8 +70,12 @@ pub struct AuthResult {
 pub struct WebSocketAuthenticator {
     /// Auth manager
     auth_manager: Arc<AuthManager>,
+    /// Global rate limit
+    global_rate_limit: Arc<RwLock<TokenBucket>>,
     /// Rate limiting per IP
-    ip_rate_limits: Arc<RwLock<HashMap<String, RateLimitInfo>>>,
+    ip_rate_limits: Arc<RwLock<HashMap<String, TokenBucket>>>,
+    /// Rate limiting per user
+    user_rate_limits: Arc<RwLock<HashMap<String, TokenBucket>>>,
     /// Failed authentication attempts
     failed_attempts: Arc<RwLock<HashMap<String, FailedAttemptInfo>>>,
     /// Configuration
@@ -56,18 +99,21 @@ pub struct AuthConfig {
     pub enable_rate_limiting: bool,
     /// Enable IP lockout
     pub enable_ip_lockout: bool,
+    /// Global rate limit capacity
+    pub global_rate_limit_capacity: f64,
+    /// Global rate limit fill rate (tokens per second)
+    pub global_rate_limit_fill_rate: f64,
+    /// IP rate limit capacity
+    pub ip_rate_limit_capacity: f64,
+    /// IP rate limit fill rate (tokens per second)
+    pub ip_rate_limit_fill_rate: f64,
+    /// User rate limit capacity
+    pub user_rate_limit_capacity: f64,
+    /// User rate limit fill rate (tokens per second)
+    pub user_rate_limit_fill_rate: f64,
 }
 
-/// Rate limiting information
-#[derive(Debug, Clone)]
-struct RateLimitInfo {
-    /// Number of attempts
-    attempts: u32,
-    /// First attempt time
-    first_attempt: Instant,
-    /// Last attempt time
-    last_attempt: Instant,
-}
+
 
 /// Failed attempt information
 #[derive(Debug, Clone)]
@@ -85,7 +131,12 @@ impl WebSocketAuthenticator {
     pub fn new(auth_manager: Arc<AuthManager>, config: AuthConfig) -> Self {
         Self {
             auth_manager,
+            global_rate_limit: Arc::new(RwLock::new(TokenBucket::new(
+                config.global_rate_limit_capacity,
+                config.global_rate_limit_fill_rate,
+            ))),
             ip_rate_limits: Arc::new(RwLock::new(HashMap::new())),
+            user_rate_limits: Arc::new(RwLock::new(HashMap::new())),
             failed_attempts: Arc::new(RwLock::new(HashMap::new())),
             config,
         }
@@ -97,9 +148,20 @@ impl WebSocketAuthenticator {
         message: &WebSocketMessage,
         client_ip: &str,
     ) -> Result<AuthResult> {
-        // Check rate limiting
+        // Global rate limit check
         if self.config.enable_rate_limiting {
-            if let Err(e) = self.check_rate_limit(client_ip).await {
+            if let Err(e) = self.check_global_rate_limit().await {
+                return Ok(AuthResult {
+                    success: false,
+                    user_id: None,
+                    session_id: None,
+                    roles: Vec::new(),
+                    error: Some(e.to_string()),
+                    timestamp: chrono::Utc::now(),
+                });
+            }
+            // IP rate limit check
+            if let Err(e) = self.check_ip_rate_limit(client_ip).await {
                 return Ok(AuthResult {
                     success: false,
                     user_id: None,
@@ -141,7 +203,7 @@ impl WebSocketAuthenticator {
         };
 
         // Authenticate based on method
-        let result = match auth_payload.method {
+        let mut result = match auth_payload.method {
             AuthMethod::JWT => {
                 self.authenticate_jwt(&auth_payload.token, client_ip)
                     .await?
@@ -156,9 +218,22 @@ impl WebSocketAuthenticator {
             }
         };
 
-        // Update rate limiting and failed attempts
+        // If authentication was successful, check user rate limit and record success
         if result.success {
-            self.record_successful_auth(client_ip).await;
+            if self.config.enable_rate_limiting {
+                if let Some(user_id) = result.user_id.clone() {
+                    if let Err(e) = self.check_user_rate_limit(&user_id).await {
+                        // User rate limit exceeded, so authentication effectively fails
+                        result.success = false;
+                        result.error = Some(e.to_string());
+                    }
+                }
+            }
+            if result.success { // Only record successful auth if no user rate limit issues
+                self.record_successful_auth(client_ip).await;
+            } else { // If user rate limit caused failure
+                self.record_failed_auth(client_ip).await;
+            }
         } else {
             self.record_failed_auth(client_ip).await;
         }
@@ -292,32 +367,81 @@ impl WebSocketAuthenticator {
         // In production: secure session store lookup with proper validation
         let session_data = self.validate_session_token(session_token).await?;
 
-        if session_data.is_none() {
-            return Ok(AuthResult {
+        match session_data {
+            Some(session) => Ok(AuthResult {
+                success: true,
+                user_id: Some(session.user_id),
+                session_id: Some(session_token.to_string()),
+                roles: session.roles,
+                error: None,
+                timestamp: chrono::Utc::now(),
+            }),
+            None => Ok(AuthResult {
                 success: false,
                 user_id: None,
                 session_id: None,
                 roles: Vec::new(),
                 error: Some("Invalid or expired session token".to_string()),
                 timestamp: chrono::Utc::now(),
-            });
+            }),
         }
-
-        let session = session_data
-            .ok_or_else(|| FortressError::authentication("Invalid session data", None))?;
-
-        Ok(AuthResult {
-            success: true,
-            user_id: Some(session.user_id),
-            session_id: Some(session_token.to_string()),
-            roles: session.roles,
-            error: None,
-            timestamp: chrono::Utc::now(),
-        })
     }
 
-    /// Validate user exists and is active
-    async fn validate_user(&self, user_id: &str) -> Result<()> {
+/// Check global rate limiting
+async fn check_global_rate_limit(&self) -> Result<()> {
+let mut global_limit = self.global_rate_limit.write().await;
+if !global_limit.check() {
+return Err(FortressError::websocket(
+    "Global rate limit exceeded".to_string(),
+));
+}
+Ok(())
+}
+
+/// Check IP rate limiting
+async fn check_ip_rate_limit(&self, client_ip: &str) -> Result<()> {
+let mut ip_limits = self.ip_rate_limits.write().await;
+let ip_limit = ip_limits
+.entry(client_ip.to_string())
+.or_insert_with(|| {
+    TokenBucket::new(
+        self.config.ip_rate_limit_capacity,
+        self.config.ip_rate_limit_fill_rate,
+    )
+});
+
+if !ip_limit.check() {
+return Err(FortressError::websocket(format!(
+    "Rate limit exceeded for IP: {}",
+    client_ip
+)));
+}
+Ok(())
+}
+
+/// Check user rate limiting
+async fn check_user_rate_limit(&self, user_id: &str) -> Result<()> {
+let mut user_limits = self.user_rate_limits.write().await;
+let user_limit = user_limits
+.entry(user_id.to_string())
+.or_insert_with(|| {
+    TokenBucket::new(
+        self.config.user_rate_limit_capacity,
+        self.config.user_rate_limit_fill_rate,
+    )
+});
+
+if !user_limit.check() {
+return Err(FortressError::websocket(format!(
+    "Rate limit exceeded for user: {}",
+    user_id
+)));
+}
+Ok(())
+}
+
+/// Validate user exists and is active
+async fn validate_user(&self, user_id: &str) -> Result<()> {
         // In a real implementation, check user database
         // For now, we'll simulate validation
         if user_id.is_empty() {
@@ -338,40 +462,7 @@ impl WebSocketAuthenticator {
         Ok(())
     }
 
-    /// Check rate limiting for IP
-    async fn check_rate_limit(&self, client_ip: &str) -> Result<()> {
-        let mut rate_limits = self.ip_rate_limits.write().await;
-        let now = Instant::now();
 
-        let rate_info = rate_limits
-            .entry(client_ip.to_string())
-            .or_insert_with(|| RateLimitInfo {
-                attempts: 0,
-                first_attempt: now,
-                last_attempt: now,
-            });
-
-        // Reset if window has passed
-        if now.duration_since(rate_info.first_attempt)
-            > Duration::from_secs(self.config.attempt_window_seconds)
-        {
-            rate_info.attempts = 0;
-            rate_info.first_attempt = now;
-        }
-
-        // Check if rate limit exceeded
-        if rate_info.attempts >= self.config.max_attempts_per_ip {
-            return Err(FortressError::websocket(format!(
-                "Rate limit exceeded for IP: {}",
-                client_ip
-            )));
-        }
-
-        rate_info.attempts += 1;
-        rate_info.last_attempt = now;
-
-        Ok(())
-    }
 
     /// Check if IP is locked out
     async fn check_ip_lockout(&self, client_ip: &str) -> Result<()> {
@@ -396,10 +487,6 @@ impl WebSocketAuthenticator {
         // Clear failed attempts for this IP
         let mut failed_attempts = self.failed_attempts.write().await;
         failed_attempts.remove(client_ip);
-
-        // Reset rate limit
-        let mut rate_limits = self.ip_rate_limits.write().await;
-        rate_limits.remove(client_ip);
     }
 
     /// Record failed authentication
@@ -434,12 +521,21 @@ impl WebSocketAuthenticator {
     pub async fn cleanup(&self) {
         let now = Instant::now();
 
-        // Clean up rate limits
+        // Clean up IP rate limits (remove entries not accessed for a while)
         {
-            let mut rate_limits = self.ip_rate_limits.write().await;
-            rate_limits.retain(|_, info| {
-                now.duration_since(info.last_attempt)
-                    <= Duration::from_secs(self.config.attempt_window_seconds * 2)
+            let mut ip_limits = self.ip_rate_limits.write().await;
+            ip_limits.retain(|_, bucket| {
+                bucket.refill(); // Refill to update last_refill
+                now.duration_since(bucket.last_refill) <= Duration::from_secs(self.config.attempt_window_seconds * 2)
+            });
+        }
+
+        // Clean up user rate limits (remove entries not accessed for a while)
+        {
+            let mut user_limits = self.user_rate_limits.write().await;
+            user_limits.retain(|_, bucket| {
+                bucket.refill(); // Refill to update last_refill
+                now.duration_since(bucket.last_refill) <= Duration::from_secs(self.config.token_expiration_seconds * 2) // Using token_expiration for user limit retention example
             });
         }
 
@@ -557,6 +653,12 @@ impl Default for AuthConfig {
             token_expiration_seconds: 3600, // 1 hour
             enable_rate_limiting: true,
             enable_ip_lockout: true,
+            global_rate_limit_capacity: 1000.0,
+            global_rate_limit_fill_rate: 100.0, // 100 requests per second globally
+            ip_rate_limit_capacity: 100.0,
+            ip_rate_limit_fill_rate: 10.0, // 10 requests per second per IP
+            user_rate_limit_capacity: 50.0,
+            user_rate_limit_fill_rate: 5.0, // 5 requests per second per user
         }
     }
 }
