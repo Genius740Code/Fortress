@@ -1556,6 +1556,9 @@ impl AuthManager {
             },
         };
 
+        // Validate the configuration upon creation
+        config.validate().expect("AuthManager configuration is invalid at initialization");
+
         Self {
             users: HashMap::new().into(),
             roles: HashMap::new().into(),
