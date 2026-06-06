@@ -3,6 +3,7 @@
 //! This module provides configuration structures for the Fortress server,
 //! including network settings, security options, and feature flags.
 
+use fortress_core::validation::{MAX_PASSWORD_LENGTH};
 use fortress_core::config::Config as CoreConfig;
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
@@ -102,6 +103,16 @@ impl NetworkConfig {
     pub fn bind_address(&self) -> std::result::Result<SocketAddr, std::net::AddrParseError> {
         format!("{}:{}", self.host, self.port).parse()
     }
+
+    pub fn validate(&self) -> Result<(), String> {
+        if self.max_connections == 0 || self.max_connections > 100_000 {
+            return Err("Invalid max_connections: must be between 1 and 100,000".to_string());
+        }
+        if self.request_timeout == 0 || self.request_timeout > 3600 {
+            return Err("Invalid request_timeout: must be between 1 and 3600 seconds".to_string());
+        }
+        Ok(())
+    }
 }
 
 /// Security configuration
@@ -135,6 +146,14 @@ impl Default for SecurityConfig {
     }
 }
 
+impl SecurityConfig {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.jwt_secret.len() > MAX_PASSWORD_LENGTH {
+            return Err("JWT secret too long".to_string());
+        }
+        Ok(())
+    }
+}
 /// CORS configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CorsConfig {
@@ -397,16 +416,14 @@ impl Default for MetricsConfig {
 
 /// Generate a default JWT secret for development
 fn generate_default_jwt_secret() -> String {
-    use rand::Rng;
-    let mut secret = String::with_capacity(64);
-    let mut rng = rand::thread_rng();
+    use rand::{RngCore, rngs::OsRng};
+    let mut secret = vec![0u8; 64];
+    OsRng.fill_bytes(&mut secret);
 
-    for _ in 0..64 {
+    secret.iter().map(|&b| {
         let chars = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-        secret.push(chars[rng.gen_range(0..chars.len())] as char);
-    }
-
-    secret
+        chars[(b as usize) % chars.len()] as char
+    }).collect()
 }
 
 #[cfg(test)]

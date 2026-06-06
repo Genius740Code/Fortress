@@ -64,6 +64,14 @@ pub struct FortressServer {
 }
 
 impl FortressServer {
+    pub fn host(&self) -> &str {
+        &self.config.network.host
+    }
+
+    pub fn port(&self) -> u16 {
+        self.config.network.port
+    }
+
     /// Create a new Fortress server
     pub async fn new(config: ServerConfig) -> ServerResult<Self> {
         info!("Initializing Fortress server");

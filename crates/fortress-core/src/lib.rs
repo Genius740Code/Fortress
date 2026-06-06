@@ -89,6 +89,9 @@ pub use key::{KeyManager, KeyMetadata, SecureKey};
 /// Input validation for security
 pub mod input_validation;
 
+/// Validation utilities and constants
+pub mod validation;
+
 /// Caching system
 pub mod cache_manager;
 

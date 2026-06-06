@@ -155,6 +155,14 @@ impl WebSocketServer {
                 )));
             }
 
+            // Validate certificate format (lightweight check for PEM header)
+            let cert_data = std::fs::read_to_string(cert_file).map_err(|e| {
+                FortressError::websocket(format!("Failed to read certificate file: {}", e))
+            })?;
+            if !cert_data.starts_with("-----BEGIN CERTIFICATE-----") {
+                return Err(FortressError::websocket("Invalid certificate format: missing PEM header"));
+            }
+
             if !std::path::Path::new(key_file).exists() {
                 return Err(FortressError::websocket(format!(
                     "TLS private key file not found: {}",

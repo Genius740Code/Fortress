@@ -30,7 +30,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Fortress server starting");
     println!(
         "Server will bind to {}{}",
-        config.network.host, config.network.port
+        server.host(), server.port()
     );
     println!(
         "Authentication: {}",
@@ -62,7 +62,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let bind_addr = format!(
         "{}:{}",
-        server.config.network.host, server.config.network.port
+        server.host(),
+        server.port()
     );
     server.listen(&bind_addr).await?;
 

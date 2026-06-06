@@ -33,7 +33,7 @@ mod tests {
             active: true,
             created_at: now,
             last_login: None,
-            password_hash: "test_hash".to_string(),
+            password_hash: fortress_core::auth::FortressPasswordHash("test_hash".to_string()),
         }
     }
 

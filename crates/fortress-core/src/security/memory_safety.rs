@@ -132,8 +132,9 @@ impl SecureKey {
     /// # Returns
     /// * `Result<SecureKey, FortressError>` - Generated secure key or error
     pub fn generate_random(length: usize) -> Result<Self, FortressError> {
+        use rand::rngs::OsRng;
         use rand::RngCore;
-        let mut rng = rand::thread_rng();
+        let mut rng = OsRng;
         let mut data = vec![0u8; length];
         rng.fill_bytes(&mut data);
         Ok(Self::new(data))

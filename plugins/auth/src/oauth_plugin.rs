@@ -240,10 +240,10 @@ fn make_http_request(url: &str, method: &str, body: Option<&str>) -> Result<Stri
 
 // PKCE (Proof Key for Code Exchange) helpers
 fn generate_code_verifier() -> String {
-    use rand::Rng;
+    use rand::{RngCore, rngs::OsRng};
 
-    let mut rng = rand::thread_rng();
-    let bytes: Vec<u8> = (0..32).map(|_| rng.gen()).collect();
+    let mut bytes = [0u8; 32];
+    OsRng.fill_bytes(&mut bytes);
     URL_SAFE_NO_PAD.encode(bytes)
 }
 

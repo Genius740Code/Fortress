@@ -1104,7 +1104,7 @@ mod tests {
         let admin_user = UserRecord {
             id: "admin".to_string(),
             username: "admin".to_string(),
-            password_hash: hash_password_secure(admin_password)
+            password_hash: hash_password_secure(&admin_password)
                 .expect("Failed to hash admin password"),
             email: Some("admin@fortress-db.com".to_string()),
             roles: vec!["admin".to_string(), "user".to_string()],

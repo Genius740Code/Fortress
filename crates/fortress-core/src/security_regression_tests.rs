@@ -38,11 +38,14 @@ impl CodebaseScanner {
                         }
 
                         let content = std::fs::read_to_string(path).map_err(|e| {
-                            FortressError::GeneralError(format!(
-                                "Failed to read file {}: {}",
-                                path.display(),
-                                e
-                            ))
+                            FortressError::internal(
+                                format!(
+                                    "Failed to read file {}: {}",
+                                    path.display(),
+                                    e
+                                ),
+                                "FileReadError".to_string(),
+                            )
                         })?;
 
                         for pattern in patterns {
@@ -80,11 +83,14 @@ impl CodebaseScanner {
                         }
 
                         let content = std::fs::read_to_string(path).map_err(|e| {
-                            FortressError::GeneralError(format!(
-                                "Failed to read file {}: {}",
-                                path.display(),
-                                e
-                            ))
+                            FortressError::internal(
+                                format!(
+                                    "Failed to read file {}: {}",
+                                    path.display(),
+                                    e
+                                ),
+                                "FileReadError".to_string(),
+                            )
                         })?;
 
                         for pattern in patterns {

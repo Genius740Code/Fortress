@@ -5,7 +5,8 @@ use axum::{
     http::{Request, StatusCode},
     response::Response,
 };
-use fortress_api_server::middleware::{AdvancedRateLimiter, RateLimitAlgorithm};
+use fortress_api_server::middleware::{AdvancedRateLimiter};
+use fortress_api_server::config::RateLimitAlgorithm;
 use fortress_api_server::prelude::*;
 use std::sync::Arc;
 use std::time::Duration;

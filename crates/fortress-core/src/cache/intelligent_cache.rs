@@ -269,7 +269,7 @@ impl<T: Clone> IntelligentCache<T> {
         // Update size accounting
         if let Some(old_entry) = entries.get(key) {
             if let Some(old_size) = old_entry.size_bytes {
-                *current_size = current_size.saturating_sub(old_size);
+                *current_size = current_size.checked_sub(old_size).unwrap_or(0);
             }
         }
         
@@ -290,7 +290,7 @@ impl<T: Clone> IntelligentCache<T> {
         
         if let Some(entry) = entries.remove(key) {
             if let Some(size) = entry.size_bytes {
-                *current_size = current_size.saturating_sub(size);
+                *current_size = current_size.checked_sub(size).unwrap_or(0);
             }
             self.remove_from_access_order(key).await;
             Some(entry.value)
@@ -426,7 +426,7 @@ impl<T: Clone> IntelligentCache<T> {
         for key in &to_evict {
             if let Some(entry) = entries.remove(key) {
                 if let Some(size) = entry.size_bytes {
-                    *current_size = current_size.saturating_sub(size);
+                    *current_size = current_size.checked_sub(size).unwrap_or(0);
                 }
                 evicted_count += 1;
                 self.remove_from_access_order(key).await;
@@ -503,7 +503,7 @@ impl<T: Clone> IntelligentCache<T> {
         for key in &expired_keys {
             if let Some(entry) = entries.remove(key) {
                 if let Some(size) = entry.size_bytes {
-                    *current_size = current_size.saturating_sub(size);
+                    *current_size = current_size.checked_sub(size).unwrap_or(0);
                 }
                 self.remove_from_access_order(key).await;
             }
