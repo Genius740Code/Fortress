@@ -710,7 +710,7 @@ pub fn install_completions() -> Result<(), FortressError> {
                 .join("bash-completion")
                 .join("completions");
             std::fs::create_dir_all(&dir).map_err(|e| {
-                FortressError::io_error(format!("Failed to create completions directory: {}", e))
+                FortressError::io_error_with_path("create_dir_all", dir.to_string_lossy(), format!("Failed to create completions directory: {}", e))
             })?;
             dir
         }
@@ -721,7 +721,7 @@ pub fn install_completions() -> Result<(), FortressError> {
                 .join("fortress")
                 .join("completions");
             std::fs::create_dir_all(&dir).map_err(|e| {
-                FortressError::io_error(format!("Failed to create completions directory: {}", e))
+                FortressError::io_error_with_path("create_dir_all", dir.to_string_lossy(), format!("Failed to create completions directory: {}", e))
             })?;
             dir
         }
@@ -735,7 +735,7 @@ pub fn install_completions() -> Result<(), FortressError> {
     // Generate bash completions
     let bash_file = completions_dir.join("fortress");
     let mut bash_output = std::fs::File::create(&bash_file).map_err(|e| {
-        FortressError::io_error(format!("Failed to create bash completion file: {}", e))
+        FortressError::io_error_with_path("create_file", bash_file.to_string_lossy(), format!("Failed to create bash completion file: {}", e))
     })?;
     generate_completions(clap_complete::shells::Bash, &mut bash_output)?;
 

@@ -510,6 +510,20 @@ impl FortressError {
         }
     }
 
+    pub fn io_error_with_path(operation: impl Into<String>, path: impl Into<String>, message: impl Into<String>) -> Self {
+        FortressError::FileSystemError {
+            operation: operation.into(),
+            path: path.into(),
+            error_code: "IO001".to_string(),
+            help_text: message.into(),
+            permission_info: Some("Check file permissions and disk space".to_string()),
+            alternative_paths: vec![
+                "Try using a different file path".to_string(),
+                "Check if the file exists and is accessible".to_string(),
+            ],
+        }
+    }
+
     pub fn cli(command: impl Into<String>, reason: impl Into<String>) -> Self {
         let cmd_str = command.into();
         let reason_str = reason.into();
