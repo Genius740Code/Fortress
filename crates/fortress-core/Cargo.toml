@@ -118,7 +118,7 @@ sha2 = "0.10"
 
 # Web framework
 
-warp = "0.3.7"
+warp = "0.4.3"
 
 axum = "0.7"
 
@@ -283,7 +283,7 @@ regex = "1.10"
 
 # OPA/Rego policy engine support
 
-rego = "0.1"
+regorus = "0.10.1"
 
 wasmtime = "19.0"
 

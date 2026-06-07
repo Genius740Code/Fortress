@@ -14,6 +14,7 @@ use sha2::Digest;
 use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
+use regorus::Engine;
 
 /// OIDC Provider configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -251,12 +252,6 @@ pub struct OidcProvider {
     jwks: JsonWebKeySet,
     /// Rego policy engine (if enabled)
     rego_engine: Option<RegoPolicyEngine>,
-    /// Policy evaluation cache
-    cache: HashMap<String, bool>,
-    /// Cache timestamps
-    cache_timestamps: HashMap<String, u64>,
-    /// Policy data
-    data: HashMap<String, serde_json::Value>,
 }
 
 /// Refresh token information
@@ -289,14 +284,8 @@ pub struct PolicyStats {
 
 /// Rego Policy Engine for authorization decisions
 pub struct RegoPolicyEngine {
-    /// Policy evaluation cache
-    cache: HashMap<String, bool>,
-    /// Cache TTL in seconds
-    cache_ttl: u64,
-    /// Cache timestamps
-    cache_timestamps: HashMap<String, u64>,
-    /// Policy data
-    data: HashMap<String, serde_json::Value>,
+    engine: Engine,
+    config: RegoConfig,
 }
 
 impl OidcProvider {
@@ -304,7 +293,24 @@ impl OidcProvider {
     pub fn new(config: OidcConfig, auth_manager: AuthManager) -> Result<Self, FortressError> {
         // Initialize Rego engine if configured
         let rego_engine = if let Some(rego_config) = &config.rego_policies {
-            Some(RegoPolicyEngine::new(rego_config)?)
+            let mut engine = RegoPolicyEngine::new(rego_config.clone())?;
+            if let Err(e) = engine.load_policies_from_dir(&rego_config.policy_dir) {
+                tracing::error!("Failed to load Rego policies from directory: {:?}", e);
+                return Err(FortressError::policy_evaluation(
+                    format!("Failed to load Rego policies from directory: {}", e),
+                    Some(e.to_string()),
+                ));
+            }
+            if let Some(data_dir) = &rego_config.data_dir {
+                if let Err(e) = engine.load_data_from_dir(data_dir) {
+                    tracing::error!("Failed to load Rego data from directory: {:?}", e);
+                    return Err(FortressError::policy_evaluation(
+                        format!("Failed to load Rego data from directory: {}", e),
+                        Some(e.to_string()),
+                    ));
+                }
+            }
+            Some(engine)
         } else {
             None
         };
@@ -319,9 +325,6 @@ impl OidcProvider {
             refresh_tokens: HashMap::new(),
             jwks,
             rego_engine,
-            cache: HashMap::new(),
-            cache_timestamps: HashMap::new(),
-            data: HashMap::new(),
         })
     }
 
@@ -908,19 +911,18 @@ impl OidcProvider {
 
 impl RegoPolicyEngine {
     /// Create a new Rego policy engine
-    pub fn new(config: &RegoConfig) -> Result<Self, FortressError> {
-        Ok(Self {
-            cache: HashMap::new(),
-            cache_ttl: config.cache_ttl,
-            cache_timestamps: HashMap::new(),
-            data: HashMap::new(),
-        })
+    pub fn new(config: RegoConfig) -> Result<Self, FortressError> {
+        let engine = Engine::new();
+        // Configure engine if needed, e.g., set strict mode or enable coverage
+        // For example: engine.set_strict_mode(true);
+        Ok(Self { engine, config })
     }
 
     /// Load Rego policy from string
-    pub fn load_policy(&mut self, name: &str, _policy: &str) -> Result<(), FortressError> {
-        // For now, just store the policy string
-        // In a real implementation, this would compile and validate Rego policy
+    pub fn load_policy(&mut self, name: &str, policy: &str) -> Result<(), FortressError> {
+        self.engine.add_policy(name.to_string(), policy.to_string()).map_err(|e| {
+            FortressError::policy_evaluation(format!("Failed to load policy '{}'", name), Some(e.to_string()))
+        })?;
         tracing::info!("Loaded policy '{}'", name);
         Ok(())
     }
@@ -954,6 +956,37 @@ impl RegoPolicyEngine {
         Ok(())
     }
 
+    /// Load data from directory
+    pub fn load_data_from_dir(&mut self, dir: &str) -> Result<(), FortressError> {
+        let paths = std::fs::read_dir(dir).map_err(|e| {
+            FortressError::io("Failed to read data directory", Some(e.to_string()))
+        })?;
+
+        for path in paths {
+            let path = path.map_err(|e| {
+                FortressError::io("Failed to read directory entry", Some(e.to_string()))
+            })?;
+
+            if path.path().extension().and_then(|s| s.to_str()) == Some("json") {
+                let data_content = std::fs::read_to_string(path.path()).map_err(|e| {
+                    FortressError::io("Failed to read data file", Some(e.to_string()))
+                })?;
+
+                let data_value: serde_json::Value = serde_json::from_str(&data_content).map_err(|e| {
+                    FortressError::io(format!("Failed to parse data file {}: {}", path.path().display(), e), None)
+                })?;
+
+                // Assuming top-level JSON objects are merged into the data
+                // For more complex scenarios, specific data paths might be needed
+                self.engine.add_data(data_value.to_string().into()).map_err(|e| {
+                    FortressError::policy_evaluation(format!("Failed to set Rego data from file {}: {}", path.path().display(), e), Some(e.to_string()))
+                })?;
+                tracing::info!("Loaded data from '{}'", path.path().display());
+            }
+        }
+        Ok(())
+    }
+
     /// Evaluate authorization policy
     pub fn evaluate_authorization(
         &mut self,
@@ -961,81 +994,58 @@ impl RegoPolicyEngine {
         client_id: &str,
         scope: &str,
     ) -> Result<bool, FortressError> {
-        let current_time = current_timestamp();
-        let cache_key = format!("{}:{}:{}", user_id, client_id, scope);
+        let input = serde_json::json!({
+            "user_id": user_id,
+            "client_id": client_id,
+            "scope": scope.split_whitespace().collect::<Vec<&str>>(),
+        });
 
-        // Check cache first
-        if let Some(&timestamp) = self.cache_timestamps.get(&cache_key) {
-            if current_time - timestamp < self.cache_ttl {
-                if let Some(&result) = self.cache.get(&cache_key) {
-                    return Ok(result);
-                }
-            }
-        }
+        self.engine.set_input_json(&input.to_string()).map_err(|e| {
+            FortressError::policy_evaluation(format!("Failed to set Rego input: {}", e), Some(e.to_string()))
+        })?;
 
-        // Simple policy evaluation for now
-        // In a real implementation, this would use OPA Rego engine
-        let allowed = self.evaluate_simple_policy(user_id, client_id, scope)?;
+        // A common Rego query for authorization is `data.<policy_path>.allow`
+        // Assuming policies define a rule named `allow`
+        let query = "data.authz.allow".to_string(); // Example query path
+        let results = self.engine.eval_query(query, false).map_err(|e| {
+            FortressError::policy_evaluation(format!("Failed to evaluate Rego query: {}", e), Some(e.to_string()))
+        })?;
 
-        // Cache result
-        self.cache.insert(cache_key.clone(), allowed);
-        self.cache_timestamps.insert(cache_key, current_time);
+        // Parse Rego query results
+        // In OPA, a rule like 'allow { ... }' evaluates to true if the rule is defined and its conditions are met.
+        // If the 'allow' rule is not defined or its conditions are not met, the result is typically empty or undefined.
+        // We'll consider access allowed if the 'allow' rule evaluates to true.
+        let allowed = results.result.get(0)
+                                    .and_then(|r| r.expressions.get(0))
+                                    .and_then(|e| e.value.as_bool().ok())
+                                    .copied()
+                                    .unwrap_or(false); // Default to false if not explicitly allowed
 
         Ok(allowed)
     }
 
-    /// Simple policy evaluation (placeholder for real Rego implementation)
-    fn evaluate_simple_policy(
-        &self,
-        user_id: &str,
-        client_id: &str,
-        scope: &str,
-    ) -> Result<bool, FortressError> {
-        // Example policy: Allow access if user is not blocked and client is trusted
-        let blocked_users = vec!["blocked_user_1", "blocked_user_2"];
-        let untrusted_clients = vec!["untrusted_client_1"];
-
-        if blocked_users.contains(&user_id) {
-            return Ok(false);
-        }
-
-        if untrusted_clients.contains(&client_id) {
-            return Ok(false);
-        }
-
-        // Allow access to basic scopes
-        let allowed_scopes = vec!["openid", "profile", "email"];
-        let requested_scopes: Vec<&str> = scope.split_whitespace().collect();
-
-        for requested_scope in requested_scopes {
-            if !allowed_scopes.contains(&requested_scope)
-                && requested_scope != "read"
-                && requested_scope != "write"
-            {
-                return Ok(false);
-            }
-        }
-
-        Ok(true)
-    }
-
     /// Set policy data
-    pub fn set_data(&mut self, key: &str, value: serde_json::Value) {
-        self.data.insert(key.to_string(), value);
-    }
-
-    /// Clear cache
-    pub fn clear_cache(&mut self) {
-        self.cache.clear();
-        self.cache_timestamps.clear();
+    pub fn set_data(&mut self, key: &str, value: serde_json::Value) -> Result<(), FortressError> {
+        // Regorus `set_data_json` merges data at the root level.
+        // If we want to set data at a specific path, we'd need to construct the JSON accordingly.
+        // For now, assuming top-level data merge or replacement.
+        let mut data_to_set = serde_json::json!({});
+        data_to_set[key] = value;
+        self.engine.add_data(data_to_set.to_string().into()).map_err(|e| {
+            FortressError::policy_evaluation(format!("Failed to set Rego data: {}", e), Some(e.to_string()))
+        })?;
+        Ok(())
     }
 
     /// Get policy statistics
     pub fn get_stats(&self) -> PolicyStats {
+        // Regorus does not expose direct policy count or cached results in its public API easily.
+        // We can estimate based on loaded policies if needed.
+        // For simplicity, we'll return placeholder stats.
         PolicyStats {
-            total_policies: 0, // No policies loaded in simplified version
-            cached_results: self.cache.len(),
-            data_entries: self.data.len(),
+            total_policies: self.engine.get_policies().map(|p| p.len()).unwrap_or(0),
+            cached_results: 0, // Regorus manages its own internal caching
+            data_entries: 0,   // Regorus data is merged, not easily countable as distinct entries
         }
     }
 }

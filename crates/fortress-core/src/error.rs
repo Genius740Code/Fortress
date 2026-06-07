@@ -1423,6 +1423,15 @@ impl FortressError {
         Self::PolicyError(message.into())
     }
 
+    /// Create a new policy evaluation error
+
+    pub fn policy_evaluation<S: Into<String>>(message: S, details: Option<S>) -> Self {
+        Self::Internal {
+            message: format!("Policy evaluation error: {}", message.into()),
+            code: details.map(|s| s.into()).unwrap_or_else(|| "PolicyEvaluationError".to_string()),
+        }
+    }
+
     /// Create a new token error
 
     pub fn token_with_id<S: Into<String>>(
