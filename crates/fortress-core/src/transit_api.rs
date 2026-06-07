@@ -707,8 +707,10 @@ async fn handle_get_stats_request(
     })
 }
 
-fn update_metrics(metrics: &Arc<RwLock<ApiMetrics>>, success: bool, response_time: std::time::Duration) {
-    let mut m = metrics.write().unwrap();
+fn update_metrics(metrics: &Arc<RwLock<ApiMetrics>>, success: bool, response_time: std::time::Duration) -> Result<(), FortressError> {
+    let mut m = metrics.write().map_err(|e| {
+        FortressError::internal(format!("Failed to acquire metrics lock: {}", e), "METRICS_LOCK")
+    })?;
     m.total_requests += 1;
     
     if success {
@@ -719,6 +721,7 @@ fn update_metrics(metrics: &Arc<RwLock<ApiMetrics>>, success: bool, response_tim
     
     let response_time_ms = response_time.as_millis() as f64;
     m.avg_response_time_ms = (m.avg_response_time_ms * (m.total_requests - 1) as f64 + response_time_ms) / m.total_requests as f64;
+    Ok(())
 }
 
 #[cfg(test)]
