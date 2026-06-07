@@ -28,6 +28,9 @@ use tracing::info;
 use utoipa::OpenApi;
 use uuid::Uuid;
 
+/// Maximum allowed data size in bytes (100KB)
+const MAX_DATA_SIZE: usize = 100_000;
+
 /// Sanitize error messages to prevent information disclosure
 pub fn sanitize_error(error: &ServerError) -> &'static str {
     match error {
@@ -190,48 +193,13 @@ pub async fn store_data(
     // Validate data size
     let data_str = serde_json::to_string(&request.data)
         .map_err(|e| ServerError::validation(format!("Invalid JSON data: {}", e)))?;
-    validator.validate_length(&data_str, 0, 100000)?; // Max 100KB
+    validator.validate_length(&data_str, 0, MAX_DATA_SIZE)?; // Max 100KB
 
     // Generate data ID
     let data_id = Uuid::new_v4().to_string();
 
     // Get or generate encryption key
-    let key_id = request
-        .key_id
-        .clone()
-        .unwrap_or_else(|| format!("key_{}", Uuid::new_v4()));
-
-    // Ensure the key exists; if not, generate and store it.
-    // This keeps the API usable without requiring a prior key-generation call.
-    if !state
-        .key_manager
-        .key_exists(&key_id)
-        .await
-        .map_err(ServerError::Core)?
-    {
-        let algorithm = Aegis256::new();
-        let new_key = state
-            .key_manager
-            .generate_key(&algorithm)
-            .await
-            .map_err(ServerError::Core)?;
-
-        let metadata = fortress_core::key::KeyMetadata::new(
-            key_id.clone(),
-            algorithm.name().to_string(),
-            1,
-            Utc::now(),
-            Utc::now() + chrono::Duration::days(90),
-            "data_encryption".to_string(),
-            fortress_core::encryption::PerformanceProfile::Balanced,
-        );
-
-        state
-            .key_manager
-            .store_key(&key_id, &new_key, &metadata)
-            .await
-            .map_err(ServerError::Core)?;
-    }
+    let key_id = get_or_create_encryption_key(state.clone(), request.key_id.clone()).await?;
 
     // Get the key
     let key = state
@@ -1704,7 +1672,48 @@ mod tests {
     }
 }
 
-// ===== TENANT MANAGEMENT HANDLERS =====
+
+/// Helper to get or create an encryption key
+async fn get_or_create_encryption_key(
+    state: Arc<AppState>,
+    requested_key_id: Option<String>,
+) -> ServerResult<String> {
+    let key_id = requested_key_id.unwrap_or_else(|| format!("key_{}", Uuid::new_v4()));
+
+    // Ensure the key exists; if not, generate and store it.
+    if !state
+        .key_manager
+        .key_exists(&key_id)
+        .await
+        .map_err(ServerError::Core)?
+    {
+        let algorithm = Aegis256::new();
+        let new_key = state
+            .key_manager
+            .generate_key(&algorithm)
+            .await
+            .map_err(ServerError::Core)?;
+
+        let metadata = fortress_core::key::KeyMetadata::new(
+            key_id.clone(),
+            algorithm.name().to_string(),
+            1,
+            Utc::now(),
+            Utc::now() + chrono::Duration::days(90),
+            "data_encryption".to_string(),
+            fortress_core::encryption::PerformanceProfile::Balanced,
+        );
+
+        state
+            .key_manager
+            .store_key(&key_id, &new_key, &metadata)
+            .await
+            .map_err(ServerError::Core)?;
+    }
+
+    Ok(key_id)
+}
+
 
 /// Response for tenant operations
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]

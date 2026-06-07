@@ -951,6 +951,11 @@ impl SecretsEngine for KubernetesAuth {
             stats: stats.clone(),
         })
     }
+
+    async fn cleanup_expired_credentials(&self) -> Result<()> {
+        self.cleanup_expired_sessions().await?;
+        Ok(())
+    }
 }
 
 impl Default for KubernetesAuth {

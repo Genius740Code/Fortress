@@ -230,6 +230,10 @@ path = "examples/testplugin_demo.rs"
 name = "testplugin_working_demo"
 path = "examples/testplugin_working_demo.rs"
 
+[[example]]
+name = "dynamic_secrets_demo"
+path = "examples/dynamic_secrets_demo.rs"
+
 [workspace.dependencies]
 # Shared workspace dependencies for consistent versions
 tokio = "1.51.0"

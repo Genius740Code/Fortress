@@ -1201,6 +1201,52 @@ impl DynamicSecretsEngine {
 
         Ok(())
     }
+
+    /// Clean up expired credentials
+    pub async fn cleanup_expired_credentials(&self) -> Result<()> {
+        let now = Utc::now();
+        let mut cleaned_count = 0;
+
+        // Clean up expired AWS credentials
+        {
+            let mut credentials = self.aws_credentials.write().await;
+            let initial_count = credentials.len();
+            credentials.retain(|_, cred| cred.expires_at > now);
+            cleaned_count += initial_count - credentials.len();
+            if initial_count - credentials.len() > 0 {
+                log::info!("Cleaned up {} expired AWS credentials.", initial_count - credentials.len());
+            }
+        }
+
+        // Clean up expired database credentials
+        {
+            let mut credentials = self.database_credentials.write().await;
+            let initial_count = credentials.len();
+            credentials.retain(|_, cred| cred.expires_at > now);
+            cleaned_count += initial_count - credentials.len();
+            if initial_count - credentials.len() > 0 {
+                log::info!("Cleaned up {} expired database credentials.", initial_count - credentials.len());
+            }
+        }
+
+        // Update stats
+        {
+            let mut stats = self.stats.write().await;
+            stats.total_secrets = self.aws_credentials.read().await.len() as u64
+                + self.database_credentials.read().await.len() as u64;
+            stats.active_leases = stats.total_secrets;
+            *stats.operations.entry("cleanup".to_string()).or_insert(0) += 1;
+            stats.last_operation = Some(Utc::now());
+        }
+
+        if cleaned_count > 0 {
+            log::info!("Total expired credentials cleaned up: {}", cleaned_count);
+        } else {
+            log::info!("No expired credentials found for cleanup.");
+        }
+
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -1685,6 +1731,11 @@ impl SecretsEngine for DynamicSecretsEngine {
 
         log::info!("Dynamic secrets engine configured");
 
+        Ok(())
+    }
+
+    async fn cleanup_expired_credentials(&self) -> Result<()> {
+        self.cleanup_expired_credentials().await?;
         Ok(())
     }
 }

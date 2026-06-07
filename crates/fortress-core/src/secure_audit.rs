@@ -908,6 +908,11 @@ impl crate::secrets::SecretsEngine for SecureAuditLogger {
             },
         })
     }
+
+    async fn cleanup_expired_credentials(&self) -> Result<()> {
+        // Audit logger does not manage dynamic credentials that expire, so this is a no-op.
+        Ok(())
+    }
 }
 
 impl Default for SecureAuditLogger {

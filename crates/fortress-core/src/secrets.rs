@@ -91,6 +91,9 @@ pub trait SecretsEngine: Send + Sync {
 
     /// Get engine name
     fn name(&self) -> &str;
+
+    /// Clean up expired credentials
+    async fn cleanup_expired_credentials(&self) -> Result<()>;
 }
 
 /// Engine types
@@ -447,6 +450,11 @@ mod tests {
 
         fn name(&self) -> &str {
             "TestKvEngine"
+        }
+
+        async fn cleanup_expired_credentials(&self) -> Result<()> {
+            // No-op for test engine
+            Ok(())
         }
     }
 }

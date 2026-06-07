@@ -4,8 +4,8 @@
 //! to generate temporary AWS IAM credentials and database users.
 
 use fortress_core::{
-    dynamic_secrets::{DynamicSecretsEngine, AwsConfig},
-    secrets::{SecretsEngineManager, SecretsEngine},
+    dynamic_secrets::DynamicSecretsEngine,
+    secrets::{SecretsEngineManager, SecretsConfig, SecretsEngine},
 };
 use serde_json::json;
 use tokio;
@@ -13,26 +13,29 @@ use tokio;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize the secrets engine manager
-    let mut manager = SecretsEngineManager::new();
+    let mut manager = SecretsEngineManager::new(SecretsConfig::default());
     
     // Register the dynamic secrets engine
-    let dynamic_engine = DynamicSecretsEngine::new();
-    manager.register("dynamic/", Box::new(dynamic_engine)).await?;
-    
+    let dynamic_engine_instance = DynamicSecretsEngine::new();
+    manager.register_engine("dynamic/".to_string(), Box::new(dynamic_engine_instance))?;
+
+    let dynamic_engine: &dyn SecretsEngine = manager.get_engine("dynamic/").ok_or("Dynamic engine not found")?;
+
     println!("Fortress Dynamic Secrets Engine Demo");
     println!("=====================================");
     
-    // Configure AWS integration
+    // Configure AWS integration through the manager's engine
     println!("\nConfiguring AWS integration...");
-    let aws_config = json!({
-        "access_key_id": "AKIAIOSFODNN7EXAMPLE",
-        "secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
-        "region": "us-west-2",
-        "default_role": "arn:aws:iam::123456789012:role/DynamicSecretRole"
+    let aws_config_json = json!({
+        "aws": {
+            "access_key_id": "AKIAIOSFODNN7EXAMPLE",
+            "secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+            "region": "us-west-2",
+            "default_role": "arn:aws:iam::123456789012:role/DynamicSecretRole"
+        }
     });
-    
-    // Note: In a real implementation, you would get the dynamic engine
-    // and call configure_aws() on it directly
+
+    dynamic_engine.configure(aws_config_json).await?;
     println!("✓ AWS configured for region: us-west-2");
     
     // Generate AWS IAM credentials
@@ -58,7 +61,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "role": "arn:aws:iam::123456789012:role/AppSpecificRole"
     });
     
-    let aws_secret = manager.write("dynamic/aws/myapp", &aws_credential_request).await?;
+    let aws_secret = dynamic_engine.write("dynamic/aws/myapp", &aws_credential_request).await?;
     
     println!("✓ AWS credentials generated successfully");
     println!("Credential Details:");
@@ -66,16 +69,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         aws_secret.data.get("access_key_id")
             .and_then(|v| v.as_str())
             .unwrap_or("N/A"));
-    println!("   Secret Access Key: {}", 
-        aws_secret.data.get("secret_access_key")
-            .and_then(|v| v.as_str())
-            .map(|s| format!("{}...", &s[..8]))
-            .unwrap_or("N/A"));
-    println!("   Session Token: {}", 
-        aws_secret.data.get("session_token")
-            .and_then(|v| v.as_str())
-            .map(|s| format!("{}...", &s[..8]))
-            .unwrap_or("N/A"));
+    let secret_access_key = aws_secret.data.get("secret_access_key")
+        .and_then(|v| v.as_str());
+    println!("   Secret Access Key: {}", secret_access_key.map_or("N/A".to_string(), |s| format!("{}...", &s[..8])));
+    let session_token = aws_secret.data.get("session_token")
+        .and_then(|v| v.as_str());
+    println!("   Session Token: {}", session_token.map_or("N/A".to_string(), |s| format!("{}...", &s[..8])));
     println!("   Expires At: {}", 
         aws_secret.data.get("expires_at")
             .and_then(|v| v.as_str())
@@ -85,7 +84,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .and_then(|v| v.as_str())
             .unwrap_or("N/A"));
     
-    if let Some(lease) = aws_secret.metadata.lease {
+    if let Some(lease) = aws_secret.lease {
         println!("   TTL: {} seconds", lease.ttl);
         println!("   Renewable: {}", lease.renewable);
     }
@@ -97,10 +96,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "database_url": "postgresql://admin:password@localhost:5432/myapp_db",
         "permissions": ["SELECT", "INSERT", "UPDATE"],
         "ttl": 1800, // 30 minutes
-        "username": "myapp_user" // Optional custom username prefix
+        "username": "myapp_user", // Optional custom username prefix
+        "database_type": "postgresql",
+        "connection_string": "postgresql://admin:password@localhost:5432/myapp_db"
     });
     
-    let pg_secret = manager.write("dynamic/db/myapp", &pg_credential_request).await?;
+    let pg_secret = dynamic_engine.write("dynamic/db/myapp", &pg_credential_request).await?;
     
     println!("✓ PostgreSQL credentials generated successfully");
     println!("Database Details:");
@@ -108,11 +109,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         pg_secret.data.get("username")
             .and_then(|v| v.as_str())
             .unwrap_or("N/A"));
-    println!("   Password: {}", 
-        pg_secret.data.get("password")
-            .and_then(|v| v.as_str())
-            .map(|s| format!("{}...", &s[..8]))
-            .unwrap_or("N/A"));
+    let pg_password = pg_secret.data.get("password")
+        .and_then(|v| v.as_str());
+    println!("   Password: {}", pg_password.map_or("N/A".to_string(), |s| format!("{}...", &s[..8])));
     println!("   Database: {}", 
         pg_secret.data.get("database")
             .and_then(|v| v.as_str())
@@ -121,15 +120,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         pg_secret.data.get("database_type")
             .and_then(|v| v.as_str())
             .unwrap_or("N/A"));
-    println!("   Connection String: {}", 
-        pg_secret.data.get("connection_string")
-            .and_then(|v| v.as_str())
-            .map(|s| format!("{}...", &s[..s.len().min(40)]))
-            .unwrap_or("N/A"));
+    let pg_connection_string = pg_secret.data.get("connection_string")
+        .and_then(|v| v.as_str());
+    println!("   Connection String: {}", pg_connection_string.map_or("N/A".to_string(), |s| format!("{}...", &s[..s.len().min(40)])));
     
     let permissions = pg_secret.data.get("permissions")
         .and_then(|v| v.as_array())
-        .unwrap_or(&serde_json::Value::Array(vec![]));
+        .map_or(&[] as &[serde_json::Value], |v| v);
     println!("   Permissions: {}", 
         permissions.iter()
             .filter_map(|v| v.as_str())
@@ -145,7 +142,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "ttl": 7200 // 2 hours
     });
     
-    let mysql_secret = manager.write("dynamic/db/myapp_mysql", &mysql_credential_request).await?;
+    let mysql_secret = dynamic_engine.write("dynamic/db/myapp_mysql", &mysql_credential_request).await?;
     
     println!("✓ MySQL credentials generated successfully");
     println!("Database Details:");
@@ -153,11 +150,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         mysql_secret.data.get("username")
             .and_then(|v| v.as_str())
             .unwrap_or("N/A"));
-    println!("   Password: {}", 
-        mysql_secret.data.get("password")
-            .and_then(|v| v.as_str())
-            .map(|s| format!("{}...", &s[..8]))
-            .unwrap_or("N/A"));
+    let mysql_password = mysql_secret.data.get("password")
+        .and_then(|v| v.as_str());
+    println!("   Password: {}", mysql_password.map_or("N/A".to_string(), |s| format!("{}...", &s[..8])));
     println!("   Database Type: {}", 
         mysql_secret.data.get("database_type")
             .and_then(|v| v.as_str())
@@ -165,7 +160,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // List all dynamic secrets
     println!("\nListing all dynamic secrets...");
-    let secrets = manager.list("dynamic/").await?;
+    let secrets = dynamic_engine.list("dynamic/").await?;
     
     for (i, secret_path) in secrets.iter().enumerate() {
         println!("   {}. {}", i + 1, secret_path);
@@ -173,7 +168,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Demonstrate credential retrieval
     println!("\nRetrieving AWS credentials...");
-    if let Some(retrieved_secret) = manager.read("dynamic/aws/myapp").await? {
+    if let Some(retrieved_secret) = dynamic_engine.read("dynamic/aws/myapp").await? {
         println!("✓ Successfully retrieved AWS credentials");
         println!("   Access Key ID: {}", 
             retrieved_secret.data.get("access_key_id")
@@ -181,34 +176,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .unwrap_or("N/A"));
         
         // Check if credential is still valid
-        if let Some(lease) = retrieved_secret.metadata.lease {
+        if let Some(lease) = retrieved_secret.lease {
             println!("   TTL Remaining: {} seconds", lease.ttl);
         }
     }
     
     // Demonstrate credential cleanup
     println!("\nCleaning up expired credentials...");
-    
-    // Note: In a real implementation, you would get the dynamic engine
-    // and call cleanup_expired_credentials() on it
+    dynamic_engine.cleanup_expired_credentials().await?;
     println!("✓ Cleanup completed");
     
     // Show engine statistics
     println!("\nEngine Statistics:");
-    let engines = manager.list_engines().await;
+    let engines = manager.list_engines();
     for engine_name in engines {
-        if let Some(engine) = manager.engines.try_lock().unwrap().get(&engine_name) {
+        if let Some(engine) = manager.get_engine(&engine_name) {
             if let Ok(status) = engine.status().await {
                 println!("   Engine: {}", status.name);
                 println!("   Type: {:?}", status.engine_type);
-                println!("   Total Secrets: {}", status.total_secrets);
-                println!("   Active Leases: {}", status.active_leases);
+                println!("   Total Secrets: {}", status.stats.total_secrets);
+                println!("   Active Leases: {}", status.stats.active_leases);
                 
-                if let Some(last_op) = status.last_operation {
+                if let Some(last_op) = status.stats.last_operation {
                     println!("   Last Operation: {}", last_op.format("%Y-%m-%d %H:%M:%S UTC"));
                 }
                 
-                println!("   Operations: {:?}", status.operations);
+                println!("   Operations: {:?}", status.stats.operations);
                 println!();
             }
         }

@@ -1743,6 +1743,11 @@ impl SecretsEngine for DatabaseEngine {
             },
         })
     }
+
+    async fn cleanup_expired_credentials(&self) -> Result<()> {
+        self.cleanup_expired_credentials().await?;
+        Ok(())
+    }
 }
 
 impl Default for DatabaseEngine {

@@ -1069,6 +1069,11 @@ impl SecretsEngine for KvEngine {
             stats: stats.clone(),
         })
     }
+
+    async fn cleanup_expired_credentials(&self) -> Result<()> {
+        // KvEngine does not manage dynamic credentials that expire, so this is a no-op.
+        Ok(())
+    }
 }
 
 #[cfg(test)]
