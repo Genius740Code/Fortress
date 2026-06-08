@@ -932,48 +932,68 @@ impl InMemoryUserStore {
 #[async_trait::async_trait]
 impl UserStore for InMemoryUserStore {
     async fn authenticate(&self, request: AuthRequest) -> ServerResult<UserInfo> {
-        let mut users = self.users.write();
+        let (user_id, username, email, roles, tenant_id, password_hash, mut failed_login_attempts, mut locked_until) = {
+            let users_read_guard = self.users.read();
+            let user_record = users_read_guard
+                .get(&request.username)
+                .ok_or_else(|| ServerError::auth("Invalid username or password"))?;
 
-        let user_record = users
-            .get_mut(&request.username)
-            .ok_or_else(|| ServerError::auth("Invalid username or password"))?;
+            (
+                user_record.id.clone(),
+                user_record.username.clone(),
+                user_record.email.clone(),
+                user_record.roles.clone(),
+                user_record.tenant_id.clone(),
+                user_record.password_hash.clone(),
+                user_record.failed_login_attempts,
+                user_record.locked_until,
+            )
+        }; // Read lock is dropped here
 
-        // Check if account is locked
-        if let Some(locked_until) = user_record.locked_until {
-            if chrono::Utc::now() < locked_until {
+        // Check if account is locked (outside of the lock)
+        if let Some(locked_until_time) = locked_until {
+            if chrono::Utc::now() < locked_until_time {
                 return Err(ServerError::auth(
                     "Account is temporarily locked due to multiple failed login attempts",
                 ));
             } else {
-                // Lock expired, reset
-                user_record.locked_until = None;
-                user_record.failed_login_attempts = 0;
+                // Lock expired, reset (this will be updated under write lock later if needed)
+                locked_until = None;
+                failed_login_attempts = 0;
             }
         }
 
-        // Verify password using Argon2id
-        match verify_password_secure(&request.password, &user_record.password_hash) {
+        // Verify password using Argon2id (outside of the lock)
+        match verify_password_secure(&request.password, &password_hash) {
             Ok(true) => {
-                // Reset failed attempts on successful login
-                user_record.failed_login_attempts = 0;
-                user_record.locked_until = None;
+                // On successful login, check if any updates are needed for failed attempts/locked status
+                if failed_login_attempts != 0 || locked_until.is_some() {
+                    let mut users_write_guard = self.users.write(); // Acquire write lock only if needed
+                    if let Some(user_record_mut) = users_write_guard.get_mut(&request.username) {
+                        user_record_mut.failed_login_attempts = 0;
+                        user_record_mut.locked_until = None;
+                    }
+                }
 
                 Ok(UserInfo {
-                    id: user_record.id.clone(),
-                    username: user_record.username.clone(),
-                    email: user_record.email.clone(),
-                    roles: user_record.roles.clone(),
-                    tenant_id: user_record.tenant_id.clone(),
+                    id: user_id,
+                    username,
+                    email,
+                    roles,
+                    tenant_id,
                 })
             }
             Ok(false) => {
-                // Increment failed attempts
-                user_record.failed_login_attempts += 1;
+                // Increment failed attempts (acquire write lock)
+                let mut users_write_guard = self.users.write();
+                if let Some(user_record_mut) = users_write_guard.get_mut(&request.username) {
+                    user_record_mut.failed_login_attempts += 1;
 
-                // Lock account after 5 failed attempts for 30 minutes
-                if user_record.failed_login_attempts >= 5 {
-                    user_record.locked_until =
-                        Some(chrono::Utc::now() + chrono::Duration::minutes(30));
+                    // Lock account after 5 failed attempts for 30 minutes
+                    if user_record_mut.failed_login_attempts >= 5 {
+                        user_record_mut.locked_until =
+                            Some(chrono::Utc::now() + chrono::Duration::minutes(30));
+                    }
                 }
 
                 Err(ServerError::auth("Invalid username or password"))
