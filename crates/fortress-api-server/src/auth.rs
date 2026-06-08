@@ -20,7 +20,10 @@ use axum::{
 };
 use base64::{engine::general_purpose, Engine as _};
 use chrono::{Duration, Utc};
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{
+    decode, encode, DecodingKey, EncodingKey, Header, Validation,
+    jwk::{JwkSet},
+};
 use percent_encoding;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
@@ -29,6 +32,8 @@ use sha2::Digest;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::Instant;
+use parking_lot::RwLock;
 use uuid::Uuid;
 
 /// JWT claims structure
@@ -50,6 +55,10 @@ pub struct TokenClaims {
     pub exp: i64,
     /// JWT ID
     pub jti: String,
+    /// Issuer (OIDC)
+    pub iss: Option<String>,
+    /// Audience (OIDC)
+    pub aud: Option<HashSet<String>>,
 }
 
 /// Optional TokenClaims extractor for handlers
@@ -131,9 +140,13 @@ pub struct OidcUserStore {
     /// HTTP client for OIDC requests
     client: reqwest::Client,
     /// In-memory cache for user information
-    user_cache: Arc<parking_lot::RwLock<HashMap<String, CachedUser>>>,
+    user_cache: Arc<RwLock<HashMap<String, CachedUser>>>,
     /// Refresh token storage
-    refresh_tokens: Arc<parking_lot::RwLock<HashMap<String, TokenEntry>>>, // token -> TokenEntry
+    refresh_tokens: Arc<RwLock<HashMap<String, TokenEntry>>>, // token -> TokenEntry
+    /// In-memory cache for JWKS
+    jwks_cache: Arc<RwLock<Option<JwkSet>>>,
+    /// Expiry for JWKS cache
+    jwks_cache_expiry: Arc<RwLock<Option<Instant>>>,
 }
 
 #[derive(Clone)]
@@ -242,9 +255,58 @@ impl OidcUserStore {
                 .timeout(std::time::Duration::from_secs(30))
                 .build()
                 .expect("Failed to create HTTP client"),
-            user_cache: Arc::new(parking_lot::RwLock::new(HashMap::new())),
-            refresh_tokens: Arc::new(parking_lot::RwLock::new(HashMap::new())),
+            user_cache: Arc::new(RwLock::new(HashMap::new())),
+            refresh_tokens: Arc::new(RwLock::new(HashMap::new())),
+            jwks_cache: Arc::new(RwLock::new(None)),
+            jwks_cache_expiry: Arc::new(RwLock::new(None)),
         }
+    }
+
+    /// Fetches JWKS from the OIDC provider's jwks_uri and caches it.
+    async fn fetch_jwks(&self) -> ServerResult<JwkSet> {
+        // Check cache first
+        {
+            let cache_read = self.jwks_cache.read();
+            let expiry_read = self.jwks_cache_expiry.read();
+            if let (Some(jwks), Some(expiry)) = (cache_read.as_ref(), expiry_read.as_ref()) {
+                if *expiry > Instant::now() {
+                    tracing::debug!("Using cached JWKS.");
+                    return Ok(jwks.clone());
+                }
+            }
+        }
+
+        let jwks_uri = self
+            .provider_config
+            .jwks_uri
+            .as_ref()
+            .ok_or_else(|| ServerError::internal("JWKS URI not configured"))?;
+
+        tracing::info!("Fetching JWKS from: {}", jwks_uri);
+        let response = self.client.get(jwks_uri).send().await.map_err(|e| {
+            ServerError::internal(format!("Failed to fetch JWKS: {}", e))
+        })?;
+
+        if !response.status().is_success() {
+            return Err(ServerError::internal(format!(
+                "JWKS request failed with status: {}",
+                response.status()
+            )));
+        }
+
+        let jwks: JwkSet = response.json().await.map_err(|e| {
+            ServerError::internal(format!("Failed to parse JWKS: {}", e))
+        })?;
+
+        // Cache JWKS for 1 hour
+        {
+            let mut cache_write = self.jwks_cache.write();
+            let mut expiry_write = self.jwks_cache_expiry.write();
+            *cache_write = Some(jwks.clone());
+            *expiry_write = Some(Instant::now() + std::time::Duration::from_secs(3600)); // Cache for 1 hour
+        }
+        tracing::info!("JWKS fetched and cached successfully.");
+        Ok(jwks)
     }
 
     /// Discover OIDC provider endpoints
@@ -441,72 +503,58 @@ impl OidcUserStore {
         Ok(user_info)
     }
 
-    /// Validate ID token signature and claims
-    pub fn validate_id_token(&self, id_token: &str) -> ServerResult<TokenClaims> {
-        // In a real implementation, this would:
-        // 1. Parse the JWT token
-        // 2. Fetch the JWKS from the provider
-        // 3. Validate the signature using the public keys
-        // 4. Validate the claims (issuer, audience, expiration, etc.)
+    /// Validate ID token signature and claims using JWKS.
+    pub async fn validate_id_token(&self, id_token: &str) -> ServerResult<TokenClaims> {
+        let jwks = self.fetch_jwks().await?;
 
-        // For now, we'll do a simplified validation
-        let parts: Vec<&str> = id_token.split('.').collect();
-        if parts.len() != 3 {
-            return Err(ServerError::auth("Invalid ID token format"));
-        }
+        let header = jsonwebtoken::decode_header(id_token)
+            .map_err(|e| ServerError::auth(format!("Invalid ID token header: {}", e)))?;
 
-        // Decode payload (simplified - in production, use proper JWT library)
-        let payload = general_purpose::STANDARD
-            .decode(parts[1])
-            .map_err(|_| ServerError::auth("Failed to decode ID token payload"))?;
+        let kid = header.kid.ok_or_else(|| {
+            ServerError::auth("ID token header is missing 'kid' (Key ID)")
+        })?;
 
-        let claims: serde_json::Value = serde_json::from_slice(&payload)
-            .map_err(|_| ServerError::auth("Failed to parse ID token claims"))?;
+        let jwk = jwks
+            .find(&kid)
+            .ok_or_else(|| ServerError::auth(format!("No JWK found for kid: {}", kid)))?;
 
-        // Extract basic claims
-        let sub = claims
-            .get("sub")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| ServerError::auth("Missing subject claim"))?;
+        let decoding_key = DecodingKey::from_jwk(jwk)
+            .map_err(|e| ServerError::auth(format!("Failed to create decoding key: {}", e)))?;
 
-        let exp = claims
-            .get("exp")
-            .and_then(|v| v.as_i64())
-            .ok_or_else(|| ServerError::auth("Missing expiration claim"))?;
+        let jwk_alg = jwk.common.key_algorithm.ok_or_else(|| {
+            ServerError::auth(format!("JWK with kid '{}' does not specify an algorithm", kid))
+        })?;
 
-        let iat = claims
-            .get("iat")
-            .and_then(|v| v.as_i64())
-            .ok_or_else(|| ServerError::auth("Missing issued at claim"))?;
+        let alg: jsonwebtoken::Algorithm = match jwk_alg {
+            jsonwebtoken::jwk::KeyAlgorithm::HS256 => jsonwebtoken::Algorithm::HS256,
+            jsonwebtoken::jwk::KeyAlgorithm::HS384 => jsonwebtoken::Algorithm::HS384,
+            jsonwebtoken::jwk::KeyAlgorithm::HS512 => jsonwebtoken::Algorithm::HS512,
+            jsonwebtoken::jwk::KeyAlgorithm::RS256 => jsonwebtoken::Algorithm::RS256,
+            jsonwebtoken::jwk::KeyAlgorithm::RS384 => jsonwebtoken::Algorithm::RS384,
+            jsonwebtoken::jwk::KeyAlgorithm::RS512 => jsonwebtoken::Algorithm::RS512,
+            jsonwebtoken::jwk::KeyAlgorithm::ES256 => jsonwebtoken::Algorithm::ES256,
+            jsonwebtoken::jwk::KeyAlgorithm::ES384 => jsonwebtoken::Algorithm::ES384,
+            jsonwebtoken::jwk::KeyAlgorithm::PS256 => jsonwebtoken::Algorithm::PS256,
+            jsonwebtoken::jwk::KeyAlgorithm::PS384 => jsonwebtoken::Algorithm::PS384,
+            jsonwebtoken::jwk::KeyAlgorithm::PS512 => jsonwebtoken::Algorithm::PS512,
+            _ => return Err(ServerError::auth(format!("Unsupported JWK KeyAlgorithm: {:?}", jwk_alg))),
+        };
+        let mut validation = Validation::new(alg);
+        // Configure validation for common OIDC claims
+        validation.set_issuer(&[&self.provider_config.issuer_url]);
+        validation.set_audience(&[&self.provider_config.client_id]);
+        validation.validate_exp = true; // Validate expiration
+        // validation.validate_iat = true; // Validate issued at - Removed as not available in jsonwebtoken::Validation
+        validation.validate_nbf = false; // No not-before validation by default
+        validation.leeway = 60; // Allow 60 seconds clock skew
 
-        // Check expiration
-        let now = chrono::Utc::now().timestamp();
-        if exp <= now {
-            return Err(ServerError::auth("ID token has expired"));
-        }
+        let token_data = decode::<TokenClaims>(id_token, &decoding_key, &validation)
+            .map_err(|e| ServerError::auth(format!("ID token validation failed: {}", e)))?;
 
-        // Create TokenClaims (simplified)
-        Ok(TokenClaims {
-            sub: sub.to_string(),
-            username: sub.to_string(),
-            email: claims
-                .get("email")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string()),
-            roles: claims
-                .get("roles")
-                .and_then(|v| v.as_array())
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                        .collect()
-                })
-                .unwrap_or_default(),
-            tenant_id: None,
-            iat,
-            exp,
-            jti: uuid::Uuid::new_v4().to_string(),
-        })
+        // Additional claim validations if necessary
+        // For example, if you need to check specific scopes or other custom claims
+
+        Ok(token_data.claims)
     }
 
     /// Authenticate with OIDC authorization code
@@ -517,19 +565,49 @@ impl OidcUserStore {
         // Exchange code for tokens
         let token_response = self.exchange_code_for_tokens(request.clone()).await?;
 
+        // Validate the ID token
+        let id_token_claims = if let Some(id_token) = &token_response.id_token {
+            Some(self.validate_id_token(id_token).await?)
+        } else {
+            None
+        };
+
         // Get user info
-        let user_info = self.get_user_info(&token_response.access_token).await?;
+        let user_info_from_endpoint = self.get_user_info(&token_response.access_token).await?;
+
+        // Prefer claims from ID token if available and verified, otherwise from userinfo endpoint
+        let user_id = id_token_claims
+            .as_ref()
+            .map(|claims| claims.sub.clone())
+            .unwrap_or_else(|| user_info_from_endpoint.sub.clone());
+        let username = id_token_claims
+            .as_ref()
+            .map(|claims| claims.username.clone())
+            .unwrap_or_else(|| {
+                user_info_from_endpoint
+                    .preferred_username
+                    .clone()
+                    .unwrap_or_else(|| user_info_from_endpoint.sub.clone())
+            });
+        let email = id_token_claims
+            .as_ref()
+            .and_then(|claims| claims.email.clone())
+            .or_else(|| user_info_from_endpoint.email.clone());
+        let roles = id_token_claims
+            .as_ref()
+            .map(|claims| claims.roles.clone())
+            .unwrap_or_else(|| user_info_from_endpoint.roles.clone().unwrap_or_default());
+        let tenant_id = id_token_claims
+            .as_ref()
+            .and_then(|claims| claims.tenant_id.clone());
 
         // Convert to UserInfo format
         let user = UserInfo {
-            id: user_info.sub.clone(),
-            username: user_info
-                .preferred_username
-                .clone()
-                .unwrap_or_else(|| user_info.sub.clone()),
-            email: user_info.email.clone(),
-            roles: user_info.roles.clone().unwrap_or_default(),
-            tenant_id: None,
+            id: user_id,
+            username,
+            email,
+            roles,
+            tenant_id,
         };
 
         // Store refresh token if provided
@@ -789,6 +867,8 @@ impl AuthManager {
             iat: now.timestamp(),
             exp: (now + self.token_expiration).timestamp(),
             jti: Uuid::new_v4().to_string(),
+            iss: None, // Internal token, no OIDC issuer
+            aud: None, // Internal token, no OIDC audience
         };
 
         encode(&Header::default(), &claims, &self.encoding_key)

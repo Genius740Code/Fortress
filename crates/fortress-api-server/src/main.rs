@@ -66,11 +66,6 @@ async fn create_router_with_state(
         .route("/health/detailed", get(detailed_health_check))
         .route("/health/security", get(security_health_check))
         .route("/openapi.json", get(openapi_handler))
-        .route("/metrics", get(get_prometheus_metrics))
-        .route("/security/events", get(get_security_events))
-        .route("/security/blocked-requests", get(get_blocked_requests))
-        .route("/graphql", get(graphql_handler).post(graphql_handler))
-        .route("/graphql/playground", get(graphql_playground))
         .route("/api/v1/auth/login", post(authenticate))
         .route("/api/v1/auth/refresh", post(refresh_token));
 
@@ -85,6 +80,11 @@ async fn create_router_with_state(
         .route("/api/v1/tenants", get(list_tenants))
         .route("/api/v1/tenants/:tenant_id/stats", get(get_tenant_stats))
         .route("/api/v1/admin/data", get(admin_list_data))
+        .route("/metrics", get(get_prometheus_metrics))
+        .route("/security/events", get(get_security_events))
+        .route("/security/blocked-requests", get(get_blocked_requests))
+        .route("/graphql", get(graphql_handler).post(graphql_handler))
+        .route("/graphql/playground", get(graphql_playground))
         .layer(from_fn_with_state(state.clone(), require_jwt_middleware));
 
     let app = public_routes
