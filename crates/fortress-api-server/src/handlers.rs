@@ -1883,7 +1883,7 @@ pub async fn get_tenant_stats(
     get,
     path = "/api/v1/admin/data",
     responses(
-        (status = 200, description = "All data retrieved", body = ApiResponse<Vec<StorageRecord>>),
+        (status = 200, description = "All data retrieved", body = ApiResponse<Vec<AdminStorageRecordSummary>>),
         (status = 401, description = "Unauthorized", body = ErrorResponse),
         (status = 500, description = "Internal server error", body = ErrorResponse)
     ),
@@ -1895,7 +1895,7 @@ pub async fn get_tenant_stats(
 pub async fn admin_list_data(
     State(state): State<Arc<AppState>>,
     RequiredTokenClaims(claims): RequiredTokenClaims,
-) -> ServerResult<Json<ApiResponse<Vec<StorageRecord>>>> {
+) -> ServerResult<Json<ApiResponse<Vec<AdminStorageRecordSummary>>>> {
     if !claims.roles.contains(&"admin".to_string()) {
         return Err(ServerError::access_denied("Admin access required"));
     }
@@ -1907,14 +1907,39 @@ pub async fn admin_list_data(
         .await
         .map_err(|e| ServerError::Core(e))?;
 
-    let mut records = Vec::new();
+    let mut records_summary = Vec::new();
     for key in keys {
         if let Ok(Some(record_bytes)) = state.storage.get(&key).await {
             if let Ok(storage_record) = serde_json::from_slice::<StorageRecord>(&record_bytes) {
-                records.push(storage_record);
+                let summary = AdminStorageRecordSummary {
+                    id: storage_record.id,
+                    algorithm: storage_record.algorithm,
+                    created_at: storage_record.created_at,
+                    metadata: storage_record.metadata,
+                    tenant_id: storage_record.tenant_id,
+                    field_metadata: storage_record.field_metadata,
+                };
+                records_summary.push(summary);
             }
         }
     }
 
-    Ok(Json(ApiResponse::success(records)))
+    Ok(Json(ApiResponse::success(records_summary)))
+}
+
+/// A summary of a storage record for admin views, excluding sensitive data like ciphertext and key IDs.
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct AdminStorageRecordSummary {
+    /// Unique identifier for the storage record
+    pub id: String,
+    /// Name of the encryption algorithm used
+    pub algorithm: String,
+    /// Timestamp when the record was created
+    pub created_at: DateTime<Utc>,
+    /// Optional metadata associated with the record
+    pub metadata: Option<HashMap<String, serde_json::Value>>,
+    /// Optional tenant identifier for multi-tenancy
+    pub tenant_id: Option<String>,
+    /// Optional field-level encryption metadata
+    pub field_metadata: Option<HashMap<String, FieldEncryptionMetadata>>,
 }
