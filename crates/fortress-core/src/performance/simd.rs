@@ -44,6 +44,13 @@ impl SimdEncryptor {
                 EncryptionErrorCode::InvalidInput,
             ));
         }
+        if plaintext.len() % 32 != 0 {
+            return Err(FortressError::encryption(
+                "Plaintext length not a multiple of 32 for AVX2",
+                self.algorithm.name(),
+                EncryptionErrorCode::InvalidInput,
+            ));
+        }
         // Fallback to the provided algorithm for secure encryption.
         // The simulated AVX2 encryption (XOR) is insecure and has been removed.
         self.algorithm.encrypt(plaintext, &self.keys)
@@ -63,6 +70,13 @@ impl SimdEncryptor {
         if plaintext.as_ptr() as usize % 64 != 0 {
             return Err(FortressError::encryption(
                 "Input not aligned to 64 bytes",
+                self.algorithm.name(),
+                EncryptionErrorCode::InvalidInput,
+            ));
+        }
+        if plaintext.len() % 64 != 0 {
+            return Err(FortressError::encryption(
+                "Plaintext length not a multiple of 64 for AVX-512",
                 self.algorithm.name(),
                 EncryptionErrorCode::InvalidInput,
             ));

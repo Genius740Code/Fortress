@@ -362,7 +362,7 @@ impl OidcUserStore {
         if let Some(verifier) = code_verifier {
             if self.provider_config.enable_pkce {
                 let challenge_bytes = sha2::Sha256::digest(verifier.as_bytes());
-                let challenge = general_purpose::STANDARD.encode(challenge_bytes);
+                let challenge = general_purpose::URL_SAFE_NO_PAD.encode(challenge_bytes);
                 params.insert("code_challenge".to_string(), challenge);
                 params.insert("code_challenge_method".to_string(), "S256".to_string());
             }
