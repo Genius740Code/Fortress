@@ -81,6 +81,10 @@ pub enum ServerError {
     /// Payload too large
     #[error("Payload too large: {0}")]
     PayloadTooLarge(String),
+
+    /// Not implemented error
+    #[error("Not implemented: {0}")]
+    NotImplemented(String),
 }
 
 impl ServerError {
@@ -98,6 +102,7 @@ impl ServerError {
             ServerError::PayloadTooLarge(_) => StatusCode::PAYLOAD_TOO_LARGE,
             ServerError::Timeout => StatusCode::REQUEST_TIMEOUT,
             ServerError::Unavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
+            ServerError::NotImplemented(_) => StatusCode::NOT_IMPLEMENTED,
 
             // Core Fortress errors need special handling
             ServerError::Core(core_err) => match core_err {
@@ -141,6 +146,7 @@ impl ServerError {
             ServerError::Configuration(_) => "CONFIGURATION_ERROR",
             ServerError::Internal(_) => "INTERNAL_ERROR",
             ServerError::Core(_) => "CORE_ERROR",
+            ServerError::NotImplemented(_) => "NOT_IMPLEMENTED",
         }
     }
 
@@ -257,6 +263,11 @@ impl ServerError {
     /// Create a service unavailable error
     pub fn unavailable<S: Into<String>>(message: S) -> Self {
         Self::Unavailable(message.into())
+    }
+
+    /// Create a not implemented error
+    pub fn not_implemented<S: Into<String>>(message: S) -> Self {
+        Self::NotImplemented(message.into())
     }
 }
 

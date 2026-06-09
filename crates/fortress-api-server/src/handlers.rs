@@ -68,6 +68,7 @@ pub fn sanitize_error(error: &ServerError) -> &'static str {
         ServerError::Internal(_) => "Internal server error",
         ServerError::Timeout => "Request timeout",
         ServerError::Unavailable(_) => "Service unavailable",
+        ServerError::NotImplemented(_) => "Feature not implemented",
     }
 }
 
@@ -452,10 +453,10 @@ pub async fn delete_data(
     let soft_delete = request.soft_delete.unwrap_or(false);
 
     if soft_delete {
-        // Issue 13: Soft delete is identical to hard delete.
-        // Proper soft delete would involve marking the record as deleted
-        // (e.g., by updating a `deleted_at` field), not physically deleting it.
-        todo!("Implement proper soft delete mechanism for StorageRecord");
+        // Return 501 Not Implemented for soft delete
+        return Err(ServerError::not_implemented(
+            "Soft delete is not yet implemented".to_string(),
+        ));
     } else {
         // Hard delete
         state
