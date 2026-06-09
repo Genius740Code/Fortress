@@ -348,13 +348,28 @@ fn track_global_request(ddos_protection: &Arc<DdosProtection>) {
     let index = (now % 60) as usize;
     let bucket = &ddos_protection.global_requests[index];
 
-    let old_ts = bucket.timestamp.load(std::sync::atomic::Ordering::Relaxed);
-    if old_ts != now {
-        // Reset bucket for new second
-        bucket.timestamp.store(now, std::sync::atomic::Ordering::Relaxed);
-        bucket.count.store(1, std::sync::atomic::Ordering::Relaxed);
-    } else {
-        bucket.count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let mut old_ts = bucket.timestamp.load(std::sync::atomic::Ordering::Acquire);
+    loop {
+        if old_ts != now {
+            match bucket.timestamp.compare_exchange(
+                old_ts,
+                now,
+                std::sync::atomic::Ordering::AcqRel,
+                std::sync::atomic::Ordering::Acquire,
+            ) {
+                Ok(_) => {
+                    bucket.count.store(1, std::sync::atomic::Ordering::Release);
+                    break;
+                }
+                Err(current_ts) => {
+                    old_ts = current_ts;
+                    continue;
+                }
+            }
+        } else {
+            bucket.count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            break;
+        }
     }
 }
 
