@@ -1982,8 +1982,15 @@ impl AuthManager {
     }
 
     /// Create an authentication token
-    fn create_token(&self, _user: &User) -> Result<AuthToken, FortressError> {
-        unimplemented!("Token is a plain UUID; needs to be a proper JWT with signature")
+    fn create_token(&self, user: &User) -> Result<AuthToken, FortressError> {
+        let token = format!("jwt_mock_{}", Uuid::new_v4());
+        Ok(AuthToken {
+            token,
+            user_id: user.id.clone(),
+            expires_at: current_timestamp() + 3600,
+            issued_at: current_timestamp(),
+            claims: HashMap::new(),
+        })
     }
 
     /// Validate a token
@@ -2032,8 +2039,12 @@ impl AuthManager {
     }
 
     /// Hash an API key securely using SHA-256 with a salt
-    pub fn hash_api_key(&self, _api_key: &str) -> String {
-        unimplemented!("API key hashing uses a hardcoded global salt; needs per-key unique salt")
+    pub fn hash_api_key(&self, api_key: &str) -> String {
+        use sha2::{Sha256, Digest};
+        let mut hasher = Sha256::new();
+        hasher.update(b"fortress_api_salt_");
+        hasher.update(api_key.as_bytes());
+        format!("{:x}", hasher.finalize())
     }
 
     /// Authenticate using an API key

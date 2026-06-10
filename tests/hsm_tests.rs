@@ -41,11 +41,23 @@ mod tests {
         );
 
         // Test invalid configuration (missing required fields)
-        let mut invalid_config = valid_config.clone();
-        // This will cause a compilation error since HsmProviderType is an enum
-        // For now, just test that the valid config works
-        assert!(true, "Config structure is valid");
-        // TODO: Add proper invalid config test when validation is implemented
+        let invalid_config = HsmConfig {
+            provider: HsmProviderType::AwsCloudHsm,
+            connection: HsmConnection::AwsCloudHsm {
+                cluster_id: "".to_string(), // Empty cluster_id for invalid test
+            },
+            credentials: HsmCredentials::Aws {
+                access_key_id: "test_access_key".to_string(),
+                secret_access_key: "test_secret_key".to_string(),
+                region: "us-east-1".to_string(),
+            },
+            key_settings: HsmKeySettings::default(),
+        };
+
+        assert!(
+            invalid_config.validate().is_err(),
+            "Invalid config should fail validation"
+        );
     }
 
     /// Test AWS CloudHSM provider initialization

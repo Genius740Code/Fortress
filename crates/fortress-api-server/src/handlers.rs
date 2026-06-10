@@ -92,6 +92,8 @@ pub struct StorageRecord {
     pub tenant_id: Option<String>,
     /// Optional field-level encryption metadata
     pub field_metadata: Option<HashMap<String, FieldEncryptionMetadata>>,
+    /// ID of the user who owns this record
+    pub owner_id: String,
 }
 
 /// Query parameters for storage queries
@@ -211,8 +213,12 @@ pub async fn store_data(
     let key_bytes = key.0.as_bytes().ok_or_else(|| ServerError::Internal("HSM keys not supported for local encryption".to_string()))?;
 
     // Encrypt data
-    let plaintext = data_str.as_bytes();
-    let ciphertext = match Aegis256::new().encrypt(plaintext, key_bytes) {
+    let plaintext = data_str.as_bytes().to_vec();
+    let key_bytes_vec = key_bytes.to_vec();
+    let ciphertext = match tokio::task::spawn_blocking(move || Aegis256::new().encrypt(&plaintext, &key_bytes_vec))
+        .await
+        .map_err(|e| ServerError::Internal(format!("Async error: {}", e)))?
+    {
         Ok(ciphertext) => ciphertext,
         Err(e) => return Err(ServerError::Core(e)),
     };
@@ -269,6 +275,7 @@ pub async fn store_data(
         metadata: request.metadata,
         tenant_id: request.tenant_id.clone(),
         field_metadata,
+        owner_id: claims.sub.clone(),
     };
 
     // Store the encrypted data using the storage backend
@@ -359,6 +366,10 @@ pub async fn retrieve_data(
         if !state.auth_manager.has_tenant_access(&claims, tenant_id) {
             return Err(ServerError::access_denied("Access denied to tenant"));
         }
+    } else {
+        if storage_record.owner_id != claims.sub {
+            return Err(ServerError::access_denied("Access denied to record"));
+        }
     }
 
     // Get the decryption key
@@ -370,9 +381,14 @@ pub async fn retrieve_data(
     let key_bytes = key.0.as_bytes().ok_or_else(|| ServerError::Internal("HSM keys not supported for local decryption".to_string()))?;
 
     // Decrypt the data
-    let plaintext = Aegis256::new()
-        .decrypt(&storage_record.data, key_bytes)
-        .map_err(|e| ServerError::Core(e))?;
+    let data_to_decrypt = storage_record.data.clone();
+    let key_bytes_vec = key_bytes.to_vec();
+    let plaintext = tokio::task::spawn_blocking(move || {
+        Aegis256::new().decrypt(&data_to_decrypt, &key_bytes_vec)
+    })
+    .await
+    .map_err(|e| ServerError::Internal(format!("Async error: {}", e)))?
+    .map_err(|e| ServerError::Core(e))?;
 
     let decrypted_data: serde_json::Value = serde_json::from_slice(&plaintext)
         .map_err(|e| ServerError::serialization(e.to_string()))?;
@@ -446,6 +462,10 @@ pub async fn delete_data(
     if let Some(ref tenant_id) = storage_record.tenant_id {
         if !state.auth_manager.has_tenant_access(&claims, tenant_id) {
             return Err(ServerError::access_denied("Access denied to tenant"));
+        }
+    } else {
+        if storage_record.owner_id != claims.sub {
+            return Err(ServerError::access_denied("Access denied to record"));
         }
     }
 

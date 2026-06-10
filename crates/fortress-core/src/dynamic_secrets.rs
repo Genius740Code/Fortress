@@ -1142,6 +1142,93 @@ impl DynamicSecretsEngine {
         result
     }
 
+    /// Retrieve a credential by its exact lease ID
+    pub async fn get_credential_by_lease_id(&self, lease_id: &str) -> Result<Option<Secret>> {
+        // Check AWS credentials first
+        {
+            let credentials = self.aws_credentials.read().await;
+            if let Some(credential) = credentials.get(lease_id) {
+                let ttl = (credential.expires_at - Utc::now()).num_seconds() as u64;
+                let lease = Some(LeaseInfo {
+                    lease_id: credential.lease_id.clone(),
+                    ttl,
+                    max_ttl: Some(self.config.read().await.max_ttl),
+                    created_at: Utc::now(),
+                    expires_at: credential.expires_at,
+                    renewable: true,
+                    max_renewals: Some(5),
+                    renewal_count: 0,
+                });
+                let secret_data = serde_json::json!({
+                    "access_key_id": credential.access_key_id,
+                    "secret_access_key": credential.secret_access_key,
+                    "session_token": credential.session_token,
+                    "expires_at": credential.expires_at.to_rfc3339(),
+                    "policy": credential.policy,
+                    "role": credential.role,
+                    "lease_id": credential.lease_id
+                });
+                return Ok(Some(Secret {
+                    data: secret_data,
+                    metadata: SecretMetadata {
+                        name: lease_id.to_string(),
+                        version: 1,
+                        created_at: Utc::now(),
+                        updated_at: None,
+                        created_by: Some("dynamic-secrets".to_string()),
+                        tags: HashMap::new(),
+                        custom: HashMap::new(),
+                    },
+                    lease,
+                }));
+            }
+        }
+
+        // Check database credentials
+        {
+            let credentials = self.database_credentials.read().await;
+            if let Some(credential) = credentials.get(lease_id) {
+                let ttl = (credential.expires_at - Utc::now()).num_seconds() as u64;
+                let lease = Some(LeaseInfo {
+                    lease_id: credential.lease_id.clone(),
+                    ttl,
+                    max_ttl: Some(self.config.read().await.max_ttl),
+                    created_at: Utc::now(),
+                    expires_at: credential.expires_at,
+                    renewable: true,
+                    max_renewals: Some(5),
+                    renewal_count: 0,
+                });
+                let secret_data = serde_json::json!({
+                    "username": credential.username,
+                    "password": credential.password,
+                    "database_type": credential.database_type,
+                    "database": credential.database,
+                    "connection_string": credential.connection_string,
+                    "permissions": credential.permissions,
+                    "expires_at": credential.expires_at.to_rfc3339(),
+                    "lease_id": credential.lease_id,
+                    "metadata": credential.metadata
+                });
+                return Ok(Some(Secret {
+                    data: secret_data,
+                    metadata: SecretMetadata {
+                        name: lease_id.to_string(),
+                        version: 1,
+                        created_at: Utc::now(),
+                        updated_at: None,
+                        created_by: Some("dynamic-secrets".to_string()),
+                        tags: HashMap::new(),
+                        custom: HashMap::new(),
+                    },
+                    lease,
+                }));
+            }
+        }
+
+        Ok(None)
+    }
+
     /// Revoke a credential by lease ID
 
     async fn revoke_credential(&self, lease_id: &str) -> Result<()> {

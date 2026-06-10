@@ -778,13 +778,38 @@ impl Query {
     }
 
     /// Get a specific dynamic credential
-    // TODO: This function is broken - DynamicSecretsEngine doesn't have a read method
-    // Need to implement proper credential retrieval or use SecretsKvEngine for static secrets
     async fn get_dynamic_credential(
         &self,
-        _ctx: &Context<'_>,
-        _lease_id: String,
+        ctx: &Context<'_>,
+        lease_id: String,
     ) -> Result<Option<SecretData>> {
-        Err(async_graphql::Error::new("Dynamic credential retrieval not implemented - DynamicSecretsEngine doesn't have a read method"))
+        let graphql_ctx = from_context(ctx)?;
+        graphql_ctx.require_role("user")?;
+
+        let dynamic_secrets = &graphql_ctx.app_state.dynamic_secrets;
+        let secret = dynamic_secrets
+            .get_credential_by_lease_id(&lease_id)
+            .await
+            .map_err(|e| {
+                async_graphql::Error::new(format!(
+                    "Failed to retrieve dynamic credential: {}",
+                    e
+                ))
+            })?;
+
+        if let Some(secret) = secret {
+            // Extract expires_at from lease info
+            let expires_at = secret.lease.and_then(|lease| {
+                lease.expires_at.to_rfc3339().parse().ok()
+            });
+
+            Ok(Some(SecretData {
+                lease_id: Some(lease_id),
+                expires_at,
+                data: async_graphql::Json(secret.data),
+            }))
+        } else {
+            Ok(None)
+        }
     }
 }

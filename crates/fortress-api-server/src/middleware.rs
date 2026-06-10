@@ -478,7 +478,8 @@ impl AdvancedRateLimiter {
 
         if tokens_to_add > 0 {
             state.tokens = (state.tokens + tokens_to_add).min(state.burst_capacity);
-            state.last_refill = now;
+            let time_used = std::time::Duration::from_secs((tokens_to_add as u64 * 60) / self.config.requests_per_minute as u64);
+            state.last_refill += time_used;
         }
 
         // Check if we have enough tokens

@@ -343,27 +343,25 @@ impl QueryOptimizer {
             match node.node_type {
                 PlanNodeType::Filter => {
                     if let Some(predicate) = node.parameters.get("predicate") {
-                        if let Ok(pred_str) = serde_json::from_value::<String>(predicate.clone()) {
+                        if let Some(pred_str) = predicate.as_str() {
                             // Extract column names from predicate (simplified)
-                            let columns = self.extract_columns_from_predicate(&pred_str);
+                            let columns = self.extract_columns_from_predicate(pred_str);
                             used_columns.extend(columns);
                         }
                     }
                 }
                 PlanNodeType::Project => {
                     if let Some(columns) = node.parameters.get("columns") {
-                        if let Ok(column_list) =
-                            serde_json::from_value::<Vec<String>>(columns.clone())
-                        {
+                        if let Some(array) = columns.as_array() {
+                            let column_list: Vec<String> = array.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
                             used_columns.extend(column_list);
                         }
                     }
                 }
                 PlanNodeType::Join => {
                     if let Some(join_cols) = node.parameters.get("join_columns") {
-                        if let Ok(join_col_list) =
-                            serde_json::from_value::<Vec<String>>(join_cols.clone())
-                        {
+                        if let Some(array) = join_cols.as_array() {
+                            let join_col_list: Vec<String> = array.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
                             used_columns.extend(join_col_list);
                         }
                     }
