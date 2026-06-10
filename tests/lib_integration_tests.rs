@@ -30,20 +30,20 @@ mod tests {
 
         // Generate encryption key
         let key = key_manager.generate_key(&Aes256Gcm::new()).await.unwrap();
-        assert!(!key.as_bytes().is_empty(), "Key should not be empty");
+        assert!(!key.as_bytes().unwrap().is_empty(), "Key should not be empty");
 
         // Create encryption algorithm
         let encryptor = Aes256Gcm::new();
 
         // Test encryption and decryption
         let plaintext = b"Library integration test data";
-        let ciphertext = encryptor.encrypt(plaintext, key.as_bytes()).unwrap();
+        let ciphertext = encryptor.encrypt(plaintext, key.as_bytes().unwrap()).unwrap();
         assert_ne!(
             ciphertext, plaintext,
             "Ciphertext should differ from plaintext"
         );
 
-        let decrypted = encryptor.decrypt(&ciphertext, key.as_bytes()).unwrap();
+        let decrypted = encryptor.decrypt(&ciphertext, key.as_bytes().unwrap()).unwrap();
         assert_eq!(decrypted, plaintext, "Decrypted data should match original");
     }
 
@@ -56,13 +56,13 @@ mod tests {
             .generate_key(&ChaCha20Poly1305::new())
             .await
             .unwrap();
-        assert!(!key.as_bytes().is_empty(), "Key should be generated");
+        assert!(!key.as_bytes().unwrap().is_empty(), "Key should be generated");
 
         // Test encryption
         let encryptor = ChaCha20Poly1305::new();
         let plaintext = b"Test data";
-        let ciphertext = encryptor.encrypt(plaintext, key.as_bytes()).unwrap();
-        let decrypted = encryptor.decrypt(&ciphertext, key.as_bytes()).unwrap();
+        let ciphertext = encryptor.encrypt(plaintext, key.as_bytes().unwrap()).unwrap();
+        let decrypted = encryptor.decrypt(&ciphertext, key.as_bytes().unwrap()).unwrap();
         assert_eq!(decrypted, plaintext, "Encryption/decryption should work");
     }
 
@@ -76,10 +76,10 @@ mod tests {
         let aes_encryptor = Aes256Gcm::new();
         let plaintext = b"Multi-algorithm test";
         let aes_ciphertext = aes_encryptor
-            .encrypt(plaintext, aes_key.as_bytes())
+            .encrypt(plaintext, aes_key.as_bytes().unwrap())
             .unwrap();
         let aes_decrypted = aes_encryptor
-            .decrypt(&aes_ciphertext, aes_key.as_bytes())
+            .decrypt(&aes_ciphertext, aes_key.as_bytes().unwrap())
             .unwrap();
         assert_eq!(aes_decrypted, plaintext, "AES encryption should work");
 
@@ -90,10 +90,10 @@ mod tests {
             .unwrap();
         let chacha_encryptor = ChaCha20Poly1305::new();
         let chacha_ciphertext = chacha_encryptor
-            .encrypt(plaintext, chacha_key.as_bytes())
+            .encrypt(plaintext, chacha_key.as_bytes().unwrap())
             .unwrap();
         let chacha_decrypted = chacha_encryptor
-            .decrypt(&chacha_ciphertext, chacha_key.as_bytes())
+            .decrypt(&chacha_ciphertext, chacha_key.as_bytes().unwrap())
             .unwrap();
         assert_eq!(
             chacha_decrypted, plaintext,
@@ -118,11 +118,11 @@ mod tests {
             // Encrypt data
             let test_data = format!("Performance test data {}", i);
             let encrypted = encryptor
-                .encrypt(test_data.as_bytes(), key.as_bytes())
+                .encrypt(test_data.as_bytes(), key.as_bytes().unwrap())
                 .unwrap();
 
             // Decrypt data
-            let _decrypted = encryptor.decrypt(&encrypted, key.as_bytes()).unwrap();
+            let _decrypted = encryptor.decrypt(&encrypted, key.as_bytes().unwrap()).unwrap();
             operations += 1;
         }
 
@@ -157,10 +157,10 @@ mod tests {
         // Test encryption/decryption with different keys (should fail)
         let key2 = key_manager.generate_key(&Aes256Gcm::new()).await.unwrap();
         let plaintext = b"Test data";
-        let ciphertext = encryptor.encrypt(plaintext, key.as_bytes()).unwrap();
+        let ciphertext = encryptor.encrypt(plaintext, key.as_bytes().unwrap()).unwrap();
 
         // Trying to decrypt with wrong key should fail
-        let decrypt_result = encryptor.decrypt(&ciphertext, key2.as_bytes());
+        let decrypt_result = encryptor.decrypt(&ciphertext, key2.as_bytes().unwrap());
         assert!(
             decrypt_result.is_err(),
             "Decryption with wrong key should fail"
@@ -187,9 +187,9 @@ mod tests {
                     .unwrap();
                 let data = format!("Concurrent test {}", i);
                 let encrypted = encryptor_clone
-                    .encrypt(data.as_bytes(), key.as_bytes())
+                    .encrypt(data.as_bytes(), key.as_bytes().unwrap())
                     .unwrap();
-                let decrypted = encryptor_clone.decrypt(&encrypted, key.as_bytes()).unwrap();
+                let decrypted = encryptor_clone.decrypt(&encrypted, key.as_bytes().unwrap()).unwrap();
                 decrypted
             });
 

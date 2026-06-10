@@ -522,6 +522,18 @@ impl AuthPluginManager {
         Ok(())
     }
 
+    /// Register a plugin directly (useful for testing and native plugins)
+    pub async fn register_plugin(&self, name: &str, plugin: Box<dyn AuthPlugin>) -> Result<()> {
+        let mut plugins = self.plugins.write().await;
+
+        if plugins.len() >= self.config.max_plugins {
+            return Err(FortressError::plugin("Maximum plugin limit reached"));
+        }
+
+        plugins.insert(name.to_string(), plugin);
+        Ok(())
+    }
+
     /// Unload a plugin
     pub async fn unload_plugin(&self, name: &str) -> Result<()> {
         let mut plugins = self.plugins.write().await;

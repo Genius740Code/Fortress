@@ -70,7 +70,7 @@ async fn test_wasm_sandbox_isolation() {
 
     // Load plugin with valid WASM bytes
     let plugin = loader
-        .load_from_bytes(&create_valid_wasm_bytes(), metadata)
+        .load_from_bytes(&create_valid_wasm_bytes(), metadata, Some("FORTRESS_SECURE_WASM_TOKEN"))
         .unwrap();
 
     // Test that plugin is properly sandboxed
@@ -115,7 +115,7 @@ async fn test_memory_limits_enforcement() {
     let metadata = create_test_metadata("memory-test", "Memory Limits Test");
 
     let plugin = loader
-        .load_from_bytes(&create_valid_wasm_bytes(), metadata)
+        .load_from_bytes(&create_valid_wasm_bytes(), metadata, Some("FORTRESS_SECURE_WASM_TOKEN"))
         .unwrap();
 
     // Test memory limit configuration
@@ -171,7 +171,7 @@ async fn test_execution_time_limits() {
     let metadata = create_test_metadata("time-limit-test", "Execution Time Limits Test");
 
     let plugin = loader
-        .load_from_bytes(&create_valid_wasm_bytes(), metadata)
+        .load_from_bytes(&create_valid_wasm_bytes(), metadata, Some("FORTRESS_SECURE_WASM_TOKEN"))
         .unwrap();
 
     let context = PluginContext {
@@ -226,7 +226,7 @@ async fn test_fuel_metering_enforcement() {
     let metadata = create_test_metadata("fuel-test", "Fuel Metering Test");
 
     let plugin = loader
-        .load_from_bytes(&create_valid_wasm_bytes(), metadata)
+        .load_from_bytes(&create_valid_wasm_bytes(), metadata, Some("FORTRESS_SECURE_WASM_TOKEN"))
         .unwrap();
 
     let context = PluginContext {
@@ -278,7 +278,7 @@ async fn test_host_function_access_control() {
     let metadata = create_test_metadata("permissive-test", "Permissive Host Functions Test");
 
     let plugin = loader
-        .load_from_bytes(&create_valid_wasm_bytes(), metadata)
+        .load_from_bytes(&create_valid_wasm_bytes(), metadata, Some("FORTRESS_SECURE_WASM_TOKEN"))
         .unwrap();
 
     let context = PluginContext {
@@ -324,7 +324,7 @@ async fn test_host_function_access_control() {
     let metadata2 = create_test_metadata("restrictive-test", "Restrictive Host Functions Test");
 
     let plugin2 = loader2
-        .load_from_bytes(&create_valid_wasm_bytes(), metadata2)
+        .load_from_bytes(&create_valid_wasm_bytes(), metadata2, Some("FORTRESS_SECURE_WASM_TOKEN"))
         .unwrap();
 
     let context2 = PluginContext {
@@ -365,21 +365,21 @@ async fn test_malicious_wasm_detection() {
     let metadata = create_test_metadata("malicious-test", "Malicious WASM Detection Test");
 
     // Test 1: Invalid WASM magic bytes
-    let result = loader.load_from_bytes(&create_malicious_wasm_bytes(), metadata.clone());
+    let result = loader.load_from_bytes(&create_malicious_wasm_bytes(), metadata.clone(), Some("FORTRESS_SECURE_WASM_TOKEN"));
     assert!(result.is_err(), "Should reject invalid WASM bytes");
 
     // Test 2: Empty WASM bytes
-    let result = loader.load_from_bytes(&[], metadata.clone());
+    let result = loader.load_from_bytes(&[], metadata.clone(), Some("FORTRESS_SECURE_WASM_TOKEN"));
     assert!(result.is_err(), "Should reject empty WASM bytes");
 
     // Test 3: Truncated WASM bytes
     let truncated_bytes = vec![0x00, 0x61, 0x73]; // Incomplete magic number
-    let result = loader.load_from_bytes(&truncated_bytes, metadata.clone());
+    let result = loader.load_from_bytes(&truncated_bytes, metadata.clone(), Some("FORTRESS_SECURE_WASM_TOKEN"));
     assert!(result.is_err(), "Should reject truncated WASM bytes");
 
     // Test 4: Oversized WASM bytes (simulating potential attack)
     let oversized_bytes = vec![0xFF; 100 * 1024 * 1024]; // 100MB of invalid data
-    let result = loader.load_from_bytes(&oversized_bytes, metadata);
+    let result = loader.load_from_bytes(&oversized_bytes, metadata, Some("FORTRESS_SECURE_WASM_TOKEN"));
     assert!(result.is_err(), "Should reject oversized WASM bytes");
 }
 
@@ -394,13 +394,13 @@ async fn test_plugin_isolation_between_instances() {
     let metadata3 = create_test_metadata("instance3", "Plugin Instance 3");
 
     let plugin1 = loader
-        .load_from_bytes(&create_valid_wasm_bytes(), metadata1)
+        .load_from_bytes(&create_valid_wasm_bytes(), metadata1, Some("FORTRESS_SECURE_WASM_TOKEN"))
         .unwrap();
     let plugin2 = loader
-        .load_from_bytes(&create_valid_wasm_bytes(), metadata2)
+        .load_from_bytes(&create_valid_wasm_bytes(), metadata2, Some("FORTRESS_SECURE_WASM_TOKEN"))
         .unwrap();
     let plugin3 = loader
-        .load_from_bytes(&create_valid_wasm_bytes(), metadata3)
+        .load_from_bytes(&create_valid_wasm_bytes(), metadata3, Some("FORTRESS_SECURE_WASM_TOKEN"))
         .unwrap();
 
     // Initialize all plugins with different contexts
@@ -458,7 +458,7 @@ async fn test_resource_cleanup_on_error() {
     let metadata = create_test_metadata("cleanup-test", "Resource Cleanup Test");
 
     let plugin = loader
-        .load_from_bytes(&create_valid_wasm_bytes(), metadata)
+        .load_from_bytes(&create_valid_wasm_bytes(), metadata, Some("FORTRESS_SECURE_WASM_TOKEN"))
         .unwrap();
 
     let context = PluginContext {
@@ -506,7 +506,7 @@ async fn test_concurrent_plugin_execution() {
             &format!("Concurrent Plugin {}", i),
         );
         let plugin = loader
-            .load_from_bytes(&create_valid_wasm_bytes(), metadata)
+            .load_from_bytes(&create_valid_wasm_bytes(), metadata, Some("FORTRESS_SECURE_WASM_TOKEN"))
             .unwrap();
 
         let context = PluginContext {
@@ -583,7 +583,7 @@ async fn test_plugin_configuration_validation() {
     let metadata = create_test_metadata("config-test", "Configuration Validation Test");
 
     let plugin = loader
-        .load_from_bytes(&create_valid_wasm_bytes(), metadata)
+        .load_from_bytes(&create_valid_wasm_bytes(), metadata, Some("FORTRESS_SECURE_WASM_TOKEN"))
         .unwrap();
 
     // Test valid configuration
@@ -646,7 +646,7 @@ async fn test_plugin_health_monitoring() {
     let metadata = create_test_metadata("health-test", "Health Monitoring Test");
 
     let plugin = loader
-        .load_from_bytes(&create_valid_wasm_bytes(), metadata)
+        .load_from_bytes(&create_valid_wasm_bytes(), metadata, Some("FORTRESS_SECURE_WASM_TOKEN"))
         .unwrap();
 
     let context = PluginContext {
@@ -701,7 +701,7 @@ async fn test_attack_vector_prevention() {
     let metadata = create_test_metadata("security-test", "Attack Vector Prevention Test");
 
     let plugin = loader
-        .load_from_bytes(&create_valid_wasm_bytes(), metadata)
+        .load_from_bytes(&create_valid_wasm_bytes(), metadata, Some("FORTRESS_SECURE_WASM_TOKEN"))
         .unwrap();
 
     let context = PluginContext {
@@ -799,7 +799,7 @@ async fn test_plugin_lifecycle_security() {
 
     // Test secure plugin creation
     let plugin = loader
-        .load_from_bytes(&create_valid_wasm_bytes(), metadata)
+        .load_from_bytes(&create_valid_wasm_bytes(), metadata, Some("FORTRESS_SECURE_WASM_TOKEN"))
         .unwrap();
 
     // Test secure initialization
@@ -856,7 +856,7 @@ async fn test_performance_under_security_constraints() {
     let metadata = create_test_metadata("performance-test", "Performance Under Security Test");
 
     let plugin = loader
-        .load_from_bytes(&create_valid_wasm_bytes(), metadata)
+        .load_from_bytes(&create_valid_wasm_bytes(), metadata, Some("FORTRESS_SECURE_WASM_TOKEN"))
         .unwrap();
 
     let context = PluginContext {
@@ -930,7 +930,7 @@ async fn test_error_handling_and_recovery() {
     let metadata = create_test_metadata("error-handling-test", "Error Handling Test");
 
     let plugin = loader
-        .load_from_bytes(&create_valid_wasm_bytes(), metadata)
+        .load_from_bytes(&create_valid_wasm_bytes(), metadata, Some("FORTRESS_SECURE_WASM_TOKEN"))
         .unwrap();
 
     let context = PluginContext {

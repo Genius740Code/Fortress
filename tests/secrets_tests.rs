@@ -18,7 +18,7 @@ mod tests {
     /// Test secret creation and storage
     #[tokio::test]
     async fn test_secret_creation_and_storage() {
-        let engine = KvEngine::new();
+        let engine = KvEngine::new().unwrap();
 
         // Test basic secret creation
         let test_data = json!({
@@ -55,7 +55,7 @@ mod tests {
     /// Test secret retrieval and access control
     #[tokio::test]
     async fn test_secret_retrieval_and_access_control() {
-        let engine = KvEngine::new();
+        let engine = KvEngine::new().unwrap();
 
         // Store a secret
         let test_data = json!({
@@ -106,7 +106,7 @@ mod tests {
     /// Test secret rotation and versioning
     #[tokio::test]
     async fn test_secret_rotation_and_versioning() {
-        let engine = KvEngine::new();
+        let engine = KvEngine::new().unwrap();
         let secret_path = "secret/rotating";
 
         // Store initial version
@@ -166,7 +166,7 @@ mod tests {
         // Create engine with short TTL for testing
         let mut config = fortress_core::secrets_kv::KvConfig::default();
         config.default_ttl = Some(2); // 2 seconds TTL
-        let engine = KvEngine::with_config(config);
+        let engine = KvEngine::with_config(config).unwrap();
 
         // Store a secret
         let test_data = json!({"temp_secret": "expires_quickly"});
@@ -201,7 +201,7 @@ mod tests {
     /// Test integration with key management
     #[tokio::test]
     async fn test_key_management_integration() {
-        let engine = KvEngine::new();
+        let engine = KvEngine::new().unwrap();
 
         // Store sensitive data that should be encrypted
         let sensitive_data = json!({
@@ -281,7 +281,7 @@ mod tests {
         let mut manager = SecretsEngineManager::new(config);
 
         // Register a KV engine
-        let kv_engine = Box::new(KvEngine::new()) as Box<dyn SecretsEngine>;
+        let kv_engine = Box::new(KvEngine::new().unwrap()) as Box<dyn SecretsEngine>;
         let registration_result = manager.register_engine("kv".to_string(), kv_engine);
         assert!(
             registration_result.is_ok(),
@@ -330,7 +330,7 @@ mod tests {
     /// Test lease management operations
     #[tokio::test]
     async fn test_lease_management_operations() {
-        let engine = KvEngine::new();
+        let engine = KvEngine::new().unwrap();
 
         // Store a secret with lease
         let test_data = json!({"leased": "data"});
@@ -394,7 +394,7 @@ mod tests {
     /// Test concurrent secrets operations
     #[tokio::test]
     async fn test_concurrent_secrets_operations() {
-        let engine = Arc::new(KvEngine::new());
+        let engine = Arc::new(KvEngine::new().unwrap());
         let num_concurrent = 10;
 
         // Test concurrent writes
@@ -459,7 +459,7 @@ mod tests {
     /// Test secrets deletion and cleanup
     #[tokio::test]
     async fn test_secrets_deletion_and_cleanup() {
-        let engine = KvEngine::new();
+        let engine = KvEngine::new().unwrap();
 
         // Store multiple secrets
         let secrets_to_store = vec![
@@ -533,7 +533,7 @@ mod tests {
         // Create engine with limited versions
         let mut config = fortress_core::secrets_kv::KvConfig::default();
         config.max_versions = 3; // Keep only 3 versions
-        let engine = KvEngine::with_config(config);
+        let engine = KvEngine::with_config(config).unwrap();
 
         let secret_path = "secret/versioned";
 
@@ -600,7 +600,7 @@ mod tests {
         config.case_sensitive = true;
         config.auto_cleanup = false;
 
-        let engine = KvEngine::with_config(config);
+        let engine = KvEngine::with_config(config).unwrap();
 
         // Store a secret
         let test_data = json!({"config_test": "data"});
@@ -636,7 +636,7 @@ mod tests {
     /// Test error handling and edge cases
     #[tokio::test]
     async fn test_error_handling_edge_cases() {
-        let engine = KvEngine::new();
+        let engine = KvEngine::new().unwrap();
 
         // Test invalid paths
         let invalid_paths = vec![
@@ -714,7 +714,7 @@ mod tests {
     /// Test performance with many secrets
     #[tokio::test]
     async fn test_performance_many_secrets() {
-        let engine = KvEngine::new();
+        let engine = KvEngine::new().unwrap();
         let num_secrets = 100;
 
         let start_time = std::time::Instant::now();
