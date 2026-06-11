@@ -684,7 +684,7 @@ pub async fn generate_key(
     let fingerprint = generate_key_fingerprint(&key);
 
     let response = KeyResponse {
-        id: format!("key_{}", Uuid::new_v4()), // Generate ID since SecureKey doesn't have one
+        id: key_id.clone(), // Use the same key_id that was used for storing the key
         algorithm: request.algorithm,
         key_size: request.key_size.unwrap_or(256),
         created_at: Utc::now(),
