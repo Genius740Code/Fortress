@@ -14,6 +14,7 @@ use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_http::{compression::CompressionLayer, cors::CorsLayer, trace::TraceLayer};
 use tracing::info;
+use zeroize::Zeroize;
 
 // Import from fortress_api_server instead of fortress_server
 use fortress_api_server::auth::{require_jwt_middleware, AuthManager, InMemoryUserStore};
@@ -165,6 +166,7 @@ async fn create_app_state() -> Result<Arc<AppState>, Box<dyn std::error::Error>>
             failed_login_attempts: 0,
             locked_until: None,
         };
+        admin_password.zeroize(); // Securely wipe the admin password from memory
         user_store.add_user(admin_user);
     }
     let auth_manager = Arc::new(AuthManager::new(
@@ -172,6 +174,7 @@ async fn create_app_state() -> Result<Arc<AppState>, Box<dyn std::error::Error>>
         Duration::seconds(3600),
         user_store.clone(), // Clone the Arc for AuthManager
     ));
+    jwt_secret.zeroize(); // Securely wipe the JWT secret from memory
     let metrics = Arc::new(MetricsCollector::new());
     let key_manager = Arc::new(fortress_core::key::InMemoryKeyManager::new());
 
