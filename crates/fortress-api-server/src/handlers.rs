@@ -215,13 +215,8 @@ pub async fn store_data(
     // Encrypt data
     let plaintext = data_str.as_bytes().to_vec();
     let key_bytes_vec = key_bytes.to_vec();
-    let ciphertext = match tokio::task::spawn_blocking(move || Aegis256::new().encrypt(&plaintext, &key_bytes_vec))
-        .await
-        .map_err(|e| ServerError::Internal(format!("Async error: {}", e)))?
-    {
-        Ok(ciphertext) => ciphertext,
-        Err(e) => return Err(ServerError::Core(e)),
-    };
+    let ciphertext = Aegis256::new().encrypt(&plaintext, &key_bytes_vec)
+        .map_err(|e| ServerError::Core(e))?;
 
     // Handle field-level encryption if specified
     let field_metadata = if let Some(ref field_config) = request.field_encryption {
@@ -383,12 +378,8 @@ pub async fn retrieve_data(
     // Decrypt the data
     let data_to_decrypt = storage_record.data.clone();
     let key_bytes_vec = key_bytes.to_vec();
-    let plaintext = tokio::task::spawn_blocking(move || {
-        Aegis256::new().decrypt(&data_to_decrypt, &key_bytes_vec)
-    })
-    .await
-    .map_err(|e| ServerError::Internal(format!("Async error: {}", e)))?
-    .map_err(|e| ServerError::Core(e))?;
+    let plaintext = Aegis256::new().decrypt(&data_to_decrypt, &key_bytes_vec)
+        .map_err(|e| ServerError::Core(e))?;
 
     let decrypted_data: serde_json::Value = serde_json::from_slice(&plaintext)
         .map_err(|e| ServerError::serialization(e.to_string()))?;
