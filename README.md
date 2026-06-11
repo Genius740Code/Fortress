@@ -523,7 +523,7 @@ helm install my-fortress ./helm/fortress \
   --create-namespace
 ```
 
-**Note**: Official Helm repository will be available in Q2 2024. Until then, please install from local source.
+
 
 ## Cloud Integration
 
@@ -678,3 +678,4 @@ ws.onmessage = (event) => {
 ---
 
 **Fortress** - Where security meets simplicity.
+mplicity.

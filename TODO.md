@@ -5,7 +5,7 @@
 - [ ] Rewrite `README.md`
 - [ ] Make docs easier and simpler to read, organize, and understand
 - [ ] Add more comprehensive code examples (especially for plugins)
-
+- [ ] Possibly upgrade the rust version
 ## Language SDKs & Libraries (Published)
 - [ ] **Python Library (`fortress-python`)**
   - [ ] Thoroughly test all published features
@@ -33,7 +33,6 @@
 ## Codebase Refactoring & Quality
 - [ ] Refactor large files in `fortress-core/src` by splitting them into smaller submodules (e.g. `hsm.rs`, `auth.rs`, `encryption.rs`)
 - [ ] Increase testing coverage (add more Unit, Integration, and E2E tests)
-- [ ] Address C++ build tools requirement on Windows (either document thoroughly or switch cryptography backends)
 
 ## Future / Long-Term Goals (Backlog)
 - [ ] Build a Plugin Marketplace (e.g., for Node.js or WASM plugins)

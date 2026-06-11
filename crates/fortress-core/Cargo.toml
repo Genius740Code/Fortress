@@ -22,7 +22,7 @@ keywords = ["database", "encryption", "security", "cryptography", "privacy"]
 
 categories = ["database", "cryptography"]
 
-rust-version = "1.70"
+rust-version = "1.74"
 
 
 
@@ -428,10 +428,12 @@ memcached = { version = "0.4.5-beta.2", optional = true }
 
 
 
-# Advanced profiling (optional)
 
-pprof = { version = "0.12", features = ["flamegraph", "protobuf-codec"], optional = true }
 
+
+
+[target.'cfg(unix)'.dependencies]
+pprof = { version = "0.15", features = ["flamegraph", "protobuf-codec"], optional = true }
 
 
 [dev-dependencies]
