@@ -1989,7 +1989,7 @@ impl AuthManager {
             user_id: user.id.clone(),
             expires_at: current_timestamp() + 3600,
             issued_at: current_timestamp(),
-            claims: HashMap::new(),
+            permissions: Vec::new(),
         })
     }
 
