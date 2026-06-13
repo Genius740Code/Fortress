@@ -17,9 +17,9 @@ pub mod middleware;
 pub mod storage;
 
 pub use algorithms::{FixedWindowAlgorithm, SlidingWindowAlgorithm, TokenBucketAlgorithm};
-pub use manager::RateLimitManager;
+pub use manager::RateLimitManager as Manager;
 pub use middleware::RateLimitMiddleware;
-pub use storage::{MemoryStorage, RateLimitStorage, RedisStorage};
+pub use storage::{MemoryStorage, RedisStorage};
 
 /// Rate limiting configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -154,6 +154,7 @@ pub struct RateLimitMetrics {
 }
 
 /// Trait for rate limit algorithms
+#[async_trait]
 pub trait RateLimitAlgorithm: Send + Sync {
     /// Name of the algorithm
     fn name(&self) -> &str;
@@ -177,6 +178,7 @@ pub trait RateLimitAlgorithm: Send + Sync {
 }
 
 /// Trait for rate limit storage backends
+#[async_trait]
 pub trait RateLimitStorage: Send + Sync {
     /// Name of the storage backend
     fn name(&self) -> &str;

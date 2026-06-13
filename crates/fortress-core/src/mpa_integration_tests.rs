@@ -32,7 +32,7 @@ async fn setup_mpa_test() -> (MpaService, Vec<UserId>) {
         let mut auth = auth_manager.write().unwrap();
 
         let user_id = auth
-            .create_user(name.to_string(), format!("{}_password", name))
+            .create_user(name.to_string(), "test@example.com".to_string(), format!("{}_password", name))
             .await
             .unwrap();
 

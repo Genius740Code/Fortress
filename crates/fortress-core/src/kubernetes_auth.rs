@@ -48,7 +48,9 @@ use tokio::sync::RwLock;
 #[cfg(feature = "k8s")]
 use k8s_openapi::api::{authentication::v1::TokenReview, core::v1::Pod};
 #[cfg(feature = "k8s")]
-use k8s_openapi::Client;
+use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
+#[cfg(feature = "k8s")]
+use kube::Client;
 #[cfg(feature = "k8s")]
 use kube::Config;
 
@@ -58,7 +60,7 @@ pub struct KubernetesAuthConfig {
     /// Kubernetes API server host
     pub kubernetes_host: String,
     /// Kubernetes API server port
-    pub kubernetes_port: u16,
+    pub _kubernetes_port: u16,
     /// CA certificate for Kubernetes API server
     pub kubernetes_ca_cert: Option<String>,
     /// Service account JWT token
@@ -216,12 +218,11 @@ impl KubernetesAuth {
             })?;
 
             let token_review = TokenReview {
-                api_version: Some("authentication.k8s.io/v1".to_string()),
-                kind: Some("TokenReview".to_string()),
-                spec: Some(k8s_openapi::api::authentication::v1::TokenReviewSpec {
+                metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta::default(),
+                spec: k8s_openapi::api::authentication::v1::TokenReviewSpec {
                     token: token.to_string(),
                     audiences: Some(vec!["fortress".to_string()]),
-                }),
+                },
                 status: None,
             };
 

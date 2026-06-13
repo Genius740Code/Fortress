@@ -11,7 +11,9 @@ use crate::mesh::{
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::RwLock;
 
 /// Linkerd mesh provider configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -635,6 +637,54 @@ impl LinkerdMesh {
         metrics.last_updated = Utc::now();
         Ok(metrics)
     }
+
+    /// Convert Linkerd authorization policy to security policy
+    fn linkerd_authz_policy_to_security_policy(
+        &self,
+        authz: &LinkerdAuthzPolicy,
+    ) -> Result<SecurityPolicy> {
+        let mut authz_rules = Vec::new();
+
+        // Convert Linkerd authz policy to our format
+        let authz_rule = crate::mesh::AuthzRule {
+            name: authz.metadata.name.clone(),
+            action: crate::mesh::AuthzAction::Allow, // Default to allow
+            when: authz
+                .spec
+                .allow_unauthenticated
+                .iter()
+                .map(|_| crate::mesh::AuthzCondition {
+                    key: "authenticated".to_string(),
+                    values: vec!["true".to_string()],
+                    not_values: vec![],
+                })
+                .collect(),
+            deny: !authz.spec.allow_unauthenticated,
+        };
+        authz_rules.push(authz_rule);
+
+        Ok(SecurityPolicy {
+            name: authz.metadata.name.clone(),
+            namespace: authz.metadata.namespace.clone(),
+            selector: authz
+                .spec
+                .selector
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
+            authentication_rules: Vec::new(), // Auth handled in server policy
+            authorization_rules: authz_rules,
+            mtls_enabled: true, // Linkerd uses mTLS by default
+            created_at: authz
+                .metadata
+                .creation_timestamp
+                .unwrap_or_else(|| Utc::now()),
+            updated_at: authz
+                .metadata
+                .creation_timestamp
+                .unwrap_or_else(|| Utc::now()),
+        })
+    }
 }
 
 #[async_trait::async_trait]
@@ -845,54 +895,6 @@ impl MeshProvider for LinkerdMesh {
 
         tracing::info!("Linkerd mesh provider shutdown");
         Ok(())
-    }
-
-    /// Convert Linkerd authorization policy to security policy
-    fn linkerd_authz_policy_to_security_policy(
-        &self,
-        authz: &LinkerdAuthzPolicy,
-    ) -> Result<SecurityPolicy> {
-        let mut authz_rules = Vec::new();
-
-        // Convert Linkerd authz policy to our format
-        let authz_rule = crate::mesh::AuthzRule {
-            name: authz.metadata.name.clone(),
-            action: crate::mesh::AuthzAction::Allow, // Default to allow
-            when: authz
-                .spec
-                .allow_unauthenticated
-                .iter()
-                .map(|_| crate::mesh::AuthzCondition {
-                    key: "authenticated".to_string(),
-                    values: vec!["true".to_string()],
-                    not_values: vec![],
-                })
-                .collect(),
-            deny: !authz.spec.allow_unauthenticated,
-        };
-        authz_rules.push(authz_rule);
-
-        Ok(SecurityPolicy {
-            name: authz.metadata.name.clone(),
-            namespace: authz.metadata.namespace.clone(),
-            selector: authz
-                .spec
-                .selector
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect(),
-            authentication_rules: Vec::new(), // Auth handled in server policy
-            authorization_rules: authz_rules,
-            mtls_enabled: true, // Linkerd uses mTLS by default
-            created_at: authz
-                .metadata
-                .creation_timestamp
-                .unwrap_or_else(|| Utc::now()),
-            updated_at: authz
-                .metadata
-                .creation_timestamp
-                .unwrap_or_else(|| Utc::now()),
-        })
     }
 }
 

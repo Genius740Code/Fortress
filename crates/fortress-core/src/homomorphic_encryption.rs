@@ -1920,7 +1920,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_production_performance_characteristics() {
+    async fn test_ckks_production_performance_characteristics() {
         let ckks = CkksHomomorphic::new(128, 1024, 10, 1e6);
         let perf = ckks.performance_characteristics();
 

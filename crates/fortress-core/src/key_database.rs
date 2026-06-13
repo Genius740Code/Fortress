@@ -704,11 +704,20 @@ impl KeyDatabase for PostgresKeyDatabase {
         Ok(())
     }
 
-    async fn list_keys(&self) -> Result<Vec<(KeyId, KeyMetadata)>> {
+    async fn list_keys(
+        &self,
+        limit: Option<u32>,
+        offset: Option<u32>,
+    ) -> Result<Vec<(KeyId, KeyMetadata)>> {
+        let limit = limit.unwrap_or(1000); // Default limit
+        let offset = offset.unwrap_or(0);
+
         let rows = sqlx::query(
-            "SELECT key_id, metadata FROM keys WHERE expires_at > $1 ORDER BY created_at",
+            "SELECT key_id, metadata FROM keys WHERE expires_at > $1 ORDER BY created_at LIMIT $2 OFFSET $3",
         )
         .bind(Utc::now())
+        .bind(limit as i64)
+        .bind(offset as i64)
         .fetch_all(&self.pool)
         .await
         .map_err(|e| {

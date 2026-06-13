@@ -4,9 +4,14 @@
 //! for connection pooling, consistent hashing, and advanced Memcached features.
 
 use serde::{Deserialize, Serialize};
+use async_trait::async_trait;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+
+use crate::error::{FortressError, Result};
 
 #[cfg(feature = "memcached")]
-use memcache::{Client, ClientBuilder};
+use memcached::Client;
 
 /// Memcached cache configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -72,10 +77,17 @@ impl MemcachedPool {
         let mut clients = Vec::new();
 
         for server in &config.servers {
-            let client = ClientBuilder::new(server)
-                .binary_protocol(config.enable_binary_protocol)
-                .connect()
-                .map_err(|e| {
+            let url = if server.starts_with("memcache://") {
+                server.clone()
+            } else {
+                format!("memcache://{}", server)
+            };
+            let client = Client::connect_with(
+                vec![url],
+                config.pool_size as u64,
+                |_| 0,
+            )
+            .map_err(|e| {
                     FortressError::storage(
                         format!("Failed to connect to Memcached server {}: {}", server, e),
                         "memcached_cache".to_string(),
@@ -168,7 +180,7 @@ impl MemcachedCache {
     /// Execute a Memcached operation with retry logic
     async fn execute_with_retry<F, T>(&self, operation: F) -> Result<T>
     where
-        F: Fn() -> memcache::memcache::Result<T> + Send + Sync,
+        F: Fn() -> memcached::Result<T> + Send + Sync,
         T: Send + Sync + 'static,
     {
         if !self.config.enable_retry {

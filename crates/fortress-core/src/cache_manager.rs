@@ -5,7 +5,7 @@
 
 #[cfg(feature = "distributed-cache")]
 use crate::cache_hybrid::HybridCacheConfig;
-use crate::cache_invalidation::{CacheInvalidation, InvalidationConfig, InvalidationReason};
+use crate::cache_invalidation::{CacheInvalidation, CacheInvalidationManager, InvalidationConfig, InvalidationReason};
 #[cfg(feature = "memcached")]
 use crate::cache_memcached::{MemcachedCache, MemcachedConfig};
 #[cfg(feature = "redis")]

@@ -551,7 +551,7 @@ impl LeakyBucketAlgorithm {
 }
 
 #[async_trait::async_trait]
-impl RateLimitAlgorithm for LeakyAlgorithm {
+impl RateLimitAlgorithm for LeakyBucketAlgorithm {
     fn name(&self) -> &str {
         "leaky_bucket"
     }
@@ -846,7 +846,7 @@ mod tests {
             .await
             .unwrap();
         assert!(result.allowed);
-        assert!(result.remaining, 8);
+        assert!(result.remaining, "{}", 8);
 
         // Wait for some leak
         tokio::time::sleep(Duration::from_secs(2)).await;

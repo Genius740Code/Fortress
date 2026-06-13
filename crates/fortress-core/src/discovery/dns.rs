@@ -9,7 +9,9 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
+use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::RwLock;
 
 /// DNS discovery provider configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -67,7 +69,7 @@ impl DnsDiscovery {
             config,
             resolver: None,
             initialized: false,
-            last_health_check: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            node_cache: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -98,7 +100,7 @@ impl DnsDiscovery {
     }
 
     /// Resolve SRV records
-    async fn resolve_srv_records(&self) -> Result<Vec<trust_dns_resolver::proto::rr::SRV>> {
+    async fn resolve_srv_records(&self) -> Result<Vec<trust_dns_resolver::proto::rr::rdata::SRV>> {
         let resolver = match &self.resolver {
             Some(resolver) => resolver,
             None => return Ok(Vec::new()),
@@ -110,7 +112,7 @@ impl DnsDiscovery {
             .map_err(|e| FortressError::discovery(format!("Invalid SRV name: {}", e)))?;
 
         match resolver.srv_lookup(name).await {
-            Ok(lookup_result) => Ok(lookup_result),
+            Ok(lookup_result) => Ok(lookup_result.iter().cloned().collect()),
             Err(e) => {
                 tracing::warn!("SRV lookup failed: {}", e);
                 Ok(Vec::new())
@@ -185,7 +187,7 @@ impl DnsDiscovery {
     /// Convert SRV record to discovered node
     fn srv_record_to_node(
         &self,
-        srv: &trust_dns_resolver::proto::rr::SRV,
+        srv: &trust_dns_resolver::proto::rr::rdata::SRV,
     ) -> Result<DiscoveredNode> {
         let hostname = srv.target().to_string();
         let port = srv.port() as u16;

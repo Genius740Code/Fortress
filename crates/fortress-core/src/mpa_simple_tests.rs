@@ -35,7 +35,7 @@ mod tests {
             let mut auth = auth_manager.write().unwrap();
 
             let user_id = auth
-                .create_user(name.to_string(), format!("{}_password", name))
+                .create_user(name.to_string(), format!("{}@example.com", name), format!("{}_password", name))
                 .await
                 .unwrap();
 

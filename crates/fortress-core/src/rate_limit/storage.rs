@@ -4,7 +4,7 @@
 //! including memory, Redis, and database backends.
 
 use crate::error::{FortressError, Result};
-use crate::rate_limit::{RateLimitAlgorithm, RateLimitContext, RateLimitResult, RateLimitRule};
+use crate::rate_limit::{RateLimitAlgorithm, RateLimitContext, RateLimitResult, RateLimitRule, RateLimitStorage};
 use async_trait::async_trait;
 use chrono::{DateTime, Duration, Utc};
 use std::collections::HashMap;

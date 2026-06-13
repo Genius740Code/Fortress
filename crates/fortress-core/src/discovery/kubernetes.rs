@@ -8,7 +8,13 @@ use crate::error::{FortressError, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::RwLock;
+
+use k8s_openapi::api::core::v1::{Pod, Service};
+use kube::api::ListParams;
+use kube::Api;
 
 /// Kubernetes discovery provider configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,18 +93,18 @@ impl KubernetesDiscovery {
     }
 
     /// Get pods using label selector
-    async fn get_pods(&self) -> Result<Vec<kube::api::Pod>> {
+    async fn get_pods(&self) -> Result<Vec<Pod>> {
         let client = match &self.client {
             Some(client) => client,
             None => return Ok(Vec::new()),
         };
 
-        let pods: kube::api::Api<kube::api::Pod> =
-            kube::api::Api::namespaced(client.clone(), &self.config.namespace);
+        let pods: Api<Pod> =
+            Api::namespaced(client.clone(), &self.config.namespace);
 
         match pods
             .list(
-                &kube::api::ListParams::default().labels(
+                &ListParams::default().labels(
                     &self
                         .config
                         .label_selector
@@ -117,16 +123,16 @@ impl KubernetesDiscovery {
     }
 
     /// Get services
-    async fn get_services(&self) -> Result<Vec<kube::api::Service>> {
+    async fn get_services(&self) -> Result<Vec<Service>> {
         let client = match &self.client {
             Some(client) => client,
             None => return Ok(Vec::new()),
         };
 
-        let services: kube::api::Api<kube::api::Service> =
-            kube::api::Api::namespaced(client.clone(), &self.config.namespace);
+        let services: Api<Service> =
+            Api::namespaced(client.clone(), &self.config.namespace);
 
-        match services.list(&kube::api::ListParams::default()).await {
+        match services.list(&ListParams::default()).await {
             Ok(service_list) => Ok(service_list.items),
             Err(e) => {
                 tracing::warn!("Failed to list services: {}", e);
@@ -136,7 +142,7 @@ impl KubernetesDiscovery {
     }
 
     /// Extract node information from a pod
-    fn pod_to_node(&self, pod: &kube::api::Pod) -> Result<DiscoveredNode> {
+    fn pod_to_node(&self, pod: &Pod) -> Result<DiscoveredNode> {
         let pod_name = pod
             .metadata
             .name
@@ -210,7 +216,7 @@ impl KubernetesDiscovery {
     }
 
     /// Extract node information from a service
-    fn service_to_node(&self, service: &kube::api::Service) -> Result<DiscoveredNode> {
+    fn service_to_node(&self, service: &Service) -> Result<DiscoveredNode> {
         let service_name = service
             .metadata
             .name
@@ -257,8 +263,8 @@ impl KubernetesDiscovery {
                 service
                     .spec
                     .as_ref()
-                    .map(|s| &s.service_type)
-                    .unwrap_or(&kube::api::ServiceType::ClusterIP)
+                    .map(|s| s.type_.as_deref().unwrap_or("ClusterIP"))
+                    .unwrap_or("ClusterIP")
             ),
         );
 
@@ -286,7 +292,7 @@ impl KubernetesDiscovery {
     }
 
     /// Extract port from pod specification
-    fn extract_port_from_pod(&self, pod: &kube::api::Pod) -> Result<u16> {
+    fn extract_port_from_pod(&self, pod: &Pod) -> Result<u16> {
         // Check if a specific port name is configured
         if let Some(ref port_name) = self.config.port_name {
             if let Some(ref containers) =
@@ -323,7 +329,7 @@ impl KubernetesDiscovery {
     }
 
     /// Extract port from service specification
-    fn extract_port_from_service(&self, service: &kube::api::Service) -> Result<u16> {
+    fn extract_port_from_service(&self, service: &Service) -> Result<u16> {
         // Check if a specific port name is configured
         if let Some(ref port_name) = self.config.port_name {
             if let Some(ref ports) = service.spec.as_ref().and_then(|spec| spec.ports.as_ref()) {
@@ -350,7 +356,7 @@ impl KubernetesDiscovery {
     }
 
     /// Determine pod health status
-    fn pod_health_status(&self, pod: &kube::api::Pod) -> NodeHealthStatus {
+    fn pod_health_status(&self, pod: &Pod) -> NodeHealthStatus {
         if let Some(ref status) = pod.status {
             // Check pod phase
             if let Some(ref phase) = status.phase {
@@ -388,8 +394,8 @@ impl KubernetesDiscovery {
             .as_ref()
             .ok_or_else(|| FortressError::discovery("Kubernetes client not initialized"))?;
 
-        let pods: kube::api::Api<kube::api::Pod> =
-            kube::api::Api::namespaced(client.clone(), &self.config.namespace);
+        let pods: Api<Pod> =
+            Api::namespaced(client.clone(), &self.config.namespace);
 
         match pods.get(pod_name).await {
             Ok(pod) => Ok(self.pod_health_status(&pod)),

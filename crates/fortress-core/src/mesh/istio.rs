@@ -6,12 +6,14 @@
 use crate::error::{FortressError, Result};
 use crate::mesh::{
     MeshConfig, MeshMetrics, MeshNode, MeshNodeHealthStatus, MeshProvider, MeshType,
-    SecurityPolicy, TrafficPolicy,
+    SecurityPolicy, TrafficAction, TrafficPolicy, TrafficRule,
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::RwLock;
 
 /// Istio mesh provider configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -420,7 +422,7 @@ impl IstioMesh {
         let vsvc = self.convert_traffic_policy_to_istio_virtual_service(policy)?;
 
         // Apply via Kubernetes API
-        self.apply_istio_virtual_service(&vsync).await
+        self.apply_istio_virtual_service(&vsvc).await
     }
 
     /// Apply security policy via Istio AuthorizationPolicy

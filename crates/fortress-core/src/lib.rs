@@ -696,7 +696,7 @@ pub mod prelude {
 
     pub use crate::tee::{
         AttestationResult, EnclaveConfig, EnclaveInfo, EnclaveStatus, SecureChannel,
-        SecurityPolicy, TeeAwareKeyManager, TeeCapabilities, TeeManager, TeeProvider, TeeType,
+        SecurityPolicy as TeeSecurityPolicy, TeeAwareKeyManager, TeeCapabilities, TeeManager, TeeProvider, TeeType,
     };
 
     pub use crate::tee_aws_nitro::{

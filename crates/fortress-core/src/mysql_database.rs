@@ -172,7 +172,7 @@ impl MySQLDatabase {
                 )
             })?;
 
-        let mut db = Self { config, pool };
+        let db = Self { config, pool };
 
         // Validate configuration
         db.config.validate()?;

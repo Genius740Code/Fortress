@@ -21,7 +21,7 @@ use aws_sdk_s3::{config::Region as S3Region, Client as S3Client};
 #[cfg(feature = "cloud-storage")]
 use azure_identity::DefaultAzureCredential;
 #[cfg(feature = "cloud-storage")]
-use azure_storage::BlobServiceClient;
+use azure_storage_blobs::prelude::BlobServiceClient;
 #[cfg(feature = "cloud-storage")]
 use azure_storage_blobs::prelude::*;
 

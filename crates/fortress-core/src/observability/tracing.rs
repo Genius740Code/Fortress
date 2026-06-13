@@ -6,6 +6,8 @@
 use crate::error::{FortressError, Result};
 
 #[cfg(feature = "opentelemetry")]
+use opentelemetry::trace::noop::{NoopSpan as OtelNoopSpan, NoopTracer as OtelNoopTracer};
+#[cfg(feature = "opentelemetry")]
 use opentelemetry::trace::{Span, Tracer, TracerProvider};
 #[cfg(feature = "opentelemetry")]
 use opentelemetry::{global, KeyValue};
@@ -13,6 +15,7 @@ use opentelemetry::{global, KeyValue};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::time::Instant;
 use uuid::Uuid;
@@ -305,20 +308,30 @@ impl ObservabilityTracer {
     /// Create a new observability tracer
     pub fn new(config: TraceConfig) -> Result<Self> {
         if !config.enabled {
-            // Create a no-op tracer for disabled tracing
-            return Ok(Self {
-                config,
-                tracer: TracerImpl::NoOp(NoOpTracer),
-                active_spans: tokio::sync::RwLock::new(HashMap::new()),
-            });
+            #[cfg(feature = "opentelemetry")]
+            {
+                return Ok(Self {
+                    config,
+                    tracer: Box::new(OtelNoopTracer::new()),
+                    active_spans: tokio::sync::RwLock::new(HashMap::new()),
+                });
+            }
+            #[cfg(not(feature = "opentelemetry"))]
+            {
+                return Ok(Self {
+                    config,
+                    tracer: TracerImpl::NoOp(NoOpTracer),
+                    active_spans: tokio::sync::RwLock::new(HashMap::new()),
+                });
+            }
         }
 
-        // Initialize OpenTelemetry tracer based on configuration
         #[cfg(feature = "opentelemetry")]
-        let tracer = Self::create_otel_tracer(&config)?;
+        let tracer: Box<dyn opentelemetry::trace::Tracer + Send + Sync> =
+            Self::create_otel_tracer(&config)?;
 
         #[cfg(not(feature = "opentelemetry"))]
-        let tracer = TracerImpl::Console(ConsoleTracer::new(TracerConfig::default()));
+        let tracer: TracerImpl = TracerImpl::Console(ConsoleTracer::new(TracerConfig::default()));
 
         Ok(Self {
             config,
@@ -359,24 +372,24 @@ fn create_otel_tracer(
         ExporterType::Console => {
             // For now, return a no-op tracer that logs to console
             // In a full implementation, this would set up OpenTelemetry with console exporter
-            Ok(Box::new(ConsoleTracer))
+            Ok(Box::new(OtelNoopTracer::new()))
         }
         ExporterType::Jaeger => {
             // Would set up Jaeger exporter
-            tracing::warn!("Jaeger exporter not yet implemented, using console tracer");
-            Ok(Box::new(ConsoleTracer))
+            ::tracing::warn!("Jaeger exporter not yet implemented, using console tracer");
+            Ok(Box::new(OtelNoopTracer::new()))
         }
         ExporterType::Zipkin => {
             // Would set up Zipkin exporter
-            tracing::warn!("Zipkin exporter not yet implemented, using console tracer");
-            Ok(Box::new(ConsoleTracer))
+            ::tracing::warn!("Zipkin exporter not yet implemented, using console tracer");
+            Ok(Box::new(OtelNoopTracer::new()))
         }
         ExporterType::OtelCollector => {
             // Would set up OTLP exporter
-            tracing::warn!("OTLP exporter not yet implemented, using console tracer");
-            Ok(Box::new(ConsoleTracer))
+            ::tracing::warn!("OTLP exporter not yet implemented, using console tracer");
+            Ok(Box::new(OtelNoopTracer::new()))
         }
-        ExporterType::None => Ok(Box::new(NoOpTracer)),
+        ExporterType::None => Ok(Box::new(OtelNoopTracer::new())),
     }
 }
 
@@ -706,12 +719,23 @@ impl SpanContext {
 
 /// No-op tracer implementation
 #[derive(Debug)]
+#[cfg(feature = "opentelemetry")]
+pub struct NoOpTracer(OtelNoopTracer);
+
+#[derive(Debug)]
+#[cfg(not(feature = "opentelemetry"))]
 pub struct NoOpTracer;
 
 #[cfg(feature = "opentelemetry")]
-impl Tracer for NoOpTracer {
-    fn start_with_context<T>(&self, name: &str, _context: &T) -> Box<dyn Span + Send + Sync> {
-        Box::new(NoOpSpan::new(name.to_string()))
+impl opentelemetry::trace::Tracer for NoOpTracer {
+    type Span = OtelNoopSpan;
+
+    fn build_with_context(
+        &self,
+        builder: opentelemetry::trace::SpanBuilder,
+        parent_context: &opentelemetry::Context,
+    ) -> Self::Span {
+        self.0.build_with_context(builder, parent_context)
     }
 }
 
@@ -724,6 +748,11 @@ impl Tracer for NoOpTracer {
 
 /// Console tracer implementation
 #[derive(Debug)]
+#[cfg(feature = "opentelemetry")]
+pub struct ConsoleTracer(OtelNoopTracer);
+
+#[derive(Debug)]
+#[cfg(not(feature = "opentelemetry"))]
 pub struct ConsoleTracer {
     config: TracerConfig,
 }
@@ -735,9 +764,15 @@ impl ConsoleTracer {
 }
 
 #[cfg(feature = "opentelemetry")]
-impl Tracer for ConsoleTracer {
-    fn start_with_context<T>(&self, name: &str, _context: &T) -> Box<dyn Span + Send + Sync> {
-        Box::new(ConsoleSpan::new(name.to_string()))
+impl opentelemetry::trace::Tracer for ConsoleTracer {
+    type Span = OtelNoopSpan;
+
+    fn build_with_context(
+        &self,
+        builder: opentelemetry::trace::SpanBuilder,
+        parent_context: &opentelemetry::Context,
+    ) -> Self::Span {
+        self.0.build_with_context(builder, parent_context)
     }
 }
 
@@ -750,22 +785,73 @@ impl Tracer for ConsoleTracer {
 
 /// No-op span implementation
 pub struct NoOpSpan {
+    #[cfg(feature = "opentelemetry")]
+    inner: OtelNoopSpan,
+    #[cfg(not(feature = "opentelemetry"))]
     name: String,
 }
 
 impl NoOpSpan {
     fn new(name: String) -> Self {
-        Self { name }
+        #[cfg(feature = "opentelemetry")]
+        {
+            Self {
+                inner: OtelNoopSpan::DEFAULT,
+            }
+        }
+        #[cfg(not(feature = "opentelemetry"))]
+        {
+            Self { name }
+        }
     }
 }
 
 #[cfg(feature = "opentelemetry")]
-impl Span for NoOpSpan {
-    fn add_event<T>(&mut self, _name: T, _attributes: Vec<KeyValue>) {}
-    fn add_link(&mut self, _link: opentelemetry::trace::Link) {}
-    fn set_status(&mut self, _status: opentelemetry::trace::Status) {}
-    fn set_attribute(&mut self, _attribute: KeyValue) {}
-    fn end_with_timestamp(&mut self, _timestamp: opentelemetry::time::Timestamp) {}
+impl opentelemetry::trace::Span for NoOpSpan {
+    fn add_event<T>(&mut self, name: T, attributes: Vec<opentelemetry::KeyValue>)
+    where
+        T: Into<Cow<'static, str>>,
+    {
+        self.inner.add_event(name, attributes)
+    }
+
+    fn add_event_with_timestamp<T>(
+        &mut self,
+        name: T,
+        timestamp: std::time::SystemTime,
+        attributes: Vec<opentelemetry::KeyValue>,
+    ) where
+        T: Into<Cow<'static, str>>,
+    {
+        self.inner.add_event_with_timestamp(name, timestamp, attributes)
+    }
+
+    fn end_with_timestamp(&mut self, timestamp: std::time::SystemTime) {
+        self.inner.end_with_timestamp(timestamp)
+    }
+
+    fn is_recording(&self) -> bool {
+        self.inner.is_recording()
+    }
+
+    fn set_attribute(&mut self, attribute: opentelemetry::KeyValue) {
+        self.inner.set_attribute(attribute)
+    }
+
+    fn set_status(&mut self, status: opentelemetry::trace::Status) {
+        self.inner.set_status(status)
+    }
+
+    fn span_context(&self) -> &opentelemetry::trace::SpanContext {
+        self.inner.span_context()
+    }
+
+    fn update_name<T>(&mut self, name: T)
+    where
+        T: Into<Cow<'static, str>>,
+    {
+        self.inner.update_name(name)
+    }
 }
 
 #[cfg(not(feature = "opentelemetry"))]
@@ -779,37 +865,87 @@ impl Span for NoOpSpan {
 
 /// Console span implementation
 pub struct ConsoleSpan {
+    #[cfg(feature = "opentelemetry")]
+    inner: OtelNoopSpan, // For now, use NoopSpan for delegation
+    #[cfg(not(feature = "opentelemetry"))]
     name: String,
+    #[cfg(not(feature = "opentelemetry"))]
     start_time: std::time::Instant,
 }
 
 impl ConsoleSpan {
     fn new(name: String) -> Self {
-        tracing::info!("Starting span: {}", name);
-        Self {
-            name,
-            start_time: std::time::Instant::now(),
+        #[cfg(feature = "opentelemetry")]
+        {
+            // For now, delegate to NoopSpan
+            Self {
+                inner: OtelNoopSpan::DEFAULT,
+            }
+        }
+        #[cfg(not(feature = "opentelemetry"))]
+        {
+            tracing::info!("Starting span: {}", name);
+            Self {
+                name,
+                start_time: std::time::Instant::now(),
+            }
         }
     }
 }
 
 #[cfg(feature = "opentelemetry")]
-impl Span for ConsoleSpan {
-    fn add_event<T>(&mut self, name: T, _attributes: Vec<KeyValue>) {
-        tracing::info!("Span event: {}", format!("{}", name));
+impl opentelemetry::trace::Span for ConsoleSpan {
+    fn add_event<T>(&mut self, name: T, attributes: Vec<opentelemetry::KeyValue>)
+    where
+        T: Into<Cow<'static, str>>,
+    {
+        tracing::info!("Span event: {}", name.into());
+        self.inner.add_event(name, attributes)
     }
 
-    fn add_link(&mut self, _link: opentelemetry::trace::Link) {}
+    fn add_event_with_timestamp<T>(
+        &mut self,
+        name: T,
+        timestamp: std::time::SystemTime,
+        attributes: Vec<opentelemetry::KeyValue>,
+    ) where
+        T: Into<Cow<'static, str>>,
+    {
+        tracing::info!("Span event with timestamp: {}", name.into());
+        self.inner.add_event_with_timestamp(name, timestamp, attributes)
+    }
 
-    fn set_status(&mut self, _status: opentelemetry::trace::Status) {}
+    fn add_link(&mut self, link: opentelemetry::trace::Link) {
+        self.inner.add_link(link)
+    }
 
-    fn set_attribute(&mut self, attribute: KeyValue) {
+    fn end_with_timestamp(&mut self, timestamp: opentelemetry::time::Timestamp) {
+        self.inner.end_with_timestamp(timestamp)
+    }
+
+    fn is_recording(&self) -> bool {
+        self.inner.is_recording()
+    }
+
+    fn set_attribute(&mut self, attribute: opentelemetry::KeyValue) {
         tracing::info!("Span attribute: {} = {}", attribute.key, attribute.value);
+        self.inner.set_attribute(attribute)
     }
 
-    fn end_with_timestamp(&mut self, _timestamp: opentelemetry::time::Timestamp) {
-        let duration = self.start_time.elapsed();
-        tracing::info!("Finished span: {} (duration: {:?})", self.name, duration);
+    fn set_status(&mut self, status: opentelemetry::trace::Status) {
+        self.inner.set_status(status)
+    }
+
+    fn span_context(&self) -> &opentelemetry::trace::SpanContext {
+        self.inner.span_context()
+    }
+
+    fn update_name<T>(&mut self, name: T)
+    where
+        T: Into<Cow<'static, str>>,
+    {
+        tracing::info!("Updating span name: {}", name.into());
+        self.inner.update_name(name)
     }
 }
 

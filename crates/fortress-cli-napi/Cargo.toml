@@ -31,7 +31,7 @@ serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
 
 [build-dependencies]
-napi-build = "2.0"
+napi-build = { version = "2.1", optional = true }
 
 [package.metadata.napi]
 targets = ["x86_64-pc-windows-msvc"]
@@ -43,3 +43,4 @@ napi5 = ["napi/napi5"]
 napi6 = ["napi/napi6"]
 napi7 = ["napi/napi7"]
 napi8 = ["napi/napi8"]
+napi-build = ["dep:napi-build"]

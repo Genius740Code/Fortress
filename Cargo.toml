@@ -19,9 +19,9 @@ members = [
     "crates/fortress-core",
     "crates/fortress-cli",
     "crates/fortress-api-server",
-    "crates/fortress-cli-napi",
     "crates/fortress-db",
-    "plugins/auth",
+    # "crates/fortress-cli-napi",
+    # "plugins/auth",
     # "crates/fortress-python",
     # "crates/fortress-js",
 ]

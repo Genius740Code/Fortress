@@ -33,7 +33,7 @@ pub use tracing::{ObservabilityTracer, SpanContext, TraceConfig};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 #[cfg(feature = "observability")]
-use tracing::{debug, error, info, warn};
+use ::tracing::{debug, error, info, warn};
 
 /// Comprehensive observability configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]

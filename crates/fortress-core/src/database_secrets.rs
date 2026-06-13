@@ -99,10 +99,10 @@ use rayon::prelude::*;
 // Database-specific imports for actual connections
 
 #[cfg(feature = "postgres")]
-use postgres::{Client, NoTls};
+use sqlx::{PgConnection, PgPool};
 
 #[cfg(feature = "mysql")]
-use mysql::{Pool, PooledConn};
+use sqlx::{MySqlConnection, MySqlPool};
 
 // mssql feature not available in sqlx 0.8
 
@@ -1075,23 +1075,27 @@ impl DatabaseEngine {
             results = requests
                 .into_par_iter()
                 .map(|(path, username, permissions, ttl)| {
-                    let ttl = ttl.unwrap_or(config.default_ttl);
-                    if ttl > config.max_ttl {
+                    let inner_config = config
+                        .as_ref()
+                        .ok_or_else(|| FortressError::secrets("Database not configured".to_string()))?;
+
+                    let ttl = ttl.unwrap_or(inner_config.default_ttl);
+                    if ttl > inner_config.max_ttl {
                         return Err(FortressError::secrets("TTL exceeds maximum".to_string()));
                     }
 
                     let username =
-                        username.unwrap_or_else(|| self.generate_username(&config.username_prefix));
+                        username.unwrap_or_else(|| self.generate_username(&inner_config.username_prefix));
                     let password = self.generate_password(16);
 
                     // Create credential object
                     let credential = DatabaseCredential {
                         username: username.clone(),
                         password: password.clone(),
-                        database: self.extract_database_name(&config.database_url),
+                        database: self.extract_database_name(&inner_config.database_url),
                         connection_string: self
-                            .build_connection_string(&config, &username, &password),
-                        granted_permissions: permissions.clone(),
+                            .build_connection_string(&inner_config, &username, &password),
+                        permissions: permissions.clone(),
                         created_at: Utc::now(),
                         expires_at: Utc::now() + Duration::seconds(ttl as i64),
                     };
@@ -1133,7 +1137,7 @@ impl DatabaseEngine {
                 })
                 .collect();
 
-            for (lease_id, username) in to_revoke {
+            for (lease_id, _username) in to_revoke {
                 if self.revoke(&lease_id).await.is_ok() {
                     revoked_count += 1;
                 }

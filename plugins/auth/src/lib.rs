@@ -15,9 +15,9 @@ pub mod mock_host_functions {
     use std::os::raw::{c_char, c_int};
 
     #[no_mangle]
-    pub extern "C" fn auth_log(_level: c_int, ptr: *const c_char, _len: usize) {
+    pub unsafe extern "C" fn auth_log(_level: c_int, ptr: *const c_char, _len: usize) {
         if !ptr.is_null() {
-            let msg = unsafe { CStr::from_ptr(ptr) }.to_string_lossy();
+            let msg = CStr::from_ptr(ptr).to_string_lossy();
             println!("[MOCK LOG] {}", msg);
         }
     }
