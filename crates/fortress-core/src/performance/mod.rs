@@ -486,7 +486,7 @@ mod tests {
     async fn test_high_performance_encryptor() {
         let algorithm = Box::new(Aegis256::new());
         let config = PerformanceConfig::default();
-        let key = crate::key::SecureKey::generate_random(32).unwrap();
+        let key = crate::key::SecureKey::generate(32).unwrap();
         let mut encryptor = HighPerformanceEncryptor::new(algorithm, config, key).unwrap();
 
         // Start monitoring
@@ -514,7 +514,7 @@ mod tests {
     #[tokio::test]
     async fn test_benchmark() {
         let algorithm = Box::new(Aegis256::new());
-        let key = crate::key::SecureKey::generate_random(32).unwrap();
+        let key = crate::key::SecureKey::generate(32).unwrap();
         let encryptor =
             HighPerformanceEncryptor::new(algorithm, PerformanceConfig::default(), key).unwrap();
 

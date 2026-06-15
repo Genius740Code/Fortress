@@ -15,7 +15,7 @@ use opentelemetry::{global, KeyValue};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use serde::{Deserialize, Serialize};
-use std::borrow::Cow;
+
 use std::collections::HashMap;
 use std::time::Instant;
 use uuid::Uuid;
@@ -353,6 +353,7 @@ pub struct TracerConfig {
     pub service_version: String,
 }
 
+#[cfg(not(feature = "opentelemetry"))]
 impl Default for TracerConfig {
     fn default() -> Self {
         Self {
@@ -757,6 +758,7 @@ pub struct ConsoleTracer {
     config: TracerConfig,
 }
 
+#[cfg(not(feature = "opentelemetry"))]
 impl ConsoleTracer {
     fn new(config: TracerConfig) -> Self {
         Self { config }
@@ -915,11 +917,7 @@ impl opentelemetry::trace::Span for ConsoleSpan {
         self.inner.add_event_with_timestamp(name, timestamp, attributes)
     }
 
-    fn add_link(&mut self, link: opentelemetry::trace::Link) {
-        self.inner.add_link(link)
-    }
-
-    fn end_with_timestamp(&mut self, timestamp: opentelemetry::time::Timestamp) {
+    fn end_with_timestamp(&mut self, timestamp: std::time::SystemTime) {
         self.inner.end_with_timestamp(timestamp)
     }
 

@@ -6,7 +6,7 @@
 use crate::error::{FortressError, Result};
 use crate::mesh::{
     MeshConfig, MeshMetrics, MeshNode, MeshNodeHealthStatus, MeshProvider, MeshType,
-    SecurityPolicy, TrafficPolicy,
+    SecurityPolicy, TrafficPolicy, TrafficRule,
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

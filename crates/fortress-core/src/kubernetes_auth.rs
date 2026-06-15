@@ -274,7 +274,7 @@ impl KubernetesAuth {
             let url = format!(
                 "{}:{}/apis/authentication.k8s.io/v1/tokenreviews",
                 config.kubernetes_host.trim_end_matches('/'),
-                config.kubernetes_port
+                config._kubernetes_port
             );
 
             let request = self

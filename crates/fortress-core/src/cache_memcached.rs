@@ -4,10 +4,16 @@
 //! for connection pooling, consistent hashing, and advanced Memcached features.
 
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "memcached")]
 use async_trait::async_trait;
+#[cfg(feature = "memcached")]
 use std::sync::Arc;
+#[cfg(feature = "memcached")]
+use std::time::Duration;
+#[cfg(feature = "memcached")]
 use tokio::sync::RwLock;
 
+#[cfg(feature = "memcached")]
 use crate::error::{FortressError, Result};
 
 #[cfg(feature = "memcached")]

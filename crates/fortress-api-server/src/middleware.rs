@@ -947,7 +947,7 @@ pub fn create_cors_layer(config: &crate::config::CorsConfig) -> CorsLayer {
 
 /// Create timeout layer
 pub fn create_timeout_layer(timeout_seconds: u64) -> TimeoutLayer {
-    TimeoutLayer::new(Duration::from_secs(timeout_seconds))
+    TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_secs(timeout_seconds))
 }
 
 /// Create trace layer

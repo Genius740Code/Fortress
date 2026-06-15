@@ -432,8 +432,8 @@ impl QuantumResistantEncryption for LweEncryption {
     ) -> Result<QuantumResistantCiphertext> {
         // Extract secret and public parameters
         let secret_size = self.dimension * (self.modulus_size / 8);
-        let secret = &key.as_bytes()[..secret_size];
-        let public_params = &key.as_bytes()[secret_size..];
+        let secret = &key.as_bytes().unwrap()[..secret_size];
+        let public_params = &key.as_bytes().unwrap()[secret_size..];
 
         let ciphertext_data = self.encrypt_lwe(plaintext, secret, public_params)?;
 
@@ -455,7 +455,7 @@ impl QuantumResistantEncryption for LweEncryption {
     ) -> Result<Vec<u8>> {
         // Extract secret
         let secret_size = self.dimension * (self.modulus_size / 8);
-        let secret = &key.as_bytes()[..secret_size];
+        let secret = &key.as_bytes().unwrap()[..secret_size];
 
         self.decrypt_lwe(&ciphertext.data, secret)
     }
@@ -639,8 +639,8 @@ impl QuantumResistantEncryption for HybridEncryption {
         // Extract keys
         let classical_algorithm = create_algorithm(&self.classical_algorithm)?;
         let classical_key_size = classical_algorithm.key_size();
-        let classical_key = &key.as_bytes()[..classical_key_size];
-        let quantum_key = &key.as_bytes()[classical_key_size..];
+        let classical_key = &key.as_bytes().unwrap()[..classical_key_size];
+        let quantum_key = &key.as_bytes().unwrap()[classical_key_size..];
 
         let ciphertext_data = self
             .encrypt_hybrid(plaintext, classical_key, quantum_key)
@@ -665,8 +665,8 @@ impl QuantumResistantEncryption for HybridEncryption {
         // Extract keys
         let classical_algorithm = create_algorithm(&self.classical_algorithm)?;
         let classical_key_size = classical_algorithm.key_size();
-        let classical_key = &key.as_bytes()[..classical_key_size];
-        let quantum_key = &key.as_bytes()[classical_key_size..];
+        let classical_key = &key.as_bytes().unwrap()[..classical_key_size];
+        let quantum_key = &key.as_bytes().unwrap()[classical_key_size..];
 
         self.decrypt_hybrid(&ciphertext.data, classical_key, quantum_key)
             .await

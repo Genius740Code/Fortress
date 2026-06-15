@@ -4,10 +4,16 @@
 //! for clustering, connection pooling, and advanced Redis features.
 
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "redis")]
 use async_trait::async_trait;
+#[cfg(feature = "redis")]
 use std::sync::Arc;
+#[cfg(feature = "redis")]
+use std::time::Duration;
+#[cfg(feature = "redis")]
 use tokio::sync::RwLock;
 
+#[cfg(feature = "redis")]
 use crate::error::{FortressError, Result};
 
 #[cfg(feature = "redis")]

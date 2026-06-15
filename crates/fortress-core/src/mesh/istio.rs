@@ -720,7 +720,7 @@ impl MeshProvider for IstioMesh {
         match self.get_istio_virtual_services().await {
             Ok(virtual_services) => {
                 for vsvc in virtual_services {
-                    match self.istio_virtual_service_to_traffic_policy(&vsync) {
+                    match self.istio_virtual_service_to_traffic_policy(&vsvc) {
                         Ok(policy) => policies.push(policy),
                         Err(e) => {
                             tracing::warn!(

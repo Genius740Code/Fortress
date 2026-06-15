@@ -30,7 +30,7 @@ rust-version = "1.74"
 
 # Async runtime
 
-tokio = { version = "1.35", features = ["rt", "sync", "macros"] }
+tokio = { version = "1.39.2", features = ["rt", "sync", "macros"] }
 
 
 
@@ -120,12 +120,10 @@ sha2 = "0.10"
 
 warp = "0.4.3"
 
-axum = "0.7"
+axum = "0.7.9"
 
-tower = "0.4"
-
-tower-http = "0.5"
-
+tower = { version = "0.5", features = ["full"] }
+tower-http = { version = "0.6.11", default-features = false, features = ["cors", "trace"] }
 sha3 = "0.10"
 
 hmac = "0.12"
@@ -425,6 +423,8 @@ sysinfo = "0.30"
 # Distributed caching (optional features)
 
 memcached = { version = "0.4.5-beta.2", optional = true }
+mysql_async = { version = "0.37.0", optional = true }
+tokio-postgres = { version = "0.7.13", optional = true }
 
 
 
@@ -458,9 +458,9 @@ default = ["std"]
 
 std = []
 
-postgres = ["sqlx/postgres"]
+postgres = ["sqlx/postgres", "tokio-postgres"]
 
-mysql = ["sqlx/mysql"]
+mysql = ["sqlx/mysql", "mysql_async"]
 
 mssql = []  # SQL Server feature (currently not supported by sqlx 0.8)
 
@@ -503,6 +503,8 @@ mesh = ["kube", "k8s-openapi"]
 rate-limiting = ["redis"]
 
 phase3 = ["discovery", "mesh", "rate-limiting"]
+mysql_async = ["dep:mysql_async"]
+tokio-postgres = ["dep:tokio-postgres"]
 
 
 

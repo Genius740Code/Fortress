@@ -21,16 +21,17 @@ path = "src/main.rs"
 fortress-core = { path = "../fortress-core", version = "1.0.1" }
 
 # Async runtime
-tokio = { version = "1.35", features = ["full"] }
+tokio = { version = "1.39.2", features = ["full"] }
 tokio-util = { version = "0.7", features = ["codec"] }
 
 # Web framework
-axum = { version = "0.7", features = ["multipart", "macros"] }
-tower = { version = "0.4", features = ["full"] }
+axum = { version = "0.7.9", features = ["multipart", "macros"] }
+tower = { version = "0.5.3", features = ["full"] }
 tower-service = "0.3"
-tower-http = { version = "0.5", features = ["cors", "trace", "compression-br", "timeout"] }
-hyper = { version = "1.0", features = ["full"] }
-http = "1.0"
+tower-http = { version = "0.6.11", default-features = false, features = ["cors", "trace", "timeout", "compression-deflate", "compression-gzip", "compression-zstd"] }
+hyper = { version = "1.10.1", features = ["full"] }
+http = "1.4.2"
+async-compression = { version = "0.4.42", default-features = false, features = ["deflate", "gzip", "zstd"] }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }

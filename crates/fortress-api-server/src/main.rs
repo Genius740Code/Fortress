@@ -139,7 +139,7 @@ async fn create_app_state() -> Result<Arc<AppState>, Box<dyn std::error::Error>>
     use fortress_core::tenant::{GlobalResourceLimits, InMemoryTenantManager};
 
     // Initialize components with secure JWT secret from environment
-    let jwt_secret = std::env::var("FORTRESS_JWT_SECRET")
+    let mut jwt_secret = std::env::var("FORTRESS_JWT_SECRET")
         .map_err(|_| "FORTRESS_JWT_SECRET environment variable not set")?;
 
     if jwt_secret.len() < 32 {
@@ -153,7 +153,7 @@ async fn create_app_state() -> Result<Arc<AppState>, Box<dyn std::error::Error>>
         .as_deref()
         == Some("1")
     {
-        let admin_password = std::env::var("FORTRESS_BOOTSTRAP_ADMIN_PASSWORD") // Password for default admin user
+        let mut admin_password = std::env::var("FORTRESS_BOOTSTRAP_ADMIN_PASSWORD") // Password for default admin user
             .map_err(|_| "FORTRESS_BOOTSTRAP_ADMIN_PASSWORD environment variable not set for default admin bootstrap")?;
         let admin_user = fortress_api_server::auth::UserRecord {
             id: "admin".to_string(),

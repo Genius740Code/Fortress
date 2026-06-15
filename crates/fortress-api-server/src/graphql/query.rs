@@ -798,15 +798,12 @@ impl Query {
             })?;
 
         if let Some(secret) = secret {
-            // Extract expires_at from lease info
-            let expires_at = secret.lease.and_then(|lease| {
-                lease.expires_at.to_rfc3339().parse().ok()
-            });
-
             Ok(Some(SecretData {
-                lease_id: Some(lease_id),
-                expires_at,
-                data: async_graphql::Json(secret.data),
+                data: secret.data,
+                created_at: secret.metadata.created_at,
+                updated_at: secret.metadata.updated_at,
+                version: secret.metadata.version as i32,
+                lease: secret.lease.map(LeaseInfo::from),
             }))
         } else {
             Ok(None)

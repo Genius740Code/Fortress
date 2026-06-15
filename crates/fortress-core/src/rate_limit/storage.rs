@@ -123,7 +123,7 @@ impl RateLimitStorage for MemoryStorage {
         Ok(entry.value)
     }
 
-    async fn decrement_counter(&self, key: str, rule_name: str, amount: u64) -> Result<u64> {
+    async fn decrement_counter(&self, key: &str, rule_name: &str, amount: u64) -> Result<u64> {
         let storage_key = self.generate_key(&key, &rule_name);
         let mut counters = self.counters.write().await;
 
@@ -298,7 +298,7 @@ impl RateLimitStorage for RedisStorage {
         Ok(entry.value)
     }
 
-    async fn decrement_counter(&self, key: str, rule_name: str, amount: u64) -> Result<u64> {
+    async fn decrement_counter(&self, key: &str, rule_name: &str, amount: u64) -> Result<u64> {
         let storage_key = self.generate_key(&key, &rule_name);
         let mut conn = match self.get_connection().await? {
             Some(conn) => conn,
@@ -415,7 +415,7 @@ impl RateLimitStorage for DatabaseStorage {
         Ok(0)
     }
 
-    async fn decrement_counter(&self, key: str, rule_name: str, amount: u64) -> Result<u64> {
+    async fn decrement_counter(&self, key: &str, rule_name: &str, amount: u64) -> Result<u64> {
         // Placeholder implementation - would use actual database queries
         tracing::warn!("Database storage not implemented yet");
         Ok(0)
@@ -514,7 +514,7 @@ impl RateLimitStorage for DistributedStorage {
         Ok(0)
     }
 
-    async fn decrement_counter(&self, key: str, rule_name: str, amount: u64) -> Result<u64> {
+    async fn decrement_counter(&self, key: &str, rule_name: &str, amount: u64) -> Result<u64> {
         // Placeholder implementation - would use distributed cache
         tracing::warn!("Distributed storage not implemented yet");
         Ok(0)
@@ -596,7 +596,7 @@ mod tests {
         assert_eq!(value, Some(10));
 
         // Wait for expiration
-        tokio::time::sleep(Duration::seconds(2)).await;
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
         // Cleanup expired entries
         storage.cleanup().await.unwrap();
@@ -642,7 +642,7 @@ mod tests {
     #[tokio::test]
     async fn test_redis_storage_with_config() {
         let storage = RedisStorage::with_config(
-            "redis://localhost:6379".to_string(),
+            "redis://localhost:6379",
             "custom:prefix".to_string(),
             Duration::hours(12),
         );

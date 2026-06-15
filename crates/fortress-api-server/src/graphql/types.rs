@@ -603,3 +603,16 @@ pub struct LeaseInfo {
     /// Maximum TTL
     pub max_ttl: Option<u64>,
 }
+
+impl From<fortress_core::secrets::LeaseInfo> for LeaseInfo {
+    fn from(core_lease: fortress_core::secrets::LeaseInfo) -> Self {
+        LeaseInfo {
+            lease_id: core_lease.lease_id,
+            ttl: core_lease.ttl,
+            created_at: core_lease.created_at,
+            renewable: core_lease.renewable,
+            max_ttl: core_lease.max_ttl,
+        }
+    }
+}
+

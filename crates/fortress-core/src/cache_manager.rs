@@ -5,7 +5,7 @@
 
 #[cfg(feature = "distributed-cache")]
 use crate::cache_hybrid::HybridCacheConfig;
-use crate::cache_invalidation::{CacheInvalidation, CacheInvalidationManager, InvalidationConfig, InvalidationReason};
+use crate::cache_invalidation::{CacheInvalidation, InvalidationConfig, InvalidationReason};
 #[cfg(feature = "memcached")]
 use crate::cache_memcached::{MemcachedCache, MemcachedConfig};
 #[cfg(feature = "redis")]
@@ -363,7 +363,7 @@ impl FortressCacheManager {
         let cache = Self::create_cache(&config).await?;
 
         // Create invalidation manager
-        let invalidation_manager = Arc::new(CacheInvalidationManager::new(
+        let invalidation_manager = Arc::new(crate::cache_invalidation::CacheInvalidationManager::new(
             config.invalidation_config.clone(),
         ));
 

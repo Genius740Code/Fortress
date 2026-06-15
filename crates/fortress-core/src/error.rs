@@ -339,6 +339,22 @@ pub enum FortressError {
         /// Error code for programmatic handling
         code: AuditErrorCode,
     },
+
+    /// Discovery errors
+
+    #[error("Discovery error: {message}")]
+    Discovery {
+        /// Error message
+        message: String,
+    },
+
+    /// Mesh errors
+
+    #[error("Mesh error: {message}")]
+    Mesh {
+        /// Error message
+        message: String,
+    },
 }
 
 /// Encryption error codes
@@ -1953,9 +1969,27 @@ impl FortressError {
 
             Self::Audit { .. } => "audit",
 
+            Self::Discovery { .. } => "discovery",
+
+            Self::Mesh { .. } => "mesh",
+
             Self::Tee { .. } => "tee",
 
             Self::WebSocket { .. } => "websocket",
+        }
+    }
+
+    /// Create a new discovery error
+    pub fn discovery<S: Into<String>>(message: S) -> Self {
+        Self::Discovery {
+            message: message.into(),
+        }
+    }
+
+    /// Create a new mesh error
+    pub fn mesh<S: Into<String>>(message: S) -> Self {
+        Self::Mesh {
+            message: message.into(),
         }
     }
 }

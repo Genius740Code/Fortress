@@ -99,10 +99,10 @@ use rayon::prelude::*;
 // Database-specific imports for actual connections
 
 #[cfg(feature = "postgres")]
-use sqlx::{PgConnection, PgPool};
+use tokio_postgres::{Client, NoTls};
 
 #[cfg(feature = "mysql")]
-use sqlx::{MySqlConnection, MySqlPool};
+use mysql_async::Pool;
 
 // mssql feature not available in sqlx 0.8
 

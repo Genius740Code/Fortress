@@ -307,7 +307,7 @@ impl SecurityMonitoringSystem {
 
     /// Update security metrics
     async fn update_metrics(&self, event: &SecurityAuditEvent) -> Result<(), FortressError> {
-        let mut metrics = self.metrics.write();
+        let mut metrics = self.metrics.write().await;
 
         match event.event_type {
             SecurityEventType::Authentication => {
@@ -421,7 +421,7 @@ impl SecurityMonitoringSystem {
             .unwrap_or_else(|| "unknown".to_string());
         let key = format!("auth_fail_{}", ip);
 
-        let mut counters = self.event_counters.lock();
+        let mut counters = self.event_counters.lock().await;
         let events = counters.entry(key).or_insert_with(VecDeque::new);
 
         // Add current event
@@ -448,7 +448,7 @@ impl SecurityMonitoringSystem {
     ) -> Result<bool, FortressError> {
         let key = "suspicious_activity".to_string();
 
-        let mut counters = self.event_counters.lock();
+        let mut counters = self.event_counters.lock().await;
         let events = counters.entry(key).or_insert_with(VecDeque::new);
 
         // Add current event
@@ -480,7 +480,7 @@ impl SecurityMonitoringSystem {
             .unwrap_or_else(|| "unknown".to_string());
         let key = format!("authz_fail_{}", ip);
 
-        let mut counters = self.event_counters.lock();
+        let mut counters = self.event_counters.lock().await;
         let events = counters.entry(key).or_insert_with(VecDeque::new);
 
         // Add current event
@@ -532,11 +532,11 @@ impl SecurityMonitoringSystem {
         };
 
         // Add to active alerts
-        let mut active_alerts = self.active_alerts.lock();
+        let mut active_alerts = self.active_alerts.lock().await;
         active_alerts.push(alert.clone());
 
         // Add to alert history
-        let mut alert_history = self.alert_history.lock();
+        let mut alert_history = self.alert_history.lock().await;
         alert_history.push_back(alert.clone());
 
         // Trim alert history
@@ -574,7 +574,7 @@ impl SecurityMonitoringSystem {
         alert_type: &AlertType,
         severity: AlertSeverity,
     ) -> Result<bool, FortressError> {
-        let active_alerts = self.active_alerts.lock();
+        let active_alerts = self.active_alerts.lock().await;
         let cooldown_duration =
             Duration::minutes(self.config.anomaly_detection.alert_cooldown_minutes as i64);
         let cutoff_time = Utc::now() - cooldown_duration;
@@ -614,8 +614,8 @@ impl SecurityMonitoringSystem {
 
     /// Update historical metrics
     async fn update_historical_metrics(&self) -> Result<(), FortressError> {
-        let metrics = self.metrics.read().clone();
-        let mut historical = self.historical_metrics.lock();
+        let metrics = self.metrics.read().await.clone();
+        let mut historical = self.historical_metrics.lock().await;
 
         historical.push_back((Utc::now(), metrics));
 
@@ -636,7 +636,7 @@ impl SecurityMonitoringSystem {
 
     /// Clean up old data
     async fn cleanup_old_data(&self) -> Result<(), FortressError> {
-        let mut counters = self.event_counters.lock();
+        let mut counters = self.event_counters.lock().await;
         let cutoff_time = Utc::now() - Duration::minutes(5); // Keep 5 minutes of data
 
         for events in counters.values_mut() {
@@ -654,7 +654,7 @@ impl SecurityMonitoringSystem {
 
     /// Check system health
     async fn check_system_health(&self) -> Result<(), FortressError> {
-        let metrics = self.metrics.read();
+        let metrics = self.metrics.read().await;
 
         // Check for performance issues
         if metrics.avg_response_time_ms > self.config.anomaly_detection.response_time_threshold_ms {
@@ -681,17 +681,17 @@ impl SecurityMonitoringSystem {
 
     /// Get current metrics
     pub async fn get_metrics(&self) -> SecurityMetrics {
-        self.metrics.read().clone()
+        self.metrics.read().await.clone()
     }
 
     /// Get active alerts
     pub async fn get_active_alerts(&self) -> Vec<SecurityAlert> {
-        self.active_alerts.lock().clone()
+        self.active_alerts.lock().await.clone()
     }
 
     /// Get alert history
     pub async fn get_alert_history(&self, limit: Option<usize>) -> Vec<SecurityAlert> {
-        let history = self.alert_history.lock();
+        let history = self.alert_history.lock().await;
         if let Some(limit) = limit {
             history.iter().rev().take(limit).cloned().collect()
         } else {
@@ -701,7 +701,7 @@ impl SecurityMonitoringSystem {
 
     /// Acknowledge an alert
     pub async fn acknowledge_alert(&self, alert_id: &str) -> Result<(), FortressError> {
-        let mut active_alerts = self.active_alerts.lock();
+        let mut active_alerts = self.active_alerts.lock().await;
 
         for alert in active_alerts.iter_mut() {
             if alert.id == alert_id {
@@ -716,7 +716,7 @@ impl SecurityMonitoringSystem {
 
     /// Resolve an alert
     pub async fn resolve_alert(&self, alert_id: &str) -> Result<(), FortressError> {
-        let mut active_alerts = self.active_alerts.lock();
+        let mut active_alerts = self.active_alerts.lock().await;
 
         for i in 0..active_alerts.len() {
             if active_alerts[i].id == alert_id {
@@ -724,7 +724,7 @@ impl SecurityMonitoringSystem {
                 alert.status = AlertStatus::Resolved;
 
                 // Add to history
-                let mut history = self.alert_history.lock();
+                let mut history = self.alert_history.lock().await;
                 history.push_back(alert);
 
                 tracing::info!(target: "security_alert", alert_id = %alert_id, "Alert resolved");
@@ -741,7 +741,7 @@ impl SecurityMonitoringSystem {
         response_time_ms: f64,
         concurrent_requests: u32,
     ) {
-        let mut metrics = self.metrics.write();
+        let mut metrics = self.metrics.write().await;
 
         // Update average response time (simple moving average)
         metrics.avg_response_time_ms = (metrics.avg_response_time_ms + response_time_ms) / 2.0;
