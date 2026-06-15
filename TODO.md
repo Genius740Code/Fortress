@@ -19,7 +19,7 @@
 
 ## Deployment & Infrastructure
 - [ ] **Docker**
-  - [ ] Thoroughly test the published Docker image across all features
+  - [ ] gooThoroughly test the published Docker image across all features
   - [ ] Validate multi-container deployments (docker-compose)
   - [ ] Verify image footprint and security vulnerabilities inside the container
 

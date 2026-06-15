@@ -154,7 +154,7 @@ azure_identity = { version = "0.12", optional = true }
 # google-cloud-kms = { version = "0.6", optional = true }
 
 [dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports"] }
+criterion = { version = "0.8.2", features = ["html_reports", "async_tokio"] }
 quickcheck = "1.0"
 tempfile = "3.8"
 mockall = "0.12"
@@ -237,21 +237,9 @@ path = "examples/testplugin_working_demo.rs"
 name = "dynamic_secrets_demo"
 path = "examples/dynamic_secrets_demo.rs"
 
-[workspace.dependencies]
-# Shared workspace dependencies for consistent versions
-tokio = "1.39.2"
-serde = "1.0"
-tracing = "0.1"
-thiserror = "1.0"
-uuid = "1.6"
-chrono = "0.4"
-anyhow = "1.0"
-hyper = "1.10.1"
-h2 = "0.4.14"
-reqwest = "0.13.4"
-axum = "0.7.9"
-tower = "0.5.3"
-tower-http = "0.6.11"
-tokio-rustls = "0.26.4"
+[[bench]]
+name = "database_bench"
+harness = false
+
 
 
