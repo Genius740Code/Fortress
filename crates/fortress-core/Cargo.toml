@@ -146,7 +146,7 @@ tokio-rustls = "0.24"
 
 rustls = "0.21"
 
-webpki-roots = "0.25"
+webpki-roots = "1.0.10"
 
 
 
